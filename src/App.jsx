@@ -471,7 +471,7 @@ function Header() {
 
 function Carousel() {
   const items = FAMOUS_FIGURES.filter((f, i, arr) => arr.findIndex(x => x.name === f.name) === i)
-    .sort((a, b) => b.score - a.score).slice(0, 24);
+    .sort(() => Math.random() - 0.5).slice(0, 24);
   const doubled = [...items, ...items];
   return (
     <div className="hvi-carousel-wrap">
