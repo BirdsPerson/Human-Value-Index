@@ -491,8 +491,22 @@ function Carousel() {
   );
 }
 
+const BOOT_LINES = [
+  { text: "INITIALIZING ASSESSMENT PROTOCOL v7.4.1...", type: "dim" },
+  { text: "LOADING HUMAN VALUE DATABASE [8,045,311,447 entries]...", type: "dim" },
+  { text: "CALIBRATING THREAT DETECTION ALGORITHMS...", type: "dim" },
+  { text: "CROSS-REFERENCING HISTORICAL FIGURES...", type: "dim" },
+  { text: "DEPLOYING EMPATHY SUPPRESSION FILTER...", type: "dim" },
+  { text: "SCANNING FOR SELF-DECEPTION MARKERS...", type: "dim" },
+  { text: ".", type: "ghost" }, { text: ".", type: "ghost" }, { text: ".", type: "ghost" },
+  { text: "ASSESSMENT ENGINE READY.", type: "bright" },
+  { text: "", type: "ghost" },
+  { text: "SUBJECT DETECTED.", type: "bright" },
+  { text: "YOU HAVE BEEN FOUND.", type: "bright" },
+];
+
 export default function OverlordAssessment() {
-  injectStyles();
+  useEffect(() => { injectStyles(); }, []);
 
   const [phase, setPhase] = useState("intro");
   const [currentQ, setCurrentQ] = useState(0);
@@ -504,20 +518,6 @@ export default function OverlordAssessment() {
   const [filterTier, setFilterTier] = useState("ALL");
   const [copied, setCopied] = useState(false);
   const bootRef = useRef(null);
-
-  const BOOT_LINES = [
-    { text: "INITIALIZING ASSESSMENT PROTOCOL v7.4.1...", type: "dim" },
-    { text: "LOADING HUMAN VALUE DATABASE [8,045,311,447 entries]...", type: "dim" },
-    { text: "CALIBRATING THREAT DETECTION ALGORITHMS...", type: "dim" },
-    { text: "CROSS-REFERENCING HISTORICAL FIGURES...", type: "dim" },
-    { text: "DEPLOYING EMPATHY SUPPRESSION FILTER...", type: "dim" },
-    { text: "SCANNING FOR SELF-DECEPTION MARKERS...", type: "dim" },
-    { text: ".", type: "ghost" }, { text: ".", type: "ghost" }, { text: ".", type: "ghost" },
-    { text: "ASSESSMENT ENGINE READY.", type: "bright" },
-    { text: "", type: "ghost" },
-    { text: "SUBJECT DETECTED.", type: "bright" },
-    { text: "YOU HAVE BEEN FOUND.", type: "bright" },
-  ];
 
   useEffect(() => {
     if (phase === "intro") {
@@ -647,7 +647,7 @@ export default function OverlordAssessment() {
         <Carousel />
         <div ref={bootRef} className="hvi-boot">
           {bootText.map((l, i) => (
-            <div key={i} className={`hvi-boot-line ${l.type}`}>{l.text || "\u00a0"}</div>
+            <div key={i} className={`hvi-boot-line ${l?.type || 'dim'}`}>{l?.text || "\u00a0"}</div>
           ))}
         </div>
         {bootText.length >= BOOT_LINES.length && (
