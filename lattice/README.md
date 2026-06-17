@@ -75,10 +75,15 @@ npm run build      # type-check + production build
 
 ## Roadmap
 
-- [x] Canvas grid, formula engine, `.xlsx`/`.csv` interop, multi-sheet
-- [ ] Cross-sheet references (`Sheet2!A1`)
-- [ ] Cell formatting (number formats, colors, fonts, borders)
-- [ ] Undo/redo, copy/paste with formula offset rewriting
-- [ ] Column/row resize, freeze panes, sort & filter
-- [ ] Charts
-- [ ] Realtime collaboration (phase 2 — CRDT-backed)
+See [ROADMAP.md](./ROADMAP.md) for the full phased plan. In short:
+
+- [x] **Phase 1 (shipped):** canvas grid, formula engine, `.xlsx`/`.csv` interop, multi-sheet
+- [ ] **Phase 2:** cross-sheet refs, cell formatting, undo/redo, clipboard with formula rewriting
+- [ ] **Phase 3:** row/col resize+insert+delete, freeze panes, sort/filter, incremental recalc
+- [ ] **Phase 4:** charts, conditional formatting, lookup/criteria functions
+- [ ] **Phase 5:** local-first persistence, then CRDT-backed realtime collaboration
+
+## Deploy
+
+`netlify.toml` is included, so once this folder is its own repo you can point a
+Netlify site at it and it builds (`npm run build` → `dist`) out of the box.
