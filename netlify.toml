@@ -3,6 +3,10 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[functions]
+  node_bundler = "esbuild"
+
+# The function also declares its own route via `export const config = { path: "/api/evaluate" }`.
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
