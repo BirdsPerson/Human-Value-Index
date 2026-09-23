@@ -1,3 +1,5 @@
+import { SYSTEM_PROMPT } from "../lib/systemPrompt.js";
+
 const rateLimitMap = new Map();
 const RATE_LIMIT = 8;
 const RATE_WINDOW = 60 * 1000;
@@ -40,11 +42,17 @@ export default async (req, context) => {
   }
 
   try {
-    const body = await req.json();
-    if (!body.messages || !body.model) {
+    // Client sends only survey text; model, prompt and limits are fixed here so the key can't be used as an open proxy.
+    const { survey } = await req.json();
+    if (typeof survey !== "string" || !survey.trim() || survey.length > 12000) {
       return new Response(JSON.stringify({ error: "Invalid request" }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
     }
-    body.max_tokens = Math.min(body.max_tokens || 1000, 1200);
+    const body = {
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: `HUMAN SUBJECT SURVEY DATA:\n\n${survey}` }],
+    };
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
