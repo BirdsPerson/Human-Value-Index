@@ -1,5 +1,155 @@
 {
+  "aaron-hernandez": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "ada-lovelace": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "alan-turing": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
   "albert-einstein": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "aretha-franklin": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "babe-ruth": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "bernie-madoff": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "billie-holiday": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "bruce-lee": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "caligula": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "cleopatra": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "elizabeth-holmes": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "elon-musk": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "genghis-khan": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "george-orwell": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "ghislaine-maxwell": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "grace-hopper": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "harriet-tubman": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "harvey-weinstein": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "henry-viii": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "isaac-newton": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "jason-kelce": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "jeffrey-epstein": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "jfk": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "joe-jackson": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "keanu-reeves": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "kim-jong-un": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "kobe-bryant": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "leonardo-da-vinci": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "madonna": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "mahatma-gandhi": {
     "frames": 2,
     "w": 32,
     "h": 48
@@ -9,7 +159,92 @@
     "w": 32,
     "h": 48
   },
+  "mao-zedong": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "marcus-aurelius": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
   "marie-curie": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "martin-luther-king-jr": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "martin-shkreli": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "michael-jackson": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "mother-teresa": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "muhammad-ali": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "nelson-mandela": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "nikola-jokic": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "nikola-tesla": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "oj-simpson": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "oprah-winfrey": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "pablo-escobar": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "pablo-picasso": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "pel": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "peter-thiel": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "prince": {
     "frames": 2,
     "w": 32,
     "h": 48
@@ -19,7 +254,52 @@
     "w": 32,
     "h": 48
   },
+  "putin": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "queen-elizabeth-ii": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "ronaldinho": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "sam-altman": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "shohei-ohtani": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
   "socrates": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "stephen-hawking": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "taylor-swift": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "tom-brady": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "winston-churchill": {
     "frames": 2,
     "w": 32,
     "h": 48
