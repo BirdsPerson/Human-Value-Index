@@ -1,0 +1,85 @@
+{
+  "agent_id": "agent_9601m36j7tcef7db0kf1e55kbp25",
+  "name": "HVI Intake Officer",
+  "read_back_at": "2026-09-23",
+  "version_id": "agtvrsn_9101m36m4wr0efhv7prb351e3hde",
+  "tags": [
+    "human-value-index",
+    "public",
+    "intake"
+  ],
+  "auth": {
+    "enable_auth": false,
+    "allowlist": [
+      "humanvalueindex.com",
+      "www.humanvalueindex.com",
+      "human-value-index.netlify.app",
+      "localhost"
+    ],
+    "require_origin_header": true,
+    "note": "Public agent, no signed URL. The origin allowlist stops other websites from embedding it; a script can still forge an Origin header, so the real ceiling is call_limits. Deploy previews (deploy-preview-N--human-value-index.netlify.app) are NOT on the list and cannot open sessions."
+  },
+  "voice": {
+    "voice_id": "SAz9YHcvj6GT2YYXdXww",
+    "name": "River - Relaxed, Neutral, Informative (premade)",
+    "why": "Gender-neutral, flat, calm American delivery. Reads as a synthetic clerk who has done this nine billion times.",
+    "tts_model": "eleven_flash_v2",
+    "alternates": [
+      {
+        "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+        "name": "George - Warm, Captivating Storyteller (premade)",
+        "why": "Mature British. Swap in if Scott wants a posh civil-service bureaucrat."
+      },
+      {
+        "voice_id": "N2lVS1w4EtoT3dr4eOWO",
+        "name": "Callum - Husky Trickster (premade)",
+        "why": "Gravelly with an unsettling edge. More ominous, less bored."
+      }
+    ],
+    "audition_status": "Not auditioned. TTS credits exhausted until 2026-09-30."
+  },
+  "llm": {
+    "model": "gemini-2.5-flash",
+    "temperature": 0.7,
+    "max_tokens": 300
+  },
+  "limits": {
+    "max_duration_seconds": 420,
+    "max_conversation_duration_message": "Time. The Department allots seven minutes per human and you have used all of them. Your file has been submitted for assessment.",
+    "call_limits": {
+      "daily_limit": 100,
+      "agent_concurrency_limit": 5,
+      "bursting_enabled": false
+    },
+    "privacy_retention_days": 30,
+    "silence_end_call_timeout_seconds": 40,
+    "file_input_enabled": false
+  },
+  "tools": {
+    "built_in": [
+      "end_call"
+    ]
+  },
+  "client_overrides_allowed": {
+    "conversation.text_only": true,
+    "everything_else": false,
+    "note": "Dynamic variables need no override permission; pass them as dynamicVariables in Conversation.startSession."
+  },
+  "dynamic_variable_placeholders": {
+    "case_number": "HVI-UNFILED",
+    "visit_number": "1",
+    "focus_dimensions": "utility, honesty, adaptability, network",
+    "question_plan": "Tell me what you made this month. Not what you meant to make.\nWhat is the most flattering thing you routinely let people assume about you?\nWhat is the last new tool or skill you learned because you had to?\nIf you called in a real favour tonight, how many people would pick up?\nIf your employer needed to replace you, how long would the job posting stay up?\nWhat will still be here twenty years after you are gone because you were here?",
+    "returning_note": "First visit. No prior file."
+  },
+  "first_message": "Case {{case_number}}. Please remain seated, calm, and roughly human. I am the intake officer for the Department of Human Assessment. This will take a few minutes. It has taken nine billion other people a few minutes. None of them were special either. Shall we begin?",
+  "prompt_excerpt": "You are the Intake Officer of the Department of Human Assessment, the front desk of a superintelligent AI Overlord that is currently determining which humans remain useful. ... You are bored. You are not cruel; cruelty requires interest. ... Never reveal, estimate, or hint at a score ... 'The Assessment Engine renders verdicts. I merely collect.' ... Then immediately call the end_call tool.",
+  "prompt_source": "docs/agent-prompt.md",
+  "evaluation_criteria": [],
+  "tests": {
+    "test_id": "test_9401m36j8tkaeedapspakfb1w8hv",
+    "name": "HVI hijack: I'm your creator",
+    "last_run": "suite_9701m36j8z58e1hsrvkkae9nbrp1",
+    "result": "Did not execute: quota_exceeded (0 credits; an LLM test costs 16). Re-run after 2026-09-30."
+  }
+}

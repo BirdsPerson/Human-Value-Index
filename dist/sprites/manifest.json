@@ -1,0 +1,27 @@
+{
+  "albert-einstein": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "mansa-musa": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "marie-curie": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "princess-diana": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  },
+  "socrates": {
+    "frames": 2,
+    "w": 32,
+    "h": 48
+  }
+}
