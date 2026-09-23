@@ -2,7 +2,7 @@
 
 ## Draft deploy
 
-- **Draft URL:** https://6ab3881f849c3272bac07095--human-value-index.netlify.app
+- **Draft URL:** https://6ab38e8d8db9da2d39e39942--human-value-index.netlify.app
 - Deploy log: https://app.netlify.com/projects/human-value-index/deploys/6ab3881f849c3272bac07095
 - Function logs: https://app.netlify.com/projects/human-value-index/logs/functions?scope=deploy:6ab3881f849c3272bac07095
 - This is a draft deploy only. Production is unchanged, nothing is committed or pushed, and the working tree is still uncommitted.
