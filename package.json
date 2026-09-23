@@ -8,6 +8,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@elevenlabs/client": "^1.25.0",
+    "@netlify/blobs": "^11.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
