@@ -5,6 +5,11 @@ import { getStore } from "@netlify/blobs";
 const cases = () => getStore({ name: "hvi-cases", consistency: "strong" });
 const pen = () => getStore({ name: "hvi-pen", consistency: "strong" });
 const limits = () => getStore({ name: "hvi-limits", consistency: "strong" });
+const figures = () => getStore({ name: "hvi-figures", consistency: "strong" });
+const sprites = () => getStore({ name: "hvi-sprites", consistency: "strong" });
+
+// "day" (YYYY-MM-DD), "minute" (YYYY-MM-DDTHH:MM) or "month" (YYYY-MM), UTC.
+const bucket = window => new Date().toISOString().slice(0, window === "minute" ? 16 : window === "month" ? 7 : 10);
 
 export async function getCase(caseId) {
   return (await cases().get(caseId, { type: "json" })) || null;
@@ -69,7 +74,7 @@ export async function listPenCards(max = PEN_MAX) {
 // ponytail: old keys are never deleted; a few bytes each, prune if it ever matters.
 export async function hitLimit(key, max, window = "day") {
   const store = limits();
-  const k = `${new Date().toISOString().slice(0, window === "minute" ? 16 : 10)}:${key}`;
+  const k = `${bucket(window)}:${key}`;
   for (let attempt = 0; attempt < 4; attempt++) {
     const cur = await store.getWithMetadata(k, { type: "json" });
     const count = (cur?.data?.count || 0) + 1;
@@ -86,11 +91,63 @@ export async function hitLimit(key, max, window = "day") {
 // Best effort: a failed refund only costs the subject one slot.
 export async function refundLimit(key, window = "day") {
   const store = limits();
-  const k = `${new Date().toISOString().slice(0, window === "minute" ? 16 : 10)}:${key}`;
+  const k = `${bucket(window)}:${key}`;
   for (let attempt = 0; attempt < 4; attempt++) {
     const cur = await store.getWithMetadata(k, { type: "json" });
     if (!cur?.data?.count) return;
     const res = await store.setJSON(k, { count: cur.data.count - 1 }, { onlyIfMatch: cur.etag });
     if (res.modified) return;
   }
+}
+
+// Reads a counter without charging it (for "remaining this cycle" lines).
+export async function peekLimit(key, window = "day") {
+  const cur = await limits().get(`${bucket(window)}:${key}`, { type: "json" });
+  return cur?.count || 0;
+}
+
+// ---- referred public figures ------------------------------------------------
+// hvi-figures: slug -> card, plus an "index" blob the pen reads in one GET. The Mac
+// sprite job (scripts/referral_sprites.py) is the reader for spriteStatus "pending".
+const FIG_INDEX = "index";
+const FIG_MAX = 300;
+
+export async function getFigure(slug) {
+  return (await figures().get(slug, { type: "json" })) || null;
+}
+
+// Writes the card only if the slug is new (a concurrent referral of the same person
+// loses cleanly). Returns true when this call created it.
+export async function createFigure(card) {
+  const res = await figures().setJSON(card.slug, card, { onlyIfNew: true });
+  if (!res.modified) return false;
+  await indexFigure(card);
+  return true;
+}
+
+export async function indexFigure(card) {
+  const store = figures();
+  const entry = figureIndexEntry(card);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const cur = await store.getWithMetadata(FIG_INDEX, { type: "json" });
+    const base = cur?.data?.cards || [];
+    const cards = [entry, ...base.filter(c => c.slug !== card.slug)].slice(0, FIG_MAX);
+    const res = await store.setJSON(FIG_INDEX, { cards }, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
+    if (res.modified) return;
+  }
+  console.warn("figure index: lost the write race; card saved");
+}
+
+export const figureIndexEntry = c => ({
+  slug: c.slug, name: c.name, score: c.score, tier: c.tier, breakdown: c.breakdown, verdict: c.verdict,
+  sprite: c.sprite ?? null, spriteStatus: c.spriteStatus, referredBy: c.referredBy, at: c.at,
+});
+
+export async function listFigures() {
+  const idx = await figures().get(FIG_INDEX, { type: "json" });
+  return idx?.cards || [];
+}
+
+export async function getSprite(slug) {
+  return sprites().get(slug, { type: "arrayBuffer" });
 }

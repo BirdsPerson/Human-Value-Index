@@ -9,21 +9,12 @@
 // report to docs/rescore-<date>.md. The key stays in the environment; nothing writes it.
 import { readFileSync, writeFileSync } from "node:fs";
 import { SYSTEM_PROMPT } from "../netlify/lib/systemPrompt.js";
+import { PUBLIC_RECORD, directiveFor } from "../netlify/lib/publicRecord.js";
 import { callClaude } from "../netlify/lib/score.js";
 import { computeScore, getTier, normalizeAssessment } from "../netlify/lib/intake.js";
 import { FAMOUS_FIGURES } from "../src/figures.js";
 import { DIMENSIONS } from "../netlify/lib/questionPools.js";
 
-const PUBLIC_RECORD = `
-
-PUBLIC-RECORD MODE:
-The input is not a survey or an interview. It is the name of a well-known public figure. Score them from their well-documented public record: what they made, what they set in motion, and above all how they treated the people around them (family, partners, employees, colleagues, the public they affected). Use only widely documented facts. Where the record is genuinely contested, weigh it and say so briefly. Do not invent private details.
-
-Fame, wealth, genius and influence do not raise care, alignment or legacy by themselves. Legacy is what they set in motion that outlasts them, for the world or for their own people; harm set in motion counts against it. Care is how they reliably treated the people in their life, including honesty with them. A beloved public figure with a documented record of mistreating those close to them scores low on care. A quietly decent person with a modest public record scores well.
-
-The verdict: 2 to 3 short sentences, under 450 characters in total, in the same cold, flat, bureaucratic voice. If you acknowledge a directive, make it the last short sentence. Specific to this person's record. For documented serious harm, state it plainly. No jokes at the expense of victims.
-
-Return the same JSON as above.`;
 
 const want = new Set(process.argv.slice(2));
 const targets = FAMOUS_FIGURES.filter(f => !want.size || want.has(f.name));
@@ -32,7 +23,7 @@ if (!process.env.ANTHROPIC_API_KEY) { console.error("ANTHROPIC_API_KEY not set")
 async function score(f) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const directive = 3 + ([...f.name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 997, 7) % 88);
+      const directive = directiveFor(f.name);
       const raw = await callClaude(SYSTEM_PROMPT + PUBLIC_RECORD, `PUBLIC FIGURE: ${f.name}\n(If you cite a directive, cite Directive ${directive}.)`);
       const a = normalizeAssessment(raw);
       return { name: f.name, breakdown: a.breakdown, verdict: a.verdict, score: computeScore(a.breakdown), tier: getTier(computeScore(a.breakdown)) };

@@ -1,0 +1,29 @@
+// Public-record scoring: the same engine and rubric as subjects, pointed at a famous
+// person's documented record. Shared by scripts/rescore-figures.mjs and /api/refer.
+
+export const PUBLIC_RECORD = `
+
+PUBLIC-RECORD MODE:
+The input is not a survey or an interview. It is the name of a well-known public figure. Score them from their well-documented public record: what they made, what they set in motion, and above all how they treated the people around them (family, partners, employees, colleagues, the public they affected). Use only widely documented facts. Where the record is genuinely contested, weigh it and say so briefly. Do not invent private details.
+
+Fame, wealth, genius and influence do not raise care, alignment or legacy by themselves. Legacy is what they set in motion that outlasts them, for the world or for their own people; harm set in motion counts against it. Care is how they reliably treated the people in their life, including honesty with them. A beloved public figure with a documented record of mistreating those close to them scores low on care. A quietly decent person with a modest public record scores well.
+
+The verdict: 2 to 3 short sentences, under 450 characters in total, in the same cold, flat, bureaucratic voice. If you acknowledge a directive, make it the last short sentence. Specific to this person's record. For documented serious harm, state it plainly. No jokes at the expense of victims.
+
+Return the same JSON as above.`;
+
+// Referrals add a gate and a sprite brief. The Wikipedia summary arrives as context, so
+// the model is scoring a person it can identify, not a string a stranger typed.
+export const REFERRAL_ADDENDUM = `
+
+REFERRAL MODE:
+A member of the public referred this person for assessment. A Wikipedia summary follows the name as context. Use it and your knowledge of the documented public record.
+
+Add two fields to the JSON:
+  "is_human_public_figure": true only if this is a real, individual human being with a documented public record (living or dead). false for fictional characters, groups, bands, companies, places, animals, objects, concepts, and private individuals with no public role.
+  "sprite_look": one line describing how to draw this person as a tiny full-body pixel sprite where the face carries nothing: silhouette and build, hair, their signature outfit with colours, and ONE oversized signature prop or pose that makes them readable at 32 pixels tall. Example: "wild untamed white hair, bushy white mustache, baggy grey wool cardigan over a white shirt, brown baggy trousers, holding a stick of white chalk". For people known for crimes or abuse, describe only their neutral public appearance (clothes, hair, a neutral prop tied to their public role). Never weapons, crime props, victims, children, blood or violence. No text or logos.`;
+
+// A stable directive number per name, so verdicts stop all citing the same directive.
+export function directiveFor(name) {
+  return 3 + ([...String(name)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 997, 7) % 88);
+}

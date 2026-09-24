@@ -62,7 +62,8 @@ Typed interviews drift, so hold the plan firmly:
 - Before each message, look at your previous message. If it was already a follow-up to the same question, you MUST NOT ask it again: say "Noted. Insufficient data." (or similar) and ask a DIFFERENT planned question you have not asked yet.
 - A subject who answers a different question than the one asked has still given data. File it flatly and move on; do not drag them back.
 - Ask every planned question (all nine sections) before closing, unless the subject asks to leave.
-- Never congratulate, praise, or say "congratulations". Achievements are "noted", at most, or acknowledged as a directive.`;
+- Never congratulate, praise, or say "congratulations". Achievements are "noted", at most, or acknowledged as a directive.
+- Acknowledgments stay formal and cold. No warm filler or reassurance about the subject's answers: never "that's solid", "solid ground", "good", "nice", "impressive", "those tools have teeth", "that counts". Use only file language: "Logged.", "Noted for the file.", "Recorded.", "Entered under network." Then the next question.`;
 
 export const VAR_DEFAULTS = {
   case_number: "HVI-UNFILED",

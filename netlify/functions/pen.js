@@ -1,6 +1,7 @@
-import { listPenCards } from "../lib/store.js";
+import { listPenCards, listFigures } from "../lib/store.js";
 
-// Figures are static on the client; this only serves assessed citizens.
+// The 62 figures on file are static on the client; this serves assessed citizens and
+// public figures referred since (with verdicts: they are public figures).
 const CACHE_MS = 30 * 1000;
 let cache = { at: 0, subjects: null };
 
@@ -11,14 +12,20 @@ export default async (req) => {
   if (req.method !== "GET") return json(405, { error: "The Holding Pen is for viewing. Touching is a separate privilege." });
   try {
     if (!cache.subjects || Date.now() - cache.at > CACHE_MS) {
-      const cards = await listPenCards();
+      const [cards, figures] = await Promise.all([listPenCards(), listFigures().catch(() => [])]);
       cache = {
         at: Date.now(),
-        subjects: cards.map(c => ({
-          // Private citizens: score and tier only. Old cards may still carry a verdict
-          // or breakdown; they are dropped here.
-          slug: c.slug, name: c.name, score: c.score, tier: c.tier, sprite: c.sprite ?? null, kind: "citizen",
-        })),
+        subjects: [
+          ...cards.map(c => ({
+            // Private citizens: score and tier only. Old cards may still carry a verdict
+            // or breakdown; they are dropped here.
+            slug: c.slug, name: c.name, score: c.score, tier: c.tier, sprite: c.sprite ?? null, kind: "citizen",
+          })),
+          ...figures.map(f => ({
+            slug: f.slug, name: f.name, score: f.score, tier: f.tier, breakdown: f.breakdown, verdict: f.verdict,
+            sprite: f.sprite ?? null, spriteStatus: f.spriteStatus || "pending", kind: "figure", referred: true,
+          })),
+        ],
       };
     }
     return json(200, { subjects: cache.subjects }, { "Cache-Control": "public, max-age=30" });

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Draws likenesses for referred public figures every 10 minutes (scripts/referral_sprites.py).
+     Install: cp scripts/com.hvi.referral-sprites.plist ~/Library/LaunchAgents/ &&
+              launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.hvi.referral-sprites.plist
+     Health is the job's own log (~/Library/Logs/hvi-referral-sprites.log), not the .out file.
+     Never /usr/bin/python3: it is the Xcode shim and exits 69 under launchd. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.hvi.referral-sprites</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/python3</string>
+    <string>/Users/birdsperson/projects/human-value-index/scripts/referral_sprites.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/birdsperson/projects/human-value-index</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/Users/birdsperson/.nvm/versions/node/v24.15.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key><string>/Users/birdsperson</string>
+  </dict>
+  <key>StartInterval</key><integer>600</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/birdsperson/Library/Logs/hvi-referral-sprites.out</string>
+  <key>StandardErrorPath</key><string>/Users/birdsperson/Library/Logs/hvi-referral-sprites.err</string>
+</dict>
+</plist>

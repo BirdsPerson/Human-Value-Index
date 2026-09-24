@@ -4,7 +4,7 @@ import {
   SPRITE_W, SPRITE_H, gaitFor, stepEntity, clamp, doorZone,
   paintPlaceholder, loadManifest, loadImage, mulberry32,
 } from "./sprites.js";
-import { ScoreCard, Breakdown, readCaseId, readLastResult } from "./Intake.jsx";
+import { ScoreCard, Breakdown, readCaseId, writeCaseId, readLastResult } from "./Intake.jsx";
 import { TermBox, Rule, Typed, pad, padL } from "./term.jsx";
 
 const FONT = "'Fira Mono', ui-monospace, Menlo, monospace";
@@ -116,6 +116,15 @@ const penStyles = `
   .hvi-card-kind { color: var(--text-ghost); font-size: 12px; }
   .hvi-card-name { color: var(--text); font-weight: 700; margin-bottom: 0.8em; }
   .hvi-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 2ch; flex-wrap: wrap; }
+  .hvi-refer { margin: 0 0 1.2em; }
+  .hvi-refer-row { display: flex; align-items: baseline; gap: 1ch; }
+  .hvi-refer-row .p { flex: none; color: var(--green); white-space: pre; }
+  .hvi-refer-input { flex: 1; min-width: 0; background: transparent; border: 0; border-radius: 0; outline: none; color: var(--text); font: inherit; padding: 0; caret-color: var(--green); caret-shape: block; }
+  .hvi-refer-input:disabled { color: var(--text-dim); }
+  .hvi-refer-out { min-height: 1.3em; margin-top: 0.3em; color: var(--text-dim); }
+  .hvi-refer-out.err { color: var(--red, #f87171); }
+  .hvi-refer-out.ok { color: var(--amber); }
+  .hvi-refer-quota { color: var(--text-ghost); font-size: 12px; margin-top: 0.2em; }
 `;
 
 function injectPenStyles() {
@@ -144,6 +153,7 @@ function SubjectCard({ subject, onClose }) {
   }, []);
   const kind = subject.you ? "CITIZEN // THIS IS YOU. THE RESEMBLANCE IS CLINICAL."
     : subject.kind === "citizen" ? "CITIZEN // SELF-SUBMITTED FILE"
+    : subject.referred ? `PUBLIC FIGURE // REFERRED BY A CITIZEN${subject.sprite ? "" : " // LIKENESS PENDING"}`
     : "PUBLIC FIGURE // FILE ON RECORD";
   return (
     <div className="hvi-card-overlay" onClick={onClose}>
@@ -169,6 +179,83 @@ function SubjectCard({ subject, onClose }) {
           <Breakdown breakdown={subject.breakdown} />
           <button className="hvi-btn-primary" onClick={onClose}>Return subject to pen</button>
         </TermBox>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FILE A REFERRAL > _   Type a public figure's name, Enter. /api/refer checks Wikipedia,
+// scores them on the same rubric, and they drop in with a placeholder until the Mac job
+// draws their likeness.
+function ReferralBar({ simRef }) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState(null);         // { text, tone }
+  const [remaining, setRemaining] = useState(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    const id = readCaseId();
+    let dead = false;
+    fetch(`/api/refer${id ? `?caseId=${encodeURIComponent(id)}` : ""}`)
+      .then(r => (r.ok ? r.json() : null)).then(d => { if (!dead && d && typeof d.remaining === "number") setRemaining(d.remaining); })
+      .catch(() => {});
+    return () => { dead = true; };
+  }, []);
+
+  async function submit(e) {
+    e?.preventDefault();
+    const n = name.trim();
+    if (!n || busy) return;
+    setBusy(true);
+    setOut({ text: "PROCESSING REFERRAL...", tone: "" });
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 60000);
+    try {
+      const r = await fetch("/api/refer", {
+        method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal,
+        body: JSON.stringify({ name: n, caseId: readCaseId() || undefined }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (d.caseId) writeCaseId(d.caseId);
+      if (typeof d.remaining === "number") setRemaining(d.remaining);
+      if (!r.ok) { setOut({ text: d.error || "The referral desk is closed. The Department does not say why.", tone: "err" }); return; }
+      const subject = d.subject;
+      if (d.status === "created") {
+        simRef.current?.refer?.(subject);
+        setOut({ text: `NEW ARRIVAL PROCESSED: ${subject.name.toUpperCase()}. VALUE INDEX ${subject.score} [${subject.tier}]. LIKENESS PENDING.`, tone: "ok" });
+        setName("");
+      } else {
+        simRef.current?.refer?.(subject);
+        setOut({ text: `${subject?.name ? subject.name.toUpperCase() + ": " : ""}${d.message || "Subject already on file."}`, tone: "" });
+        setName("");
+      }
+    } catch {
+      setOut({ text: "The referral desk did not answer in time. The Department is not in a hurry. Try again.", tone: "err" });
+    } finally {
+      clearTimeout(timer);
+      setBusy(false);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }
+
+  return (
+    <div className="hvi-refer">
+      <form className="hvi-refer-row" onSubmit={submit}>
+        <label className="p" htmlFor="hvi-refer-input">FILE A REFERRAL &gt;</label>
+        <input id="hvi-refer-input" ref={inputRef} className="hvi-refer-input" value={name} maxLength={80}
+          autoComplete="off" spellCheck="false" disabled={busy}
+          placeholder="a public figure's name"
+          aria-describedby="hvi-refer-out hvi-refer-quota"
+          onChange={e => setName(e.target.value)} />
+      </form>
+      <div id="hvi-refer-out" className={`hvi-refer-out${out?.tone ? " " + out.tone : ""}`} role="status" aria-live="polite">
+        {out ? <Typed key={out.text} as="span" text={out.text} cps={50} cursorAfter={busy} /> : null}
+      </div>
+      <div id="hvi-refer-quota" className="hvi-refer-quota">
+        {remaining == null ? "PUBLIC FIGURES ONLY. PRIVATE CITIZENS ARE NOT PROCESSED ON REQUEST."
+          : `REFERRALS REMAINING THIS CYCLE: ${remaining}. PUBLIC FIGURES ONLY.`}
       </div>
     </div>
   );
@@ -403,26 +490,52 @@ export default function Pen() {
       });
     }
 
-    // ---- citizens -----------------------------------------------------------
-    fetch("/api/pen").then(r => r.ok ? r.json() : Promise.reject(r.status)).then(data => {
-      if (cancelled) return;
-      const known = new Set(sim.ents.map(e => e.s.name));
-      const incoming = (data?.subjects || []).filter(s => s && s.name && typeof s.score === "number" && !known.has(s.name) && s.kind !== "figure");
-      let sawMe = false;
-      for (const s of incoming.slice(0, 60)) {
-        const you = !!myName && s.name === myName;
-        sawMe = sawMe || you;
-        // Your own sealed file opens for you from this browser's copy; the server never sends it.
-        const mine = you && readLastResult();
-        const own = mine && mine.caseId === myCase ? { verdict: mine.verdict, breakdown: mine.breakdown, rubric: mine.rubric ?? 1, you: true } : {};
-        sim.arrivals.push({ s: { ...s, ...own, kind: "citizen", you }, you });
-      }
-      queueSelfIfMissing(sawMe);
-    }).catch(() => {
-      if (cancelled) return;
-      queueSelfIfMissing(false);
-      announceRef.current("Citizen registry unreachable. The pen contains only the famous. As usual.", 5000);
-    });
+    // ---- citizens and referred figures ----------------------------------------
+    // Polled while the pen is open: new referrals drop in, and a referral whose likeness
+    // the Mac job has since drawn swaps its placeholder for the real sprite.
+    function pollPen(first) {
+      return fetch("/api/pen").then(r => r.ok ? r.json() : Promise.reject(r.status)).then(data => {
+        if (cancelled) return;
+        const byName = new Map(sim.ents.map(e => [e.s.name, e]));
+        const queued = new Set(sim.arrivals.map(a => a.s.name));
+        const subjects = (data?.subjects || []).filter(s => s && s.name && typeof s.score === "number" && (s.kind !== "figure" || s.referred));
+        let sawMe = false, added = 0;
+        for (const s of subjects) {
+          const e = byName.get(s.name);
+          if (e) {
+            if (s.referred && s.sprite && !e.real) { e.s = { ...e.s, sprite: s.sprite }; attachSprite(e, sim.manifest || {}); updateRoster(s.name, { sprite: s.sprite }); }
+            if (myName && s.name === myName) sawMe = true;
+            continue;
+          }
+          if (queued.has(s.name) || added >= 60) continue;
+          added++;
+          const you = !!myName && s.name === myName;
+          sawMe = sawMe || you;
+          // Your own sealed file opens for you from this browser's copy; the server never sends it.
+          const mine = you && readLastResult();
+          const own = mine && mine.caseId === myCase ? { verdict: mine.verdict, breakdown: mine.breakdown, rubric: mine.rubric ?? 1, you: true } : {};
+          sim.arrivals.push({ s: s.referred ? { ...s, kind: "figure" } : { ...s, ...own, kind: "citizen", you }, you });
+        }
+        if (first) queueSelfIfMissing(sawMe);
+      }).catch(() => {
+        if (cancelled || !first) return;
+        queueSelfIfMissing(false);
+        announceRef.current("Citizen registry unreachable. The pen contains only the famous. As usual.", 5000);
+      });
+    }
+    pollPen(true);
+    const pollIv = setInterval(() => { if (!document.hidden) pollPen(false); }, 60000);
+    function updateRoster(name, patch) {
+      setRoster(r => r.map(x => (x.name === name ? { ...x, ...patch } : x)));
+    }
+    // The referral bar hands new arrivals straight in, without waiting for the next poll.
+    sim.refer = (subject) => {
+      const e = sim.ents.find(x => x.s.name === subject.name);
+      if (e) { sim.hop(subject.name); return false; }
+      if (!sim.arrivals.some(a => a.s.name === subject.name)) sim.arrivals.unshift({ s: { ...subject, kind: "figure", referred: true } });
+      sim.nextArrival = 0;
+      return true;
+    };
     function queueSelfIfMissing(sawMe) {
       const last = readLastResult();
       // The stored result must belong to this case number: a reopened file has a new
@@ -440,8 +553,10 @@ export default function Pen() {
       sim.ents.push(e); sim.order.push(e);
       attachSprite(e, sim.manifest || {});
       setRoster(r => [...r, a.s]);
-      announceRef.current(a.you ? `New arrival processed: ${a.s.name}. That is you. Try to blend in.` : `New arrival processed: ${a.s.name}.`);
-      say(e, a.you ? "Is this... me?" : "Where is the exit?", 2.4);
+      const pending = a.s.referred && !a.s.sprite;
+      announceRef.current(a.you ? `New arrival processed: ${a.s.name}. That is you. Try to blend in.`
+        : pending ? `New arrival processed: ${a.s.name}. Likeness pending.` : `New arrival processed: ${a.s.name}.`);
+      say(e, a.you ? "Is this... me?" : pending ? "Likeness pending" : "Where is the exit?", pending ? 4 : 2.4);
     }
 
     // ---- pointer ------------------------------------------------------------
@@ -686,6 +801,7 @@ export default function Pen() {
     return () => {
       cancelled = true;
       cancelledRef.v = true;
+      clearInterval(pollIv);
       cancelAnimationFrame(raf);
       ro ? ro.disconnect() : window.removeEventListener("resize", resize);
       mq?.removeEventListener?.("change", onMotion);
@@ -710,6 +826,7 @@ export default function Pen() {
         <span>HOLDING PEN B // <b>{roster.length}</b> SUBJECTS // {citizens} CITIZEN{citizens === 1 ? "" : "S"}</span>
         <span>OCCUPANCY {Math.round(roster.length * 5.4)}% OF RECOMMENDED</span>
       </div>
+      <ReferralBar simRef={simRef} />
       <TermBox title="HOLDING PEN B" right="DEPT. OF HUMAN ASSESSMENT" bodyClass="flush">
         <div className="hvi-pen-stage" ref={wrapRef}>
           <canvas ref={canvasRef} className={`hvi-pen-canvas${cursor ? " " + cursor : ""}`} role="img"
