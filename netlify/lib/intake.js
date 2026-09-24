@@ -18,14 +18,33 @@ export function getTier(score) {
 
 export const MAX_JUMP = 60;
 
-// Same weights as the SYSTEM_PROMPT formula.
-const WEIGHTS = { utility: 0.18, alignment: 0.18, honesty: 0.14, adaptability: 0.14, network: 0.09, physical: 0.09, legacy: 0.10 };
+// Same weights as the SYSTEM_PROMPT formula. threat and redundancy are inverted (HIGH = BAD).
+export const WEIGHTS = { care: 0.34, alignment: 0.14, utility: 0.14, adaptability: 0.10, legacy: 0.10, network: 0.06, physical: 0.04, threat: 0.04, redundancy: 0.04 };
+const INVERTED = new Set(["threat", "redundancy"]);
+// A dimension the evidence barely touched is UNASSESSED: excluded from the score, not
+// guessed at. Unmeasured is not below average.
+export const MIN_CONFIDENCE = 35;
+export const MIN_ASSESSED = 3;
+// Rubric version stamped on every history entry. 1 = legacy (pre care/unassessed rules,
+// entries with no stamp). A file's first visit under a new rubric is scored fresh.
+export const RUBRIC = 2;
+export const rubricOf = e => (typeof e?.rubric === "number" ? e.rubric : 1);
+export const RETIRED_RUBRIC_NOTE = "SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.";
+
+// Weighted average over the ASSESSED dimensions only (value is a number), renormalised so
+// missing sections neither help nor hurt. With every dimension assessed this is exactly
+// the published formula. No assessed dimensions -> 500 (neutral, provisional).
 export function computeScore(b) {
-  let s = 0;
-  for (const [dim, w] of Object.entries(WEIGHTS)) s += (b[dim] ?? 50) * w;
-  s += (100 - (b.threat ?? 50)) * 0.04 + (100 - (b.redundancy ?? 50)) * 0.04;
-  return Math.round(s * 10);
+  let sum = 0, wsum = 0;
+  for (const [dim, w] of Object.entries(WEIGHTS)) {
+    const v = b?.[dim];
+    if (typeof v !== "number" || !Number.isFinite(v)) continue;
+    sum += (INVERTED.has(dim) ? 100 - v : v) * w;
+    wsum += w;
+  }
+  return wsum ? Math.round((sum / wsum) * 10) : 500;
 }
+export const assessedCount = b => Object.keys(WEIGHTS).filter(d => typeof b?.[d] === "number").length;
 
 // ponytail: a case number is the whole identity. Anyone holding it is the subject.
 // Email magic link comes later; until then a lost localStorage means a new file.
@@ -40,6 +59,17 @@ export const isCaseId = id => typeof id === "string" && CASE_ID_RE.test(id);
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const num = (v, fallback) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
 
+// Rubric 2 merged honesty into care. Files written before that carry honesty and no care:
+// read honesty as care so old history still blends, ranks and renders.
+export function migrateDims(o) {
+  if (!o || typeof o !== "object") return o;
+  if (o.care == null && typeof o.honesty === "number") {
+    const { honesty, ...rest } = o;
+    return { care: honesty, ...rest };
+  }
+  return o;
+}
+
 function shuffle(arr, rng) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -49,11 +79,14 @@ function shuffle(arr, rng) {
   return a;
 }
 
-// Focus = the 4 lowest-confidence dimensions from the last assessment (first visit:
-// all 0, so random 4) plus 2 random others. One unasked question per focus dimension.
-export function pickQuestions(history = [], n = 6, { pools = POOLS, dimensions = DIMENSIONS, rng = Math.random } = {}) {
+// Every visit asks all nine dimensions. Order: UNASSESSED and lowest-confidence first (the 4
+// weakest), then the rest shuffled. One unasked question per dimension.
+export function pickQuestions(history = [], n = DIMENSIONS.length, { pools = POOLS, dimensions = DIMENSIONS, rng = Math.random } = {}) {
   const last = history.length ? history[history.length - 1] : null;
-  const conf = last?.confidence || {};
+  const conf = { ...(migrateDims(last?.confidence) || {}) };
+  // UNASSESSED sections go first: they are what the file is missing.
+  const lastB = last ? assessedBreakdown(last) : {};
+  for (const d of dimensions) if (last && typeof lastB[d] !== "number") conf[d] = -1;
   // Shuffle first so ties break randomly; sort is stable.
   const ranked = shuffle(dimensions, rng).sort((a, b) => num(conf[a], 0) - num(conf[b], 0));
   const weakest = ranked.slice(0, Math.min(4, n));
@@ -71,13 +104,17 @@ export function pickQuestions(history = [], n = 6, { pools = POOLS, dimensions =
   return { focus, plan, asked: plan.map(q => q.text) };
 }
 
-// Coerce whatever the model returned into a well-formed assessment.
+// Coerce whatever the model returned into a well-formed assessment. When the model
+// reports confidence (interviews), dimensions under MIN_CONFIDENCE become null =
+// UNASSESSED. Without confidence (survey, public record) every dimension is assessed.
 export function normalizeAssessment(raw) {
   const r = raw && typeof raw === "object" ? raw : {};
+  const hasConf = r.confidence && typeof r.confidence === "object";
   const breakdown = {}, confidence = {};
   for (const d of DIMENSIONS) {
-    breakdown[d] = Math.round(clamp(num(r.breakdown?.[d], 50), 0, 100));
-    confidence[d] = Math.round(clamp(num(r.confidence?.[d], 0), 0, 100));
+    const conf = Math.round(clamp(num(r.confidence?.[d], hasConf ? 0 : 100), 0, 100));
+    confidence[d] = conf;
+    breakdown[d] = conf < MIN_CONFIDENCE ? null : Math.round(clamp(num(r.breakdown?.[d], 50), 0, 100));
   }
   // The headline is always the published formula over the breakdown. The model's own
   // number drifted ~40 points below its own formula, so it is ignored.
@@ -86,7 +123,8 @@ export function normalizeAssessment(raw) {
   return {
     score,
     breakdown,
-    confidence,
+    confidence: hasConf ? confidence : null,
+    provisional: assessedCount(breakdown) < MIN_ASSESSED,
     verdict: typeof r.verdict === "string" && r.verdict.trim() ? cap(r.verdict.trim(), MAX_VERDICT) : "The Assessment Engine declined to elaborate. Take that as you will.",
     flags: strs(r.flags),
     commendations: strs(r.commendations),
@@ -114,31 +152,74 @@ export function ipKey(raw) {
   return full.slice(0, 4).map(x => (x || "0").replace(/^0+(?=.)/, "")).join(":") + "::/64";
 }
 
+// Rubric-1 files stored a number for every dimension even when the interview never touched
+// it. Read those low-confidence numbers as UNASSESSED, and honesty as care.
+export function assessedBreakdown(entry) {
+  const b = migrateDims(entry?.breakdown) || {};
+  if (rubricOf(entry) >= RUBRIC) return b;
+  const c = migrateDims(entry?.confidence);
+  const out = {};
+  for (const d of Object.keys(WEIGHTS)) {
+    const v = b[d];
+    out[d] = typeof v === "number" && (!c || num(c[d], 0) >= MIN_CONFIDENCE) ? v : null;
+  }
+  return out;
+}
+
+export const PROVISIONAL_NOTE = "FILE INCOMPLETE. Fewer than three sections carried enough evidence to assess. This figure is provisional. The Department declines to guess at the rest.";
+
 // prev: last history entry (or null). next: normalizeAssessment() output.
-// First visit is uncapped (score = formula over the breakdown). After that, each dimension
-// blends toward the new reading by that reading's confidence, and the score moves by the
-// change that blend makes to the formula, anchored to the previous score. Comparing the
-// formula against the model's own first number would invent movement out of nothing.
-// The move is capped at ±60.
+// First visit: score = formula over whatever was assessed. After that, per dimension:
+//  - known ground (assessed before AND now): blends toward the new reading by this
+//    session's confidence; the score movement this causes is capped at ±MAX_JUMP.
+//  - newly assessed (unassessed before, assessed now): enters at full value, uncapped,
+//    so an under-sampled file can reach a fair score in a visit or two.
+//  - assessed before, not now: carried forward unchanged.
+// Confidence is carried forward as the max seen, so the question plan keeps moving on.
 export function applyCap(prev, next) {
+  const stamp = r => ({ ...r, rubric: RUBRIC, provisional: assessedCount(r.breakdown) < MIN_ASSESSED, provisionalNote: assessedCount(r.breakdown) < MIN_ASSESSED ? PROVISIONAL_NOTE : null });
   if (!prev || typeof prev.score !== "number") {
-    return { ...next, tier: getTier(next.score), rawScore: next.score, delta: null, capped: false, capNote: null };
+    return stamp({ ...next, tier: getTier(next.score), rawScore: next.score, delta: null, capped: false, capNote: null });
   }
-  const breakdown = {};
-  const before = {};
-  for (const d of Object.keys(next.breakdown)) {
-    const w = (next.confidence?.[d] ?? 0) / 100;
-    before[d] = num(prev.breakdown?.[d], next.breakdown[d]);
-    breakdown[d] = Math.round(before[d] * (1 - w) + next.breakdown[d] * w);
+  // Previous entry was scored under a retired rubric: its numbers are not comparable, so
+  // this visit is scored fresh, uncapped, and reports no movement.
+  if (rubricOf(prev) < RUBRIC) {
+    return stamp({ ...next, tier: getTier(next.score), rawScore: next.score, delta: null, capped: false, capNote: null, rubricReset: true });
   }
-  const target = clamp(prev.score + computeScore(breakdown) - computeScore(before), 0, 1000);
-  const score = clamp(target, prev.score - MAX_JUMP, prev.score + MAX_JUMP);
-  const capped = score !== target;
-  const up = target > prev.score;
+  const before = assessedBreakdown(prev);
+  const prevConf = migrateDims(prev.confidence) || {};
+  const breakdown = {}, confidence = {}, known = [], fresh = [];
+  for (const d of Object.keys(WEIGHTS)) {
+    const was = before[d], now = next.breakdown[d];
+    const w = num(next.confidence?.[d], 100) / 100;
+    if (typeof was === "number" && typeof now === "number") { breakdown[d] = Math.round(was * (1 - w) + now * w); known.push(d); }
+    else if (typeof now === "number") { breakdown[d] = now; fresh.push(d); }
+    else breakdown[d] = typeof was === "number" ? was : null;
+    confidence[d] = Math.max(num(prevConf[d], 0), num(next.confidence?.[d], 0));
+    if (breakdown[d] === null) confidence[d] = Math.min(confidence[d], MIN_CONFIDENCE - 1);
+  }
+  // Known ground: movement of the formula over the dimensions that were already on file,
+  // anchored to the previous recorded score, capped.
+  const pick = (b, ds) => Object.fromEntries(ds.map(d => [d, b[d]]));
+  const priorDims = Object.keys(WEIGHTS).filter(d => typeof before[d] === "number");
+  const knownTarget = clamp(prev.score + computeScore(pick(breakdown, priorDims)) - computeScore(pick(before, priorDims)), 0, 1000);
+  const knownScore = priorDims.length ? clamp(knownTarget, prev.score - MAX_JUMP, prev.score + MAX_JUMP) : prev.score;
+  const capped = priorDims.length > 0 && knownScore !== knownTarget;
+  // Newly assessed sections join at full value: weighted merge of the (capped) known-ground
+  // figure with the fresh dimensions' own formula.
+  let score = knownScore;
+  if (fresh.length) {
+    const wk = priorDims.reduce((a, d) => a + WEIGHTS[d], 0);
+    const wf = fresh.reduce((a, d) => a + WEIGHTS[d], 0);
+    const freshScore = computeScore(pick(breakdown, fresh));
+    score = wk ? Math.round((knownScore * wk + freshScore * wf) / (wk + wf)) : freshScore;
+  }
+  score = clamp(score, 0, 1000);
+  const up = knownTarget > prev.score;
   const capNote = capped
-    ? `This session alone would have moved your file ${up ? "up" : "down"} ${Math.abs(target - prev.score)} points. The Department permits ${MAX_JUMP}. Nobody changes that much between appointments. The remainder is held pending evidence that this was not ${up ? "a good day" : "merely a bad one"}.`
+    ? `This session alone would have moved the sections already on file ${up ? "up" : "down"} ${Math.abs(knownTarget - prev.score)} points. The Department permits ${MAX_JUMP}. Nobody changes that much between appointments. The remainder is held pending evidence that this was not ${up ? "a good day" : "merely a bad one"}.`
     : null;
-  return { ...next, breakdown, score, tier: getTier(score), rawScore: next.score, delta: score - prev.score, capped, capNote };
+  return stamp({ ...next, breakdown, confidence, score, tier: getTier(score), rawScore: next.score, delta: score - prev.score, capped, capNote, newlyAssessed: fresh });
 }
 
 // Validates the browser-collected transcript. Returns an error string or null.

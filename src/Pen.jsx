@@ -165,6 +165,7 @@ function SubjectCard({ subject, onClose }) {
               </>
             )}
           </ScoreCard>
+          {subject.you && subject.rubric < 2 && <div className="hvi-delta" style={{ margin: "8px 0" }}>SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.</div>}
           <Breakdown breakdown={subject.breakdown} />
           <button className="hvi-btn-primary" onClick={onClose}>Return subject to pen</button>
         </TermBox>
@@ -413,7 +414,7 @@ export default function Pen() {
         sawMe = sawMe || you;
         // Your own sealed file opens for you from this browser's copy; the server never sends it.
         const mine = you && readLastResult();
-        const own = mine && mine.caseId === myCase ? { verdict: mine.verdict, breakdown: mine.breakdown } : {};
+        const own = mine && mine.caseId === myCase ? { verdict: mine.verdict, breakdown: mine.breakdown, rubric: mine.rubric ?? 1, you: true } : {};
         sim.arrivals.push({ s: { ...s, ...own, kind: "citizen", you }, you });
       }
       queueSelfIfMissing(sawMe);
@@ -427,7 +428,7 @@ export default function Pen() {
       // The stored result must belong to this case number: a reopened file has a new
       // number and nothing on it yet.
       if (sawMe || !last || !myName || last.caseId !== myCase) return;
-      sim.arrivals.unshift({ s: { name: myName, score: last.score, tier: last.tier, breakdown: last.breakdown, verdict: last.verdict, kind: "citizen", you: true }, you: true });
+      sim.arrivals.unshift({ s: { name: myName, score: last.score, tier: last.tier, breakdown: last.breakdown, verdict: last.verdict, rubric: last.rubric ?? 1, kind: "citizen", you: true }, you: true });
     }
 
     function spawnArrival(a) {

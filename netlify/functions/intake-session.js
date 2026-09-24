@@ -42,7 +42,7 @@ export default async (req, context) => {
     const visit = record.history.length + 1;
     const last = record.history[record.history.length - 1];
     const returningNote = last
-      ? `Previous score ${last.score} (${last.tier}). Weakest file sections: ${focus.slice(0, 4).join(", ")}.`
+      ? `Previous score ${last.score} (${last.tier}). File sections with the least evidence: ${focus.slice(0, 4).join(", ")}.`
       : "First visit. No file on record.";
     const dynamicVariables = {
       case_number: record.caseId,

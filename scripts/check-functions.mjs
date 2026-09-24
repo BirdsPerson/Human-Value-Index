@@ -37,7 +37,7 @@ console.error = console.warn = () => {};
 // ---- fake Anthropic ----
 process.env.ANTHROPIC_API_KEY = "test";
 let claudeCalls = 0, claudeMode = "ok", lastUser = "", chatMode = "turn", lastChat = null;
-const dims = ["utility", "honesty", "adaptability", "threat", "redundancy", "network", "alignment", "physical", "legacy"];
+const dims = ["care", "alignment", "utility", "adaptability", "legacy", "network", "physical", "threat", "redundancy"];
 globalThis.fetch = async (url, init) => {
   assert.match(String(url), /api\.anthropic\.com/);
   claudeCalls++;
@@ -106,14 +106,22 @@ assert.equal(card.score, 542);
 assert.equal(card.verdict, undefined, "no verdict on the public pen");
 assert.equal(card.breakdown, undefined, "no breakdown on the public pen");
 
+// a hand-assigned sprite on the citizen card must survive the next assessment
+{ const e = globalThis.__blobs.get("hvi-pen").get(`citizen:${caseId}`); e.data.sprite = "/sprites/test.png"; }
+
 // second visit, new transcript: same breakdown at 60% confidence -> no phantom movement
 await post(session, "/api/intake-session", { caseId });
 const t2 = [...transcript, { role: "agent", text: "Anything else?" }, { role: "user", text: "No." }];
 r = await read(await post(score, "/api/intake-score", { caseId, transcript: t2 }));
 assert.equal(r.body.visit, 2);
-assert.match(lastUser, /PREVIOUS FILE:[\s\S]*Last recorded score: 542[\s\S]*more than 60 points/, "returning subject's prompt carries the previous file");
+assert.match(lastUser, /PREVIOUS FILE:[\s\S]*Last recorded score: 542[\s\S]*at most 60 points/, "returning subject's prompt carries the previous file");
+assert.match(lastUser, /Sections on file: care, alignment/, "previous file lists assessed sections");
+assert.ok(globalThis.__blobs.get("hvi-cases").get(caseId).data.history[0].transcript.length > 0, "transcript stored on the entry");
+assert.equal(globalThis.__blobs.get("hvi-cases").get(caseId).data.history[0].rubric, 2);
 assert.equal(r.body.delta, 0);
 assert.equal(r.body.capped, false);
+assert.equal(globalThis.__blobs.get("hvi-pen").get(`citizen:${caseId}`).data.sprite, "/sprites/test.png", "re-assessment keeps a hand-assigned sprite");
+assert.equal(globalThis.__blobs.get("hvi-pen").get("index").data.cards.find(c => c.key === `citizen:${caseId}`).sprite, "/sprites/test.png", "pen index carries the kept sprite");
 
 // engine failure refunds the case slot: five failures then a success still scores
 claudeMode = "overloaded";
@@ -153,7 +161,7 @@ r = await read(await post(chat, "/api/intake-chat", { caseId: chatCase, messages
 assert.equal(r.body.end, true);
 assert.ok(!r.body.reply.includes("[END_INTERVIEW]"), "marker stripped");
 assert.equal((await post(chat, "/api/intake-chat", { caseId: chatCase, messages: [{ role: "agent", text: "hi" }] })).status, 400, "last turn must be the subject's");
-assert.equal((await post(chat, "/api/intake-chat", { caseId: chatCase, messages: Array(41).fill({ role: "user", text: "x" }) })).status, 400);
+assert.equal((await post(chat, "/api/intake-chat", { caseId: chatCase, messages: Array(61).fill({ role: "user", text: "x" }) })).status, 400);
 assert.equal((await post(chat, "/api/intake-chat", { caseId: "nope", messages: [] })).status, 400);
 assert.equal((await post(chat, "/api/intake-chat", { caseId: chatCase, messages: [] }, { origin: "https://evil.example" })).status, 403);
 globalThis.__blobs.get("hvi-cases").get(noPlan).data.pending = undefined;

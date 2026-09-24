@@ -4,7 +4,7 @@ import { AGENT_PROMPT, FIRST_MESSAGE, fillVars, splitEnd, END_MARKER } from "../
 import { messagesError, toClaudeMessages } from "../netlify/functions/intake-chat.js";
 
 // variables: every placeholder in the real prompt gets filled, unknowns fall back
-const vars = { case_number: "HVI-ABCDEFGH", visit_number: "2", focus_dimensions: "honesty", question_plan: "Q1\nQ2", returning_note: "Back." };
+const vars = { case_number: "HVI-ABCDEFGH", visit_number: "2", focus_dimensions: "care", question_plan: "Q1\nQ2", returning_note: "Back." };
 for (const t of [AGENT_PROMPT, FIRST_MESSAGE]) assert.ok(!fillVars(t, vars).includes("{{"), "unfilled placeholder");
 assert.ok(fillVars(AGENT_PROMPT, vars).includes("Q1\nQ2"));
 assert.equal(fillVars("{{ case_number }}|{{visit_number}}|{{mystery}}", {}), "HVI-UNFILED|1|");
@@ -24,7 +24,8 @@ assert.ok(messagesError([{ role: "system", text: "x" }]));
 assert.ok(messagesError([{ role: "user", text: 5 }]));
 assert.ok(messagesError([{ role: "user", text: "a" }, { role: "agent", text: "b" }]), "last turn must be the subject's");
 assert.ok(messagesError([{ role: "user", text: "   " }]), "empty reply");
-assert.ok(messagesError(Array(41).fill({ role: "user", text: "x" })));
+assert.ok(messagesError(Array(61).fill({ role: "user", text: "x" })));
+assert.equal(messagesError(Array(59).fill(0).map((_, i) => ({ role: i % 2 ? "agent" : "user", text: "x" }))), null, "a full nine-section interview fits");
 assert.ok(messagesError([{ role: "user", text: "x".repeat(20001) }]));
 
 // API shape: starts with user, alternates, merges runs

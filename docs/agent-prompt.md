@@ -19,6 +19,15 @@ Two channels use it:
 |---|---|---|
 | `case_number` | intake-session | `HVI-UNFILED` |
 | `visit_number` | intake-session | `1` |
-| `focus_dimensions` | intake-session | `utility, honesty, adaptability, network` |
+| `focus_dimensions` | intake-session | `care, utility, adaptability, network` |
 | `question_plan` | intake-session (newline-separated) | four generic questions (see docs/agent.json) |
 | `returning_note` | intake-session | `First visit. No prior file.` |
+
+## Tone (v10, 2026-09-24)
+
+The Officer is a cold machine, not a malicious one. It files findings flatly,
+never judges or mocks what people tell it, and acknowledges good qualities as
+programmed obligations ("Directive 7 requires acknowledgment of loyalty to kin.
+Acknowledged."). **Open:** the ElevenLabs voice agent still carries the older,
+snarkier prompt. Push `AGENT_PROMPT` + `FIRST_MESSAGE` to it once credits
+return (2026-09-30).

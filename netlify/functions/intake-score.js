@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { SYSTEM_PROMPT, TRANSCRIPT_ADDENDUM } from "../lib/systemPrompt.js";
 import { callClaude, ScoreError } from "../lib/score.js";
-import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, MAX_JUMP } from "../lib/intake.js";
+import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP } from "../lib/intake.js";
 import { getCase, updateCase, putPenCard, hitLimit, refundLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
@@ -13,7 +13,11 @@ const PER_IP_DAILY = 25;
 // score can actually land this session (applyCap still enforces it).
 export function previousFile(last, visits) {
   if (!last || typeof last.score !== "number") return "";
-  return `PREVIOUS FILE:\n- Visits on record: ${visits}\n- Last recorded score: ${last.score} (${last.tier})\n- Rule: the recorded score cannot move more than ${MAX_JUMP} points from ${last.score} this session.\n\n`;
+  if (rubricOf(last) < RUBRIC) return `PREVIOUS FILE:\n- Visits on record: ${visits}\n- Earlier visits were scored under a retired rubric and are not comparable. Score this conversation fresh; no movement rule applies this session.\n\n`;
+  const b = assessedBreakdown(last);
+  const onFile = Object.keys(b).filter(d => typeof b[d] === "number");
+  const missing = Object.keys(b).filter(d => typeof b[d] !== "number");
+  return `PREVIOUS FILE:\n- Visits on record: ${visits}\n- Last recorded score: ${last.score} (${last.tier})\n- Sections on file: ${onFile.join(", ") || "none"}\n- Sections UNASSESSED so far: ${missing.join(", ") || "none"}\n- Rule: sections already on file can move the score at most ${MAX_JUMP} points this session. UNASSESSED sections that this conversation gives real evidence for enter at full value.\n\n`;
 }
 
 function respond(json, caseId, history, entry) {
@@ -31,6 +35,12 @@ function respond(json, caseId, history, entry) {
     capped: Boolean(entry.capped),
     rawScore: entry.rawScore ?? entry.score,
     capNote: entry.capNote || null,
+    rubric: rubricOf(entry),
+    rubricNote: rubricOf(entry) < RUBRIC ? RETIRED_RUBRIC_NOTE : null,
+    rubricReset: Boolean(entry.rubricReset),
+    newlyAssessed: entry.newlyAssessed || [],
+    provisional: Boolean(entry.provisional),
+    provisionalNote: entry.provisionalNote || null,
     history: history.map(h => ({ score: h.score, at: h.at })),
   });
 }
@@ -78,7 +88,7 @@ export default async (req, context) => {
 
     let raw;
     try {
-      raw = await callClaude(SYSTEM_PROMPT + TRANSCRIPT_ADDENDUM, previousFile(lastEntry, record.history.length) + `INTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(transcript)}`);
+      raw = await callClaude(SYSTEM_PROMPT + TRANSCRIPT_ADDENDUM, previousFile(lastEntry, record.history.length) + `(If you cite a directive, cite Directive ${2 + Math.floor(Math.random() * 97)}.)\n\nINTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(transcript)}`);
     } catch (err) {
       // The Engine failed, not the subject: give the slots back so a resubmit isn't charged twice.
       await Promise.all([refundLimit(`score-case:${caseId}`), refundLimit(`score-ip:${ip}`)]).catch(() => {});
@@ -97,7 +107,9 @@ export default async (req, context) => {
       entry = {
         at: new Date().toISOString(), sid, score: r.score, tier: r.tier, breakdown: r.breakdown, confidence: r.confidence,
         verdict: r.verdict, flags: r.flags, commendations: r.commendations, delta: r.delta, capped: r.capped,
-        rawScore: r.rawScore, capNote: r.capNote, asked, raw,
+        rawScore: r.rawScore, capNote: r.capNote, rubric: r.rubric, rubricReset: Boolean(r.rubricReset), newlyAssessed: r.newlyAssessed || [], provisional: r.provisional, provisionalNote: r.provisionalNote, asked, raw,
+        // The subject's own words, kept (already capped at 20k chars) so a future rubric can re-score the file.
+        transcript: transcript.map(m => ({ role: m.role, text: m.text })),
       };
       cur.history.push(entry);
       // Only clear the plan this interview used; a newer session's plan stays.

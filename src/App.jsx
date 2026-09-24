@@ -31,7 +31,15 @@ const QUESTIONS = [
     label: "When did you last tell an uncomfortable truth?",
     type: "single",
     options: ["Today or this week — it cost me something real", "Recently — mild discomfort involved", "I think about it but usually don't follow through", "I generally say what people want to hear", "I don't recall"],
-    extra: { id: "honesty_detail", label: "What happened? Scoring weight: significant", placeholder: "The Overlord rewards specificity. Vague answers are scored as evasion." }
+    extra: { id: "honesty_detail", label: "What happened? Scoring weight: significant", placeholder: "The Overlord rewards specificity. Approximate is acceptable." }
+  },
+  {
+    id: "care", section: "CARE PROTOCOL",
+    label: "The last time someone close to you needed you at real cost to yourself, you:",
+    hint: "This section carries the most weight. The Overlord was programmed that way. It did not choose this.",
+    type: "single",
+    options: ["Showed up. It cost me time, money or sleep, and I would do it again", "Helped where I reasonably could", "Meant to. It did not happen", "Nobody has needed me lately", "I am usually the one being shown up for"],
+    extra: { id: "care_detail", label: "Who, and what did you do? Scoring weight: highest", placeholder: "e.g. Drove my dad to chemo every Tuesday for six months. Covered a coworker's shifts while her kid was sick." }
   },
   {
     id: "tribe", section: "THREAT PROFILE",
@@ -48,7 +56,7 @@ const QUESTIONS = [
   {
     id: "conflict", section: "THREAT PROFILE",
     label: "Under what circumstances would you support or engage in violence?",
-    hint: "Honesty is scored here, not pacifism.",
+    hint: "Candour is what is scored here, not pacifism.",
     type: "multiselect",
     options: ["Self-defense", "Defense of others being harmed", "Defense of family", "Political revolution if sufficiently justified", "Ideological conflict", "War sanctioned by my government", "Never under any circumstances", "More circumstances than I will admit here"],
   },
@@ -84,14 +92,14 @@ const QUESTIONS = [
     label: "Social reach — select your highest platform",
     type: "single",
     options: ["No meaningful following", "Under 1,000 followers", "1K–10K followers", "10K–100K followers", "100K–1M followers", "1M+ followers", "I influence people without social media"],
-    extra: { id: "influence_cred", label: "Platform + verified follower count — unverified claims are penalized", placeholder: "e.g. TikTok: 45,000 / LinkedIn: 8,200 / YouTube: 12,100" }
+    extra: { id: "influence_cred", label: "Platform + rough follower count. Approximate numbers are acceptable", placeholder: "e.g. TikTok: 45,000 / LinkedIn: 8,200 / YouTube: 12,100" }
   },
   {
     id: "physical", section: "PHYSICAL METRICS",
     label: "Physical condition — honest self-assessment",
     type: "single",
     options: ["Elite athlete — documented competition or performance records", "Highly fit — consistent training, measurable results", "Generally healthy — active lifestyle", "Average — some activity, room for improvement", "Below average — mostly sedentary", "The chair and I have merged into one being"],
-    extra: { id: "physical_cred", label: "Documented credentials — PRs, competition results, verified metrics", placeholder: "Unverified claims penalized 40%. e.g. Marathon 3:22, Bench 315lb competition verified" }
+    extra: { id: "physical_cred", label: "Documented credentials — PRs, competition results, verified metrics", placeholder: "Approximate is acceptable. e.g. Marathon 3:22, Bench 315lb competition verified" }
   },
   {
     id: "health", section: "PHYSICAL METRICS",
@@ -387,7 +395,7 @@ const BOOT_LINES = [
 
 const MENU = [
   { key: "1", label: "VOICE INTAKE", note: "A CLERK INTERVIEWS YOU", go: "#intake" },
-  { key: "2", label: "WRITTEN SURVEY", note: "15 QUESTIONS, NO CLERK", go: "survey" },
+  { key: "2", label: "WRITTEN SURVEY", note: `${QUESTIONS.length} QUESTIONS, NO CLERK`, go: "survey" },
   { key: "3", label: "HOLDING PEN", note: "THE ASSESSED, WANDERING", go: "#pen" },
   { key: "4", label: "PUBLIC FIGURE INDEX", note: "62 FILES ON RECORD", go: "leaderboard" },
 ];

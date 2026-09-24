@@ -9,12 +9,12 @@ import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMI
 
 export const CHAT_MODEL = "claude-haiku-4-5-20251001";
 const CHAT_MAX_TOKENS = 300;
-export const MAX_MESSAGES = 40;
+export const MAX_MESSAGES = 60;
 export const MAX_CHARS = 20000;
-const PER_CASE_DAILY = 60;
+const PER_CASE_DAILY = 90;
 const PER_IP_DAILY = 150;
 const GLOBAL_CHAT_DAILY = Number(process.env.HVI_CHAT_DAILY_CAP) || 1500;
-// Past this many messages the Officer is told to close, so the 40-message cap is never hit mid-interview.
+// Past this many messages the Officer is told to close, so the message cap is never hit mid-interview.
 const WRAP_UP_AT = MAX_MESSAGES - 6;
 
 const CLOSING_FALLBACK = "That will do. Your file has been submitted for assessment. Please do not wait by the door; it makes the other subjects nervous.";

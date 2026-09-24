@@ -34,6 +34,11 @@ const PEN_INDEX = "index";
 export async function putPenCard(caseId, card) {
   const store = pen();
   const key = `citizen:${caseId}`;
+  // A hand-assigned sprite (e.g. /sprites/scott.png) survives re-assessment.
+  if (card.sprite == null) {
+    const prev = await store.get(key, { type: "json" }).catch(() => null);
+    if (prev?.sprite) card = { ...card, sprite: prev.sprite };
+  }
   await store.setJSON(key, card);
   for (let attempt = 0; attempt < 5; attempt++) {
     const cur = await store.getWithMetadata(PEN_INDEX, { type: "json" });

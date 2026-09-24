@@ -76,16 +76,31 @@ export function ScoreCard({ score, tierLabel, verdict, label = "YOUR VALUE INDEX
   );
 }
 
+// Rubric 2, heaviest weight first. Rubric-1 files carry honesty and no care;
+// honesty is read as care so old results still render.
+export const DIM_ORDER = ["care", "alignment", "utility", "adaptability", "legacy", "network", "physical", "threat", "redundancy"];
+const withCare = o => (o && o.care == null && typeof o.honesty === "number" ? { ...o, care: o.honesty } : o);
+
 export function Breakdown({ breakdown, confidence }) {
   if (!breakdown) return null;
+  const b = withCare(breakdown);
+  const c = withCare(confidence);
   return (
     <TermBox title="CATEGORY BREAKDOWN">
       <div className="hvi-rows" role="list">
-        {Object.entries(breakdown).map(([k, v]) => {
+        {DIM_ORDER.map(k => {
+          const v = b[k];
+          if (typeof v !== "number") {
+            return (
+              <div key={k} role="listitem" aria-label={`${k}: unassessed`}>
+                <span aria-hidden="true"><span className="muted">{pad(k.toUpperCase(), 14)}</span><span className="ghost">{"-- UNASSESSED --"}</span></span>
+              </div>
+            );
+          }
           const inv = k === "threat" || k === "redundancy";
           const display = inv ? (100 - v) : v;
           const color = display > 70 ? "#4ade80" : display > 40 ? "#fbbf24" : "#f87171";
-          const conf = confidence && typeof confidence[k] === "number" ? confidence[k] : null;
+          const conf = c && typeof c[k] === "number" ? c[k] : null;
           return (
             <div key={k} role="listitem" aria-label={`${k}${inv ? ", lower is better" : ""}: ${v}${conf !== null ? `, evidence ${conf}%` : ""}`}>
               <span aria-hidden="true">
@@ -98,6 +113,9 @@ export function Breakdown({ breakdown, confidence }) {
           );
         })}
       </div>
+      {DIM_ORDER.some(k => typeof b[k] !== "number") && (
+        <div className="ghost" style={{ marginTop: 8 }}>UNASSESSED: INSUFFICIENT DATA. THE DEPARTMENT DECLINES TO GUESS. EXCLUDED FROM THE SCORE, NOT COUNTED AGAINST IT.</div>
+      )}
     </TermBox>
   );
 }
@@ -126,16 +144,18 @@ function Sparkline({ history }) {
 }
 
 function deltaLine(r) {
+  if (r.rubricReset) return "Earlier visits were scored under a retired rubric. This visit was scored fresh. Previous figures are not comparable and have not been carried forward.";
   const visits = r.history?.length || 1;
-  if (visits <= 1 || typeof r.delta !== "number") return "First assessment. Baseline established. Everything from here is a deviation.";
+  if (visits <= 1 || typeof r.delta !== "number") return "First assessment. Baseline established.";
   const d = r.delta;
-  let line = d > 0 ? `+${d} since your last visit. The Overlord has adjusted its estimate. Reluctantly.`
-    : d < 0 ? `${d} since your last visit. Your file has deteriorated. It was not a strong file to begin with.`
-    : "No change since your last visit. Consistency is a trait. Not necessarily a good one.";
+  let line = d > 0 ? `+${d} since your last visit. Estimate adjusted.`
+    : d < 0 ? `${d} since your last visit. Estimate adjusted.`
+    : "No change since your last visit. The file is consistent.";
+  if (Array.isArray(r.newlyAssessed) && r.newlyAssessed.length) line += ` Sections newly assessed: ${r.newlyAssessed.join(", ").toUpperCase()}. They entered at full value.`;
   if (r.capped && r.capNote) line += ` ${r.capNote}`;
   else if (r.capped) {
     const raw = r.rawScore ?? r.raw;
-    line += ` Movement is capped at ±60 per session${typeof raw === "number" ? `; this session alone assessed you at ${raw}` : ""}. The Overlord does not believe in overnight transformations. Neither should you.`;
+    line += ` Movement on sections already on file is capped at ±60 per session${typeof raw === "number" ? `; this session alone assessed you at ${raw}` : ""}.`;
   }
   return line;
 }
@@ -326,7 +346,7 @@ export default function Intake() {
     try {
       const r = await postJSON("/api/intake-score", { caseId: caseRef.current, transcript: lines });
       setResult(r);
-      writeLastResult({ caseId: caseRef.current, score: r.score, tier: r.tier, breakdown: r.breakdown, verdict: r.verdict, at: Date.now() });
+      writeLastResult({ caseId: caseRef.current, score: r.score, tier: r.tier, breakdown: r.breakdown, verdict: r.verdict, rubric: r.rubric ?? 2, at: Date.now() });
       setStage("result");
     } catch (e) {
       scoredRef.current = false;
@@ -521,6 +541,7 @@ export default function Intake() {
           label={`YOUR VALUE INDEX // VISIT ${visits}`} />
         <TermBox title="FILE MOVEMENT">
           <div className="hvi-delta">{deltaLine(result)}</div>
+          {result.provisional && <div className="hvi-delta" style={{ marginTop: 8 }}>{result.provisionalNote || "FILE INCOMPLETE. This figure is provisional."}</div>}
         </TermBox>
         <Sparkline history={result.history} />
         {result.commendations?.length > 0 && (
