@@ -22,6 +22,10 @@ const REFER_DAILY = Number(process.env.HVI_REFER_DAILY_CAP) || 50;
 const LOOKUP_DAILY = Number(process.env.HVI_REFER_LOOKUP_DAILY) || 300;
 const MAX_LOOK = 400;
 const DECLINE = new Set(["minor", "victim", "pending_case"]);
+// Owner cases (env HVI_OWNER_CASES, comma list) skip the monthly quota and the assessed
+// check. They still pay the IP, lookup, global referral and Anthropic caps.
+const OWNER = new Set(String(process.env.HVI_OWNER_CASES || "").split(",").map(s => s.trim()).filter(Boolean));
+const isOwner = id => OWNER.has(id);
 
 // Figures on file are static and fully public; referred ones go through publicFigure.
 const onFileCard = f => ({
@@ -42,6 +46,7 @@ export default async (req, context) => {
     const id = new URL(req.url).searchParams.get("caseId");
     if (!id) return json(200, { remaining: null, assessed: false });
     if (!isCaseId(id)) return json(400, { error: "That is not a case number." });
+    if (isOwner(id)) return json(200, { remaining: null, assessed: true, owner: true });
     try {
       if (!(await getCase(id))?.history?.length) return json(200, { remaining: null, assessed: false });
       return json(200, { remaining: remainingThisMonth(await peekLimit(`refer-case:${id}`, "month")), assessed: true });
@@ -72,7 +77,7 @@ export default async (req, context) => {
 
   // Only an assessed citizen refers. Checked before anything is charged.
   try {
-    if (!caseId || !(await getCase(caseId))?.history?.length) return json(403, { error: NOT_ASSESSED, reason: "unassessed" });
+    if (!isOwner(caseId) && (!caseId || !(await getCase(caseId))?.history?.length)) return json(403, { error: NOT_ASSESSED, reason: "unassessed" });
   } catch (err) {
     console.error("refer case read failed", err);
     return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
@@ -105,11 +110,12 @@ export default async (req, context) => {
     const stripped = wiki.title.replace(/\s*\([^)]*\)\s*$/, "");
     const displayName = slugify(stripped) === slug ? stripped : wiki.title;
 
-    const month = await hitLimit(`refer-case:${caseId}`, PER_CASE_MONTHLY, "month");
+    const owner = isOwner(caseId);
+    const month = owner ? { ok: true, count: 0 } : await hitLimit(`refer-case:${caseId}`, PER_CASE_MONTHLY, "month");
     if (!month.ok) {
       return json(429, { error: `This case has filed ${PER_CASE_MONTHLY} referrals this cycle. The Department's appetite is finite. Yours should be too.`, caseId, remaining: 0 }, { "Retry-After": "86400" });
     }
-    const refund = () => refundLimit(`refer-case:${caseId}`, "month").catch(() => {});
+    const refund = () => (owner ? Promise.resolve() : refundLimit(`refer-case:${caseId}`, "month").catch(() => {}));
     if (!(await hitLimit("refer-global", REFER_DAILY)).ok) {
       await refund();
       return json(503, { error: "The Department has admitted its daily quota of public figures. The pen is full of people who were confident they mattered. Return tomorrow.", caseId }, { "Retry-After": "3600" });
@@ -179,8 +185,8 @@ export default async (req, context) => {
       const won = await getFigure(slug);
       return json(200, { ...onFileBody(publicFigure(won || card)), caseId });
     }
-    const used = await peekLimit(`refer-case:${caseId}`, "month").catch(() => month.count);
-    return json(201, { status: "created", message: `New arrival processed: ${displayName}. Likeness pending.`, subject: publicFigure(card), caseId, remaining: remainingThisMonth(used) });
+    const used = owner ? null : await peekLimit(`refer-case:${caseId}`, "month").catch(() => month.count);
+    return json(201, { status: "created", message: `New arrival processed: ${displayName}. Likeness pending.`, subject: publicFigure(card), caseId, remaining: owner ? null : remainingThisMonth(used) });
   } catch (err) {
     if (err instanceof ScoreError) return json(err.status, { error: err.message });
     console.error("refer failed", err);

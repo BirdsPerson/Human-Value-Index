@@ -36,6 +36,7 @@ console.error = console.warn = () => {};
 
 // ---- fake Anthropic ----
 process.env.ANTHROPIC_API_KEY = "test";
+process.env.HVI_OWNER_CASES = "HVI-OWNERAAA";
 let claudeCalls = 0, claudeMode = "ok", lastUser = "", chatMode = "turn", lastChat = null;
 const dims = ["care", "alignment", "utility", "adaptability", "legacy", "network", "physical", "threat", "redundancy"];
 // Wikipedia/Wikidata for /api/refer: a tiny routed stub.
@@ -262,6 +263,9 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
     [/srsearch=Bob%20Ross/, { query: { search: [{ title: "Bob Ross" }] } }],
     [/summary\/Bob_Ross/, { title: "Bob Ross", type: "standard", extract: "x", wikibase_item: "Q57302" }],
     human("Q57302"),
+    [/srsearch=Grace%20Hopper%20Owner/, { query: { search: [{ title: "Terence McKenna" }] } }],
+    [/summary\/Terence_McKenna/, { title: "Terence McKenna", type: "standard", extract: "x", wikibase_item: "Q380407" }],
+    human("Q380407"),
   ];
   const casesBefore = globalThis.__blobs.get("hvi-cases").size;
   // no case, or a case with no completed assessment: refused before anything is charged
@@ -347,6 +351,17 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
   globalThis.__blobs.get("hvi-figures").set("dolly-parton", { data: { slug: "dolly-parton", removed: true, wikidata: "Q180453" }, etag: "x" });
   r = await read(await post(refer, "/api/refer", { name: "Dolly Parton", caseId }, { ip: "192.0.2.53" }));
   assert.equal(r.status, 410);
+
+  // the owner case: no assessment on file, no monthly quota, still a normal scored referral
+  const own = await read(await refer(new Request(HOST + "/api/refer?caseId=HVI-OWNERAAA"), {}));
+  assert.equal(own.body.assessed, true); assert.equal(own.body.owner, true); assert.equal(own.body.remaining, null);
+  r = await read(await post(refer, "/api/refer", { name: "Grace Hopper Owner", caseId: "HVI-OWNERAAA" }, { ip: "192.0.2.60" }));
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.remaining, null, "the owner has no monthly counter");
+  assert.ok(![...globalThis.__blobs.get("hvi-limits").keys()].some(k => k.includes("refer-case:HVI-OWNERAAA")), "no monthly charge for the owner");
+  // a non-owner stranger with no case is still refused
+  r = await read(await post(refer, "/api/refer", { name: "Grace Hopper Owner" }, { ip: "192.0.2.61" }));
+  assert.ok(r.status === 200 || r.status === 403, "now on file, or refused: never scored for a stranger");
 }
 
 

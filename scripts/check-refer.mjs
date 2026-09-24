@@ -138,3 +138,12 @@ assert.equal(fc.checked, 0, "unknown statuses and junk entries are ignored");
 assert.ok(summarizeFactCheck({ claims: [], verdict: "x".repeat(900) }, "o").verdict.length <= 700);
 
 console.log("check-refer ok");
+
+// pending_case is narrow: only people whose public record is essentially the case
+{
+  const { REFERRAL_ADDENDUM } = await import("../netlify/lib/publicRecord.js");
+  const assert2 = (await import("node:assert/strict")).default;
+  assert2.match(REFERRAL_ADDENDUM, /"pending_case" ONLY if they are notable chiefly/);
+  assert2.match(REFERRAL_ADDENDUM, /heads of state[^.]*is NOT declined/);
+  assert2.match(REFERRAL_ADDENDUM, /never lower any score/);
+}

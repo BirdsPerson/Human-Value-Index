@@ -10,7 +10,7 @@ import {
   floorTop, walkTop, walkBot, roomX1, doorX, floorAt, prefsFor, chooseFloor, stayFor, isLow,
   makeLift, stepLift, leaveLift, stepSubject, arrive, countFloors, occupancyLine, procZone,
 } from "./building.js";
-import { ScoreCard, Breakdown, readCaseId, writeCaseId, readLastResult } from "./Intake.jsx";
+import { ScoreCard, Breakdown, readCaseId, writeCaseId, readLastResult, CaseLogon } from "./Intake.jsx";
 import { TermBox, Rule, Typed, pad, padL } from "./term.jsx";
 
 const FONT = "'Fira Mono', ui-monospace, Menlo, monospace";
@@ -228,6 +228,7 @@ function ReferralBar({ simRef }) {
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState(null);         // { text, tone }
   const [remaining, setRemaining] = useState(null);
+  const [needRestore, setNeedRestore] = useState(null);   // the name to retry once a file is restored
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -239,10 +240,11 @@ function ReferralBar({ simRef }) {
     return () => { dead = true; };
   }, []);
 
-  async function submit(e) {
+  async function submit(e, retryName) {
     e?.preventDefault();
-    const n = name.trim();
+    const n = (retryName ?? name).trim();
     if (!n || busy) return;
+    setNeedRestore(null);
     setBusy(true);
     setOut({ text: "PROCESSING REFERRAL...", tone: "" });
     const ctl = new AbortController();
@@ -255,7 +257,12 @@ function ReferralBar({ simRef }) {
       const d = await r.json().catch(() => ({}));
       if (d.caseId) writeCaseId(d.caseId);
       if (typeof d.remaining === "number") setRemaining(d.remaining);
-      if (!r.ok) { setOut({ text: d.error || "The referral desk is closed. The Department does not say why.", tone: "err" }); return; }
+      if (!r.ok) {
+        setOut({ text: d.error || "The referral desk is closed. The Department does not say why.", tone: "err" });
+        // Not assessed usually means this browser lost the case number: offer the restore here.
+        if (d.reason === "unassessed") setNeedRestore(n);
+        return;
+      }
       const subject = d.subject;
       if (d.status === "created") {
         simRef.current?.refer?.(subject);
@@ -288,6 +295,12 @@ function ReferralBar({ simRef }) {
       <div id="hvi-refer-out" className={`hvi-refer-out${out?.tone ? " " + out.tone : ""}`} role="status" aria-live="polite">
         {out ? <Typed key={out.text} as="span" text={out.text} cps={50} cursorAfter={busy} /> : null}
       </div>
+      {needRestore && (
+        <div className="hvi-refer-restore">
+          <div className="hvi-refer-quota">ALREADY ASSESSED ON ANOTHER BROWSER? RESTORE A FILE &gt; HVI-________</div>
+          <CaseLogon autoFocus onRestored={() => { const n = needRestore; setNeedRestore(null); submit(null, n); }} />
+        </div>
+      )}
       <div id="hvi-refer-quota" className="hvi-refer-quota">
         {remaining == null ? "PUBLIC FIGURES ONLY. PRIVATE CITIZENS ARE NOT PROCESSED ON REQUEST."
           : `REFERRALS REMAINING THIS CYCLE: ${remaining}. PUBLIC FIGURES ONLY.`}
