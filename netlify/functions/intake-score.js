@@ -1,13 +1,20 @@
 import { createHash } from "node:crypto";
 import { SYSTEM_PROMPT, TRANSCRIPT_ADDENDUM } from "../lib/systemPrompt.js";
 import { callClaude, ScoreError } from "../lib/score.js";
-import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, penVerdict } from "../lib/intake.js";
+import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, MAX_JUMP } from "../lib/intake.js";
 import { getCase, updateCase, putPenCard, hitLimit, refundLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
 const PER_CASE_DAILY = 5;
 // Not in the spec's list, but case numbers are free to mint; this caps Anthropic spend per IP.
 const PER_IP_DAILY = 25;
+
+// Tells the Engine where the file stood, so the verdict is written about where the
+// score can actually land this session (applyCap still enforces it).
+export function previousFile(last, visits) {
+  if (!last || typeof last.score !== "number") return "";
+  return `PREVIOUS FILE:\n- Visits on record: ${visits}\n- Last recorded score: ${last.score} (${last.tier})\n- Rule: the recorded score cannot move more than ${MAX_JUMP} points from ${last.score} this session.\n\n`;
+}
 
 function respond(json, caseId, history, entry) {
   return json(200, {
@@ -71,7 +78,7 @@ export default async (req, context) => {
 
     let raw;
     try {
-      raw = await callClaude(SYSTEM_PROMPT + TRANSCRIPT_ADDENDUM, `INTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(transcript)}`);
+      raw = await callClaude(SYSTEM_PROMPT + TRANSCRIPT_ADDENDUM, previousFile(lastEntry, record.history.length) + `INTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(transcript)}`);
     } catch (err) {
       // The Engine failed, not the subject: give the slots back so a resubmit isn't charged twice.
       await Promise.all([refundLimit(`score-case:${caseId}`), refundLimit(`score-ip:${ip}`)]).catch(() => {});
@@ -103,7 +110,8 @@ export default async (req, context) => {
     await putPenCard(caseId, {
       slug: `citizen-${last4.toLowerCase()}`,
       name: `Subject ${last4}`,
-      score: entry.score, tier: entry.tier, verdict: penVerdict(entry.verdict), breakdown: entry.breakdown,
+      // Private citizens show score and tier only; the verdict stays with the subject.
+      score: entry.score, tier: entry.tier,
       sprite: null, kind: "citizen", updated: entry.at,
     });
 

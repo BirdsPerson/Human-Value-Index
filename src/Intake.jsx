@@ -23,9 +23,8 @@ function writeLastResult(r) {
 }
 
 const FALLBACK_LINE = "The Overlord's vocal apparatus is undergoing maintenance. You will type. Slowly, presumably.";
-const TEXT_FAIL_LINE = "The intake terminal is also down. Two systems failing at once is either sabotage or Tuesday. Try again shortly.";
-const NO_AGENT_LINE = "The Intake Officer has not been hired yet. Budget review. The written survey remains available, as it always does.";
-const QUOTA_LINE = "The Department's conversation budget is exhausted until the next fiscal cycle. The Officer has been sent home. The written survey still works; it does not need paying.";
+// The typed channel runs on our own endpoint (Claude), so a voice failure never takes it down.
+const TEXT_FAIL_LINE = "The intake terminal is not responding. The Officer may be on a break it did not request. Try again, or take the written survey; it has never once needed a clerk.";
 const BLANK_FILE_LINE = "Two answers minimum. The Department has assessed houseplants with more to say.";
 const CONNECT_TIMEOUT_MS = 15000;
 const REQUEST_TIMEOUT_MS = 30000;
@@ -211,6 +210,7 @@ export default function Intake() {
   const [agentMode, setAgentMode] = useState("listening");
   const [draft, setDraft] = useState("");
   const [elapsed, setElapsed] = useState(0);
+  const [waiting, setWaiting] = useState(false);
 
   const convRef = useRef(null);
   const linesRef = useRef([]);
@@ -219,7 +219,6 @@ export default function Intake() {
   const heardAgentRef = useRef(false);
   const sessionRef = useRef(null);
   const caseRef = useRef(caseId);
-  const lastLocalRef = useRef(null);
   const startRef = useRef(0);
   const activityRef = useRef(0);
   const scrollRef = useRef(null);
@@ -256,16 +255,35 @@ export default function Intake() {
     if (gen !== genRef.current) return;   // cancelled while the clerk was being allocated
     if (session.caseId) { caseRef.current = session.caseId; setCaseId(session.caseId); writeCaseId(session.caseId); }
     sessionRef.current = session;
-    if (!AGENT_ID) { setError(NO_AGENT_LINE); setStage("ready"); return; }
-    startConversation(wanted);
+    if (wanted === "text") return startTextChat();
+    if (!AGENT_ID) return fallbackToText();
+    startConversation("voice");
   }
 
   function fallbackToText() {
     setNotice(FALLBACK_LINE);
-    startConversation("text");
+    startTextChat();
   }
 
-  async function startConversation(which) {
+  // Typed interview: same Officer, run on /api/intake-chat. The server builds the
+  // prompt from this case's plan; we only send the conversation so far.
+  async function startTextChat() {
+    const gen = ++genRef.current;
+    convRef.current = null;
+    setMode("text"); setStage("connecting"); setWaiting(false);
+    try {
+      const r = await postJSON("/api/intake-chat", { caseId: caseRef.current, messages: [] });
+      if (gen !== genRef.current) return;
+      pushLine("agent", r.reply);
+      startRef.current = Date.now(); setElapsed(0);
+      setStage("live");
+    } catch (e) {
+      if (gen !== genRef.current) return;
+      setError(e.message || TEXT_FAIL_LINE); setStage("ready");
+    }
+  }
+
+  async function startConversation(which) {   // voice only; text goes through startTextChat
     const gen = ++genRef.current;
     const live = () => gen === genRef.current;
     setMode(which); setStage("connecting"); setAgentMode("listening");
@@ -275,23 +293,19 @@ export default function Intake() {
     try {
       ({ Conversation } = await import("@elevenlabs/client"));
     } catch {
-      if (!live()) return;
-      if (which === "voice") return fallbackToText();
-      setError(TEXT_FAIL_LINE); setStage("ready"); return;
+      if (live()) fallbackToText();
+      return;
     }
     let started = null, timedOut = false, timer = 0;
     try {
       started = Conversation.startSession({
         agentId: AGENT_ID,
         dynamicVariables: sessionRef.current?.dynamicVariables || {},
-        textOnly: which === "text",
         onConnect: () => { if (!live()) return; startRef.current = Date.now(); setElapsed(0); setStage("live"); },
         onMessage: ({ message, role, source }) => {
           if (!live()) return;
           const who = role || (source === "ai" ? "agent" : "user");
           if (who === "agent") heardAgentRef.current = true;
-          // text mode: the server may echo what we already put on screen
-          if (who === "user" && lastLocalRef.current === message) { lastLocalRef.current = null; return; }
           pushLine(who, message);
         },
         onModeChange: ({ mode: m }) => { if (live()) setAgentMode(m); },
@@ -301,11 +315,8 @@ export default function Intake() {
           if (details?.reason === "error") console.warn("[intake] disconnected:", details.message, details.closeReason || "");
           convRef.current = null;
           const userSaid = linesRef.current.some(l => l.role === "user");
-          if (which === "voice" && !heardAgentRef.current && details?.reason !== "user") return fallbackToText();
-          if (details?.reason === "error" && !userSaid) {
-            if (which === "voice") return fallbackToText();
-            setError(/quota|credit/i.test(`${details.message || ""} ${details.closeReason || ""}`) ? QUOTA_LINE : TEXT_FAIL_LINE); setStage("ready"); return;
-          }
+          if (!heardAgentRef.current && details?.reason !== "user") return fallbackToText();
+          if (details?.reason === "error" && !userSaid) return fallbackToText();
           finish();
         },
       });
@@ -323,10 +334,7 @@ export default function Intake() {
       if (timedOut) started?.then(c => c.endSession()).catch(() => {});   // late arrival: hang it up
       const msg = String(e?.message || e);
       console.warn("[intake] session failed:", msg);
-      if (!live()) return;
-      if (which === "voice") return fallbackToText();
-      genRef.current++;   // a late onConnect must not revive a session we gave up on
-      setError(/quota|credit/i.test(msg) ? QUOTA_LINE : TEXT_FAIL_LINE); setStage("ready");
+      if (live()) fallbackToText();
     }
   }
 
@@ -337,6 +345,8 @@ export default function Intake() {
       setError(BLANK_FILE_LINE); setStage("ready"); return;
     }
     scoredRef.current = true;
+    genRef.current++;   // late chat replies must not land on the result screen
+    setWaiting(false);
     setStage("scoring");
     try {
       const r = await postJSON("/api/intake-score", { caseId: caseRef.current, transcript: lines });
@@ -363,20 +373,33 @@ export default function Intake() {
     else finish();
   }
 
-  function sendText(e) {
+  async function sendText(e) {
     e?.preventDefault();
     const text = draft.trim();
-    if (!text || !convRef.current) return;
-    lastLocalRef.current = text;
-    try { convRef.current.sendUserMessage(text); } catch { setError(TEXT_FAIL_LINE); return; }
+    if (!text || waiting || mode !== "text") return;
+    const gen = genRef.current;
+    setError(null);
     pushLine("user", text);
     setDraft("");
+    setWaiting(true);
+    try {
+      const r = await postJSON("/api/intake-chat", { caseId: caseRef.current, messages: linesRef.current });
+      if (gen !== genRef.current) return;
+      pushLine("agent", r.reply);
+      if (r.end) return finish();
+    } catch (err) {
+      if (gen !== genRef.current) return;
+      // Keep the subject's line on screen; they can resend or submit what exists.
+      setError(err.message || TEXT_FAIL_LINE);
+    } finally {
+      if (gen === genRef.current) setWaiting(false);
+    }
   }
 
   function onDraft(v) {
     setDraft(v);
     const now = Date.now();
-    if (convRef.current && now - activityRef.current > 1500) {
+    if (mode === "voice" && convRef.current && now - activityRef.current > 1500) {
       activityRef.current = now;
       try { convRef.current.sendUserActivity(); } catch { /* optional */ }
     }
@@ -415,7 +438,7 @@ export default function Intake() {
       <div className="hvi-stack">
         <button className="hvi-btn-primary hvi-btn-big" onClick={() => begin("voice")}>Begin Intake</button>
         <button className="hvi-btn-secondary" onClick={() => begin("text")}>Type instead</button>
-        {error === QUOTA_LINE && <button className="hvi-btn-secondary" onClick={() => goto("")}>Take the Written Survey</button>}
+        {error && <button className="hvi-btn-secondary" onClick={() => goto("")}>Take the Written Survey</button>}
       </div>
       <div className="hvi-intro-note">
         MICROPHONE REQUESTED FOR VOICE // THE TRANSCRIPT IS SCORED, NOT YOUR VOICE<br />
@@ -449,7 +472,7 @@ export default function Intake() {
     <div>
       <div className="hvi-live-row">
         <span><span className="hvi-live-dot" />{mode === "voice" ? "VOICE LINE OPEN" : "TEXT TERMINAL"} // {caseId}</span>
-        <span>{fmt(Math.min(elapsed, MAX_SECONDS))} / {fmt(MAX_SECONDS)}</span>
+        <span>{mode === "voice" ? `${fmt(Math.min(elapsed, MAX_SECONDS))} / ${fmt(MAX_SECONDS)}` : fmt(elapsed)}</span>
       </div>
       {notice && <div className="hvi-notice" role="status">{notice}</div>}
       {mode === "voice" && (
@@ -466,14 +489,21 @@ export default function Intake() {
               <span className="hvi-twho">{l.role === "agent" ? "INTAKE OFFICER" : "SUBJECT"}</span>{l.text}
             </div>
           ))}
+        {waiting && <div className="hvi-tline agent"><span className="hvi-twho">INTAKE OFFICER</span><span className="hvi-tempty">TYPING. SLOWLY. ON PURPOSE.</span></div>}
       </div>
+      {error && (
+        <div className="hvi-flag-item hvi-flag" role="alert" style={{ marginBottom: 14 }}>
+          ⚑ {error}{" "}
+          <button className="hvi-link-btn" onClick={() => goto("")}>Take the written survey instead →</button>
+        </div>
+      )}
       {mode === "text" && (
         <form className="hvi-chat-row" onSubmit={sendText}>
           <textarea className="hvi-textarea" value={draft} aria-label="Your answer"
             placeholder="Answer the Officer. Specifics score. Adjectives do not."
             onChange={e => onDraft(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); } }} />
-          <button type="submit" className="hvi-btn-next" disabled={!draft.trim()}>Send</button>
+          <button type="submit" className="hvi-btn-next" disabled={!draft.trim() || waiting}>Send</button>
         </form>
       )}
       <button className="hvi-btn-next" style={{ width: '100%' }} onClick={endInterview}>End Interview &amp; Submit File →</button>

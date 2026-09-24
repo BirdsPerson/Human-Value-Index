@@ -1,5 +1,4 @@
 import { listPenCards } from "../lib/store.js";
-import { penVerdict } from "../lib/intake.js";
 
 // Figures are static on the client; this only serves assessed citizens.
 const CACHE_MS = 30 * 1000;
@@ -16,8 +15,9 @@ export default async (req) => {
       cache = {
         at: Date.now(),
         subjects: cards.map(c => ({
-          slug: c.slug, name: c.name, score: c.score, tier: c.tier, verdict: penVerdict(c.verdict),
-          breakdown: c.breakdown, sprite: c.sprite ?? null, kind: "citizen",
+          // Private citizens: score and tier only. Old cards may still carry a verdict
+          // or breakdown; they are dropped here.
+          slug: c.slug, name: c.name, score: c.score, tier: c.tier, sprite: c.sprite ?? null, kind: "citizen",
         })),
       };
     }

@@ -18,7 +18,7 @@ if (!existsSync(new URL("../netlify/lib/questionPools.js", import.meta.url))) {
 }
 
 const I = await import("../netlify/lib/intake.js");
-const { pickQuestions, applyCap, newCaseId, isCaseId, getTier, computeScore, normalizeAssessment, transcriptError, ipKey, penVerdict, PEN_VERDICT_WITHHELD, MAX_VERDICT } = I;
+const { pickQuestions, applyCap, newCaseId, isCaseId, getTier, computeScore, normalizeAssessment, transcriptError, ipKey, MAX_VERDICT } = I;
 const opts = { pools: STUB_POOLS, dimensions: DIMS };
 
 // caseId format
@@ -141,14 +141,6 @@ assert.ok(transcriptError([{ role: "user", text: "x".repeat(20001) }]));
 assert.ok(normalizeAssessment({ verdict: "x".repeat(5000) }).verdict.length <= MAX_VERDICT);
 assert.ok(normalizeAssessment({ verdict: "   " }).verdict.length > 10);
 
-// public pen verdicts: short, and no contact details
-assert.equal(penVerdict("Adequate. Barely."), "Adequate. Barely.");
-assert.ok(penVerdict("y".repeat(1000)).length <= 280);
-for (const leak of ["Call Dave at 555-123-4567.", "dave@example.com is the real problem", "See https://spam.example", "follow @davesmith", "buy at cheapstuff.io now"]) {
-  assert.equal(penVerdict(leak), PEN_VERDICT_WITHHELD, leak);
-}
-assert.equal(penVerdict("Scored 480 in 2026 across 9 sections."), "Scored 480 in 2026 across 9 sections.");
-assert.equal(penVerdict(null), null);
 
 // limiter keys: IPv4 whole, IPv6 by /64, forwarded lists by first hop
 assert.equal(ipKey("203.0.113.9"), "203.0.113.9");

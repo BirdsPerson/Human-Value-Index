@@ -26,7 +26,9 @@ export function parseModelJson(text) {
   }
 }
 
-export async function callClaude(system, user) {
+// One request to the Messages API; returns the reply text. model and maxTokens are
+// fixed by each caller in code, never taken from the client.
+export async function claudeText({ system, messages, model = MODEL, maxTokens = MAX_TOKENS }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new ScoreError("The Assessment Engine is not connected. The Department regrets nothing.", 500);
 
@@ -37,7 +39,7 @@ export async function callClaude(system, user) {
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       // Sonnet 5 thinks by default and thinking tokens count against max_tokens: at 1200
       // it ate the budget and returned truncated or empty JSON. Scoring doesn't need it.
-      body: JSON.stringify({ model: MODEL, max_tokens: MAX_TOKENS, thinking: { type: "disabled" }, system, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model, max_tokens: maxTokens, thinking: { type: "disabled" }, system, messages }),
     });
   } catch {
     throw new ScoreError("The Assessment Engine could not be reached. Remain where you are.");
@@ -49,7 +51,10 @@ export async function callClaude(system, user) {
     if (response.status === 429 || response.status === 529) throw new ScoreError("The Assessment Engine is overloaded with subjects more interesting than you. Try again shortly.", 503);
     throw new ScoreError("The Assessment Engine rejected the request. This is rare, and it is not a compliment.");
   }
-  if (data?.stop_reason === "max_tokens") console.warn("anthropic hit max_tokens; attempting parse anyway");
-  const text = (data?.content || []).map(b => b.text || "").join("");
-  return parseModelJson(text);
+  if (data?.stop_reason === "max_tokens") console.warn("anthropic hit max_tokens; using what arrived");
+  return (data?.content || []).map(b => b.text || "").join("");
+}
+
+export async function callClaude(system, user) {
+  return parseModelJson(await claudeText({ system, messages: [{ role: "user", content: user }] }));
 }

@@ -150,7 +150,15 @@ function SubjectCard({ subject, onClose }) {
         <button ref={closeRef} className="hvi-btn-secondary hvi-card-close" onClick={onClose}>Release ✕</button>
         <div className="hvi-card-kind">{kind}</div>
         <div className="hvi-card-name" id="hvi-card-name">{subject.name}</div>
-        <ScoreCard score={subject.score} tierLabel={subject.tier} verdict={subject.verdict} label="Value Index" />
+        <ScoreCard score={subject.score} tierLabel={subject.tier} verdict={subject.verdict} label="Value Index">
+          {subject.kind === "citizen" && !subject.verdict && (
+            // Private citizens: the public pen carries score and tier only.
+            <div className="hvi-verdict-box">
+              <div className="hvi-verdict-label">Overlord Verdict</div>
+              <div className="hvi-verdict-text" style={{ color: 'var(--text-dim)' }}>Private citizen. The file is sealed. The number is not.</div>
+            </div>
+          )}
+        </ScoreCard>
         <Breakdown breakdown={subject.breakdown} />
         <button className="hvi-btn-primary" onClick={onClose}>Return Subject to Pen</button>
       </div>
@@ -354,7 +362,10 @@ export default function Pen() {
       for (const s of incoming.slice(0, 60)) {
         const you = !!myName && s.name === myName;
         sawMe = sawMe || you;
-        sim.arrivals.push({ s: { ...s, kind: "citizen", you }, you });
+        // Your own sealed file opens for you from this browser's copy; the server never sends it.
+        const mine = you && readLastResult();
+        const own = mine && mine.caseId === myCase ? { verdict: mine.verdict, breakdown: mine.breakdown } : {};
+        sim.arrivals.push({ s: { ...s, ...own, kind: "citizen", you }, you });
       }
       queueSelfIfMissing(sawMe);
     }).catch(() => {

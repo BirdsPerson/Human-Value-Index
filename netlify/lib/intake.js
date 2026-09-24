@@ -96,17 +96,6 @@ export function normalizeAssessment(raw) {
 export const MAX_VERDICT = 700;
 const cap = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s);
 
-// Pen cards are public. The verdict comes from a transcript the client controls, so it
-// is shortened and dropped entirely if it looks like it carries contact details or links.
-export const PEN_VERDICT_MAX = 280;
-export const PEN_VERDICT_WITHHELD = "Verdict withheld from public display. The Department redacts. It does not explain.";
-const CONTACT_RE = /(https?:\/\/|www\.|\b[\w.-]+\.(com|net|org|io|co|ly|gg|me|xyz)\b|[\w.+-]+@[\w-]+\.[\w.]+|@\w{2,}|(?:\+?\d[\s().-]*){7,})/i;
-export function penVerdict(v) {
-  if (typeof v !== "string" || !v.trim()) return null;
-  if (CONTACT_RE.test(v)) return PEN_VERDICT_WITHHELD;
-  return cap(v.trim(), PEN_VERDICT_MAX);
-}
-
 // Limiter key for an address. IPv6 hosts get a whole /64, so the first four hextets
 // are the subscriber; keying on the full address lets one host rotate past every limit.
 export function ipKey(raw) {

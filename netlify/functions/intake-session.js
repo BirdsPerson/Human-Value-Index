@@ -39,16 +39,24 @@ export default async (req, context) => {
     }
 
     const { focus, plan, asked } = pickQuestions(record.history);
-    const pending = { at: new Date().toISOString(), focus, asked };
-    // Fresh read inside the write: a score landing meanwhile keeps its history entry.
-    const fresh = { ...record, pending };
-    record = await updateCase(record.caseId, cur => (cur ? { ...cur, pending } : fresh));
-
     const visit = record.history.length + 1;
     const last = record.history[record.history.length - 1];
     const returningNote = last
       ? `Previous score ${last.score} (${last.tier}). Weakest file sections: ${focus.slice(0, 4).join(", ")}.`
       : "First visit. No file on record.";
+    const dynamicVariables = {
+      case_number: record.caseId,
+      visit_number: String(visit),
+      focus_dimensions: focus.join(", "),
+      question_plan: plan.map(q => q.text).join("\n"),
+      returning_note: returningNote,
+    };
+    // vars are stored so the typed channel (intake-chat) builds its prompt from the
+    // server's plan, never the client's.
+    const pending = { at: new Date().toISOString(), focus, asked, vars: dynamicVariables };
+    // Fresh read inside the write: a score landing meanwhile keeps its history entry.
+    const fresh = { ...record, pending };
+    record = await updateCase(record.caseId, cur => (cur ? { ...cur, pending } : fresh));
 
     return json(200, {
       caseId: record.caseId,
@@ -58,13 +66,7 @@ export default async (req, context) => {
       focus,
       questions: plan.map(q => q.text),
       plan,
-      dynamicVariables: {
-        case_number: record.caseId,
-        visit_number: String(visit),
-        focus_dimensions: focus.join(", "),
-        question_plan: plan.map(q => q.text).join("\n"),
-        returning_note: returningNote,
-      },
+      dynamicVariables,
     });
   } catch (err) {
     console.error("intake-session failed", err);
