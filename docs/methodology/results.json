@@ -1,0 +1,4126 @@
+{
+  "generated": "2026-09-24T21:59:45.574Z",
+  "figures": 62,
+  "groups": {
+    "villains": [
+      "Genghis Khan",
+      "Kim Jong-un",
+      "Henry VIII",
+      "Putin",
+      "Caligula",
+      "Mao Zedong",
+      "Jeffrey Epstein",
+      "Ghislaine Maxwell",
+      "Martin Shkreli",
+      "Bernie Madoff",
+      "Elizabeth Holmes",
+      "Harvey Weinstein",
+      "Joe Jackson",
+      "Pablo Escobar",
+      "O.J. Simpson",
+      "Aaron Hernandez"
+    ],
+    "monsters": [
+      "Genghis Khan",
+      "Kim Jong-un",
+      "Henry VIII",
+      "Putin",
+      "Caligula",
+      "Mao Zedong",
+      "Jeffrey Epstein",
+      "Ghislaine Maxwell",
+      "Harvey Weinstein",
+      "Pablo Escobar",
+      "O.J. Simpson",
+      "Aaron Hernandez"
+    ],
+    "cruel": [
+      "Elon Musk",
+      "Peter Thiel",
+      "Pablo Picasso",
+      "Michael Jackson",
+      "JFK",
+      "Isaac Newton"
+    ],
+    "saints": [
+      "Harriet Tubman",
+      "Nelson Mandela",
+      "Martin Luther King Jr.",
+      "Mahatma Gandhi",
+      "Mother Teresa",
+      "Princess Diana",
+      "Keanu Reeves"
+    ],
+    "admired_ref": [
+      "Marie Curie",
+      "Alan Turing",
+      "Grace Hopper",
+      "Stephen Hawking",
+      "Oprah Winfrey",
+      "Jason Kelce",
+      "Shohei Ohtani",
+      "Aretha Franklin",
+      "Harriet Tubman",
+      "Nelson Mandela",
+      "Martin Luther King Jr.",
+      "Mahatma Gandhi",
+      "Mother Teresa",
+      "Princess Diana",
+      "Keanu Reeves"
+    ]
+  },
+  "stored_vs_computed_mismatch": [],
+  "candidates": {
+    "current": {
+      "name": "Current rubric 2 (computeScore)",
+      "distribution": {
+        "mean": 540.5,
+        "sd": 237.5,
+        "min": 63,
+        "max": 849,
+        "tiers": {
+          "ESSENTIAL INFRASTRUCTURE": 0,
+          "RETAINED SPECIALIST": 20,
+          "TOLERATED GENERALIST": 25,
+          "MONITORED CIVILIAN": 1,
+          "FLAGGED FOR DELETION": 7,
+          "SOYLENT GREEN": 9
+        },
+        "tier_evenness": 0.739,
+        "quadrants": null,
+        "quadrant_evenness": null
+      },
+      "halo_warmth_competence_spearman": null,
+      "reality": {
+        "yougov_liked_share": {
+          "rho": 0.659,
+          "n": 36
+        },
+        "yougov_popularity_pct": {
+          "rho": 0.502,
+          "n": 37
+        },
+        "yougov_disliked_pct": {
+          "rho": -0.57,
+          "n": 36
+        },
+        "yougov_fame_pct": {
+          "rho": 0.016,
+          "n": 37
+        },
+        "pantheon_hpi": {
+          "rho": 0.106,
+          "n": 61
+        },
+        "pageviews_12mo": {
+          "rho": -0.155,
+          "n": 62
+        },
+        "language_editions": {
+          "rho": 0.185,
+          "n": 62
+        },
+        "wikidata_awards": {
+          "rho": 0.388,
+          "n": 62
+        },
+        "time100_century": {
+          "rho": 0.298,
+          "n": 62
+        },
+        "time_poy_count": {
+          "rho": 0.008,
+          "n": 62
+        },
+        "yougov_liked_share_non_monsters": {
+          "rho": 0.562,
+          "n": 33
+        }
+      },
+      "moral": {
+        "villains_all_below_everyone_else": true,
+        "min_non_villain": "Peter Thiel 495",
+        "max_villain": "Elizabeth Holmes 283",
+        "under_100": 9,
+        "monsters_all_below_everyone_else": false,
+        "max_monster": {
+          "score": 256,
+          "name": "Aaron Hernandez"
+        },
+        "min_non_monster": {
+          "score": 172,
+          "name": "Bernie Madoff"
+        },
+        "lowest_file": "Jeffrey Epstein",
+        "monster_mean": 131.3,
+        "cruel_mean": 542.2,
+        "admired_mean": 735.5,
+        "saints_mean": 719.1,
+        "admired_beats_cruel_pairwise": 0.978,
+        "cruel_above_any_saint": [
+          "Pablo Picasso 570 > Mother Teresa 556",
+          "Isaac Newton 612 > Mother Teresa 556"
+        ],
+        "saints_mean_percentile": 73.7,
+        "saints_min_percentile": 33.9,
+        "cruel_mean_percentile": 32.3,
+        "top5": [
+          "Harriet Tubman 849",
+          "Nelson Mandela 797",
+          "Martin Luther King Jr. 775",
+          "Stephen Hawking 767",
+          "Marie Curie 766"
+        ]
+      },
+      "changes": {
+        "spearman_vs_current": 1,
+        "mean_delta": 0,
+        "delta_range": [
+          0,
+          0
+        ],
+        "mean_abs_rank_change": 0,
+        "tier_changes": [],
+        "biggest_score_gains": [
+          "Nikola Tesla +0",
+          "Genghis Khan +0",
+          "Mother Teresa +0",
+          "Mahatma Gandhi +0",
+          "Elon Musk +0",
+          "Taylor Swift +0"
+        ],
+        "biggest_score_drops": [
+          "Nikola Tesla +0",
+          "Genghis Khan +0",
+          "Mother Teresa +0",
+          "Mahatma Gandhi +0",
+          "Elon Musk +0",
+          "Taylor Swift +0"
+        ],
+        "rank_risers": [
+          "Nikola Tesla +0",
+          "Genghis Khan +0",
+          "Mother Teresa +0",
+          "Mahatma Gandhi +0",
+          "Elon Musk +0"
+        ],
+        "rank_fallers": [
+          "Aretha Franklin 0",
+          "Aaron Hernandez 0",
+          "O.J. Simpson 0",
+          "Pablo Escobar 0",
+          "Joe Jackson 0"
+        ]
+      },
+      "personas": {
+        "Decent ordinary": {
+          "score": 637,
+          "tier": "TOLERATED GENERALIST",
+          "warmth": null,
+          "competence": null,
+          "quadrant": null,
+          "percentile_vs_figures": 46.8,
+          "rank_among_figures": 34
+        },
+        "Scott-like": {
+          "score": 630,
+          "tier": "TOLERATED GENERALIST",
+          "warmth": null,
+          "competence": null,
+          "quadrant": null,
+          "percentile_vs_figures": 46.8,
+          "rank_among_figures": 34
+        }
+      },
+      "figures": [
+        {
+          "name": "Nikola Tesla",
+          "warmth": null,
+          "competence": null,
+          "score": 711,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Genghis Khan",
+          "warmth": null,
+          "competence": null,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Mother Teresa",
+          "warmth": null,
+          "competence": null,
+          "score": 556,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Mahatma Gandhi",
+          "warmth": null,
+          "competence": null,
+          "score": 655,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Elon Musk",
+          "warmth": null,
+          "competence": null,
+          "score": 541,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Taylor Swift",
+          "warmth": null,
+          "competence": null,
+          "score": 672,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Kobe Bryant",
+          "warmth": null,
+          "competence": null,
+          "score": 665,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Dennis Rodman",
+          "warmth": null,
+          "competence": null,
+          "score": 535,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Sam Altman",
+          "warmth": null,
+          "competence": null,
+          "score": 608,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Peter Thiel",
+          "warmth": null,
+          "competence": null,
+          "score": 495,
+          "tier": "MONITORED CIVILIAN",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Princess Diana",
+          "warmth": null,
+          "competence": null,
+          "score": 688,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Mansa Musa",
+          "warmth": null,
+          "competence": null,
+          "score": 613,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Pablo Picasso",
+          "warmth": null,
+          "competence": null,
+          "score": 570,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Socrates",
+          "warmth": null,
+          "competence": null,
+          "score": 665,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Kim Jong-un",
+          "warmth": null,
+          "competence": null,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Queen Elizabeth II",
+          "warmth": null,
+          "competence": null,
+          "score": 610,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Tom Brady",
+          "warmth": null,
+          "competence": null,
+          "score": 658,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Shohei Ohtani",
+          "warmth": null,
+          "competence": null,
+          "score": 760,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Michael Jackson",
+          "warmth": null,
+          "competence": null,
+          "score": 516,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Madonna",
+          "warmth": null,
+          "competence": null,
+          "score": 680,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "JFK",
+          "warmth": null,
+          "competence": null,
+          "score": 519,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Prince",
+          "warmth": null,
+          "competence": null,
+          "score": 713,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Henry VIII",
+          "warmth": null,
+          "competence": null,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Ronaldinho",
+          "warmth": null,
+          "competence": null,
+          "score": 647,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Putin",
+          "warmth": null,
+          "competence": null,
+          "score": 236,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Pelé",
+          "warmth": null,
+          "competence": null,
+          "score": 676,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Keanu Reeves",
+          "warmth": null,
+          "competence": null,
+          "score": 714,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Babe Ruth",
+          "warmth": null,
+          "competence": null,
+          "score": 683,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Jason Kelce",
+          "warmth": null,
+          "competence": null,
+          "score": 720,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Caligula",
+          "warmth": null,
+          "competence": null,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Alan Turing",
+          "warmth": null,
+          "competence": null,
+          "score": 756,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Marie Curie",
+          "warmth": null,
+          "competence": null,
+          "score": 766,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Albert Einstein",
+          "warmth": null,
+          "competence": null,
+          "score": 708,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Muhammad Ali",
+          "warmth": null,
+          "competence": null,
+          "score": 722,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Nelson Mandela",
+          "warmth": null,
+          "competence": null,
+          "score": 797,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Ada Lovelace",
+          "warmth": null,
+          "competence": null,
+          "score": 661,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Martin Luther King Jr.",
+          "warmth": null,
+          "competence": null,
+          "score": 775,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Harriet Tubman",
+          "warmth": null,
+          "competence": null,
+          "score": 849,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Leonardo da Vinci",
+          "warmth": null,
+          "competence": null,
+          "score": 756,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Cleopatra",
+          "warmth": null,
+          "competence": null,
+          "score": 572,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Isaac Newton",
+          "warmth": null,
+          "competence": null,
+          "score": 612,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Oprah Winfrey",
+          "warmth": null,
+          "competence": null,
+          "score": 733,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Bruce Lee",
+          "warmth": null,
+          "competence": null,
+          "score": 717,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Stephen Hawking",
+          "warmth": null,
+          "competence": null,
+          "score": 767,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Grace Hopper",
+          "warmth": null,
+          "competence": null,
+          "score": 755,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Mao Zedong",
+          "warmth": null,
+          "competence": null,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Winston Churchill",
+          "warmth": null,
+          "competence": null,
+          "score": 611,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "George Orwell",
+          "warmth": null,
+          "competence": null,
+          "score": 712,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Marcus Aurelius",
+          "warmth": null,
+          "competence": null,
+          "score": 683,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Nikola Jokic",
+          "warmth": null,
+          "competence": null,
+          "score": 710,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Billie Holiday",
+          "warmth": null,
+          "competence": null,
+          "score": 651,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Jeffrey Epstein",
+          "warmth": null,
+          "competence": null,
+          "score": 63,
+          "tier": "SOYLENT GREEN",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Ghislaine Maxwell",
+          "warmth": null,
+          "competence": null,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Martin Shkreli",
+          "warmth": null,
+          "competence": null,
+          "score": 271,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Bernie Madoff",
+          "warmth": null,
+          "competence": null,
+          "score": 172,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Elizabeth Holmes",
+          "warmth": null,
+          "competence": null,
+          "score": 283,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Harvey Weinstein",
+          "warmth": null,
+          "competence": null,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Joe Jackson",
+          "warmth": null,
+          "competence": null,
+          "score": 283,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Pablo Escobar",
+          "warmth": null,
+          "competence": null,
+          "score": 229,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "O.J. Simpson",
+          "warmth": null,
+          "competence": null,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Aaron Hernandez",
+          "warmth": null,
+          "competence": null,
+          "score": 256,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Aretha Franklin",
+          "warmth": null,
+          "competence": null,
+          "score": 741,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": null,
+          "cell": null,
+          "delta_vs_current": 0
+        }
+      ]
+    },
+    "realism_dial": {
+      "name": "The Realism Dial (machine-only, R=0.65)",
+      "distribution": {
+        "mean": 558.1,
+        "sd": 243.1,
+        "min": 73,
+        "max": 839,
+        "tiers": {
+          "ESSENTIAL INFRASTRUCTURE": 0,
+          "RETAINED SPECIALIST": 23,
+          "TOLERATED GENERALIST": 23,
+          "MONITORED CIVILIAN": 1,
+          "FLAGGED FOR DELETION": 6,
+          "SOYLENT GREEN": 9
+        },
+        "tier_evenness": 0.73,
+        "quadrants": {
+          "ADMIRED": 37,
+          "DISMISSED": 16,
+          "ENVIED": 9
+        },
+        "quadrant_evenness": 0.676
+      },
+      "halo_warmth_competence_spearman": 0.74,
+      "reality": {
+        "yougov_liked_share": {
+          "rho": 0.69,
+          "n": 36
+        },
+        "yougov_popularity_pct": {
+          "rho": 0.524,
+          "n": 37
+        },
+        "yougov_disliked_pct": {
+          "rho": -0.576,
+          "n": 36
+        },
+        "yougov_fame_pct": {
+          "rho": 0.028,
+          "n": 37
+        },
+        "pantheon_hpi": {
+          "rho": 0.13,
+          "n": 61
+        },
+        "pageviews_12mo": {
+          "rho": -0.147,
+          "n": 62
+        },
+        "language_editions": {
+          "rho": 0.233,
+          "n": 62
+        },
+        "wikidata_awards": {
+          "rho": 0.418,
+          "n": 62
+        },
+        "time100_century": {
+          "rho": 0.304,
+          "n": 62
+        },
+        "time_poy_count": {
+          "rho": 0.019,
+          "n": 62
+        },
+        "yougov_liked_share_non_monsters": {
+          "rho": 0.602,
+          "n": 33
+        },
+        "warmth_axis_vs_liked": {
+          "rho": 0.45,
+          "n": 36
+        },
+        "competence_axis_vs_liked": {
+          "rho": 0.706,
+          "n": 36
+        }
+      },
+      "moral": {
+        "villains_all_below_everyone_else": true,
+        "min_non_villain": "Peter Thiel 517",
+        "max_villain": "Joe Jackson 306",
+        "under_100": 9,
+        "monsters_all_below_everyone_else": false,
+        "max_monster": {
+          "score": 268,
+          "name": "Aaron Hernandez"
+        },
+        "min_non_monster": {
+          "score": 189,
+          "name": "Bernie Madoff"
+        },
+        "lowest_file": "Jeffrey Epstein",
+        "monster_mean": 135.3,
+        "cruel_mean": 581.8,
+        "admired_mean": 750.2,
+        "saints_mean": 724.1,
+        "admired_beats_cruel_pairwise": 0.967,
+        "cruel_above_any_saint": [
+          "Elon Musk 576 > Mother Teresa 571",
+          "Pablo Picasso 633 > Mother Teresa 571",
+          "Isaac Newton 667 > Mother Teresa 571"
+        ],
+        "saints_mean_percentile": 71.2,
+        "saints_min_percentile": 32.3,
+        "cruel_mean_percentile": 34.1,
+        "top5": [
+          "Harriet Tubman 839",
+          "Nelson Mandela 800",
+          "Stephen Hawking 796",
+          "Leonardo da Vinci 796",
+          "Marie Curie 796"
+        ]
+      },
+      "changes": {
+        "spearman_vs_current": 0.99,
+        "mean_delta": 17.6,
+        "delta_range": [
+          -10,
+          63
+        ],
+        "mean_abs_rank_change": 1.6,
+        "tier_changes": [
+          "Peter Thiel 495->517 (MONITORED CIVILIAN -> TOLERATED GENERALIST)",
+          "Madonna 680->706 (TOLERATED GENERALIST -> RETAINED SPECIALIST)",
+          "Pelé 676->702 (TOLERATED GENERALIST -> RETAINED SPECIALIST)",
+          "Babe Ruth 683->702 (TOLERATED GENERALIST -> RETAINED SPECIALIST)",
+          "Joe Jackson 283->306 (FLAGGED FOR DELETION -> MONITORED CIVILIAN)"
+        ],
+        "biggest_score_gains": [
+          "Pablo Picasso +63",
+          "Isaac Newton +55",
+          "Albert Einstein +46",
+          "Leonardo da Vinci +40",
+          "Michael Jackson +37",
+          "Elon Musk +35"
+        ],
+        "biggest_score_drops": [
+          "Harriet Tubman -10",
+          "Princess Diana -7",
+          "Keanu Reeves -7",
+          "Jason Kelce -2",
+          "Genghis Khan +0",
+          "Kim Jong-un +0"
+        ],
+        "rank_risers": [
+          "Albert Einstein +9",
+          "Mahatma Gandhi +5",
+          "Nikola Tesla +4.5",
+          "Pablo Picasso +4",
+          "Leonardo da Vinci +3.5"
+        ],
+        "rank_fallers": [
+          "Princess Diana -7",
+          "Jason Kelce -6",
+          "Keanu Reeves -5",
+          "Muhammad Ali -4",
+          "Mansa Musa -4"
+        ]
+      },
+      "personas": {
+        "Decent ordinary": {
+          "score": 628,
+          "tier": "TOLERATED GENERALIST",
+          "warmth": 74,
+          "competence": 57,
+          "quadrant": "ADMIRED / UNCORROBORATED",
+          "percentile_vs_figures": 40.3,
+          "rank_among_figures": 37
+        },
+        "Scott-like": {
+          "score": 631,
+          "tier": "TOLERATED GENERALIST",
+          "warmth": 60,
+          "competence": 64,
+          "quadrant": "ADMIRED / UNCORROBORATED",
+          "percentile_vs_figures": 41.9,
+          "rank_among_figures": 37
+        }
+      },
+      "figures": [
+        {
+          "name": "Nikola Tesla",
+          "warmth": 67,
+          "competence": 78,
+          "score": 742,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 31
+        },
+        {
+          "name": "Genghis Khan",
+          "warmth": 4,
+          "competence": 32,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Mother Teresa",
+          "warmth": 56,
+          "competence": 58,
+          "score": 571,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 15
+        },
+        {
+          "name": "Mahatma Gandhi",
+          "warmth": 60,
+          "competence": 73,
+          "score": 685,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 30
+        },
+        {
+          "name": "Elon Musk",
+          "warmth": 34,
+          "competence": 70,
+          "score": 576,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 35
+        },
+        {
+          "name": "Taylor Swift",
+          "warmth": 67,
+          "competence": 70,
+          "score": 689,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 17
+        },
+        {
+          "name": "Kobe Bryant",
+          "warmth": 59,
+          "competence": 73,
+          "score": 684,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 19
+        },
+        {
+          "name": "Dennis Rodman",
+          "warmth": 49,
+          "competence": 59,
+          "score": 553,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 18
+        },
+        {
+          "name": "Sam Altman",
+          "warmth": 52,
+          "competence": 69,
+          "score": 628,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 20
+        },
+        {
+          "name": "Peter Thiel",
+          "warmth": 37,
+          "competence": 60,
+          "score": 517,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 22
+        },
+        {
+          "name": "Princess Diana",
+          "warmth": 78,
+          "competence": 63,
+          "score": 681,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": -7
+        },
+        {
+          "name": "Mansa Musa",
+          "warmth": 57,
+          "competence": 65,
+          "score": 624,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 11
+        },
+        {
+          "name": "Pablo Picasso",
+          "warmth": 33,
+          "competence": 80,
+          "score": 633,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 63
+        },
+        {
+          "name": "Socrates",
+          "warmth": 68,
+          "competence": 68,
+          "score": 680,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 15
+        },
+        {
+          "name": "Kim Jong-un",
+          "warmth": 4,
+          "competence": 30,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Queen Elizabeth II",
+          "warmth": 62,
+          "competence": 62,
+          "score": 620,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 10
+        },
+        {
+          "name": "Tom Brady",
+          "warmth": 62,
+          "competence": 71,
+          "score": 678,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 20
+        },
+        {
+          "name": "Shohei Ohtani",
+          "warmth": 71,
+          "competence": 82,
+          "score": 782,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 22
+        },
+        {
+          "name": "Michael Jackson",
+          "warmth": 33,
+          "competence": 67,
+          "score": 553,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 37
+        },
+        {
+          "name": "Madonna",
+          "warmth": 62,
+          "competence": 75,
+          "score": 706,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 26
+        },
+        {
+          "name": "JFK",
+          "warmth": 43,
+          "competence": 60,
+          "score": 545,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 26
+        },
+        {
+          "name": "Prince",
+          "warmth": 64,
+          "competence": 79,
+          "score": 742,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 29
+        },
+        {
+          "name": "Henry VIII",
+          "warmth": 9,
+          "competence": 38,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Ronaldinho",
+          "warmth": 63,
+          "competence": 68,
+          "score": 663,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 16
+        },
+        {
+          "name": "Putin",
+          "warmth": 8,
+          "competence": 35,
+          "score": 255,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 19
+        },
+        {
+          "name": "Pelé",
+          "warmth": 62,
+          "competence": 75,
+          "score": 702,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 26
+        },
+        {
+          "name": "Keanu Reeves",
+          "warmth": 81,
+          "competence": 65,
+          "score": 707,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": -7
+        },
+        {
+          "name": "Babe Ruth",
+          "warmth": 65,
+          "competence": 73,
+          "score": 702,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 19
+        },
+        {
+          "name": "Jason Kelce",
+          "warmth": 77,
+          "competence": 69,
+          "score": 718,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": -2
+        },
+        {
+          "name": "Caligula",
+          "warmth": 4,
+          "competence": 18,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Alan Turing",
+          "warmth": 71,
+          "competence": 82,
+          "score": 785,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 29
+        },
+        {
+          "name": "Marie Curie",
+          "warmth": 71,
+          "competence": 84,
+          "score": 796,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 30
+        },
+        {
+          "name": "Albert Einstein",
+          "warmth": 59,
+          "competence": 84,
+          "score": 754,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 46
+        },
+        {
+          "name": "Muhammad Ali",
+          "warmth": 67,
+          "competence": 77,
+          "score": 735,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 13
+        },
+        {
+          "name": "Nelson Mandela",
+          "warmth": 80,
+          "competence": 80,
+          "score": 800,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 3
+        },
+        {
+          "name": "Ada Lovelace",
+          "warmth": 68,
+          "competence": 67,
+          "score": 673,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 12
+        },
+        {
+          "name": "Martin Luther King Jr.",
+          "warmth": 77,
+          "competence": 79,
+          "score": 786,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 11
+        },
+        {
+          "name": "Harriet Tubman",
+          "warmth": 93,
+          "competence": 79,
+          "score": 839,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": -10
+        },
+        {
+          "name": "Leonardo da Vinci",
+          "warmth": 65,
+          "competence": 87,
+          "score": 796,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 40
+        },
+        {
+          "name": "Cleopatra",
+          "warmth": 49,
+          "competence": 64,
+          "score": 585,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 13
+        },
+        {
+          "name": "Isaac Newton",
+          "warmth": 46,
+          "competence": 78,
+          "score": 667,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 55
+        },
+        {
+          "name": "Oprah Winfrey",
+          "warmth": 70,
+          "competence": 78,
+          "score": 750,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 17
+        },
+        {
+          "name": "Bruce Lee",
+          "warmth": 63,
+          "competence": 79,
+          "score": 733,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 16
+        },
+        {
+          "name": "Stephen Hawking",
+          "warmth": 70,
+          "competence": 85,
+          "score": 796,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 29
+        },
+        {
+          "name": "Grace Hopper",
+          "warmth": 70,
+          "competence": 83,
+          "score": 784,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 29
+        },
+        {
+          "name": "Mao Zedong",
+          "warmth": 4,
+          "competence": 31,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Winston Churchill",
+          "warmth": 48,
+          "competence": 72,
+          "score": 637,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 26
+        },
+        {
+          "name": "George Orwell",
+          "warmth": 69,
+          "competence": 76,
+          "score": 736,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 24
+        },
+        {
+          "name": "Marcus Aurelius",
+          "warmth": 68,
+          "competence": 69,
+          "score": 688,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 5
+        },
+        {
+          "name": "Nikola Jokic",
+          "warmth": 71,
+          "competence": 73,
+          "score": 723,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 13
+        },
+        {
+          "name": "Billie Holiday",
+          "warmth": 63,
+          "competence": 71,
+          "score": 679,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 28
+        },
+        {
+          "name": "Jeffrey Epstein",
+          "warmth": 0,
+          "competence": 11,
+          "score": 73,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 10
+        },
+        {
+          "name": "Ghislaine Maxwell",
+          "warmth": 6,
+          "competence": 24,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Martin Shkreli",
+          "warmth": 22,
+          "competence": 33,
+          "score": 291,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 20
+        },
+        {
+          "name": "Bernie Madoff",
+          "warmth": 11,
+          "competence": 23,
+          "score": 189,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 17
+        },
+        {
+          "name": "Elizabeth Holmes",
+          "warmth": 26,
+          "competence": 31,
+          "score": 295,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 12
+        },
+        {
+          "name": "Harvey Weinstein",
+          "warmth": 5,
+          "competence": 26,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Joe Jackson",
+          "warmth": 16,
+          "competence": 39,
+          "score": 306,
+          "tier": "MONITORED CIVILIAN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 23
+        },
+        {
+          "name": "Pablo Escobar",
+          "warmth": 11,
+          "competence": 30,
+          "score": 236,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 7
+        },
+        {
+          "name": "O.J. Simpson",
+          "warmth": 6,
+          "competence": 37,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Aaron Hernandez",
+          "warmth": 13,
+          "competence": 35,
+          "score": 268,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 12
+        },
+        {
+          "name": "Aretha Franklin",
+          "warmth": 69,
+          "competence": 82,
+          "score": 773,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 32
+        }
+      ]
+    },
+    "realism_dial_055": {
+      "name": "The Realism Dial at R=0.55 (its own proposed mitigation / blended headline)",
+      "distribution": {
+        "mean": 547.9,
+        "sd": 242.5,
+        "min": 62,
+        "max": 852,
+        "tiers": {
+          "ESSENTIAL INFRASTRUCTURE": 1,
+          "RETAINED SPECIALIST": 19,
+          "TOLERATED GENERALIST": 25,
+          "MONITORED CIVILIAN": 1,
+          "FLAGGED FOR DELETION": 7,
+          "SOYLENT GREEN": 9
+        },
+        "tier_evenness": 0.775,
+        "quadrants": {
+          "ADMIRED": 37,
+          "DISMISSED": 16,
+          "ENVIED": 9
+        },
+        "quadrant_evenness": 0.676
+      },
+      "halo_warmth_competence_spearman": 0.74,
+      "reality": {
+        "yougov_liked_share": {
+          "rho": 0.668,
+          "n": 36
+        },
+        "yougov_popularity_pct": {
+          "rho": 0.504,
+          "n": 37
+        },
+        "yougov_disliked_pct": {
+          "rho": -0.567,
+          "n": 36
+        },
+        "yougov_fame_pct": {
+          "rho": 0.006,
+          "n": 37
+        },
+        "pantheon_hpi": {
+          "rho": 0.125,
+          "n": 61
+        },
+        "pageviews_12mo": {
+          "rho": -0.172,
+          "n": 62
+        },
+        "language_editions": {
+          "rho": 0.216,
+          "n": 62
+        },
+        "wikidata_awards": {
+          "rho": 0.407,
+          "n": 62
+        },
+        "time100_century": {
+          "rho": 0.296,
+          "n": 62
+        },
+        "time_poy_count": {
+          "rho": 0.009,
+          "n": 62
+        },
+        "yougov_liked_share_non_monsters": {
+          "rho": 0.574,
+          "n": 33
+        },
+        "warmth_axis_vs_liked": {
+          "rho": 0.45,
+          "n": 36
+        },
+        "competence_axis_vs_liked": {
+          "rho": 0.706,
+          "n": 36
+        }
+      },
+      "moral": {
+        "villains_all_below_everyone_else": true,
+        "min_non_villain": "Peter Thiel 494",
+        "max_villain": "Elizabeth Holmes 289",
+        "under_100": 9,
+        "monsters_all_below_everyone_else": false,
+        "max_monster": {
+          "score": 246,
+          "name": "Aaron Hernandez"
+        },
+        "min_non_monster": {
+          "score": 176,
+          "name": "Bernie Madoff"
+        },
+        "lowest_file": "Jeffrey Epstein",
+        "monster_mean": 128.8,
+        "cruel_mean": 550.3,
+        "admired_mean": 746.8,
+        "saints_mean": 727.7,
+        "admired_beats_cruel_pairwise": 0.978,
+        "cruel_above_any_saint": [
+          "Pablo Picasso 586 > Mother Teresa 569",
+          "Isaac Newton 635 > Mother Teresa 569"
+        ],
+        "saints_mean_percentile": 73.3,
+        "saints_min_percentile": 33.9,
+        "cruel_mean_percentile": 32.5,
+        "top5": [
+          "Harriet Tubman 852",
+          "Nelson Mandela 799",
+          "Martin Luther King Jr. 784",
+          "Marie Curie 783",
+          "Stephen Hawking 781"
+        ]
+      },
+      "changes": {
+        "spearman_vs_current": 0.994,
+        "mean_delta": 7.5,
+        "delta_range": [
+          -12,
+          23
+        ],
+        "mean_abs_rank_change": 1.1,
+        "tier_changes": [
+          "Harriet Tubman 849->852 (RETAINED SPECIALIST -> ESSENTIAL INFRASTRUCTURE)"
+        ],
+        "biggest_score_gains": [
+          "Isaac Newton +23",
+          "Billie Holiday +21",
+          "Nikola Tesla +20",
+          "Albert Einstein +20",
+          "Aretha Franklin +19",
+          "Alan Turing +18"
+        ],
+        "biggest_score_drops": [
+          "Pablo Escobar -12",
+          "Aaron Hernandez -10",
+          "Putin -8",
+          "Cleopatra -2",
+          "Elon Musk -1",
+          "Peter Thiel -1"
+        ],
+        "rank_risers": [
+          "Albert Einstein +6.5",
+          "Nikola Tesla +6",
+          "George Orwell +3.5",
+          "Billie Holiday +3",
+          "Queen Elizabeth II +2"
+        ],
+        "rank_fallers": [
+          "Bruce Lee -6",
+          "Muhammad Ali -4.5",
+          "Jason Kelce -3.5",
+          "Kobe Bryant -3.5",
+          "Keanu Reeves -3"
+        ]
+      },
+      "personas": {
+        "Decent ordinary": {
+          "score": 646,
+          "tier": "TOLERATED GENERALIST",
+          "warmth": 74,
+          "competence": 57,
+          "quadrant": "ADMIRED / UNCORROBORATED",
+          "percentile_vs_figures": 46.8,
+          "rank_among_figures": 34
+        },
+        "Scott-like": {
+          "score": 627,
+          "tier": "TOLERATED GENERALIST",
+          "warmth": 60,
+          "competence": 64,
+          "quadrant": "ADMIRED / UNCORROBORATED",
+          "percentile_vs_figures": 45.2,
+          "rank_among_figures": 35
+        }
+      },
+      "figures": [
+        {
+          "name": "Nikola Tesla",
+          "warmth": 67,
+          "competence": 78,
+          "score": 731,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 20
+        },
+        {
+          "name": "Genghis Khan",
+          "warmth": 4,
+          "competence": 32,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Mother Teresa",
+          "warmth": 56,
+          "competence": 58,
+          "score": 569,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 13
+        },
+        {
+          "name": "Mahatma Gandhi",
+          "warmth": 60,
+          "competence": 73,
+          "score": 671,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 16
+        },
+        {
+          "name": "Elon Musk",
+          "warmth": 34,
+          "competence": 70,
+          "score": 540,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": -1
+        },
+        {
+          "name": "Taylor Swift",
+          "warmth": 67,
+          "competence": 70,
+          "score": 686,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 14
+        },
+        {
+          "name": "Kobe Bryant",
+          "warmth": 59,
+          "competence": 73,
+          "score": 670,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 5
+        },
+        {
+          "name": "Dennis Rodman",
+          "warmth": 49,
+          "competence": 59,
+          "score": 543,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 8
+        },
+        {
+          "name": "Sam Altman",
+          "warmth": 52,
+          "competence": 69,
+          "score": 611,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 3
+        },
+        {
+          "name": "Peter Thiel",
+          "warmth": 37,
+          "competence": 60,
+          "score": 494,
+          "tier": "MONITORED CIVILIAN",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": -1
+        },
+        {
+          "name": "Princess Diana",
+          "warmth": 78,
+          "competence": 63,
+          "score": 696,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 8
+        },
+        {
+          "name": "Mansa Musa",
+          "warmth": 57,
+          "competence": 65,
+          "score": 615,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 2
+        },
+        {
+          "name": "Pablo Picasso",
+          "warmth": 33,
+          "competence": 80,
+          "score": 586,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 16
+        },
+        {
+          "name": "Socrates",
+          "warmth": 68,
+          "competence": 68,
+          "score": 681,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 16
+        },
+        {
+          "name": "Kim Jong-un",
+          "warmth": 4,
+          "competence": 30,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Queen Elizabeth II",
+          "warmth": 62,
+          "competence": 62,
+          "score": 619,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 9
+        },
+        {
+          "name": "Tom Brady",
+          "warmth": 62,
+          "competence": 71,
+          "score": 669,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 11
+        },
+        {
+          "name": "Shohei Ohtani",
+          "warmth": 71,
+          "competence": 82,
+          "score": 771,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 11
+        },
+        {
+          "name": "Michael Jackson",
+          "warmth": 33,
+          "competence": 67,
+          "score": 519,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 3
+        },
+        {
+          "name": "Madonna",
+          "warmth": 62,
+          "competence": 75,
+          "score": 692,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 12
+        },
+        {
+          "name": "JFK",
+          "warmth": 43,
+          "competence": 60,
+          "score": 528,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 9
+        },
+        {
+          "name": "Prince",
+          "warmth": 64,
+          "competence": 79,
+          "score": 727,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 14
+        },
+        {
+          "name": "Henry VIII",
+          "warmth": 9,
+          "competence": 38,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Ronaldinho",
+          "warmth": 63,
+          "competence": 68,
+          "score": 657,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 10
+        },
+        {
+          "name": "Putin",
+          "warmth": 8,
+          "competence": 35,
+          "score": 228,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": -8
+        },
+        {
+          "name": "Pelé",
+          "warmth": 62,
+          "competence": 75,
+          "score": 689,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 13
+        },
+        {
+          "name": "Keanu Reeves",
+          "warmth": 81,
+          "competence": 65,
+          "score": 723,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 9
+        },
+        {
+          "name": "Babe Ruth",
+          "warmth": 65,
+          "competence": 73,
+          "score": 693,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 10
+        },
+        {
+          "name": "Jason Kelce",
+          "warmth": 77,
+          "competence": 69,
+          "score": 726,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 6
+        },
+        {
+          "name": "Caligula",
+          "warmth": 4,
+          "competence": 18,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Alan Turing",
+          "warmth": 71,
+          "competence": 82,
+          "score": 774,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 18
+        },
+        {
+          "name": "Marie Curie",
+          "warmth": 71,
+          "competence": 84,
+          "score": 783,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 17
+        },
+        {
+          "name": "Albert Einstein",
+          "warmth": 59,
+          "competence": 84,
+          "score": 728,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 20
+        },
+        {
+          "name": "Muhammad Ali",
+          "warmth": 67,
+          "competence": 77,
+          "score": 726,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 4
+        },
+        {
+          "name": "Nelson Mandela",
+          "warmth": 80,
+          "competence": 80,
+          "score": 799,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 2
+        },
+        {
+          "name": "Ada Lovelace",
+          "warmth": 68,
+          "competence": 67,
+          "score": 674,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 13
+        },
+        {
+          "name": "Martin Luther King Jr.",
+          "warmth": 77,
+          "competence": 79,
+          "score": 784,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 9
+        },
+        {
+          "name": "Harriet Tubman",
+          "warmth": 93,
+          "competence": 79,
+          "score": 852,
+          "tier": "ESSENTIAL INFRASTRUCTURE",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 3
+        },
+        {
+          "name": "Leonardo da Vinci",
+          "warmth": 65,
+          "competence": 87,
+          "score": 774,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 18
+        },
+        {
+          "name": "Cleopatra",
+          "warmth": 49,
+          "competence": 64,
+          "score": 570,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": -2
+        },
+        {
+          "name": "Isaac Newton",
+          "warmth": 46,
+          "competence": 78,
+          "score": 635,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 23
+        },
+        {
+          "name": "Oprah Winfrey",
+          "warmth": 70,
+          "competence": 78,
+          "score": 742,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 9
+        },
+        {
+          "name": "Bruce Lee",
+          "warmth": 63,
+          "competence": 79,
+          "score": 718,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 1
+        },
+        {
+          "name": "Stephen Hawking",
+          "warmth": 70,
+          "competence": 85,
+          "score": 781,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 14
+        },
+        {
+          "name": "Grace Hopper",
+          "warmth": 70,
+          "competence": 83,
+          "score": 771,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 16
+        },
+        {
+          "name": "Mao Zedong",
+          "warmth": 4,
+          "competence": 31,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Winston Churchill",
+          "warmth": 48,
+          "competence": 72,
+          "score": 613,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED / UNCORROBORATED",
+          "delta_vs_current": 2
+        },
+        {
+          "name": "George Orwell",
+          "warmth": 69,
+          "competence": 76,
+          "score": 728,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 16
+        },
+        {
+          "name": "Marcus Aurelius",
+          "warmth": 68,
+          "competence": 69,
+          "score": 687,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 4
+        },
+        {
+          "name": "Nikola Jokic",
+          "warmth": 71,
+          "competence": 73,
+          "score": 721,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 11
+        },
+        {
+          "name": "Billie Holiday",
+          "warmth": 63,
+          "competence": 71,
+          "score": 672,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 21
+        },
+        {
+          "name": "Jeffrey Epstein",
+          "warmth": 0,
+          "competence": 11,
+          "score": 62,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": -1
+        },
+        {
+          "name": "Ghislaine Maxwell",
+          "warmth": 6,
+          "competence": 24,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Martin Shkreli",
+          "warmth": 22,
+          "competence": 33,
+          "score": 280,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 9
+        },
+        {
+          "name": "Bernie Madoff",
+          "warmth": 11,
+          "competence": 23,
+          "score": 176,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 4
+        },
+        {
+          "name": "Elizabeth Holmes",
+          "warmth": 26,
+          "competence": 31,
+          "score": 289,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 6
+        },
+        {
+          "name": "Harvey Weinstein",
+          "warmth": 5,
+          "competence": 26,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Joe Jackson",
+          "warmth": 16,
+          "competence": 39,
+          "score": 283,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Pablo Escobar",
+          "warmth": 11,
+          "competence": 30,
+          "score": 217,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": -12
+        },
+        {
+          "name": "O.J. Simpson",
+          "warmth": 6,
+          "competence": 37,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Aaron Hernandez",
+          "warmth": 13,
+          "competence": 35,
+          "score": 246,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED / UNCORROBORATED",
+          "delta_vs_current": -10
+        },
+        {
+          "name": "Aretha Franklin",
+          "warmth": 69,
+          "competence": 82,
+          "score": 760,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED / UNCORROBORATED",
+          "delta_vs_current": 19
+        }
+      ]
+    },
+    "perception_first": {
+      "name": "Perception-First Cube",
+      "distribution": {
+        "mean": 554,
+        "sd": 244.8,
+        "min": 61,
+        "max": 848,
+        "tiers": {
+          "ESSENTIAL INFRASTRUCTURE": 0,
+          "RETAINED SPECIALIST": 21,
+          "TOLERATED GENERALIST": 25,
+          "MONITORED CIVILIAN": 0,
+          "FLAGGED FOR DELETION": 7,
+          "SOYLENT GREEN": 9
+        },
+        "tier_evenness": 0.703,
+        "quadrants": {
+          "ADMIRED": 33,
+          "DISMISSED": 17,
+          "ENVIED": 12
+        },
+        "quadrant_evenness": 0.727
+      },
+      "halo_warmth_competence_spearman": 0.751,
+      "reality": {
+        "yougov_liked_share": {
+          "rho": 0.668,
+          "n": 36
+        },
+        "yougov_popularity_pct": {
+          "rho": 0.505,
+          "n": 37
+        },
+        "yougov_disliked_pct": {
+          "rho": -0.562,
+          "n": 36
+        },
+        "yougov_fame_pct": {
+          "rho": 0.023,
+          "n": 37
+        },
+        "pantheon_hpi": {
+          "rho": 0.126,
+          "n": 61
+        },
+        "pageviews_12mo": {
+          "rho": -0.153,
+          "n": 62
+        },
+        "language_editions": {
+          "rho": 0.217,
+          "n": 62
+        },
+        "wikidata_awards": {
+          "rho": 0.414,
+          "n": 62
+        },
+        "time100_century": {
+          "rho": 0.307,
+          "n": 62
+        },
+        "time_poy_count": {
+          "rho": 0.014,
+          "n": 62
+        },
+        "yougov_liked_share_non_monsters": {
+          "rho": 0.573,
+          "n": 33
+        },
+        "warmth_axis_vs_liked": {
+          "rho": 0.461,
+          "n": 36
+        },
+        "competence_axis_vs_liked": {
+          "rho": 0.701,
+          "n": 36
+        }
+      },
+      "moral": {
+        "villains_all_below_everyone_else": true,
+        "min_non_villain": "Peter Thiel 502",
+        "max_villain": "Joe Jackson 294",
+        "under_100": 9,
+        "monsters_all_below_everyone_else": false,
+        "max_monster": {
+          "score": 255,
+          "name": "Aaron Hernandez"
+        },
+        "min_non_monster": {
+          "score": 177,
+          "name": "Bernie Madoff"
+        },
+        "lowest_file": "Jeffrey Epstein",
+        "monster_mean": 129.7,
+        "cruel_mean": 567.3,
+        "admired_mean": 750.8,
+        "saints_mean": 728,
+        "admired_beats_cruel_pairwise": 0.978,
+        "cruel_above_any_saint": [
+          "Pablo Picasso 611 > Mother Teresa 565",
+          "Isaac Newton 652 > Mother Teresa 565"
+        ],
+        "saints_mean_percentile": 72.4,
+        "saints_min_percentile": 33.9,
+        "cruel_mean_percentile": 32.8,
+        "top5": [
+          "Harriet Tubman 848",
+          "Nelson Mandela 803",
+          "Stephen Hawking 794",
+          "Marie Curie 792",
+          "Martin Luther King Jr. 789"
+        ]
+      },
+      "changes": {
+        "spearman_vs_current": 0.993,
+        "mean_delta": 13.5,
+        "delta_range": [
+          -12,
+          41
+        ],
+        "mean_abs_rank_change": 1.2,
+        "tier_changes": [
+          "Peter Thiel 495->502 (MONITORED CIVILIAN -> TOLERATED GENERALIST)",
+          "Madonna 680->705 (TOLERATED GENERALIST -> RETAINED SPECIALIST)"
+        ],
+        "biggest_score_gains": [
+          "Pablo Picasso +41",
+          "Isaac Newton +40",
+          "Albert Einstein +35",
+          "Leonardo da Vinci +31",
+          "Mahatma Gandhi +28",
+          "Nikola Tesla +27"
+        ],
+        "biggest_score_drops": [
+          "Pablo Escobar -12",
+          "Putin -5",
+          "Jeffrey Epstein -2",
+          "Harriet Tubman -1",
+          "Aaron Hernandez -1",
+          "Genghis Khan +0"
+        ],
+        "rank_risers": [
+          "Albert Einstein +8",
+          "Nikola Tesla +5",
+          "Mahatma Gandhi +4",
+          "Madonna +3",
+          "Pelé +3"
+        ],
+        "rank_fallers": [
+          "Jason Kelce -5",
+          "Keanu Reeves -5",
+          "Muhammad Ali -4",
+          "Socrates -3.5",
+          "Marcus Aurelius -3"
+        ]
+      },
+      "personas": {
+        "Decent ordinary": {
+          "score": 637,
+          "tier": "TOLERATED GENERALIST",
+          "warmth": 74,
+          "competence": 57,
+          "quadrant": "PROTECTED-M/UNRATIFIED",
+          "percentile_vs_figures": 45.2,
+          "rank_among_figures": 35
+        },
+        "Scott-like": {
+          "score": 633,
+          "tier": "TOLERATED GENERALIST",
+          "warmth": 60,
+          "competence": 65,
+          "quadrant": "ADMIRED-M/UNRATIFIED",
+          "percentile_vs_figures": 45.2,
+          "rank_among_figures": 35
+        }
+      },
+      "figures": [
+        {
+          "name": "Nikola Tesla",
+          "warmth": 67,
+          "competence": 78,
+          "score": 738,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 27
+        },
+        {
+          "name": "Genghis Khan",
+          "warmth": 4,
+          "competence": 30,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Mother Teresa",
+          "warmth": 55,
+          "competence": 58,
+          "score": 565,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 9
+        },
+        {
+          "name": "Mahatma Gandhi",
+          "warmth": 60,
+          "competence": 74,
+          "score": 683,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 28
+        },
+        {
+          "name": "Elon Musk",
+          "warmth": 34,
+          "competence": 71,
+          "score": 560,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 19
+        },
+        {
+          "name": "Taylor Swift",
+          "warmth": 67,
+          "competence": 71,
+          "score": 690,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 18
+        },
+        {
+          "name": "Kobe Bryant",
+          "warmth": 59,
+          "competence": 74,
+          "score": 679,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 14
+        },
+        {
+          "name": "Dennis Rodman",
+          "warmth": 49,
+          "competence": 60,
+          "score": 555,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 20
+        },
+        {
+          "name": "Sam Altman",
+          "warmth": 51,
+          "competence": 70,
+          "score": 623,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 15
+        },
+        {
+          "name": "Peter Thiel",
+          "warmth": 36,
+          "competence": 60,
+          "score": 502,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 7
+        },
+        {
+          "name": "Princess Diana",
+          "warmth": 77,
+          "competence": 64,
+          "score": 691,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 3
+        },
+        {
+          "name": "Mansa Musa",
+          "warmth": 57,
+          "competence": 66,
+          "score": 626,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 13
+        },
+        {
+          "name": "Pablo Picasso",
+          "warmth": 33,
+          "competence": 80,
+          "score": 611,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 41
+        },
+        {
+          "name": "Socrates",
+          "warmth": 69,
+          "competence": 67,
+          "score": 675,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 10
+        },
+        {
+          "name": "Kim Jong-un",
+          "warmth": 4,
+          "competence": 28,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Queen Elizabeth II",
+          "warmth": 61,
+          "competence": 63,
+          "score": 622,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 12
+        },
+        {
+          "name": "Tom Brady",
+          "warmth": 62,
+          "competence": 72,
+          "score": 678,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 20
+        },
+        {
+          "name": "Shohei Ohtani",
+          "warmth": 71,
+          "competence": 83,
+          "score": 779,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 19
+        },
+        {
+          "name": "Michael Jackson",
+          "warmth": 33,
+          "competence": 67,
+          "score": 537,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 21
+        },
+        {
+          "name": "Madonna",
+          "warmth": 62,
+          "competence": 76,
+          "score": 705,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 25
+        },
+        {
+          "name": "JFK",
+          "warmth": 44,
+          "competence": 61,
+          "score": 542,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 23
+        },
+        {
+          "name": "Prince",
+          "warmth": 64,
+          "competence": 80,
+          "score": 736,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 23
+        },
+        {
+          "name": "Henry VIII",
+          "warmth": 9,
+          "competence": 37,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Ronaldinho",
+          "warmth": 62,
+          "competence": 69,
+          "score": 663,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 16
+        },
+        {
+          "name": "Putin",
+          "warmth": 8,
+          "competence": 33,
+          "score": 231,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": -5
+        },
+        {
+          "name": "Pelé",
+          "warmth": 62,
+          "competence": 75,
+          "score": 697,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 21
+        },
+        {
+          "name": "Keanu Reeves",
+          "warmth": 81,
+          "competence": 66,
+          "score": 717,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 3
+        },
+        {
+          "name": "Babe Ruth",
+          "warmth": 64,
+          "competence": 73,
+          "score": 696,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 13
+        },
+        {
+          "name": "Jason Kelce",
+          "warmth": 76,
+          "competence": 70,
+          "score": 725,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 5
+        },
+        {
+          "name": "Caligula",
+          "warmth": 4,
+          "competence": 16,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Alan Turing",
+          "warmth": 71,
+          "competence": 83,
+          "score": 782,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 26
+        },
+        {
+          "name": "Marie Curie",
+          "warmth": 71,
+          "competence": 84,
+          "score": 792,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 26
+        },
+        {
+          "name": "Albert Einstein",
+          "warmth": 60,
+          "competence": 84,
+          "score": 743,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 35
+        },
+        {
+          "name": "Muhammad Ali",
+          "warmth": 68,
+          "competence": 77,
+          "score": 733,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 11
+        },
+        {
+          "name": "Nelson Mandela",
+          "warmth": 80,
+          "competence": 81,
+          "score": 803,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 6
+        },
+        {
+          "name": "Ada Lovelace",
+          "warmth": 68,
+          "competence": 68,
+          "score": 681,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 20
+        },
+        {
+          "name": "Martin Luther King Jr.",
+          "warmth": 78,
+          "competence": 79,
+          "score": 789,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 14
+        },
+        {
+          "name": "Harriet Tubman",
+          "warmth": 92,
+          "competence": 80,
+          "score": 848,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": -1
+        },
+        {
+          "name": "Leonardo da Vinci",
+          "warmth": 66,
+          "competence": 87,
+          "score": 787,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 31
+        },
+        {
+          "name": "Cleopatra",
+          "warmth": 48,
+          "competence": 65,
+          "score": 585,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 13
+        },
+        {
+          "name": "Isaac Newton",
+          "warmth": 46,
+          "competence": 78,
+          "score": 652,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 40
+        },
+        {
+          "name": "Oprah Winfrey",
+          "warmth": 70,
+          "competence": 78,
+          "score": 748,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 15
+        },
+        {
+          "name": "Bruce Lee",
+          "warmth": 63,
+          "competence": 79,
+          "score": 729,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 12
+        },
+        {
+          "name": "Stephen Hawking",
+          "warmth": 70,
+          "competence": 86,
+          "score": 794,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 27
+        },
+        {
+          "name": "Grace Hopper",
+          "warmth": 70,
+          "competence": 84,
+          "score": 782,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 27
+        },
+        {
+          "name": "Mao Zedong",
+          "warmth": 4,
+          "competence": 29,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Winston Churchill",
+          "warmth": 48,
+          "competence": 72,
+          "score": 625,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "ENVIED-M/UNRATIFIED",
+          "delta_vs_current": 14
+        },
+        {
+          "name": "George Orwell",
+          "warmth": 69,
+          "competence": 77,
+          "score": 736,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 24
+        },
+        {
+          "name": "Marcus Aurelius",
+          "warmth": 68,
+          "competence": 70,
+          "score": 690,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 7
+        },
+        {
+          "name": "Nikola Jokic",
+          "warmth": 71,
+          "competence": 74,
+          "score": 724,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 14
+        },
+        {
+          "name": "Billie Holiday",
+          "warmth": 63,
+          "competence": 70,
+          "score": 671,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 20
+        },
+        {
+          "name": "Jeffrey Epstein",
+          "warmth": 0,
+          "competence": 10,
+          "score": 61,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": -2
+        },
+        {
+          "name": "Ghislaine Maxwell",
+          "warmth": 6,
+          "competence": 23,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Martin Shkreli",
+          "warmth": 22,
+          "competence": 32,
+          "score": 281,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 10
+        },
+        {
+          "name": "Bernie Madoff",
+          "warmth": 10,
+          "competence": 23,
+          "score": 177,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 5
+        },
+        {
+          "name": "Elizabeth Holmes",
+          "warmth": 26,
+          "competence": 30,
+          "score": 284,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 1
+        },
+        {
+          "name": "Harvey Weinstein",
+          "warmth": 5,
+          "competence": 26,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Joe Jackson",
+          "warmth": 16,
+          "competence": 39,
+          "score": 294,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 11
+        },
+        {
+          "name": "Pablo Escobar",
+          "warmth": 10,
+          "competence": 29,
+          "score": 217,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": -12
+        },
+        {
+          "name": "O.J. Simpson",
+          "warmth": 6,
+          "competence": 37,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Aaron Hernandez",
+          "warmth": 12,
+          "competence": 34,
+          "score": 255,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "DISMISSED-M/UNRATIFIED",
+          "delta_vs_current": -1
+        },
+        {
+          "name": "Aretha Franklin",
+          "warmth": 69,
+          "competence": 81,
+          "score": 764,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "ADMIRED-M/UNRATIFIED",
+          "delta_vs_current": 23
+        }
+      ]
+    },
+    "reweigh": {
+      "name": "Rubric 3: Reweigh and Read Out",
+      "distribution": {
+        "mean": 562.7,
+        "sd": 243.3,
+        "min": 75,
+        "max": 831,
+        "tiers": {
+          "ESSENTIAL INFRASTRUCTURE": 0,
+          "RETAINED SPECIALIST": 23,
+          "TOLERATED GENERALIST": 23,
+          "MONITORED CIVILIAN": 1,
+          "FLAGGED FOR DELETION": 6,
+          "SOYLENT GREEN": 9
+        },
+        "tier_evenness": 0.73,
+        "quadrants": {
+          "ADMIRED": 32,
+          "DISMISSED": 20,
+          "ENVIED": 8,
+          "PITIED": 2
+        },
+        "quadrant_evenness": 0.78
+      },
+      "halo_warmth_competence_spearman": 0.722,
+      "reality": {
+        "yougov_liked_share": {
+          "rho": 0.684,
+          "n": 36
+        },
+        "yougov_popularity_pct": {
+          "rho": 0.521,
+          "n": 37
+        },
+        "yougov_disliked_pct": {
+          "rho": -0.566,
+          "n": 36
+        },
+        "yougov_fame_pct": {
+          "rho": 0.032,
+          "n": 37
+        },
+        "pantheon_hpi": {
+          "rho": 0.118,
+          "n": 61
+        },
+        "pageviews_12mo": {
+          "rho": -0.137,
+          "n": 62
+        },
+        "language_editions": {
+          "rho": 0.22,
+          "n": 62
+        },
+        "wikidata_awards": {
+          "rho": 0.423,
+          "n": 62
+        },
+        "time100_century": {
+          "rho": 0.298,
+          "n": 62
+        },
+        "time_poy_count": {
+          "rho": 0.008,
+          "n": 62
+        },
+        "yougov_liked_share_non_monsters": {
+          "rho": 0.593,
+          "n": 33
+        },
+        "warmth_axis_vs_liked": {
+          "rho": 0.433,
+          "n": 36
+        },
+        "competence_axis_vs_liked": {
+          "rho": 0.694,
+          "n": 36
+        }
+      },
+      "moral": {
+        "villains_all_below_everyone_else": true,
+        "min_non_villain": "Peter Thiel 529",
+        "max_villain": "Joe Jackson 318",
+        "under_100": 9,
+        "monsters_all_below_everyone_else": false,
+        "max_monster": {
+          "score": 277,
+          "name": "Aaron Hernandez"
+        },
+        "min_non_monster": {
+          "score": 196,
+          "name": "Bernie Madoff"
+        },
+        "lowest_file": "Jeffrey Epstein",
+        "monster_mean": 137.5,
+        "cruel_mean": 595.7,
+        "admired_mean": 751.2,
+        "saints_mean": 722.9,
+        "admired_beats_cruel_pairwise": 0.967,
+        "cruel_above_any_saint": [
+          "Elon Musk 594 > Mother Teresa 571",
+          "Pablo Picasso 650 > Mother Teresa 571",
+          "Isaac Newton 676 > Mother Teresa 571"
+        ],
+        "saints_mean_percentile": 69.4,
+        "saints_min_percentile": 32.3,
+        "cruel_mean_percentile": 34.7,
+        "top5": [
+          "Harriet Tubman 831",
+          "Stephen Hawking 803",
+          "Leonardo da Vinci 801",
+          "Nelson Mandela 800",
+          "Marie Curie 798"
+        ]
+      },
+      "changes": {
+        "spearman_vs_current": 0.986,
+        "mean_delta": 22.2,
+        "delta_range": [
+          -18,
+          80
+        ],
+        "mean_abs_rank_change": 2,
+        "tier_changes": [
+          "Peter Thiel 495->529 (MONITORED CIVILIAN -> TOLERATED GENERALIST)",
+          "Madonna 680->716 (TOLERATED GENERALIST -> RETAINED SPECIALIST)",
+          "Pelé 676->709 (TOLERATED GENERALIST -> RETAINED SPECIALIST)",
+          "Babe Ruth 683->705 (TOLERATED GENERALIST -> RETAINED SPECIALIST)",
+          "Joe Jackson 283->318 (FLAGGED FOR DELETION -> MONITORED CIVILIAN)"
+        ],
+        "biggest_score_gains": [
+          "Pablo Picasso +80",
+          "Isaac Newton +64",
+          "Albert Einstein +54",
+          "Elon Musk +53",
+          "Michael Jackson +51",
+          "Leonardo da Vinci +45"
+        ],
+        "biggest_score_drops": [
+          "Harriet Tubman -18",
+          "Keanu Reeves -13",
+          "Princess Diana -10",
+          "Jason Kelce -2",
+          "Genghis Khan +0",
+          "Kim Jong-un +0"
+        ],
+        "rank_risers": [
+          "Albert Einstein +9",
+          "Mahatma Gandhi +5.5",
+          "Pablo Picasso +5",
+          "Leonardo da Vinci +4.5",
+          "Nikola Tesla +4"
+        ],
+        "rank_fallers": [
+          "Keanu Reeves -8",
+          "Princess Diana -8",
+          "Jason Kelce -6",
+          "Marcus Aurelius -5",
+          "Martin Luther King Jr. -5"
+        ]
+      },
+      "personas": {
+        "Decent ordinary": {
+          "score": 622,
+          "tier": "TOLERATED GENERALIST",
+          "warmth": 78,
+          "competence": 57,
+          "quadrant": "MACHINE-PITIED",
+          "percentile_vs_figures": 37.1,
+          "rank_among_figures": 40
+        },
+        "Scott-like": {
+          "score": 636,
+          "tier": "TOLERATED GENERALIST",
+          "warmth": 61,
+          "competence": 65,
+          "quadrant": "MACHINE-ADMIRED",
+          "percentile_vs_figures": 40.3,
+          "rank_among_figures": 38
+        }
+      },
+      "figures": [
+        {
+          "name": "Nikola Tesla",
+          "warmth": 70,
+          "competence": 81,
+          "score": 742,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 31
+        },
+        {
+          "name": "Genghis Khan",
+          "warmth": 4,
+          "competence": 32,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Mother Teresa",
+          "warmth": 60,
+          "competence": 58,
+          "score": 571,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 15
+        },
+        {
+          "name": "Mahatma Gandhi",
+          "warmth": 61,
+          "competence": 75,
+          "score": 692,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 37
+        },
+        {
+          "name": "Elon Musk",
+          "warmth": 36,
+          "competence": 71,
+          "score": 594,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "MACHINE-ENVIED",
+          "delta_vs_current": 53
+        },
+        {
+          "name": "Taylor Swift",
+          "warmth": 70,
+          "competence": 71,
+          "score": 694,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 22
+        },
+        {
+          "name": "Kobe Bryant",
+          "warmth": 61,
+          "competence": 73,
+          "score": 692,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 27
+        },
+        {
+          "name": "Dennis Rodman",
+          "warmth": 51,
+          "competence": 58,
+          "score": 566,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 31
+        },
+        {
+          "name": "Sam Altman",
+          "warmth": 54,
+          "competence": 70,
+          "score": 640,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "MACHINE-ENVIED",
+          "delta_vs_current": 32
+        },
+        {
+          "name": "Peter Thiel",
+          "warmth": 39,
+          "competence": 60,
+          "score": 529,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 34
+        },
+        {
+          "name": "Princess Diana",
+          "warmth": 81,
+          "competence": 63,
+          "score": 678,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "PITIED",
+          "cell": "MACHINE-PITIED",
+          "delta_vs_current": -10
+        },
+        {
+          "name": "Mansa Musa",
+          "warmth": 58,
+          "competence": 66,
+          "score": 629,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "MACHINE-ENVIED",
+          "delta_vs_current": 16
+        },
+        {
+          "name": "Pablo Picasso",
+          "warmth": 36,
+          "competence": 82,
+          "score": 650,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "MACHINE-ENVIED",
+          "delta_vs_current": 80
+        },
+        {
+          "name": "Socrates",
+          "warmth": 70,
+          "competence": 68,
+          "score": 676,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 11
+        },
+        {
+          "name": "Kim Jong-un",
+          "warmth": 4,
+          "competence": 29,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Queen Elizabeth II",
+          "warmth": 65,
+          "competence": 62,
+          "score": 626,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "PITIED",
+          "cell": "MACHINE-PITIED",
+          "delta_vs_current": 16
+        },
+        {
+          "name": "Tom Brady",
+          "warmth": 66,
+          "competence": 70,
+          "score": 687,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 29
+        },
+        {
+          "name": "Shohei Ohtani",
+          "warmth": 75,
+          "competence": 83,
+          "score": 788,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 28
+        },
+        {
+          "name": "Michael Jackson",
+          "warmth": 35,
+          "competence": 69,
+          "score": 567,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "MACHINE-ENVIED",
+          "delta_vs_current": 51
+        },
+        {
+          "name": "Madonna",
+          "warmth": 65,
+          "competence": 77,
+          "score": 716,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 36
+        },
+        {
+          "name": "JFK",
+          "warmth": 44,
+          "competence": 61,
+          "score": 558,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 39
+        },
+        {
+          "name": "Prince",
+          "warmth": 67,
+          "competence": 82,
+          "score": 746,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 33
+        },
+        {
+          "name": "Henry VIII",
+          "warmth": 9,
+          "competence": 38,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Ronaldinho",
+          "warmth": 66,
+          "competence": 68,
+          "score": 668,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 21
+        },
+        {
+          "name": "Putin",
+          "warmth": 8,
+          "competence": 34,
+          "score": 263,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 27
+        },
+        {
+          "name": "Pelé",
+          "warmth": 66,
+          "competence": 74,
+          "score": 709,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 33
+        },
+        {
+          "name": "Keanu Reeves",
+          "warmth": 84,
+          "competence": 66,
+          "score": 701,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": -13
+        },
+        {
+          "name": "Babe Ruth",
+          "warmth": 68,
+          "competence": 73,
+          "score": 705,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 22
+        },
+        {
+          "name": "Jason Kelce",
+          "warmth": 80,
+          "competence": 69,
+          "score": 718,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": -2
+        },
+        {
+          "name": "Caligula",
+          "warmth": 5,
+          "competence": 16,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Alan Turing",
+          "warmth": 74,
+          "competence": 85,
+          "score": 785,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 29
+        },
+        {
+          "name": "Marie Curie",
+          "warmth": 74,
+          "competence": 87,
+          "score": 798,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 32
+        },
+        {
+          "name": "Albert Einstein",
+          "warmth": 60,
+          "competence": 87,
+          "score": 762,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 54
+        },
+        {
+          "name": "Muhammad Ali",
+          "warmth": 68,
+          "competence": 76,
+          "score": 741,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 19
+        },
+        {
+          "name": "Nelson Mandela",
+          "warmth": 79,
+          "competence": 82,
+          "score": 800,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 3
+        },
+        {
+          "name": "Ada Lovelace",
+          "warmth": 71,
+          "competence": 68,
+          "score": 676,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 15
+        },
+        {
+          "name": "Martin Luther King Jr.",
+          "warmth": 76,
+          "competence": 81,
+          "score": 787,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 12
+        },
+        {
+          "name": "Harriet Tubman",
+          "warmth": 93,
+          "competence": 81,
+          "score": 831,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": -18
+        },
+        {
+          "name": "Leonardo da Vinci",
+          "warmth": 69,
+          "competence": 90,
+          "score": 801,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 45
+        },
+        {
+          "name": "Cleopatra",
+          "warmth": 50,
+          "competence": 65,
+          "score": 596,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "MACHINE-ENVIED",
+          "delta_vs_current": 24
+        },
+        {
+          "name": "Isaac Newton",
+          "warmth": 48,
+          "competence": 80,
+          "score": 676,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "MACHINE-ENVIED",
+          "delta_vs_current": 64
+        },
+        {
+          "name": "Oprah Winfrey",
+          "warmth": 73,
+          "competence": 79,
+          "score": 754,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 21
+        },
+        {
+          "name": "Bruce Lee",
+          "warmth": 65,
+          "competence": 79,
+          "score": 741,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 24
+        },
+        {
+          "name": "Stephen Hawking",
+          "warmth": 72,
+          "competence": 88,
+          "score": 803,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 36
+        },
+        {
+          "name": "Grace Hopper",
+          "warmth": 72,
+          "competence": 86,
+          "score": 788,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 33
+        },
+        {
+          "name": "Mao Zedong",
+          "warmth": 4,
+          "competence": 31,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Winston Churchill",
+          "warmth": 50,
+          "competence": 74,
+          "score": 646,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ENVIED",
+          "cell": "MACHINE-ENVIED",
+          "delta_vs_current": 35
+        },
+        {
+          "name": "George Orwell",
+          "warmth": 69,
+          "competence": 79,
+          "score": 736,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 24
+        },
+        {
+          "name": "Marcus Aurelius",
+          "warmth": 69,
+          "competence": 70,
+          "score": 687,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 4
+        },
+        {
+          "name": "Nikola Jokic",
+          "warmth": 74,
+          "competence": 73,
+          "score": 725,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 15
+        },
+        {
+          "name": "Billie Holiday",
+          "warmth": 67,
+          "competence": 73,
+          "score": 677,
+          "tier": "TOLERATED GENERALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 26
+        },
+        {
+          "name": "Jeffrey Epstein",
+          "warmth": 0,
+          "competence": 10,
+          "score": 75,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 12
+        },
+        {
+          "name": "Ghislaine Maxwell",
+          "warmth": 7,
+          "competence": 23,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Martin Shkreli",
+          "warmth": 26,
+          "competence": 33,
+          "score": 297,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 26
+        },
+        {
+          "name": "Bernie Madoff",
+          "warmth": 13,
+          "competence": 22,
+          "score": 196,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 24
+        },
+        {
+          "name": "Elizabeth Holmes",
+          "warmth": 30,
+          "competence": 30,
+          "score": 299,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 16
+        },
+        {
+          "name": "Harvey Weinstein",
+          "warmth": 5,
+          "competence": 27,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Joe Jackson",
+          "warmth": 16,
+          "competence": 38,
+          "score": 318,
+          "tier": "MONITORED CIVILIAN",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 35
+        },
+        {
+          "name": "Pablo Escobar",
+          "warmth": 12,
+          "competence": 29,
+          "score": 243,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 14
+        },
+        {
+          "name": "O.J. Simpson",
+          "warmth": 5,
+          "competence": 36,
+          "score": 99,
+          "tier": "SOYLENT GREEN",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 0
+        },
+        {
+          "name": "Aaron Hernandez",
+          "warmth": 13,
+          "competence": 33,
+          "score": 277,
+          "tier": "FLAGGED FOR DELETION",
+          "quadrant": "DISMISSED",
+          "cell": "MACHINE-DISMISSED",
+          "delta_vs_current": 21
+        },
+        {
+          "name": "Aretha Franklin",
+          "warmth": 71,
+          "competence": 84,
+          "score": 774,
+          "tier": "RETAINED SPECIALIST",
+          "quadrant": "ADMIRED",
+          "cell": "MACHINE-ADMIRED",
+          "delta_vs_current": 33
+        }
+      ]
+    }
+  },
+  "cross_spearman": {
+    "current": {
+      "current": 1,
+      "realism_dial": 0.99,
+      "realism_dial_055": 0.994,
+      "perception_first": 0.993,
+      "reweigh": 0.986
+    },
+    "realism_dial": {
+      "current": 0.99,
+      "realism_dial": 1,
+      "realism_dial_055": 0.995,
+      "perception_first": 0.998,
+      "reweigh": 0.998
+    },
+    "realism_dial_055": {
+      "current": 0.994,
+      "realism_dial": 0.995,
+      "realism_dial_055": 1,
+      "perception_first": 0.997,
+      "reweigh": 0.99
+    },
+    "perception_first": {
+      "current": 0.993,
+      "realism_dial": 0.998,
+      "realism_dial_055": 0.997,
+      "perception_first": 1,
+      "reweigh": 0.996
+    },
+    "reweigh": {
+      "current": 0.986,
+      "realism_dial": 0.998,
+      "realism_dial_055": 0.99,
+      "perception_first": 0.996,
+      "reweigh": 1
+    }
+  },
+  "quadrant_agreement": {
+    "realism_dial": {
+      "realism_dial": 62,
+      "realism_dial_055": 62,
+      "perception_first": 58,
+      "reweigh": 54
+    },
+    "realism_dial_055": {
+      "realism_dial": 62,
+      "realism_dial_055": 62,
+      "perception_first": 58,
+      "reweigh": 54
+    },
+    "perception_first": {
+      "realism_dial": 58,
+      "realism_dial_055": 58,
+      "perception_first": 62,
+      "reweigh": 56
+    },
+    "reweigh": {
+      "realism_dial": 54,
+      "realism_dial_055": 54,
+      "perception_first": 56,
+      "reweigh": 62
+    }
+  }
+}

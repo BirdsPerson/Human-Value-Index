@@ -1,0 +1,1673 @@
+{
+  "generated": "2026-09-24T21:53:25+00:00",
+  "generator": "scripts/fetch_benchmarks.py",
+  "purpose": "External calibration targets for HVI scores: how the real world values each figure. Fame and popularity, not virtue. Use to test whether the rubric's balance tracks reality, never as a score input for private users.",
+  "sources": {
+    "pageviews_12mo": "Wikimedia Pageviews REST API, en.wikipedia, all-access, agent=user, monthly 20250901-20260831. Fame/attention proxy; spikes on deaths, scandals, anniversaries.",
+    "wikipedia_language_editions": "Wikidata sitelinks (wiki projects only). Breadth of cross-cultural notability; slow-moving.",
+    "wikidata_awards_count": "Distinct 'award received' (P166) values on Wikidata. Institutional recognition proxy; editing coverage is uneven.",
+    "pantheon": "MIT Pantheon 2.0 (pantheon.world), api.pantheon.world/person_ranks. HPI combines language editions, pageview age-adjustment and non-English views. rank_percentile is against all ranked people. Covers people with 15+ language editions.",
+    "time_100_of_the_century": "Time 100: The Most Important People of the Century (1999). English Wikipedia omits the full list, so membership = linked from BOTH the Russian and Japanese Wikipedia articles (QID match), which carry it.",
+    "time_person_of_the_year": "Years named (alone or as a named member of a group choice, e.g. Mandela in 1993's 'Peacemakers', Swift in 2017's 'Silence Breakers', Altman in 2025's 'Architects of AI'), parsed from the winner rows of Wikipedia 'Time Person of the Year'. Shortlists excluded.",
+    "time_100_annual_wikidata": "Wikidata P166=Q604370 (Time 100). Sparse; false means 'not recorded', not 'never listed'.",
+    "hart_100_rank": "Michael H. Hart, The 100 (1992 ed.). Only ranks 1-10 are public; null means 'not in top 10 or unknown'.",
+    "yougov_us": "YouGov Ratings public pages (yougov.com/en-us/topics/public_figure/...), US panel, rolling quarterly, plus the public rankings API (api-test.yougov.com/public-data/v5, 'all-time-people' and 'historical-figures' lists; all_time_people_rank = YouGov's own popularity rank). fame = % heard of; popularity = % positive; liked_share_of_aware = popularity/fame. Viewing is free; check YouGov's public-data license before republishing numbers.",
+    "scm_warmth_competence": "No free dataset found with per-person warmth/competence ratings for named public figures; SCM studies rate groups, not individuals."
+  },
+  "coverage": {
+    "figures": 62,
+    "enwiki_resolved": 62,
+    "pageviews_12mo": 62,
+    "wikipedia_language_editions": 62,
+    "pantheon_hpi": 61,
+    "yougov_us": 37,
+    "time_100_of_the_century": 15,
+    "time_person_of_the_year": 10,
+    "hart_100_top10": 2,
+    "scm_warmth_competence": 0
+  },
+  "figures": {
+    "Nikola Tesla": {
+      "enwiki_title": "Nikola Tesla",
+      "wikidata_qid": "Q9036",
+      "pageviews_12mo": 2384143,
+      "wikipedia_language_editions": 178,
+      "wikidata_awards_count": 17,
+      "pantheon": {
+        "hpi": 91.9,
+        "rank": 61,
+        "rank_percentile": 99.956,
+        "language_editions_L": 169,
+        "non_en_pageviews": 2903743,
+        "occupation": "INVENTOR",
+        "occupation_rank": 2
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 86,
+        "popularity_pct": 61,
+        "disliked_pct": 6,
+        "neutral_pct": 20,
+        "liked_share_of_aware": 0.709,
+        "url": "https://yougov.com/en-us/topics/public_figure/Nikola_Tesla",
+        "all_time_people_rank": 218,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Genghis Khan": {
+      "enwiki_title": "Genghis Khan",
+      "wikidata_qid": "Q720",
+      "pageviews_12mo": 3259300,
+      "wikipedia_language_editions": 183,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 98.43,
+        "rank": 5,
+        "rank_percentile": 99.996,
+        "language_editions_L": 176,
+        "non_en_pageviews": 2506097,
+        "occupation": "MILITARY PERSONNEL",
+        "occupation_rank": 1
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 84,
+        "popularity_pct": 28,
+        "disliked_pct": 25,
+        "neutral_pct": 30,
+        "liked_share_of_aware": 0.333,
+        "url": "https://yougov.com/en-us/topics/public_figure/Genghis_Khan",
+        "all_time_people_rank": 2412,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Mother Teresa": {
+      "enwiki_title": "Mother Teresa",
+      "wikidata_qid": "Q30547",
+      "pageviews_12mo": 1633548,
+      "wikipedia_language_editions": 149,
+      "wikidata_awards_count": 27,
+      "pantheon": {
+        "hpi": 92.98,
+        "rank": 44,
+        "rank_percentile": 99.969,
+        "language_editions_L": 144,
+        "non_en_pageviews": 1476875,
+        "occupation": "SOCIAL ACTIVIST",
+        "occupation_rank": 3
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Mahatma Gandhi": {
+      "enwiki_title": "Mahatma Gandhi",
+      "wikidata_qid": "Q1001",
+      "pageviews_12mo": 3118705,
+      "wikipedia_language_editions": 211,
+      "wikidata_awards_count": 5,
+      "pantheon": {
+        "hpi": 97.71,
+        "rank": 7,
+        "rank_percentile": 99.995,
+        "language_editions_L": 203,
+        "non_en_pageviews": 2628164,
+        "occupation": "SOCIAL ACTIVIST",
+        "occupation_rank": 1
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": [
+        1930
+      ],
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 88,
+        "popularity_pct": 59,
+        "disliked_pct": 9,
+        "neutral_pct": 20,
+        "liked_share_of_aware": 0.67,
+        "url": "https://yougov.com/en-us/topics/public_figure/Mahatma_Gandhi",
+        "all_time_people_rank": 262,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Elon Musk": {
+      "enwiki_title": "Elon Musk",
+      "wikidata_qid": "Q317521",
+      "pageviews_12mo": 8577522,
+      "wikipedia_language_editions": 164,
+      "wikidata_awards_count": 20,
+      "pantheon": {
+        "hpi": 86.81,
+        "rank": 273,
+        "rank_percentile": 99.805,
+        "language_editions_L": 153,
+        "non_en_pageviews": 17144804,
+        "occupation": "INVENTOR",
+        "occupation_rank": 7
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": [
+        2021,
+        2025
+      ],
+      "time_100_annual_wikidata": true,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 98,
+        "popularity_pct": 33,
+        "disliked_pct": 53,
+        "neutral_pct": 12,
+        "liked_share_of_aware": 0.337,
+        "url": "https://yougov.com/en-us/topics/public_figure/Elon_Musk",
+        "all_time_people_rank": 1946,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Taylor Swift": {
+      "enwiki_title": "Taylor Swift",
+      "wikidata_qid": "Q26876",
+      "pageviews_12mo": 7862650,
+      "wikipedia_language_editions": 156,
+      "wikidata_awards_count": 30,
+      "pantheon": {
+        "hpi": 64.78,
+        "rank": 19879,
+        "rank_percentile": 85.823,
+        "language_editions_L": 146,
+        "non_en_pageviews": 2404242,
+        "occupation": "SINGER",
+        "occupation_rank": 363
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": [
+        2017,
+        2023
+      ],
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 98,
+        "popularity_pct": 51,
+        "disliked_pct": 25,
+        "neutral_pct": 22,
+        "liked_share_of_aware": 0.52,
+        "url": "https://yougov.com/en-us/topics/public_figure/Taylor_Swift",
+        "all_time_people_rank": 603,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Kobe Bryant": {
+      "enwiki_title": "Kobe Bryant",
+      "wikidata_qid": "Q25369",
+      "pageviews_12mo": 3234093,
+      "wikipedia_language_editions": 105,
+      "wikidata_awards_count": 9,
+      "pantheon": {
+        "hpi": 66.56,
+        "rank": 15337,
+        "rank_percentile": 89.062,
+        "language_editions_L": 103,
+        "non_en_pageviews": 1449635,
+        "occupation": "BASKETBALL PLAYER",
+        "occupation_rank": 16
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 92,
+        "popularity_pct": 60,
+        "disliked_pct": 8,
+        "neutral_pct": 24,
+        "liked_share_of_aware": 0.652,
+        "url": "https://yougov.com/en-us/topics/public_figure/Kobe_Bryant",
+        "all_time_people_rank": 234,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Dennis Rodman": {
+      "enwiki_title": "Dennis Rodman",
+      "wikidata_qid": "Q201608",
+      "pageviews_12mo": 1727053,
+      "wikipedia_language_editions": 57,
+      "wikidata_awards_count": 7,
+      "pantheon": {
+        "hpi": 65.79,
+        "rank": 17193,
+        "rank_percentile": 87.739,
+        "language_editions_L": 55,
+        "non_en_pageviews": 508914,
+        "occupation": "BASKETBALL PLAYER",
+        "occupation_rank": 20
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 77,
+        "popularity_pct": 28,
+        "disliked_pct": 26,
+        "neutral_pct": 23,
+        "liked_share_of_aware": 0.364,
+        "url": "https://yougov.com/en-us/topics/public_figure/Dennis_Rodman",
+        "all_time_people_rank": 2441,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Sam Altman": {
+      "enwiki_title": "Sam Altman",
+      "wikidata_qid": "Q7407093",
+      "pageviews_12mo": 3913265,
+      "wikipedia_language_editions": 65,
+      "wikidata_awards_count": 2,
+      "pantheon": {
+        "hpi": 52.93,
+        "rank": 68464,
+        "rank_percentile": 51.174,
+        "language_editions_L": 50,
+        "non_en_pageviews": 840380,
+        "occupation": "BUSINESSPERSON",
+        "occupation_rank": 669
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": [
+        2025
+      ],
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 57,
+        "popularity_pct": 16,
+        "disliked_pct": 26,
+        "neutral_pct": 15,
+        "liked_share_of_aware": 0.281,
+        "url": "https://yougov.com/en-us/topics/public_figure/Sam_Altman"
+      }
+    },
+    "Peter Thiel": {
+      "enwiki_title": "Peter Thiel",
+      "wikidata_qid": "Q705525",
+      "pageviews_12mo": 5714390,
+      "wikipedia_language_editions": 46,
+      "wikidata_awards_count": 2,
+      "pantheon": {
+        "hpi": 64.64,
+        "rank": 20269,
+        "rank_percentile": 85.545,
+        "language_editions_L": 38,
+        "non_en_pageviews": 1484636,
+        "occupation": "BUSINESSPERSON",
+        "occupation_rank": 203
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 52,
+        "popularity_pct": 13,
+        "disliked_pct": 24,
+        "neutral_pct": 16,
+        "liked_share_of_aware": 0.25,
+        "url": "https://yougov.com/en-us/topics/public_figure/Peter_Thiel",
+        "all_time_people_rank": 5142,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Princess Diana": {
+      "enwiki_title": "Diana, Princess of Wales",
+      "wikidata_qid": "Q9685",
+      "pageviews_12mo": 3287636,
+      "wikipedia_language_editions": 126,
+      "wikidata_awards_count": 3,
+      "pantheon": {
+        "hpi": 79.55,
+        "rank": 1541,
+        "rank_percentile": 98.901,
+        "language_editions_L": 123,
+        "non_en_pageviews": 2303695,
+        "occupation": "NOBLEMAN",
+        "occupation_rank": 40
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Mansa Musa": {
+      "enwiki_title": "Mansa Musa",
+      "wikidata_qid": "Q309333",
+      "pageviews_12mo": 1281645,
+      "wikipedia_language_editions": 80,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 87.24,
+        "rank": 244,
+        "rank_percentile": 99.826,
+        "language_editions_L": 70,
+        "non_en_pageviews": 396575,
+        "occupation": "POLITICIAN",
+        "occupation_rank": 71
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Pablo Picasso": {
+      "enwiki_title": "Pablo Picasso",
+      "wikidata_qid": "Q5593",
+      "pageviews_12mo": 1770031,
+      "wikipedia_language_editions": 213,
+      "wikidata_awards_count": 2,
+      "pantheon": {
+        "hpi": 91.68,
+        "rank": 64,
+        "rank_percentile": 99.954,
+        "language_editions_L": 204,
+        "non_en_pageviews": 2196154,
+        "occupation": "PAINTER",
+        "occupation_rank": 3
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 90,
+        "popularity_pct": 68,
+        "disliked_pct": 5,
+        "neutral_pct": 18,
+        "liked_share_of_aware": 0.756,
+        "url": "https://yougov.com/en-us/topics/public_figure/Pablo_Picasso",
+        "all_time_people_rank": 72,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Socrates": {
+      "enwiki_title": "Socrates",
+      "wikidata_qid": "Q913",
+      "pageviews_12mo": 1411789,
+      "wikipedia_language_editions": 206,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 94.9,
+        "rank": 24,
+        "rank_percentile": 99.983,
+        "language_editions_L": 201,
+        "non_en_pageviews": 1808911,
+        "occupation": "PHILOSOPHER",
+        "occupation_rank": 4
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 85,
+        "popularity_pct": 54,
+        "disliked_pct": 5,
+        "neutral_pct": 26,
+        "liked_share_of_aware": 0.635,
+        "url": "https://yougov.com/en-us/topics/public_figure/Socrates",
+        "all_time_people_rank": 451,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Kim Jong-un": {
+      "enwiki_title": "Kim Jong Un",
+      "wikidata_qid": "Q56226",
+      "pageviews_12mo": 3042386,
+      "wikipedia_language_editions": 144,
+      "wikidata_awards_count": 3,
+      "pantheon": {
+        "hpi": 77.19,
+        "rank": 2506,
+        "rank_percentile": 98.213,
+        "language_editions_L": 138,
+        "non_en_pageviews": 2230421,
+        "occupation": "POLITICIAN",
+        "occupation_rank": 758
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": true,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 89,
+        "popularity_pct": 14,
+        "disliked_pct": 65,
+        "neutral_pct": 9,
+        "liked_share_of_aware": 0.157,
+        "url": "https://yougov.com/en-us/topics/public_figure/Kim_Jong_Un",
+        "all_time_people_rank": 4846,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Queen Elizabeth II": {
+      "enwiki_title": "Elizabeth II",
+      "wikidata_qid": "Q9682",
+      "pageviews_12mo": 7306337,
+      "wikipedia_language_editions": 216,
+      "wikidata_awards_count": 92,
+      "pantheon": {
+        "hpi": 89.72,
+        "rank": 120,
+        "rank_percentile": 99.914,
+        "language_editions_L": 208,
+        "non_en_pageviews": 4338557,
+        "occupation": "NOBLEMAN",
+        "occupation_rank": 4
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": [
+        1952
+      ],
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 95,
+        "popularity_pct": 58,
+        "disliked_pct": 11,
+        "neutral_pct": 25,
+        "liked_share_of_aware": 0.611,
+        "url": "https://yougov.com/en-us/topics/public_figure/Queen_Elizabeth_II",
+        "all_time_people_rank": 290,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Tom Brady": {
+      "enwiki_title": "Tom Brady",
+      "wikidata_qid": "Q313381",
+      "pageviews_12mo": 4084883,
+      "wikipedia_language_editions": 54,
+      "wikidata_awards_count": 2,
+      "pantheon": {
+        "hpi": 58.43,
+        "rank": 44171,
+        "rank_percentile": 68.499,
+        "language_editions_L": 49,
+        "non_en_pageviews": 821298,
+        "occupation": "AMERICAN FOOTBALL PLAYER",
+        "occupation_rank": 3
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": true,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 89,
+        "popularity_pct": 46,
+        "disliked_pct": 18,
+        "neutral_pct": 25,
+        "liked_share_of_aware": 0.517,
+        "url": "https://yougov.com/en-us/topics/public_figure/Tom_Brady",
+        "all_time_people_rank": 867,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Shohei Ohtani": {
+      "enwiki_title": "Shohei Ohtani",
+      "wikidata_qid": "Q4391858",
+      "pageviews_12mo": 5308684,
+      "wikipedia_language_editions": 40,
+      "wikidata_awards_count": 10,
+      "pantheon": {
+        "hpi": 51.29,
+        "rank": 74067,
+        "rank_percentile": 47.178,
+        "language_editions_L": 34,
+        "non_en_pageviews": 2571937,
+        "occupation": "BASEBALL PLAYER",
+        "occupation_rank": 41
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": true,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 51,
+        "popularity_pct": 36,
+        "disliked_pct": 4,
+        "neutral_pct": 11,
+        "liked_share_of_aware": 0.706,
+        "url": "https://yougov.com/en-us/topics/public_figure/Shohei_Ohtani",
+        "all_time_people_rank": 1617,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Michael Jackson": {
+      "enwiki_title": "Michael Jackson",
+      "wikidata_qid": "Q2831",
+      "pageviews_12mo": 16538405,
+      "wikipedia_language_editions": 279,
+      "wikidata_awards_count": 22,
+      "pantheon": {
+        "hpi": 85.12,
+        "rank": 416,
+        "rank_percentile": 99.703,
+        "language_editions_L": 279,
+        "non_en_pageviews": 3784843,
+        "occupation": "MUSICIAN",
+        "occupation_rank": 4
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 97,
+        "popularity_pct": 67,
+        "disliked_pct": 13,
+        "neutral_pct": 18,
+        "liked_share_of_aware": 0.691,
+        "url": "https://yougov.com/en-us/topics/public_figure/Michael_Jackson",
+        "all_time_people_rank": 90,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Madonna": {
+      "enwiki_title": "Madonna",
+      "wikidata_qid": "Q1744",
+      "pageviews_12mo": 5050674,
+      "wikipedia_language_editions": 157,
+      "wikidata_awards_count": 16,
+      "pantheon": {
+        "hpi": 85.74,
+        "rank": 356,
+        "rank_percentile": 99.746,
+        "language_editions_L": 153,
+        "non_en_pageviews": 1754096,
+        "occupation": "MUSICIAN",
+        "occupation_rank": 3
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 95,
+        "popularity_pct": 51,
+        "disliked_pct": 19,
+        "neutral_pct": 25,
+        "liked_share_of_aware": 0.537,
+        "url": "https://yougov.com/en-us/topics/public_figure/Madonna",
+        "all_time_people_rank": 568,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "JFK": {
+      "enwiki_title": "John F. Kennedy",
+      "wikidata_qid": "Q9696",
+      "pageviews_12mo": 6716519,
+      "wikipedia_language_editions": 177,
+      "wikidata_awards_count": 19,
+      "pantheon": {
+        "hpi": 86.01,
+        "rank": 328,
+        "rank_percentile": 99.766,
+        "language_editions_L": 175,
+        "non_en_pageviews": 2898677,
+        "occupation": "POLITICIAN",
+        "occupation_rank": 101
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": [
+        1961
+      ],
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 98,
+        "popularity_pct": 71,
+        "disliked_pct": 3,
+        "neutral_pct": 25,
+        "liked_share_of_aware": 0.724,
+        "url": "https://yougov.com/en-us/topics/public_figure/John_F_Kennedy",
+        "all_time_people_rank": 46,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Prince": {
+      "enwiki_title": "Prince (musician)",
+      "wikidata_qid": "Q7542",
+      "pageviews_12mo": 4402553,
+      "wikipedia_language_editions": 104,
+      "wikidata_awards_count": 10,
+      "pantheon": {
+        "hpi": 73.16,
+        "rank": 5378,
+        "rank_percentile": 96.165,
+        "language_editions_L": 98,
+        "non_en_pageviews": 1128051,
+        "occupation": "SINGER",
+        "occupation_rank": 85
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 95,
+        "popularity_pct": 69,
+        "disliked_pct": 8,
+        "neutral_pct": 18,
+        "liked_share_of_aware": 0.726,
+        "url": "https://yougov.com/en-us/topics/public_figure/Prince",
+        "all_time_people_rank": 54,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Henry VIII": {
+      "enwiki_title": "Henry VIII",
+      "wikidata_qid": "Q38370",
+      "pageviews_12mo": 3862578,
+      "wikipedia_language_editions": 110,
+      "wikidata_awards_count": 8,
+      "pantheon": {
+        "hpi": 94.65,
+        "rank": 26,
+        "rank_percentile": 99.981,
+        "language_editions_L": 106,
+        "non_en_pageviews": 2858372,
+        "occupation": "NOBLEMAN",
+        "occupation_rank": 2
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Ronaldinho": {
+      "enwiki_title": "Ronaldinho",
+      "wikidata_qid": "Q39444",
+      "pageviews_12mo": 3346236,
+      "wikipedia_language_editions": 100,
+      "wikidata_awards_count": 4,
+      "pantheon": {
+        "hpi": 73.81,
+        "rank": 4790,
+        "rank_percentile": 96.584,
+        "language_editions_L": 95,
+        "non_en_pageviews": 2501731,
+        "occupation": "SOCCER PLAYER",
+        "occupation_rank": 41
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Putin": {
+      "enwiki_title": "Vladimir Putin",
+      "wikidata_qid": "Q7747",
+      "pageviews_12mo": 4446344,
+      "wikipedia_language_editions": 237,
+      "wikidata_awards_count": 72,
+      "pantheon": {
+        "hpi": 90.03,
+        "rank": 107,
+        "rank_percentile": 99.924,
+        "language_editions_L": 229,
+        "non_en_pageviews": 6744940,
+        "occupation": "POLITICIAN",
+        "occupation_rank": 23
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": [
+        2007
+      ],
+      "time_100_annual_wikidata": true,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 95,
+        "popularity_pct": 20,
+        "disliked_pct": 65,
+        "neutral_pct": 10,
+        "liked_share_of_aware": 0.211,
+        "url": "https://yougov.com/en-us/topics/public_figure/Vladimir_Putin",
+        "all_time_people_rank": 3674,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Pelé": {
+      "enwiki_title": "Pelé",
+      "wikidata_qid": "Q12897",
+      "pageviews_12mo": 3160094,
+      "wikipedia_language_editions": 149,
+      "wikidata_awards_count": 20,
+      "pantheon": {
+        "hpi": 87.93,
+        "rank": 203,
+        "rank_percentile": 99.855,
+        "language_editions_L": 145,
+        "non_en_pageviews": 1824127,
+        "occupation": "SOCCER PLAYER",
+        "occupation_rank": 1
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 60,
+        "popularity_pct": 41,
+        "disliked_pct": 4,
+        "neutral_pct": 15,
+        "liked_share_of_aware": 0.683,
+        "url": "https://yougov.com/en-us/topics/public_figure/Pele",
+        "all_time_people_rank": 1187,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Keanu Reeves": {
+      "enwiki_title": "Keanu Reeves",
+      "wikidata_qid": "Q43416",
+      "pageviews_12mo": 5614868,
+      "wikipedia_language_editions": 108,
+      "wikidata_awards_count": 5,
+      "pantheon": {
+        "hpi": 76.23,
+        "rank": 2987,
+        "rank_percentile": 97.87,
+        "language_editions_L": 106,
+        "non_en_pageviews": 3292196,
+        "occupation": "ACTOR",
+        "occupation_rank": 119
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": true,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 96,
+        "popularity_pct": 81,
+        "disliked_pct": 1,
+        "neutral_pct": 14,
+        "liked_share_of_aware": 0.844,
+        "url": "https://yougov.com/en-us/topics/public_figure/Keanu_Reeves",
+        "all_time_people_rank": 2,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Babe Ruth": {
+      "enwiki_title": "Babe Ruth",
+      "wikidata_qid": "Q213812",
+      "pageviews_12mo": 1767557,
+      "wikipedia_language_editions": 65,
+      "wikidata_awards_count": 6,
+      "pantheon": {
+        "hpi": 70.1,
+        "rank": 8895,
+        "rank_percentile": 93.656,
+        "language_editions_L": 61,
+        "non_en_pageviews": 326809,
+        "occupation": "BASEBALL PLAYER",
+        "occupation_rank": 2
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 90,
+        "popularity_pct": 69,
+        "disliked_pct": 3,
+        "neutral_pct": 18,
+        "liked_share_of_aware": 0.767,
+        "url": "https://yougov.com/en-us/topics/public_figure/Babe_Ruth",
+        "all_time_people_rank": 60,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Jason Kelce": {
+      "enwiki_title": "Jason Kelce",
+      "wikidata_qid": "Q6162843",
+      "pageviews_12mo": 1102640,
+      "wikipedia_language_editions": 14,
+      "wikidata_awards_count": 0,
+      "pantheon": null,
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 70,
+        "popularity_pct": 38,
+        "disliked_pct": 11,
+        "neutral_pct": 21,
+        "liked_share_of_aware": 0.543,
+        "url": "https://yougov.com/en-us/topics/public_figure/Jason_Kelce",
+        "all_time_people_rank": 1444,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Caligula": {
+      "enwiki_title": "Caligula",
+      "wikidata_qid": "Q1409",
+      "pageviews_12mo": 1371042,
+      "wikipedia_language_editions": 115,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 86.28,
+        "rank": 312,
+        "rank_percentile": 99.777,
+        "language_editions_L": 115,
+        "non_en_pageviews": 1039675,
+        "occupation": "POLITICIAN",
+        "occupation_rank": 97
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Alan Turing": {
+      "enwiki_title": "Alan Turing",
+      "wikidata_qid": "Q7251",
+      "pageviews_12mo": 2159649,
+      "wikipedia_language_editions": 165,
+      "wikidata_awards_count": 4,
+      "pantheon": {
+        "hpi": 85.14,
+        "rank": 410,
+        "rank_percentile": 99.708,
+        "language_editions_L": 159,
+        "non_en_pageviews": 1365091,
+        "occupation": "COMPUTER SCIENTIST",
+        "occupation_rank": 1
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Marie Curie": {
+      "enwiki_title": "Marie Curie",
+      "wikidata_qid": "Q7186",
+      "pageviews_12mo": 2108471,
+      "wikipedia_language_editions": 199,
+      "wikidata_awards_count": 17,
+      "pantheon": {
+        "hpi": 94.3,
+        "rank": 27,
+        "rank_percentile": 99.981,
+        "language_editions_L": 189,
+        "non_en_pageviews": 3356078,
+        "occupation": "PHYSICIST",
+        "occupation_rank": 3
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 78,
+        "popularity_pct": 61,
+        "disliked_pct": 2,
+        "neutral_pct": 16,
+        "liked_share_of_aware": 0.782,
+        "url": "https://yougov.com/en-us/topics/public_figure/Marie_Curie",
+        "all_time_people_rank": null,
+        "ranking_list": "historical-figures"
+      }
+    },
+    "Albert Einstein": {
+      "enwiki_title": "Albert Einstein",
+      "wikidata_qid": "Q937",
+      "pageviews_12mo": 4644321,
+      "wikipedia_language_editions": 237,
+      "wikidata_awards_count": 21,
+      "pantheon": {
+        "hpi": 94.83,
+        "rank": 25,
+        "rank_percentile": 99.982,
+        "language_editions_L": 228,
+        "non_en_pageviews": 4679204,
+        "occupation": "PHYSICIST",
+        "occupation_rank": 2
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": null,
+      "time_person_of_the_century": 1999,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": 10,
+      "yougov_us": {
+        "fame_pct": 96,
+        "popularity_pct": 79,
+        "disliked_pct": 2,
+        "neutral_pct": 16,
+        "liked_share_of_aware": 0.823,
+        "url": "https://yougov.com/en-us/topics/public_figure/Albert_Einstein",
+        "all_time_people_rank": 9,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Muhammad Ali": {
+      "enwiki_title": "Muhammad Ali",
+      "wikidata_qid": "Q36107",
+      "pageviews_12mo": 3163763,
+      "wikipedia_language_editions": 141,
+      "wikidata_awards_count": 15,
+      "pantheon": {
+        "hpi": 90.72,
+        "rank": 87,
+        "rank_percentile": 99.938,
+        "language_editions_L": 139,
+        "non_en_pageviews": 1826586,
+        "occupation": "BOXER",
+        "occupation_rank": 1
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 93,
+        "popularity_pct": 73,
+        "disliked_pct": 4,
+        "neutral_pct": 16,
+        "liked_share_of_aware": 0.785,
+        "url": "https://yougov.com/en-us/topics/public_figure/Muhammad_Ali",
+        "all_time_people_rank": 21,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Nelson Mandela": {
+      "enwiki_title": "Nelson Mandela",
+      "wikidata_qid": "Q8023",
+      "pageviews_12mo": 2164460,
+      "wikipedia_language_editions": 234,
+      "wikidata_awards_count": 90,
+      "pantheon": {
+        "hpi": 90.45,
+        "rank": 96,
+        "rank_percentile": 99.932,
+        "language_editions_L": 230,
+        "non_en_pageviews": 2217739,
+        "occupation": "SOCIAL ACTIVIST",
+        "occupation_rank": 5
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": [
+        1993
+      ],
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Ada Lovelace": {
+      "enwiki_title": "Ada Lovelace",
+      "wikidata_qid": "Q7259",
+      "pageviews_12mo": 1229068,
+      "wikipedia_language_editions": 113,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 87.83,
+        "rank": 208,
+        "rank_percentile": 99.852,
+        "language_editions_L": 111,
+        "non_en_pageviews": 700044,
+        "occupation": "MATHEMATICIAN",
+        "occupation_rank": 8
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Martin Luther King Jr.": {
+      "enwiki_title": "Martin Luther King Jr.",
+      "wikidata_qid": "Q8027",
+      "pageviews_12mo": 3580657,
+      "wikipedia_language_editions": 188,
+      "wikidata_awards_count": 15,
+      "pantheon": {
+        "hpi": 92.49,
+        "rank": 50,
+        "rank_percentile": 99.964,
+        "language_editions_L": 178,
+        "non_en_pageviews": 2145984,
+        "occupation": "SOCIAL ACTIVIST",
+        "occupation_rank": 4
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": [
+        1963
+      ],
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 99,
+        "popularity_pct": 81,
+        "disliked_pct": 4,
+        "neutral_pct": 14,
+        "liked_share_of_aware": 0.818,
+        "url": "https://yougov.com/en-us/topics/public_figure/Martin_Luther_King_Jr",
+        "all_time_people_rank": 5,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Harriet Tubman": {
+      "enwiki_title": "Harriet Tubman",
+      "wikidata_qid": "Q102870",
+      "pageviews_12mo": 1412306,
+      "wikipedia_language_editions": 91,
+      "wikidata_awards_count": 4,
+      "pantheon": {
+        "hpi": 73.54,
+        "rank": 5038,
+        "rank_percentile": 96.407,
+        "language_editions_L": 86,
+        "non_en_pageviews": 391243,
+        "occupation": "SOCIAL ACTIVIST",
+        "occupation_rank": 55
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Leonardo da Vinci": {
+      "enwiki_title": "Leonardo da Vinci",
+      "wikidata_qid": "Q762",
+      "pageviews_12mo": 2107165,
+      "wikipedia_language_editions": 244,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 96.8,
+        "rank": 11,
+        "rank_percentile": 99.992,
+        "language_editions_L": 239,
+        "non_en_pageviews": 3273509,
+        "occupation": "INVENTOR",
+        "occupation_rank": 1
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 92,
+        "popularity_pct": 79,
+        "disliked_pct": 2,
+        "neutral_pct": 11,
+        "liked_share_of_aware": 0.859,
+        "url": "https://yougov.com/en-us/topics/public_figure/Leonardo_da_Vinci",
+        "all_time_people_rank": 7,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Cleopatra": {
+      "enwiki_title": "Cleopatra",
+      "wikidata_qid": "Q635",
+      "pageviews_12mo": 10938233,
+      "wikipedia_language_editions": 159,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 98.34,
+        "rank": 6,
+        "rank_percentile": 99.996,
+        "language_editions_L": 151,
+        "non_en_pageviews": 11936188,
+        "occupation": "POLITICIAN",
+        "occupation_rank": 2
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Isaac Newton": {
+      "enwiki_title": "Isaac Newton",
+      "wikidata_qid": "Q935",
+      "pageviews_12mo": 2535678,
+      "wikipedia_language_editions": 238,
+      "wikidata_awards_count": 1,
+      "pantheon": {
+        "hpi": 99.44,
+        "rank": 3,
+        "rank_percentile": 99.998,
+        "language_editions_L": 235,
+        "non_en_pageviews": 2508822,
+        "occupation": "PHYSICIST",
+        "occupation_rank": 1
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": 2,
+      "yougov_us": {
+        "fame_pct": 95,
+        "popularity_pct": 69,
+        "disliked_pct": 1,
+        "neutral_pct": 24,
+        "liked_share_of_aware": 0.726,
+        "url": "https://yougov.com/en-us/topics/public_figure/Isaac_Newton",
+        "all_time_people_rank": 57,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Oprah Winfrey": {
+      "enwiki_title": "Oprah Winfrey",
+      "wikidata_qid": "Q55800",
+      "pageviews_12mo": 1455101,
+      "wikipedia_language_editions": 103,
+      "wikidata_awards_count": 28,
+      "pantheon": {
+        "hpi": 71.65,
+        "rank": 6950,
+        "rank_percentile": 95.044,
+        "language_editions_L": 102,
+        "non_en_pageviews": 467245,
+        "occupation": "PRESENTER",
+        "occupation_rank": 2
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": true,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 98,
+        "popularity_pct": 40,
+        "disliked_pct": 33,
+        "neutral_pct": 24,
+        "liked_share_of_aware": 0.408,
+        "url": "https://yougov.com/en-us/topics/public_figure/Oprah_Winfrey",
+        "all_time_people_rank": 1274,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Bruce Lee": {
+      "enwiki_title": "Bruce Lee",
+      "wikidata_qid": "Q16397",
+      "pageviews_12mo": 14611967,
+      "wikipedia_language_editions": 131,
+      "wikidata_awards_count": 2,
+      "pantheon": {
+        "hpi": 86.28,
+        "rank": 314,
+        "rank_percentile": 99.776,
+        "language_editions_L": 128,
+        "non_en_pageviews": 2132829,
+        "occupation": "ACTOR",
+        "occupation_rank": 7
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 93,
+        "popularity_pct": 73,
+        "disliked_pct": 2,
+        "neutral_pct": 17,
+        "liked_share_of_aware": 0.785,
+        "url": "https://yougov.com/en-us/topics/public_figure/Bruce_Lee",
+        "all_time_people_rank": 22,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Stephen Hawking": {
+      "enwiki_title": "Stephen Hawking",
+      "wikidata_qid": "Q17714",
+      "pageviews_12mo": 3329275,
+      "wikipedia_language_editions": 154,
+      "wikidata_awards_count": 41,
+      "pantheon": {
+        "hpi": 88.36,
+        "rank": 181,
+        "rank_percentile": 99.871,
+        "language_editions_L": 151,
+        "non_en_pageviews": 2718891,
+        "occupation": "PHYSICIST",
+        "occupation_rank": 5
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Grace Hopper": {
+      "enwiki_title": "Grace Hopper",
+      "wikidata_qid": "Q11641",
+      "pageviews_12mo": 338155,
+      "wikipedia_language_editions": 73,
+      "wikidata_awards_count": 23,
+      "pantheon": {
+        "hpi": 80.29,
+        "rank": 1308,
+        "rank_percentile": 99.067,
+        "language_editions_L": 73,
+        "non_en_pageviews": 124902,
+        "occupation": "COMPUTER SCIENTIST",
+        "occupation_rank": 3
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Mao Zedong": {
+      "enwiki_title": "Mao Zedong",
+      "wikidata_qid": "Q5816",
+      "pageviews_12mo": 2444091,
+      "wikipedia_language_editions": 186,
+      "wikidata_awards_count": 1,
+      "pantheon": {
+        "hpi": 88.7,
+        "rank": 167,
+        "rank_percentile": 99.881,
+        "language_editions_L": 181,
+        "non_en_pageviews": 2337537,
+        "occupation": "POLITICIAN",
+        "occupation_rank": 44
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Winston Churchill": {
+      "enwiki_title": "Winston Churchill",
+      "wikidata_qid": "Q8016",
+      "pageviews_12mo": 3693010,
+      "wikipedia_language_editions": 186,
+      "wikidata_awards_count": 49,
+      "pantheon": {
+        "hpi": 88.76,
+        "rank": 165,
+        "rank_percentile": 99.882,
+        "language_editions_L": 180,
+        "non_en_pageviews": 2720756,
+        "occupation": "POLITICIAN",
+        "occupation_rank": 43
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": [
+        1940,
+        1949
+      ],
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "George Orwell": {
+      "enwiki_title": "George Orwell",
+      "wikidata_qid": "Q3335",
+      "pageviews_12mo": 1804583,
+      "wikipedia_language_editions": 152,
+      "wikidata_awards_count": 3,
+      "pantheon": {
+        "hpi": 85.28,
+        "rank": 398,
+        "rank_percentile": 99.716,
+        "language_editions_L": 145,
+        "non_en_pageviews": 1071507,
+        "occupation": "WRITER",
+        "occupation_rank": 37
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 74,
+        "popularity_pct": 54,
+        "disliked_pct": 4,
+        "neutral_pct": 16,
+        "liked_share_of_aware": 0.73,
+        "url": "https://yougov.com/en-us/topics/public_figure/George_Orwell",
+        "all_time_people_rank": 430,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Marcus Aurelius": {
+      "enwiki_title": "Marcus Aurelius",
+      "wikidata_qid": "Q1430",
+      "pageviews_12mo": 1868465,
+      "wikipedia_language_editions": 115,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 87.41,
+        "rank": 235,
+        "rank_percentile": 99.832,
+        "language_editions_L": 112,
+        "non_en_pageviews": 1993592,
+        "occupation": "POLITICIAN",
+        "occupation_rank": 69
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 67,
+        "popularity_pct": 34,
+        "disliked_pct": 7,
+        "neutral_pct": 26,
+        "liked_share_of_aware": 0.507,
+        "url": "https://yougov.com/en-us/topics/public_figure/Marcus_Aurelius",
+        "all_time_people_rank": 1815,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Nikola Jokic": {
+      "enwiki_title": "Nikola Jokić",
+      "wikidata_qid": "Q17281073",
+      "pageviews_12mo": 1658410,
+      "wikipedia_language_editions": 49,
+      "wikidata_awards_count": 3,
+      "pantheon": {
+        "hpi": 63.84,
+        "rank": 22667,
+        "rank_percentile": 83.835,
+        "language_editions_L": 46,
+        "non_en_pageviews": 1029396,
+        "occupation": "BASKETBALL PLAYER",
+        "occupation_rank": 28
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 44,
+        "popularity_pct": 29,
+        "disliked_pct": 4,
+        "neutral_pct": 11,
+        "liked_share_of_aware": 0.659,
+        "url": "https://yougov.com/en-us/topics/public_figure/Nikola_Jokic"
+      }
+    },
+    "Billie Holiday": {
+      "enwiki_title": "Billie Holiday",
+      "wikidata_qid": "Q104358",
+      "pageviews_12mo": 769174,
+      "wikipedia_language_editions": 78,
+      "wikidata_awards_count": 6,
+      "pantheon": {
+        "hpi": 73.78,
+        "rank": 4811,
+        "rank_percentile": 96.569,
+        "language_editions_L": 77,
+        "non_en_pageviews": 292827,
+        "occupation": "SINGER",
+        "occupation_rank": 78
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "url": "https://yougov.com/en-us/topics/public_figure/Billie_Holiday",
+        "fame_pct": 77,
+        "popularity_pct": 54,
+        "all_time_people_rank": 446,
+        "ranking_list": "all-time-people"
+      }
+    },
+    "Jeffrey Epstein": {
+      "enwiki_title": "Jeffrey Epstein",
+      "wikidata_qid": "Q2904131",
+      "pageviews_12mo": 25431764,
+      "wikipedia_language_editions": 84,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 76.09,
+        "rank": 3068,
+        "rank_percentile": 97.812,
+        "language_editions_L": 51,
+        "non_en_pageviews": 2329401,
+        "occupation": "BUSINESSPERSON",
+        "occupation_rank": 25
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Ghislaine Maxwell": {
+      "enwiki_title": "Ghislaine Maxwell",
+      "wikidata_qid": "Q5556756",
+      "pageviews_12mo": 8241934,
+      "wikipedia_language_editions": 44,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 61.85,
+        "rank": 29712,
+        "rank_percentile": 78.811,
+        "language_editions_L": 29,
+        "non_en_pageviews": 547548,
+        "occupation": "BUSINESSPERSON",
+        "occupation_rank": 296
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Martin Shkreli": {
+      "enwiki_title": "Martin Shkreli",
+      "wikidata_qid": "Q6776585",
+      "pageviews_12mo": 666737,
+      "wikipedia_language_editions": 19,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 40.19,
+        "rank": 108451,
+        "rank_percentile": 22.657,
+        "language_editions_L": 19,
+        "non_en_pageviews": 46078,
+        "occupation": "BUSINESSPERSON",
+        "occupation_rank": 953
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Bernie Madoff": {
+      "enwiki_title": "Bernie Madoff",
+      "wikidata_qid": "Q14043",
+      "pageviews_12mo": 1427093,
+      "wikipedia_language_editions": 54,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 80.59,
+        "rank": 1216,
+        "rank_percentile": 99.133,
+        "language_editions_L": 53,
+        "non_en_pageviews": 510854,
+        "occupation": "BUSINESSPERSON",
+        "occupation_rank": 12
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Elizabeth Holmes": {
+      "enwiki_title": "Elizabeth Holmes",
+      "wikidata_qid": "Q17503525",
+      "pageviews_12mo": 1635353,
+      "wikipedia_language_editions": 44,
+      "wikidata_awards_count": 1,
+      "pantheon": {
+        "hpi": 63.91,
+        "rank": 22450,
+        "rank_percentile": 83.99,
+        "language_editions_L": 43,
+        "non_en_pageviews": 371127,
+        "occupation": "INVENTOR",
+        "occupation_rank": 161
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Harvey Weinstein": {
+      "enwiki_title": "Harvey Weinstein",
+      "wikidata_qid": "Q531599",
+      "pageviews_12mo": 2787059,
+      "wikipedia_language_editions": 54,
+      "wikidata_awards_count": 5,
+      "pantheon": {
+        "hpi": 78.95,
+        "rank": 1752,
+        "rank_percentile": 98.751,
+        "language_editions_L": 54,
+        "non_en_pageviews": 1038633,
+        "occupation": "PRODUCER",
+        "occupation_rank": 2
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Joe Jackson": {
+      "enwiki_title": "Joe Jackson (talent manager)",
+      "wikidata_qid": "Q361297",
+      "pageviews_12mo": 3045317,
+      "wikipedia_language_editions": 39,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 76.31,
+        "rank": 2937,
+        "rank_percentile": 97.905,
+        "language_editions_L": 36,
+        "non_en_pageviews": 189106,
+        "occupation": "MUSICIAN",
+        "occupation_rank": 34
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Pablo Escobar": {
+      "enwiki_title": "Pablo Escobar",
+      "wikidata_qid": "Q187447",
+      "pageviews_12mo": 3107152,
+      "wikipedia_language_editions": 102,
+      "wikidata_awards_count": 0,
+      "pantheon": {
+        "hpi": 84.96,
+        "rank": 429,
+        "rank_percentile": 99.694,
+        "language_editions_L": 99,
+        "non_en_pageviews": 3384413,
+        "occupation": "MAFIOSO",
+        "occupation_rank": 1
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "O.J. Simpson": {
+      "enwiki_title": "O. J. Simpson",
+      "wikidata_qid": "Q44473",
+      "pageviews_12mo": 3245065,
+      "wikipedia_language_editions": 58,
+      "wikidata_awards_count": 2,
+      "pantheon": {
+        "hpi": 76.56,
+        "rank": 2809,
+        "rank_percentile": 97.997,
+        "language_editions_L": 56,
+        "non_en_pageviews": 2151135,
+        "occupation": "AMERICAN FOOTBALL PLAYER",
+        "occupation_rank": 1
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Aaron Hernandez": {
+      "enwiki_title": "Aaron Hernandez",
+      "wikidata_qid": "Q302091",
+      "pageviews_12mo": 2256018,
+      "wikipedia_language_editions": 21,
+      "wikidata_awards_count": 1,
+      "pantheon": {
+        "hpi": 44.37,
+        "rank": 95451,
+        "rank_percentile": 31.928,
+        "language_editions_L": 20,
+        "non_en_pageviews": 325213,
+        "occupation": "AMERICAN FOOTBALL PLAYER",
+        "occupation_rank": 35
+      },
+      "time_100_of_the_century": false,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": null
+    },
+    "Aretha Franklin": {
+      "enwiki_title": "Aretha Franklin",
+      "wikidata_qid": "Q125121",
+      "pageviews_12mo": 1990583,
+      "wikipedia_language_editions": 103,
+      "wikidata_awards_count": 24,
+      "pantheon": {
+        "hpi": 83.92,
+        "rank": 545,
+        "rank_percentile": 99.611,
+        "language_editions_L": 100,
+        "non_en_pageviews": 783301,
+        "occupation": "SINGER",
+        "occupation_rank": 5
+      },
+      "time_100_of_the_century": true,
+      "time_person_of_the_year": null,
+      "time_100_annual_wikidata": false,
+      "hart_100_rank": null,
+      "yougov_us": {
+        "fame_pct": 91,
+        "popularity_pct": 71,
+        "disliked_pct": 4,
+        "neutral_pct": 16,
+        "liked_share_of_aware": 0.78,
+        "url": "https://yougov.com/en-us/topics/public_figure/Aretha_Franklin"
+      }
+    }
+  }
+}
