@@ -38,7 +38,14 @@ console.error = console.warn = () => {};
 process.env.ANTHROPIC_API_KEY = "test";
 let claudeCalls = 0, claudeMode = "ok", lastUser = "", chatMode = "turn", lastChat = null;
 const dims = ["care", "alignment", "utility", "adaptability", "legacy", "network", "physical", "threat", "redundancy"];
+// Wikipedia/Wikidata for /api/refer: a tiny routed stub.
+let wikiRoutes = [], wikiCalls = 0;
 globalThis.fetch = async (url, init) => {
+  if (/wikipedia\.org|wikidata\.org/.test(String(url))) {
+    wikiCalls++;
+    const hit = wikiRoutes.find(([re]) => re.test(String(url)));
+    return hit ? new Response(JSON.stringify(hit[1]), { status: 200 }) : new Response("null", { status: 404 });
+  }
   assert.match(String(url), /api\.anthropic\.com/);
   claudeCalls++;
   const reqBody = JSON.parse(init.body);
@@ -63,6 +70,7 @@ const score = (await import("../netlify/functions/intake-score.js")).default;
 const pen = (await import("../netlify/functions/pen.js")).default;
 const evaluate = (await import("../netlify/functions/evaluate.js")).default;
 const chat = (await import("../netlify/functions/intake-chat.js")).default;
+const refer = (await import("../netlify/functions/refer.js")).default;
 
 const HOST = "https://humanvalueindex.com";
 const post = (fn, path, body, { origin = HOST, ip = "203.0.113.7" } = {}) =>
@@ -186,5 +194,72 @@ for (let i = 0; i < 12 && !limited; i++) {
   limited = r.status === 429;
 }
 assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
+
+// ---- /api/refer ----
+{
+  const human = qid => [new RegExp(`${qid}&property=P31`), { claims: { P31: [{ mainsnak: { datavalue: { value: { id: "Q5" } } } }] } }];
+  wikiRoutes = [
+    [/srsearch=Dolly/, { query: { search: [{ title: "Dolly Parton" }] } }],
+    [/summary\/Dolly_Parton/, { title: "Dolly Parton", type: "standard", description: "singer", extract: "x", wikibase_item: "Q180453" }],
+    human("Q180453"),
+    [/srsearch=Joe%20Jackson%20musician/, { query: { search: [{ title: "Joe Jackson (musician)" }] } }],
+    [/summary\/Joe_Jackson_\(musician\)/, { title: "Joe Jackson (musician)", type: "standard", extract: "x", wikibase_item: "Q1349079" }],
+    human("Q1349079"),
+    [/srsearch=Prince%20Rogers/, { query: { search: [{ title: "Prince (musician)" }] } }],
+    [/summary\/Prince_\(musician\)/, { title: "Prince (musician)", type: "standard", extract: "x", wikibase_item: "Q7542" }],
+    human("Q7542"),
+  ];
+  const casesBefore = globalThis.__blobs.get("hvi-cases").size;
+  // no case, or a case with no completed assessment: refused before anything is charged
+  r = await read(await post(refer, "/api/refer", { name: "Dolly Parton" }, { ip: "192.0.2.50" }));
+  assert.equal(r.status, 403, JSON.stringify(r.body));
+  assert.equal(r.body.reason, "unassessed");
+  r = await read(await post(refer, "/api/refer", { name: "Dolly Parton", caseId: "HVI-AAAAAAAA" }, { ip: "192.0.2.50" }));
+  assert.equal(r.status, 403, "an unknown case number is not an assessed citizen");
+  assert.equal(globalThis.__blobs.get("hvi-cases").size, casesBefore, "a refused referral mints no case");
+  assert.equal(wikiCalls, 0, "nothing reached Wikipedia");
+  const q = await read(await refer(new Request(HOST + "/api/refer"), {}));
+  assert.equal(q.body.remaining, null, "no case: nothing to spend");
+
+  // an assessed citizen refers a living figure: score and tier public, verdict held for review
+  const calls0 = claudeCalls;
+  r = await read(await post(refer, "/api/refer", { name: "Dolly Parton", caseId }, { ip: "192.0.2.50" }));
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(claudeCalls, calls0 + 1);
+  assert.equal(r.body.subject.verdict, null, "living subject: verdict not published");
+  assert.equal(r.body.subject.breakdown, null);
+  assert.equal(r.body.subject.underReview, true);
+  const dolly = globalThis.__blobs.get("hvi-figures").get("dolly-parton").data;
+  assert.equal(dolly.verdictStatus, "review");
+  assert.equal(dolly.noDangle, false);
+  assert.ok(dolly.verdict, "the verdict is kept for review");
+  assert.equal(globalThis.__blobs.get("hvi-figures").get("index").data.cards[0].verdictStatus, "review");
+
+  // "Index" is a name; it must not read the index blob back as a figure
+  r = await read(await post(refer, "/api/refer", { name: "Index", caseId }, { ip: "192.0.2.51" }));
+  assert.notEqual(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.subject, undefined);
+
+  // a namesake of a figure on file gets its own file, not Joe Jackson the manager's
+  r = await read(await post(refer, "/api/refer", { name: "Joe Jackson musician", caseId }, { ip: "192.0.2.52" }));
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.subject.slug, "joe-jackson-musician");
+  assert.equal(r.body.subject.name, "Joe Jackson (musician)");
+
+  // the same person as a figure on file (by Wikidata id) is on file, whatever the name typed
+  r = await read(await post(refer, "/api/refer", { name: "Prince Rogers", caseId }, { ip: "192.0.2.52" }));
+  assert.equal(r.status, 200); assert.equal(r.body.status, "on-file"); assert.equal(r.body.subject.name, "Prince");
+
+  // pen: referred living figure shows no verdict
+  const penNow = (await import("../netlify/functions/pen.js?fresh")).default;
+  const p = await read(await penNow(new Request(HOST + "/api/pen")));
+  const pd = p.body.subjects.find(s => s.slug === "dolly-parton");
+  assert.ok(pd); assert.equal(pd.verdict, null); assert.equal(pd.breakdown, null);
+
+  // a withdrawn file stays withdrawn
+  globalThis.__blobs.get("hvi-figures").set("dolly-parton", { data: { slug: "dolly-parton", removed: true, wikidata: "Q180453" }, etag: "x" });
+  r = await read(await post(refer, "/api/refer", { name: "Dolly Parton", caseId }, { ip: "192.0.2.53" }));
+  assert.equal(r.status, 410);
+}
 
 console.log("check-functions: ok");

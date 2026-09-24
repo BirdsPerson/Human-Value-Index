@@ -112,7 +112,9 @@ export async function peekLimit(key, window = "day") {
 const FIG_INDEX = "index";
 const FIG_MAX = 300;
 
+// The index shares the store, so its key is never read as a figure ("Index" is a name).
 export async function getFigure(slug) {
+  if (!slug || slug === FIG_INDEX) return null;
   return (await figures().get(slug, { type: "json" })) || null;
 }
 
@@ -138,14 +140,16 @@ export async function indexFigure(card) {
   console.warn("figure index: lost the write race; card saved");
 }
 
+// Keep in step with INDEX_KEYS in scripts/referral_sprites.py, which rewrites entries.
 export const figureIndexEntry = c => ({
   slug: c.slug, name: c.name, score: c.score, tier: c.tier, breakdown: c.breakdown, verdict: c.verdict,
+  verdictStatus: c.verdictStatus, noDangle: Boolean(c.noDangle), wikidata: c.wikidata,
   sprite: c.sprite ?? null, spriteStatus: c.spriteStatus, referredBy: c.referredBy, at: c.at,
 });
 
 export async function listFigures() {
   const idx = await figures().get(FIG_INDEX, { type: "json" });
-  return idx?.cards || [];
+  return (idx?.cards || []).filter(c => c && c.slug && !c.removed);
 }
 
 export async function getSprite(slug) {

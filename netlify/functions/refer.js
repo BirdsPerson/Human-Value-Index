@@ -1,36 +1,47 @@
 import { SYSTEM_PROMPT } from "../lib/systemPrompt.js";
 import { PUBLIC_RECORD, REFERRAL_ADDENDUM, directiveFor } from "../lib/publicRecord.js";
 import { callClaude, ScoreError } from "../lib/score.js";
-import { isCaseId, newCaseId, normalizeAssessment, computeScore, getTier } from "../lib/intake.js";
+import { isCaseId, normalizeAssessment, computeScore, getTier } from "../lib/intake.js";
 import { slugify } from "../../src/figures.js";
-import { nameError, cleanName, resolveWikipedia, titleSlug, onFileFigure, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
-import { getCase, updateCase, hitLimit, refundLimit, peekLimit, getFigure, createFigure } from "../lib/store.js";
+import { nameError, cleanName, resolveWikipedia, onFileFigure, placeReferral, publicFigure, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
+import { getCase, hitLimit, refundLimit, peekLimit, getFigure, createFigure } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
-// Every request that reaches Wikipedia costs an IP slot, rejected or not, so the gate
-// can't be used to enumerate. Only a referral that gets scored costs the monthly quota.
+// Referrals come only from citizens with a completed assessment on file: the monthly
+// quota hangs on that case number, and a case costs a full interview to mint. Every
+// request that reaches Wikipedia costs an IP slot and a slot of a global lookup budget,
+// rejected or not, so the gate can't be used to enumerate or to hammer Wikimedia. Only a
+// referral that gets scored costs the monthly quota and the global scoring cap.
+// ponytail: REFER_DAILY bounds Higgsfield too: one generation per referral, retried at
+// most MAX_ATTEMPTS (3) times by scripts/referral_sprites.py only when a figure fails.
 const PER_IP_DAILY = Number(process.env.HVI_REFER_IP_DAILY) || 10;
 const REFER_DAILY = Number(process.env.HVI_REFER_DAILY_CAP) || 50;
+const LOOKUP_DAILY = Number(process.env.HVI_REFER_LOOKUP_DAILY) || 300;
 const MAX_LOOK = 400;
+const DECLINE = new Set(["minor", "victim", "pending_case"]);
 
-const publicCard = (c, extra = {}) => ({
-  slug: c.slug, name: c.name, score: c.score, tier: c.tier, breakdown: c.breakdown, verdict: c.verdict,
-  sprite: c.sprite ?? null, spriteStatus: c.spriteStatus || null, kind: "figure", referred: Boolean(c.referredBy || extra.referred), ...extra,
+// Figures on file are static and fully public; referred ones go through publicFigure.
+const onFileCard = f => ({
+  slug: slugify(f.name), name: f.name, score: f.score, tier: f.tier, breakdown: f.breakdown, verdict: f.verdict,
+  sprite: null, spriteStatus: "ready", kind: "figure", referred: false,
 });
 
 const ON_FILE = "Subject already on file. The Department does not process anyone twice. It rarely needs to.";
-const onFileBody = (c, extra) => ({ status: "on-file", message: ON_FILE, subject: publicCard(c, extra) });
+const onFileBody = subject => ({ status: "on-file", message: ON_FILE, subject });
+const NOT_ASSESSED = "The Department accepts referrals only from citizens with a completed assessment on file. Submit to your own intake first. Then you may judge others.";
 
 export default async (req, context) => {
   if (req.method === "OPTIONS") return preflight(req);
   const json = makeJson(req);
   // GET ?caseId= : how many referrals this case has left this cycle. Charges nothing.
+  // remaining is null for anyone who can't refer yet (no assessed case).
   if (req.method === "GET") {
     const id = new URL(req.url).searchParams.get("caseId");
-    if (!id) return json(200, { remaining: PER_CASE_MONTHLY });
+    if (!id) return json(200, { remaining: null, assessed: false });
     if (!isCaseId(id)) return json(400, { error: "That is not a case number." });
     try {
-      return json(200, { remaining: remainingThisMonth(await peekLimit(`refer-case:${id}`, "month")) });
+      if (!(await getCase(id))?.history?.length) return json(200, { remaining: null, assessed: false });
+      return json(200, { remaining: remainingThisMonth(await peekLimit(`refer-case:${id}`, "month")), assessed: true });
     } catch {
       return json(503, { error: LIMITER_DOWN_LINE });
     }
@@ -43,22 +54,34 @@ export default async (req, context) => {
   const bad = nameError(body?.name);
   if (bad) return json(400, { error: bad });
   const name = cleanName(body.name);
-  const given = body?.caseId;
-  if (given != null && !isCaseId(given)) return json(400, { error: "That is not a case number. Case numbers look like HVI-XXXXXXXX. You were told this." });
+  const caseId = body?.caseId;
+  if (caseId != null && !isCaseId(caseId)) return json(400, { error: "That is not a case number. Case numbers look like HVI-XXXXXXXX. You were told this." });
 
   // Exact name already on file ("Prince", "JFK"): answer before Wikipedia, which may
   // resolve a bare name to something else entirely (the title, not the musician).
   const typed = onFileFigure(slugify(name));
-  if (typed) return json(200, onFileBody({ ...typed, slug: slugify(typed.name) }, { referred: false, spriteStatus: "ready" }));
+  if (typed) return json(200, onFileBody(onFileCard(typed)));
   try {
     const prior = await getFigure(slugify(name));
-    if (prior) return json(200, onFileBody(prior));
+    if (prior?.removed) return json(410, { error: REJECT.withdrawn, reason: "withdrawn" });
+    if (prior?.name) return json(200, onFileBody(publicFigure(prior)));
   } catch { /* fall through to the full lookup */ }
+
+  // Only an assessed citizen refers. Checked before anything is charged.
+  try {
+    if (!caseId || !(await getCase(caseId))?.history?.length) return json(403, { error: NOT_ASSESSED, reason: "unassessed" });
+  } catch (err) {
+    console.error("refer case read failed", err);
+    return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
+  }
 
   const ip = clientIp(req, context);
   try {
     if (!(await hitLimit(`refer-ip:${ip}`, PER_IP_DAILY)).ok) {
       return json(429, { error: "Your location has filed ten referrals today. The Department suspects a grudge. Return tomorrow." }, { "Retry-After": "3600" });
+    }
+    if (!(await hitLimit("refer-lookup-global", LOOKUP_DAILY)).ok) {
+      return json(503, { error: "The Department has consulted the public record enough for one day. The record will still be there tomorrow. So will you." }, { "Retry-After": "3600" });
     }
   } catch (err) {
     console.error("refer limiter unavailable", err);
@@ -68,21 +91,16 @@ export default async (req, context) => {
   const wiki = await resolveWikipedia(name);
   if (!wiki.ok) return json(wiki.reason === "lookup" ? 503 : 422, { error: REJECT[wiki.reason] || REJECT.none, reason: wiki.reason });
 
-  const slug = titleSlug(wiki.title);
-  const displayName = wiki.title.replace(/\s*\([^)]*\)\s*$/, "");
-  const figure = onFileFigure(slug);
-  if (figure) return json(200, onFileBody({ ...figure, slug: slugify(figure.name) }, { referred: false, spriteStatus: "ready" }));
-
   try {
-    const existing = await getFigure(slug);
-    if (existing) return json(200, onFileBody(existing));
-
-    // The referrer needs a case number: the monthly quota hangs on it.
-    let caseId = given;
-    if (!caseId || !(await getCase(caseId))) {
-      caseId = newCaseId();
-      await updateCase(caseId, cur => cur || { caseId, created: new Date().toISOString(), history: [] });
-    }
+    const place = await placeReferral(wiki, getFigure);
+    if (place.onFile) return json(200, onFileBody(onFileCard(place.onFile)));
+    if (place.existing?.removed) return json(410, { error: REJECT.withdrawn, reason: "withdrawn" });
+    if (place.existing) return json(200, onFileBody(publicFigure(place.existing)));
+    if (!place.slug) return json(422, { error: REJECT.ambiguous, reason: "ambiguous" });
+    const slug = place.slug;
+    // The stripped title reads better; a namesake keeps its qualifier so the pen can tell them apart.
+    const stripped = wiki.title.replace(/\s*\([^)]*\)\s*$/, "");
+    const displayName = slugify(stripped) === slug ? stripped : wiki.title;
 
     const month = await hitLimit(`refer-case:${caseId}`, PER_CASE_MONTHLY, "month");
     if (!month.ok) {
@@ -102,7 +120,7 @@ export default async (req, context) => {
     try {
       raw = await callClaude(
         SYSTEM_PROMPT + PUBLIC_RECORD + REFERRAL_ADDENDUM,
-        `PUBLIC FIGURE: ${wiki.title}\nWIKIPEDIA DESCRIPTION: ${wiki.description}\nWIKIPEDIA SUMMARY: ${wiki.extract}\n(If you cite a directive, cite Directive ${directiveFor(wiki.title)}.)`,
+        `PUBLIC FIGURE: ${wiki.title}\nSTATUS: ${wiki.living ? "living" : "deceased"}\nWIKIPEDIA DESCRIPTION: ${wiki.description}\nWIKIPEDIA SUMMARY: ${wiki.extract}\n(If you cite a directive, cite Directive ${directiveFor(wiki.title)}.)`,
       );
     } catch (err) {
       await Promise.all([refund(), refundLimit("refer-global").catch(() => {})]);
@@ -112,6 +130,10 @@ export default async (req, context) => {
       await Promise.all([refund(), refundLimit("refer-global").catch(() => {})]);
       return json(422, { error: REJECT.notHuman, reason: "notHuman", caseId });
     }
+    if (DECLINE.has(raw?.decline)) {
+      await Promise.all([refund(), refundLimit("refer-global").catch(() => {})]);
+      return json(422, { error: REJECT[raw.decline], reason: raw.decline, caseId });
+    }
 
     const a = normalizeAssessment({ ...raw, confidence: undefined });
     const score = computeScore(a.breakdown);
@@ -119,6 +141,9 @@ export default async (req, context) => {
     const card = {
       slug, name: displayName, wikiTitle: wiki.title, wikidata: wiki.wikidata,
       score, tier: getTier(score), breakdown: a.breakdown, confidence: null, verdict: a.verdict,
+      // Living subjects: the verdict waits for review before the public sees it.
+      verdictStatus: wiki.living ? "review" : "published", living: wiki.living,
+      noDangle: raw?.no_dangle === true,
       flags: a.flags, commendations: a.commendations,
       sprite: null, spriteStatus: "pending", spriteAttempts: 0, look,
       referredBy: caseId.slice(-4), at: new Date().toISOString(),
@@ -127,10 +152,10 @@ export default async (req, context) => {
       // Someone referred the same person a moment earlier: theirs stands, ours is free.
       await refund();
       const won = await getFigure(slug);
-      return json(200, { ...onFileBody(won || card), caseId });
+      return json(200, { ...onFileBody(publicFigure(won || card)), caseId });
     }
     const used = await peekLimit(`refer-case:${caseId}`, "month").catch(() => month.count);
-    return json(201, { status: "created", message: `New arrival processed: ${displayName}. Likeness pending.`, subject: publicCard(card), caseId, remaining: remainingThisMonth(used) });
+    return json(201, { status: "created", message: `New arrival processed: ${displayName}. Likeness pending.`, subject: publicFigure(card), caseId, remaining: remainingThisMonth(used) });
   } catch (err) {
     if (err instanceof ScoreError) return json(err.status, { error: err.message });
     console.error("refer failed", err);

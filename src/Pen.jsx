@@ -84,7 +84,8 @@ const DROP_CAPTIONS = [
 ];
 const DOOR_DROP = "Premature processing request denied. The paperwork has not cleared.";
 // Figures whose deaths make a dangling, kicking sprite read as a hanging gag. They are
-// not lifted; a tap opens the file directly.
+// not lifted; a tap opens the file directly. Referred figures carry their own noDangle
+// flag from the scoring model; this list covers the figures on file.
 const NO_DANGLE = new Set(["Aaron Hernandez", "Jeffrey Epstein"]);
 
 const DOOR_OPEN_CAPTIONS = [
@@ -172,6 +173,13 @@ function SubjectCard({ subject, onClose }) {
               <>
                 <Rule label="OVERLORD VERDICT" />
                 <Typed className="hvi-verdict-text" text="Private citizen. The file is sealed. The number is not." cps={40} />
+              </>
+            )}
+            {subject.kind !== "citizen" && subject.referred && !subject.verdict && (
+              // Referred living subjects: the verdict waits for review before publication.
+              <>
+                <Rule label="OVERLORD VERDICT" />
+                <Typed className="hvi-verdict-text" text="Verdict under review. The subject is living, and the Department checks its facts before it files them. The number stands." cps={40} />
               </>
             )}
           </ScoreCard>
@@ -530,6 +538,7 @@ export default function Pen() {
     }
     // The referral bar hands new arrivals straight in, without waiting for the next poll.
     sim.refer = (subject) => {
+      if (!subject?.name || typeof subject.score !== "number") return false;
       const e = sim.ents.find(x => x.s.name === subject.name);
       if (e) { sim.hop(subject.name); return false; }
       if (!sim.arrivals.some(a => a.s.name === subject.name)) sim.arrivals.unshift({ s: { ...subject, kind: "figure", referred: true } });
@@ -584,7 +593,7 @@ export default function Pen() {
       const [wx, wy] = toWorld(ev);
       const e = hitTest(wx, wy, ev.pointerType === "touch" || ev.pointerType === "pen");
       if (!e) return;
-      if (NO_DANGLE.has(e.s.name)) { const subj = e.s; setTimeout(() => { if (!cancelled) setCard({ ...subj }); }, 0); return; }
+      if (e.s.noDangle || NO_DANGLE.has(e.s.name)) { const subj = e.s; setTimeout(() => { if (!cancelled) setCard({ ...subj }); }, 0); return; }
       const p = sim.pointer;
       p.x = wx; p.y = wy; p.downX = wx; p.downY = wy; p.vx = 0; p.dragged = false; p.id = ev.pointerId;
       sim.held = e; e.state = "held"; e.ang = 0; e.va = 0;

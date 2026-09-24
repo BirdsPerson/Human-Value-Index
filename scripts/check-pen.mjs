@@ -1,6 +1,7 @@
 // Self-check for the Holding Pen / intake helpers. Run: node scripts/check-pen.mjs
 import assert from "node:assert/strict";
 import { FAMOUS_FIGURES, getTier, slugify, slugCandidates } from "../src/figures.js";
+import { computeScore, getTier as tierLabel } from "../netlify/lib/intake.js";
 import {
   placeholderPixels, PX, SPRITE_W, SPRITE_H, hashStr, mulberry32,
   gaitFor, stepEntity, doorZone, sparkPoints,
@@ -15,6 +16,11 @@ for (const s of slugs) assert.match(s, /^[a-z0-9]+(-[a-z0-9]+)*$/, s);
 assert.equal(slugify("Martin Luther King Jr."), "martin-luther-king-jr");
 assert.equal(slugify("O.J. Simpson"), "oj-simpson");
 assert.deepEqual(slugCandidates("Pelé"), ["pele", "pel"]);
+// every stored figure score is the formula (harm gate included) over its breakdown
+for (const f of FAMOUS_FIGURES) {
+  assert.equal(f.score, computeScore(f.breakdown), `${f.name}: stored score is not the formula`);
+  assert.equal(f.tier, tierLabel(f.score), `${f.name}: tier`);
+}
 assert.equal(getTier(850).label, "ESSENTIAL INFRASTRUCTURE");
 assert.equal(getTier(99).label, "SOYLENT GREEN");
 

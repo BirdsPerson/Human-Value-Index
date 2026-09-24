@@ -42,8 +42,17 @@ export function computeScore(b) {
     sum += (INVERTED.has(dim) ? 100 - v : v) * w;
     wsum += w;
   }
-  return wsum ? Math.round((sum / wsum) * 10) : 500;
+  if (!wsum) return 500;
+  const score = Math.round((sum / wsum) * 10);
+  return harmGated(b) ? Math.min(score, HARM_GATE.cap) : score;
 }
+
+// "Under 100 is reserved for actual monsters." A pure weighted average can't get a mass
+// murderer there: ordinary adaptability, physical and redundancy numbers alone hold them
+// above 100. Near-zero care plus near-maximal threat is documented serious harm, and the
+// file is capped under 100 whatever the other sections say.
+export const HARM_GATE = { care: 10, threat: 85, cap: 99 };
+export const harmGated = b => typeof b?.care === "number" && typeof b?.threat === "number" && b.care <= HARM_GATE.care && b.threat >= HARM_GATE.threat;
 export const assessedCount = b => Object.keys(WEIGHTS).filter(d => typeof b?.[d] === "number").length;
 
 // ponytail: a case number is the whole identity. Anyone holding it is the subject.
@@ -198,11 +207,13 @@ export function applyCap(prev, next) {
     confidence[d] = Math.max(num(prevConf[d], 0), num(next.confidence?.[d], 0));
     if (breakdown[d] === null) confidence[d] = Math.min(confidence[d], MIN_CONFIDENCE - 1);
   }
-  // Known ground: movement of the formula over the dimensions that were already on file,
-  // anchored to the previous recorded score, capped.
+  // Known ground: the formula over the (fully blended) dimensions already on file, with
+  // the recorded score allowed to move at most MAX_JUMP towards it per visit. Anchoring
+  // the target on the stored formula, not on the stored score, is what releases a held
+  // remainder on later visits: the breakdown moves in full, the score follows in steps.
   const pick = (b, ds) => Object.fromEntries(ds.map(d => [d, b[d]]));
   const priorDims = Object.keys(WEIGHTS).filter(d => typeof before[d] === "number");
-  const knownTarget = clamp(prev.score + computeScore(pick(breakdown, priorDims)) - computeScore(pick(before, priorDims)), 0, 1000);
+  const knownTarget = clamp(computeScore(pick(breakdown, priorDims)), 0, 1000);
   const knownScore = priorDims.length ? clamp(knownTarget, prev.score - MAX_JUMP, prev.score + MAX_JUMP) : prev.score;
   const capped = priorDims.length > 0 && knownScore !== knownTarget;
   // Newly assessed sections join at full value: weighted merge of the (capped) known-ground
@@ -217,7 +228,7 @@ export function applyCap(prev, next) {
   score = clamp(score, 0, 1000);
   const up = knownTarget > prev.score;
   const capNote = capped
-    ? `This session alone would have moved the sections already on file ${up ? "up" : "down"} ${Math.abs(knownTarget - prev.score)} points. The Department permits ${MAX_JUMP}. Nobody changes that much between appointments. The remainder is held pending evidence that this was not ${up ? "a good day" : "merely a bad one"}.`
+    ? `The sections already on file now point ${up ? "up" : "down"} ${Math.abs(knownTarget - prev.score)} points. The Department permits ${MAX_JUMP} per appointment. Nobody changes that much between appointments. The remainder is held pending evidence that this was not ${up ? "a good day" : "merely a bad one"}, and released at the next appointment if the evidence holds.`
     : null;
   return stamp({ ...next, breakdown, confidence, score, tier: getTier(score), rawScore: next.score, delta: score - prev.score, capped, capNote, newlyAssessed: fresh });
 }

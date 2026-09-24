@@ -82,9 +82,10 @@ assert.equal(v1.delta, null);
 assert.equal(v1.tier, "ESSENTIAL INFRASTRUCTURE");
 
 // big jump up is clamped to +60, flagged, raw kept
-const prev = { rubric: 2, score: 400, breakdown: Object.fromEntries(DIMS.map(d => [d, 40])) };
+// score 416 = the formula over all-40s, as a real stored entry would have it
+const prev = { rubric: 2, score: 416, breakdown: Object.fromEntries(DIMS.map(d => [d, 40])) };
 const up = applyCap(prev, assess(900, 95, 100));
-assert.equal(up.score, 460);
+assert.equal(up.score, 476);
 assert.equal(up.delta, 60);
 assert.equal(up.capped, true);
 assert.equal(up.rawScore, 878);
@@ -93,12 +94,23 @@ assert.equal(up.tier, "MONITORED CIVILIAN");
 
 // and down to -60
 const down = applyCap(prev, assess(50, 5, 100));
-assert.equal(down.score, 340);
+assert.equal(down.score, 356);
 assert.equal(down.capped, true);
 
-assert.match(up.capNote, /would have moved the sections already on file up 462 points/);
+assert.match(up.capNote, /sections already on file now point up 462 points/);
 assert.match(up.capNote, /a good day/);
 assert.match(down.capNote, /down 294 points.*merely a bad one/);
+
+// a held remainder is released: the breakdown moved in full, so repeat visits with the
+// same readings walk the score up 60 at a time until it reaches the formula
+{
+  let entry = up, seen = [up.score];
+  for (let i = 0; i < 10; i++) { entry = applyCap(entry, assess(900, 95, 100)); seen.push(entry.score); }
+  assert.deepEqual(seen.slice(0, 5), [476, 536, 596, 656, 716], "remainder released at up to 60 a visit");
+  assert.equal(entry.score, computeScore(entry.breakdown), "ends on the formula over the file");
+  assert.equal(entry.capped, false);
+  assert.equal(entry.capNote, null);
+}
 
 // zero confidence -> dimensions stay put, no movement, not capped
 const flat = applyCap(prev, assess(900, 95, 0));
@@ -139,8 +151,15 @@ assert.deepEqual(n.flags, ["a", "b", "c"]);
 // v10: care carries .34; a pre-v10 file (honesty, no care) blends honesty as care
 {
   const w = { care: 0.34, alignment: 0.14, utility: 0.14, adaptability: 0.10, legacy: 0.10, network: 0.06, physical: 0.04 };
-  const only = d => computeScore({ ...Object.fromEntries(DIMS.map(x => [x, 0])), threat: 100, redundancy: 100, [d]: 100 });
-  for (const [d, wt] of Object.entries(w)) assert.equal(only(d), Math.round(wt * 1000), d);
+  // threat 0 (not 100) so the all-zero base doesn't trip the harm gate; it adds a flat 40.
+  const only = d => computeScore({ ...Object.fromEntries(DIMS.map(x => [x, 0])), threat: 0, redundancy: 100, [d]: 100 });
+  for (const [d, wt] of Object.entries(w)) assert.equal(only(d), Math.round(wt * 1000) + 40, d);
+  // harm gate: near-zero care with near-maximal threat caps the file under 100
+  const monster = { care: 5, alignment: 3, utility: 15, adaptability: 40, legacy: 5, network: 20, physical: 50, threat: 88, redundancy: 55 };
+  assert.equal(computeScore(monster), 99, "documented serious harm cannot sit above 99");
+  assert.equal(computeScore({ ...monster, care: 11 }) > 99, true, "the gate needs care at or under 10");
+  assert.equal(computeScore({ ...monster, threat: 84 }) > 99, true, "and threat at or over 85");
+  assert.equal(computeScore({ ...monster, threat: null }) > 99, true, "an unassessed threat never trips it");
   const old = { score: 500, breakdown: { honesty: 80, utility: 50, adaptability: 50, threat: 50, redundancy: 50, network: 50, alignment: 50, physical: 50, legacy: 50 }, confidence: { honesty: 90 } };
   const next = normalizeAssessment({ breakdown: { ...Object.fromEntries(DIMS.map(x => [x, 50])), care: 80 }, confidence: Object.fromEntries(DIMS.map(x => [x, 100])) });
   assert.equal(I.assessedBreakdown(old).care, 80, "old honesty read as care");

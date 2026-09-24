@@ -129,8 +129,10 @@ def slug(name):
 
 # ---------- generation ----------
 
-def generate(name, dest):
-    prompt = PROMPT.format(name=name, look=LOOKS.get(slug(name), GENERIC_LOOK))
+def generate(name, dest, look=None):
+    # look: an explicit brief (referrals pass the scoring model's safety-constrained one);
+    # otherwise the hand-written LOOKS entry, then the generic brief.
+    prompt = PROMPT.format(name=name, look=look or LOOKS.get(slug(name), GENERIC_LOOK))
     cmd = ["higgsfield", "generate", "create", MODEL, "--prompt", prompt,
            "--resolution", "1k", "--aspect_ratio", "2:3", "--wait", "--json"]
     res = subprocess.run(cmd, capture_output=True, text=True, timeout=900)

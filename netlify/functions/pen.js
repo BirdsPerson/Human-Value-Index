@@ -1,7 +1,8 @@
 import { listPenCards, listFigures } from "../lib/store.js";
+import { publicFigure } from "../lib/refer.js";
 
 // The 62 figures on file are static on the client; this serves assessed citizens and
-// public figures referred since (with verdicts: they are public figures).
+// public figures referred since (verdicts only once published: see publicFigure).
 const CACHE_MS = 30 * 1000;
 let cache = { at: 0, subjects: null };
 
@@ -21,10 +22,8 @@ export default async (req) => {
             // or breakdown; they are dropped here.
             slug: c.slug, name: c.name, score: c.score, tier: c.tier, sprite: c.sprite ?? null, kind: "citizen",
           })),
-          ...figures.map(f => ({
-            slug: f.slug, name: f.name, score: f.score, tier: f.tier, breakdown: f.breakdown, verdict: f.verdict,
-            sprite: f.sprite ?? null, spriteStatus: f.spriteStatus || "pending", kind: "figure", referred: true,
-          })),
+          // Referred figures: verdict and breakdown only once reviewed (see publicFigure).
+          ...figures.map(publicFigure),
         ],
       };
     }

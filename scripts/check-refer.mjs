@@ -2,7 +2,7 @@
 // (stubbed fetch), slug/dedupe against the figures on file, and the quota math.
 //   node scripts/check-refer.mjs
 import assert from "node:assert/strict";
-import { nameError, cleanName, titleSlug, onFileFigure, classifySummary, resolveWikipedia, monthKey, remainingThisMonth, PER_CASE_MONTHLY, REJECT } from "../netlify/lib/refer.js";
+import { nameError, cleanName, titleSlug, onFileFigure, classifySummary, resolveWikipedia, monthKey, remainingThisMonth, PER_CASE_MONTHLY, REJECT, FIGURE_QIDS, placeReferral, ageFrom } from "../netlify/lib/refer.js";
 import { FAMOUS_FIGURES, slugify } from "../src/figures.js";
 
 // --- names
@@ -52,7 +52,40 @@ let f = stub([
   [/wbgetclaims.*Q180453/, { claims: { P31: [{ mainsnak: { datavalue: { value: { id: "Q5" } } } }] } }],
 ]);
 let r = await resolveWikipedia("dolly parton", f);
-assert.equal(r.ok, true); assert.equal(r.title, "Dolly Parton"); assert.equal(f.calls.length, 3);
+assert.equal(r.ok, true); assert.equal(r.title, "Dolly Parton"); assert.equal(f.calls.length, 5);
+assert.equal(r.living, true, "no death claim on record = living");
+
+// death on record -> not living; born under 18 years ago and living -> refused as a minor
+const P = (prop, snaks) => ({ claims: { [prop]: snaks.map(mainsnak => ({ mainsnak })) } });
+const time = t => ({ datavalue: { value: { time: t } } });
+f = stub([
+  [/list=search/, { query: { search: [{ title: "Prince (musician)" }] } }],
+  [/page\/summary\/Prince_\(musician\)/, { title: "Prince (musician)", type: "standard", wikibase_item: "Q7542" }],
+  [/Q7542&property=P31/, P("P31", [{ datavalue: { value: { id: "Q5" } } }])],
+  [/Q7542&property=P570/, P("P570", [time("+2016-04-21T00:00:00Z")])],
+]);
+r = await resolveWikipedia("prince", f);
+assert.equal(r.ok, true); assert.equal(r.living, false);
+const kid = new Date(); kid.setUTCFullYear(kid.getUTCFullYear() - 12);
+assert.equal(classifySummary({ title: "A Child Actor", type: "standard" }, ["Q5"], { born: "+" + kid.toISOString().slice(0, 10) + "T00:00:00Z", died: false }).reason, "minor");
+assert.equal(classifySummary({ title: "An Adult", type: "standard" }, ["Q5"], { born: "+1960-01-01T00:00:00Z", died: false }).ok, true);
+assert.equal(ageFrom("+2000-09-25T00:00:00Z", new Date("2018-09-24T12:00:00Z")), 17, "birthday not reached yet");
+assert.equal(ageFrom("+2000-09-24T00:00:00Z", new Date("2018-09-24T12:00:00Z")), 18);
+assert.equal(ageFrom("unknown"), null);
+assert.ok(REJECT.minor && REJECT.victim && REJECT.pending_case && REJECT.withdrawn);
+
+// dedupe by person: every figure on file has an id; a namesake gets its own slug
+for (const f of FAMOUS_FIGURES) assert.match(FIGURE_QIDS[f.name] || "", /^Q\d+$/, `qid for ${f.name}`);
+const none = async () => null;
+assert.equal((await placeReferral({ title: "Joe Jackson (talent manager)", wikidata: "Q361297" }, none)).onFile?.name, "Joe Jackson");
+assert.deepEqual(await placeReferral({ title: "Joe Jackson (musician)", wikidata: "Q1349079" }, none), { slug: "joe-jackson-musician" });
+assert.deepEqual(await placeReferral({ title: "Michael Jackson (writer)", wikidata: "Q6831558" }, none), { slug: "michael-jackson-writer" });
+const evans = { slug: "chris-evans", wikidata: "Q178348" };
+const held = async s => (s === "chris-evans" ? evans : null);
+assert.equal((await placeReferral({ title: "Chris Evans (actor)", wikidata: "Q178348" }, held)).existing, evans, "same person: already on file");
+assert.deepEqual(await placeReferral({ title: "Chris Evans (presenter)", wikidata: "Q2964710" }, held), { slug: "chris-evans-presenter" });
+assert.deepEqual(await placeReferral({ title: "Dolly Parton", wikidata: "Q180453" }, none), { slug: "dolly-parton" });
+assert.deepEqual(await placeReferral({ title: "Index", wikidata: "Q1" }, none), { slug: "index-q1" }, "the store's index key is never a slug");
 
 f = stub([[/list=search/, { query: { search: [] } }]]);
 assert.deepEqual(await resolveWikipedia("asdfqwer", f), { ok: false, reason: "none" });
