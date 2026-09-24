@@ -1,7 +1,7 @@
 // The typed intake channel. Same Intake Officer as the ElevenLabs voice agent, run on
 // Claude so text interviews don't spend ElevenLabs credits. The prompt is built from
 // the case's pending plan in Blobs; the client only sends the conversation so far.
-import { AGENT_PROMPT, FIRST_MESSAGE, CHAT_ADDENDUM, fillVars, splitEnd } from "../lib/agentPrompt.js";
+import { AGENT_PROMPT, FIRST_MESSAGE, APPEAL_FIRST_MESSAGE, CHAT_ADDENDUM, fillVars, splitEnd } from "../lib/agentPrompt.js";
 import { claudeText, ScoreError } from "../lib/score.js";
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit, refundLimit } from "../lib/store.js";
@@ -73,7 +73,7 @@ export default async (req, context) => {
     if (!record.pending?.vars) return json(409, { error: "No interview is open on this case. Request intake first. The Officer does not freelance." });
     const vars = record.pending.vars;
 
-    if (!messages.length) return json(200, { reply: fillVars(FIRST_MESSAGE, vars), end: false });
+    if (!messages.length) return json(200, { reply: fillVars(vars.appeal_sections ? APPEAL_FIRST_MESSAGE : FIRST_MESSAGE, vars), end: false });
 
     const ip = clientIp(req, context);
     try {

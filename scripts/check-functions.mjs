@@ -67,7 +67,11 @@ globalThis.fetch = async (url, init) => {
 
   lastUser = reqBody.messages[0].content;
   if (claudeMode === "overloaded") return new Response(JSON.stringify({ error: { type: "overloaded" } }), { status: 529 });
-  const out = {
+  const out = claudeMode === "appeal" ? {
+    // Loud readings on every section: an appeal must only let the sections in scope through.
+    score: 999, breakdown: Object.fromEntries(dims.map(d => [d, 90])), confidence: Object.fromEntries(dims.map(d => [d, 100])),
+    verdict: "Physical evidence logged: marathon, twice weekly swims.", flags: [], commendations: [],
+  } : {
     score: 480, tier: "MONITORED CIVILIAN", breakdown: Object.fromEntries(dims.map(d => [d, 55])),
     confidence: Object.fromEntries(dims.map(d => [d, 60])),
     verdict: claudeMode === "leak" ? "Subject says to call Dave at 555-123-4567." : "Adequate. " + "Very adequate. ".repeat(80),
@@ -82,6 +86,7 @@ const pen = (await import("../netlify/functions/pen.js")).default;
 const evaluate = (await import("../netlify/functions/evaluate.js")).default;
 const chat = (await import("../netlify/functions/intake-chat.js")).default;
 const refer = (await import("../netlify/functions/refer.js")).default;
+const caseLookup = (await import("../netlify/functions/case.js")).default;
 
 const HOST = "https://humanvalueindex.com";
 const post = (fn, path, body, { origin = HOST, ip = "203.0.113.7" } = {}) =>
@@ -313,6 +318,88 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
   globalThis.__blobs.get("hvi-figures").set("dolly-parton", { data: { slug: "dolly-parton", removed: true, wikidata: "Q180453" }, etag: "x" });
   r = await read(await post(refer, "/api/refer", { name: "Dolly Parton", caseId }, { ip: "192.0.2.53" }));
   assert.equal(r.status, 410);
+}
+
+
+// ---- appeals: only the disputed (and adjacent) sections are re-scored ----
+{
+  const ip = "198.51.100.77";
+  let a = await read(await post(session, "/api/intake-session", {}, { ip }));
+  const cid = a.body.caseId;
+  const t = [{ role: "agent", text: "Q?" }, { role: "user", text: "I build things and I keep promises." }, { role: "agent", text: "Q2?" }, { role: "user", text: "Ten people, roughly." }];
+  a = await read(await post(score, "/api/intake-score", { caseId: cid, transcript: t }, { ip }));
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  const before = a.body.breakdown;
+
+  // validation before anything is charged
+  a = await read(await post(session, "/api/intake-session", { caseId: cid, appeal: ["charisma"] }, { ip }));
+  assert.equal(a.status, 400);
+  a = await read(await post(session, "/api/intake-session", { caseId: cid, appeal: ["physical", "physical"] }, { ip }));
+  assert.equal(a.status, 400);
+  a = await read(await post(session, "/api/intake-session", { appeal: ["physical"] }, { ip }));
+  assert.equal(a.status, 400, "an appeal needs a case number");
+  a = await read(await post(session, "/api/intake-session", { caseId: "HVI-ZZZZZZZZ", appeal: ["physical"] }, { ip }));
+  assert.equal(a.status, 404, "no file, no appeal");
+
+  // a retired-rubric file can't be appealed
+  globalThis.__blobs.get("hvi-cases").set("HVI-OLDOLDOL", { data: { caseId: "HVI-OLDOLDOL", history: [{ score: 500, breakdown: { care: 50 } }] }, etag: "o" });
+  a = await read(await post(session, "/api/intake-session", { caseId: "HVI-OLDOLDOL", appeal: ["physical"] }, { ip }));
+  assert.equal(a.status, 409);
+
+  a = await read(await post(session, "/api/intake-session", { caseId: cid, appeal: ["physical"] }, { ip }));
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.deepEqual(a.body.appeal, ["physical"]);
+  assert.equal(a.body.plan.filter(q => q.dimension === "physical").length, 3, "three questions for a single disputed section");
+  assert.ok(a.body.plan.every(q => ["physical", "adaptability"].includes(q.dimension)), "plan stays on physical and its neighbour");
+  assert.match(a.body.dynamicVariables.returning_note, /^APPEAL FILED: PHYSICAL/, "the voice agent gets the appeal through the returning note");
+  assert.equal(a.body.dynamicVariables.appeal_sections, "PHYSICAL");
+
+  // the typed Officer opens with the appeal
+  a = await read(await post(chat, "/api/intake-chat", { caseId: cid, messages: [] }, { ip }));
+  assert.match(a.body.reply, /APPEAL FILED: PHYSICAL\. The Department will listen\. It is not obliged to agree\./);
+
+  claudeMode = "appeal";
+  const t2 = [{ role: "agent", text: "APPEAL FILED: PHYSICAL." }, { role: "user", text: "I ran a marathon last year." }, { role: "agent", text: "How often?" }, { role: "user", text: "I swim twice a week." }];
+  a = await read(await post(score, "/api/intake-score", { caseId: cid, transcript: t2 }, { ip }));
+  claudeMode = "ok";
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.match(lastUser, /APPEAL:[\s\S]*physical: 55 on file/, "the Engine is told what is disputed and where it stood");
+  assert.ok(a.body.breakdown.physical > before.physical, "the disputed section moved");
+  const inScope = new Set(["physical", "adaptability"]);
+  for (const d of dims) if (!inScope.has(d)) assert.equal(a.body.breakdown[d], before[d], `${d} is not under appeal and must not move`);
+  assert.equal(a.body.appealOutcome, "UPHELD");
+  assert.deepEqual(a.body.appealRulings, { physical: "UPHELD" });
+  assert.match(a.body.verdict, /^APPEAL UPHELD\. PHYSICAL: UPHELD\. Physical evidence logged/);
+  const stored = globalThis.__blobs.get("hvi-cases").get(cid).data.history.at(-1);
+  assert.deepEqual(stored.appeal, ["physical"]);
+
+  // several sections: fewer questions each, capped at 12
+  a = await read(await post(session, "/api/intake-session", { caseId: cid, appeal: ["physical", "network", "care", "legacy"] }, { ip }));
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.ok(a.body.plan.length <= 12);
+  for (const d of ["physical", "network", "care", "legacy"]) assert.equal(a.body.plan.filter(q => q.dimension === d).length, 2, `${d}: two questions each when four are disputed`);
+}
+
+// ---- case number logon: a boolean and a count, nothing else; metered per IP ----
+{
+  const get = (id, ip = "198.51.100.9") => caseLookup(new Request(HOST + "/api/case?caseId=" + encodeURIComponent(id), { headers: { origin: HOST } }), { ip });
+  let c = await read(await get("not-a-case"));
+  assert.equal(c.status, 400);
+  c = await read(await get("HVI-ZZZZZZZZ"));
+  assert.equal(c.status, 404);
+  assert.equal(c.body.exists, false);
+  assert.match(c.body.error, /No such file\. The Department does not lose files\. You have mistyped\./);
+  c = await read(await get(caseId.toLowerCase()));
+  assert.equal(c.status, 200, "case numbers are case-insensitive on entry");
+  assert.deepEqual(Object.keys(c.body).sort(), ["caseId", "exists", "visits"], "nothing but existence and a count leaves the endpoint");
+  assert.equal(c.body.exists, true);
+  assert.ok(c.body.visits >= 1);
+  // enumeration guard: 30 lookups an hour per address
+  let last;
+  for (let i = 0; i < 30; i++) last = await get("HVI-ZZZZZZZ" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"[i], "198.51.100.10");
+  assert.equal(last.status, 404);
+  c = await read(await get("HVI-ZZZZZZZA", "198.51.100.10"));
+  assert.equal(c.status, 429, "the 31st lookup in an hour is refused");
 }
 
 console.log("check-functions: ok");

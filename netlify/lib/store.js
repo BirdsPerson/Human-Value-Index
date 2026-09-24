@@ -8,8 +8,9 @@ const limits = () => getStore({ name: "hvi-limits", consistency: "strong" });
 const figures = () => getStore({ name: "hvi-figures", consistency: "strong" });
 const sprites = () => getStore({ name: "hvi-sprites", consistency: "strong" });
 
-// "day" (YYYY-MM-DD), "minute" (YYYY-MM-DDTHH:MM) or "month" (YYYY-MM), UTC.
-const bucket = window => new Date().toISOString().slice(0, window === "minute" ? 16 : window === "month" ? 7 : 10);
+// "day" (YYYY-MM-DD), "hour" (YYYY-MM-DDTHH), "minute" (YYYY-MM-DDTHH:MM) or "month" (YYYY-MM), UTC.
+const BUCKET_LEN = { minute: 16, hour: 13, month: 7, day: 10 };
+const bucket = window => new Date().toISOString().slice(0, BUCKET_LEN[window] || 10);
 
 export async function getCase(caseId) {
   return (await cases().get(caseId, { type: "json" })) || null;

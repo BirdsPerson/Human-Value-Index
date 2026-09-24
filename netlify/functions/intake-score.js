@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { SYSTEM_PROMPT, TRANSCRIPT_ADDENDUM } from "../lib/systemPrompt.js";
 import { callClaude, ScoreError } from "../lib/score.js";
-import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP } from "../lib/intake.js";
+import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP, restrictToDims, appealOutcome, appealRulings, appealStamp } from "../lib/intake.js";
 import { getCase, updateCase, putPenCard, hitLimit, refundLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
@@ -20,6 +20,16 @@ export function previousFile(last, visits) {
   return `PREVIOUS FILE:\n- Visits on record: ${visits}\n- Last recorded score: ${last.score} (${last.tier})\n- Sections on file: ${onFile.join(", ") || "none"}\n- Sections UNASSESSED so far: ${missing.join(", ") || "none"}\n- Rule: sections already on file can move the score at most ${MAX_JUMP} points this session. UNASSESSED sections that this conversation gives real evidence for enter at full value.\n\n`;
 }
 
+// Tells the Engine this session is an appeal, and where the disputed sections stood.
+export function appealBrief(last, appeal, touch) {
+  if (!appeal?.length) return "";
+  const b = assessedBreakdown(last);
+  const c = last?.confidence || {};
+  const adjacent = (touch || []).filter(d => !appeal.includes(d));
+  const lines = appeal.map(d => `- ${d}: ${typeof b[d] === "number" ? `${b[d]} on file (evidence ${c[d] ?? "?"}%)` : "UNASSESSED on file"}`);
+  return `APPEAL:\nThe subject disputes these sections of the file:\n${lines.join("\n")}\n${adjacent.length ? `Adjacent sections also in scope: ${adjacent.join(", ")}.\n` : ""}Score ONLY the appealed and adjacent sections from this conversation; give every other section confidence 0. The rest of the file is not under review.\nIn the verdict, do NOT state whether the appeal is upheld or denied: the Department's ledger stamps that. Rule on EACH appealed section in turn: say coldly what the new evidence showed for it, compared with what was on file.\n\n`;
+}
+
 function respond(json, caseId, history, entry) {
   return json(200, {
     caseId,
@@ -35,6 +45,9 @@ function respond(json, caseId, history, entry) {
     capped: Boolean(entry.capped),
     rawScore: entry.rawScore ?? entry.score,
     capNote: entry.capNote || null,
+    appeal: entry.appeal || null,
+    appealOutcome: entry.appealOutcome || null,
+    appealRulings: entry.appealRulings || null,
     rubric: rubricOf(entry),
     rubricNote: rubricOf(entry) < RUBRIC ? RETIRED_RUBRIC_NOTE : null,
     rubricReset: Boolean(entry.rubricReset),
@@ -71,6 +84,9 @@ export default async (req, context) => {
     if (!record) return json(404, { error: `Case ${caseId} does not exist. Either you invented it or the Department lost it. The Department does not lose things.` });
     const lastEntry = record.history[record.history.length - 1];
     if (lastEntry?.sid === sid) return respond(json, caseId, record.history, lastEntry);
+    // An appeal only applies on top of a current-rubric file; otherwise score it as a full visit.
+    const appeal = Array.isArray(record.pending?.appeal) && lastEntry && rubricOf(lastEntry) >= RUBRIC ? record.pending.appeal : null;
+    const touch = appeal ? (record.pending.touch || appeal) : null;
 
     const ip = clientIp(req, context);
     try {
@@ -88,13 +104,15 @@ export default async (req, context) => {
 
     let raw;
     try {
-      raw = await callClaude(SYSTEM_PROMPT + TRANSCRIPT_ADDENDUM, previousFile(lastEntry, record.history.length) + `(If you cite a directive, cite Directive ${2 + Math.floor(Math.random() * 97)}.)\n\nINTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(transcript)}`);
+      raw = await callClaude(SYSTEM_PROMPT + TRANSCRIPT_ADDENDUM, previousFile(lastEntry, record.history.length) + appealBrief(lastEntry, appeal, touch) + `(If you cite a directive, cite Directive ${2 + Math.floor(Math.random() * 97)}.)\n\nINTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(transcript)}`);
     } catch (err) {
       // The Engine failed, not the subject: give the slots back so a resubmit isn't charged twice.
       await Promise.all([refundLimit(`score-case:${caseId}`), refundLimit(`score-ip:${ip}`)]).catch(() => {});
       throw err;
     }
-    const assessment = normalizeAssessment(raw);
+    const normalized = normalizeAssessment(raw);
+    // An appeal re-scores only the sections in scope; the rest of the file carries forward.
+    const assessment = appeal ? restrictToDims(normalized, touch) : normalized;
     const pendingAt = record.pending?.at;
     const asked = record.pending?.asked || [];
 
@@ -104,12 +122,16 @@ export default async (req, context) => {
       const prev = cur.history[cur.history.length - 1] || null;
       if (prev?.sid === sid) { entry = prev; return undefined; }   // a concurrent twin already wrote it
       const r = applyCap(prev, assessment);
+      const outcome = appeal ? appealOutcome(prev, r, appeal) : null;
+      const rulings = appeal ? appealRulings(prev, r, appeal) : null;
+      if (outcome) r.verdict = `${appealStamp(outcome, rulings)} ${r.verdict}`;
       entry = {
         at: new Date().toISOString(), sid, score: r.score, tier: r.tier, breakdown: r.breakdown, confidence: r.confidence,
         verdict: r.verdict, flags: r.flags, commendations: r.commendations, delta: r.delta, capped: r.capped,
         rawScore: r.rawScore, capNote: r.capNote, rubric: r.rubric, rubricReset: Boolean(r.rubricReset), newlyAssessed: r.newlyAssessed || [], provisional: r.provisional, provisionalNote: r.provisionalNote, asked, raw,
         // The subject's own words, kept (already capped at 20k chars) so a future rubric can re-score the file.
         transcript: transcript.map(m => ({ role: m.role, text: m.text })),
+        ...(appeal ? { appeal, appealOutcome: outcome, appealRulings: rulings } : {}),
       };
       cur.history.push(entry);
       // Only clear the plan this interview used; a newer session's plan stays.

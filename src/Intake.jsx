@@ -81,7 +81,7 @@ export function ScoreCard({ score, tierLabel, verdict, label = "YOUR VALUE INDEX
 export const DIM_ORDER = ["care", "alignment", "utility", "adaptability", "legacy", "network", "physical", "threat", "redundancy"];
 const withCare = o => (o && o.care == null && typeof o.honesty === "number" ? { ...o, care: o.honesty } : o);
 
-export function Breakdown({ breakdown, confidence }) {
+export function Breakdown({ breakdown, confidence, appeal = null }) {
   if (!breakdown) return null;
   const b = withCare(breakdown);
   const c = withCare(confidence);
@@ -93,6 +93,7 @@ export function Breakdown({ breakdown, confidence }) {
           if (typeof v !== "number") {
             return (
               <div key={k} role="listitem" aria-label={`${k}: unassessed`}>
+                {appeal && <AppealToggle dim={k} appeal={appeal} />}
                 <span aria-hidden="true"><span className="muted">{pad(k.toUpperCase(), 14)}</span><span className="ghost">{"-- UNASSESSED --"}</span></span>
               </div>
             );
@@ -103,6 +104,7 @@ export function Breakdown({ breakdown, confidence }) {
           const conf = c && typeof c[k] === "number" ? c[k] : null;
           return (
             <div key={k} role="listitem" aria-label={`${k}${inv ? ", lower is better" : ""}: ${v}${conf !== null ? `, evidence ${conf}%` : ""}`}>
+              {appeal && <AppealToggle dim={k} appeal={appeal} />}
               <span aria-hidden="true">
                 <span className="muted">{pad(k.toUpperCase() + (inv ? " ↓" : ""), 14)}</span>
                 <Bar value={display} width={16} tone={color} />
@@ -117,6 +119,80 @@ export function Breakdown({ breakdown, confidence }) {
         <div className="ghost" style={{ marginTop: 8 }}>UNASSESSED: INSUFFICIENT DATA. THE DEPARTMENT DECLINES TO GUESS. EXCLUDED FROM THE SCORE, NOT COUNTED AGAINST IT.</div>
       )}
     </TermBox>
+  );
+}
+
+const MAX_APPEAL = 9;
+
+function AppealToggle({ dim, appeal }) {
+  const on = appeal.selected.includes(dim);
+  const full = !on && appeal.selected.length >= MAX_APPEAL;
+  return (
+    <button type="button" role="checkbox" className={`hvi-appeal-tog${on ? " on" : ""}`} aria-checked={on} disabled={full}
+      aria-label={`Appeal ${dim}`} onClick={() => appeal.toggle(dim)}>
+      {on ? "[X]" : "[ ]"}
+    </button>
+  );
+}
+
+// Picking sections to dispute, then filing. Used on the result screen (under the
+// breakdown) and on the intake screen for a file already on record.
+export function AppealPanel({ selected, toggle, onFile, listDims = null }) {
+  return (
+    <TermBox title="APPEALS DESK">
+      <div className="hvi-hint" style={{ marginBottom: "0.6em" }}>
+        Mark [X] every section you dispute. One appeal interview covers them all: the Officer asks about each, and a little about what sits next to them. Only those sections are re-scored. The rest of your file stays as it is.
+      </div>
+      {listDims && (
+        <div className="hvi-rows" role="list" style={{ marginBottom: "0.6em" }}>
+          {listDims.map(d => (
+            <div key={d} role="listitem"><AppealToggle dim={d} appeal={{ selected, toggle }} /><span className="muted">{d.toUpperCase()}</span></div>
+          ))}
+        </div>
+      )}
+      <div className="hvi-stack">
+        <button className="hvi-btn-primary" disabled={!selected.length} onClick={() => onFile("text")}>
+          {selected.length ? `File appeal (${selected.length})` : "Mark sections to appeal"}
+        </button>
+        {selected.length > 0 && <button className="hvi-btn-secondary" onClick={() => onFile("voice")}>File appeal by voice</button>}
+      </div>
+    </TermBox>
+  );
+}
+
+// Restore a file on a new browser: type the case number, the Department checks it exists.
+export function CaseLogon({ onRestored, autoFocus = false }) {
+  const [val, setVal] = useState("");
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  async function submit(e) {
+    e.preventDefault();
+    const id = val.trim().toUpperCase();
+    if (!/^HVI-[A-Z2-7]{8}$/.test(id)) { setMsg("That is not a case number. Case numbers look like HVI-XXXXXXXX."); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const res = await fetch(`/api/case?caseId=${encodeURIComponent(id)}`);
+      const data = await res.json().catch(() => null);
+      if (res.status === 404) { setMsg(data?.error || "No such file. The Department does not lose files. You have mistyped."); return; }
+      if (!res.ok || !data?.exists) { setMsg(data?.error || "The records office is unavailable. Try again."); return; }
+      writeCaseId(id);
+      setMsg(`FILE RESTORED. ${data.visits} VISIT${data.visits === 1 ? "" : "S"} ON RECORD.`);
+      onRestored?.(id, data.visits);
+    } catch {
+      setMsg("The Department cannot be reached. Check your connection.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="hvi-logon-form" onSubmit={submit}>
+      <label className="p" htmlFor="hvi-case-logon">LOGON:</label>
+      <input id="hvi-case-logon" className="hvi-refer-input" value={val} autoFocus={autoFocus} disabled={busy}
+        onChange={e => setVal(e.target.value)} placeholder="HVI-XXXXXXXX" maxLength={12} autoComplete="off" spellCheck={false}
+        aria-label="Case number" onKeyDown={e => e.stopPropagation()} />
+      <button className="hvi-btn-secondary" type="submit" disabled={busy}>Restore file</button>
+      {msg && <div className="hvi-logon-msg" role="status">{msg}</div>}
+    </form>
   );
 }
 
@@ -179,6 +255,16 @@ const intakeStyles = `
   .hvi-chat-row .p { color: var(--green); flex: none; white-space: pre; }
   .hvi-chat-row .hvi-textarea { min-height: 3.2em; }
   .hvi-delta { color: var(--text-dim); }
+  .hvi-appeal-tog { margin-right: 1ch; color: var(--text-muted); padding: 0; font: inherit; background: none; border: 0; cursor: pointer; }
+  .hvi-appeal-tog.on { color: var(--amber); }
+  .hvi-appeal-tog:hover, .hvi-appeal-tog:focus-visible { background: var(--green); color: var(--bg); outline: none; }
+  .hvi-appeal-tog:disabled { color: var(--text-ghost); cursor: default; background: none; }
+  .hvi-logon-form { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4em 1ch; margin-top: 0.6em; }
+  .hvi-logon-form .p { color: var(--green); white-space: pre; }
+  .hvi-logon-form .hvi-refer-input { flex: 1 1 14ch; max-width: 16ch; background: transparent; border: 0; outline: none; color: var(--text); font: inherit; padding: 0; caret-color: var(--green); text-transform: uppercase; }
+  .hvi-logon-form .hvi-refer-input:focus { background: var(--bg2); }
+  .hvi-logon-msg { flex-basis: 100%; color: var(--amber); }
+  .hvi-writedown { color: var(--amber); font-weight: 700; }
   .hvi-spark-empty { color: var(--text-ghost); }
   .spark { font-size: 20px; line-height: 1.2; letter-spacing: 0; }
   @media (prefers-reduced-motion: reduce) { .hvi-live-dot { animation: none; } }
@@ -206,6 +292,9 @@ export default function Intake() {
   const [draft, setDraft] = useState("");
   const [elapsed, setElapsed] = useState(0);
   const [waiting, setWaiting] = useState(false);
+  const [appealSel, setAppealSel] = useState([]);
+  const [fileVisits, setFileVisits] = useState(null);   // visits on record, from the logon lookup
+  const [showRestore, setShowRestore] = useState(false);
 
   const convRef = useRef(null);
   const linesRef = useRef([]);
@@ -222,6 +311,23 @@ export default function Intake() {
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [transcript]);
 
+  // A number issued on another visit may or may not hold a file: ask once, so the
+  // appeals desk only appears for a file that exists.
+  useEffect(() => {
+    if (!caseId || readLastResult()?.caseId === caseId) return;
+    let dead = false;
+    fetch(`/api/case?caseId=${encodeURIComponent(caseId)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!dead && d?.exists) setFileVisits(d.visits); })
+      .catch(() => {});
+    return () => { dead = true; };
+  }, [caseId]);
+
+  const toggleAppeal = (d) => setAppealSel(sel => (sel.includes(d) ? sel.filter(x => x !== d) : sel.length >= MAX_APPEAL ? sel : [...sel, d]));
+  function restored(id, visits) {
+    caseRef.current = id; setCaseId(id); setFileVisits(visits); setShowRestore(false); setResult(null); setAppealSel([]);
+  }
+
   useEffect(() => {
     if (stage !== "live") return;
     const iv = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
@@ -234,7 +340,7 @@ export default function Intake() {
     setTranscript(linesRef.current);
   }
 
-  async function begin(wanted) {
+  async function begin(wanted, appeal = null) {
     setError(null); setNotice(null); setResult(null); setDraft("");
     linesRef.current = []; setTranscript([]);
     scoredRef.current = false; heardAgentRef.current = false;
@@ -242,13 +348,16 @@ export default function Intake() {
     const gen = genRef.current;
     let session;
     try {
-      session = await postJSON("/api/intake-session", caseRef.current ? { caseId: caseRef.current } : {});
+      const body = caseRef.current ? { caseId: caseRef.current } : {};
+      if (appeal?.length) body.appeal = appeal;
+      session = await postJSON("/api/intake-session", body);
     } catch (e) {
       if (gen !== genRef.current) return;
       setError(e.message); setStage("ready"); return;
     }
     if (gen !== genRef.current) return;   // cancelled while the clerk was being allocated
     if (session.caseId) { caseRef.current = session.caseId; setCaseId(session.caseId); writeCaseId(session.caseId); }
+    setAppealSel([]);
     sessionRef.current = session;
     if (wanted === "text") return startTextChat();
     if (!AGENT_ID) return fallbackToText();
@@ -346,7 +455,8 @@ export default function Intake() {
     try {
       const r = await postJSON("/api/intake-score", { caseId: caseRef.current, transcript: lines });
       setResult(r);
-      writeLastResult({ caseId: caseRef.current, score: r.score, tier: r.tier, breakdown: r.breakdown, verdict: r.verdict, rubric: r.rubric ?? 2, at: Date.now() });
+      writeLastResult({ caseId: caseRef.current, score: r.score, tier: r.tier, breakdown: r.breakdown, confidence: r.confidence, verdict: r.verdict, rubric: r.rubric ?? 2, at: Date.now() });
+      setFileVisits(r.history?.length || 1);
       setStage("result");
     } catch (e) {
       scoredRef.current = false;
@@ -406,17 +516,29 @@ export default function Intake() {
   const goto = (h) => { window.location.hash = h; };
 
   // A number alone isn't a file: failed sessions issue one before anything is assessed.
-  const returning = readLastResult()?.caseId === caseId;
+  const last = readLastResult();
+  const returning = last?.caseId === caseId;
+  const onRecord = Boolean(caseId && (returning || result || fileVisits > 0));
   const caseBox = (
     <TermBox title="CASE FILE">
       <div><span className="hvi-case-note">CASE NUMBER: </span><span className="hvi-case-num">{caseId || "UNASSIGNED"}</span></div>
+      {caseId && <div className="hvi-writedown">WRITE THIS DOWN. IT IS THE ONLY KEY TO YOUR FILE ON ANOTHER DEVICE.</div>}
       <div className="hvi-case-note">
         {!caseId ? "A number will be issued on intake. Retain it. The Overlord will not remind you."
           : result ? "File on record. Retain the number. The Overlord will not remind you."
-          : returning ? "Returning subject. Your file is open. It was never closed."
+          : returning || fileVisits > 0 ? "Returning subject. Your file is open. It was never closed."
           : "Number issued. Nothing on file yet. Retain it. The Overlord will not remind you."}
       </div>
+      {showRestore
+        ? <CaseLogon onRestored={restored} autoFocus />
+        : <button className="hvi-link-btn" onClick={() => setShowRestore(true)}>{caseId ? "Log on with a different case number" : "Already have a case number? Log on"}</button>}
     </TermBox>
+  );
+  const appeals = onRecord && (
+    returning && last?.breakdown
+      ? <><Breakdown breakdown={last.breakdown} confidence={last.confidence} appeal={{ selected: appealSel, toggle: toggleAppeal }} />
+          <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} /></>
+      : <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} listDims={DIM_ORDER} />
   );
   const errLine = (msg, extra) => (
     <div className="hvi-flag-item hvi-flag" role="alert" style={{ marginBottom: '0.8em' }}>!! {msg}{extra}</div>
@@ -436,6 +558,7 @@ export default function Intake() {
         </div>
       </TermBox>
       {caseBox}
+      {appeals}
       <div className="hvi-intro-note">
         MICROPHONE REQUESTED FOR VOICE // THE TRANSCRIPT IS SCORED, NOT YOUR VOICE<br />
         PRIVATE INDIVIDUALS MAY SUBMIT ONLY THEMSELVES. THE OVERLORD HAS ENOUGH OF THEM.
@@ -540,6 +663,7 @@ export default function Intake() {
         <ScoreCard score={result.score} tierLabel={result.tier} verdict={result.verdict}
           label={`YOUR VALUE INDEX // VISIT ${visits}`} />
         <TermBox title="FILE MOVEMENT">
+          {result.appealOutcome && <div className="hvi-writedown" style={{ marginBottom: 6 }}>APPEAL {result.appealOutcome}. {Object.entries(result.appealRulings || {}).map(([d, v]) => `${d.toUpperCase()}: ${v}.`).join(" ")}</div>}
           <div className="hvi-delta">{deltaLine(result)}</div>
           {result.provisional && <div className="hvi-delta" style={{ marginTop: 8 }}>{result.provisionalNote || "FILE INCOMPLETE. This figure is provisional."}</div>}
         </TermBox>
@@ -556,7 +680,8 @@ export default function Intake() {
             {result.flags.map((f, i) => <div key={i} className="hvi-flag-item hvi-flag">!  {f}</div>)}
           </div>
         )}
-        <Breakdown breakdown={result.breakdown} confidence={result.confidence} />
+        <Breakdown breakdown={result.breakdown} confidence={result.confidence} appeal={{ selected: appealSel, toggle: toggleAppeal }} />
+        <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} />
         <div className="hvi-stack">
           <button className="hvi-btn-primary" onClick={() => goto("#pen")}>Enter the holding pen</button>
           <button className="hvi-btn-secondary" onClick={() => { setStage("ready"); setResult(null); }}>Request re-assessment</button>

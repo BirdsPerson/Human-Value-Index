@@ -239,4 +239,63 @@ assert.notEqual(ipKey("2001:db8:abcd:12::1"), ipKey("2001:db8:abcd:13::1"));
 assert.equal(ipKey("2001:0db8:0000:0001::2"), ipKey("2001:db8:0:1::99"));
 assert.equal(ipKey(""), "unknown");
 
+
+// ---- appeals ----
+{
+  const { ADJACENT, appealError, pickAppealQuestions, appealQuestionsPerDim, restrictToDims, appealRulings, appealOutcome, appealStamp, MAX_APPEAL_QUESTIONS } = I;
+  // adjacency is symmetric enough to be sane: every neighbour is a real section, never itself
+  for (const [d, ns] of Object.entries(ADJACENT)) { assert.ok(DIMS.includes(d)); for (const n of ns) { assert.ok(DIMS.includes(n)); assert.notEqual(n, d); } }
+  assert.equal(Object.keys(ADJACENT).length, 9);
+  assert.equal(appealError(["physical"]), null);
+  assert.ok(appealError([]));
+  assert.ok(appealError(["physical", "physical"]));
+  assert.ok(appealError(["charisma"]));
+  assert.ok(appealError("physical"));
+  // question budget: 3 each for 1-2, 2 each for 3+, never past 12
+  assert.equal(appealQuestionsPerDim(1), 3); assert.equal(appealQuestionsPerDim(2), 3);
+  assert.equal(appealQuestionsPerDim(3), 2); assert.equal(appealQuestionsPerDim(6), 2);
+  assert.equal(appealQuestionsPerDim(7), 1); assert.equal(appealQuestionsPerDim(9), 1);
+  const aopts = { pools: STUB_POOLS, rng: () => 0.42 };
+  const one = pickAppealQuestions([], ["physical"], aopts);
+  assert.equal(one.plan.filter(q => q.dimension === "physical").length, 3);
+  assert.deepEqual(one.adjacent, ["adaptability"], "physical's only neighbour");
+  assert.equal(one.plan.length, 4);
+  assert.deepEqual(one.touch, ["physical", "adaptability"]);
+  const two = pickAppealQuestions([], ["care", "network"], aopts);
+  assert.equal(two.plan.length, 6 + two.adjacent.length);
+  assert.ok(two.adjacent.length <= 2 && two.adjacent.every(d => !["care", "network"].includes(d)));
+  for (const n of [3, 4, 5, 6, 7, 8, 9]) {
+    const p = pickAppealQuestions([], DIMS.slice(0, n), aopts);
+    assert.ok(p.plan.length <= MAX_APPEAL_QUESTIONS, `${n} sections: ${p.plan.length} questions`);
+    for (const d of DIMS.slice(0, n)) assert.ok(p.plan.some(q => q.dimension === d), `${n} sections: ${d} is asked`);
+    assert.equal(new Set(p.plan.map(q => q.text)).size, p.plan.length, "no question twice in one appeal");
+  }
+  // questions already asked are skipped while the pool lasts
+  const hist = [{ asked: STUB_POOLS.physical.slice(0, 5) }];
+  const fresh = pickAppealQuestions(hist, ["physical"], aopts);
+  assert.ok(fresh.plan.filter(q => q.dimension === "physical").every(q => !hist[0].asked.includes(q.text)));
+  // restrictToDims: out-of-scope sections become "not assessed now"
+  const loud = normalizeAssessment({ breakdown: Object.fromEntries(DIMS.map(d => [d, 90])), confidence: Object.fromEntries(DIMS.map(d => [d, 100])), verdict: "v" });
+  const r = restrictToDims(loud, ["physical", "adaptability"]);
+  for (const d of DIMS) assert.equal(r.breakdown[d], ["physical", "adaptability"].includes(d) ? 90 : null);
+  // applied to a current file, only the scoped sections move
+  const prev = { score: 560, rubric: 2, breakdown: Object.fromEntries(DIMS.map(d => [d, 55])), confidence: Object.fromEntries(DIMS.map(d => [d, 60])) };
+  prev.score = computeScore(prev.breakdown);
+  const next = applyCap(prev, r);
+  for (const d of DIMS) {
+    if (d === "physical" || d === "adaptability") assert.ok(next.breakdown[d] > 55);
+    else assert.equal(next.breakdown[d], 55, `${d} untouched by the appeal`);
+  }
+  assert.ok(Math.abs(next.score - prev.score) <= 60);
+  const rul = appealRulings(prev, next, ["physical"]);
+  assert.deepEqual(rul, { physical: "UPHELD" });
+  assert.equal(appealOutcome(prev, next, ["physical"]), "UPHELD");
+  // a section with nothing new is denied; mixed = partially upheld
+  const mixed = { physical: "UPHELD", network: "DENIED" };
+  assert.deepEqual(appealRulings(prev, next, ["physical", "network"]), mixed);
+  assert.equal(appealOutcome(prev, next, ["physical", "network"]), "PARTIALLY UPHELD");
+  assert.equal(appealOutcome(prev, next, ["network"]), "DENIED");
+  assert.equal(appealStamp("PARTIALLY UPHELD", mixed), "APPEAL PARTIALLY UPHELD. PHYSICAL: UPHELD. NETWORK: DENIED.");
+}
+
 console.log("check-intake: all assertions passed");

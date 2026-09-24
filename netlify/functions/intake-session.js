@@ -1,4 +1,4 @@
-import { isCaseId, newCaseId, pickQuestions } from "../lib/intake.js";
+import { isCaseId, newCaseId, pickQuestions, pickAppealQuestions, appealError, rubricOf, RUBRIC } from "../lib/intake.js";
 import { getCase, updateCase, hitLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE } from "../lib/http.js";
 
@@ -22,6 +22,12 @@ export default async (req, context) => {
   if (given != null && !isCaseId(given)) {
     return json(400, { error: "That is not a case number. Case numbers look like HVI-XXXXXXXX. You were told this." });
   }
+  const appeal = body?.appeal ?? null;
+  if (appeal != null) {
+    const bad = appealError(appeal);
+    if (bad) return json(400, { error: bad });
+    if (!given) return json(400, { error: "An appeal needs a case number. The Department does not hear appeals from strangers." });
+  }
 
   try {
     const ip = clientIp(req, context);
@@ -30,6 +36,11 @@ export default async (req, context) => {
     }
 
     let record = given ? await getCase(given) : null;
+    if (appeal) {
+      const last = record?.history?.[record.history.length - 1];
+      if (!last) return json(404, { error: "There is no file to appeal. Be assessed first. Then object." });
+      if (rubricOf(last) < RUBRIC) return json(409, { error: "Your file was scored under a retired rubric. Appeals require a current file. Complete a full re-assessment first; the Department will then entertain your objections." });
+    }
     const reopened = Boolean(given && !record);
     if (!record) record = { caseId: newCaseId(), created: new Date().toISOString(), history: [] };
 
@@ -38,22 +49,29 @@ export default async (req, context) => {
       return json(429, { error: "This case has been interviewed five times today. Additional interviews will not change who you are. Return tomorrow." }, { "Retry-After": "3600" });
     }
 
-    const { focus, plan, asked } = pickQuestions(record.history);
+    const picked = appeal ? pickAppealQuestions(record.history, appeal) : pickQuestions(record.history);
+    const { focus, plan, asked } = picked;
     const visit = record.history.length + 1;
     const last = record.history[record.history.length - 1];
-    const returningNote = last
-      ? `Previous score ${last.score} (${last.tier}). File sections with the least evidence: ${focus.slice(0, 4).join(", ")}.`
-      : "First visit. No file on record.";
+    const sections = appeal ? appeal.map(d => d.toUpperCase()).join(", ") : "";
+    // The voice agent only knows these five variables, so the appeal rides in the
+    // returning note as well as in the plan.
+    const returningNote = appeal
+      ? `APPEAL FILED: ${sections}. The subject disputes these sections of the file. Ask only the questions in the plan: they target the appealed sections${picked.adjacent.length ? `, plus adjacent sections (${picked.adjacent.join(", ")})` : ""}. Previous score ${last.score} (${last.tier}).`
+      : last
+        ? `Previous score ${last.score} (${last.tier}). File sections with the least evidence: ${focus.slice(0, 4).join(", ")}.`
+        : "First visit. No file on record.";
     const dynamicVariables = {
       case_number: record.caseId,
       visit_number: String(visit),
       focus_dimensions: focus.join(", "),
       question_plan: plan.map(q => q.text).join("\n"),
       returning_note: returningNote,
+      ...(appeal ? { appeal_sections: sections } : {}),
     };
     // vars are stored so the typed channel (intake-chat) builds its prompt from the
     // server's plan, never the client's.
-    const pending = { at: new Date().toISOString(), focus, asked, vars: dynamicVariables };
+    const pending = { at: new Date().toISOString(), focus, asked, vars: dynamicVariables, ...(appeal ? { appeal, touch: picked.touch } : {}) };
     // Fresh read inside the write: a score landing meanwhile keeps its history entry.
     const fresh = { ...record, pending };
     record = await updateCase(record.caseId, cur => (cur ? { ...cur, pending } : fresh));
@@ -64,6 +82,7 @@ export default async (req, context) => {
       reopened,
       notice: reopened ? "Your previous file could not be located. A new one has been opened. This happens more than the Department admits." : null,
       focus,
+      appeal: appeal || null,
       questions: plan.map(q => q.text),
       plan,
       dynamicVariables,

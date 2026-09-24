@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { FAMOUS_FIGURES, TIERS, getTier } from "./figures.js";
-import Intake, { ScoreCard, Breakdown, readCaseId } from "./Intake.jsx";
+import Intake, { ScoreCard, Breakdown, readCaseId, CaseLogon } from "./Intake.jsx";
 import Pen from "./Pen.jsx";
 import { TermBox, Rule, Typed, Bar, BANNER, RULE, pad, padL } from "./term.jsx";
 
@@ -398,12 +398,16 @@ const MENU = [
   { key: "2", label: "WRITTEN SURVEY", note: `${QUESTIONS.length} QUESTIONS, NO CLERK`, go: "survey" },
   { key: "3", label: "HOLDING PEN", note: "THE ASSESSED, WANDERING", go: "#pen" },
   { key: "4", label: "PUBLIC FIGURE INDEX", note: "62 FILES ON RECORD", go: "leaderboard" },
+  { key: "5", label: "RESTORE A FILE", note: "LOG ON WITH A CASE NUMBER", go: "restore" },
 ];
 
 // The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
 // and offers a numbered menu. Click or any key finishes the typing at once.
-function Logon({ onPick }) {
-  const [caseId] = useState(() => readCaseId());
+function Logon({ onPick: pick }) {
+  const [caseId, setCaseId] = useState(() => readCaseId());
+  const [restoring, setRestoring] = useState(false);
+  const [restoredMsg, setRestoredMsg] = useState(null);
+  const onPick = (m) => (m.go === "restore" ? setRestoring(true) : pick(m));
   const lines = [
     ...BOOT_LINES.map(l => ({ ...l, cps: 140 })),
     { text: "", type: "ghost" },
@@ -421,6 +425,7 @@ function Logon({ onPick }) {
   useEffect(() => {
     const onKey = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
       if (!done) { if (e.key !== "Tab") { if (e.key === " ") e.preventDefault(); finish(); } return; }
       const i = MENU.findIndex(m => m.key === e.key);
       if (i >= 0) { e.preventDefault(); onPick(MENU[i]); return; }
@@ -457,6 +462,13 @@ function Logon({ onPick }) {
               </li>
             ))}
           </ol>
+          {restoring && (
+            <div style={{ margin: "0.4em 0 0.8em" }}>
+              <CaseLogon autoFocus onRestored={(id, visits) => { setCaseId(id); setRestoring(false); setRestoredMsg(`FILE ${id} RESTORED. ${visits} VISIT${visits === 1 ? "" : "S"} ON RECORD. GREETINGS, RETURNING SUBJECT.`); }} />
+            </div>
+          )}
+          {restoredMsg && <div className="bright" role="status">{restoredMsg}</div>}
+          {caseId && <div className="dim">CASE {caseId} // WRITE THIS DOWN. IT IS THE ONLY KEY TO YOUR FILE ON ANOTHER DEVICE.</div>}
           <div className="hvi-prompt">SELECT: <span className="cur">█</span></div>
           <div className="hvi-intro-note">
             THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.<br />

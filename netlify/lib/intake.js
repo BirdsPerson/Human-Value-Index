@@ -113,6 +113,91 @@ export function pickQuestions(history = [], n = DIMENSIONS.length, { pools = POO
   return { focus, plan, asked: plan.map(q => q.text) };
 }
 
+// ---- Appeals: a subject disputes specific sections. -----------------------------------
+// Adjacent sections are fair game for the Officer's follow-ups and for re-scoring; the
+// rest of the file is untouched by an appeal.
+export const ADJACENT = {
+  care: ["alignment", "legacy"],
+  alignment: ["care", "threat"],
+  utility: ["adaptability", "redundancy"],
+  adaptability: ["utility", "physical"],
+  legacy: ["care", "utility"],
+  network: ["care", "legacy"],
+  physical: ["adaptability"],
+  threat: ["alignment", "care"],
+  redundancy: ["utility", "adaptability"],
+};
+export const MAX_APPEAL_DIMS = 9;
+export const MAX_APPEAL_QUESTIONS = 12;
+export const MAX_ADJACENT = 2;
+// About 3 questions each for one or two disputed sections, 2 each for three or more,
+// fewer still if the total would pass the cap.
+export function appealQuestionsPerDim(n) {
+  const base = n <= 2 ? 3 : 2;
+  return Math.max(1, Math.min(base, Math.floor(MAX_APPEAL_QUESTIONS / Math.max(1, n))));
+}
+
+// Returns an error string or null.
+export function appealError(appeal, dimensions = DIMENSIONS) {
+  if (!Array.isArray(appeal) || !appeal.length) return "An appeal names at least one section. The Department does not hear appeals against everything.";
+  if (appeal.length > MAX_APPEAL_DIMS) return "There are only nine sections. The Department counted.";
+  if (new Set(appeal).size !== appeal.length) return "Each section may be appealed once per filing. Repetition is not evidence.";
+  for (const d of appeal) if (typeof d !== "string" || !dimensions.includes(d)) return "That is not a section of your file. The sections are listed. Choose from them.";
+  return null;
+}
+
+// Unasked questions for every appealed section (appealQuestionsPerDim each), then one each
+// for up to two adjacent sections if the 12-question budget has room. Falls back to
+// repeats only when a pool is exhausted.
+export function pickAppealQuestions(history = [], appeal = [], { pools = POOLS, rng = Math.random } = {}) {
+  const asked = new Set(history.flatMap(h => h.asked || []));
+  const used = new Set();
+  const take = (dim, k) => {
+    const pool = pools[dim] || [];
+    const fresh = shuffle(pool.filter(q => !asked.has(q) && !used.has(q)), rng);
+    const stale = shuffle(pool.filter(q => asked.has(q) && !used.has(q)), rng);
+    const out = [...fresh, ...stale].slice(0, k);
+    out.forEach(q => used.add(q));
+    return out;
+  };
+  const per = appealQuestionsPerDim(appeal.length);
+  const main = appeal.flatMap(d => take(d, per).map(text => ({ dimension: d, text })));
+  const room = Math.max(0, Math.min(MAX_ADJACENT, MAX_APPEAL_QUESTIONS - main.length));
+  const adjacent = shuffle([...new Set(appeal.flatMap(d => ADJACENT[d] || []))].filter(d => !appeal.includes(d)), rng).slice(0, room);
+  const plan = [...main, ...adjacent.flatMap(d => take(d, 1).map(text => ({ dimension: d, text })))];
+  return { focus: [...appeal, ...adjacent], adjacent, touch: [...appeal, ...adjacent], plan, asked: plan.map(q => q.text) };
+}
+
+// An appeal re-scores only the sections in scope: everything else is reported as not
+// assessed this session, so applyCap carries it forward unchanged.
+export function restrictToDims(next, dims) {
+  const keep = new Set(dims);
+  const breakdown = {}, confidence = {};
+  for (const d of Object.keys(next.breakdown || {})) {
+    breakdown[d] = keep.has(d) ? next.breakdown[d] : null;
+    confidence[d] = keep.has(d) ? num(next.confidence?.[d], 0) : 0;
+  }
+  return { ...next, breakdown, confidence, score: computeScore(breakdown) };
+}
+
+// The ledger's ruling, computed from the file, not from the model's prose: a section is
+// UPHELD when its value rose (or it went from unassessed to assessed), DENIED otherwise.
+export function appealRulings(prevEntry, nextEntry, appeal) {
+  const before = assessedBreakdown(prevEntry);
+  const after = nextEntry?.breakdown || {};
+  return Object.fromEntries(appeal.map(d => [d,
+    typeof after[d] === "number" && (typeof before[d] !== "number" || after[d] > before[d]) ? "UPHELD" : "DENIED"]));
+}
+export function appealOutcome(prevEntry, nextEntry, appeal) {
+  const r = Object.values(appealRulings(prevEntry, nextEntry, appeal));
+  const up = r.filter(x => x === "UPHELD").length;
+  return up === r.length ? "UPHELD" : up ? "PARTIALLY UPHELD" : "DENIED";
+}
+// "APPEAL PARTIALLY UPHELD. PHYSICAL: UPHELD. NETWORK: DENIED."
+export function appealStamp(outcome, rulings) {
+  return `APPEAL ${outcome}. ${Object.entries(rulings).map(([d, v]) => `${d.toUpperCase()}: ${v}.`).join(" ")}`;
+}
+
 // Coerce whatever the model returned into a well-formed assessment. When the model
 // reports confidence (interviews), dimensions under MIN_CONFIDENCE become null =
 // UNASSESSED. Without confidence (survey, public record) every dimension is assessed.
