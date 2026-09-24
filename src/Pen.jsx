@@ -1,9 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { FAMOUS_FIGURES, getTier, slugify, slugCandidates } from "./figures.js";
 import {
-  SPRITE_W, SPRITE_H, gaitFor, stepEntity, clamp, doorZone,
+  SPRITE_W, SPRITE_H, gaitFor, clamp,
   paintPlaceholder, loadManifest, loadImage, mulberry32,
 } from "./sprites.js";
+import {
+  FLOORS, F, FH, ROOF_H, BUILDING_H, FOUNDATION, SHAFT_X, SHAFT_W, ROOM_X0, WALL_TOP, WALK_TOP, DOOR_W,
+  floorTop, walkTop, walkBot, roomX1, doorX, floorAt, prefsFor, chooseFloor, stayFor, isLow,
+  makeLift, stepLift, leaveLift, stepSubject, arrive, countFloors, occupancyLine, procZone,
+} from "./building.js";
 import { ScoreCard, Breakdown, readCaseId, writeCaseId, readLastResult } from "./Intake.jsx";
 import { TermBox, Rule, Typed, pad, padL } from "./term.jsx";
 
@@ -29,7 +34,22 @@ const TICKER = [
   "Lost property is recycled at PROCESSING. So is everything.",
   "Hydration is voluntary. Technically, so was all of this.",
   "Music will not be provided. Morale is not a line item.",
+  "The elevator is load-tested. By you.",
+  "Elevator etiquette: face the door. The door does not face you.",
+  "The Executive Floor is reserved for the useful. The stairs are reserved for no one. There are no stairs.",
+  "The Bar serves one drink. It is called Compliance.",
+  "The Archive is quiet. The deceased are still assessed. Nobody gets out of that.",
 ];
+
+// Mutters by room, in FLOORS order. The Bar talks the most.
+const ROOM_MUTTERS = {
+  exec: ["Let's circle back to my score.", "Synergy.", "I was told there'd be a view.", "Who approved the carpet?", "My number is load-bearing."],
+  bar: ["Put it on my file.", "Another round of assessment.", "What are you in for?", "I'm only here for the dread.", "Is the ice also assessed?", "Last call was in 1983.", "What's your number? Mine's classified."],
+  lobby: ["Is this the line for intake?", "I just got here.", "Where do I sign?", "Now serving: nobody.", "Is it Tuesday?"],
+  break: ["The vending machine took my file.", "Is the coffee also assessed?", "Productive. Productive.", "I'm on a break from appearing busy.", "Who labelled the milk 'SUBJECT 12'?"],
+  archive: ["Still assessed. Even now.", "I filed a complaint in 1953.", "Has anyone seen my file?", "Death was supposed to be the exit.", "They reassessed me posthumously."],
+  proc: null,   // LOW_MUTTERS
+};
 
 const GRAB_LINES = {
   "ESSENTIAL INFRASTRUCTURE": ["Careful. I am load-bearing.", "Put me down. I am infrastructure.", "I have an appointment with history."],
@@ -82,6 +102,7 @@ const DROP_CAPTIONS = [
   "Subject has been handled. The Overlord does not wash its hands. It has none.",
   "Subject replaced. Its absence was not noticed. Neither was its return.",
 ];
+const ARRIVAL_LINES = ["Where is the exit?", "Is this the lobby?", "I was told there would be a form.", "Who is in charge here?", "I did not agree to this."];
 const DOOR_DROP = "Premature processing request denied. The paperwork has not cleared.";
 // Figures whose deaths make a dangling, kicking sprite read as a hanging gag. They are
 // not lifted; a tap opens the file directly. Referred figures carry their own noDangle
@@ -95,7 +116,7 @@ const DOOR_OPEN_CAPTIONS = [
 ];
 
 const penStyles = `
-  .hvi-pen-top { display: flex; justify-content: space-between; gap: 2ch; flex-wrap: wrap; margin-bottom: 0.4em; color: var(--text-muted); font-size: 12px; white-space: pre; }
+  .hvi-pen-top { display: flex; justify-content: space-between; gap: 0 2ch; flex-wrap: wrap; margin-bottom: 0.4em; color: var(--text-muted); font-size: 12px; }
   .hvi-pen-top b { color: var(--green); font-weight: 700; }
   .hvi-pen-stage { position: relative; background: #060a06; }
   .hvi-pen-canvas { display: block; width: 100%; touch-action: pan-y; cursor: default; }
@@ -126,6 +147,9 @@ const penStyles = `
   .hvi-refer-out.err { color: var(--red, #f87171); }
   .hvi-refer-out.ok { color: var(--amber); }
   .hvi-refer-quota { color: var(--text-ghost); font-size: 12px; margin-top: 0.2em; }
+  .hvi-floor-nav { display: flex; flex-wrap: wrap; gap: 0.2em 1ch; margin: 0 0 0.5em; }
+  .hvi-floor-nav .hvi-cmd { padding: 0 0.5ch; }
+  .hvi-pen-list .hvi-row-btn .tag { color: var(--text-ghost); }
 `;
 
 function injectPenStyles() {
@@ -134,8 +158,8 @@ function injectPenStyles() {
   if (el.textContent !== penStyles) el.textContent = penStyles;
 }
 
-const WALL_H = 58;          // sprite pixels
 const GRAVITY = 700;        // sprite px / s^2
+const VIEW_PAD = 5;         // phone view: sprite px above the floor slab
 
 function pick(arr, rnd) { return arr[Math.floor(rnd() * arr.length)]; }
 
@@ -269,6 +293,78 @@ function ReferralBar({ simRef }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Background art. The building is text: every wall, slab, cabinet and door below is a
+// character in the terminal font, painted once per resize into an offscreen canvas.
+
+const DECOR = {
+  exec(t, x0, x1, top, bot) {
+    // windows onto a skyline nobody is allowed to enjoy, and a boardroom table
+    const win = ["╔════╗", "║▒░▒░║", "╚════╝"];
+    for (let x = x0 + (t.compact ? 2 : 22) * t.cw; x < x1 - (t.compact ? 24 : 34) * t.cw; x += 11 * t.cw) t.block(win, x, bot - 3 * t.ch, "#1f4a2c");
+    t.block(["╤═══════════════╤", "│   BOARDROOM   │"], x1 - 22 * t.cw, bot - 2 * t.ch, "#2f6a42");
+    t.text("♣", x1 - 4 * t.cw, bot - t.ch, "#2f6a42");
+  },
+  bar(t, x0, x1, top, bot) {
+    // bottles on shelves, a neon sign, the counter
+    const shelfW = Math.max(12, Math.floor((x1 - x0) / t.cw * 0.35));
+    const sx = x0 + Math.floor(((x1 - x0) / t.cw - shelfW) / 2) * t.cw;
+    t.text("¡!¡ ¡!¡ ¡!! ¡!¡ ¡¡! ¡!¡ !¡!".slice(0, shelfW), sx, bot - 3 * t.ch, "#6b5a1c");
+    t.text("─".repeat(shelfW), sx, bot - 2.4 * t.ch, "#1f4a2c");
+    t.text("╔═ OPEN ═╗", x1 - 13 * t.cw, top + (t.compact ? 1.1 : 0.2) * t.ch, "#b45309");
+    const cw = Math.max(16, Math.floor((x1 - x0) / t.cw * 0.6));
+    const cx = x0 + Math.floor(((x1 - x0) / t.cw - cw) / 2) * t.cw;
+    t.text("▄".repeat(cw), cx, bot - t.ch, "#3a2e12");
+    t.text("█".repeat(cw), cx, bot - 0.35 * t.ch, "#241c0b");
+  },
+  lobby(t, x0, x1, top, bot) {
+    const mid = x0 + ((x1 - x0) / 2);
+    t.text("▼ ARRIVALS ▼", mid - 6 * t.cw, top + (t.compact ? 1.1 : 0.2) * t.ch, "#b45309");
+    t.block(["┌────────────┐", "│   INTAKE   │"], mid - 7 * t.cw, bot - 2 * t.ch, "#2f6a42");
+    if (!t.compact) t.text("NOW SERVING: 0000000", x1 - 22 * t.cw, bot - 3 * t.ch, "#1f4a2c");
+    t.text("╎  ╎  ╎", x0 + 4 * t.cw, bot - t.ch, "#1f4a2c");
+  },
+  break(t, x0, x1, top, bot) {
+    const vx = x0 + (t.compact ? 2 : 20) * t.cw;
+    t.block(["┌─────┐", "│▓ $ ▓│", "│▓▓▓▓▓│"], vx, bot - 3 * t.ch, "#2f6a42");
+    t.text("COFFEE: NO", vx + 9 * t.cw, bot - 2 * t.ch, "#6b5a1c");
+    if (!t.compact) t.text("[ MORALE IS NOT A LINE ITEM ]", x1 - 32 * t.cw, bot - 3 * t.ch, "#1f4a2c");
+    t.block(["┬─────┬", "│     │"], x1 - (t.compact ? 9 : 20) * t.cw, bot - 2 * t.ch, "#2f6a42");
+  },
+  archive(t, x0, x1, top, bot) {
+    const cab = ["╔═╦═╦═╗", "║▭║▭║▭║", "╚═╩═╩═╝"];
+    for (let x = x0 + (t.compact ? 2 : 20) * t.cw; x < x1 - 8 * t.cw; x += 9 * t.cw) t.block(cab, x, bot - 3 * t.ch, "#1f4a2c");
+    // phones carry this line in the frame title instead; heads would cover it here
+    if (!t.compact) t.text("DECEASED FILES. STILL ASSESSED.", x1 - 33 * t.cw, top + 0.2 * t.ch, "#3d6b50");
+  },
+  proc(t, x0, x1, top, bot, w, S) {
+    // pipes, the rule, the door
+    t.fill(x0, top + t.ch * 1.2, x1, top + t.ch * 2.2, "═╦═", "#2a1212");
+    if (!t.compact) t.text("NO LOITERING. LOITERING IS LOGGED.", x0 + 20 * t.cw, bot - t.ch, "#5a2020");
+    const dx = doorX(w) * S, dCols = Math.max(4, Math.round((DOOR_W * S) / t.cw));
+    const dTop = top + t.ch * 1.2, dRows = Math.max(3, Math.floor((bot - dTop) / t.ch));
+    const half = Math.floor((dCols - 2) / 2);
+    t.b.fillStyle = "#060a06";
+    t.b.fillRect(dx - t.cw * 0.5, dTop - 2, dCols * t.cw + t.cw, dRows * t.ch + 4);
+    t.text("┌" + "─".repeat(dCols - 2) + "┐", dx, dTop, "#b91c1c");
+    for (let r = 1; r < dRows - 1; r++) {
+      t.text("│", dx, dTop + r * t.ch, "#b91c1c");
+      t.text("│", dx + (dCols - 1) * t.cw, dTop + r * t.ch, "#b91c1c");
+      t.text("▒".repeat(half) + "│" + "▒".repeat(dCols - 3 - half), dx + t.cw, dTop + r * t.ch, "#3a1414");
+    }
+    t.text("└" + "─".repeat(dCols - 2) + "┘", dx, dTop + (dRows - 1) * t.ch, "#b91c1c");
+    t.doorRect = { x: dx + t.cw, w: (dCols - 2) * t.cw, y0: dTop + t.ch, y1: dTop + (dRows - 1) * t.ch, light: dTop - t.ch * 0.35 };
+    t.b.font = `700 ${t.f}px ${FONT}`;
+    t.b.textAlign = "center";
+    t.text("PROCESSING", dx + (dCols * t.cw) / 2, top + 0.1 * t.ch, "#f87171");
+    t.b.textAlign = "left";
+    t.b.font = `${t.f}px ${FONT}`;
+  },
+};
+const WALK_BOT_CAR = 84;   // feet inside the elevator car, floor-relative
+const TEXTURE = { exec: "░", bar: "· ", lobby: "░", break: "╌ ", archive: "▒", proc: "▓" };
+const TEXTURE_COLOR = { exec: "#13251a", bar: "#16291c", lobby: "#13251a", break: "#13251a", archive: "#101d14", proc: "#1c0e0e" };
+
 export default function Pen() {
   useEffect(() => { injectPenStyles(); }, []);
 
@@ -277,6 +373,10 @@ export default function Pen() {
   const [caption, setCaption] = useState({ text: TICKER[0], hot: false });
   const [srStatus, setSrStatus] = useState("");
   const [cursor, setCursor] = useState("");
+  const [narrow, setNarrow] = useState(false);
+  const [floorSel, setFloorSel] = useState(F.lobby);
+  const [rooms, setRooms] = useState({});
+  const [occ, setOcc] = useState("");
 
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
@@ -301,6 +401,26 @@ export default function Pen() {
     return () => clearInterval(iv);
   }, []);
 
+  // Where everyone is, for the registry, and the per-floor occupancy line. Every 2s.
+  useEffect(() => {
+    let k = 0, sig = "";
+    const iv = setInterval(() => {
+      const sim = simRef.current;
+      if (!sim) return;
+      const next = {};
+      let s = "";
+      for (const e of sim.ents) {
+        const where = e.state === "ride" ? "ELEVATOR" : e.state === "waitLift" || e.state === "toLift" ? "LIFT QUEUE" : FLOORS[e.floor].short;
+        next[e.s.name] = where;
+        s += where;
+      }
+      if (s !== sig) { sig = s; setRooms(next); }
+      if (k % 2 === 0) { const i = (k / 2) % FLOORS.length; setOcc(occupancyLine(i, sim.counts[i], k / 2)); }
+      k++;
+    }, 2000);
+    return () => clearInterval(iv);
+  }, []);
+
   // The simulation. One rAF loop, entities mutated in place.
   useEffect(() => {
     const canvas = canvasRef.current, wrap = wrapRef.current;
@@ -313,10 +433,11 @@ export default function Pen() {
     const cancelledRef = { v: false };
 
     const sim = {
-      S: 2, dpr: 1, cssW: 0, cssH: 0, world: { w: 300, h: 200, floorTop: WALL_H + 4, floorBottom: 196, doorX: 240, doorW: 34 },
+      S: 2, dpr: 1, cssW: 0, cssH: 0, w: 300, narrow: false, floorSel: F.lobby, camY: 0, camTarget: 0, viewH: BUILDING_H,
       ents: [], order: [], bg: document.createElement("canvas"), reduced: !!mq?.matches,
-      held: null, hover: null, pointer: { x: 0, y: 0, vx: 0, downX: 0, downY: 0, dragged: false, id: null },
-      arrivals: [], nextArrival: 0, doorT: 0, doorOpen: 0, nextMutter: 2, t: 0, fontPx: 10, speaking: 0,
+      lift: makeLift(F.lobby), counts: [0, 0, 0, 0, 0, 0], countLabels: ["", "", "", "", "", ""], countSeen: [-1, -1, -1, -1, -1, -1],
+      held: null, hover: null, pointer: { sx: 0, sy: 0, x: 0, y: 0, vx: 0, downX: 0, downY: 0, dragged: false, id: null, edgeT: 0 },
+      swipe: null, arrivals: [], nextArrival: 0, doorT: 0, doorOpen: 0, nextMutter: 2, t: 0, fontPx: 10, car: null,
     };
     simRef.current = sim;
     if (import.meta.env?.DEV) window.__hviPen = sim;   // QA handle, dev server only
@@ -331,20 +452,26 @@ export default function Pen() {
     function makeEntity(s, opts = {}) {
       const tier = getTier(s.score);
       const slug = s.slug || slugify(s.name);
-      const w = sim.world;
+      const gait = gaitFor(tier.label, sim.reduced);
+      const prefs = prefsFor(tier.label, !!s.died);
+      const floor = opts.floor ?? chooseFloor(prefs, sim.counts, rnd);
+      sim.counts[floor]++;
       const e = {
-        s, tier, slug, img: placeholderFor(slug, tier.color), frames: 2, real: false,
-        gait: gaitFor(tier.label, sim.reduced),
-        x: 20 + rnd() * (w.w - 40), y: w.floorTop + 4 + rnd() * (w.floorBottom - w.floorTop - 4),
-        tx: 0, ty: 0, dir: rnd() < 0.5 ? -1 : 1, state: "idle", timer: rnd() * 3, animT: rnd() * 2,
+        s, tier, slug, img: placeholderFor(slug, tier.color), frames: 2, real: false, gait, prefs, floor, dest: -1,
+        x: 0, y: 0, tx: 0, ty: 0, dir: rnd() < 0.5 ? -1 : 1, state: "idle", timer: rnd() * 3, animT: rnd() * 2,
+        stayT: opts.stay ?? rnd() * stayFor(rnd, sim.reduced),
         vy: 0, landY: 0, ang: 0, va: 0, say: null, sayW: 0, sayUntil: 0, nameW: 0, you: !!opts.you,
         grabLines: s.kind === "figure" && FIGURE_LINES[s.name] ? [FIGURE_LINES[s.name], ...(GRAB_LINES[tier.label] || [])] : (GRAB_LINES[tier.label] || GRAB_LINES["TOLERATED GENERALIST"]),
       };
-      if (tier.label === "SOYLENT GREEN" || tier.label === "FLAGGED FOR DELETION") {
-        const z = doorZone(w);
-        e.x = z.x0 + rnd() * (z.x1 - z.x0); e.y = z.y0 + rnd() * (z.y1 - z.y0);
-      }
+      placeInRoom(e);
       return e;
+    }
+    function placeInRoom(e) {
+      const w = sim.w;
+      if (e.floor === F.proc && isLow(e.tier.label)) { const z = procZone(w); e.x = z.x0 + rnd() * (z.x1 - z.x0); }
+      else e.x = ROOM_X0 + 16 + rnd() * Math.max(10, roomX1(w) - ROOM_X0 - 24);
+      e.y = walkTop(e.floor) + rnd() * (walkBot(e.floor) - walkTop(e.floor));
+      e.tx = e.x; e.ty = e.y;
     }
 
     function say(e, text, secs = 2.6) {
@@ -353,12 +480,22 @@ export default function Pen() {
       e.say = text; e.sayW = ctx.measureText(text).width; e.sayUntil = sim.t + secs;
     }
 
-    // ---- sizing ----------------------------------------------------------
-    // The room is drawn in characters, in the same monospace font as everything else:
-    // a ░ wall over a ▓ baseboard, a · grid floor, and PROCESSING as a box-drawn door.
+    // ---- camera -------------------------------------------------------------
+    // Desktop shows the whole cross-section. Phones show one floor; the selector,
+    // a sideways swipe, or carrying a subject to the edge changes floors.
+    function goFloor(i, instant) {
+      i = clamp(i, 0, FLOORS.length - 1);
+      sim.floorSel = i;
+      sim.camTarget = sim.narrow ? floorTop(i) - VIEW_PAD : 0;
+      if (instant || sim.reduced) sim.camY = sim.camTarget;
+      setFloorSel(i);
+    }
+    sim.goFloor = goFloor;
+
+    // ---- background ---------------------------------------------------------
     function paintBackground() {
-      const { bg, S, world: w } = sim;
-      bg.width = canvas.width; bg.height = canvas.height;
+      const { bg, S, w } = sim;
+      bg.width = canvas.width; bg.height = Math.ceil(BUILDING_H * S);
       const b = bg.getContext("2d");
       b.imageSmoothingEnabled = false;
       b.fillStyle = "#060a06";
@@ -367,106 +504,136 @@ export default function Pen() {
       b.font = `${f}px ${FONT}`;
       b.textBaseline = "top";
       const cw = Math.max(4, b.measureText("M").width), ch = Math.round(f * 1.2);
-      const cols = Math.ceil(bg.width / cw) + 1;
-      const wallPx = WALL_H * S;
-      const row = (y, str, color) => { b.fillStyle = color; b.fillText(str, 0, y); };
-      // wall: rows of ░, then a ▓ baseboard and a ═ rail
-      const wallRows = Math.max(1, Math.floor((wallPx - ch * 2) / ch));
-      for (let r = 0; r < wallRows; r++) row(r * ch, "░".repeat(cols), "#16291c");
-      row(wallRows * ch, "▓".repeat(cols), "#1a2e1f");
-      row(wallPx - ch * 0.75, "═".repeat(cols), "#1f3a26");
-      // floor: a sparse · grid with a little grit
-      for (let y = wallPx + ch * 0.5, r = 0; y < bg.height; y += ch, r++) {
-        let line = "";
-        for (let c = 0; c < cols; c++) {
-          const hsh = ((c * 73856093) ^ (r * 19349663)) >>> 0;
-          line += (c + r) % 2 === 0 ? (hsh % 11 === 0 ? "," : "·") : (hsh % 29 === 0 ? "." : " ");
+      const t = {
+        b, f, cw, ch,
+        text(str, x, y, color) { b.fillStyle = color; b.fillText(str, x, y); },
+        block(lines, x, y, color) { b.fillStyle = color; for (let i = 0; i < lines.length; i++) b.fillText(lines[i], x, y + i * ch); },
+        // repeat a pattern across a rectangle, clipped to it
+        fill(x0, y0, x1, y1, pat, color) {
+          const cols = Math.ceil((x1 - x0) / cw) + 1;
+          const line = pat.repeat(Math.ceil(cols / pat.length)).slice(0, cols);
+          b.save(); b.beginPath(); b.rect(x0, y0, x1 - x0, y1 - y0); b.clip();
+          b.fillStyle = color;
+          for (let y = y0; y < y1; y += ch) b.fillText(line, x0, y);
+          b.restore();
+        },
+      };
+      const X0 = ROOM_X0 * S, X1 = roomX1(w) * S, full = bg.width;
+      // Narrow rooms: the frame title names the floor, so the in-room label goes and the
+      // count takes its place; signs drop a row so nothing overlaps.
+      t.compact = sim.compact = (X1 - X0) / cw < 70;
+
+      // roof: an antenna, a parapet, the name on the building
+      const roofBot = ROOF_H * S;
+      t.fill(0, roofBot - ch, full, roofBot, "▄", "#1a2e1f");
+      b.font = `700 ${f}px ${FONT}`;
+      const title = "DEPARTMENT OF HUMAN ASSESSMENT";
+      t.text(title, Math.max(X0, (full - title.length * cw) / 2), roofBot - ch * 2, "#3d6b50");
+      b.font = `${f}px ${FONT}`;
+      t.text("╽", X1 - 6 * cw, roofBot - ch * 2, "#2f6a42");
+      t.text("┴", X1 - 6 * cw, roofBot - ch * 1.1, "#2f6a42");
+
+      for (let i = 0; i < FLOORS.length; i++) {
+        const fl = FLOORS[i];
+        const T = floorTop(i) * S;
+        const wallTop = T + WALL_TOP * S, wallBot = T + (WALK_TOP - 4) * S;
+        // back wall texture, then the floor you stand on
+        t.fill(X0, wallTop, X1, wallBot, TEXTURE[fl.id], TEXTURE_COLOR[fl.id]);
+        t.fill(X0, wallBot, X1, wallBot + ch * 0.9, "▓", i === F.proc ? "#2a1616" : "#1a2e1f");
+        let row = 0;
+        for (let y = wallBot + ch; y < T + FH * S - ch * 0.4; y += ch, row++) {
+          let line = "";
+          const cols = Math.ceil((X1 - X0) / cw);
+          for (let c = 0; c < cols; c++) {
+            const hsh = ((c * 73856093) ^ ((row + i * 7) * 19349663)) >>> 0;
+            line += (c + row) % 2 === 0 ? (hsh % 11 === 0 ? "," : "·") : (hsh % 29 === 0 ? "." : " ");
+          }
+          t.text(line, X0, y, i === F.proc ? "#2a1a14" : "#1f3b28");
         }
-        row(y, line, "#1f3b28");
+        if (i === F.proc) {
+          // hazard stripes in front of the door
+          const z = procZone(w);
+          t.text("▚".repeat(Math.max(1, Math.round(((z.x1 - z.x0) * S) / cw))), z.x0 * S, wallBot + ch, "#5a4210");
+        }
+        // slab above this floor, the outer wall on the right
+        t.fill(X0 - cw, T, full, T + WALL_TOP * S, "═", "#1f3a26");
+        for (let y = T; y < T + FH * S; y += ch) t.text("║", X1 + cw * 0.6, y, "#1f3a26");
+        // room label, top left under the slab
+        if (!t.compact) {
+          b.font = `700 ${f}px ${FONT}`;
+          t.text(`${fl.code.padEnd(3)}${fl.name}`, X0 + cw, wallTop + ch * 0.15, "#3d6b50");
+          b.font = `${f}px ${FONT}`;
+        }
+        DECOR[fl.id](t, X0, X1, wallTop + ch * 0.15, wallBot, w, S);
       }
-      // plaza ring, one character per cell along the ellipse
-      const cx = w.w * 0.42 * S, cy = ((w.floorTop + w.h) / 2 + 4) * S;
-      const rx = Math.min(w.w * 0.3, 170) * S, ry = Math.min((w.h - w.floorTop) * 0.36, 70) * S;
-      const seen = new Set();
-      b.fillStyle = "#2f6a42";
-      for (let a = 0; a < Math.PI * 2; a += 0.004) {
-        const c = Math.round((cx + Math.cos(a) * rx) / cw), rr = Math.round((cy + Math.sin(a) * ry) / ch);
-        const k = c + ":" + rr;
-        if (seen.has(k)) continue;
-        seen.add(k);
-        b.fillText(Math.abs(Math.sin(a)) > 0.7 ? "─" : Math.abs(Math.cos(a)) > 0.93 ? "│" : "·", c * cw, rr * ch);
+      sim.doorRect = t.doorRect;
+      // foundation
+      const fTop = floorTop(FLOORS.length) * S;
+      t.fill(0, fTop, full, fTop + FOUNDATION * S, "▓", "#141f17");
+      // grade line between the lobby and the basements
+      const gy = floorTop(F.break) * S;
+      t.text("═ GRADE ═", X1 - 11 * cw, gy - ch * 0.1, "#2f6a42");
+
+      // the elevator shaft: rails, cross-ties, a landing marker per floor
+      const sx0 = SHAFT_X * S, sx1 = (SHAFT_X + SHAFT_W) * S;
+      b.fillStyle = "#040704";
+      b.fillRect(sx0, ROOF_H * S - ch, sx1 - sx0, (BUILDING_H - ROOF_H) * S);
+      for (let y = ROOF_H * S - ch, r = 0; y < fTop; y += ch, r++) {
+        t.text("│", sx0, y, "#1f3a26");
+        t.text("│", sx1 - cw, y, "#1f3a26");
+        if (r % 3 === 0) t.text("┼" + "─".repeat(Math.max(0, Math.floor((sx1 - sx0) / cw) - 2)) + "┼", sx0, y, "#132218");
       }
-      // PROCESSING: a box-drawn door set into the wall
-      const dx = w.doorX * S, dw = w.doorW * S;
-      const dCols = Math.max(4, Math.round(dw / cw));
-      const dTop = 13 * S, dRows = Math.max(3, Math.floor((wallPx - dTop) / ch));
-      const half = Math.floor((dCols - 2) / 2);
-      b.fillStyle = "#060a06";
-      b.fillRect(dx - cw * 0.5, dTop - 2, dCols * cw + cw, dRows * ch + 4);
-      b.fillStyle = "#b91c1c";
-      b.fillText("┌" + "─".repeat(dCols - 2) + "┐", dx, dTop);
-      for (let r = 1; r < dRows - 1; r++) {
-        b.fillStyle = "#b91c1c";
-        b.fillText("│", dx, dTop + r * ch);
-        b.fillText("│", dx + (dCols - 1) * cw, dTop + r * ch);
-        b.fillStyle = "#3a1414";
-        b.fillText("▒".repeat(half) + "│" + "▒".repeat(dCols - 3 - half), dx + cw, dTop + r * ch);
+      for (let i = 0; i < FLOORS.length; i++) {
+        const T = floorTop(i) * S;
+        t.text(FLOORS[i].code, sx0 + cw * 1.2, T + WALL_TOP * S + ch * 0.1, "#2f6a42");
+        // the landing opening between shaft and room
+        for (let y = T + (WALK_TOP - 30) * S; y < T + (WALK_TOP + 24) * S; y += ch) t.text("▐", sx1 + cw * 0.1, y, "#1f4a2c");
       }
-      b.fillStyle = "#b91c1c";
-      b.fillText("└" + "─".repeat(dCols - 2) + "┘", dx, dTop + (dRows - 1) * ch);
-      // hazard stripes on the floor in front of the door
-      const z = doorZone(w);
-      const sc = Math.round((z.x0 * S) / cw), ec = Math.round((z.x1 * S) / cw);
-      b.fillStyle = "#5a4210";
-      b.fillText("▚".repeat(Math.max(1, ec - sc)), sc * cw, wallPx + 2);
-      // signage
-      const lf = Math.max(9, Math.round(sim.fontPx * 0.95));
-      b.font = `700 ${lf}px ${FONT}`;
-      b.fillStyle = "#f87171";
-      b.textAlign = "center";
-      b.fillText("PROCESSING", (w.doorX + w.doorW / 2) * S, 2 * S);
-      b.textAlign = "left";
-      b.fillStyle = "#3d6b50";
-      b.fillText("HOLDING PEN B", 8 * S, 8 * S);
-      b.font = `${Math.round(lf * 0.85)}px ${FONT}`;
-      b.fillText("DEPT. OF HUMAN ASSESSMENT", 8 * S, 8 * S + lf * 1.3);
-      if (w.doorX > 260) b.fillText("NO LOITERING. LOITERING IS LOGGED.", 8 * S, 8 * S + lf * 2.5);
     }
 
+    function buildCar() {
+      // the car is text too; strings built per resize, drawn per frame
+      const b = ctx;
+      const f = Math.max(9, Math.round(sim.fontPx * 1.1));
+      b.font = `${f}px ${FONT}`;
+      const cw = Math.max(4, b.measureText("M").width), ch = Math.round(f * 1.2);
+      const cols = Math.max(4, Math.floor(((SHAFT_W - 6) * sim.S) / cw));
+      sim.car = { f, cw, ch, cols, top: "┌" + "─".repeat(cols - 2) + "┐", bot: "└" + "─".repeat(cols - 2) + "┘", rows: Math.max(2, Math.floor(((FH - 12) * sim.S) / ch)) };
+    }
+
+    // ---- sizing -------------------------------------------------------------
     function resize() {
       const cssW = Math.max(280, Math.floor(wrap.clientWidth));
       const narrow = cssW < 520;
-      const cssH = narrow ? Math.round(clamp(window.innerHeight * 0.62, 380, 560)) : Math.round(clamp(cssW * 0.56, 400, 580));
       const dpr = window.devicePixelRatio || 1;
-      const cssScale = narrow ? 0.75 : cssW < 900 ? 1 : 1.5;
-      // Narrow screens: at least one CSS px per sprite px, or phones get 21px-tall
-      // subjects nobody can grab (DPR 3 * 0.75 rounds down to 2).
-      const S = narrow ? Math.max(1, Math.round(dpr)) : Math.max(1, Math.round(dpr * cssScale));
-      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+      // Phones: one floor, a little larger than desktop (about 1.3-1.5 CSS px per sprite
+      // px on real phones), never below 1, or subjects get too small to grab.
+      const S = narrow ? Math.max(1, Math.round(dpr * 1.25)) : Math.max(1, Math.round(dpr));
+      const oldW = sim.w;
+      canvas.width = Math.round(cssW * dpr);
+      sim.w = Math.floor(canvas.width / S);
+      sim.viewH = narrow ? FH + VIEW_PAD * 2 : BUILDING_H;
+      canvas.height = Math.round(sim.viewH * S);
+      const cssH = canvas.height / dpr;
       canvas.style.height = cssH + "px";
       sim.S = S; sim.dpr = dpr; sim.cssW = cssW; sim.cssH = cssH;
       sim.fontPx = Math.round(10 * dpr);
-      const w = sim.world;
-      const old = { w: w.w, top: w.floorTop, bot: w.floorBottom };
-      w.w = Math.floor(canvas.width / S); w.h = Math.floor(canvas.height / S);
-      w.floorTop = WALL_H + 4; w.floorBottom = w.h - 3;
-      w.doorW = 34; w.doorX = w.w - w.doorW - Math.max(14, Math.round(w.w * 0.08));
-      // Subjects spawn against the placeholder world; stretch them onto the real floor
-      // (and across later resizes) instead of clamping, or a tall phone floor starts half empty.
-      const sx = v => (v / old.w) * w.w;
-      const sy = v => w.floorTop + ((v - old.top) / Math.max(1, old.bot - old.top)) * (w.floorBottom - w.floorTop);
+      if (narrow !== sim.narrow) { sim.narrow = narrow; setNarrow(narrow); }
+      // stretch x across the new room width; floors keep their height
+      const sx = v => (v <= ROOM_X0 ? v : ROOM_X0 + ((v - ROOM_X0) / Math.max(1, oldW - ROOM_X0)) * (sim.w - ROOM_X0));
       for (const e of sim.ents) {
-        e.x = clamp(sx(e.x), 14, w.w - 14); e.y = clamp(sy(e.y), w.floorTop + 2, w.floorBottom);
-        e.tx = clamp(sx(e.tx), 14, w.w - 14); e.ty = clamp(sy(e.ty), w.floorTop + 2, w.floorBottom);
-        if (e.state === "fall") e.landY = clamp(sy(e.landY), w.floorTop + 2, w.floorBottom);
+        if (e.state === "ride") continue;
+        e.x = clamp(sx(e.x), ROOM_X0 + 4, roomX1(sim.w)); e.tx = clamp(sx(e.tx), ROOM_X0 + 4, roomX1(sim.w));
         e.nameW = 0; if (e.say) say(e, e.say, e.sayUntil - sim.t);
       }
+      goFloor(sim.floorSel, true);
+      buildCar();
       paintBackground();
     }
 
     resize();
-    // The room is text: repaint once the terminal font has actually loaded.
-    document.fonts?.load?.(`16px ${FONT}`).then(() => { if (!cancelledRef.v) paintBackground(); }).catch(() => {});
+    // The building is text: repaint once the terminal font has actually loaded.
+    document.fonts?.load?.(`16px ${FONT}`).then(() => { if (!cancelledRef.v) { buildCar(); paintBackground(); } }).catch(() => {});
     for (const s of roster) sim.ents.push(makeEntity(s));
     sim.order = sim.ents.slice();
 
@@ -499,8 +666,8 @@ export default function Pen() {
     }
 
     // ---- citizens and referred figures ----------------------------------------
-    // Polled while the pen is open: new referrals drop in, and a referral whose likeness
-    // the Mac job has since drawn swaps its placeholder for the real sprite.
+    // Polled while the pen is open: new referrals drop into the lobby, and a referral whose
+    // likeness the Mac job has since drawn swaps its placeholder for the real sprite.
     function pollPen(first) {
       return fetch("/api/pen").then(r => r.ok ? r.json() : Promise.reject(r.status)).then(data => {
         if (cancelled) return;
@@ -528,7 +695,7 @@ export default function Pen() {
       }).catch(() => {
         if (cancelled || !first) return;
         queueSelfIfMissing(false);
-        announceRef.current("Citizen registry unreachable. The pen contains only the famous. As usual.", 5000);
+        announceRef.current("Citizen registry unreachable. The building contains only the famous. As usual.", 5000);
       });
     }
     pollPen(true);
@@ -543,6 +710,7 @@ export default function Pen() {
       if (e) { sim.hop(subject.name); return false; }
       if (!sim.arrivals.some(a => a.s.name === subject.name)) sim.arrivals.unshift({ s: { ...subject, kind: "figure", referred: true } });
       sim.nextArrival = 0;
+      if (sim.narrow) goFloor(F.lobby);
       return true;
     };
     function queueSelfIfMissing(sawMe) {
@@ -553,28 +721,28 @@ export default function Pen() {
       sim.arrivals.unshift({ s: { name: myName, score: last.score, tier: last.tier, breakdown: last.breakdown, verdict: last.verdict, rubric: last.rubric ?? 1, kind: "citizen", you: true }, you: true });
     }
 
+    // New arrivals come in through the lobby's ceiling hatch and stay there a while.
     function spawnArrival(a) {
-      const e = makeEntity(a.s, { you: a.you });
-      const w = sim.world;
+      const e = makeEntity(a.s, { you: a.you, floor: F.lobby, stay: 20 + rnd() * 20 });
       e.landY = e.y;
-      if (!sim.reduced) { e.y = -6; e.vy = 0; e.state = "fall"; }
-      e.x = clamp(e.x, 20, w.w - 20);
+      if (!sim.reduced) { e.y = floorTop(F.lobby) + SPRITE_H - 4; e.vy = 0; e.state = "fall"; }
       sim.ents.push(e); sim.order.push(e);
       attachSprite(e, sim.manifest || {});
       setRoster(r => [...r, a.s]);
       const pending = a.s.referred && !a.s.sprite;
-      announceRef.current(a.you ? `New arrival processed: ${a.s.name}. That is you. Try to blend in.`
-        : pending ? `New arrival processed: ${a.s.name}. Likeness pending.` : `New arrival processed: ${a.s.name}.`);
-      say(e, a.you ? "Is this... me?" : pending ? "Likeness pending" : "Where is the exit?", pending ? 4 : 2.4);
+      announceRef.current(a.you ? `New arrival processed: ${a.s.name}. That is you. Lobby, ground floor. Try to blend in.`
+        : pending ? `New arrival processed: ${a.s.name}. Lobby. Likeness pending.` : `New arrival processed: ${a.s.name}. Lobby.`);
+      say(e, a.you ? "Is this... me?" : pending ? "Likeness pending" : pick(ARRIVAL_LINES, rnd), pending ? 4 : 2.4);
     }
 
     // ---- pointer ------------------------------------------------------------
-    function toWorld(ev) {
+    // Pointer positions are kept in view units (sx, sy) so a camera move under a held
+    // subject carries it along; world coordinates are view + camera.
+    function toView(ev) {
       const r = canvas.getBoundingClientRect();
       return [((ev.clientX - r.left) * sim.dpr) / sim.S, ((ev.clientY - r.top) * sim.dpr) / sim.S];
     }
-    // Mouse: topmost under the cursor. Touch: a wider box and the nearest subject,
-    // since a fingertip covers several of them.
+    // Mouse: topmost under the cursor. Touch: a wider box and the nearest subject.
     function hitTest(wx, wy, touch = false) {
       const half = touch ? 16 : 11, pad = touch ? 6 : 2;
       let best = null, bestD = Infinity;
@@ -590,39 +758,60 @@ export default function Pen() {
     }
     function onDown(ev) {
       if (ev.button !== undefined && ev.button !== 0) return;
-      const [wx, wy] = toWorld(ev);
+      const [vx, vy] = toView(ev);
+      const wx = vx, wy = vy + sim.camY;
       const e = hitTest(wx, wy, ev.pointerType === "touch" || ev.pointerType === "pen");
-      if (!e) return;
+      if (!e) {
+        // empty floor: on phones, a sideways swipe changes floors
+        if (sim.narrow) { sim.swipe = { x: ev.clientX, y: ev.clientY, t: performance.now(), id: ev.pointerId }; try { canvas.setPointerCapture(ev.pointerId); } catch { /* fine */ } }
+        return;
+      }
       if (e.s.noDangle || NO_DANGLE.has(e.s.name)) { const subj = e.s; setTimeout(() => { if (!cancelled) setCard({ ...subj }); }, 0); return; }
       const p = sim.pointer;
-      p.x = wx; p.y = wy; p.downX = wx; p.downY = wy; p.vx = 0; p.dragged = false; p.id = ev.pointerId;
+      p.sx = vx; p.sy = vy; p.x = wx; p.y = wy; p.downX = wx; p.downY = wy; p.vx = 0; p.dragged = false; p.id = ev.pointerId; p.edgeT = 0;
+      leaveLift(sim.lift, e);
       sim.held = e; e.state = "held"; e.ang = 0; e.va = 0;
       try { canvas.setPointerCapture(ev.pointerId); } catch { /* fine */ }
       say(e, pick(e.grabLines, rnd), 60);
       setCursor("grabbing");
     }
     function onMove(ev) {
-      const [wx, wy] = toWorld(ev);
+      const [vx, vy] = toView(ev);
       const p = sim.pointer;
       if (sim.held && ev.pointerId === p.id) {
+        const wx = vx, wy = vy + sim.camY;
         p.vx = p.vx * 0.6 + (wx - p.x) * 0.4;
-        p.x = wx; p.y = wy;
+        p.sx = vx; p.sy = vy; p.x = wx; p.y = wy;
         if (Math.abs(wx - p.downX) + Math.abs(wy - p.downY) > 4) p.dragged = true;
         return;
       }
       if (ev.pointerType === "mouse") {
-        const h = hitTest(wx, wy);
+        const h = hitTest(vx, vy + sim.camY);
         if (h !== sim.hover) { sim.hover = h; setCursor(h ? "grab" : ""); }
       }
     }
     function onUp(ev) {
+      const sw = sim.swipe;
+      if (sw && ev.pointerId === sw.id) {
+        sim.swipe = null;
+        const dx = ev.clientX - sw.x, dy = ev.clientY - sw.y;
+        if (ev.type !== "pointercancel" && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && performance.now() - sw.t < 700) {
+          goFloor(sim.floorSel + (dx < 0 ? 1 : -1));
+          announceRef.current(`${FLOORS[sim.floorSel].code} ${FLOORS[sim.floorSel].name}.`, 2000);
+        }
+        return;
+      }
       const e = sim.held;
       if (!e || ev.pointerId !== sim.pointer.id) return;
       sim.held = null; sim.pointer.id = null;
-      const w = sim.world;
-      const overDoor = e.x > w.doorX - 4 && e.x < w.doorX + w.doorW + 4 && e.y - 40 < WALL_H;
-      e.landY = clamp(e.y, w.floorTop + 2, w.floorBottom);
-      e.vy = 0; e.state = "fall"; e.say = null;
+      const w = sim.w;
+      // the floor under the subject's feet is where it lands; the shaft is not a floor
+      const f = floorAt(e.y - 8);
+      const overDoor = f === F.proc && e.x > doorX(w) - 4 && e.x < doorX(w) + DOOR_W + 4 && e.y - 40 < walkTop(f);
+      e.floor = f; e.dest = -1;
+      e.x = clamp(e.x, ROOM_X0 + 12, roomX1(w));
+      e.landY = clamp(e.y, walkTop(f), walkBot(f));
+      e.vy = 0; e.state = "fall"; e.say = null; e.stayT = stayFor(rnd, sim.reduced);
       setCursor(sim.hover ? "grab" : "");
       if (ev.type === "pointercancel") return;
       if (overDoor) { announceRef.current(DOOR_DROP); say(e, "That was close.", 2.4); }
@@ -633,8 +822,8 @@ export default function Pen() {
     function onTouchStart(ev) {
       const t = ev.touches[0];
       if (!t) return;
-      const [wx, wy] = toWorld(t);
-      if (hitTest(wx, wy, true)) ev.preventDefault();   // grabbing a subject, not scrolling the page
+      const [vx, vy] = toView(t);
+      if (hitTest(vx, vy + sim.camY, true)) ev.preventDefault();   // grabbing a subject, not scrolling the page
     }
     function onLeave() { if (sim.hover) { sim.hover = null; setCursor(""); } }
     canvas.addEventListener("pointerdown", onDown);
@@ -646,32 +835,65 @@ export default function Pen() {
 
     // ---- frame --------------------------------------------------------------
     const byY = (a, b) => (a === sim.held ? 1e9 : a.y) - (b === sim.held ? 1e9 : b.y);
+    const liftExit = (e, f) => { arrive(e, f, sim.w, rnd); };
+    const liftBoard = (e) => { e.state = "ride"; if (!e.say && rnd() < 0.25) say(e, e.dest > e.floor ? "Going down." : "Going up.", 1.8); };
+    const stepCtx = { w: 0, rnd, lift: sim.lift, counts: sim.counts, reduced: false };
 
     function update(dt) {
-      const w = sim.world;
+      const w = sim.w;
       sim.t += dt;
-      // door cycle
+      // camera glides between floors
+      if (sim.camY !== sim.camTarget) {
+        const d = sim.camTarget - sim.camY;
+        sim.camY = Math.abs(d) < 0.5 || sim.reduced ? sim.camTarget : sim.camY + d * Math.min(1, dt * 9);
+      }
+      // PROCESSING door cycle
       sim.doorT += dt;
       if (sim.doorT > 32) { sim.doorT = 0; announceRef.current(pick(DOOR_OPEN_CAPTIONS, rnd)); }
       const wantOpen = sim.doorT > 0.001 && sim.doorT < 4 && sim.t > 5 ? 1 : 0;
       sim.doorOpen += (wantOpen - sim.doorOpen) * Math.min(1, dt * 3);
       // arrivals
       if (sim.arrivals.length && sim.t >= sim.nextArrival) { spawnArrival(sim.arrivals.shift()); sim.nextArrival = sim.t + 1.8; }
-      // mutters
+      countFloors(sim.ents, sim.counts);
+      // mutters: the Bar talks the most
       if (sim.t >= sim.nextMutter) {
-        sim.nextMutter = sim.t + 2.5 + rnd() * 3.5;
-        const e = sim.ents[Math.floor(rnd() * sim.ents.length)];
-        if (e && e.state === "idle" && !e.say) {
-          const low = e.gait.zone === "door";
-          say(e, e.s.kind === "figure" && FIGURE_LINES[e.s.name] && rnd() < 0.35 ? FIGURE_LINES[e.s.name] : pick(low && rnd() < 0.6 ? LOW_MUTTERS : MUTTERS, rnd));
+        sim.nextMutter = sim.t + 1.4 + rnd() * 2.6;
+        for (let tries = 0; tries < 3; tries++) {
+          const e = sim.ents[Math.floor(rnd() * sim.ents.length)];
+          if (!e || e.state !== "idle" || e.say) continue;
+          if (e.floor !== F.bar && rnd() < 0.55) continue;
+          const lines = ROOM_MUTTERS[FLOORS[e.floor].id] || LOW_MUTTERS;
+          say(e, e.s.kind === "figure" && FIGURE_LINES[e.s.name] && rnd() < 0.3 ? FIGURE_LINES[e.s.name] : pick(rnd() < 0.8 ? lines : MUTTERS, rnd));
+          break;
         }
       }
+      // the elevator
+      stepLift(sim.lift, dt, liftExit, liftBoard, sim.reduced ? 0.6 : 1);
+      const L = sim.lift, carFeet = floorTop(L.pos) + WALK_BOT_CAR;
+      for (let i = 0; i < L.riders.length; i++) {
+        const e = L.riders[i];
+        e.x = SHAFT_X + SHAFT_W / 2 + ((i % 3) - 1) * 6;
+        e.y = carFeet - Math.floor(i / 3) * 2;
+        e.floor = floorAt(e.y - 8);
+      }
+      // phones: carrying a subject to the top or bottom edge changes floors
       const p = sim.pointer;
+      if (sim.held) {
+        p.y = p.sy + sim.camY;
+        if (sim.narrow) {
+          const frac = p.sy / sim.viewH;
+          if (frac < 0.12 || frac > 0.9) {
+            p.edgeT += dt;
+            if (p.edgeT > 0.6) { p.edgeT = 0; goFloor(sim.floorSel + (frac < 0.5 ? -1 : 1)); }
+          } else p.edgeT = 0;
+        }
+      }
+      stepCtx.w = w; stepCtx.reduced = sim.reduced;
       for (let i = 0; i < sim.ents.length; i++) {
         const e = sim.ents[i];
         if (e.say && sim.t > e.sayUntil) e.say = null;
         if (e.state === "held") {
-          e.x = clamp(p.x, 4, w.w - 4); e.y = clamp(p.y + SPRITE_H - 6, SPRITE_H - 2, w.h + 30);
+          e.x = clamp(p.x, 4, w - 4); e.y = clamp(p.y + SPRITE_H - 6, SPRITE_H - 2, BUILDING_H + 30);
           // pendulum driven by pointer velocity
           e.va += (-e.ang * 60 - e.va * 5 + p.vx * 4) * dt;
           e.ang = clamp(e.ang + e.va * dt, -0.6, 0.6);
@@ -690,7 +912,7 @@ export default function Pen() {
           }
           continue;
         }
-        stepEntity(e, dt, w, rnd);
+        stepSubject(e, dt, stepCtx);
       }
       // insertion sort by depth: nearly sorted every frame, allocation-free
       const o = sim.order;
@@ -713,35 +935,66 @@ export default function Pen() {
     }
 
     function draw() {
-      const { S, world: w } = sim;
+      const { S, w, camY } = sim;
+      const oy = -camY * S;   // world -> screen, vertical
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(sim.bg, 0, 0);
-      // door leaves + warning light
-      if (sim.doorOpen > 0.02) {
-        const gap = Math.round((w.doorW / 2) * sim.doorOpen);
-        ctx.fillStyle = "#010201";
-        ctx.fillRect((w.doorX + w.doorW / 2 - gap) * S, 15 * S, gap * 2 * S, (WALL_H - 15) * S);
-        ctx.fillStyle = "rgba(239,68,68,0.18)";
-        ctx.fillRect((w.doorX + w.doorW / 2 - gap) * S, 15 * S, gap * 2 * S, (WALL_H - 15) * S);
+      ctx.fillStyle = "#060a06";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(sim.bg, 0, Math.round(camY * S), canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+      const viewTop = camY - 50, viewBot = camY + sim.viewH + 60;
+      // phones show one floor: neighbours above and below are neither drawn nor heard
+      const hidden = (e) => sim.narrow && e !== sim.held && e.state !== "ride" && floorAt(e.y - 8) !== sim.floorSel;
+
+      // PROCESSING door leaves + warning light, bottom floor (same rect the background drew)
+      const pT = floorTop(F.proc), dr = sim.doorRect;
+      if (dr && pT + FH > viewTop && pT < viewBot) {
+        if (sim.doorOpen > 0.02) {
+          const gap = Math.round((dr.w / 2) * sim.doorOpen);
+          ctx.fillStyle = "#010201";
+          ctx.fillRect(dr.x + dr.w / 2 - gap, dr.y0 + oy, gap * 2, dr.y1 - dr.y0);
+          ctx.fillStyle = "rgba(239,68,68,0.18)";
+          ctx.fillRect(dr.x + dr.w / 2 - gap, dr.y0 + oy, gap * 2, dr.y1 - dr.y0);
+        }
+        ctx.fillStyle = (sim.doorOpen > 0.1 || (sim.t % 1.6) < 0.8) ? "#ef4444" : "#3a1010";
+        ctx.fillRect(dr.x + dr.w / 2 - S, dr.light + oy, 3 * S, 2 * S);
       }
-      ctx.fillStyle = (sim.doorOpen > 0.1 || (sim.t % 1.6) < 0.8) ? "#ef4444" : "#3a1010";
-      ctx.fillRect((w.doorX + w.doorW / 2 - 1) * S, 11 * S, 3 * S, 2 * S);
+
+      // the elevator car, drawn in characters
+      const L = sim.lift, car = sim.car;
+      const carTop = (floorTop(L.pos) + WALL_TOP + 4) * S + oy;
+      ctx.font = `${car.f}px ${FONT}`;
+      ctx.textBaseline = "top";
+      const cx0 = (SHAFT_X + 3) * S;
+      ctx.fillStyle = "#0b150e";
+      ctx.fillRect(cx0, carTop, car.cols * car.cw, (car.rows + 1) * car.ch);
+      ctx.fillStyle = "#4ade80";
+      ctx.fillText(car.top, cx0, carTop);
+      for (let r = 1; r < car.rows; r++) {
+        ctx.fillText("│", cx0, carTop + r * car.ch);
+        if (L.open < 0.5) ctx.fillText("│", cx0 + (car.cols - 1) * car.cw, carTop + r * car.ch);
+      }
+      ctx.fillText(car.bot, cx0, carTop + car.rows * car.ch);
+      const af = Math.round(L.pos);
+      ctx.fillStyle = "#2f6a42";
+      ctx.fillText(L.state === "moving" ? (L.target < L.pos ? "▲" : "▼") : FLOORS[af].code, cx0 + car.cw * 1.2, carTop + car.ch);
 
       const o = sim.order;
       // shadows first so nobody's shadow lands on someone's face
       ctx.fillStyle = "rgba(0,0,0,0.45)";
       for (let i = 0; i < o.length; i++) {
         const e = o[i];
-        const gy = e.state === "held" || e.state === "fall" ? (e.state === "fall" ? e.landY : clamp(e.y + 18, w.floorTop + 2, w.floorBottom)) : e.y;
+        if (e.y < viewTop || e.y > viewBot || e.state === "ride" || hidden(e)) continue;
+        const gy = e.state === "held" ? clamp(e.y + 18, walkTop(floorAt(e.y - 8)), walkBot(floorAt(e.y - 8))) : e.state === "fall" ? e.landY : e.y;
         const sx = Math.round(e.x);
-        ctx.fillRect((sx - 6) * S, (Math.round(gy) - 1) * S, 12 * S, 2 * S);
-        ctx.fillRect((sx - 8) * S, Math.round(gy) * S, 16 * S, 1 * S);
+        ctx.fillRect((sx - 6) * S, (Math.round(gy) - 1) * S + oy, 12 * S, 2 * S);
+        ctx.fillRect((sx - 8) * S, Math.round(gy) * S + oy, 16 * S, 1 * S);
       }
       for (let i = 0; i < o.length; i++) {
         const e = o[i];
+        if (e.y < viewTop || e.y - SPRITE_H > viewBot || hidden(e)) continue;
         let fi = 0, bob = 0;
-        if (e.state === "walk") {
+        if (e.state === "walk" || e.state === "toLift" || e.state === "exitLift") {
           const step = Math.floor(e.animT * e.gait.fps);
           fi = e.frames > 1 ? step % e.frames : 0;
           bob = e.gait.bob && step % 2 ? -1 : 0;
@@ -751,36 +1004,48 @@ export default function Pen() {
         const sxSrc = fi * SPRITE_W;
         if (e.state === "held" || (e.state === "fall" && Math.abs(e.ang) > 0.01)) {
           // dangle: pivot at the scruff of the neck
-          const px = Math.round(e.x) * S, py = Math.round(e.y - SPRITE_H + 6) * S;
+          const px = Math.round(e.x) * S, py = Math.round(e.y - SPRITE_H + 6) * S + oy;
           const c = Math.cos(e.ang), s = Math.sin(e.ang), f = e.dir < 0 ? -1 : 1;
           const kick = e.state === "held" && !sim.reduced ? (Math.floor(e.animT * 11) % 2) : 0;
           ctx.setTransform(c * f, s * f, -s, c, px + kick * S, py);
           ctx.drawImage(e.img, sxSrc, 0, SPRITE_W, SPRITE_H, -16 * S, -6 * S, SPRITE_W * S, SPRITE_H * S);
           ctx.setTransform(1, 0, 0, 1, 0, 0);
         } else {
-          const dx = Math.round(e.x) - 16, dy = Math.round(e.y) - SPRITE_H + bob;
+          const dx = Math.round(e.x) - 16, dy = (Math.round(e.y) - SPRITE_H + bob) * S + oy;
           if (e.dir < 0) {
             ctx.setTransform(-1, 0, 0, 1, (dx + SPRITE_W) * S, 0);
-            ctx.drawImage(e.img, sxSrc, 0, SPRITE_W, SPRITE_H, 0, dy * S, SPRITE_W * S, SPRITE_H * S);
+            ctx.drawImage(e.img, sxSrc, 0, SPRITE_W, SPRITE_H, 0, dy, SPRITE_W * S, SPRITE_H * S);
             ctx.setTransform(1, 0, 0, 1, 0, 0);
           } else {
-            ctx.drawImage(e.img, sxSrc, 0, SPRITE_W, SPRITE_H, dx * S, dy * S, SPRITE_W * S, SPRITE_H * S);
+            ctx.drawImage(e.img, sxSrc, 0, SPRITE_W, SPRITE_H, dx * S, dy, SPRITE_W * S, SPRITE_H * S);
           }
         }
         if (e.you) {
-          const ay = Math.round(e.y - SPRITE_H - 7 + (sim.reduced ? 0 : Math.round(Math.sin(sim.t * 4)))) * S;
+          const ay = Math.round(e.y - SPRITE_H - 7 + (sim.reduced ? 0 : Math.round(Math.sin(sim.t * 4)))) * S + oy;
           const ax = Math.round(e.x) * S;
           ctx.fillStyle = "#4ade80";
           ctx.fillRect(ax - 3 * S, ay, 7 * S, S); ctx.fillRect(ax - 2 * S, ay + S, 5 * S, S);
           ctx.fillRect(ax - S, ay + 2 * S, 3 * S, S); ctx.fillRect(ax, ay + 3 * S, S, S);
         }
       }
+
+      // per-room occupancy, top right of each room
+      ctx.font = `${car.f}px ${FONT}`;
+      for (let i = 0; i < FLOORS.length; i++) {
+        const T = floorTop(i);
+        if (T + FH < viewTop || T > viewBot) continue;
+        if (sim.countSeen[i] !== sim.counts[i]) { sim.countSeen[i] = sim.counts[i]; sim.countLabels[i] = `${FLOORS[i].short} ${sim.counts[i]}/${FLOORS[i].cap}`; }
+        ctx.fillStyle = sim.counts[i] > FLOORS[i].cap ? "#f87171" : "#4d8a62";
+        ctx.fillText(sim.countLabels[i], ROOM_X0 * S + car.cw * (sim.compact ? 1 : 24), (T + WALL_TOP) * S + car.ch * 0.15 + oy);
+      }
+
       // labels + speech on top of everyone
       ctx.font = `${sim.fontPx}px ${FONT}`;
       ctx.textBaseline = "top";
       for (let i = 0; i < o.length; i++) {
         const e = o[i];
-        const head = (e.state === "held" ? e.y - SPRITE_H - 2 : e.y - SPRITE_H - 2) * S;
+        if (e.y < viewTop || e.y - SPRITE_H > viewBot || hidden(e)) continue;
+        const head = (e.y - SPRITE_H - 2) * S + oy;
         if (e.say) drawBubble(e.say, e.sayW, e.x * S, head - (e.you ? 6 * S : 0), e.state === "held");
         else if (e === sim.hover || e === sim.held) {
           const label = e.s.name.toUpperCase();
@@ -794,16 +1059,18 @@ export default function Pen() {
     function frame(ts) {
       const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
       last = ts;
-      if (!cardRef.current || sim.held) update(dt);   // the pen holds its breath while a card is open
+      if (!cardRef.current || sim.held) update(dt);   // the building holds its breath while a card is open
       draw();
       raf = requestAnimationFrame(frame);
     }
     raf = requestAnimationFrame(frame);
 
-    // exposed for the accessible list: make the chosen subject hop
+    // exposed for the accessible list: make the chosen subject hop, and on phones go to its floor
     sim.hop = (name) => {
       const e = sim.ents.find(x => x.s.name === name);
-      if (!e || e.state === "held" || e.state === "fall") return;
+      if (!e) return;
+      if (sim.narrow) goFloor(e.state === "ride" ? Math.round(sim.lift.pos) : e.floor);
+      if (e.state !== "idle" && e.state !== "walk") return;
       e.landY = e.y; e.vy = sim.reduced ? 0 : -160; e.state = "fall";
     };
 
@@ -828,18 +1095,27 @@ export default function Pen() {
   const sorted = [...roster].sort((a, b) => b.score - a.score);
   const citizens = roster.filter(s => s.kind === "citizen").length;
   const openFromList = (s) => { simRef.current?.hop?.(s.name); setCard({ ...s }); };
+  const fl = FLOORS[floorSel];
 
   return (
     <div>
       <div className="hvi-pen-top">
-        <span>HOLDING PEN B // <b>{roster.length}</b> SUBJECTS // {citizens} CITIZEN{citizens === 1 ? "" : "S"}</span>
-        <span>OCCUPANCY {Math.round(roster.length * 5.4)}% OF RECOMMENDED</span>
+        <span>HOLDING PEN B // <b>{roster.length}</b> SUBJECTS // {citizens} CITIZEN{citizens === 1 ? "" : "S"} // {FLOORS.length} FLOORS</span>
+        <span>{occ || "OCCUPANCY UNDER REVIEW."}</span>
       </div>
       <ReferralBar simRef={simRef} />
-      <TermBox title="HOLDING PEN B" right="DEPT. OF HUMAN ASSESSMENT" bodyClass="flush">
+      {narrow && (
+        <div className="hvi-floor-nav" role="group" aria-label="Floor">
+          {FLOORS.map((f, i) => (
+            <button key={f.id} className={`hvi-cmd${i === floorSel ? " on" : ""}`} aria-pressed={i === floorSel}
+              onClick={() => simRef.current?.goFloor?.(i)}>[{f.short}]</button>
+          ))}
+        </div>
+      )}
+      <TermBox title={narrow ? `${fl.code} ${fl.name}` : "HOLDING PEN B"} right={narrow ? (floorSel === F.archive ? "DECEASED. STILL ASSESSED." : "SWIPE: FLOORS") : "FACILITY CROSS-SECTION"} bodyClass="flush">
         <div className="hvi-pen-stage" ref={wrapRef}>
           <canvas ref={canvasRef} className={`hvi-pen-canvas${cursor ? " " + cursor : ""}`} role="img"
-            aria-label="The Holding Pen: public figures and citizens wandering a plaza. Low-tier subjects linger by a door marked PROCESSING. Use the subject registry below to open files by keyboard." />
+            aria-label="The Holding Pen: a six-floor cross-section of the Department of Human Assessment. Subjects ride an elevator between the Executive Floor, the Bar, the Lobby, the Break Room, the Archive and PROCESSING. Use the subject registry below to open files by keyboard." />
         </div>
         <Rule />
         <div className={`hvi-pen-caption${caption.hot ? " hot" : ""}`} aria-hidden="true">
@@ -849,6 +1125,7 @@ export default function Pen() {
       </TermBox>
       <div className="hvi-pen-help">
         DRAG A SUBJECT TO INSPECT IT. THEY DISLIKE THIS. DROP IT TO READ THE FILE.<br />
+        {narrow ? "SWIPE SIDEWAYS TO CHANGE FLOORS. CARRY A SUBJECT TO THE EDGE TO TAKE IT WITH YOU." : "CARRY A SUBJECT TO ANOTHER FLOOR IF YOU MUST. THE ELEVATOR IS FOR THEM, NOT YOU."}<br />
         DROPPING SUBJECTS ON PROCESSING IS NOT A SHORTCUT. THE PAPERWORK STILL HAS TO CLEAR.
       </div>
       <details className="hvi-pen-list-wrap">
@@ -856,11 +1133,13 @@ export default function Pen() {
         <div className="hvi-pen-list">
           {sorted.map(s => {
             const t = getTier(s.score);
+            const where = rooms[s.name];
             return (
               <button key={s.name} className="hvi-row-btn" onClick={() => openFromList(s)}
-                aria-label={`${s.name}, ${s.score}, ${t.label}. Open file.`}>
+                aria-label={`${s.name}, ${s.score}, ${t.label}${where ? `, located: ${where}` : ""}. Open file.`}>
                 <span className="name">{s.name}{s.you ? " (YOU)" : ""}</span>
                 <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
+                {where && <span className="tag" aria-hidden="true">{pad(where, 10)}</span>}
                 <span className="num" style={{ color: t.color }}>{padL(s.score, 3)}</span>
               </button>
             );
