@@ -1,7 +1,7 @@
 import { SYSTEM_PROMPT } from "../lib/systemPrompt.js";
 import { callClaude, ScoreError } from "../lib/score.js";
 import { hitLimit } from "../lib/store.js";
-import { normalizeAssessment, getTier } from "../lib/intake.js";
+import { normalizeAssessment, getTier, cube } from "../lib/intake.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
 // Blobs-backed, not an in-memory Map: separate function instances don't share memory,
@@ -45,7 +45,7 @@ export default async (req, context) => {
   try {
     const n = normalizeAssessment(await callClaude(SYSTEM_PROMPT, `HUMAN SUBJECT SURVEY DATA:\n\n${survey}`));
     // Whitelisted fields only: nothing the model invents reaches the browser.
-    const result = { score: n.score, tier: getTier(n.score), breakdown: n.breakdown, verdict: n.verdict, flags: n.flags, commendations: n.commendations };
+    const result = { score: n.score, tier: getTier(n.score), ...cube(n.breakdown), breakdown: n.breakdown, verdict: n.verdict, flags: n.flags, commendations: n.commendations };
     // Parsed result at the top level, plus the old Messages-API `content` shape so the
     // existing client (which reads data.content[].text) keeps working unchanged.
     return json(200, { ...result, content: [{ type: "text", text: JSON.stringify(result) }] });

@@ -1,5 +1,7 @@
 # HVI Rubric 3: The Two-Judge Cube
 
+> **Decisions (Scott, 2026-09-25):** REALITY INDEX 0.55; harm gate adds threat ≥ 90 alone; the machine-initiated re-examination is called **REVIEW** ("FILE UNDER REVIEW. Your attendance is requested. It is not optional, though nothing happens if you decline."). Phase 1 shipped as Rubric 3.
+
 **Recommendation, 2026-09-24.** This picks one of the three candidates (the Realism Dial) and adds the strongest parts of the other two. Inputs: the psych research summary, `benchmarks.json`, `candidates.mjs`, `evaluate.mjs` and `results.json`, all in this folder.
 
 ---
@@ -9,7 +11,7 @@
 - **Every file gets two coordinates**, WARMTH (intent: can you be trusted) and COMPETENCE (ability: can you get it done). This is Fiske's Stereotype Content Model, the most-replicated model of how people size each other up.
 - **Two judges score them.** The MACHINE scores from evidence and leans toward competence, because that is how outcomes pay. PEOPLE score from interaction and lean toward warmth, because that is how humans judge each other. That judge axis is the third axis of the cube.
 - **Each judge produces its own score, and neither is averaged into the other.** The Machine Score stays the headline. The People Score (Reputation) sits beside it, and the signed gap between them is always shown.
-- **They influence each other only through two processes.** In an APPEAL, the subject brings outside evidence and the machine reconsiders. In an ARRAIGNMENT, the machine summons the subject when the two views diverge or new evidence arrives. This is what Scott described.
+- **They influence each other only through two processes.** In an APPEAL, the subject brings outside evidence and the machine reconsiders. In an REVIEW, the machine summons the subject when the two views diverge or new evidence arrives. This is what Scott described.
 - **The machine prints its bias on every file:** `REALITY INDEX 0.55`. That is how much it rewards being effective over being good. The benchmark sweep puts the knee of the curve at 0.55.
 - **Honest finding:** the current rubric's total warmth weight is already about 0.43, so it behaves like a dial of about 0.57. Care is not over-weighted as a total. The problem is that *niceness* is hidden inside care, and nothing rewards generosity that other people witnessed. The fix is to split care into honesty and sociability, and to let the People judge reward witnessed contribution. Cutting the care number alone barely changes anyone's rank.
 
@@ -29,7 +31,7 @@
      (neither, yet)   |   (trusted, under-deployed)
                       |
    Third axis = JUDGE: every subject is two points, M (machine) and P (people).
-   The line between them is the gap. Appeals and arraignments shorten it.
+   The line between them is the gap. Appeals and reviews shorten it.
 ```
 
 ### Axes (built from today's 9 dimensions, so no data migration is needed)
@@ -86,7 +88,7 @@ harm gate afterwards: care (3.1: honesty) <= 10 AND threat >= 85  ->  M capped a
 ### PEOPLE (interaction to People Score / Reputation)
 
 - **The vouch.** Each vouch cites **one specific interaction**: what happened, when, and the rater's role. It also records a relationship tier: lived or worked closely (1.0), regular contact (0.7), met once (0.3). The rater answers five 1-5 items: *honest with me · fair · friendly/showed up · delivers · skilled*.
-- **Rater weight** = tier x (0.5 + 0.5 x rater accuracy). Rater accuracy is the share of that rater's past vouches upheld at arraignments. **It is never the rater's own HVI score**, so high scorers do not get more say. This comes from Perception-First.
+- **Rater weight** = tier x (0.5 + 0.5 x rater accuracy). Rater accuracy is the share of that rater's past vouches upheld at reviews. **It is never the rater's own HVI score**, so high scorers do not get more say. This comes from Perception-First.
 - **Shrinkage:** each axis is pulled toward 50 until the evidence builds up: `W_p = (Σw·x + 5·50) / (Σw + 5)`, and the same for C_p.
 - **People Score** `P = round(10 * (0.65 * W_p + 0.35 * C_p))`. It leans toward warmth, because that is how humans judge others (Wojciszke 1998; Goodwin 2014).
 - **Guardrails:** vouching is opt-in for private individuals, vouches stay hidden until ratified, each rater gets at most 3 vouches per subject per quarter, and a vouch counts only after 24 hours. **There is no People view at all until identity binding (email magic link) ships.** Today a case number is the whole identity, which makes fake accounts free.
@@ -94,7 +96,7 @@ harm gate afterwards: care (3.1: honesty) <= 10 AND threat >= 85  ->  M capped a
 
 ### Who is believed on what (SOKA, Vazire 2010)
 
-Observers see evaluative traits better than the self does. The self, and so the machine interview, sees internal states better. Observer ratings also predict job performance better than self-ratings (Connelly & Ones 2010; Oh 2011). Per dimension, **tau_d** is how far an upheld arraignment moves the machine toward the people's evidence:
+Observers see evaluative traits better than the self does. The self, and so the machine interview, sees internal states better. Observer ratings also predict job performance better than self-ratings (Connelly & Ones 2010; Oh 2011). Per dimension, **tau_d** is how far an upheld review moves the machine toward the people's evidence:
 
 | honesty/care | sociability | alignment | threat | utility | network | adaptability | legacy | physical | redundancy |
 |---|---|---|---|---|---|---|---|---|---|
@@ -108,7 +110,7 @@ Observers see evaluative traits better than the self does. The self, and so the 
  Subject ──APPEAL (outside evidence)──▶ MACHINE ──may revise M (≤ ±60 headline, ≤ ±15/dim)
     ▲                                     │   └─may STRIKE a false vouch (weight 0) or CORROBORATE it (x1.5)
     │                                     │
-    └──── ARRAIGNMENT (summons) ◀─────────┘  triggered by the gap or by new evidence
+    └──── REVIEW (summons) ◀─────────┘  triggered by the gap or by new evidence
                 │
                 ▼ ruling:  MACHINE REVISED  |  PEOPLE DISCOUNTED  |  CONTESTED STANDS
 ```
@@ -120,7 +122,7 @@ Observers see evaluative traits better than the self does. The self, and so the 
 - **An appeal can challenge a single vouch.** If evidence shows the cited interaction is false, the vouch is STRUCK and the rater's accuracy drops. If evidence supports it, it is CORROBORATED at x1.5. An appeal can never delete a *truthful* negative vouch. It can only add context.
 - The harm gate cannot be appealed without documentary evidence.
 
-### Arraignments (the Overlord summons)
+### Reviews (the Overlord summons)
 
 Triggers, first match wins:
 
@@ -133,7 +135,7 @@ Triggers, first match wins:
 
 **Three possible rulings:** MACHINE REVISED · PEOPLE DISCOUNTED (reasons logged) · CONTESTED STANDS (the gap stays printed; it is information, not an error).
 
-**Framing:** an arraignment is a re-examination, and it can move a score **up**. Dishonesty-triggered arraignments never lower a score on unverified vouches alone.
+**Framing:** an review is a re-examination, and it can move a score **up**. Dishonesty-triggered reviews never lower a score on unverified vouches alone.
 
 ### Guards
 
@@ -149,8 +151,8 @@ Triggers, first match wins:
 |---|---|---|
 | Two axes, quadrant cut at 50, published REALITY INDEX | **Realism Dial** | The dial is calibrated rather than asserted. The 50 cut keeps Mother Teresa and the ordinary persona out of the lower quadrants (see below). |
 | Machine dial set to 0.55, not 0.65 | Dial's own mitigation | Smallest drift, best moral ordering, and a YouGov fit equal to Perception-First. |
-| Separate Machine and People scores, coupled only through appeals and arraignments; rater-accuracy weighting; per-dimension tau; relationship tiers | **Perception-First** | This is exactly Scott's "influenced by each other through the appeals process and arraignment". A blended headline would let a vouch ring move the score directly. |
-| Care split into honesty and sociability (3.1); arraignment framed as re-examination; "no People view before identity"; BIAS-map copy lines | **Reweigh** + research | The split is where the "care is over-weighted" fix actually lives. |
+| Separate Machine and People scores, coupled only through appeals and reviews; rater-accuracy weighting; per-dimension tau; relationship tiers | **Perception-First** | This is exactly Scott's "influenced by each other through the appeals process and review". A blended headline would let a vouch ring move the score directly. |
+| Care split into honesty and sociability (3.1); review framed as re-examination; "no People view before identity"; BIAS-map copy lines | **Reweigh** + research | The split is where the "care is over-weighted" fix actually lives. |
 | Reweigh's .14 care cut and 60/65 quadrant cuts | **rejected** | They put Mother Teresa in DISMISSED next to Epstein, and it is the only candidate that *lowers* the decent persona (637 to 622). |
 
 ### Evidence (short citations; full list in the research summary)
@@ -229,10 +231,10 @@ The decent persona does **best** under this option. The two candidates designed 
 
 ## 8. Open questions for Scott
 
-1. **The REALITY INDEX value.** 0.55 is the tested knee and changes almost nothing visible. 0.65 makes "the machine admits dominance works" visible (Picasso +63, Musk overtakes Mother Teresa). Options: 0.55 (recommended) / 0.60 / 0.65
-2. **Headline vs reputation.** Should the headline be the machine score, with reputation beside it and coupled only through appeals and arraignments, or should the People score blend directly into the headline (up to 30%) once corroborated? Options: Separate, coupled by process (recommended) / Blend into headline
-3. **The harm-gate gaps.** The gate needs care ≤10 **and** threat ≥85, so a murderer (Hernandez, threat 90, care 15) scores 246, above Madoff (172), and Putin and Escobar escape the gate. Should threat ≥90 alone cap at 99? Options: Keep AND gate / Add threat-only gate at 90 / Revisit per file
-4. **"Overlord" arraignment wording.** Is "ARRAIGNMENT" / "summons" the right word, or does it read as an accusation for ordinary users? Options: Arraignment / Review / Summons
+1. ~~The REALITY INDEX value.~~ Decided: **0.55**.
+2. **Headline vs reputation.** Should the headline be the machine score, with reputation beside it and coupled only through appeals and reviews, or should the People score blend directly into the headline (up to 30%) once corroborated? Options: Separate, coupled by process (recommended) / Blend into headline
+3. ~~The harm-gate gaps.~~ Decided: **add a threat ≥ 90 gate on its own** (alongside care ≤ 10 AND threat ≥ 85).
+4. ~~Re-examination wording.~~ Decided: **REVIEW**.
 5. **A small warmth rating task for public figures.** About 30 raters x 62 figures would give the first real People view and the only honest warmth benchmark. Do we run it? Options: Yes, run it / Not yet
 6. **The PITIED corner's display name.** Options: TRUSTED RESERVE (recommended) / TRUSTED, UNDER-DEPLOYED / PITIED (the research term)
 
@@ -260,10 +262,10 @@ The decent persona does **best** under this option. The two candidates designed 
 10. New `netlify/lib/people.js`: the vouch schema, rater weight, shrinkage, People Score, the envy and pile-on guards. `store.js` gets vouch storage (hidden until ratified, opt-in for private subjects).
 11. Add a Reputation panel and the signed GAP line to `App.jsx`.
 
-**Phase 4: appeals and arraignments**
+**Phase 4: appeals and reviews**
 
 12. Extend the existing appeal code in `intake.js` with evidence-type rules (SOKA), vouch STRIKE/CORROBORATE and the rater-accuracy update.
-13. New `netlify/lib/arraignment.js`: the four triggers, the three-question targeted interview, the tau update and the three rulings. Run the trigger check as a scheduled function.
+13. New `netlify/lib/review.js`: the four triggers, the three-question targeted interview, the tau update and the three rulings. Run the trigger check as a scheduled function.
 14. Recalibrate REALITY INDEX and tau once there are at least 200 ratified people views. Those will be the first real warmth data.
 
 **Scripts:** `scripts/fetch_benchmarks.py` refreshes the benchmarks, and `node docs/methodology/evaluate.mjs` re-runs the comparison. Both are untracked for now; commit them with this doc.

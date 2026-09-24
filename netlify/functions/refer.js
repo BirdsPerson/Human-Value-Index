@@ -2,7 +2,7 @@ import { SYSTEM_PROMPT } from "../lib/systemPrompt.js";
 import { PUBLIC_RECORD, REFERRAL_ADDENDUM, directiveFor } from "../lib/publicRecord.js";
 import { callClaude, ScoreError } from "../lib/score.js";
 import { factCheck } from "../lib/factCheck.js";
-import { isCaseId, normalizeAssessment, computeScore, getTier } from "../lib/intake.js";
+import { isCaseId, normalizeAssessment, computeScore, getTier, cube } from "../lib/intake.js";
 import { slugify } from "../../src/figures.js";
 import { nameError, cleanName, resolveWikipedia, fetchArticleText, onFileFigure, placeReferral, publicFigure, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
 import { getCase, hitLimit, refundLimit, peekLimit, getFigure, createFigure } from "../lib/store.js";
@@ -165,7 +165,7 @@ export default async (req, context) => {
     const look = typeof raw?.sprite_look === "string" ? raw.sprite_look.replace(/\s+/g, " ").trim().slice(0, MAX_LOOK) : "";
     const card = {
       slug, name: displayName, wikiTitle: wiki.title, wikidata: wiki.wikidata,
-      score, tier: getTier(score), breakdown: a.breakdown, confidence: null, verdict: a.verdict,
+      score, tier: getTier(score), ...cube(a.breakdown), breakdown: a.breakdown, confidence: null, verdict: a.verdict,
       verdictStatus, living: wiki.living, born: wiki.born, died: wiki.died,
       factCheck: fc ? { checked: fc.checked, removed: fc.removed, regenerated: Boolean(fc.regenerated), at: new Date().toISOString() } : null,
       noDangle: raw?.no_dangle === true,

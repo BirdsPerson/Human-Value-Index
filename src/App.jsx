@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import { FAMOUS_FIGURES, TIERS, getTier } from "./figures.js";
 import Intake, { ScoreCard, Breakdown, readCaseId, CaseLogon } from "./Intake.jsx";
 import Pen from "./Pen.jsx";
@@ -300,6 +301,10 @@ const globalStyles = `
   .hvi-rows { white-space: pre; overflow-x: auto; }
   .hvi-rows .muted { color: var(--text-muted); }
   .hvi-rows .ghost { color: var(--text-ghost); }
+  .hvi-cube { line-height: 1.15; }
+  .hvi-cube-dot { color: var(--green); font-weight: 700; }
+  .hvi-cube-line { margin: 0.2em 0 0.4em; }
+  .hvi-cube-nums { margin-top: 0.5em; }
 
   /* SHARE */
   .hvi-share-text { color: var(--text-muted); white-space: pre-wrap; margin-bottom: 0.8em; }
@@ -735,7 +740,8 @@ export default function OverlordAssessment() {
         <div className="hvi-wrap">
           <Header />
 
-          <ScoreCard score={result.score} tierLabel={result.tier} verdict={result.verdict} label="YOUR VALUE INDEX" />
+          <ScoreCard score={result.score} tierLabel={result.tier} verdict={result.verdict} label="YOUR VALUE INDEX"><CubeLine subject={result} /></ScoreCard>
+          <CubePanel subject={result} />
 
           {result.commendations?.length > 0 && (
             <div className="hvi-flags-section">

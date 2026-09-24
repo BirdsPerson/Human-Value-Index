@@ -1,7 +1,7 @@
 // Self-check for the Holding Pen / intake helpers. Run: node scripts/check-pen.mjs
 import assert from "node:assert/strict";
 import { FAMOUS_FIGURES, getTier, slugify, slugCandidates } from "../src/figures.js";
-import { computeScore, getTier as tierLabel } from "../netlify/lib/intake.js";
+import { computeScore, cube, getTier as tierLabel } from "../netlify/lib/intake.js";
 import {
   placeholderPixels, PX, SPRITE_W, SPRITE_H, hashStr, mulberry32,
   gaitFor, stepEntity, doorZone, sparkPoints,
@@ -20,6 +20,22 @@ assert.deepEqual(slugCandidates("Pelé"), ["pele", "pel"]);
 for (const f of FAMOUS_FIGURES) {
   assert.equal(f.score, computeScore(f.breakdown), `${f.name}: stored score is not the formula`);
   assert.equal(f.tier, tierLabel(f.score), `${f.name}: tier`);
+  const q = cube(f.breakdown);
+  assert.deepEqual([f.warmth, f.competence, f.quadrant], [q.warmth, q.competence, q.quadrant], `${f.name}: stored cube is not the formula`);
+}
+// Rubric 3 regression (docs/methodology/RECOMMENDATION.md step 6): the moral floor holds.
+{
+  const VILLAINS = new Set(["Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez", "Genghis Khan", "Kim Jong-un", "Henry VIII", "Putin", "Caligula", "Mao Zedong"]);
+  assert.equal(FAMOUS_FIGURES.filter(f => VILLAINS.has(f.name)).length, VILLAINS.size, "villain list matches the roster");
+  const worstDecent = Math.min(...FAMOUS_FIGURES.filter(f => !VILLAINS.has(f.name)).map(f => f.score));
+  const bestVillain = Math.max(...FAMOUS_FIGURES.filter(f => VILLAINS.has(f.name)).map(f => f.score));
+  assert.ok(bestVillain < worstDecent, `every villain sits below every non-villain (${bestVillain} vs ${worstDecent})`);
+  assert.ok(FAMOUS_FIGURES.filter(f => f.score < 100).length >= 9, "files under 100 stay reserved for monsters, and there are at least 9");
+  for (const f of FAMOUS_FIGURES.filter(f => f.score < 100)) assert.ok(VILLAINS.has(f.name), `${f.name} under 100 but not on the villain list`);
+  // the ordinary decent persona stays at or above the 40th percentile of the roster
+  const persona = computeScore({ care: 76, alignment: 62, utility: 60, adaptability: 55, legacy: 58, network: 53, physical: 62, threat: 12, redundancy: 50 });
+  const pct = FAMOUS_FIGURES.filter(f => f.score < persona).length / FAMOUS_FIGURES.length * 100;
+  assert.ok(pct >= 40, `decent persona at p${pct.toFixed(0)}`);
 }
 assert.equal(getTier(850).label, "ESSENTIAL INFRASTRUCTURE");
 assert.equal(getTier(99).label, "SOYLENT GREEN");

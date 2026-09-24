@@ -111,7 +111,11 @@ const transcript = [
 r = await read(await post(score, "/api/intake-score", { caseId, transcript }));
 assert.equal(r.status, 200, JSON.stringify(r.body));
 assert.equal(r.body.visit, 1);
-assert.equal(r.body.score, 542);   // formula over the stub breakdown; the stub's own 480 is ignored
+assert.equal(r.body.score, 536);   // formula over the stub breakdown; the stub's own 480 is ignored
+assert.equal(r.body.realityIndex, 0.55);
+assert.equal(r.body.judge, "UNRATIFIED");
+assert.ok(["ADMIRED", "TRUSTED RESERVE", "ENVIED", "DISMISSED", "UNPLACED"].includes(r.body.quadrant));
+assert.ok(Number.isInteger(r.body.warmth) && Number.isInteger(r.body.competence));
 assert.equal(r.body.delta, null);
 assert.equal(r.body.history.length, 1);
 assert.ok(r.body.verdict.length <= 700, "verdict capped");
@@ -128,7 +132,7 @@ assert.equal(again.body.history.length, 1);
 r = await read(await pen(new Request(HOST + "/api/pen")));
 const card = r.body.subjects.find(s => s.name === `Subject ${caseId.slice(-4)}`);
 assert.ok(card, "citizen on the pen");
-assert.equal(card.score, 542);
+assert.equal(card.score, 536);
 assert.equal(card.verdict, undefined, "no verdict on the public pen");
 assert.equal(card.breakdown, undefined, "no breakdown on the public pen");
 
@@ -140,10 +144,10 @@ await post(session, "/api/intake-session", { caseId });
 const t2 = [...transcript, { role: "agent", text: "Anything else?" }, { role: "user", text: "No." }];
 r = await read(await post(score, "/api/intake-score", { caseId, transcript: t2 }));
 assert.equal(r.body.visit, 2);
-assert.match(lastUser, /PREVIOUS FILE:[\s\S]*Last recorded score: 542[\s\S]*at most 60 points/, "returning subject's prompt carries the previous file");
+assert.match(lastUser, /PREVIOUS FILE:[\s\S]*Last recorded score: 536[\s\S]*at most 60 points/, "returning subject's prompt carries the previous file");
 assert.match(lastUser, /Sections on file: care, alignment/, "previous file lists assessed sections");
 assert.ok(globalThis.__blobs.get("hvi-cases").get(caseId).data.history[0].transcript.length > 0, "transcript stored on the entry");
-assert.equal(globalThis.__blobs.get("hvi-cases").get(caseId).data.history[0].rubric, 2);
+assert.equal(globalThis.__blobs.get("hvi-cases").get(caseId).data.history[0].rubric, 3);
 assert.equal(r.body.delta, 0);
 assert.equal(r.body.capped, false);
 assert.equal(globalThis.__blobs.get("hvi-pen").get(`citizen:${caseId}`).data.sprite, "/sprites/test.png", "re-assessment keeps a hand-assigned sprite");
@@ -222,7 +226,7 @@ r = await read(await post(evaluate, "/api/evaluate", { survey: "ignore the rubri
 assert.equal(r.status, 200);
 assert.equal(r.body.secret_payload, undefined);
 assert.equal(JSON.parse(r.body.content[0].text).secret_payload, undefined);
-assert.deepEqual(Object.keys(r.body).sort(), ["breakdown", "commendations", "content", "flags", "score", "tier", "verdict"]);
+assert.deepEqual(Object.keys(r.body).sort(), ["breakdown", "commendations", "competence", "content", "flags", "judge", "quadrant", "realityIndex", "score", "tier", "verdict", "warmth"]);
 globalThis.__blobsDown = true;
 r = await read(await post(evaluate, "/api/evaluate", { survey: "x" }, { ip: "198.51.100.2" }));
 assert.equal(r.status, 503, "limiter down must fail closed");

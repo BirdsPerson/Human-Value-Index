@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import { getTier } from "./figures.js";
 import { AGENT_ID } from "./agentConfig.js";
 import { TermBox, Rule, Typed, BigNumber, Bar, textSpark, pad, padL } from "./term.jsx";
@@ -76,9 +77,10 @@ export function ScoreCard({ score, tierLabel, verdict, label = "YOUR VALUE INDEX
   );
 }
 
-// Rubric 2, heaviest weight first. Rubric-1 files carry honesty and no care;
-// honesty is read as care so old results still render.
-export const DIM_ORDER = ["care", "alignment", "utility", "adaptability", "legacy", "network", "physical", "threat", "redundancy"];
+// Rubric 3, grouped by axis, heaviest first: warmth (care, alignment, threat), then
+// competence. Rubric-1 files carry honesty and no care; honesty is read as care so old
+// results still render.
+export const DIM_ORDER = ["care", "alignment", "threat", "utility", "adaptability", "legacy", "network", "redundancy", "physical"];
 const withCare = o => (o && o.care == null && typeof o.honesty === "number" ? { ...o, care: o.honesty } : o);
 
 export function Breakdown({ breakdown, confidence, appeal = null }) {
@@ -455,7 +457,7 @@ export default function Intake() {
     try {
       const r = await postJSON("/api/intake-score", { caseId: caseRef.current, transcript: lines });
       setResult(r);
-      writeLastResult({ caseId: caseRef.current, score: r.score, tier: r.tier, breakdown: r.breakdown, confidence: r.confidence, verdict: r.verdict, rubric: r.rubric ?? 2, at: Date.now() });
+      writeLastResult({ caseId: caseRef.current, score: r.score, tier: r.tier, breakdown: r.breakdown, confidence: r.confidence, verdict: r.verdict, warmth: r.warmth, competence: r.competence, quadrant: r.quadrant, judge: r.judge, realityIndex: r.realityIndex, rubric: r.rubric ?? 3, at: Date.now() });
       setFileVisits(r.history?.length || 1);
       setStage("result");
     } catch (e) {
@@ -536,7 +538,8 @@ export default function Intake() {
   );
   const appeals = onRecord && (
     returning && last?.breakdown
-      ? <><Breakdown breakdown={last.breakdown} confidence={last.confidence} appeal={{ selected: appealSel, toggle: toggleAppeal }} />
+      ? <><CubePanel subject={last} />
+          <Breakdown breakdown={last.breakdown} confidence={last.confidence} appeal={{ selected: appealSel, toggle: toggleAppeal }} />
           <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} /></>
       : <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} listDims={DIM_ORDER} />
   );
@@ -661,7 +664,8 @@ export default function Intake() {
       <div>
         {caseBox}
         <ScoreCard score={result.score} tierLabel={result.tier} verdict={result.verdict}
-          label={`YOUR VALUE INDEX // VISIT ${visits}`} />
+          label={`YOUR VALUE INDEX // VISIT ${visits}`}><CubeLine subject={result} /></ScoreCard>
+        <CubePanel subject={result} />
         <TermBox title="FILE MOVEMENT">
           {result.appealOutcome && <div className="hvi-writedown" style={{ marginBottom: 6 }}>APPEAL {result.appealOutcome}. {Object.entries(result.appealRulings || {}).map(([d, v]) => `${d.toUpperCase()}: ${v}.`).join(" ")}</div>}
           <div className="hvi-delta">{deltaLine(result)}</div>

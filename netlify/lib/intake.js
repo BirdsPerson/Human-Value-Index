@@ -1,6 +1,7 @@
 // Pure intake logic: case numbers, question picking, the jump cap, tiers.
 // No I/O here so scripts/check-intake.mjs can exercise it without Netlify.
 import { DIMENSIONS, POOLS } from "./questionPools.js";
+import { WARMTH_AXIS, COMPETENCE_AXIS, REALITY_INDEX, axisMean, cube } from "../../src/cube.js";
 
 // Thresholds must match TIERS in src/App.jsx.
 export const TIERS = [
@@ -18,42 +19,43 @@ export function getTier(score) {
 
 export const MAX_JUMP = 60;
 
-// Same weights as the SYSTEM_PROMPT formula. threat and redundancy are inverted (HIGH = BAD).
-export const WEIGHTS = { care: 0.25, alignment: 0.14, utility: 0.17, adaptability: 0.13, legacy: 0.11, network: 0.08, physical: 0.04, threat: 0.04, redundancy: 0.04 };
-const INVERTED = new Set(["threat", "redundancy"]);
+// Rubric 3: the machine cube. The axis math lives in src/cube.js so the browser plot and
+// this score can never disagree.
+export { WARMTH_AXIS, COMPETENCE_AXIS, REALITY_INDEX, cube };
+// Effective per-dimension weights (for display, and the SYSTEM_PROMPT formula text).
+export const WEIGHTS = Object.fromEntries([
+  ...Object.entries(WARMTH_AXIS).map(([d, w]) => [d, w * (1 - REALITY_INDEX)]),
+  ...Object.entries(COMPETENCE_AXIS).map(([d, w]) => [d, w * REALITY_INDEX]),
+]);
 // A dimension the evidence barely touched is UNASSESSED: excluded from the score, not
 // guessed at. Unmeasured is not below average.
 export const MIN_CONFIDENCE = 35;
 export const MIN_ASSESSED = 3;
 // Rubric version stamped on every history entry. 1 = legacy (pre care/unassessed rules,
-// entries with no stamp). A file's first visit under a new rubric is scored fresh.
-export const RUBRIC = 2;
+// entries with no stamp), 2 = care-first single formula, 3 = the machine cube. A file's
+// first visit under a new rubric is scored fresh.
+export const RUBRIC = 3;
 export const rubricOf = e => (typeof e?.rubric === "number" ? e.rubric : 1);
 export const RETIRED_RUBRIC_NOTE = "SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.";
 
-// Weighted average over the ASSESSED dimensions only (value is a number), renormalised so
-// missing sections neither help nor hurt. With every dimension assessed this is exactly
-// the published formula. No assessed dimensions -> 500 (neutral, provisional).
+const isNum = v => typeof v === "number" && Number.isFinite(v);
+
+// The Machine Score: round(10 * (0.45·W + 0.55·C)), then the harm gate. No assessed
+// dimensions -> 500 (neutral, provisional).
 export function computeScore(b) {
-  let sum = 0, wsum = 0;
-  for (const [dim, w] of Object.entries(WEIGHTS)) {
-    const v = b?.[dim];
-    if (typeof v !== "number" || !Number.isFinite(v)) continue;
-    sum += (INVERTED.has(dim) ? 100 - v : v) * w;
-    wsum += w;
-  }
-  if (!wsum) return 500;
-  const score = Math.round((sum / wsum) * 10);
-  return harmGated(b) ? Math.min(score, HARM_GATE.cap) : score;
+  const w = axisMean(b, WARMTH_AXIS), c = axisMean(b, COMPETENCE_AXIS);
+  if (w.value === null && c.value === null) return 500;
+  const score = Math.round(10 * ((1 - REALITY_INDEX) * (w.value ?? 50) + REALITY_INDEX * (c.value ?? 50)));
+  return harmGated(b) ? Math.min(score, HARM_GATE.cap) : Math.max(0, Math.min(1000, score));
 }
 
-// "Under 100 is reserved for actual monsters." A pure weighted average can't get a mass
-// murderer there: ordinary adaptability, physical and redundancy numbers alone hold them
-// above 100. Near-zero care plus near-maximal threat is documented serious harm, and the
-// file is capped under 100 whatever the other sections say.
-export const HARM_GATE = { care: 10, threat: 85, cap: 99 };
-export const harmGated = b => typeof b?.care === "number" && typeof b?.threat === "number" && b.care <= HARM_GATE.care && b.threat >= HARM_GATE.threat;
-export const assessedCount = b => Object.keys(WEIGHTS).filter(d => typeof b?.[d] === "number").length;
+// "Under 100 is reserved for actual monsters." A weighted average can't get a mass
+// murderer there: ordinary competence numbers alone hold them above 100. Documented
+// serious harm caps the file under 100 whatever the other sections say: near-zero care
+// with near-maximal threat, or extreme threat on its own.
+export const HARM_GATE = { care: 10, threat: 85, threatAlone: 90, cap: 99 };
+export const harmGated = b => isNum(b?.threat) && (b.threat >= HARM_GATE.threatAlone || (isNum(b?.care) && b.care <= HARM_GATE.care && b.threat >= HARM_GATE.threat));
+export const assessedCount = b => Object.keys(WEIGHTS).filter(d => isNum(b?.[d])).length;
 
 // ponytail: a case number is the whole identity. Anyone holding it is the subject.
 // Email magic link comes later; until then a lost localStorage means a new file.
@@ -250,7 +252,9 @@ export function ipKey(raw) {
 // it. Read those low-confidence numbers as UNASSESSED, and honesty as care.
 export function assessedBreakdown(entry) {
   const b = migrateDims(entry?.breakdown) || {};
-  if (rubricOf(entry) >= RUBRIC) return b;
+  // Rubric 2 onward store unassessed sections as null already; only rubric 1 needs the
+  // confidence filter.
+  if (rubricOf(entry) >= 2) return b;
   const c = migrateDims(entry?.confidence);
   const out = {};
   for (const d of Object.keys(WEIGHTS)) {
@@ -301,15 +305,11 @@ export function applyCap(prev, next) {
   const knownTarget = clamp(computeScore(pick(breakdown, priorDims)), 0, 1000);
   const knownScore = priorDims.length ? clamp(knownTarget, prev.score - MAX_JUMP, prev.score + MAX_JUMP) : prev.score;
   const capped = priorDims.length > 0 && knownScore !== knownTarget;
-  // Newly assessed sections join at full value: weighted merge of the (capped) known-ground
-  // figure with the fresh dimensions' own formula.
+  // Newly assessed sections join at full value: whatever they add to the formula over the
+  // whole file, on top of the (capped) known-ground figure. The axis formula renormalises,
+  // so this is a difference of formulas, not a weighted merge.
   let score = knownScore;
-  if (fresh.length) {
-    const wk = priorDims.reduce((a, d) => a + WEIGHTS[d], 0);
-    const wf = fresh.reduce((a, d) => a + WEIGHTS[d], 0);
-    const freshScore = computeScore(pick(breakdown, fresh));
-    score = wk ? Math.round((knownScore * wk + freshScore * wf) / (wk + wf)) : freshScore;
-  }
+  if (fresh.length) score = priorDims.length ? knownScore + (computeScore(breakdown) - knownTarget) : computeScore(breakdown);
   score = clamp(score, 0, 1000);
   const up = knownTarget > prev.score;
   const capNote = capped

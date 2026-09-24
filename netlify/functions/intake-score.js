@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { SYSTEM_PROMPT, TRANSCRIPT_ADDENDUM } from "../lib/systemPrompt.js";
 import { callClaude, ScoreError } from "../lib/score.js";
-import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP, restrictToDims, appealOutcome, appealRulings, appealStamp } from "../lib/intake.js";
+import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP, restrictToDims, appealOutcome, appealRulings, appealStamp, cube } from "../lib/intake.js";
 import { getCase, updateCase, putPenCard, hitLimit, refundLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
@@ -36,6 +36,7 @@ function respond(json, caseId, history, entry) {
     visit: (history.findIndex(h => h.sid && h.sid === entry.sid) + 1) || history.length,
     score: entry.score,
     tier: entry.tier,
+    ...cube(entry.breakdown),
     breakdown: entry.breakdown,
     confidence: entry.confidence,
     verdict: entry.verdict,
@@ -126,7 +127,7 @@ export default async (req, context) => {
       const rulings = appeal ? appealRulings(prev, r, appeal) : null;
       if (outcome) r.verdict = `${appealStamp(outcome, rulings)} ${r.verdict}`;
       entry = {
-        at: new Date().toISOString(), sid, score: r.score, tier: r.tier, breakdown: r.breakdown, confidence: r.confidence,
+        at: new Date().toISOString(), sid, score: r.score, tier: r.tier, ...cube(r.breakdown), breakdown: r.breakdown, confidence: r.confidence,
         verdict: r.verdict, flags: r.flags, commendations: r.commendations, delta: r.delta, capped: r.capped,
         rawScore: r.rawScore, capNote: r.capNote, rubric: r.rubric, rubricReset: Boolean(r.rubricReset), newlyAssessed: r.newlyAssessed || [], provisional: r.provisional, provisionalNote: r.provisionalNote, asked, raw,
         // The subject's own words, kept (already capped at 20k chars) so a future rubric can re-score the file.
@@ -145,7 +146,7 @@ export default async (req, context) => {
       slug: `citizen-${last4.toLowerCase()}`,
       name: `Subject ${last4}`,
       // Private citizens show score and tier only; the verdict stays with the subject.
-      score: entry.score, tier: entry.tier,
+      score: entry.score, tier: entry.tier, quadrant: entry.quadrant, warmth: entry.warmth, competence: entry.competence,
       sprite: null, kind: "citizen", updated: entry.at,
     });
 

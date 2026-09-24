@@ -50,13 +50,13 @@ first.plan.forEach(q => assert.ok(STUB_POOLS[q.dimension].includes(q.text)));
 const full = Object.fromEntries(DIMS.map(d => [d, 60]));
 const confidence = { utility: 90, care: 5, adaptability: 80, threat: 10, redundancy: 70, network: 15, alignment: 60, physical: 20, legacy: 95 };
 for (let run = 0; run < 50; run++) {
-  const r = pickQuestions([{ confidence: Object.fromEntries(DIMS.map(d => [d, 0])) }, { rubric: 2, breakdown: full, confidence, asked: [] }], undefined, opts);
+  const r = pickQuestions([{ confidence: Object.fromEntries(DIMS.map(d => [d, 0])) }, { rubric: I.RUBRIC, breakdown: full, confidence, asked: [] }], undefined, opts);
   assert.deepEqual(new Set(r.focus.slice(0, 4)), new Set(["care", "threat", "network", "physical"]));
   assert.equal(new Set(r.focus).size, 9);
 }
 // UNASSESSED sections outrank merely low-confidence ones
 {
-  const r = pickQuestions([{ rubric: 2, breakdown: { ...full, legacy: null }, confidence: { ...confidence, legacy: 95 }, asked: [] }], undefined, opts);
+  const r = pickQuestions([{ rubric: I.RUBRIC, breakdown: { ...full, legacy: null }, confidence: { ...confidence, legacy: 95 }, asked: [] }], undefined, opts);
   assert.equal(r.focus[0], "legacy", "unassessed first");
 }
 
@@ -66,7 +66,7 @@ const seen = new Set();
 for (let visit = 0; visit < 8; visit++) {
   const r = pickQuestions(history, undefined, opts);
   for (const q of r.asked) { assert.ok(!seen.has(q), `repeat: ${q}`); seen.add(q); }
-  history.push({ rubric: 2, breakdown: full, confidence: {}, asked: r.asked });
+  history.push({ rubric: I.RUBRIC, breakdown: full, confidence: {}, asked: r.asked });
 }
 // exhausted pool falls back to repeating rather than dropping the dimension
 const tiny = { ...Object.fromEntries(DIMS.map(d => [d, [`${d} only`]])) };
@@ -74,39 +74,42 @@ const ex = pickQuestions([{ confidence: {}, asked: DIMS.map(d => `${d} only`) }]
 assert.equal(ex.plan.length, 9);
 
 // applyCap: first visit uncapped
-const assess = (score, b, c) => normalizeAssessment({ score, breakdown: Object.fromEntries(DIMS.map(d => [d, b])), confidence: Object.fromEntries(DIMS.map(d => [d, c])), verdict: "v" });
+// threat and redundancy are HIGH = BAD, so a "uniformly good" subject has them inverted.
+const assess = (score, b, c) => normalizeAssessment({ score, breakdown: Object.fromEntries(DIMS.map(d => [d, d === "threat" || d === "redundancy" ? 100 - b : b])), confidence: Object.fromEntries(DIMS.map(d => [d, c])), verdict: "v" });
 const v1 = applyCap(null, assess(930, 95, 100));
-assert.equal(v1.score, 878);   // formula over the breakdown, not the model's 930
+assert.equal(v1.score, 950);   // formula over the breakdown, not the model's 930
 assert.equal(v1.capped, false);
 assert.equal(v1.delta, null);
 assert.equal(v1.tier, "ESSENTIAL INFRASTRUCTURE");
 
 // big jump up is clamped to +60, flagged, raw kept
-// score 416 = the formula over all-40s, as a real stored entry would have it
-const prev = { rubric: 2, score: 416, breakdown: Object.fromEntries(DIMS.map(d => [d, 40])) };
+// prev.score = the formula over its breakdown, as a real stored entry would have it
+const b40 = Object.fromEntries(DIMS.map(d => [d, d === "threat" || d === "redundancy" ? 60 : 40]));
+const prev = { rubric: I.RUBRIC, score: computeScore(b40), breakdown: b40 };
+assert.equal(prev.score, 400);
 const up = applyCap(prev, assess(900, 95, 100));
-assert.equal(up.score, 476);
+assert.equal(up.score, 460);
 assert.equal(up.delta, 60);
 assert.equal(up.capped, true);
-assert.equal(up.rawScore, 878);
+assert.equal(up.rawScore, 950);
 assert.ok(up.capNote && up.capNote.includes("60"));
 assert.equal(up.tier, "MONITORED CIVILIAN");
 
 // and down to -60
 const down = applyCap(prev, assess(50, 5, 100));
-assert.equal(down.score, 356);
+assert.equal(down.score, 340);
 assert.equal(down.capped, true);
 
-assert.match(up.capNote, /sections already on file now point up 462 points/);
+assert.match(up.capNote, /sections already on file now point up 550 points/);
 assert.match(up.capNote, /a good day/);
-assert.match(down.capNote, /down 294 points.*merely a bad one/);
+assert.match(down.capNote, /down 350 points.*merely a bad one/);
 
 // a held remainder is released: the breakdown moved in full, so repeat visits with the
 // same readings walk the score up 60 at a time until it reaches the formula
 {
   let entry = up, seen = [up.score];
   for (let i = 0; i < 10; i++) { entry = applyCap(entry, assess(900, 95, 100)); seen.push(entry.score); }
-  assert.deepEqual(seen.slice(0, 5), [476, 536, 596, 656, 716], "remainder released at up to 60 a visit");
+  assert.deepEqual(seen.slice(0, 5), [460, 520, 580, 640, 700], "remainder released at up to 60 a visit");
   assert.equal(entry.score, computeScore(entry.breakdown), "ends on the formula over the file");
   assert.equal(entry.capped, false);
   assert.equal(entry.capNote, null);
@@ -119,12 +122,12 @@ assert.equal(flat.capped, false);
 assert.equal(flat.score, prev.score);
 assert.equal(flat.delta, 0);
 
-// regression: the model says 480 but its breakdown computes to 603; the formula wins.
+// regression: the model says 480 but its breakdown computes to 609; the formula wins.
 // An identical visit 2 must not invent a delta or a cap line.
 const b0 = { utility: 70, care: 60, adaptability: 65, threat: 30, redundancy: 40, network: 55, alignment: 60, physical: 50, legacy: 45 };
 const first480 = applyCap(null, normalizeAssessment({ score: 480, breakdown: b0 }));
-assert.equal(first480.score, 603);   // the model's 480 is ignored; the formula is the score
-assert.equal(computeScore(b0), 603);
+assert.equal(first480.score, 609);   // the model's 480 is ignored; the formula is the score
+assert.equal(computeScore(b0), 609);
 const again = applyCap(first480, normalizeAssessment({ score: 480, breakdown: b0 }));
 assert.equal(again.delta, 0);
 assert.equal(again.capped, false);
@@ -133,7 +136,7 @@ const again100 = applyCap(first480, normalizeAssessment({ score: 480, breakdown:
 assert.equal(again100.delta, 0, "same breakdown at full confidence is still no movement");
 
 // half confidence -> halfway blend; small move is not capped
-const half = applyCap({ rubric: 2, score: 500, breakdown: Object.fromEntries(DIMS.map(d => [d, 50])) }, assess(520, 54, 50));
+const half = applyCap({ rubric: I.RUBRIC, score: 500, breakdown: Object.fromEntries(DIMS.map(d => [d, 50])) }, assess(520, 54, 50));
 assert.equal(half.breakdown.utility, 52);
 assert.equal(half.capped, false);
 assert.equal(half.delta, half.score - 500);
@@ -148,18 +151,28 @@ assert.equal(n.confidence, null, "no confidence reported (survey, public record)
 assert.deepEqual(n.flags, ["a", "b", "c"]);
 
 
-// v10: care carries .25 (was .34 until 2026-09-25); a pre-v10 file (honesty, no care) blends honesty as care
+// Rubric 3: the machine cube. WARMTH and COMPETENCE are weighted means; the index is
+// 10 * (0.45*W + 0.55*C). A pre-v10 file (honesty, no care) still blends honesty as care.
 {
-  const w = { care: 0.25, alignment: 0.14, utility: 0.17, adaptability: 0.13, legacy: 0.11, network: 0.08, physical: 0.04 };
-  // threat 0 (not 100) so the all-zero base doesn't trip the harm gate; it adds a flat 40.
+  assert.equal(I.REALITY_INDEX, 0.55);
+  // base: every section 0 except threat 0 (inverted: +100 to warmth's threat share) and
+  // redundancy 100 (inverted: 0). Raising one section to 100 adds its axis share.
   const only = d => computeScore({ ...Object.fromEntries(DIMS.map(x => [x, 0])), threat: 0, redundancy: 100, [d]: 100 });
-  for (const [d, wt] of Object.entries(w)) assert.equal(only(d), Math.round(wt * 1000) + 40, d);
+  for (const [d, wt] of Object.entries(I.WARMTH_AXIS)) if (d !== "threat") assert.equal(only(d), Math.round(10 * (0.45 * (20 + 100 * wt))), d);
+  for (const [d, wt] of Object.entries(I.COMPETENCE_AXIS)) if (d !== "redundancy") assert.equal(only(d), Math.round(10 * (0.45 * 20 + 0.55 * 100 * wt)), d);
+  const q = I.cube({ care: 70, alignment: 60, threat: 20, utility: 30, adaptability: 30, legacy: 30, network: 30, redundancy: 70, physical: 30 });
+  assert.equal(q.quadrant, "TRUSTED RESERVE");
+  assert.equal(q.judge, "UNRATIFIED");
+  assert.equal(I.cube({ care: 70, utility: 80 }).quadrant, "UNPLACED", "fewer than 2 of 3 warmth inputs");
+  assert.equal(I.cube({ care: 20, alignment: 20, threat: 80, utility: 80, adaptability: 80 }).quadrant, "ENVIED");
   // harm gate: near-zero care with near-maximal threat caps the file under 100
   const monster = { care: 5, alignment: 3, utility: 15, adaptability: 40, legacy: 5, network: 20, physical: 50, threat: 88, redundancy: 55 };
   assert.equal(computeScore(monster), 99, "documented serious harm cannot sit above 99");
   assert.equal(computeScore({ ...monster, care: 11 }) > 99, true, "the gate needs care at or under 10");
   assert.equal(computeScore({ ...monster, threat: 84 }) > 99, true, "and threat at or over 85");
   assert.equal(computeScore({ ...monster, threat: null }) > 99, true, "an unassessed threat never trips it");
+  assert.equal(computeScore({ ...monster, care: 40, threat: 90 }), 99, "threat 90 or over caps on its own");
+  assert.equal(computeScore({ ...monster, care: 40, threat: 89 }) > 99, true, "threat 89 with real care does not");
   const old = { score: 500, breakdown: { honesty: 80, utility: 50, adaptability: 50, threat: 50, redundancy: 50, network: 50, alignment: 50, physical: 50, legacy: 50 }, confidence: { honesty: 90 } };
   const next = normalizeAssessment({ breakdown: { ...Object.fromEntries(DIMS.map(x => [x, 50])), care: 80 }, confidence: Object.fromEntries(DIMS.map(x => [x, 100])) });
   assert.equal(I.assessedBreakdown(old).care, 80, "old honesty read as care");
@@ -181,19 +194,19 @@ assert.deepEqual(n.flags, ["a", "b", "c"]);
   assert.equal(a.breakdown.physical, null, "low-confidence physical is unassessed");
   assert.equal(a.score, computeScore(Object.fromEntries(DIMS.filter(d => d !== "physical").map(d => [d, 70]))));
   assert.equal(computeScore({ care: 70 }), computeScore({ care: 70, physical: null }), "null is excluded, not zero");
-  assert.equal(computeScore({ care: 80, alignment: 80 }), 800, "renormalised over assessed dims");
+  assert.equal(computeScore({ care: 80, alignment: 80 }), 635, "renormalised within an axis; an unmeasured axis reads as 50");
   assert.equal(a.provisional, false);
   const thin = normalizeAssessment({ breakdown: Object.fromEntries(DIMS.map(d => [d, 70])), confidence: { ...Object.fromEntries(DIMS.map(d => [d, 0])), care: 90, utility: 90 } });
   assert.equal(thin.provisional, true, "fewer than 3 assessed = provisional");
   const t1 = applyCap(null, thin);
   assert.equal(t1.provisional, true);
   assert.ok(t1.provisionalNote && /FILE INCOMPLETE/.test(t1.provisionalNote));
-  assert.equal(t1.rubric, 2);
+  assert.equal(t1.rubric, I.RUBRIC);
 }
 
 // the cap only guards known ground: a newly assessed section enters at full value
 {
-  const known = { rubric: 2, score: 500, breakdown: { ...Object.fromEntries(DIMS.map(d => [d, 50])), physical: null, legacy: null } };
+  const known = { rubric: I.RUBRIC, score: 500, breakdown: { ...Object.fromEntries(DIMS.map(d => [d, 50])), physical: null, legacy: null } };
   const next = normalizeAssessment({ breakdown: { ...Object.fromEntries(DIMS.map(d => [d, 50])), physical: 95, legacy: 95 }, confidence: { ...Object.fromEntries(DIMS.map(d => [d, 0])), physical: 90, legacy: 90 } });
   const r = applyCap(known, next);
   assert.deepEqual(r.newlyAssessed.sort(), ["legacy", "physical"]);
@@ -204,15 +217,17 @@ assert.deepEqual(n.flags, ["a", "b", "c"]);
   assert.ok(r.score - 500 > 0);
 }
 
-// retired rubric: the first visit under rubric 2 is scored fresh, uncapped, no delta
-{
-  const legacy = { score: 480, breakdown: Object.fromEntries(DIMS.map(d => [d, 40])) };   // no rubric stamp = 1
+// retired rubric: the first visit under the current rubric is scored fresh, uncapped, no delta
+for (const legacy of [
+  { score: 480, breakdown: Object.fromEntries(DIMS.map(d => [d, 40])) },               // no rubric stamp = 1
+  { rubric: 2, score: 630, breakdown: Object.fromEntries(DIMS.map(d => [d, 60])) },    // care-first single formula
+]) {
   const r = applyCap(legacy, assess(900, 95, 100));
-  assert.equal(r.score, 878);
+  assert.equal(r.score, 950);
   assert.equal(r.delta, null);
   assert.equal(r.capped, false);
   assert.equal(r.rubricReset, true);
-  assert.equal(r.rubric, 2);
+  assert.equal(r.rubric, I.RUBRIC);
 }
 
 // transcript validation at the trust boundary
@@ -279,7 +294,7 @@ assert.equal(ipKey(""), "unknown");
   const r = restrictToDims(loud, ["physical", "adaptability"]);
   for (const d of DIMS) assert.equal(r.breakdown[d], ["physical", "adaptability"].includes(d) ? 90 : null);
   // applied to a current file, only the scoped sections move
-  const prev = { score: 560, rubric: 2, breakdown: Object.fromEntries(DIMS.map(d => [d, 55])), confidence: Object.fromEntries(DIMS.map(d => [d, 60])) };
+  const prev = { score: 560, rubric: I.RUBRIC, breakdown: Object.fromEntries(DIMS.map(d => [d, 55])), confidence: Object.fromEntries(DIMS.map(d => [d, 60])) };
   prev.score = computeScore(prev.breakdown);
   const next = applyCap(prev, r);
   for (const d of DIMS) {

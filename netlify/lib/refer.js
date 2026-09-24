@@ -1,3 +1,4 @@
+import { cube } from "./intake.js";
 // Referral logic: name validation, the Wikipedia gate, slugs and dedupe against the
 // figures already on file. The Wikipedia calls take an injectable fetch so
 // scripts/check-refer.mjs can run them offline.
@@ -217,7 +218,7 @@ export const remainingThisMonth = used => Math.max(0, PER_CASE_MONTHLY - (used |
 // shows score and tier only.
 export const verdictPublished = c => c?.verdictStatus === "published";
 export const publicFigure = c => ({
-  slug: c.slug, name: c.name, score: c.score, tier: c.tier,
+  slug: c.slug, name: c.name, score: c.score, tier: c.tier, ...cube(c.breakdown),
   breakdown: verdictPublished(c) ? c.breakdown : null, verdict: verdictPublished(c) ? c.verdict : null,
   underReview: !verdictPublished(c), noDangle: Boolean(c.noDangle),
   born: c.born ?? null, died: c.died ?? null,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import { FAMOUS_FIGURES, getTier, slugify, slugCandidates } from "./figures.js";
 import {
   SPRITE_W, SPRITE_H, gaitFor, clamp,
@@ -192,6 +193,7 @@ function SubjectCard({ subject, onClose }) {
             <button ref={closeRef} className="hvi-btn-next" onClick={onClose}>Release</button>
           </div>
           <ScoreCard score={subject.score} tierLabel={subject.tier} verdict={subject.verdict} label="VALUE INDEX">
+            <CubeLine subject={subject} />
             {subject.kind === "citizen" && !subject.verdict && (
               // Private citizens: the public pen carries score and tier only.
               <>
@@ -207,7 +209,8 @@ function SubjectCard({ subject, onClose }) {
               </>
             )}
           </ScoreCard>
-          {subject.you && subject.rubric < 2 && <div className="hvi-delta" style={{ margin: "8px 0" }}>SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.</div>}
+          {subject.you && subject.rubric < 3 && <div className="hvi-delta" style={{ margin: "8px 0" }}>SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.</div>}
+          <CubePanel subject={subject} />
           <Breakdown breakdown={subject.breakdown} />
           <button className="hvi-btn-primary" onClick={onClose}>Return subject to pen</button>
         </TermBox>
