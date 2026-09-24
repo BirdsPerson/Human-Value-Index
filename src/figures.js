@@ -1,3 +1,5 @@
+import { PEOPLE } from "./peopleData.js";
+
 // Known subjects on file + the tier table. Shared by the survey (App.jsx),
 // the Holding Pen and the intake result screen.
 
@@ -80,7 +82,9 @@ export function getTier(score) {
 }
 
 // Deduped by name, first entry wins (same rule App.jsx has always used).
-export const FAMOUS_FIGURES = ALL_FIGURES.filter((f, i, arr) => arr.findIndex(x => x.name === f.name) === i);
+// Each figure carries its People judge (likability) when public ratings exist; see peopleData.js.
+export const FAMOUS_FIGURES = ALL_FIGURES.filter((f, i, arr) => arr.findIndex(x => x.name === f.name) === i)
+  .map(f => (PEOPLE[f.name] ? { ...f, people: PEOPLE[f.name] } : f));
 
 // Sprite slug: lowercase, spaces -> '-', everything else non-alphanumeric stripped.
 export function slugify(name) {

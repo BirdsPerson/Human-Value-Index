@@ -80,4 +80,39 @@ assert.deepEqual(pts.map(p => p[0]), [5, 50, 95]);
 assert.equal(pts[1][1], 5);   // max at top
 assert.equal(pts[0][1], 45);  // min at bottom
 
+// ---- the People judge: likability from YouGov, two points, judge state, gap line ----
+{
+  const { likabilityFrom, judged, gapLine, quadrantOf, GAP_THRESHOLD } = await import("../src/cube.js");
+  // formula: liked share of those aware x 100, shrunk toward 50 by fame (pseudo-count 20)
+  assert.equal(likabilityFrom({ liked_share_of_aware: 0.724, fame_pct: 98 }), Math.round((98 * 72.4 + 20 * 50) / 118));
+  assert.equal(likabilityFrom({ liked_share_of_aware: 1, fame_pct: 1 }) < 55, true, "an unknown name is pulled to 50");
+  assert.equal(likabilityFrom(null), null);
+  assert.equal(likabilityFrom({ fame_pct: 50 }), null);
+  assert.equal(quadrantOf(60, 40), "TRUSTED RESERVE");
+  // judge states
+  const m = { warmth: 43, competence: 60, quadrant: "ENVIED", judge: "UNRATIFIED" };
+  const jfk = judged(m, { likability: 69 });
+  assert.equal(jfk.judge, "CONTESTED"); assert.equal(jfk.people.quadrant, "ADMIRED"); assert.equal(jfk.people.gap, 26);
+  assert.equal(judged(m, { likability: 45 }).judge, "RATIFIED");
+  assert.equal(judged(m, null).judge, "UNRATIFIED");
+  assert.equal(judged({ ...m, quadrant: "UNPLACED" }, { likability: 80 }).judge, "UNRATIFIED", "no placement, no judgment");
+  // gap lines at the thresholds
+  assert.match(gapLine(GAP_THRESHOLD), /Public affection exceeds the record/);
+  assert.match(gapLine(-GAP_THRESHOLD), /The record exceeds the affection/);
+  assert.match(gapLine(19), /roughly agree/);
+  // seeded figures: JFK carries YouGov likability and comes out contested (charm over conduct)
+  const JFK = FAMOUS_FIGURES.find(f => f.name === "JFK");
+  assert.equal(JFK.people.source, "YouGov US ratings");
+  const jj = judged({ warmth: JFK.warmth, competence: JFK.competence, quadrant: JFK.quadrant }, JFK.people);
+  assert.ok(jj.people.gap >= GAP_THRESHOLD, "JFK: public affection exceeds the record");
+  assert.ok(FAMOUS_FIGURES.filter(f => f.people).length >= 30, "most figures have a People view");
+  // the headline never moves with the People view
+  for (const f of FAMOUS_FIGURES) assert.equal(f.score, computeScore(f.breakdown), `${f.name}: score is the machine's alone`);
+  // cube-points.json is regenerated from the same data
+  const fs = await import("node:fs");
+  const pts = JSON.parse(fs.readFileSync(new URL("../docs/methodology/cube-points.json", import.meta.url))).points;
+  assert.equal(pts.length, FAMOUS_FIGURES.length);
+  assert.equal(pts.find(p => p.name === "JFK").people.likability, JFK.people.likability);
+}
+
 console.log("check-pen: ok");

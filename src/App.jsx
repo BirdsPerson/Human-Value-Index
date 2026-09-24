@@ -303,6 +303,8 @@ const globalStyles = `
   .hvi-rows .ghost { color: var(--text-ghost); }
   .hvi-cube { line-height: 1.15; }
   .hvi-cube-dot { color: var(--green); font-weight: 700; }
+  .hvi-cube-people { color: var(--amber); }
+  .hvi-cube-link { color: var(--amber); opacity: .7; }
   .hvi-cube-line { margin: 0.2em 0 0.4em; }
   .hvi-cube-nums { margin-top: 0.5em; }
 

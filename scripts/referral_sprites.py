@@ -75,7 +75,7 @@ def set_json(store, key, data):
 
 # Keep in step with figureIndexEntry in netlify/lib/store.js.
 INDEX_KEYS = ("slug", "name", "score", "tier", "breakdown", "verdict", "verdictStatus", "noDangle", "wikidata",
-              "born", "died", "sprite", "spriteStatus", "referredBy", "at")
+              "born", "died", "sprite", "spriteStatus", "referredBy", "at", "people")
 
 
 def index_entry(card):

@@ -147,3 +147,17 @@ console.log("check-refer ok");
   assert2.match(REFERRAL_ADDENDUM, /heads of state[^.]*is NOT declined/);
   assert2.match(REFERRAL_ADDENDUM, /never lower any score/);
 }
+
+// a referred card with people data is judged on the server; without it, unratified
+{
+  const { publicFigure } = await import("../netlify/lib/refer.js");
+  const a3 = (await import("node:assert/strict")).default;
+  const b = { care: 30, alignment: 40, utility: 80, adaptability: 70, legacy: 60, network: 70, physical: 50, threat: 40, redundancy: 20 };
+  const base = { slug: "x", name: "X", score: 500, tier: "TOLERATED GENERALIST", breakdown: b, verdict: "v", verdictStatus: "published" };
+  const noPeople = publicFigure(base);
+  a3.equal(noPeople.judge, "UNRATIFIED"); a3.equal(noPeople.people, null);
+  const withPeople = publicFigure({ ...base, people: { likability: 80, source: "YouGov US ratings" } });
+  a3.equal(withPeople.people.likability, 80);
+  a3.ok(["RATIFIED", "CONTESTED"].includes(withPeople.judge));
+  a3.equal(withPeople.score, 500, "people never move the headline");
+}
