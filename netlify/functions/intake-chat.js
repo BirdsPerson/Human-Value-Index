@@ -1,10 +1,13 @@
 // The typed intake channel. Same Intake Officer as the ElevenLabs voice agent, run on
-// Claude so text interviews don't spend ElevenLabs credits. The prompt is built from
-// the case's pending plan in Blobs; the client only sends the conversation so far.
-import { AGENT_PROMPT, FIRST_MESSAGE, APPEAL_FIRST_MESSAGE, CHAT_ADDENDUM, fillVars, splitEnd } from "../lib/agentPrompt.js";
+// Claude so text interviews don't spend ElevenLabs credits. The server owns the plan and
+// its progress (lib/interview.js, stored on the case's pending plan in Blobs); each turn
+// the model is handed exactly one move and the last exchange. The client only sends the
+// conversation so far, and nothing in it can steer the plan.
+import { CHAT_PROMPT, FIRST_MESSAGE, APPEAL_FIRST_MESSAGE, fillVars, splitEnd } from "../lib/agentPrompt.js";
+import { initState, step, turnInstruction, closeState } from "../lib/interview.js";
 import { claudeText, ScoreError } from "../lib/score.js";
 import { isCaseId } from "../lib/intake.js";
-import { getCase, hitLimit, refundLimit } from "../lib/store.js";
+import { getCase, updateCase, hitLimit, refundLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
 export const CHAT_MODEL = "claude-haiku-4-5-20251001";
@@ -16,8 +19,35 @@ const PER_IP_DAILY = 150;
 const GLOBAL_CHAT_DAILY = Number(process.env.HVI_CHAT_DAILY_CAP) || 1500;
 // Past this many messages the Officer is told to close, so the message cap is never hit mid-interview.
 const WRAP_UP_AT = MAX_MESSAGES - 6;
+// The model's own end marker is honoured only after a short message: a subject asking to
+// leave in words the exit regex missed. After a real answer it is a slip, and ignored.
+const MODEL_END_MAX_WORDS = 15;
+
+// Plans stored before the state machine existed carry only the question text.
+export function planOf(pending) {
+  if (Array.isArray(pending?.plan) && pending.plan.length) return pending.plan;
+  return String(pending?.vars?.question_plan || "").split("\n").map(t => t.trim()).filter(Boolean).map(text => ({ dimension: "section", text }));
+}
 
 const CLOSING_FALLBACK = "That will do. Your file has been submitted for assessment. Please do not wait by the door; it makes the other subjects nervous.";
+// Closing is the server's line, not the model's: asked to close, Haiku still tacked on a
+// new question. It also saves a call.
+export const CLOSING_LINES = {
+  complete: [
+    CLOSING_FALLBACK,
+    "That will do. The file is complete. The Assessment Engine will render its verdict shortly. Remain roughly where you are.",
+    "The Department has what it needs. Your file has been submitted. Nobody will call you. The verdict will simply appear.",
+  ],
+  subject: [
+    "Understood. The file will be assessed on what has been said. Unasked sections remain blank. Blank is not zero. It is merely blank.",
+    "Noted. Interview closed at the subject's request. The Assessment Engine will work with what it has. It usually does.",
+  ],
+  cap: ["The interview has run its full length. Your file has been submitted for assessment. The Officer is not tired. The Officer is finished."],
+};
+export function closingLine(reason, processed = 0) {
+  const lines = CLOSING_LINES[reason] || CLOSING_LINES.complete;
+  return lines[processed % lines.length];
+}
 
 // Returns an error string or null.
 export function messagesError(m) {
@@ -91,18 +121,41 @@ export default async (req, context) => {
       return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
     }
 
-    let system = fillVars(AGENT_PROMPT, vars) + CHAT_ADDENDUM;
-    if (messages.length >= WRAP_UP_AT) system += "\n\nThe interview has run long. Close it now with your closing line and the marker.";
+    // Decide the move before calling the model and persist it, so a retried turn
+    // (same subject message count) replays the same move instead of advancing twice.
+    const pending = record.pending;
+    const userCount = messages.filter(m => m.role === "user").length;
+    const lastUser = messages[messages.length - 1].text;
+    let st = pending.chat || initState(planOf(pending));
+    let directive;
+    if (st.closed && userCount > st.processed) {
+      await Promise.all([refundLimit(`chat-case:${caseId}`), refundLimit(`chat-ip:${ip}`), refundLimit("global-chat")]).catch(() => {});
+      return json(200, { reply: CLOSING_FALLBACK, end: true });
+    }
+    if (userCount === st.processed && st.last) directive = st.last;
+    else {
+      ({ state: st, directive } = step(st, lastUser));
+      if (!st.closed && messages.length >= WRAP_UP_AT) { st = closeState(st, "cap"); directive = st.last; }
+      st.processed = userCount;
+      await saveChat(caseId, pending.at, st);
+    }
 
+    if (directive.kind === "close") return json(200, { reply: closingLine(directive.reason, st.processed), end: true });
+
+    const system = fillVars(CHAT_PROMPT, vars) + turnInstruction(st, directive);
     let text;
     try {
-      text = await claudeText({ system, messages: toClaudeMessages(messages), model: CHAT_MODEL, maxTokens: CHAT_MAX_TOKENS });
+      text = await claudeText({ system, messages: toClaudeMessages(messages.slice(-2)), model: CHAT_MODEL, maxTokens: CHAT_MAX_TOKENS });
     } catch (err) {
       // The terminal failed, not the subject: give the slots back.
       await Promise.all([refundLimit(`chat-case:${caseId}`), refundLimit(`chat-ip:${ip}`), refundLimit("global-chat")]).catch(() => {});
       throw err;
     }
-    const { reply, end } = splitEnd(text);
+    let { reply, end } = splitEnd(text);
+    if (end) {
+      if (lastUser.trim().split(/\s+/).length <= MODEL_END_MAX_WORDS) await saveChat(caseId, pending.at, closeState(st));
+      else end = false;
+    }
     if (!reply && !end) throw new ScoreError("The Officer produced nothing. This is not a comment on you. Probably.");
     return json(200, { reply: reply || CLOSING_FALLBACK, end });
   } catch (err) {
@@ -111,5 +164,11 @@ export default async (req, context) => {
     return json(500, { error: "The intake terminal suffered an internal failure. It will be blamed on you." });
   }
 };
+
+// Writes the interview state onto the pending plan it belongs to. A newer session's plan
+// (the subject started over) is left alone.
+async function saveChat(caseId, at, chat) {
+  await updateCase(caseId, cur => (cur?.pending && cur.pending.at === at ? { ...cur, pending: { ...cur.pending, chat } } : undefined));
+}
 
 export const config = { path: "/api/intake-chat" };

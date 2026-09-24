@@ -71,7 +71,7 @@ export default async (req, context) => {
     };
     // vars are stored so the typed channel (intake-chat) builds its prompt from the
     // server's plan, never the client's.
-    const pending = { at: new Date().toISOString(), focus, asked, vars: dynamicVariables, ...(appeal ? { appeal, touch: picked.touch } : {}) };
+    const pending = { at: new Date().toISOString(), focus, asked, plan, vars: dynamicVariables, ...(appeal ? { appeal, touch: picked.touch } : {}) };
     // Fresh read inside the write: a score landing meanwhile keeps its history entry.
     const fresh = { ...record, pending };
     record = await updateCase(record.caseId, cur => (cur ? { ...cur, pending } : fresh));

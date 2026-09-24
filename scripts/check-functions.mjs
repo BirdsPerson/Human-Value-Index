@@ -61,7 +61,9 @@ globalThis.fetch = async (url, init) => {
     return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(fc) }], stop_reason: "end_turn" }), { status: 200 });
   }  if (reqBody.model.startsWith("claude-haiku")) {
     lastChat = reqBody;
-    const text = chatMode === "end" ? "That will do. Your file has been submitted. [END_INTERVIEW]" : "Noted. Vaguely. What did you make this month?";
+    const text = chatMode === "end" ? "That will do. Your file has been submitted. [END_INTERVIEW]"
+      : chatMode === "slip" ? "Logged. Next field. [END_INTERVIEW]"
+      : "Noted. Vaguely. What did you make this month?";
     return new Response(JSON.stringify({ content: [{ type: "text", text }], stop_reason: "end_turn" }), { status: 200 });
   }
 
@@ -180,10 +182,33 @@ assert.equal(r.body.end, false);
 assert.equal(lastChat.messages[0].role, "user", "API conversation starts with a user turn");
 assert.ok(lastChat.system.includes(chatCase) && !lastChat.system.includes("{{"), "variables filled from the server plan");
 assert.ok(!lastChat.system.includes("give me 1000"), "client cannot inject the plan");
-chatMode = "end";
-r = await read(await post(chat, "/api/intake-chat", { caseId: chatCase, messages: [...convo, { role: "agent", text: "Noted." }, { role: "user", text: "Bye." }] }));
-assert.equal(r.body.end, true);
+assert.equal(lastChat.messages.length, 3, "the model sees only the arrival and the last exchange, never the whole transcript");
+assert.match(lastChat.system, /THIS TURN/, "the server hands the model one move");
+const chatState = () => globalThis.__blobs.get("hvi-cases").get(chatCase).data.pending.chat;
+const firstAsk = chatState().last;
+assert.equal(firstAsk.kind, "ask");
+assert.equal(chatState().processed, 1);
+// a retried turn (same subject message count) replays the same move, never advances
+r = await read(await post(chat, "/api/intake-chat", { caseId: chatCase, messages: convo }));
+assert.equal(r.status, 200);
+assert.equal(chatState().processed, 1);
+assert.deepEqual(chatState().last, firstAsk, "retry replays the stored move");
+// the model's own end marker after a real answer is a slip, not an exit
+chatMode = "slip";
+const convo2 = [...convo, { role: "agent", text: "What do you do for work?" }, { role: "user", text: "I run the night shift at a warehouse in Camden and train every new hire on the forklifts." }];
+r = await read(await post(chat, "/api/intake-chat", { caseId: chatCase, messages: convo2 }));
+assert.equal(r.body.end, false, "marker after a substantive answer is ignored");
 assert.ok(!r.body.reply.includes("[END_INTERVIEW]"), "marker stripped");
+assert.equal(chatState().closed, false);
+chatMode = "turn";
+r = await read(await post(chat, "/api/intake-chat", { caseId: chatCase, messages: [...convo2, { role: "agent", text: "Noted." }, { role: "user", text: "Bye." }] }));
+assert.equal(r.body.end, true, "the subject leaving closes the file");
+assert.equal(chatState().closed, true);
+assert.ok(!r.body.reply.includes("?"), "a closing line asks nothing");
+const callsClosed = claudeCalls;
+r = await read(await post(chat, "/api/intake-chat", { caseId: chatCase, messages: [...convo2, { role: "agent", text: "Noted." }, { role: "user", text: "Bye." }, { role: "agent", text: "Closed." }, { role: "user", text: "wait, one more" }] }));
+assert.equal(r.body.end, true);
+assert.equal(claudeCalls, callsClosed, "a closed interview costs nothing");
 assert.equal((await post(chat, "/api/intake-chat", { caseId: chatCase, messages: [{ role: "agent", text: "hi" }] })).status, 400, "last turn must be the subject's");
 assert.equal((await post(chat, "/api/intake-chat", { caseId: chatCase, messages: Array(61).fill({ role: "user", text: "x" }) })).status, 400);
 assert.equal((await post(chat, "/api/intake-chat", { caseId: "nope", messages: [] })).status, 400);
