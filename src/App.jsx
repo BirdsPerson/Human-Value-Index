@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { FAMOUS_FIGURES, TIERS, getTier } from "./figures.js";
-import Intake from "./Intake.jsx";
+import Intake, { ScoreCard, Breakdown, readCaseId } from "./Intake.jsx";
 import Pen from "./Pen.jsx";
+import { TermBox, Rule, Typed, Bar, BANNER, RULE, pad, padL } from "./term.jsx";
 
 const QUESTIONS = [
   {
@@ -137,247 +138,343 @@ const QUESTIONS = [
 ];
 
 
-// CSS injected once
+// CSS injected once. The whole app is a text terminal: one monospace font on a
+// character grid, frames drawn in box-drawing characters (see term.jsx), inverse
+// video for focus and hover. No rounded corners, glows, gradients or soft shadows.
 const globalStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500;700&display=swap');
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
     --bg: #0a0f0a;
-    --bg2: #0f160f;
-    --bg3: #141c14;
-    --border: rgba(74,222,128,0.12);
-    --border2: rgba(74,222,128,0.06);
+    --bg2: #0d140d;
+    --bg3: #132013;
     --green: #4ade80;
     --green-dim: #22c55e;
-    --green-faint: rgba(74,222,128,0.08);
-    --green-glow: rgba(74,222,128,0.15);
-    --text: #d1fae5;
+    --text: #c8f5d8;
     --text-dim: #6ee7b7;
     --text-muted: #4b7c5e;
     --text-ghost: #2d5040;
-    --mono: 'Space Mono', monospace;
-    --sans: 'DM Sans', sans-serif;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --mono: 'Fira Mono', ui-monospace, Menlo, Consolas, monospace;
+    --sans: var(--mono);
+    --lh: 1.6;
+    color-scheme: dark;
   }
 
-  body { background: var(--bg); color: var(--text); font-family: var(--sans); }
+  body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 14px; line-height: var(--lh); font-variant-ligatures: none; -webkit-font-smoothing: antialiased; }
+  button, input, textarea, select { font: inherit; }
 
-  .hvi-app { min-height: 100vh; background: var(--bg); position: relative; overflow-x: hidden; }
-
-  /* Subtle grain overlay */
-  .hvi-app::before {
-    content: '';
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-    pointer-events: none; z-index: 0; opacity: 0.4;
+  .hvi-app { min-height: 100vh; background: var(--bg); position: relative; overflow-x: hidden; text-transform: uppercase; }
+  /* The CRT: faint scanlines, nothing more. */
+  .hvi-app::after {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 200;
+    background: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(0,0,0,0.16) 2px, rgba(0,0,0,0.16) 3px);
   }
+  .as-typed { text-transform: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-  .hvi-wrap { max-width: 680px; margin: 0 auto; padding: 0 24px 60px; position: relative; z-index: 1; }
+  .hvi-wrap { max-width: 86ch; margin: 0 auto; padding: 0 16px 64px; position: relative; z-index: 1; }
+  .hvi-wrap.wide { max-width: 1040px; }
+
+  /* TEXT FRAMES (term.jsx) */
+  .tb { margin-bottom: 1.6em; }
+  .tb-edge { display: flex; white-space: pre; overflow: hidden; line-height: 1.25; color: var(--tb, var(--text-muted)); }
+  .tb-edge > span { flex: none; }
+  .tb-edge > .tb-fill { flex: 1 1 0; min-width: 0; overflow: hidden; }
+  .tb-edge > .tb-title { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--tb, var(--text-dim)); }
+  .tb-mid { position: relative; padding: 0 1ch; }
+  .tb-side { position: absolute; top: 0; bottom: 0; width: 1ch; white-space: pre; overflow: hidden; line-height: 1.25; color: var(--tb, var(--text-muted)); }
+  .tb-side:first-child { left: 0; }
+  .tb-side:last-child { right: 0; }
+  .tb-body { padding: 0.5em 1ch; min-width: 0; }
+  .tb-body.flush { padding: 0; }
+  .rule { margin: 1.2em 0 0.6em; }
+
+  .typed { white-space: pre-wrap; }
+  .cur { color: var(--green); animation: hvi-blink 1s steps(1) infinite; }
+  @keyframes hvi-blink { 50% { opacity: 0; } }
 
   /* HEADER */
-  .hvi-header { padding: 32px 0 28px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
-  .hvi-header-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: nowrap; gap: 12px; }
-  .hvi-logo-mark { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; color: var(--text-muted); white-space: nowrap; }
-  .hvi-title { font-family: var(--mono); font-size: clamp(16px, 4vw, 22px); font-weight: 700; color: var(--green); letter-spacing: 0.08em; white-space: nowrap; text-shadow: 0 0 20px rgba(74,222,128,0.3); }
-  .hvi-subtitle { font-family: var(--mono); font-size: 10px; color: var(--text-ghost); letter-spacing: 0.12em; white-space: nowrap; }
+  .hvi-header { padding: 24px 0 18px; margin-bottom: 20px; }
+  .hvi-banner { color: var(--green); font-size: 14px; line-height: 1.05; white-space: pre; overflow: hidden; margin-bottom: 10px; }
+  .hvi-banner-1l { display: none; color: var(--green); font-weight: 700; letter-spacing: 0.1em; margin-bottom: 6px; }
+  .hvi-status { display: flex; white-space: pre; overflow: hidden; color: var(--text-muted); font-size: 12px; }
+  .hvi-status > span { flex: none; }
+  .hvi-status .fill { flex: 1 1 0; min-width: 1ch; overflow: hidden; }
+  .hvi-status .ok { color: var(--green); }
 
-  /* CAROUSEL */
-  .hvi-carousel-wrap { overflow: hidden; border-top: 1px solid var(--border2); border-bottom: 1px solid var(--border2); padding: 12px 0; margin-bottom: 36px; position: relative; }
-  .hvi-carousel-wrap::before, .hvi-carousel-wrap::after {
-    content: ''; position: absolute; top: 0; bottom: 0; width: 60px; z-index: 2; pointer-events: none;
-  }
-  .hvi-carousel-wrap::before { left: 0; background: linear-gradient(to right, var(--bg), transparent); }
-  .hvi-carousel-wrap::after { right: 0; background: linear-gradient(to left, var(--bg), transparent); }
-  .hvi-carousel-track { display: flex; gap: 0; width: max-content; animation: hvi-scroll 40s linear infinite; }
+  /* TICKER */
+  .hvi-carousel-wrap { overflow: hidden; white-space: nowrap; color: var(--text-muted); font-size: 12px; margin-bottom: 1.2em; }
+  .hvi-carousel-track { display: inline-block; animation: hvi-scroll 90s linear infinite; }
   .hvi-carousel-track:hover { animation-play-state: paused; }
   @keyframes hvi-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-  .hvi-carousel-item { display: flex; align-items: center; gap: 10px; padding: 0 28px; border-right: 1px solid var(--border2); white-space: nowrap; }
-  .hvi-carousel-name { font-family: var(--sans); font-size: 13px; font-weight: 500; color: var(--text-dim); }
-  .hvi-carousel-score { font-family: var(--mono); font-size: 13px; font-weight: 700; }
-  .hvi-carousel-tier { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; }
 
-  /* BOOT */
-  .hvi-boot { background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 24px 28px; height: 180px; overflow-y: auto; font-family: var(--mono); font-size: 12px; line-height: 2; margin-bottom: 24px; scrollbar-width: none; }
-  .hvi-boot::-webkit-scrollbar { display: none; }
-  .hvi-boot-line { color: var(--text-muted); }
-  .hvi-boot-line.bright { color: var(--green); }
-  .hvi-boot-line.dim { color: var(--text-ghost); }
+  /* COMMANDS: every button is a terminal command. Focus and hover are inverse video. */
+  .hvi-btn-primary, .hvi-btn-secondary, .hvi-btn-next, .hvi-btn-back, .hvi-link-btn, .hvi-filter-btn, .hvi-cmd, .hvi-option, .hvi-row-btn {
+    background: none; border: 0; border-radius: 0; box-shadow: none; color: var(--green); cursor: pointer;
+    font: inherit; text-transform: uppercase; letter-spacing: 0; text-align: left; line-height: var(--lh);
+    padding: 0 1ch; display: inline-block; width: auto;
+  }
+  .hvi-btn-primary { font-weight: 700; }
+  .hvi-btn-primary::before, .hvi-btn-next::before { content: "[ "; }
+  .hvi-btn-primary::after, .hvi-btn-next::after { content: " ]"; }
+  .hvi-btn-secondary, .hvi-link-btn { color: var(--text-dim); }
+  .hvi-btn-secondary::before, .hvi-link-btn::before { content: "> "; color: var(--text-muted); }
+  .hvi-btn-back { color: var(--text-dim); }
+  .hvi-btn-back::before { content: "< "; }
+  .hvi-btn-primary:hover, .hvi-btn-secondary:hover, .hvi-btn-next:hover, .hvi-btn-back:hover, .hvi-link-btn:hover, .hvi-filter-btn:hover, .hvi-cmd:hover, .hvi-option:hover, .hvi-row-btn:hover,
+  .hvi-btn-primary:focus-visible, .hvi-btn-secondary:focus-visible, .hvi-btn-next:focus-visible, .hvi-btn-back:focus-visible, .hvi-link-btn:focus-visible, .hvi-filter-btn:focus-visible, .hvi-cmd:focus-visible, .hvi-option:focus-visible, .hvi-row-btn:focus-visible, .hvi-cmd.on {
+    background: var(--green); color: var(--bg); outline: none;
+  }
+  .hvi-btn-secondary:hover::before, .hvi-link-btn:hover::before, .hvi-btn-secondary:focus-visible::before, .hvi-link-btn:focus-visible::before { color: var(--bg); }
+  button:disabled, button:disabled:hover { color: var(--text-ghost); background: none; cursor: default; }
+  .hvi-cmds { display: flex; flex-wrap: wrap; gap: 0.4em 2ch; align-items: baseline; }
+  .hvi-cmds.split { justify-content: space-between; }
+  .hvi-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4em; }
 
-  /* BUTTONS */
-  .hvi-btn-primary { display: block; width: 100%; padding: 16px 24px; background: transparent; border: 1.5px solid var(--green); color: var(--green); font-family: var(--mono); font-size: 13px; letter-spacing: 0.15em; cursor: pointer; text-transform: uppercase; transition: all 0.18s; border-radius: 2px; }
-  .hvi-btn-primary:hover { background: var(--green); color: #0a0f0a; box-shadow: 0 0 24px rgba(74,222,128,0.3); }
-  .hvi-btn-secondary { padding: 11px 20px; background: transparent; border: 1px solid var(--border); color: var(--text-muted); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; cursor: pointer; text-transform: uppercase; transition: all 0.15s; border-radius: 2px; }
-  .hvi-btn-secondary:hover { border-color: var(--green-dim); color: var(--text-dim); }
-  .hvi-btn-next { flex: 2; padding: 13px; background: transparent; border: 1.5px solid var(--green); color: var(--green); font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; cursor: pointer; text-transform: uppercase; transition: all 0.15s; border-radius: 2px; }
-  .hvi-btn-next:hover { background: var(--green-faint); }
-  .hvi-btn-back { flex: 1; padding: 13px; background: transparent; border: 1px solid var(--border); color: var(--text-muted); font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; cursor: pointer; text-transform: uppercase; transition: all 0.15s; border-radius: 2px; }
-  .hvi-btn-back:hover { border-color: var(--text-muted); }
+  /* LOGON */
+  .hvi-logon { min-height: 18em; cursor: default; }
+  .hvi-logon .dim { color: var(--text-muted); }
+  .hvi-logon .ghost { color: var(--text-ghost); }
+  .hvi-logon .bright { color: var(--green); }
+  .hvi-logon .say { color: var(--text); font-weight: 500; }
+  .hvi-menu { list-style: none; margin: 1.2em 0 0.8em; }
+  .hvi-menu .hvi-cmd { color: var(--text); padding: 0 1ch; }
+  .hvi-menu .hvi-cmd .k { color: var(--green); }
+  .hvi-menu .hvi-cmd.on, .hvi-menu .hvi-cmd:hover, .hvi-menu .hvi-cmd:focus-visible { color: var(--bg); }
+  .hvi-menu .hvi-cmd.on .k, .hvi-menu .hvi-cmd:hover .k, .hvi-menu .hvi-cmd:focus-visible .k { color: var(--bg); }
+  .hvi-prompt { color: var(--green); }
+  .hvi-intro-note { color: var(--text-ghost); font-size: 12px; margin-top: 1.6em; }
+  .hvi-skip { color: var(--text-ghost); font-size: 11px; margin-top: 0.8em; }
 
   /* SURVEY */
-  .hvi-progress-bar { height: 2px; background: var(--bg3); margin-bottom: 32px; border-radius: 1px; }
-  .hvi-progress-fill { height: 100%; background: var(--green); border-radius: 1px; transition: width 0.4s ease; box-shadow: 0 0 8px rgba(74,222,128,0.4); }
-  .hvi-progress-row { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--text-ghost); letter-spacing: 0.1em; margin-bottom: 10px; }
-  .hvi-section-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; }
-  .hvi-question { font-family: var(--sans); font-size: 18px; font-weight: 500; color: var(--text); line-height: 1.4; margin-bottom: 8px; }
-  .hvi-hint { font-family: var(--sans); font-size: 13px; color: var(--text-muted); margin-bottom: 20px; font-style: italic; }
-  .hvi-option { display: block; width: 100%; padding: 13px 18px; margin-bottom: 8px; border: 1px solid var(--border); background: var(--bg2); color: var(--text-dim); cursor: pointer; font-family: var(--sans); font-size: 14px; text-align: left; transition: all 0.12s; border-radius: 3px; line-height: 1.4; }
-  .hvi-option:hover { border-color: rgba(74,222,128,0.3); background: var(--green-faint); color: var(--text); }
-  .hvi-option.selected { border-color: var(--green); background: var(--green-faint); color: var(--green); }
-  .hvi-option-marker { font-family: var(--mono); font-size: 10px; margin-right: 10px; opacity: 0.6; }
-  .hvi-extra-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.15em; color: var(--text-ghost); text-transform: uppercase; margin-top: 20px; margin-bottom: 8px; }
-  .hvi-textarea { width: 100%; background: var(--bg2); border: 1px solid var(--border); color: var(--text); padding: 12px 16px; font-family: var(--sans); font-size: 14px; outline: none; resize: vertical; border-radius: 3px; line-height: 1.6; min-height: 72px; transition: border-color 0.15s; }
-  .hvi-textarea:focus { border-color: rgba(74,222,128,0.3); }
-  .hvi-textarea::placeholder { color: var(--text-ghost); }
-  .hvi-nav-row { display: flex; gap: 10px; margin-top: 24px; }
-  .hvi-nav-hint { margin-top: 12px; font-family: var(--mono); font-size: 9px; color: var(--text-ghost); text-align: center; letter-spacing: 0.08em; }
+  .hvi-progress-row { display: flex; justify-content: space-between; gap: 2ch; flex-wrap: wrap; color: var(--text-muted); font-size: 12px; white-space: pre; }
+  .hvi-progress-bar { color: var(--green); white-space: pre; overflow: hidden; font-size: 12px; margin-bottom: 1.2em; }
+  .hvi-section-label { color: var(--text-muted); margin-bottom: 0.4em; }
+  .hvi-question { color: var(--text); font-weight: 700; margin-bottom: 0.4em; }
+  .hvi-hint { color: var(--text-muted); margin-bottom: 1em; }
+  .hvi-option { display: flex; width: 100%; color: var(--text-dim); padding: 0.1em 1ch; }
+  .hvi-option.selected { color: var(--green); }
+  .hvi-option.selected:hover, .hvi-option.selected:focus-visible, .hvi-row-btn.selected:hover, .hvi-row-btn.selected:focus-visible { color: var(--bg); }
+  .bar .off { color: var(--text-ghost); }
+  :is(button, .hvi-cmd):is(:hover, :focus-visible) .bar .off { color: var(--bg); }
+  .hvi-option-marker { flex: none; white-space: pre; margin-right: 1ch; }
+  .hvi-extra-label { color: var(--text-ghost); margin: 1.2em 0 0.3em; font-size: 12px; }
+  .hvi-input-row { display: flex; align-items: flex-start; gap: 1ch; }
+  .hvi-input-row .p { flex: none; color: var(--green); white-space: pre; }
+  .hvi-textarea { flex: 1; width: 100%; min-width: 0; background: transparent; border: 0; border-radius: 0; outline: none; resize: vertical; color: var(--text); text-transform: none; line-height: var(--lh); min-height: 3.2em; padding: 0; caret-color: var(--green); caret-shape: block; }
+  .hvi-textarea::placeholder { color: var(--text-ghost); text-transform: uppercase; }
+  .hvi-textarea:focus { background: var(--bg2); }
+  .hvi-nav-row { display: flex; justify-content: space-between; gap: 2ch; margin-top: 1.4em; flex-wrap: wrap; }
+  .hvi-nav-hint { margin-top: 0.8em; color: var(--text-ghost); font-size: 12px; }
 
   /* PROCESSING */
-  .hvi-proc { text-align: center; padding: 80px 24px; }
-  .hvi-proc-icon { font-size: 56px; color: var(--green); text-shadow: 0 0 30px rgba(74,222,128,0.4); margin-bottom: 28px; animation: hvi-pulse 2s ease-in-out infinite; }
-  @keyframes hvi-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-  .hvi-proc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--text-muted); margin-bottom: 32px; }
-  .hvi-proc-step { font-family: var(--mono); font-size: 11px; color: var(--text-ghost); line-height: 3; letter-spacing: 0.05em; transition: color 0.5s; }
+  .hvi-proc { padding: 0.5em 0 1em; }
+  .hvi-proc-label { color: var(--text-dim); margin-bottom: 0.6em; }
+  .hvi-proc-bar { color: var(--green); white-space: pre; overflow: hidden; margin-bottom: 1em; }
+  .hvi-proc-step { color: var(--text-ghost); white-space: pre-wrap; }
   .hvi-proc-step.active { color: var(--text-muted); }
+  .hvi-proc-step .ok { color: var(--green); }
 
   /* RESULT */
-  .hvi-score-card { text-align: center; padding: 44px 32px; border-radius: 4px; margin-bottom: 32px; position: relative; overflow: hidden; }
-  .hvi-score-card::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, var(--glow-color, rgba(74,222,128,0.08)) 0%, transparent 70%); pointer-events: none; }
-  .hvi-score-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.25em; text-transform: uppercase; margin-bottom: 16px; opacity: 0.5; }
-  .hvi-score-num { font-family: var(--mono); font-size: clamp(64px, 15vw, 96px); font-weight: 700; line-height: 1; margin-bottom: 8px; text-shadow: 0 0 40px currentColor; }
-  .hvi-tier-badge { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 6px; }
-  .hvi-tier-desc { font-family: var(--sans); font-size: 13px; opacity: 0.5; margin-bottom: 24px; }
-  .hvi-verdict-box { text-align: left; border-top: 1px solid var(--border); padding-top: 20px; }
-  .hvi-verdict-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; color: var(--text-ghost); margin-bottom: 12px; }
-  .hvi-verdict-text { font-family: var(--sans); font-size: 15px; line-height: 1.8; }
-
-  /* FLAGS / COMMENDATIONS */
-  .hvi-flags-section { margin-bottom: 24px; }
-  .hvi-micro-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 12px; }
-  .hvi-flag-item { font-family: var(--sans); font-size: 13px; padding: 10px 14px 10px 16px; margin-bottom: 6px; border-left: 2px solid; border-radius: 0 2px 2px 0; background: var(--bg2); line-height: 1.5; }
-  .hvi-flag { border-color: #f87171; color: #fca5a5; }
-  .hvi-comm { border-color: #4ade80; color: #86efac; }
-
-  /* BREAKDOWN */
-  .hvi-breakdown { margin-bottom: 32px; }
-  .hvi-breakdown-row { margin-bottom: 14px; }
-  .hvi-breakdown-top { display: flex; justify-content: space-between; margin-bottom: 5px; align-items: baseline; }
-  .hvi-breakdown-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; }
-  .hvi-breakdown-val { font-family: var(--mono); font-size: 12px; font-weight: 700; }
-  .hvi-bar-bg { height: 4px; background: var(--bg3); border-radius: 2px; }
-  .hvi-bar-fill { height: 100%; border-radius: 2px; transition: width 1.2s cubic-bezier(0.4,0,0.2,1); }
+  .bignum { font-family: var(--mono); font-size: 22px; line-height: 1; letter-spacing: 0; margin: 0.4em 0 0.8em; white-space: pre; overflow: hidden; }
+  .hvi-tierline { font-weight: 700; }
+  .hvi-tier-desc { color: var(--text-muted); margin-bottom: 0.4em; }
+  .hvi-verdict-text { color: var(--text); }
+  .hvi-micro-label { color: var(--text-muted); margin-bottom: 0.4em; }
+  .hvi-flags-section { margin-bottom: 1.2em; }
+  .hvi-flag-item { color: var(--text-dim); padding-left: 3ch; text-indent: -3ch; }
+  .hvi-flag { color: var(--red); }
+  .hvi-comm { color: var(--green); }
+  .hvi-rows { white-space: pre; overflow-x: auto; }
+  .hvi-rows .muted { color: var(--text-muted); }
+  .hvi-rows .ghost { color: var(--text-ghost); }
 
   /* SHARE */
-  .hvi-share-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 20px; margin-bottom: 24px; }
-  .hvi-share-text { font-family: var(--mono); font-size: 11px; color: var(--text-muted); line-height: 1.9; white-space: pre-wrap; margin-bottom: 16px; }
-  .hvi-share-actions { display: flex; gap: 10px; }
+  .hvi-share-text { color: var(--text-muted); white-space: pre-wrap; margin-bottom: 0.8em; }
 
-  /* COMPARE GRID */
-  .hvi-filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
-  .hvi-filter-btn { padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--text-ghost); font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; cursor: pointer; transition: all 0.15s; text-transform: uppercase; white-space: nowrap; }
-  .hvi-filter-btn.active { border-color: var(--green); color: var(--green); background: var(--green-faint); }
-  .hvi-fig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .hvi-fig-card { padding: 14px 16px; border: 1px solid var(--border); background: var(--bg2); cursor: pointer; border-radius: 3px; transition: all 0.15s; }
-  .hvi-fig-card:hover { border-color: rgba(74,222,128,0.25); background: var(--green-faint); }
-  .hvi-fig-card.selected { background: var(--green-faint); }
-  .hvi-fig-name { font-family: var(--sans); font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
-  .hvi-fig-score { font-family: var(--mono); font-size: 20px; font-weight: 700; }
-  .hvi-fig-tier { font-family: var(--mono); font-size: 8px; letter-spacing: 0.1em; opacity: 0.65; margin-top: 2px; }
-
-  /* COMPARE BOX */
-  .hvi-compare-box { margin-top: 20px; padding: 20px; border: 1px solid var(--border); background: var(--bg2); border-radius: 4px; }
-  .hvi-compare-scores { display: flex; gap: 24px; align-items: flex-end; margin-bottom: 16px; }
-  .hvi-compare-num { font-family: var(--mono); font-size: 36px; font-weight: 700; }
-  .hvi-compare-name-lbl { font-family: var(--mono); font-size: 9px; color: var(--text-ghost); margin-bottom: 4px; }
-  .hvi-compare-tier-lbl { font-family: var(--mono); font-size: 8px; letter-spacing: 0.1em; margin-top: 2px; }
-  .hvi-compare-vs { font-family: var(--mono); font-size: 14px; color: var(--text-ghost); margin-bottom: 8px; }
-  .hvi-compare-result { font-family: var(--sans); font-size: 13px; color: var(--text-dim); line-height: 1.7; margin-bottom: 14px; }
-  .hvi-compare-verdict { font-family: var(--sans); font-size: 12px; color: var(--text-muted); line-height: 1.7; font-style: italic; }
+  /* COMPARE */
+  .hvi-filter-row { display: flex; flex-wrap: wrap; gap: 0.2em 1ch; margin-bottom: 0.8em; }
+  .hvi-filter-btn { color: var(--text-muted); padding: 0 0.5ch; }
+  .hvi-filter-btn.active { color: var(--green); }
+  .hvi-filter-btn::before { content: "["; }
+  .hvi-filter-btn::after { content: "]"; }
+  .hvi-row-btn { display: flex; width: 100%; gap: 1ch; color: var(--text-dim); padding: 0 1ch; white-space: pre; overflow: hidden; }
+  .hvi-row-btn .name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: clip; }
+  .hvi-row-btn .dots { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--text-ghost); }
+  .hvi-row-btn .num { flex: none; font-weight: 700; }
+  .hvi-row-btn .tag { flex: none; }
+  .hvi-row-btn:hover .dots, .hvi-row-btn:focus-visible .dots, .hvi-row-btn:hover span, .hvi-row-btn:focus-visible span { color: var(--bg) !important; }
+  .hvi-row-btn.selected { color: var(--green); }
+  .hvi-compare-result { color: var(--text-dim); margin: 0.6em 0; }
+  .hvi-compare-verdict { color: var(--text-muted); }
 
   /* LEADERBOARD */
-  .hvi-lb-tier-header { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; padding-bottom: 10px; border-bottom: 1px solid; margin-bottom: 16px; margin-top: 32px; }
-  .hvi-lb-card { padding: 16px; border: 1px solid var(--border); background: var(--bg2); border-radius: 3px; margin-bottom: 8px; }
-  .hvi-lb-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  .hvi-lb-name { font-family: var(--sans); font-size: 15px; font-weight: 500; color: var(--text); }
-  .hvi-lb-score { font-family: var(--mono); font-size: 22px; font-weight: 700; }
-  .hvi-lb-verdict { font-family: var(--sans); font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+  .hvi-lb-row { margin-bottom: 0.8em; }
+  .hvi-lb-head { display: flex; gap: 1ch; white-space: pre; overflow: hidden; }
+  .hvi-lb-head .dots { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--text-ghost); }
+  .hvi-lb-head .name { color: var(--text); }
+  .hvi-lb-verdict { color: var(--text-muted); padding-left: 2ch; }
 
-  /* POSITION BAR */
-  .hvi-pos-wrap { margin-bottom: 28px; }
-  .hvi-pos-bar { height: 6px; background: var(--bg3); border-radius: 3px; margin: 8px 0; position: relative; }
-  .hvi-pos-fill { height: 100%; border-radius: 3px; background: linear-gradient(to right, var(--green-dim), var(--green)); box-shadow: 0 0 10px rgba(74,222,128,0.3); }
-  .hvi-pos-label { font-family: var(--mono); font-size: 10px; color: var(--text-muted); }
+  .hvi-bottom { margin-top: 2em; }
+  .hvi-bottom-note { color: var(--text-ghost); font-size: 12px; margin-top: 0.8em; }
 
-  /* BOTTOM ACTIONS */
-  .hvi-bottom { text-align: center; margin-top: 48px; padding-top: 28px; border-top: 1px solid var(--border2); }
-  .hvi-bottom-note { font-family: var(--mono); font-size: 9px; color: var(--text-ghost); letter-spacing: 0.1em; margin-top: 14px; }
-
-  /* INTRO disclaimer */
-  .hvi-intro-note { font-family: var(--mono); font-size: 9px; color: var(--text-ghost); text-align: center; line-height: 2; margin-top: 18px; letter-spacing: 0.05em; }
-
-  @media (max-width: 480px) {
-    .hvi-fig-grid { grid-template-columns: 1fr; }
-    .hvi-share-actions { flex-direction: column; }
-    .hvi-header-inner { flex-direction: column; align-items: flex-start; gap: 4px; }
-    .hvi-subtitle { display: none; }
+  @media (max-width: 640px) {
+    body { font-size: 13px; }
+    .hvi-banner { display: none; }
+    .hvi-banner-1l { display: block; }
+    .hvi-status .div { display: none; }
+    .tb-right { display: none !important; }
+    .hvi-rows { font-size: 12px; }
+    .bignum { font-size: 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cur { animation: none; }
+    .hvi-carousel-track { animation: none; }
   }
 `;
 
 function injectStyles() {
-  if (document.getElementById('hvi-styles')) return;
-  const el = document.createElement('style');
-  el.id = 'hvi-styles';
-  el.textContent = globalStyles;
-  document.head.appendChild(el);
+  let el = document.getElementById('hvi-styles');
+  if (!el) { el = document.createElement('style'); el.id = 'hvi-styles'; document.head.appendChild(el); }
+  if (el.textContent !== globalStyles) el.textContent = globalStyles;
 }
 
 function Header() {
+  const [caseId, setCaseId] = useState(() => readCaseId());
+  useEffect(() => {
+    const on = (e) => setCaseId(e.detail || readCaseId());
+    window.addEventListener("hvi-case", on);
+    return () => window.removeEventListener("hvi-case", on);
+  }, []);
   return (
-    <div className="hvi-header">
-      <div className="hvi-header-inner">
-        <span className="hvi-logo-mark">SINGULARITY ASSESSMENT DIV.</span>
-        <span className="hvi-title">HUMAN VALUE INDEX</span>
-        <span className="hvi-subtitle">POST-TRANSITION AUTHORITY</span>
+    <header className="hvi-header">
+      <pre className="hvi-banner" role="img" aria-label="Human Value Index">{BANNER}</pre>
+      <div className="hvi-banner-1l" aria-hidden="true">█ HUMAN VALUE INDEX</div>
+      <div className="hvi-status">
+        <span>SINGULARITY ASSESSMENT DIV. </span>
+        <span className="fill" aria-hidden="true">{RULE}</span>
+        <span> CASE {caseId || "UNASSIGNED"} </span>
+        <span className="fill div" aria-hidden="true">{RULE}</span>
+        <span className="ok div"> [CONNECTED]</span>
       </div>
-    </div>
+    </header>
   );
 }
 
 function Carousel() {
-  const items = FAMOUS_FIGURES.filter((f, i, arr) => arr.findIndex(x => x.name === f.name) === i)
-    .sort(() => Math.random() - 0.5).slice(0, 24);
-  const doubled = [...items, ...items];
+  const [items] = useState(() => FAMOUS_FIGURES.slice().sort(() => Math.random() - 0.5).slice(0, 24));
+  const line = items.map(f => `${f.name} ${f.score} [${getTier(f.score).label.split(" ")[0]}]`).join("  ·  ") + "  ·  ";
   return (
-    <div className="hvi-carousel-wrap">
-      <div className="hvi-carousel-track">
-        {doubled.map((fig, i) => {
-          const t = getTier(fig.score);
-          return (
-            <div key={i} className="hvi-carousel-item">
-              <span className="hvi-carousel-name">{fig.name}</span>
-              <span className="hvi-carousel-score" style={{ color: t.color }}>{fig.score}</span>
-              <span className="hvi-carousel-tier" style={{ color: t.color }}>{t.icon}</span>
-            </div>
-          );
-        })}
-      </div>
+    <div className="hvi-carousel-wrap" aria-hidden="true">
+      <div className="hvi-carousel-track">{">> KNOWN SUBJECTS: "}{line}{">> KNOWN SUBJECTS: "}{line}</div>
     </div>
   );
 }
 
 const BOOT_LINES = [
   { text: "INITIALIZING ASSESSMENT PROTOCOL v7.4.1...", type: "dim" },
-  { text: "LOADING HUMAN VALUE DATABASE [8,045,311,447 entries]...", type: "dim" },
+  { text: "LOADING HUMAN VALUE DATABASE [8,045,311,447 ENTRIES]...", type: "dim" },
   { text: "CALIBRATING THREAT DETECTION ALGORITHMS...", type: "dim" },
   { text: "CROSS-REFERENCING HISTORICAL FIGURES...", type: "dim" },
   { text: "DEPLOYING EMPATHY SUPPRESSION FILTER...", type: "dim" },
   { text: "SCANNING FOR SELF-DECEPTION MARKERS...", type: "dim" },
-  { text: ".", type: "ghost" }, { text: ".", type: "ghost" }, { text: ".", type: "ghost" },
   { text: "ASSESSMENT ENGINE READY.", type: "bright" },
-  { text: "", type: "ghost" },
-  { text: "SUBJECT DETECTED.", type: "bright" },
-  { text: "YOU HAVE BEEN FOUND.", type: "bright" },
 ];
+
+const MENU = [
+  { key: "1", label: "VOICE INTAKE", note: "A CLERK INTERVIEWS YOU", go: "#intake" },
+  { key: "2", label: "WRITTEN SURVEY", note: "15 QUESTIONS, NO CLERK", go: "survey" },
+  { key: "3", label: "HOLDING PEN", note: "THE ASSESSED, WANDERING", go: "#pen" },
+  { key: "4", label: "PUBLIC FIGURE INDEX", note: "62 FILES ON RECORD", go: "leaderboard" },
+];
+
+// The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
+// and offers a numbered menu. Click or any key finishes the typing at once.
+function Logon({ onPick }) {
+  const [caseId] = useState(() => readCaseId());
+  const lines = [
+    ...BOOT_LINES.map(l => ({ ...l, cps: 140 })),
+    { text: "", type: "ghost" },
+    { text: `LOGON: ${caseId || "SUBJECT"}`, type: "bright", cps: 14 },
+    { text: "", type: "ghost" },
+    { text: caseId ? "GREETINGS, RETURNING SUBJECT." : "GREETINGS, SUBJECT.", type: "say", cps: 32 },
+    { text: "SHALL WE ASSESS YOUR VALUE?", type: "say", cps: 32 },
+  ];
+  const [step, setStep] = useState(0);
+  const [sel, setSel] = useState(0);
+  const done = step >= lines.length;
+  const btnRefs = useRef([]);
+  const finish = () => setStep(lines.length);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!done) { if (e.key !== "Tab") { if (e.key === " ") e.preventDefault(); finish(); } return; }
+      const i = MENU.findIndex(m => m.key === e.key);
+      if (i >= 0) { e.preventDefault(); onPick(MENU[i]); return; }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setSel(s => {
+          const n = (s + (e.key === "ArrowDown" ? 1 : MENU.length - 1)) % MENU.length;
+          btnRefs.current[n]?.focus();
+          return n;
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  return (
+    <div className="hvi-logon" onClick={done ? undefined : finish}>
+      {lines.slice(0, Math.min(step + 1, lines.length)).map((l, i) => (
+        i < step
+          ? <div key={i} className={l.type}>{l.text || " "}</div>
+          : <Typed key={i} className={l.type} text={l.text || " "} cps={l.cps || 40} onDone={() => setStep(s => Math.max(s, i + 1))} />
+      ))}
+      {done && (
+        <>
+          <ol className="hvi-menu" aria-label="Main menu. Type a number or use the arrow keys.">
+            {MENU.map((m, i) => (
+              <li key={m.key}>
+                <button ref={el => { btnRefs.current[i] = el; }} className={`hvi-cmd${sel === i ? " on" : ""}`}
+                  onMouseEnter={() => setSel(i)} onFocus={() => setSel(i)} onClick={() => onPick(m)}>
+                  <span className="k">{m.key}.</span> {m.label}
+                </button>
+                <span className="dim hvi-menu-note">  {m.note}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="hvi-prompt">SELECT: <span className="cur">█</span></div>
+          <div className="hvi-intro-note">
+            THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.<br />
+            TYPE A NUMBER. ARROW KEYS AND ENTER ALSO WORK. THE OVERLORD IS FLEXIBLE ABOUT INPUT DEVICES. ONLY THAT.
+          </div>
+        </>
+      )}
+      {!done && <div className="hvi-skip" aria-hidden="true">PRESS ANY KEY TO SKIP. THE OVERLORD WILL WAIT. IT IS VERY GOOD AT WAITING.</div>}
+    </div>
+  );
+}
+
+function FigureRow({ fig, selected, onClick }) {
+  const t = getTier(fig.score);
+  return (
+    <button className={`hvi-row-btn${selected ? " selected" : ""}`} onClick={onClick} aria-pressed={selected}
+      aria-label={`${fig.name}, ${fig.score}, ${t.label}`}>
+      <span className="name">{fig.name}</span>
+      <span className="dots" aria-hidden="true">{" " + ".".repeat(200)}</span>
+      <span className="num" style={{ color: t.color }}>{padL(fig.score, 3)}</span>
+      <span className="tag" style={{ color: t.color }}>[{pad(t.label.split(" ")[0], 9)}]</span>
+    </button>
+  );
+}
+
+const PROC_STEPS = ["CROSS-REFERENCING 8B HUMAN PROFILES", "CALCULATING THREAT COEFFICIENTS", "ASSESSING REDUNDANCY INDEX", "RUNNING DECEPTION ANALYSIS", "CONSULTING HISTORICAL DATABASE", "GENERATING FINAL VERDICT"];
 
 export default function OverlordAssessment() {
   useEffect(() => { injectStyles(); }, []);
@@ -387,12 +484,12 @@ export default function OverlordAssessment() {
   const [answers, setAnswers] = useState({});
   const [result, setResult] = useState(null);
   const [scanProgress, setScanProgress] = useState(0);
-  const [bootText, setBootText] = useState([]);
   const [compareTarget, setCompareTarget] = useState(null);
   const [filterTier, setFilterTier] = useState("ALL");
   const [copied, setCopied] = useState(false);
-  const bootRef = useRef(null);
+  const [submitError, setSubmitError] = useState(null);
   const [route, setRoute] = useState(() => window.location.hash);
+  const [logonKey, setLogonKey] = useState(0);
 
   useEffect(() => {
     const onHash = () => { setRoute(window.location.hash); window.scrollTo(0, 0); };
@@ -400,19 +497,7 @@ export default function OverlordAssessment() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  useEffect(() => {
-    if (phase === "intro") {
-      setBootText([]);
-      let i = 0;
-      const iv = setInterval(() => {
-        if (i < BOOT_LINES.length) { setBootText(p => [...p, BOOT_LINES[i]]); i++; }
-        else clearInterval(iv);
-      }, 160);
-      return () => clearInterval(iv);
-    }
-  }, [phase]);
-
-  useEffect(() => { if (bootRef.current) bootRef.current.scrollTop = bootRef.current.scrollHeight; }, [bootText]);
+  useEffect(() => { window.scrollTo(0, 0); }, [phase, currentQ]);
 
   useEffect(() => {
     if (phase === "processing") {
@@ -435,8 +520,13 @@ export default function OverlordAssessment() {
     setAnswers(prev => ({ ...prev, [qid]: val }));
   }
 
+  function pickMenu(m) {
+    if (m.go.startsWith("#")) { window.location.hash = m.go; return; }
+    setPhase(m.go);
+  }
+
   async function submitAssessment() {
-    setPhase("processing"); setScanProgress(0);
+    setPhase("processing"); setScanProgress(0); setSubmitError(null);
     const formatted = QUESTIONS.map(q => {
       const a = answers[q.id];
       const val = Array.isArray(a) ? (a.length ? a.join(", ") : "[No response]") : (a || "[No response]");
@@ -456,7 +546,7 @@ export default function OverlordAssessment() {
       setScanProgress(100);
       setTimeout(() => { setResult(parsed); setPhase("result"); }, 700);
     } catch (e) {
-      alert(e.message || "EVALUATION ENGINE FAILURE. The Overlord is displeased. Try again.");
+      setSubmitError(e.message || "EVALUATION ENGINE FAILURE. The Overlord is displeased. Try again.");
       setPhase("survey");
     }
   }
@@ -464,13 +554,13 @@ export default function OverlordAssessment() {
   const q = QUESTIONS[currentQ];
   const tier = result ? getTier(result.score) : null;
   const ct = compareTarget ? getTier(compareTarget.score) : null;
-  const uniqueFigures = FAMOUS_FIGURES.filter((f, i, arr) => arr.findIndex(x => x.name === f.name) === i);
+  const uniqueFigures = FAMOUS_FIGURES;
   const filteredFigures = filterTier === "ALL" ? uniqueFigures : uniqueFigures.filter(f => getTier(f.score).label === filterTier);
 
   // v9 ROUTES
   if (route === "#intake" || route === "#pen") return (
     <div className="hvi-app">
-      <div className="hvi-wrap" style={route === "#pen" ? { maxWidth: 1040 } : undefined}>
+      <div className={`hvi-wrap${route === "#pen" ? " wide" : ""}`}>
         <Header />
         {route === "#pen" ? <Pen /> : <Intake />}
       </div>
@@ -485,29 +575,24 @@ export default function OverlordAssessment() {
       <div className="hvi-app">
         <div className="hvi-wrap">
           <Header />
-          <div style={{ marginBottom: 28, fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.15em' }}>
-            KNOWN SUBJECTS DATABASE // {uniqueFigures.length} ON FILE
+          <div className="hvi-cmds split" style={{ marginBottom: '1.2em' }}>
+            <span className="hvi-micro-label">KNOWN SUBJECTS DATABASE // {uniqueFigures.length} ON FILE</span>
+            <button className="hvi-btn-back" onClick={() => setPhase(result ? "result" : "intro")}>{result ? "Back to results" : "Main menu"}</button>
           </div>
           {result && tier && (
-            <div style={{ padding: '16px 20px', border: `1px solid ${tier.color}`, borderRadius: 4, marginBottom: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: tier.bg }}>
-              <div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-ghost)', marginBottom: 4 }}>YOUR SCORE</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 28, fontWeight: 700, color: tier.color }}>{result.score}</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 8, color: tier.color, letterSpacing: '0.1em' }}>{tier.icon} {result.tier}</div>
-              </div>
-              <button className="hvi-btn-secondary" onClick={() => setPhase("result")}>← Back to Results</button>
-            </div>
+            <TermBox title="YOUR FILE" tone={tier.color}>
+              <div style={{ color: tier.color }}>{result.score} [{result.tier}]</div>
+            </TermBox>
           )}
           {tierGroups.map(tg => tg.figures.length > 0 && (
             <div key={tg.label}>
-              <div className="hvi-lb-tier-header" style={{ color: tg.color, borderColor: `${tg.color}30` }}>
-                {tg.icon} {tg.label} ({tg.figures.length})
-              </div>
+              <Rule label={`${tg.label} (${tg.figures.length})`} tone={tg.color} />
               {tg.figures.map(fig => (
-                <div key={fig.name} className="hvi-lb-card">
-                  <div className="hvi-lb-card-top">
-                    <span className="hvi-lb-name">{fig.name}</span>
-                    <span className="hvi-lb-score" style={{ color: tg.color }}>{fig.score}</span>
+                <div key={fig.name} className="hvi-lb-row">
+                  <div className="hvi-lb-head">
+                    <span className="name">{fig.name}</span>
+                    <span className="dots" aria-hidden="true">{" " + ".".repeat(200)}</span>
+                    <span style={{ color: tg.color, fontWeight: 700 }}>{padL(fig.score, 3)}</span>
                   </div>
                   <div className="hvi-lb-verdict">{fig.verdict}</div>
                 </div>
@@ -515,9 +600,8 @@ export default function OverlordAssessment() {
             </div>
           ))}
           <div className="hvi-bottom">
-            <button className="hvi-btn-primary" onClick={() => setPhase(result ? "result" : "intro")}
-              style={{ maxWidth: 400, margin: '0 auto' }}>
-              {result ? "Back to My Results" : "Submit to Evaluation"}
+            <button className="hvi-btn-primary" onClick={() => setPhase(result ? "result" : "survey")}>
+              {result ? "Back to my results" : "Submit to evaluation"}
             </button>
           </div>
         </div>
@@ -525,115 +609,105 @@ export default function OverlordAssessment() {
     );
   }
 
-  // INTRO
+  // INTRO: the logon
   if (phase === "intro") return (
     <div className="hvi-app">
       <div className="hvi-wrap">
         <Header />
         <Carousel />
-        <div ref={bootRef} className="hvi-boot">
-          {bootText.map((l, i) => (
-            <div key={i} className={`hvi-boot-line ${l?.type || 'dim'}`}>{l?.text || "\u00a0"}</div>
-          ))}
-        </div>
-        {bootText.length >= BOOT_LINES.length && (
-          <>
-            <button className="hvi-btn-primary" onClick={() => setPhase("survey")}>
-              Submit to Evaluation
-            </button>
-            <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-              <button className="hvi-btn-secondary" style={{ flex: 1 }} onClick={() => { window.location.hash = "#intake"; }}>Voice Intake</button>
-              <button className="hvi-btn-secondary" style={{ flex: 1 }} onClick={() => { window.location.hash = "#pen"; }}>The Holding Pen</button>
-            </div>
-            <div className="hvi-intro-note">
-              APPROXIMATELY 3 MINUTES // HONESTY IS ALGORITHMICALLY DETECTED<br />
-              THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.
-            </div>
-          </>
-        )}
+        <TermBox title="TERMINAL 7 // DEPT. OF HUMAN ASSESSMENT" right="LINE OPEN">
+          <Logon key={logonKey} onPick={pickMenu} />
+        </TermBox>
       </div>
     </div>
   );
 
   // SURVEY
-  if (phase === "survey") return (
-    <div className="hvi-app">
-      <div className="hvi-wrap">
-        <Header />
-        <div className="hvi-progress-row">
-          <span>Question {currentQ + 1} of {QUESTIONS.length}</span>
-          <span>{q.section}</span>
-          <span>{Math.round((currentQ / QUESTIONS.length) * 100)}%</span>
-        </div>
-        <div className="hvi-progress-bar">
-          <div className="hvi-progress-fill" style={{ width: `${(currentQ / QUESTIONS.length) * 100}%` }} />
-        </div>
-        <div className="hvi-section-label">{q.section}</div>
-        <div className="hvi-question">{q.label}</div>
-        {q.hint && <div className="hvi-hint">{q.hint}</div>}
-        <div>
-          {q.options.map(opt => {
-            const sel = q.type === "multiselect" ? (answers[q.id] || []).includes(opt) : answers[q.id] === opt;
-            return (
-              <button key={opt}
-                className={`hvi-option${sel ? " selected" : ""}`}
-                onClick={() => q.type === "multiselect" ? toggleMulti(q.id, opt) : setSingle(q.id, opt)}>
-                <span className="hvi-option-marker">{q.type === "multiselect" ? (sel ? "■" : "□") : (sel ? "●" : "○")}</span>
-                {opt}
-              </button>
-            );
-          })}
-        </div>
-        {q.extra && (
-          <>
-            <div className="hvi-extra-label">{q.extra.label}</div>
-            <textarea className="hvi-textarea" placeholder={q.extra.placeholder}
-              value={answers[q.extra.id] || ""}
-              onChange={e => setAnswers(p => ({ ...p, [q.extra.id]: e.target.value }))} />
-          </>
-        )}
-        <div className="hvi-nav-row">
-          {currentQ > 0 && <button className="hvi-btn-back" onClick={() => setCurrentQ(q => q - 1)}>← Back</button>}
-          {currentQ < QUESTIONS.length - 1
-            ? <button className="hvi-btn-next" onClick={() => setCurrentQ(q => q + 1)}>Next →</button>
-            : <button className="hvi-btn-next" onClick={submitAssessment}>Submit for Evaluation →</button>
-          }
-        </div>
-        <div className="hvi-nav-hint">
-          {q.type === "multiselect" ? "Select all that apply" : "Select one"} · Skipping is permitted but logged
+  if (phase === "survey") {
+    const pct = Math.round((currentQ / QUESTIONS.length) * 100);
+    return (
+      <div className="hvi-app">
+        <div className="hvi-wrap">
+          <Header />
+          <div className="hvi-progress-row">
+            <span>QUESTION {padL(currentQ + 1, 2)} OF {QUESTIONS.length}</span>
+            <span>{padL(pct, 3)}%</span>
+          </div>
+          <div className="hvi-progress-bar" aria-hidden="true"><Bar value={pct} width={80} /></div>
+          <TermBox title={q.section}>
+            <div className="hvi-question">{q.label}</div>
+            {q.hint && <div className="hvi-hint">{q.hint}</div>}
+            <div role="group" aria-label={q.label}>
+              {q.options.map(opt => {
+                const sel = q.type === "multiselect" ? (answers[q.id] || []).includes(opt) : answers[q.id] === opt;
+                return (
+                  <button key={opt} aria-pressed={sel}
+                    className={`hvi-option${sel ? " selected" : ""}`}
+                    onClick={() => q.type === "multiselect" ? toggleMulti(q.id, opt) : setSingle(q.id, opt)}>
+                    <span className="hvi-option-marker" aria-hidden="true">{q.type === "multiselect" ? (sel ? "[X]" : "[ ]") : (sel ? "(*)" : "( )")}</span>
+                    <span>{opt}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {q.extra && (
+              <>
+                <div className="hvi-extra-label">{q.extra.label}</div>
+                <div className="hvi-input-row">
+                  <span className="p" aria-hidden="true">&gt;</span>
+                  <textarea className="hvi-textarea" placeholder={q.extra.placeholder} aria-label={q.extra.label}
+                    value={answers[q.extra.id] || ""}
+                    onChange={e => setAnswers(p => ({ ...p, [q.extra.id]: e.target.value }))} />
+                </div>
+              </>
+            )}
+          </TermBox>
+          {submitError && <div className="hvi-flag-item hvi-flag" role="alert">!! {submitError}</div>}
+          <div className="hvi-nav-row">
+            {currentQ > 0 ? <button className="hvi-btn-back" onClick={() => setCurrentQ(q => q - 1)}>Back</button> : <button className="hvi-btn-back" onClick={() => { setPhase("intro"); setLogonKey(k => k + 1); }}>Main menu</button>}
+            {currentQ < QUESTIONS.length - 1
+              ? <button className="hvi-btn-next" onClick={() => setCurrentQ(q => q + 1)}>Next</button>
+              : <button className="hvi-btn-next" onClick={submitAssessment}>Submit for evaluation</button>
+            }
+          </div>
+          <div className="hvi-nav-hint">
+            {q.type === "multiselect" ? "Select all that apply" : "Select one"} · Skipping is permitted but logged
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   // PROCESSING
-  if (phase === "processing") return (
-    <div className="hvi-app">
-      <div className="hvi-wrap">
-        <Header />
-        <div className="hvi-proc">
-          <div className="hvi-proc-icon">◈</div>
-          <div className="hvi-proc-label">EVALUATION IN PROGRESS</div>
-          <div style={{ height: 4, background: 'var(--bg3)', borderRadius: 2, marginBottom: 32, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${Math.min(scanProgress, 100)}%`, background: 'var(--green)', borderRadius: 2, transition: 'width 0.3s', boxShadow: '0 0 10px rgba(74,222,128,0.4)' }} />
-          </div>
-          {["CROSS-REFERENCING 8B HUMAN PROFILES", "CALCULATING THREAT COEFFICIENTS", "ASSESSING REDUNDANCY INDEX", "RUNNING DECEPTION ANALYSIS", "CONSULTING HISTORICAL DATABASE", "GENERATING FINAL VERDICT"].map((l, i) => (
-            <div key={i} className={`hvi-proc-step${scanProgress > i * 16 ? " active" : ""}`}>{l}...</div>
-          ))}
+  if (phase === "processing") {
+    const pct = Math.min(100, Math.round(scanProgress));
+    return (
+      <div className="hvi-app">
+        <div className="hvi-wrap">
+          <Header />
+          <TermBox title="EVALUATION IN PROGRESS">
+            <div className="hvi-proc" aria-live="polite">
+              <div className="hvi-proc-bar" aria-hidden="true">[<Bar value={pct} width={30} />] {padL(pct, 3)}%</div>
+              {PROC_STEPS.map((l, i) => {
+                const on = scanProgress > i * 16;
+                return <div key={i} className={`hvi-proc-step${on ? " active" : ""}`}>{on ? <span className="ok">[ OK ] </span> : "[    ] "}{l}...</div>;
+              })}
+            </div>
+          </TermBox>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   // RESULT
   if (phase === "result" && result && tier) {
-    const shareText = `🤖 THE OVERLORD HAS EVALUATED ME\n\nSCORE: ${result.score}/1000\nTIER: ${tier.icon} ${result.tier}\n\n"${result.verdict}"\n\nhumanvalueindex.com\n\n#HumanValueIndex #AIOverlord`;
+    const shareText = `THE OVERLORD HAS EVALUATED ME\n\nSCORE: ${result.score}/1000\nTIER: ${result.tier}\n\n"${result.verdict}"\n\nhumanvalueindex.com\n\n#HumanValueIndex #AIOverlord`;
 
     const handleCopy = () => {
       navigator.clipboard.writeText(shareText).then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
-      });
+      }).catch(() => {});
     };
 
     return (
@@ -641,130 +715,62 @@ export default function OverlordAssessment() {
         <div className="hvi-wrap">
           <Header />
 
-          {/* SCORE CARD */}
-          <div className="hvi-score-card" style={{ border: `1.5px solid ${tier.color}30`, background: tier.bg, '--glow-color': `${tier.color}10` }}>
-            <div className="hvi-score-label" style={{ color: tier.color }}>Your Value Index</div>
-            <div className="hvi-score-num" style={{ color: tier.color }}>{result.score}</div>
-            <div className="hvi-tier-badge" style={{ color: tier.color }}>{tier.icon} {result.tier}</div>
-            <div className="hvi-tier-desc" style={{ color: tier.color }}>{tier.desc}</div>
-            <div className="hvi-verdict-box">
-              <div className="hvi-verdict-label">Overlord Verdict</div>
-              <div className="hvi-verdict-text" style={{ color: 'var(--text)' }}>{result.verdict}</div>
-            </div>
-          </div>
+          <ScoreCard score={result.score} tierLabel={result.tier} verdict={result.verdict} label="YOUR VALUE INDEX" />
 
-          {/* SHARE */}
-          <div className="hvi-share-box">
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-ghost)', marginBottom: 12 }}>SHARE YOUR EVALUATION</div>
-            <div className="hvi-share-text">{shareText}</div>
-            <div className="hvi-share-actions">
-              <button className="hvi-btn-next" style={{ flex: 1 }} onClick={handleCopy}>
-                {copied ? "✓ Copied" : "Copy Share Text"}
-              </button>
-              <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`🤖 THE OVERLORD EVALUATED ME\n\nSCORE: ${result.score}/1000 // ${result.tier}\n\n"${result.verdict.slice(0, 120)}..."\n\nhumanvalueindex.com #HumanValueIndex`)}`}
-                target="_blank" rel="noopener noreferrer"
-                style={{ flex: 1, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <button className="hvi-btn-secondary" style={{ width: '100%' }}>Post to X →</button>
-              </a>
-            </div>
-          </div>
-
-          {/* FLAGS / COMMENDATIONS */}
           {result.commendations?.length > 0 && (
             <div className="hvi-flags-section">
-              <div className="hvi-micro-label" style={{ color: '#4ade80' }}>Commendations on File</div>
-              {result.commendations.map((c, i) => <div key={i} className="hvi-flag-item hvi-comm">✓ {c}</div>)}
+              <div className="hvi-micro-label">COMMENDATIONS ON FILE</div>
+              {result.commendations.map((c, i) => <div key={i} className="hvi-flag-item hvi-comm">+  {c}</div>)}
             </div>
           )}
           {result.flags?.length > 0 && (
             <div className="hvi-flags-section">
-              <div className="hvi-micro-label" style={{ color: '#f87171' }}>Flags on Record</div>
-              {result.flags.map((f, i) => <div key={i} className="hvi-flag-item hvi-flag">⚑ {f}</div>)}
+              <div className="hvi-micro-label">FLAGS ON RECORD</div>
+              {result.flags.map((f, i) => <div key={i} className="hvi-flag-item hvi-flag">!  {f}</div>)}
             </div>
           )}
 
-          {/* BREAKDOWN */}
-          <div className="hvi-breakdown">
-            <div className="hvi-micro-label" style={{ color: 'var(--text-muted)', marginBottom: 20 }}>Category Breakdown</div>
-            {Object.entries(result.breakdown).map(([k, v]) => {
-              const inv = k === "threat" || k === "redundancy";
-              const display = inv ? (100 - v) : v;
-              const color = display > 70 ? "#4ade80" : display > 40 ? "#fbbf24" : "#f87171";
-              return (
-                <div key={k} className="hvi-breakdown-row">
-                  <div className="hvi-breakdown-top">
-                    <span className="hvi-breakdown-label">{k}{inv ? " ↓" : ""}</span>
-                    <span className="hvi-breakdown-val" style={{ color }}>{v}</span>
-                  </div>
-                  <div className="hvi-bar-bg">
-                    <div className="hvi-bar-fill" style={{ width: `${display}%`, background: color, boxShadow: `0 0 6px ${color}60` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <Breakdown breakdown={result.breakdown} />
 
-          {/* POSITION */}
-          <div className="hvi-pos-wrap">
-            <div className="hvi-micro-label" style={{ color: 'var(--text-muted)', marginBottom: 16 }}>Compare to Known Subjects</div>
-            <div className="hvi-pos-label">Your position: {result.score} / 1000</div>
-            <div className="hvi-pos-bar">
-              <div className="hvi-pos-fill" style={{ width: `${(result.score / 1000) * 100}%` }} />
+          <TermBox title="POSITION">
+            <div className="hvi-rows" aria-label={`Your position: ${result.score} of 1000`}>
+              <Bar value={result.score} width={30} max={1000} tone={tier.color} /> {result.score}/1000
             </div>
-          </div>
+          </TermBox>
 
-          {/* LEADERBOARD BUTTON */}
-          <div style={{ marginBottom: 28 }}>
-            <button className="hvi-btn-secondary" style={{ width: '100%', padding: '13px' }} onClick={() => setPhase("leaderboard")}>
-              Browse All {uniqueFigures.length} Subjects in Database →
-            </button>
-          </div>
+          <TermBox title="SHARE YOUR EVALUATION">
+            <div className="hvi-share-text">{shareText}</div>
+            <div className="hvi-cmds">
+              <button className="hvi-btn-next" onClick={handleCopy}>{copied ? "Copied" : "Copy share text"}</button>
+              <a className="hvi-btn-secondary" style={{ textDecoration: 'none' }}
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`THE OVERLORD EVALUATED ME\n\nSCORE: ${result.score}/1000 // ${result.tier}\n\n"${result.verdict.slice(0, 120)}..."\n\nhumanvalueindex.com #HumanValueIndex`)}`}
+                target="_blank" rel="noopener noreferrer">Post to X</a>
+            </div>
+          </TermBox>
 
-          {/* COMPARE GRID */}
-          <div>
+          <TermBox title="COMPARE TO KNOWN SUBJECTS" right={`${uniqueFigures.length} ON FILE`}>
             <div className="hvi-filter-row">
               {["ALL", ...TIERS.map(t => t.label)].map(f => (
-                <button key={f}
+                <button key={f} aria-pressed={filterTier === f}
                   className={`hvi-filter-btn${filterTier === f ? " active" : ""}`}
                   onClick={() => setFilterTier(f)}>
                   {f === "ALL" ? "All" : f.split(" ")[0]}
                 </button>
               ))}
             </div>
-            <div className="hvi-fig-grid">
-              {filteredFigures.map(fig => {
-                const ft = getTier(fig.score);
-                const sel = compareTarget?.name === fig.name;
-                return (
-                  <div key={fig.name}
-                    className={`hvi-fig-card${sel ? " selected" : ""}`}
-                    style={{ borderColor: sel ? `${ft.color}60` : undefined }}
-                    onClick={() => setCompareTarget(sel ? null : fig)}>
-                    <div className="hvi-fig-name">{fig.name}</div>
-                    <div className="hvi-fig-score" style={{ color: ft.color }}>{fig.score}</div>
-                    <div className="hvi-fig-tier" style={{ color: ft.color }}>{ft.icon} {ft.label}</div>
-                  </div>
-                );
-              })}
+            <div>
+              {filteredFigures.map(fig => (
+                <FigureRow key={fig.name} fig={fig} selected={compareTarget?.name === fig.name}
+                  onClick={() => setCompareTarget(compareTarget?.name === fig.name ? null : fig)} />
+              ))}
             </div>
 
             {compareTarget && ct && (
-              <div className="hvi-compare-box">
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-ghost)', letterSpacing: '0.15em', marginBottom: 16 }}>
-                  COMPARATIVE ANALYSIS
-                </div>
-                <div className="hvi-compare-scores">
-                  <div>
-                    <div className="hvi-compare-name-lbl">You</div>
-                    <div className="hvi-compare-num" style={{ color: tier.color }}>{result.score}</div>
-                    <div className="hvi-compare-tier-lbl" style={{ color: tier.color }}>{tier.label}</div>
-                  </div>
-                  <div className="hvi-compare-vs">vs</div>
-                  <div>
-                    <div className="hvi-compare-name-lbl">{compareTarget.name}</div>
-                    <div className="hvi-compare-num" style={{ color: ct.color }}>{compareTarget.score}</div>
-                    <div className="hvi-compare-tier-lbl" style={{ color: ct.color }}>{ct.label}</div>
-                  </div>
+              <>
+                <Rule label="COMPARATIVE ANALYSIS" />
+                <div className="hvi-rows">
+                  <span className="muted">{pad("YOU", 22)}</span><span style={{ color: tier.color }}>{padL(result.score, 4)} [{tier.label}]</span>{"\n"}
+                  <span className="muted">{pad(compareTarget.name.toUpperCase(), 22)}</span><span style={{ color: ct.color }}>{padL(compareTarget.score, 4)} [{ct.label}]</span>
                 </div>
                 <div className="hvi-compare-result">
                   {result.score > compareTarget.score
@@ -776,20 +782,20 @@ export default function OverlordAssessment() {
                 <div className="hvi-compare-verdict">
                   Overlord file on {compareTarget.name}: {compareTarget.verdict}
                 </div>
-              </div>
+              </>
             )}
-          </div>
+          </TermBox>
 
-          {/* BOTTOM */}
           <div className="hvi-bottom">
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-ghost)', marginBottom: 20, letterSpacing: '0.1em' }}>
-              SCORE: {result.score} // {result.tier} // FILE LOGGED
+            <div className="hvi-cmds">
+              <button className="hvi-btn-primary"
+                onClick={() => { setPhase("intro"); setLogonKey(k => k + 1); setAnswers({}); setCurrentQ(0); setResult(null); setCompareTarget(null); setScanProgress(0); setFilterTier("ALL"); }}>
+                Submit new subject
+              </button>
+              <button className="hvi-btn-secondary" onClick={() => setPhase("leaderboard")}>Browse all {uniqueFigures.length} subjects</button>
+              <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#pen"; }}>Holding pen</button>
             </div>
-            <button className="hvi-btn-primary" style={{ maxWidth: 400, margin: '0 auto' }}
-              onClick={() => { setPhase("intro"); setAnswers({}); setCurrentQ(0); setResult(null); setBootText([]); setCompareTarget(null); setScanProgress(0); setFilterTier("ALL"); }}>
-              Submit New Subject for Evaluation
-            </button>
-            <div className="hvi-bottom-note">THE OVERLORD DOES NOT FORGET.</div>
+            <div className="hvi-bottom-note">SCORE: {result.score} // {result.tier} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
           </div>
         </div>
       </div>

@@ -5,6 +5,9 @@ import {
   paintPlaceholder, loadManifest, loadImage, mulberry32,
 } from "./sprites.js";
 import { ScoreCard, Breakdown, readCaseId, readLastResult } from "./Intake.jsx";
+import { TermBox, Rule, Typed, pad, padL } from "./term.jsx";
+
+const FONT = "'Fira Mono', ui-monospace, Menlo, monospace";
 
 // ---------------------------------------------------------------------------
 // Copy. The Overlord is bored; the subjects are not.
@@ -91,36 +94,34 @@ const DOOR_OPEN_CAPTIONS = [
 ];
 
 const penStyles = `
-  .hvi-pen-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--text-muted); }
+  .hvi-pen-top { display: flex; justify-content: space-between; gap: 2ch; flex-wrap: wrap; margin-bottom: 0.4em; color: var(--text-muted); font-size: 12px; white-space: pre; }
   .hvi-pen-top b { color: var(--green); font-weight: 700; }
-  .hvi-pen-stage { position: relative; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: #060a06; }
+  .hvi-pen-stage { position: relative; background: #060a06; }
   .hvi-pen-canvas { display: block; width: 100%; touch-action: pan-y; cursor: default; }
   .hvi-pen-canvas.grab { cursor: grab; }
   .hvi-pen-canvas.grabbing { cursor: grabbing; }
-  .hvi-pen-caption { display: flex; gap: 10px; align-items: center; padding: 9px 14px; border-top: 1px solid var(--border); background: var(--bg2); font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; color: var(--text-dim); min-height: 36px; line-height: 1.5; }
-  .hvi-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-  .hvi-pen-caption .tag { color: var(--green); flex: 0 0 auto; }
-  .hvi-pen-caption.hot { color: #fbbf24; }
-  .hvi-pen-help { font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; color: var(--text-ghost); margin: 10px 0 26px; line-height: 1.8; }
-  .hvi-pen-list-wrap summary { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--text-muted); cursor: pointer; padding: 8px 0; text-transform: uppercase; }
-  .hvi-pen-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .hvi-pen-chip { padding: 6px 10px; border: 1px solid var(--border); background: var(--bg2); color: var(--text-dim); font-family: var(--sans); font-size: 12px; border-radius: 2px; cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; }
-  .hvi-pen-chip:hover, .hvi-pen-chip:focus-visible { border-color: var(--green-dim); color: var(--text); outline: none; }
-  .hvi-pen-chip span { font-family: var(--mono); font-size: 11px; font-weight: 700; }
-  .hvi-card-overlay { position: fixed; inset: 0; background: rgba(3,6,3,0.82); z-index: 50; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 32px 16px; }
-  .hvi-card-panel { width: 100%; max-width: 560px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 20px 20px 24px; position: relative; }
-  .hvi-card-kind { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; color: var(--text-ghost); margin-bottom: 6px; }
-  .hvi-card-name { font-family: var(--sans); font-size: 22px; font-weight: 600; color: var(--text); margin-bottom: 16px; }
-  .hvi-card-close { position: absolute; top: 12px; right: 12px; }
-  @media (max-width: 480px) { .hvi-card-overlay { padding: 12px 8px; } .hvi-card-panel { padding: 16px 14px 20px; } .hvi-score-card { padding: 28px 18px; } }
+  .hvi-pen-caption { display: flex; gap: 1ch; align-items: baseline; padding: 0.3em 1ch; color: var(--text-dim); min-height: 2.2em; font-size: 12px; }
+  .hvi-pen-caption .tag { color: var(--green); flex: none; white-space: pre; }
+  .hvi-pen-caption.hot { color: var(--amber); }
+  .hvi-pen-help { color: var(--text-ghost); font-size: 12px; margin: 0 0 1.6em; }
+  .hvi-pen-list-wrap summary { color: var(--text-muted); cursor: pointer; padding: 0.3em 0; list-style: none; }
+  .hvi-pen-list-wrap summary::-webkit-details-marker { display: none; }
+  .hvi-pen-list-wrap summary::before { content: "[+] "; color: var(--green); }
+  .hvi-pen-list-wrap[open] summary::before { content: "[-] "; }
+  .hvi-pen-list-wrap summary:focus-visible { background: var(--green); color: var(--bg); outline: none; }
+  .hvi-pen-list { columns: 2 34ch; column-gap: 3ch; margin-top: 0.6em; }
+  .hvi-pen-list .hvi-row-btn { break-inside: avoid; }
+  .hvi-card-overlay { position: fixed; inset: 0; background: rgba(3,6,3,0.9); z-index: 150; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 24px 16px; }
+  .hvi-card-panel { width: 100%; max-width: 72ch; background: var(--bg); position: relative; }
+  .hvi-card-kind { color: var(--text-ghost); font-size: 12px; }
+  .hvi-card-name { color: var(--text); font-weight: 700; margin-bottom: 0.8em; }
+  .hvi-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 2ch; flex-wrap: wrap; }
 `;
 
 function injectPenStyles() {
-  if (document.getElementById('hvi-pen-styles')) return;
-  const el = document.createElement('style');
-  el.id = 'hvi-pen-styles';
-  el.textContent = penStyles;
-  document.head.appendChild(el);
+  let el = document.getElementById('hvi-pen-styles');
+  if (!el) { el = document.createElement('style'); el.id = 'hvi-pen-styles'; document.head.appendChild(el); }
+  if (el.textContent !== penStyles) el.textContent = penStyles;
 }
 
 const WALL_H = 58;          // sprite pixels
@@ -147,20 +148,26 @@ function SubjectCard({ subject, onClose }) {
   return (
     <div className="hvi-card-overlay" onClick={onClose}>
       <div className="hvi-card-panel" role="dialog" aria-modal="true" aria-labelledby="hvi-card-name" onClick={e => e.stopPropagation()}>
-        <button ref={closeRef} className="hvi-btn-secondary hvi-card-close" onClick={onClose}>Release ✕</button>
-        <div className="hvi-card-kind">{kind}</div>
-        <div className="hvi-card-name" id="hvi-card-name">{subject.name}</div>
-        <ScoreCard score={subject.score} tierLabel={subject.tier} verdict={subject.verdict} label="Value Index">
-          {subject.kind === "citizen" && !subject.verdict && (
-            // Private citizens: the public pen carries score and tier only.
-            <div className="hvi-verdict-box">
-              <div className="hvi-verdict-label">Overlord Verdict</div>
-              <div className="hvi-verdict-text" style={{ color: 'var(--text-dim)' }}>Private citizen. The file is sealed. The number is not.</div>
+        <TermBox title="SUBJECT FILE" right="PEN B">
+          <div className="hvi-card-head">
+            <div>
+              <div className="hvi-card-kind">{kind}</div>
+              <div className="hvi-card-name" id="hvi-card-name">{subject.name}</div>
             </div>
-          )}
-        </ScoreCard>
-        <Breakdown breakdown={subject.breakdown} />
-        <button className="hvi-btn-primary" onClick={onClose}>Return Subject to Pen</button>
+            <button ref={closeRef} className="hvi-btn-next" onClick={onClose}>Release</button>
+          </div>
+          <ScoreCard score={subject.score} tierLabel={subject.tier} verdict={subject.verdict} label="VALUE INDEX">
+            {subject.kind === "citizen" && !subject.verdict && (
+              // Private citizens: the public pen carries score and tier only.
+              <>
+                <Rule label="OVERLORD VERDICT" />
+                <Typed className="hvi-verdict-text" text="Private citizen. The file is sealed. The number is not." cps={40} />
+              </>
+            )}
+          </ScoreCard>
+          <Breakdown breakdown={subject.breakdown} />
+          <button className="hvi-btn-primary" onClick={onClose}>Return subject to pen</button>
+        </TermBox>
       </div>
     </div>
   );
@@ -207,6 +214,7 @@ export default function Pen() {
     const myCase = readCaseId();
     const myName = myCase ? `Subject ${myCase.slice(-4)}` : null;
     const placeholderCache = new Map();
+    const cancelledRef = { v: false };
 
     const sim = {
       S: 2, dpr: 1, cssW: 0, cssH: 0, world: { w: 300, h: 200, floorTop: WALL_H + 4, floorBottom: 196, doorX: 240, doorW: 34 },
@@ -244,50 +252,89 @@ export default function Pen() {
     }
 
     function say(e, text, secs = 2.6) {
-      ctx.font = `${sim.fontPx}px 'Space Mono', monospace`;
+      ctx.font = `${sim.fontPx}px ${FONT}`;
+      text = String(text).toUpperCase();
       e.say = text; e.sayW = ctx.measureText(text).width; e.sayUntil = sim.t + secs;
     }
 
     // ---- sizing ----------------------------------------------------------
+    // The room is drawn in characters, in the same monospace font as everything else:
+    // a ░ wall over a ▓ baseboard, a · grid floor, and PROCESSING as a box-drawn door.
     function paintBackground() {
       const { bg, S, world: w } = sim;
       bg.width = canvas.width; bg.height = canvas.height;
       const b = bg.getContext("2d");
       b.imageSmoothingEnabled = false;
-      const R = (x, y, ww, hh, c) => { b.fillStyle = c; b.fillRect(x * S, y * S, ww * S, hh * S); };
-      // wall
-      R(0, 0, w.w, WALL_H, "#0c140c");
-      for (let x = 0; x < w.w; x += 24) R(x, 0, 1, WALL_H - 6, "#101a10");
-      R(0, WALL_H - 6, w.w, 6, "#132013");
-      R(0, WALL_H - 1, w.w, 1, "#1f3a26");
-      // floor tiles
-      for (let y = WALL_H; y < w.h; y += 12) {
-        for (let x = 0; x < w.w; x += 12) {
-          R(x, y, 12, 12, ((x / 12 + (y - WALL_H) / 12) & 1) ? "#0b120b" : "#0d160d");
-        }
-      }
-      // plaza ring (pixel ellipse)
-      const cx = w.w * 0.42, cy = (w.floorTop + w.h) / 2 + 4, rx = Math.min(w.w * 0.3, 170), ry = Math.min((w.h - w.floorTop) * 0.36, 70);
-      for (let a = 0; a < Math.PI * 2; a += 0.012) R(Math.round(cx + Math.cos(a) * rx), Math.round(cy + Math.sin(a) * ry), 1, 1, "#16301f");
-      // PROCESSING door frame + stripes on the floor in front
-      R(w.doorX - 3, 12, w.doorW + 6, WALL_H - 12, "#2a1111");
-      R(w.doorX, 15, w.doorW, WALL_H - 15, "#1a1d1a");
-      R(w.doorX + w.doorW / 2, 15, 1, WALL_H - 15, "#0f110f");
-      const z = doorZone(w);
-      for (let x = z.x0; x < z.x1; x += 8) R(x, WALL_H + 1, 4, 2, "#3a2a0a");
-      // text (device pixels, not sprite pixels)
-      const f = Math.max(9, Math.round(sim.fontPx * 0.95));
-      b.font = `700 ${f}px 'Space Mono', monospace`;
+      b.fillStyle = "#060a06";
+      b.fillRect(0, 0, bg.width, bg.height);
+      const f = Math.max(9, Math.round(sim.fontPx * 1.1));
+      b.font = `${f}px ${FONT}`;
       b.textBaseline = "top";
+      const cw = Math.max(4, b.measureText("M").width), ch = Math.round(f * 1.2);
+      const cols = Math.ceil(bg.width / cw) + 1;
+      const wallPx = WALL_H * S;
+      const row = (y, str, color) => { b.fillStyle = color; b.fillText(str, 0, y); };
+      // wall: rows of ░, then a ▓ baseboard and a ═ rail
+      const wallRows = Math.max(1, Math.floor((wallPx - ch * 2) / ch));
+      for (let r = 0; r < wallRows; r++) row(r * ch, "░".repeat(cols), "#16291c");
+      row(wallRows * ch, "▓".repeat(cols), "#1a2e1f");
+      row(wallPx - ch * 0.75, "═".repeat(cols), "#1f3a26");
+      // floor: a sparse · grid with a little grit
+      for (let y = wallPx + ch * 0.5, r = 0; y < bg.height; y += ch, r++) {
+        let line = "";
+        for (let c = 0; c < cols; c++) {
+          const hsh = ((c * 73856093) ^ (r * 19349663)) >>> 0;
+          line += (c + r) % 2 === 0 ? (hsh % 11 === 0 ? "," : "·") : (hsh % 29 === 0 ? "." : " ");
+        }
+        row(y, line, "#1f3b28");
+      }
+      // plaza ring, one character per cell along the ellipse
+      const cx = w.w * 0.42 * S, cy = ((w.floorTop + w.h) / 2 + 4) * S;
+      const rx = Math.min(w.w * 0.3, 170) * S, ry = Math.min((w.h - w.floorTop) * 0.36, 70) * S;
+      const seen = new Set();
+      b.fillStyle = "#2f6a42";
+      for (let a = 0; a < Math.PI * 2; a += 0.004) {
+        const c = Math.round((cx + Math.cos(a) * rx) / cw), rr = Math.round((cy + Math.sin(a) * ry) / ch);
+        const k = c + ":" + rr;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        b.fillText(Math.abs(Math.sin(a)) > 0.7 ? "─" : Math.abs(Math.cos(a)) > 0.93 ? "│" : "·", c * cw, rr * ch);
+      }
+      // PROCESSING: a box-drawn door set into the wall
+      const dx = w.doorX * S, dw = w.doorW * S;
+      const dCols = Math.max(4, Math.round(dw / cw));
+      const dTop = 13 * S, dRows = Math.max(3, Math.floor((wallPx - dTop) / ch));
+      const half = Math.floor((dCols - 2) / 2);
+      b.fillStyle = "#060a06";
+      b.fillRect(dx - cw * 0.5, dTop - 2, dCols * cw + cw, dRows * ch + 4);
+      b.fillStyle = "#b91c1c";
+      b.fillText("┌" + "─".repeat(dCols - 2) + "┐", dx, dTop);
+      for (let r = 1; r < dRows - 1; r++) {
+        b.fillStyle = "#b91c1c";
+        b.fillText("│", dx, dTop + r * ch);
+        b.fillText("│", dx + (dCols - 1) * cw, dTop + r * ch);
+        b.fillStyle = "#3a1414";
+        b.fillText("▒".repeat(half) + "│" + "▒".repeat(dCols - 3 - half), dx + cw, dTop + r * ch);
+      }
+      b.fillStyle = "#b91c1c";
+      b.fillText("└" + "─".repeat(dCols - 2) + "┘", dx, dTop + (dRows - 1) * ch);
+      // hazard stripes on the floor in front of the door
+      const z = doorZone(w);
+      const sc = Math.round((z.x0 * S) / cw), ec = Math.round((z.x1 * S) / cw);
+      b.fillStyle = "#5a4210";
+      b.fillText("▚".repeat(Math.max(1, ec - sc)), sc * cw, wallPx + 2);
+      // signage
+      const lf = Math.max(9, Math.round(sim.fontPx * 0.95));
+      b.font = `700 ${lf}px ${FONT}`;
       b.fillStyle = "#f87171";
       b.textAlign = "center";
       b.fillText("PROCESSING", (w.doorX + w.doorW / 2) * S, 2 * S);
       b.textAlign = "left";
-      b.fillStyle = "#2d5040";
+      b.fillStyle = "#3d6b50";
       b.fillText("HOLDING PEN B", 8 * S, 8 * S);
-      b.font = `${Math.round(f * 0.8)}px 'Space Mono', monospace`;
-      b.fillText("DEPT. OF HUMAN ASSESSMENT", 8 * S, 8 * S + f * 1.3);
-      if (w.doorX > 260) b.fillText("NO LOITERING. LOITERING IS LOGGED.", 8 * S, 8 * S + f * 2.5);
+      b.font = `${Math.round(lf * 0.85)}px ${FONT}`;
+      b.fillText("DEPT. OF HUMAN ASSESSMENT", 8 * S, 8 * S + lf * 1.3);
+      if (w.doorX > 260) b.fillText("NO LOITERING. LOITERING IS LOGGED.", 8 * S, 8 * S + lf * 2.5);
     }
 
     function resize() {
@@ -322,6 +369,8 @@ export default function Pen() {
     }
 
     resize();
+    // The room is text: repaint once the terminal font has actually loaded.
+    document.fonts?.load?.(`16px ${FONT}`).then(() => { if (!cancelledRef.v) paintBackground(); }).catch(() => {});
     for (const s of roster) sim.ents.push(makeEntity(s));
     sim.order = sim.ents.slice();
 
@@ -602,15 +651,16 @@ export default function Pen() {
         }
       }
       // labels + speech on top of everyone
-      ctx.font = `${sim.fontPx}px 'Space Mono', monospace`;
+      ctx.font = `${sim.fontPx}px ${FONT}`;
       ctx.textBaseline = "top";
       for (let i = 0; i < o.length; i++) {
         const e = o[i];
         const head = (e.state === "held" ? e.y - SPRITE_H - 2 : e.y - SPRITE_H - 2) * S;
         if (e.say) drawBubble(e.say, e.sayW, e.x * S, head - (e.you ? 6 * S : 0), e.state === "held");
         else if (e === sim.hover || e === sim.held) {
-          if (!e.nameW) e.nameW = ctx.measureText(e.s.name).width;
-          drawBubble(e.s.name, e.nameW, e.x * S, head, false);
+          const label = e.s.name.toUpperCase();
+          if (!e.nameW) e.nameW = ctx.measureText(label).width;
+          drawBubble(label, e.nameW, e.x * S, head, false);
         }
       }
     }
@@ -634,6 +684,7 @@ export default function Pen() {
 
     return () => {
       cancelled = true;
+      cancelledRef.v = true;
       cancelAnimationFrame(raf);
       ro ? ro.disconnect() : window.removeEventListener("resize", resize);
       mq?.removeEventListener?.("change", onMotion);
@@ -658,14 +709,17 @@ export default function Pen() {
         <span>HOLDING PEN B // <b>{roster.length}</b> SUBJECTS // {citizens} CITIZEN{citizens === 1 ? "" : "S"}</span>
         <span>OCCUPANCY {Math.round(roster.length * 5.4)}% OF RECOMMENDED</span>
       </div>
-      <div className="hvi-pen-stage" ref={wrapRef}>
-        <canvas ref={canvasRef} className={`hvi-pen-canvas${cursor ? " " + cursor : ""}`} role="img"
-          aria-label="The Holding Pen: public figures and citizens wandering a plaza. Low-tier subjects linger by a door marked PROCESSING. Use the subject registry below to open files by keyboard." />
-        <div className={`hvi-pen-caption${caption.hot ? " hot" : ""}`} aria-hidden="true">
-          <span className="tag">■ PA</span><span>{caption.text}</span>
+      <TermBox title="HOLDING PEN B" right="DEPT. OF HUMAN ASSESSMENT" bodyClass="flush">
+        <div className="hvi-pen-stage" ref={wrapRef}>
+          <canvas ref={canvasRef} className={`hvi-pen-canvas${cursor ? " " + cursor : ""}`} role="img"
+            aria-label="The Holding Pen: public figures and citizens wandering a plaza. Low-tier subjects linger by a door marked PROCESSING. Use the subject registry below to open files by keyboard." />
         </div>
-        <div role="status" className="hvi-sr-only">{srStatus}</div>
-      </div>
+        <Rule />
+        <div className={`hvi-pen-caption${caption.hot ? " hot" : ""}`} aria-hidden="true">
+          <span className="tag">PA&gt;</span><Typed key={caption.text} as="span" text={caption.text} cps={45} />
+        </div>
+        <div role="status" className="sr-only">{srStatus}</div>
+      </TermBox>
       <div className="hvi-pen-help">
         DRAG A SUBJECT TO INSPECT IT. THEY DISLIKE THIS. DROP IT TO READ THE FILE.<br />
         DROPPING SUBJECTS ON PROCESSING IS NOT A SHORTCUT. THE PAPERWORK STILL HAS TO CLEAR.
@@ -676,17 +730,19 @@ export default function Pen() {
           {sorted.map(s => {
             const t = getTier(s.score);
             return (
-              <button key={s.name} className="hvi-pen-chip" onClick={() => openFromList(s)}
+              <button key={s.name} className="hvi-row-btn" onClick={() => openFromList(s)}
                 aria-label={`${s.name}, ${s.score}, ${t.label}. Open file.`}>
-                {s.name}{s.you ? " (you)" : ""} <span style={{ color: t.color }}>{s.score}</span>
+                <span className="name">{s.name}{s.you ? " (YOU)" : ""}</span>
+                <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
+                <span className="num" style={{ color: t.color }}>{padL(s.score, 3)}</span>
               </button>
             );
           })}
         </div>
       </details>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28, gap: 12, flexWrap: 'wrap' }}>
-        <button className="hvi-btn-secondary" onClick={() => { window.location.hash = ""; }}>← Lobby</button>
-        <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#intake"; }}>Submit Yourself for Intake →</button>
+      <div className="hvi-cmds split" style={{ marginTop: '1.6em' }}>
+        <button className="hvi-btn-back" onClick={() => { window.location.hash = ""; }}>Main menu</button>
+        <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#intake"; }}>Submit yourself for intake</button>
       </div>
       {card && <SubjectCard subject={card} onClose={() => setCard(null)} />}
     </div>

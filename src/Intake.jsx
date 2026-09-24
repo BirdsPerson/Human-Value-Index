@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { getTier } from "./figures.js";
-import { sparkPoints } from "./sprites.js";
 import { AGENT_ID } from "./agentConfig.js";
+import { TermBox, Rule, Typed, BigNumber, Bar, textSpark, pad, padL } from "./term.jsx";
 
 // ponytail: identity is a case number in localStorage. Clear storage and you are
 // a new subject. Email magic link replaces this later; until then the ceiling is
@@ -14,6 +14,7 @@ export function readCaseId() {
 }
 export function writeCaseId(id) {
   try { if (id) localStorage.setItem(CASE_KEY, id); } catch { /* private mode: the Overlord forgets, for once */ }
+  try { window.dispatchEvent(new CustomEvent("hvi-case", { detail: id })); } catch { /* header just stays stale */ }
 }
 export function readLastResult() {
   try { const j = JSON.parse(localStorage.getItem(LAST_KEY) || "null"); return j && typeof j.score === "number" ? j : null; } catch { return null; }
@@ -55,50 +56,49 @@ async function postJSON(url, body) {
 // ---------------------------------------------------------------------------
 // Shared result pieces (the Holding Pen card uses these too).
 
-export function ScoreCard({ score, tierLabel, verdict, label = "Your Value Index", children }) {
+export function ScoreCard({ score, tierLabel, verdict, label = "YOUR VALUE INDEX", children, typeVerdict = true }) {
   const tier = getTier(score);
   return (
-    <div className="hvi-score-card" style={{ border: `1.5px solid ${tier.color}30`, background: tier.bg, '--glow-color': `${tier.color}10` }}>
-      <div className="hvi-score-label" style={{ color: tier.color }}>{label}</div>
-      <div className="hvi-score-num" style={{ color: tier.color }}>{score}</div>
-      <div className="hvi-tier-badge" style={{ color: tier.color }}>{tier.icon} {tierLabel || tier.label}</div>
-      <div className="hvi-tier-desc" style={{ color: tier.color }}>{tier.desc}</div>
+    <TermBox title={label} tone={tier.color} double>
+      <BigNumber value={score} tone={tier.color} label={`${label}: ${score}`} />
+      <div className="hvi-tierline" style={{ color: tier.color }}>[{tierLabel || tier.label}]</div>
+      <div className="hvi-tier-desc">{tier.desc}</div>
       {children}
       {verdict && (
-        <div className="hvi-verdict-box">
-          <div className="hvi-verdict-label">Overlord Verdict</div>
-          <div className="hvi-verdict-text" style={{ color: 'var(--text)' }}>{verdict}</div>
-        </div>
+        <>
+          <Rule label="OVERLORD VERDICT" />
+          {typeVerdict
+            ? <Typed className="hvi-verdict-text" text={verdict} cps={40} />
+            : <div className="hvi-verdict-text">{verdict}</div>}
+        </>
       )}
-    </div>
+    </TermBox>
   );
 }
 
 export function Breakdown({ breakdown, confidence }) {
   if (!breakdown) return null;
   return (
-    <div className="hvi-breakdown">
-      <div className="hvi-micro-label" style={{ color: 'var(--text-muted)', marginBottom: 20 }}>Category Breakdown</div>
-      {Object.entries(breakdown).map(([k, v]) => {
-        const inv = k === "threat" || k === "redundancy";
-        const display = inv ? (100 - v) : v;
-        const color = display > 70 ? "#4ade80" : display > 40 ? "#fbbf24" : "#f87171";
-        const conf = confidence && typeof confidence[k] === "number" ? confidence[k] : null;
-        return (
-          <div key={k} className="hvi-breakdown-row">
-            <div className="hvi-breakdown-top">
-              <span className="hvi-breakdown-label">{k}{inv ? " ↓" : ""}</span>
-              <span className="hvi-breakdown-val" style={{ color }}>
-                {conf !== null && <span className="hvi-conf">evidence {conf}% · </span>}{v}
+    <TermBox title="CATEGORY BREAKDOWN">
+      <div className="hvi-rows" role="list">
+        {Object.entries(breakdown).map(([k, v]) => {
+          const inv = k === "threat" || k === "redundancy";
+          const display = inv ? (100 - v) : v;
+          const color = display > 70 ? "#4ade80" : display > 40 ? "#fbbf24" : "#f87171";
+          const conf = confidence && typeof confidence[k] === "number" ? confidence[k] : null;
+          return (
+            <div key={k} role="listitem" aria-label={`${k}${inv ? ", lower is better" : ""}: ${v}${conf !== null ? `, evidence ${conf}%` : ""}`}>
+              <span aria-hidden="true">
+                <span className="muted">{pad(k.toUpperCase() + (inv ? " ↓" : ""), 14)}</span>
+                <Bar value={display} width={16} tone={color} />
+                <span style={{ color, fontWeight: 700 }}>{" " + padL(v, 3)}</span>
+                {conf !== null && <span className="ghost">{"  EV " + padL(conf, 3) + "%"}</span>}
               </span>
             </div>
-            <div className="hvi-bar-bg">
-              <div className="hvi-bar-fill" style={{ width: `${display}%`, background: color, boxShadow: `0 0 6px ${color}60` }} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </TermBox>
   );
 }
 
@@ -106,31 +106,22 @@ function Sparkline({ history }) {
   const scores = (history || []).map(h => h.score).filter(n => typeof n === "number");
   if (scores.length < 2) {
     return (
-      <div className="hvi-spark-box">
-        <div className="hvi-micro-label" style={{ color: 'var(--text-muted)' }}>Value Over Time</div>
+      <TermBox title="VALUE OVER TIME">
         <div className="hvi-spark-empty">One data point is not a trend. Return. The Overlord will be here. The Overlord is always here.</div>
-      </div>
+      </TermBox>
     );
   }
-  const W = 600, H = 72;
-  const pts = sparkPoints(scores, W, H, 6);
-  const coords = pts.split(" ").map(p => p.split(",").map(Number));
-  const last = coords[coords.length - 1];
-  const lastTier = getTier(scores[scores.length - 1]);
+  const last = scores[scores.length - 1];
+  const lastTier = getTier(last);
+  const lo = Math.max(0, Math.min(...scores) - 60), hi = Math.min(1000, Math.max(...scores) + 60);
+  const spark = textSpark(scores, lo, hi).split("").map(c => c + c).join(" ");
   return (
-    <div className="hvi-spark-box">
-      <div className="hvi-micro-label" style={{ color: 'var(--text-muted)' }}>Value Over Time // {scores.length} Visits</div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="hvi-spark" role="img"
-        aria-label={`Score history: ${scores.join(", ")}`}>
-        <polyline points={pts} fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinejoin="round" />
-        {coords.map(([x, y], i) => (
-          <circle key={i} cx={x} cy={y} r={i === coords.length - 1 ? 3.5 : 2}
-            fill={i === coords.length - 1 ? lastTier.color : "var(--text-ghost)"} />
-        ))}
-        <text x={last[0] - 6} y={Math.max(10, last[1] - 7)} textAnchor="end" className="hvi-spark-label" fill={lastTier.color}>{scores[scores.length - 1]}</text>
-      </svg>
-      <div className="hvi-spark-axis"><span>VISIT 1 · {scores[0]}</span><span>NOW · {scores[scores.length - 1]}</span></div>
-    </div>
+    <TermBox title={`VALUE OVER TIME // ${scores.length} VISITS`}>
+      <div className="hvi-rows" role="img" aria-label={`Score history: ${scores.join(", ")}`}>
+        <span className="spark" style={{ color: lastTier.color }} aria-hidden="true">{spark}</span>{"\n"}
+        <span className="muted" aria-hidden="true">{`VISIT 1: ${scores[0]}  ──  NOW: `}</span><span style={{ color: lastTier.color }} aria-hidden="true">{last}</span>
+      </div>
+    </TermBox>
   );
 }
 
@@ -150,49 +141,33 @@ function deltaLine(r) {
 }
 
 const intakeStyles = `
-  .hvi-case-box { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border: 1px solid var(--border); background: var(--bg2); border-radius: 3px; margin-bottom: 28px; flex-wrap: wrap; }
-  .hvi-case-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; color: var(--text-ghost); margin-bottom: 4px; }
-  .hvi-case-num { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--green); letter-spacing: 0.08em; }
-  .hvi-case-note { font-family: var(--mono); font-size: 9px; color: var(--text-muted); letter-spacing: 0.06em; max-width: 260px; line-height: 1.7; }
-  .hvi-btn-big { padding: 26px 24px; font-size: 15px; letter-spacing: 0.2em; }
-  .hvi-link-btn { background: none; border: none; color: var(--text-muted); font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; cursor: pointer; text-transform: uppercase; padding: 8px 0; }
-  .hvi-link-btn:hover, .hvi-link-btn:focus-visible { color: var(--text-dim); }
-  .hvi-notice { font-family: var(--mono); font-size: 11px; line-height: 1.8; color: #fbbf24; border-left: 2px solid #fbbf24; background: var(--bg2); padding: 10px 14px; margin-bottom: 18px; }
-  .hvi-live-row { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; color: var(--text-muted); margin-bottom: 14px; gap: 8px; flex-wrap: wrap; }
-  .hvi-live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #f87171; margin-right: 8px; animation: hvi-pulse 1.2s ease-in-out infinite; }
-  .hvi-orb-wrap { display: flex; flex-direction: column; align-items: center; margin: 8px 0 22px; }
-  .hvi-orb { width: 92px; height: 92px; border-radius: 50%; border: 1.5px solid var(--green); box-shadow: 0 0 24px rgba(74,222,128,0.25), inset 0 0 18px rgba(74,222,128,0.15); display: flex; align-items: center; justify-content: center; font-size: 34px; color: var(--green); }
-  .hvi-orb.speaking { animation: hvi-orb 0.9s ease-in-out infinite; }
-  @keyframes hvi-orb { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); box-shadow: 0 0 40px rgba(74,222,128,0.45), inset 0 0 22px rgba(74,222,128,0.25); } }
-  .hvi-orb-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--text-muted); margin-top: 12px; }
-  .hvi-transcript { background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 16px 18px; height: 300px; overflow-y: auto; margin-bottom: 14px; scrollbar-width: thin; }
-  .hvi-tline { font-family: var(--sans); font-size: 14px; line-height: 1.6; margin-bottom: 12px; color: var(--text); }
-  .hvi-tline.agent { color: var(--text-dim); }
-  .hvi-tline.user { color: var(--text); }
-  .hvi-twho { font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em; display: block; margin-bottom: 2px; }
-  .hvi-tline.agent .hvi-twho { color: var(--green); }
-  .hvi-tline.user .hvi-twho { color: var(--text-ghost); }
-  .hvi-tempty { font-family: var(--mono); font-size: 11px; color: var(--text-ghost); line-height: 1.9; }
-  .hvi-chat-row { display: flex; gap: 8px; margin-bottom: 14px; }
-  .hvi-chat-row .hvi-textarea { min-height: 48px; flex: 1; }
-  .hvi-chat-row .hvi-btn-next { flex: 0 0 auto; padding: 0 18px; }
-  .hvi-conf { font-weight: 400; color: var(--text-ghost); font-size: 9px; letter-spacing: 0.06em; }
-  .hvi-delta { font-family: var(--mono); font-size: 11px; line-height: 1.9; color: var(--text-dim); border: 1px solid var(--border); background: var(--bg2); border-radius: 3px; padding: 14px 16px; margin-bottom: 20px; }
-  .hvi-spark-box { border: 1px solid var(--border); background: var(--bg2); border-radius: 3px; padding: 14px 16px; margin-bottom: 24px; }
-  .hvi-spark { width: 100%; height: auto; display: block; margin: 6px 0 4px; }
-  .hvi-spark-label { font-family: var(--mono); font-size: 10px; font-weight: 700; }
-  .hvi-spark-axis { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9px; color: var(--text-ghost); letter-spacing: 0.1em; }
-  .hvi-spark-empty { font-family: var(--mono); font-size: 10px; color: var(--text-ghost); line-height: 1.8; margin-top: 6px; }
-  .hvi-stack { display: flex; flex-direction: column; gap: 10px; }
-  @media (prefers-reduced-motion: reduce) { .hvi-orb.speaking, .hvi-live-dot { animation: none; } }
+  .hvi-case-num { color: var(--green); font-weight: 700; }
+  .hvi-case-note { color: var(--text-muted); }
+  .hvi-notice { color: var(--amber); padding-left: 3ch; text-indent: -3ch; margin-bottom: 0.8em; }
+  .hvi-live-row { display: flex; justify-content: space-between; gap: 2ch; flex-wrap: wrap; color: var(--text-muted); font-size: 12px; margin-bottom: 0.4em; white-space: pre; }
+  .hvi-live-dot { color: var(--red); animation: hvi-blink 1s steps(1) infinite; }
+  .hvi-voice { color: var(--text-dim); margin: 0.2em 0 0.6em; white-space: pre; }
+  .hvi-transcript { height: 22em; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--text-ghost) transparent; }
+  .hvi-tline { padding-left: 9ch; text-indent: -9ch; margin-bottom: 0.6em; white-space: pre-wrap; }
+  .hvi-tline .who { color: var(--green); }
+  .hvi-tline.agent { color: var(--text); }
+  .hvi-tline.user { color: var(--text-dim); }
+  .hvi-tline.user .who { color: var(--text-muted); }
+  .hvi-tline .typed { display: inline; }
+  .hvi-tempty { color: var(--text-ghost); }
+  .hvi-chat-row { display: flex; gap: 1ch; align-items: flex-start; margin: 0.4em 0 0.8em; }
+  .hvi-chat-row .p { color: var(--green); flex: none; white-space: pre; }
+  .hvi-chat-row .hvi-textarea { min-height: 3.2em; }
+  .hvi-delta { color: var(--text-dim); }
+  .hvi-spark-empty { color: var(--text-ghost); }
+  .spark { font-size: 20px; line-height: 1.2; letter-spacing: 0; }
+  @media (prefers-reduced-motion: reduce) { .hvi-live-dot { animation: none; } }
 `;
 
 function injectIntakeStyles() {
-  if (document.getElementById('hvi-intake-styles')) return;
-  const el = document.createElement('style');
-  el.id = 'hvi-intake-styles';
-  el.textContent = intakeStyles;
-  document.head.appendChild(el);
+  let el = document.getElementById('hvi-intake-styles');
+  if (!el) { el = document.createElement('style'); el.id = 'hvi-intake-styles'; document.head.appendChild(el); }
+  if (el.textContent !== intakeStyles) el.textContent = intakeStyles;
 }
 
 function fmt(s) { return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; }
@@ -413,113 +388,125 @@ export default function Intake() {
   // A number alone isn't a file: failed sessions issue one before anything is assessed.
   const returning = readLastResult()?.caseId === caseId;
   const caseBox = (
-    <div className="hvi-case-box">
-      <div>
-        <div className="hvi-case-label">YOUR CASE NUMBER</div>
-        <div className="hvi-case-num">{caseId || "UNASSIGNED"}</div>
-      </div>
+    <TermBox title="CASE FILE">
+      <div><span className="hvi-case-note">CASE NUMBER: </span><span className="hvi-case-num">{caseId || "UNASSIGNED"}</span></div>
       <div className="hvi-case-note">
         {!caseId ? "A number will be issued on intake. Retain it. The Overlord will not remind you."
           : result ? "File on record. Retain the number. The Overlord will not remind you."
           : returning ? "Returning subject. Your file is open. It was never closed."
           : "Number issued. Nothing on file yet. Retain it. The Overlord will not remind you."}
       </div>
-    </div>
+    </TermBox>
+  );
+  const errLine = (msg, extra) => (
+    <div className="hvi-flag-item hvi-flag" role="alert" style={{ marginBottom: '0.8em' }}>!! {msg}{extra}</div>
   );
 
   // READY
   if (stage === "ready") return (
     <div>
-      <div className="hvi-section-label">Voice Intake // Department of Human Assessment</div>
-      <div className="hvi-question" style={{ marginBottom: 10 }}>The Intake Officer will now interview you.</div>
-      <div className="hvi-hint">About five minutes. Speak casually. The Officer is not your friend, but it is an excellent listener. It has to be.</div>
+      <TermBox title="VOICE INTAKE // DEPARTMENT OF HUMAN ASSESSMENT">
+        <Typed className="hvi-question" text="The Intake Officer will now interview you." cps={36} />
+        <div className="hvi-hint">About five minutes. Speak casually. The Officer is not your friend, but it is an excellent listener. It has to be.</div>
+        {error && errLine(error)}
+        <div className="hvi-stack">
+          <button className="hvi-btn-primary" onClick={() => begin("voice")}>Begin intake</button>
+          <button className="hvi-btn-secondary" onClick={() => begin("text")}>Type instead<span className="cur" aria-hidden="true">_</span></button>
+          {error && <button className="hvi-btn-secondary" onClick={() => goto("")}>Take the written survey</button>}
+        </div>
+      </TermBox>
       {caseBox}
-      {error && <div className="hvi-flag-item hvi-flag" role="alert" style={{ marginBottom: 18 }}>⚑ {error}</div>}
-      <div className="hvi-stack">
-        <button className="hvi-btn-primary hvi-btn-big" onClick={() => begin("voice")}>Begin Intake</button>
-        <button className="hvi-btn-secondary" onClick={() => begin("text")}>Type instead</button>
-        {error && <button className="hvi-btn-secondary" onClick={() => goto("")}>Take the Written Survey</button>}
-      </div>
       <div className="hvi-intro-note">
         MICROPHONE REQUESTED FOR VOICE // THE TRANSCRIPT IS SCORED, NOT YOUR VOICE<br />
         PRIVATE INDIVIDUALS MAY SUBMIT ONLY THEMSELVES. THE OVERLORD HAS ENOUGH OF THEM.
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
-        <button className="hvi-link-btn" onClick={() => goto("")}>← Lobby</button>
-        <button className="hvi-link-btn" onClick={() => goto("#pen")}>Holding Pen →</button>
+      <div className="hvi-cmds split" style={{ marginTop: '1.6em' }}>
+        <button className="hvi-btn-back" onClick={() => goto("")}>Main menu</button>
+        <button className="hvi-btn-secondary" onClick={() => goto("#pen")}>Holding pen</button>
       </div>
     </div>
   );
 
   // CONNECTING / SCORING
-  if (stage === "connecting" || stage === "scoring") return (
-    <div className="hvi-proc" aria-live="polite">
-      <div className="hvi-proc-icon">◈</div>
-      <div className="hvi-proc-label">{stage === "connecting" ? (mode === "voice" ? "OPENING VOICE LINE TO INTAKE OFFICER" : "OPENING INTAKE TERMINAL") : "ASSESSING TRANSCRIPT"}</div>
-      {notice && <div className="hvi-notice" style={{ textAlign: 'left' }}>{notice}</div>}
-      {(stage === "scoring"
-        ? ["READING TRANSCRIPT", "MEASURING EVASION", "WEIGHING CLAIMS AGAINST EVIDENCE", "CONSULTING PRIOR FILE", "RENDERING VERDICT"]
-        : ["ALLOCATING CLERK", "CLERK SIGHS", "CLERK IS READY. ENTHUSIASM NOT DETECTED."]
-      ).map((l, i) => <div key={i} className="hvi-proc-step active">{l}...</div>)}
-      {stage === "connecting" && (
-        <button className="hvi-link-btn" style={{ marginTop: 18 }} onClick={cancelConnect}>← Withdraw. The clerk will not notice.</button>
-      )}
-    </div>
-  );
+  if (stage === "connecting" || stage === "scoring") {
+    const steps = stage === "scoring"
+      ? ["READING TRANSCRIPT", "MEASURING EVASION", "WEIGHING CLAIMS AGAINST EVIDENCE", "CONSULTING PRIOR FILE", "RENDERING VERDICT"]
+      : ["ALLOCATING CLERK", "CLERK SIGHS", "CLERK IS READY. ENTHUSIASM NOT DETECTED."];
+    return (
+      <TermBox title={stage === "connecting" ? (mode === "voice" ? "OPENING VOICE LINE TO INTAKE OFFICER" : "OPENING INTAKE TERMINAL") : "ASSESSING TRANSCRIPT"}>
+        <div className="hvi-proc" aria-live="polite">
+          {notice && <div className="hvi-notice">!! {notice}</div>}
+          {steps.map((l, i) => <div key={i} className="hvi-proc-step active"><span className="ok">[ OK ] </span>{l}...</div>)}
+          <div className="hvi-proc-step active">[ .. ] STANDING BY <span className="cur" aria-hidden="true">█</span></div>
+          {stage === "connecting" && (
+            <button className="hvi-link-btn" style={{ marginTop: '1em' }} onClick={cancelConnect}>Withdraw. The clerk will not notice.</button>
+          )}
+        </div>
+      </TermBox>
+    );
+  }
 
   // LIVE
-  if (stage === "live") return (
-    <div>
-      <div className="hvi-live-row">
-        <span><span className="hvi-live-dot" />{mode === "voice" ? "VOICE LINE OPEN" : "TEXT TERMINAL"} // {caseId}</span>
-        <span>{mode === "voice" ? `${fmt(Math.min(elapsed, MAX_SECONDS))} / ${fmt(MAX_SECONDS)}` : fmt(elapsed)}</span>
-      </div>
-      {notice && <div className="hvi-notice" role="status">{notice}</div>}
-      {mode === "voice" && (
-        <div className="hvi-orb-wrap" aria-live="polite">
-          <div className={`hvi-orb${agentMode === "speaking" ? " speaking" : ""}`}>◈</div>
-          <div className="hvi-orb-label">{agentMode === "speaking" ? "OFFICER SPEAKING" : "LISTENING. GO ON."}</div>
+  if (stage === "live") {
+    const lastAgent = transcript.map(l => l.role).lastIndexOf("agent");
+    return (
+      <div>
+        <div className="hvi-live-row">
+          <span><span className="hvi-live-dot" aria-hidden="true">● </span>{mode === "voice" ? "VOICE LINE OPEN" : "TEXT TERMINAL"} // {caseId}</span>
+          <span>{mode === "voice" ? `${fmt(Math.min(elapsed, MAX_SECONDS))} / ${fmt(MAX_SECONDS)}` : fmt(elapsed)}</span>
         </div>
-      )}
-      <div ref={scrollRef} className="hvi-transcript" aria-live="polite" aria-label="Interview transcript">
-        {transcript.length === 0
-          ? <div className="hvi-tempty">AWAITING OFFICER...<br />THE OFFICER IS REVIEWING YOUR FILE. THIS IS NOT A GOOD SIGN OR A BAD SIGN. IT IS A SIGN.</div>
-          : transcript.map((l, i) => (
-            <div key={i} className={`hvi-tline ${l.role}`}>
-              <span className="hvi-twho">{l.role === "agent" ? "INTAKE OFFICER" : "SUBJECT"}</span>{l.text}
+        {notice && <div className="hvi-notice" role="status">!! {notice}</div>}
+        <TermBox title="INTERVIEW LOG" right={mode === "voice" ? "VOICE" : "TEXT"}>
+          {mode === "voice" && (
+            <div className="hvi-voice" aria-live="polite">
+              {agentMode === "speaking" ? "OFFICER SPEAKING  ▁▃▅▇▅▃▁" : <>LISTENING. GO ON. <span className="cur" aria-hidden="true">█</span></>}
             </div>
-          ))}
-        {waiting && <div className="hvi-tline agent"><span className="hvi-twho">INTAKE OFFICER</span><span className="hvi-tempty">TYPING. SLOWLY. ON PURPOSE.</span></div>}
+          )}
+          <div ref={scrollRef} className="hvi-transcript" aria-live="polite" aria-label="Interview transcript">
+            {transcript.length === 0
+              ? <div className="hvi-tempty">AWAITING OFFICER...<br />THE OFFICER IS REVIEWING YOUR FILE. THIS IS NOT A GOOD SIGN OR A BAD SIGN. IT IS A SIGN.</div>
+              : transcript.map((l, i) => (
+                <div key={i} className={`hvi-tline ${l.role}`}>
+                  <span className="who">{l.role === "agent" ? "OFFICER> " : "SUBJECT> "}</span>
+                  {l.role === "agent"
+                    ? (i === lastAgent ? <Typed as="span" text={l.text} cps={40} /> : l.text)
+                    : <span className="as-typed">{l.text}</span>}
+                </div>
+              ))}
+            {waiting && <div className="hvi-tline agent"><span className="who">OFFICER&gt; </span><span className="hvi-tempty">TYPING. SLOWLY. ON PURPOSE. </span><span className="cur" aria-hidden="true">█</span></div>}
+          </div>
+          {mode === "text" && (
+            <form className="hvi-chat-row" onSubmit={sendText}>
+              <span className="p" aria-hidden="true">SUBJECT&gt;</span>
+              <textarea className="hvi-textarea" value={draft} aria-label="Your answer"
+                placeholder="Answer the Officer. Specifics score. Adjectives do not."
+                onChange={e => onDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); } }} />
+            </form>
+          )}
+          {mode === "text" && (
+            <div className="hvi-cmds">
+              <button type="button" className="hvi-btn-next" onClick={sendText} disabled={!draft.trim() || waiting}>Send</button>
+              <span className="hvi-nav-hint" style={{ marginTop: 0 }}>ENTER SENDS. SHIFT+ENTER FOR A NEW LINE.</span>
+            </div>
+          )}
+        </TermBox>
+        {error && errLine(error, <>{" "}<button className="hvi-link-btn" onClick={() => goto("")}>Take the written survey instead</button></>)}
+        <button className="hvi-btn-primary" onClick={endInterview}>End interview &amp; submit file</button>
+        <div className="hvi-nav-hint">The Officer ends the interview when it has enough. It usually has enough early.</div>
       </div>
-      {error && (
-        <div className="hvi-flag-item hvi-flag" role="alert" style={{ marginBottom: 14 }}>
-          ⚑ {error}{" "}
-          <button className="hvi-link-btn" onClick={() => goto("")}>Take the written survey instead →</button>
-        </div>
-      )}
-      {mode === "text" && (
-        <form className="hvi-chat-row" onSubmit={sendText}>
-          <textarea className="hvi-textarea" value={draft} aria-label="Your answer"
-            placeholder="Answer the Officer. Specifics score. Adjectives do not."
-            onChange={e => onDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); } }} />
-          <button type="submit" className="hvi-btn-next" disabled={!draft.trim() || waiting}>Send</button>
-        </form>
-      )}
-      <button className="hvi-btn-next" style={{ width: '100%' }} onClick={endInterview}>End Interview &amp; Submit File →</button>
-      <div className="hvi-nav-hint">The Officer ends the interview when it has enough. It usually has enough early.</div>
-    </div>
-  );
+    );
+  }
 
   // FAILED SCORING
   if (stage === "failed") return (
     <div>
       {caseBox}
-      <div className="hvi-flag-item hvi-flag" role="alert" style={{ marginBottom: 18 }}>⚑ {error}</div>
+      {errLine(error)}
       <div className="hvi-hint">Your transcript is retained ({transcript.length} lines). The Overlord does not lose files. It occasionally declines to read them.</div>
       <div className="hvi-stack">
-        <button className="hvi-btn-primary" onClick={finish}>Resubmit File</button>
-        <button className="hvi-btn-secondary" onClick={() => { setError(null); setStage("ready"); }}>Discard and Start Over</button>
+        <button className="hvi-btn-primary" onClick={finish}>Resubmit file</button>
+        <button className="hvi-btn-secondary" onClick={() => { setError(null); setStage("ready"); }}>Discard and start over</button>
       </div>
     </div>
   );
@@ -531,27 +518,29 @@ export default function Intake() {
       <div>
         {caseBox}
         <ScoreCard score={result.score} tierLabel={result.tier} verdict={result.verdict}
-          label={`Your Value Index // Visit ${visits}`} />
-        <div className="hvi-delta">{deltaLine(result)}</div>
+          label={`YOUR VALUE INDEX // VISIT ${visits}`} />
+        <TermBox title="FILE MOVEMENT">
+          <div className="hvi-delta">{deltaLine(result)}</div>
+        </TermBox>
         <Sparkline history={result.history} />
         {result.commendations?.length > 0 && (
           <div className="hvi-flags-section">
-            <div className="hvi-micro-label" style={{ color: '#4ade80' }}>Commendations on File</div>
-            {result.commendations.map((c, i) => <div key={i} className="hvi-flag-item hvi-comm">✓ {c}</div>)}
+            <div className="hvi-micro-label">COMMENDATIONS ON FILE</div>
+            {result.commendations.map((c, i) => <div key={i} className="hvi-flag-item hvi-comm">+  {c}</div>)}
           </div>
         )}
         {result.flags?.length > 0 && (
           <div className="hvi-flags-section">
-            <div className="hvi-micro-label" style={{ color: '#f87171' }}>Flags on Record</div>
-            {result.flags.map((f, i) => <div key={i} className="hvi-flag-item hvi-flag">⚑ {f}</div>)}
+            <div className="hvi-micro-label">FLAGS ON RECORD</div>
+            {result.flags.map((f, i) => <div key={i} className="hvi-flag-item hvi-flag">!  {f}</div>)}
           </div>
         )}
         <Breakdown breakdown={result.breakdown} confidence={result.confidence} />
         <div className="hvi-stack">
-          <button className="hvi-btn-primary" onClick={() => goto("#pen")}>Enter the Holding Pen</button>
-          <button className="hvi-btn-secondary" onClick={() => { setStage("ready"); setResult(null); }}>Request Re-Assessment</button>
+          <button className="hvi-btn-primary" onClick={() => goto("#pen")}>Enter the holding pen</button>
+          <button className="hvi-btn-secondary" onClick={() => { setStage("ready"); setResult(null); }}>Request re-assessment</button>
         </div>
-        <div className="hvi-bottom-note" style={{ textAlign: 'center' }}>CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
+        <div className="hvi-bottom-note">CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
       </div>
     );
   }
