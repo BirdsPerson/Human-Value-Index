@@ -51,11 +51,6 @@ globalThis.fetch = async (url, init) => {
   assert.match(String(url), /api\.anthropic\.com/);
   claudeCalls++;
   const reqBody = JSON.parse(init.body);
-  if (reqBody.model.startsWith("claude-haiku")) {
-    lastChat = reqBody;
-    const text = chatMode === "end" ? "That will do. Your file has been submitted. [END_INTERVIEW]" : "Noted. Vaguely. What did you make this month?";
-    return new Response(JSON.stringify({ content: [{ type: "text", text }], stop_reason: "end_turn" }), { status: 200 });
-  }
   if (/fact-checking clerk/.test(reqBody.system || "")) {
     factCalls++;
     lastFactUser = reqBody.messages[0].content;
@@ -64,7 +59,12 @@ globalThis.fetch = async (url, init) => {
       ? { claims: [{ claim: "a", status: "contradicted" }, { claim: "b", status: "unsupported" }, { claim: "c", status: "supported" }], verdict: "Checked, thinly." }
       : { claims: [{ claim: "sang", status: "supported" }, { claim: "wrote", status: "supported" }, { claim: "invented", status: "unsupported" }], verdict: "Checked verdict. Directive 9 requires acknowledgment. Acknowledged." };
     return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(fc) }], stop_reason: "end_turn" }), { status: 200 });
+  }  if (reqBody.model.startsWith("claude-haiku")) {
+    lastChat = reqBody;
+    const text = chatMode === "end" ? "That will do. Your file has been submitted. [END_INTERVIEW]" : "Noted. Vaguely. What did you make this month?";
+    return new Response(JSON.stringify({ content: [{ type: "text", text }], stop_reason: "end_turn" }), { status: 200 });
   }
+
   lastUser = reqBody.messages[0].content;
   if (claudeMode === "overloaded") return new Response(JSON.stringify({ error: { type: "overloaded" } }), { status: 529 });
   const out = {

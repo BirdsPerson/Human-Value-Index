@@ -16,7 +16,7 @@ export const FACT_CHECK_SYSTEM = `You are the fact-checking clerk for the Depart
 Return ONLY JSON, no markdown fences:
 {"claims": [{"claim": "short paraphrase", "status": "supported" | "contradicted" | "unsupported"}], "verdict": "the cleaned verdict"}`;
 
-export const SOURCE_MAX = 120000;   // whole articles: personal-life sections sit late, and care depends on them
+export const SOURCE_MAX = 30000;   // ponytail: cost cap (~7k tokens). Late personal-life sections can fall off; raise if verdicts lose care facts
 const MAX_VERDICT = 700;
 const STATUSES = new Set(["supported", "contradicted", "unsupported"]);
 
@@ -44,6 +44,6 @@ export function summarizeFactCheck(raw, original) {
 
 export async function factCheck({ name, deceased, source, verdict, max = SOURCE_MAX }) {
   const user = `SUBJECT: ${name}\nSTATUS: ${deceased ? "deceased" : "living"}\n\nSOURCE:\n${String(source || "").slice(0, max)}\n\nVERDICT:\n${verdict}`;
-  const raw = parseModelJson(await claudeText({ system: FACT_CHECK_SYSTEM, messages: [{ role: "user", content: user }], maxTokens: 1500 }));
+  const raw = parseModelJson(await claudeText({ system: FACT_CHECK_SYSTEM, messages: [{ role: "user", content: user }], model: "claude-haiku-4-5-20251001", maxTokens: 1500 }));
   return summarizeFactCheck(raw, verdict);
 }
