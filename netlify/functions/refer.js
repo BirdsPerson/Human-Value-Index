@@ -1,9 +1,10 @@
 import { SYSTEM_PROMPT } from "../lib/systemPrompt.js";
 import { PUBLIC_RECORD, REFERRAL_ADDENDUM, directiveFor } from "../lib/publicRecord.js";
 import { callClaude, ScoreError } from "../lib/score.js";
+import { factCheck } from "../lib/factCheck.js";
 import { isCaseId, normalizeAssessment, computeScore, getTier } from "../lib/intake.js";
 import { slugify } from "../../src/figures.js";
-import { nameError, cleanName, resolveWikipedia, onFileFigure, placeReferral, publicFigure, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
+import { nameError, cleanName, resolveWikipedia, fetchArticleText, onFileFigure, placeReferral, publicFigure, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
 import { getCase, hitLimit, refundLimit, peekLimit, getFigure, createFigure } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
@@ -14,6 +15,8 @@ import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORI
 // referral that gets scored costs the monthly quota and the global scoring cap.
 // ponytail: REFER_DAILY bounds Higgsfield too: one generation per referral, retried at
 // most MAX_ATTEMPTS (3) times by scripts/referral_sprites.py only when a figure fails.
+// It bounds Anthropic too: a referral is at most 4 calls (score, fact-check, and one re-score
+// plus re-check when most claims fail), charged once to the global cap.
 const PER_IP_DAILY = Number(process.env.HVI_REFER_IP_DAILY) || 10;
 const REFER_DAILY = Number(process.env.HVI_REFER_DAILY_CAP) || 50;
 const LOOKUP_DAILY = Number(process.env.HVI_REFER_LOOKUP_DAILY) || 300;
@@ -116,12 +119,13 @@ export default async (req, context) => {
       return json(503, { error: GLOBAL_CAP_LINE, caseId }, { "Retry-After": "3600" });
     }
 
+    const assess = () => callClaude(
+      SYSTEM_PROMPT + PUBLIC_RECORD + REFERRAL_ADDENDUM,
+      `PUBLIC FIGURE: ${wiki.title}\nSTATUS: ${wiki.living ? "living" : `deceased (died ${wiki.died})`}\nWIKIPEDIA DESCRIPTION: ${wiki.description}\nWIKIPEDIA SUMMARY: ${wiki.extract}\n(If you cite a directive, cite Directive ${directiveFor(wiki.title)}.)`,
+    );
     let raw;
     try {
-      raw = await callClaude(
-        SYSTEM_PROMPT + PUBLIC_RECORD + REFERRAL_ADDENDUM,
-        `PUBLIC FIGURE: ${wiki.title}\nSTATUS: ${wiki.living ? "living" : "deceased"}\nWIKIPEDIA DESCRIPTION: ${wiki.description}\nWIKIPEDIA SUMMARY: ${wiki.extract}\n(If you cite a directive, cite Directive ${directiveFor(wiki.title)}.)`,
-      );
+      raw = await assess();
     } catch (err) {
       await Promise.all([refund(), refundLimit("refer-global").catch(() => {})]);
       throw err;
@@ -135,14 +139,35 @@ export default async (req, context) => {
       return json(422, { error: REJECT[raw.decline], reason: raw.decline, caseId });
     }
 
-    const a = normalizeAssessment({ ...raw, confidence: undefined });
+    // Fact-check against the article before anything is published. More than half the
+    // claims failing means the reading itself is unreliable: re-score once, check again,
+    // and publish what survives. A check that can't run withholds the verdict.
+    let a = normalizeAssessment({ ...raw, confidence: undefined });
+    let verdictStatus = "withheld", fc = null;
+    try {
+      const source = (await fetchArticleText(wiki.title).catch(() => "")) || wiki.extract;
+      const check = v => factCheck({ name: wiki.title, deceased: !wiki.living, source, verdict: v });
+      fc = await check(a.verdict);
+      if (fc.mostlyFailed) {
+        const again = await assess();
+        if (again?.is_human_public_figure !== false && !DECLINE.has(again?.decline)) {
+          raw = { ...again, sprite_look: again.sprite_look || raw.sprite_look, no_dangle: again.no_dangle ?? raw.no_dangle };
+          a = normalizeAssessment({ ...raw, confidence: undefined });
+          fc = { ...(await check(a.verdict)), regenerated: true };
+        }
+      }
+      if (fc.verdict) { a = { ...a, verdict: fc.verdict }; verdictStatus = "published"; }
+    } catch (err) {
+      console.error("refer fact-check failed; verdict withheld", err?.message || err);
+    }
+
     const score = computeScore(a.breakdown);
     const look = typeof raw?.sprite_look === "string" ? raw.sprite_look.replace(/\s+/g, " ").trim().slice(0, MAX_LOOK) : "";
     const card = {
       slug, name: displayName, wikiTitle: wiki.title, wikidata: wiki.wikidata,
       score, tier: getTier(score), breakdown: a.breakdown, confidence: null, verdict: a.verdict,
-      // Living subjects: the verdict waits for review before the public sees it.
-      verdictStatus: wiki.living ? "review" : "published", living: wiki.living,
+      verdictStatus, living: wiki.living, born: wiki.born, died: wiki.died,
+      factCheck: fc ? { checked: fc.checked, removed: fc.removed, regenerated: Boolean(fc.regenerated), at: new Date().toISOString() } : null,
       noDangle: raw?.no_dangle === true,
       flags: a.flags, commendations: a.commendations,
       sprite: null, spriteStatus: "pending", spriteAttempts: 0, look,

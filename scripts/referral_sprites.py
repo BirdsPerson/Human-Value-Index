@@ -11,7 +11,6 @@ The pen polls /api/pen and swaps the placeholder for /api/sprite/<slug>.
   python3 scripts/referral_sprites.py                  # one pass over the queue
   python3 scripts/referral_sprites.py --dry-run        # list the queues, generate nothing
   python3 scripts/referral_sprites.py --retry-failed   # put every "failed" card back in the queue
-  python3 scripts/referral_sprites.py --approve <slug>   # publish a living subject's verdict
   python3 scripts/referral_sprites.py --takedown <slug>  # withdraw a referred figure for good
 
 Blobs are reached through the Netlify CLI (site linked in this repo), so run from the
@@ -76,7 +75,7 @@ def set_json(store, key, data):
 
 # Keep in step with figureIndexEntry in netlify/lib/store.js.
 INDEX_KEYS = ("slug", "name", "score", "tier", "breakdown", "verdict", "verdictStatus", "noDangle", "wikidata",
-              "sprite", "spriteStatus", "referredBy", "at")
+              "born", "died", "sprite", "spriteStatus", "referredBy", "at")
 
 
 def index_entry(card):
@@ -193,11 +192,6 @@ def set_card(slug, **changes):
     return card
 
 
-def approve(slug):
-    set_card(slug, verdictStatus="published", verdictReviewedAt=datetime.now(timezone.utc).isoformat())
-    log(f"approved {slug}: verdict published")
-
-
 def takedown(slug):
     card = get_json("hvi-figures", slug)
     if not card:
@@ -227,9 +221,6 @@ def arg_after(flag):
 
 
 def main():
-    if "--approve" in sys.argv:
-        approve(arg_after("--approve"))
-        return 0
     if "--takedown" in sys.argv:
         takedown(arg_after("--takedown"))
         return 0
@@ -242,13 +233,15 @@ def main():
         idx = get_json("hvi-figures", "index") or {"cards": []}
     cards = idx.get("cards", [])
     pending = [c for c in cards if c.get("spriteStatus") == "pending"]
-    review = [c for c in cards if c.get("verdictStatus") != "published"]
-    log(f"queue: {len(pending)} pending of {len(cards)} referred figures; {len(review)} verdicts awaiting review")
+    # Verdicts publish after the automatic fact-check in /api/refer; "withheld" means the
+    # check couldn't run, so the pen shows score and tier only. Listed, not acted on.
+    withheld = [c for c in cards if c.get("verdictStatus") != "published"]
+    log(f"queue: {len(pending)} pending of {len(cards)} referred figures; {len(withheld)} verdicts withheld")
     if dry:
         for c in pending:
             log(f"  pending {c['slug']}")
-        for c in review:
-            log(f"  review  {c['slug']}: {c.get('verdict')}")
+        for c in withheld:
+            log(f"  withheld {c['slug']}")
         return 0
     for entry in pending[:PER_RUN]:
         slug = entry["slug"]

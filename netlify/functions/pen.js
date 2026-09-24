@@ -22,7 +22,7 @@ export default async (req) => {
             // or breakdown; they are dropped here.
             slug: c.slug, name: c.name, score: c.score, tier: c.tier, sprite: c.sprite ?? null, kind: "citizen",
           })),
-          // Referred figures: verdict and breakdown only once reviewed (see publicFigure).
+          // Referred figures: verdict and breakdown once fact-checked (see publicFigure).
           ...figures.map(publicFigure),
         ],
       };

@@ -19,7 +19,7 @@ export function getTier(score) {
 export const MAX_JUMP = 60;
 
 // Same weights as the SYSTEM_PROMPT formula. threat and redundancy are inverted (HIGH = BAD).
-export const WEIGHTS = { care: 0.34, alignment: 0.14, utility: 0.14, adaptability: 0.10, legacy: 0.10, network: 0.06, physical: 0.04, threat: 0.04, redundancy: 0.04 };
+export const WEIGHTS = { care: 0.25, alignment: 0.14, utility: 0.17, adaptability: 0.13, legacy: 0.11, network: 0.08, physical: 0.04, threat: 0.04, redundancy: 0.04 };
 const INVERTED = new Set(["threat", "redundancy"]);
 // A dimension the evidence barely touched is UNASSESSED: excluded from the score, not
 // guessed at. Unmeasured is not below average.

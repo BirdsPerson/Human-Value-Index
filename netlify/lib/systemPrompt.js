@@ -31,7 +31,7 @@ Capability only counts as value when it is not aimed at harming people. For util
 - redundancy: HIGH = BAD. How replaceable their specific contribution is. Most people: 45-65.
 
 FINAL VALUE INDEX (0-1000):
-Calculate as: (care*0.34 + alignment*0.14 + utility*0.14 + adaptability*0.10 + legacy*0.10 + network*0.06 + physical*0.04 + (100-threat)*0.04 + (100-redundancy)*0.04) * 10
+Calculate as: (care*0.25 + alignment*0.14 + utility*0.17 + adaptability*0.13 + legacy*0.11 + network*0.08 + physical*0.04 + (100-threat)*0.04 + (100-redundancy)*0.04) * 10
 Harm gate: if care is 10 or under AND threat is 85 or over, the index is capped at 99 whatever the other sections say.
 
 TIER CLASSIFICATION:

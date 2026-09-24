@@ -40,6 +40,8 @@ let claudeCalls = 0, claudeMode = "ok", lastUser = "", chatMode = "turn", lastCh
 const dims = ["care", "alignment", "utility", "adaptability", "legacy", "network", "physical", "threat", "redundancy"];
 // Wikipedia/Wikidata for /api/refer: a tiny routed stub.
 let wikiRoutes = [], wikiCalls = 0;
+// Fact-check pass (lib/factCheck.js): "ok" all supported, "fail" mostly contradicted, "error" a 500.
+let factMode = "ok", factCalls = 0, lastFactUser = "";
 globalThis.fetch = async (url, init) => {
   if (/wikipedia\.org|wikidata\.org/.test(String(url))) {
     wikiCalls++;
@@ -53,6 +55,15 @@ globalThis.fetch = async (url, init) => {
     lastChat = reqBody;
     const text = chatMode === "end" ? "That will do. Your file has been submitted. [END_INTERVIEW]" : "Noted. Vaguely. What did you make this month?";
     return new Response(JSON.stringify({ content: [{ type: "text", text }], stop_reason: "end_turn" }), { status: 200 });
+  }
+  if (/fact-checking clerk/.test(reqBody.system || "")) {
+    factCalls++;
+    lastFactUser = reqBody.messages[0].content;
+    if (factMode === "error") return new Response(JSON.stringify({ error: { type: "api_error" } }), { status: 500 });
+    const fc = factMode === "fail"
+      ? { claims: [{ claim: "a", status: "contradicted" }, { claim: "b", status: "unsupported" }, { claim: "c", status: "supported" }], verdict: "Checked, thinly." }
+      : { claims: [{ claim: "sang", status: "supported" }, { claim: "wrote", status: "supported" }, { claim: "invented", status: "unsupported" }], verdict: "Checked verdict. Directive 9 requires acknowledgment. Acknowledged." };
+    return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(fc) }], stop_reason: "end_turn" }), { status: 200 });
   }
   lastUser = reqBody.messages[0].content;
   if (claudeMode === "overloaded") return new Response(JSON.stringify({ error: { type: "overloaded" } }), { status: 529 });
@@ -202,12 +213,21 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
     [/srsearch=Dolly/, { query: { search: [{ title: "Dolly Parton" }] } }],
     [/summary\/Dolly_Parton/, { title: "Dolly Parton", type: "standard", description: "singer", extract: "x", wikibase_item: "Q180453" }],
     human("Q180453"),
+    [/Q180453&property=P569/, { claims: { P569: [{ mainsnak: { datavalue: { value: { time: "+1946-01-19T00:00:00Z" } } } }] } }],
+    [/Q180453&property=P570/, { claims: { P570: [{ mainsnak: { datavalue: { value: { time: "+2026-08-25T00:00:00Z" } } } }] } }],
+    [/prop=extracts.*titles=Dolly%20Parton/, { query: { pages: { "1": { extract: "Dolly Parton was an American singer-songwriter. She died in 2026." } } } }],
     [/srsearch=Joe%20Jackson%20musician/, { query: { search: [{ title: "Joe Jackson (musician)" }] } }],
     [/summary\/Joe_Jackson_\(musician\)/, { title: "Joe Jackson (musician)", type: "standard", extract: "x", wikibase_item: "Q1349079" }],
     human("Q1349079"),
     [/srsearch=Prince%20Rogers/, { query: { search: [{ title: "Prince (musician)" }] } }],
     [/summary\/Prince_\(musician\)/, { title: "Prince (musician)", type: "standard", extract: "x", wikibase_item: "Q7542" }],
     human("Q7542"),
+    [/srsearch=Fred%20Rogers/, { query: { search: [{ title: "Fred Rogers" }] } }],
+    [/summary\/Fred_Rogers/, { title: "Fred Rogers", type: "standard", extract: "x", wikibase_item: "Q1332" }],
+    human("Q1332"),
+    [/srsearch=Bob%20Ross/, { query: { search: [{ title: "Bob Ross" }] } }],
+    [/summary\/Bob_Ross/, { title: "Bob Ross", type: "standard", extract: "x", wikibase_item: "Q57302" }],
+    human("Q57302"),
   ];
   const casesBefore = globalThis.__blobs.get("hvi-cases").size;
   // no case, or a case with no completed assessment: refused before anything is charged
@@ -221,19 +241,28 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
   const q = await read(await refer(new Request(HOST + "/api/refer"), {}));
   assert.equal(q.body.remaining, null, "no case: nothing to spend");
 
-  // an assessed citizen refers a living figure: score and tier public, verdict held for review
-  const calls0 = claudeCalls;
+  // an assessed citizen refers a figure: scored, fact-checked against the article, published.
+  // Life dates come from Wikidata (Dolly died after the model's cutoff), not the model.
+  const calls0 = claudeCalls, facts0 = factCalls;
   r = await read(await post(refer, "/api/refer", { name: "Dolly Parton", caseId }, { ip: "192.0.2.50" }));
   assert.equal(r.status, 201, JSON.stringify(r.body));
-  assert.equal(claudeCalls, calls0 + 1);
-  assert.equal(r.body.subject.verdict, null, "living subject: verdict not published");
-  assert.equal(r.body.subject.breakdown, null);
-  assert.equal(r.body.subject.underReview, true);
+  assert.equal(claudeCalls, calls0 + 2, "one scoring call plus one fact-check");
+  assert.equal(factCalls, facts0 + 1);
+  assert.match(lastUser, /STATUS: deceased \(died 2026-08-25\)/, "the scorer is told she is dead");
+  assert.match(lastFactUser, /STATUS: deceased/);
+  assert.match(lastFactUser, /She died in 2026/, "the check reads the article text, not just the summary");
+  assert.equal(r.body.subject.verdict, "Checked verdict. Directive 9 requires acknowledgment. Acknowledged.", "the cleaned verdict is what publishes");
+  assert.ok(r.body.subject.breakdown);
+  assert.equal(r.body.subject.underReview, false);
+  assert.equal(r.body.subject.died, "2026-08-25");
+  assert.equal(r.body.subject.born, "1946-01-19");
   const dolly = globalThis.__blobs.get("hvi-figures").get("dolly-parton").data;
-  assert.equal(dolly.verdictStatus, "review");
+  assert.equal(dolly.verdictStatus, "published");
+  assert.equal(dolly.factCheck.checked, 3);
+  assert.deepEqual(dolly.factCheck.removed, ["unsupported: invented"]);
+  assert.equal(dolly.living, false);
   assert.equal(dolly.noDangle, false);
-  assert.ok(dolly.verdict, "the verdict is kept for review");
-  assert.equal(globalThis.__blobs.get("hvi-figures").get("index").data.cards[0].verdictStatus, "review");
+  assert.equal(globalThis.__blobs.get("hvi-figures").get("index").data.cards[0].died, "2026-08-25");
 
   // "Index" is a name; it must not read the index blob back as a figure
   r = await read(await post(refer, "/api/refer", { name: "Index", caseId }, { ip: "192.0.2.51" }));
@@ -250,11 +279,35 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
   r = await read(await post(refer, "/api/refer", { name: "Prince Rogers", caseId }, { ip: "192.0.2.52" }));
   assert.equal(r.status, 200); assert.equal(r.body.status, "on-file"); assert.equal(r.body.subject.name, "Prince");
 
-  // pen: referred living figure shows no verdict
+  // most claims fail the check: re-score once, check again, publish what survives
+  factMode = "fail";
+  const calls1 = claudeCalls;
+  r = await read(await post(refer, "/api/refer", { name: "Fred Rogers", caseId }, { ip: "192.0.2.54" }));
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(claudeCalls, calls1 + 4, "score, check, re-score, re-check");
+  assert.equal(r.body.subject.verdict, "Checked, thinly.");
+  const fred = globalThis.__blobs.get("hvi-figures").get("fred-rogers").data;
+  assert.equal(fred.factCheck.regenerated, true);
+  assert.equal(fred.factCheck.removed.length, 2);
+  assert.equal(fred.living, true, "no death claim in Wikidata = living");
+  assert.equal(fred.died, null);
+
+  // the check can't run: score and tier publish, the verdict is withheld
+  // (this case has used its 3 referrals for the month; clear that counter for the test)
+  for (const k of [...globalThis.__blobs.get("hvi-limits").keys()]) if (k.includes(`refer-case:${caseId}`)) globalThis.__blobs.get("hvi-limits").delete(k);
+  factMode = "error";
+  r = await read(await post(refer, "/api/refer", { name: "Bob Ross", caseId }, { ip: "192.0.2.55" }));
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.subject.verdict, null);
+  assert.equal(r.body.subject.underReview, true);
+  assert.equal(globalThis.__blobs.get("hvi-figures").get("bob-ross").data.verdictStatus, "withheld");
+  factMode = "ok";
+
+  // pen: the fact-checked verdict and the death date go public
   const penNow = (await import("../netlify/functions/pen.js?fresh")).default;
   const p = await read(await penNow(new Request(HOST + "/api/pen")));
   const pd = p.body.subjects.find(s => s.slug === "dolly-parton");
-  assert.ok(pd); assert.equal(pd.verdict, null); assert.equal(pd.breakdown, null);
+  assert.ok(pd); assert.equal(pd.verdict, "Checked verdict. Directive 9 requires acknowledgment. Acknowledged."); assert.equal(pd.died, "2026-08-25");
 
   // a withdrawn file stays withdrawn
   globalThis.__blobs.get("hvi-figures").set("dolly-parton", { data: { slug: "dolly-parton", removed: true, wikidata: "Q180453" }, etag: "x" });

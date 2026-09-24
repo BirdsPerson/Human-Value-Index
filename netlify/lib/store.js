@@ -143,7 +143,7 @@ export async function indexFigure(card) {
 // Keep in step with INDEX_KEYS in scripts/referral_sprites.py, which rewrites entries.
 export const figureIndexEntry = c => ({
   slug: c.slug, name: c.name, score: c.score, tier: c.tier, breakdown: c.breakdown, verdict: c.verdict,
-  verdictStatus: c.verdictStatus, noDangle: Boolean(c.noDangle), wikidata: c.wikidata,
+  verdictStatus: c.verdictStatus, noDangle: Boolean(c.noDangle), wikidata: c.wikidata, born: c.born ?? null, died: c.died ?? null,
   sprite: c.sprite ?? null, spriteStatus: c.spriteStatus, referredBy: c.referredBy, at: c.at,
 });
 

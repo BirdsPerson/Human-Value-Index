@@ -136,7 +136,7 @@ export async function resolveWikipedia(name, fetchImpl = fetch) {
     let life = {};
     if (p31.includes(HUMAN)) {
       const [born, died] = await Promise.all(["P569", "P570"].map(p => claimTimes(fetchImpl, summary.wikibase_item, p)));
-      life = { born: born[0] || null, died: died.length > 0 };
+      life = { born: born[0] || null, died: died[0] || null };
     }
     return classifySummary(summary, p31, life);
   } catch (err) {
@@ -154,6 +154,18 @@ const claimIds = async (f, qid, prop) => (await claims(f, qid, prop)).map(s => s
 // A death claim with an unknown value ("somevalue") still means dead, so any snak counts.
 const claimTimes = async (f, qid, prop) => (await claims(f, qid, prop)).map(s => s?.datavalue?.value?.time || (s ? "unknown" : null)).filter(Boolean);
 
+// Wikidata time -> ISO-ish date: "+1946-01-19T00:00:00Z" -> "1946-01-19", a year-precision
+// "+1946-00-00T..." -> "1946", BCE "-0470-00-00T..." -> "-0470". "unknown" (a death with no
+// recorded date) stays "unknown": still dead. Anything else -> null.
+export function wikiDate(time) {
+  if (time === "unknown") return "unknown";
+  const m = /^([+-])(\d+)-(\d\d)-(\d\d)/.exec(String(time || ""));
+  if (!m) return null;
+  const y = (m[1] === "-" ? "-" : "") + m[2].padStart(4, "0");
+  if (m[3] === "00") return y;
+  return m[4] === "00" ? `${y}-${m[3]}` : `${y}-${m[3]}-${m[4]}`;
+}
+
 // "+1994-07-05T00:00:00Z" -> age in whole years at `now`, or null when unknown.
 export function ageFrom(time, now = new Date()) {
   const m = /^([+-]\d+)-(\d\d)-(\d\d)/.exec(String(time || ""));
@@ -165,7 +177,7 @@ export function ageFrom(time, now = new Date()) {
 }
 
 // Pure: summary JSON + P31 ids + { born, died } -> verdict. Exported for the self-check.
-// living: no death on record. A living subject's verdict is held for review, not published.
+// living: no death on record in Wikidata.
 export function classifySummary(summary, p31 = [], life = {}, now = new Date()) {
   if (!summary || !summary.title) return { ok: false, reason: "none" };
   if (summary.type === "disambiguation") return { ok: false, reason: "ambiguous" };
@@ -180,7 +192,19 @@ export function classifySummary(summary, p31 = [], life = {}, now = new Date()) 
     extract: String(summary.extract || "").slice(0, 1500),
     wikidata: summary.wikibase_item,
     living,
+    // Life dates come from Wikidata, never the model: people die after its knowledge cutoff.
+    born: wikiDate(life.born),
+    died: wikiDate(life.died),
   };
+}
+
+// The article's plain text, for the fact-check. The summary alone (a few hundred
+// characters) would leave most true claims "unsupported".
+export async function fetchArticleText(title, fetchImpl = fetch, max = 120000) {
+  const t = encodeURIComponent(String(title));
+  const data = await getJson(fetchImpl, `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&titles=${t}&format=json&origin=*`, 10000);
+  const page = Object.values(data?.query?.pages || {})[0];
+  return String(page?.extract || "").slice(0, max);
 }
 
 // Calendar-month bucket for the per-case quota (UTC).
@@ -188,13 +212,14 @@ export const monthKey = (d = new Date()) => d.toISOString().slice(0, 7);
 export const PER_CASE_MONTHLY = 3;
 export const remainingThisMonth = used => Math.max(0, PER_CASE_MONTHLY - (used || 0));
 
-// Referred figures: a verdict reaches the public only once published. Dead subjects are
-// published on creation; a living subject's verdict waits for review
-// (scripts/referral_sprites.py --approve). Until then the pen shows score and tier.
+// Referred figures: a verdict reaches the public once it has passed the automatic
+// fact-check (lib/factCheck.js). One that couldn't be checked is "withheld": the pen
+// shows score and tier only.
 export const verdictPublished = c => c?.verdictStatus === "published";
 export const publicFigure = c => ({
   slug: c.slug, name: c.name, score: c.score, tier: c.tier,
   breakdown: verdictPublished(c) ? c.breakdown : null, verdict: verdictPublished(c) ? c.verdict : null,
   underReview: !verdictPublished(c), noDangle: Boolean(c.noDangle),
+  born: c.born ?? null, died: c.died ?? null,
   sprite: c.sprite ?? null, spriteStatus: c.spriteStatus || "pending", kind: "figure", referred: true,
 });

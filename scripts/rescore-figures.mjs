@@ -70,7 +70,7 @@ if (!want.size) {
     .map(r => `**${r.name}** (${r.score}, ${r.tier})\n\n> ${r.verdict}`).join("\n\n");
   writeFileSync(new URL(`../docs/rescore-${date}.md`, import.meta.url), `# Figure rescore — ${date}
 
-Rubric v10: care (incl. honesty) .34, alignment .14, utility .14, adaptability .10, legacy .10, network .06, physical .04, low threat .04, low redundancy .04. Scored from each person's public record by \`scripts/rescore-figures.mjs\`, same engine as subjects.
+Rubric v10: care (incl. honesty) .25, alignment .14, utility .17, adaptability .13, legacy .11, network .08, physical .04, low threat .04, low redundancy .04. Scored from each person's public record by \`scripts/rescore-figures.mjs\`, same engine as subjects.
 
 | Name | Old | New | Δ | Tier |
 |---|---|---|---|---|

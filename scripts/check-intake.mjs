@@ -119,12 +119,12 @@ assert.equal(flat.capped, false);
 assert.equal(flat.score, prev.score);
 assert.equal(flat.delta, 0);
 
-// regression: the model says 480 but its breakdown computes to 601; the formula wins.
+// regression: the model says 480 but its breakdown computes to 603; the formula wins.
 // An identical visit 2 must not invent a delta or a cap line.
 const b0 = { utility: 70, care: 60, adaptability: 65, threat: 30, redundancy: 40, network: 55, alignment: 60, physical: 50, legacy: 45 };
 const first480 = applyCap(null, normalizeAssessment({ score: 480, breakdown: b0 }));
-assert.equal(first480.score, 601);   // the model's 480 is ignored; the formula is the score
-assert.equal(computeScore(b0), 601);
+assert.equal(first480.score, 603);   // the model's 480 is ignored; the formula is the score
+assert.equal(computeScore(b0), 603);
 const again = applyCap(first480, normalizeAssessment({ score: 480, breakdown: b0 }));
 assert.equal(again.delta, 0);
 assert.equal(again.capped, false);
@@ -148,9 +148,9 @@ assert.equal(n.confidence, null, "no confidence reported (survey, public record)
 assert.deepEqual(n.flags, ["a", "b", "c"]);
 
 
-// v10: care carries .34; a pre-v10 file (honesty, no care) blends honesty as care
+// v10: care carries .25 (was .34 until 2026-09-25); a pre-v10 file (honesty, no care) blends honesty as care
 {
-  const w = { care: 0.34, alignment: 0.14, utility: 0.14, adaptability: 0.10, legacy: 0.10, network: 0.06, physical: 0.04 };
+  const w = { care: 0.25, alignment: 0.14, utility: 0.17, adaptability: 0.13, legacy: 0.11, network: 0.08, physical: 0.04 };
   // threat 0 (not 100) so the all-zero base doesn't trip the harm gate; it adds a flat 40.
   const only = d => computeScore({ ...Object.fromEntries(DIMS.map(x => [x, 0])), threat: 0, redundancy: 100, [d]: 100 });
   for (const [d, wt] of Object.entries(w)) assert.equal(only(d), Math.round(wt * 1000) + 40, d);
