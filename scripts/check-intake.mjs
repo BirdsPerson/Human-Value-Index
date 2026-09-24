@@ -70,7 +70,7 @@ assert.equal(ex.plan.length, 6);
 // applyCap: first visit uncapped
 const assess = (score, b, c) => normalizeAssessment({ score, breakdown: Object.fromEntries(DIMS.map(d => [d, b])), confidence: Object.fromEntries(DIMS.map(d => [d, c])), verdict: "v" });
 const v1 = applyCap(null, assess(930, 95, 100));
-assert.equal(v1.score, 930);
+assert.equal(v1.score, 878);   // formula over the breakdown, not the model's 930
 assert.equal(v1.capped, false);
 assert.equal(v1.delta, null);
 assert.equal(v1.tier, "ESSENTIAL INFRASTRUCTURE");
@@ -81,7 +81,7 @@ const up = applyCap(prev, assess(900, 95, 100));
 assert.equal(up.score, 460);
 assert.equal(up.delta, 60);
 assert.equal(up.capped, true);
-assert.equal(up.rawScore, 900);
+assert.equal(up.rawScore, 878);
 assert.ok(up.capNote && up.capNote.includes("60"));
 assert.equal(up.tier, "MONITORED CIVILIAN");
 
@@ -101,11 +101,11 @@ assert.equal(flat.capped, false);
 assert.equal(flat.score, prev.score);
 assert.equal(flat.delta, 0);
 
-// regression: the model's own score and the formula disagree on visit 1 (480 vs 601).
+// regression: the model says 480 but its breakdown computes to 601; the formula wins.
 // An identical visit 2 must not invent a delta or a cap line.
 const b0 = { utility: 70, honesty: 60, adaptability: 65, threat: 30, redundancy: 40, network: 55, alignment: 60, physical: 50, legacy: 45 };
 const first480 = applyCap(null, normalizeAssessment({ score: 480, breakdown: b0 }));
-assert.equal(first480.score, 480);
+assert.equal(first480.score, 601);   // the model's 480 is ignored; the formula is the score
 assert.equal(computeScore(b0), 601);
 const again = applyCap(first480, normalizeAssessment({ score: 480, breakdown: b0 }));
 assert.equal(again.delta, 0);
@@ -122,7 +122,7 @@ assert.equal(half.delta, half.score - 500);
 
 // normalizeAssessment clamps garbage
 const n = normalizeAssessment({ score: 5000, breakdown: { utility: -3, honesty: "x" }, flags: ["a", 2, "b", "c", "d"] });
-assert.equal(n.score, 1000);
+assert.equal(n.score, computeScore(n.breakdown));   // a garbage model score is ignored entirely
 assert.equal(n.breakdown.utility, 0);
 assert.equal(n.breakdown.honesty, 50);
 assert.equal(n.confidence.legacy, 0);

@@ -85,7 +85,7 @@ const transcript = [
 r = await read(await post(score, "/api/intake-score", { caseId, transcript }));
 assert.equal(r.status, 200, JSON.stringify(r.body));
 assert.equal(r.body.visit, 1);
-assert.equal(r.body.score, 480);
+assert.equal(r.body.score, 542);   // formula over the stub breakdown; the stub's own 480 is ignored
 assert.equal(r.body.delta, null);
 assert.equal(r.body.history.length, 1);
 assert.ok(r.body.verdict.length <= 700, "verdict capped");
@@ -102,7 +102,7 @@ assert.equal(again.body.history.length, 1);
 r = await read(await pen(new Request(HOST + "/api/pen")));
 const card = r.body.subjects.find(s => s.name === `Subject ${caseId.slice(-4)}`);
 assert.ok(card, "citizen on the pen");
-assert.equal(card.score, 480);
+assert.equal(card.score, 542);
 assert.equal(card.verdict, undefined, "no verdict on the public pen");
 assert.equal(card.breakdown, undefined, "no breakdown on the public pen");
 
@@ -111,7 +111,7 @@ await post(session, "/api/intake-session", { caseId });
 const t2 = [...transcript, { role: "agent", text: "Anything else?" }, { role: "user", text: "No." }];
 r = await read(await post(score, "/api/intake-score", { caseId, transcript: t2 }));
 assert.equal(r.body.visit, 2);
-assert.match(lastUser, /PREVIOUS FILE:[\s\S]*Last recorded score: 480[\s\S]*more than 60 points/, "returning subject's prompt carries the previous file");
+assert.match(lastUser, /PREVIOUS FILE:[\s\S]*Last recorded score: 542[\s\S]*more than 60 points/, "returning subject's prompt carries the previous file");
 assert.equal(r.body.delta, 0);
 assert.equal(r.body.capped, false);
 

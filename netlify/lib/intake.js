@@ -79,7 +79,9 @@ export function normalizeAssessment(raw) {
     breakdown[d] = Math.round(clamp(num(r.breakdown?.[d], 50), 0, 100));
     confidence[d] = Math.round(clamp(num(r.confidence?.[d], 0), 0, 100));
   }
-  const score = Math.round(clamp(num(r.score, computeScore(breakdown)), 0, 1000));
+  // The headline is always the published formula over the breakdown. The model's own
+  // number drifted ~40 points below its own formula, so it is ignored.
+  const score = computeScore(breakdown);
   const strs = v => (Array.isArray(v) ? v.filter(s => typeof s === "string").slice(0, 3) : []);
   return {
     score,
@@ -113,7 +115,7 @@ export function ipKey(raw) {
 }
 
 // prev: last history entry (or null). next: normalizeAssessment() output.
-// First visit is uncapped and keeps the model's own score. After that, each dimension
+// First visit is uncapped (score = formula over the breakdown). After that, each dimension
 // blends toward the new reading by that reading's confidence, and the score moves by the
 // change that blend makes to the formula, anchored to the previous score. Comparing the
 // formula against the model's own first number would invent movement out of nothing.
