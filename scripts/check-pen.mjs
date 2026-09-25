@@ -25,14 +25,25 @@ for (const f of FAMOUS_FIGURES) {
 }
 // Rubric 3 regression (docs/methodology/RECOMMENDATION.md step 6): the moral floor holds.
 {
-  const VILLAINS = new Set(["Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez", "Genghis Khan", "Kim Jong-un", "Henry VIII", "Putin", "Caligula", "Mao Zedong", "Cleopatra"]);
+  const VILLAINS = new Set(["Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez", "Genghis Khan", "Kim Jong-un", "Putin", "Mao Zedong"]);
+  // Pre-modern dynastic killers are judged by scale and era (Scott, 2026-09-25): below every
+  // saint, above every modern predator, not held below everyone.
+  const HISTORICAL = new Set(["Cleopatra", "Henry VIII", "Caligula"]);
+  const SAINTS = ["Harriet Tubman", "Nelson Mandela", "Martin Luther King Jr.", "Mahatma Gandhi", "Mother Teresa", "Princess Diana", "Keanu Reeves"];
+  const PREDATORS = ["Jeffrey Epstein", "Ghislaine Maxwell", "Harvey Weinstein", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez"];
   assert.equal(FAMOUS_FIGURES.filter(f => VILLAINS.has(f.name)).length, VILLAINS.size, "villain list matches the roster");
-  const worstDecent = Math.min(...FAMOUS_FIGURES.filter(f => !VILLAINS.has(f.name)).map(f => f.score));
+  assert.equal(FAMOUS_FIGURES.filter(f => HISTORICAL.has(f.name)).length, HISTORICAL.size, "historical list matches the roster");
+  const sc = n => FAMOUS_FIGURES.find(f => f.name === n).score;
+  const hist = [...HISTORICAL].map(sc);
+  assert.ok(Math.max(...hist) < Math.min(...SAINTS.map(sc)), "historically violent rulers sit below every saint");
+  assert.ok(Math.min(...hist) > Math.max(...PREDATORS.map(sc)), "historically violent rulers sit above every modern predator");
+  for (const n of HISTORICAL) assert.ok(sc(n) < 500 && sc(n) >= 100, `${n} lands in FLAGGED or MONITORED, not gated (${sc(n)})`);
+  const worstDecent = Math.min(...FAMOUS_FIGURES.filter(f => !VILLAINS.has(f.name) && !HISTORICAL.has(f.name)).map(f => f.score));
   const bestVillain = Math.max(...FAMOUS_FIGURES.filter(f => VILLAINS.has(f.name)).map(f => f.score));
   assert.ok(bestVillain < worstDecent, `every villain sits below every non-villain (${bestVillain} vs ${worstDecent})`);
   assert.ok(FAMOUS_FIGURES.filter(f => f.score < 100).length >= 9, "files under 100 stay reserved for monsters, and there are at least 9");
   for (const f of FAMOUS_FIGURES.filter(f => f.score < 100)) assert.ok(VILLAINS.has(f.name), `${f.name} under 100 but not on the villain list`);
-  // the ordinary decent persona stays at or above the 35th percentile of the roster. Was 40
+  // the ordinary decent persona stays at or above the 35th percentile of the roster (Scott confirmed p35, 2026-09-25). Was 40
   // until the 2026-09-25 median-of-3 rescore lifted the stale-low roster ~30 points and seven
   // famous figures (Teresa, Churchill, Newton, Elizabeth II, Picasso, M. Jackson, Mansa Musa)
   // crossed the fixed persona; flagged to Scott in docs/rescore-2026-09-25.md.

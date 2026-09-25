@@ -86,6 +86,8 @@ export async function rescoreOne({ name, died = null, wikiTitle = name }, { runs
   }
   return {
     name, breakdown, verdict, flags: closest.flags, commendations: closest.commendations,
+    // Auditable harm classification: the closest reading's, plus every run's band.
+    harm: closest.harm ? { ...closest.harm, runs: readings.map(r => r.harm?.band ?? null) } : null,
     score: computeScore(breakdown), spread: dispersion(breakdowns), runScores: breakdowns.map(b => computeScore(b)),
     factCheck: fc ? { checked: fc.checked, removed: fc.removed, at: new Date().toISOString() } : null,
   };

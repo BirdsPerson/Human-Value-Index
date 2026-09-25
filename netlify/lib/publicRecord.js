@@ -21,11 +21,14 @@ The verdict: 2 to 3 short sentences, under 450 characters in total, in the same 
 
 Return the same JSON as above, plus one field:
   "documented_harm": the most serious harm to other people that the record documents as settled fact (a conviction, a court finding, an admission, or events the record reports without dispute). One of:
-    "killing": personally killed someone, was convicted of murder or manslaughter, or ordered the execution or killing of rivals, spouses, dissidents or civilians.
+    "mass_atrocity": committed or ordered killing, torture or persecution at scale: massacres, genocide, mass executions, famine or terror imposed as policy, in any era.
+    "killing": personally killed someone, was convicted of murder or manslaughter, or ordered the execution or killing of specific rivals, spouses, relatives, dissidents or civilians (individual acts, not at the scale above).
     "violent_abuse": sustained physical or sexual abuse of dependents or others.
     "nonviolent": fraud, theft, corruption or other harm without violence.
     "none": nothing of the above is documented. Allegations, acquittals and disputed claims are "none" here; leading a country in war is not "killing" unless documented atrocities or ordered executions are.
-  If you choose "killing" or "violent_abuse", the verdict must name the documented act plainly (who, what), so the file states its own grounds.`;
+  If you choose "mass_atrocity", "killing" or "violent_abuse", the verdict must name the documented act plainly (who, what), so the file states its own grounds.
+  "era_context": "pre-modern" if the documented harm was done before 1800, or "modern" otherwise (use "modern" when documented_harm is "none" or "nonviolent").
+    Scale and era matter: a pre-modern ruler's executions of rivals, relatives or spouses within the norms of their court are serious and stated plainly, but they are not the same as modern predation or mass atrocity. Weigh them against the rest of the record rather than letting them erase it. Mass atrocity is judged the same in every era.`;
 
 // Referrals add a gate and a sprite brief. The Wikipedia summary arrives as context, so
 // the model is scoring a person it can identify, not a string a stranger typed.

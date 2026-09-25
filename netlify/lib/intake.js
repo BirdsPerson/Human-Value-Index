@@ -39,7 +39,8 @@ export function computeScore(b) {
   const w = axisMean(b, WARMTH_AXIS), c = axisMean(b, COMPETENCE_AXIS);
   if (w.value === null && c.value === null) return 500;
   const score = Math.round(10 * ((1 - REALITY_INDEX) * (w.value ?? 50) + REALITY_INDEX * (c.value ?? 50)));
-  return harmGated(b) ? Math.min(score, HARM_GATE.cap) : Math.max(0, Math.min(1000, score));
+  if (harmGated(b)) return Math.min(score, HARM_GATE.cap);
+  return Math.max(0, Math.min(1000, seriousHarm(b) ? Math.min(score, HARM_GATE.seriousCap) : score));
 }
 
 // "Under 100 is reserved for actual monsters." A weighted average can't get a mass
@@ -48,6 +49,10 @@ export function computeScore(b) {
 // with near-maximal threat, or extreme threat on its own.
 export const HARM_GATE = CAL.harmGate;
 export const harmGated = b => isNum(b?.threat) && (b.threat >= HARM_GATE.threatAlone || (isNum(b?.care) && b.care <= HARM_GATE.care && b.threat >= HARM_GATE.threat));
+// Serious but not gated (threat 80-89 without near-zero care): violent abuse, or a
+// pre-modern ruler's dynastic killings. The file can't rise above MONITORED CIVILIAN;
+// the rest of the record decides how far below.
+export const seriousHarm = b => isNum(b?.threat) && isNum(HARM_GATE.seriousThreat) && b.threat >= HARM_GATE.seriousThreat;
 export const assessedCount = b => Object.keys(WEIGHTS).filter(d => isNum(b?.[d])).length;
 
 // ponytail: a case number is the whole identity. Anyone holding it is the subject.
@@ -197,7 +202,19 @@ export function appealStamp(outcome, rulings) {
 // reports confidence (interviews), dimensions under MIN_CONFIDENCE become null =
 // UNASSESSED. Without confidence (survey, public record) every dimension is assessed.
 // Threat floors for settled public-record harm (see PUBLIC_RECORD "documented_harm").
-export const HARM_FLOORS = { killing: 90, violent_abuse: 80 };
+// Scale and era decide the band (Scott, 2026-09-25):
+//   mass_atrocity (any era) and modern killing  -> floor at or above the gate: SOYLENT GREEN.
+//   historical_killing: a pre-modern ruler's individual or dynastic killings within the norms
+//   of their court (Cleopatra/Arsinoe, Henry VIII/his wives) -> threat 80-84: over the
+//   serious-harm line (score <= 499), under the gate, so the rest of the record decides
+//   between FLAGGED and MONITORED.
+export const HARM_FLOORS = { mass_atrocity: 95, killing: 90, violent_abuse: 80, historical_killing: 80 };
+export const HISTORICAL_THREAT_CEIL = Math.min(HARM_GATE.threat, HARM_GATE.threatAlone) - 1;
+// documented_harm + era_context -> the band that is actually applied.
+export function harmBand(documented, era) {
+  if (documented === "killing" && era === "pre-modern") return "historical_killing";
+  return HARM_FLOORS[documented] != null ? documented : null;
+}
 
 export function normalizeAssessment(raw) {
   const r = raw && typeof raw === "object" ? raw : {};
@@ -211,9 +228,13 @@ export function normalizeAssessment(raw) {
   // Public-record mode classifies the documented harm; the code, not the model's number,
   // enforces the floor. The model reliably names "executed two wives" and still scores
   // threat 82, just under the gate. Absent (interviews), nothing changes.
-  const floor = HARM_FLOORS[r.documented_harm];
+  const band = harmBand(r.documented_harm, r.era_context);
+  const floor = band ? HARM_FLOORS[band] : null;
   if (floor != null && typeof breakdown.threat === "number") breakdown.threat = Math.max(breakdown.threat, floor);
   else if (floor != null) breakdown.threat = floor;
+  // Historical killings stay serious but are kept out of the harm gate: that band is for
+  // mass atrocity and modern predation.
+  if (band === "historical_killing") breakdown.threat = Math.min(breakdown.threat, HISTORICAL_THREAT_CEIL);
   // The headline is always the published formula over the breakdown. The model's own
   // number drifted ~40 points below its own formula, so it is ignored.
   const score = computeScore(breakdown);
@@ -226,6 +247,7 @@ export function normalizeAssessment(raw) {
     verdict: typeof r.verdict === "string" && r.verdict.trim() ? cap(r.verdict.trim(), MAX_VERDICT) : "The Assessment Engine declined to elaborate. Take that as you will.",
     flags: strs(r.flags),
     commendations: strs(r.commendations),
+    harm: typeof r.documented_harm === "string" ? { documented: r.documented_harm, era: typeof r.era_context === "string" ? r.era_context : null, band } : null,
   };
 }
 

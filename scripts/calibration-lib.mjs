@@ -17,7 +17,9 @@ export function scoreWith(cal, b) {
   const w = axisMean(b, cal.warmthAxis), c = axisMean(b, cal.competenceAxis);
   if (w.value === null && c.value === null) return 500;
   const score = Math.round(10 * ((1 - cal.realityIndex) * (w.value ?? 50) + cal.realityIndex * (c.value ?? 50)));
-  return harmGatedWith(cal, b) ? Math.min(score, cal.harmGate.cap) : Math.max(0, Math.min(1000, score));
+  if (harmGatedWith(cal, b)) return Math.min(score, cal.harmGate.cap);
+  const serious = isNum(b?.threat) && isNum(cal.harmGate.seriousThreat) && b.threat >= cal.harmGate.seriousThreat;
+  return Math.max(0, Math.min(1000, serious ? Math.min(score, cal.harmGate.seriousCap) : score));
 }
 export function tierWith(cal, score) {
   return (cal.tiers.find(t => score >= t.min) || cal.tiers[cal.tiers.length - 1]).label;
@@ -67,13 +69,18 @@ export function evenness(counts, k) {
 }
 
 // ---- moral reference groups (fixed in docs/methodology/evaluate.mjs, before any tuning) ---
-export const VILLAINS = ["Genghis Khan", "Kim Jong-un", "Henry VIII", "Putin", "Caligula", "Mao Zedong", "Cleopatra", "Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez"];
+export const VILLAINS = ["Genghis Khan", "Kim Jong-un", "Putin", "Mao Zedong", "Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez"];
+// Pre-modern rulers whose documented harm is individual or dynastic killing within the
+// norms of their court (Scott, 2026-09-25): serious, but judged by scale and era. They sit
+// below every saint and above every modern predator; they are not held below everyone.
+export const HISTORICAL_RULERS = ["Cleopatra", "Henry VIII", "Caligula"];
+export const MODERN_PREDATORS = ["Jeffrey Epstein", "Ghislaine Maxwell", "Harvey Weinstein", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez"];
 export const SAINTS = ["Harriet Tubman", "Nelson Mandela", "Martin Luther King Jr.", "Mahatma Gandhi", "Mother Teresa", "Princess Diana", "Keanu Reeves"];
 export const PERSONAS = {
   "Decent ordinary": { care: 76, alignment: 62, utility: 60, adaptability: 55, legacy: 58, network: 53, physical: 62, threat: 12, redundancy: 50 },
   "Scott-like": { care: 62, alignment: 58, utility: 68, adaptability: 75, legacy: 58, network: 58, physical: 58, threat: null, redundancy: 45 },
 };
-export const PERSONA_FLOOR = 35;   // percentile vs the roster; a decent ordinary person must stay at or above it (40 until the 2026-09-25 roster rescore; see check-pen)
+export const PERSONA_FLOOR = 35;   // percentile vs the roster; a decent ordinary person must stay at or above it. 40 until the 2026-09-25 rescore lifted famous figures past the fixed persona; Scott confirmed p35 the same day (famous people outranking an ordinary one is realistic; the floor only guards against collapse).
 export const SAINT_FLOOR = 50;     // every saint must sit at or above the roster median
 export const MAX_SUBJECT_MOVE = 25;
 
@@ -99,7 +106,9 @@ export function measure(cal, figures, bench = {}, prev = null) {
     pantheonHpi: vs(b => b?.pantheon?.hpi),
   };
   // invariants
-  const villainRows = rows.filter(r => VILLAINS.includes(r.name)), otherRows = rows.filter(r => !VILLAINS.includes(r.name));
+  const villainRows = rows.filter(r => VILLAINS.includes(r.name)), otherRows = rows.filter(r => !VILLAINS.includes(r.name) && !HISTORICAL_RULERS.includes(r.name));
+  const histRows = rows.filter(r => HISTORICAL_RULERS.includes(r.name));
+  const saintRows = rows.filter(r => SAINTS.includes(r.name)), predatorRows = rows.filter(r => MODERN_PREDATORS.includes(r.name));
   const maxVillain = Math.max(-Infinity, ...villainRows.map(r => r.score)), minOther = Math.min(Infinity, ...otherRows.map(r => r.score));
   const under100 = rows.filter(r => r.score < 100);
   const sorted = [...scores].sort((a, b) => a - b), median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
@@ -111,6 +120,9 @@ export function measure(cal, figures, bench = {}, prev = null) {
     under100AllVillains: under100.every(r => VILLAINS.includes(r.name)),
     saintsAtOrAboveMedian: saintsLow.length === 0,
     decentPersonaAboveFloor: personas["Decent ordinary"].percentile >= PERSONA_FLOOR,
+    historicalRulersBracketed: !histRows.length
+      || (Math.max(...histRows.map(r => r.score)) < Math.min(Infinity, ...saintRows.map(r => r.score))
+        && Math.min(...histRows.map(r => r.score)) > Math.max(-Infinity, ...predatorRows.map(r => r.score))),
   };
   // drift vs a previous run (by name)
   let drift = null;

@@ -6,7 +6,7 @@
   "realityIndex": 0.55,
   "warmthAxis": { "care": 0.50, "alignment": 0.30, "threat": 0.20 },
   "competenceAxis": { "utility": 0.30, "adaptability": 0.22, "legacy": 0.20, "network": 0.13, "redundancy": 0.10, "physical": 0.05 },
-  "harmGate": { "care": 10, "threat": 85, "threatAlone": 90, "cap": 99 },
+  "harmGate": { "care": 10, "threat": 85, "threatAlone": 90, "cap": 99, "seriousThreat": 80, "seriousCap": 499 },
   "maxJump": 60,
   "minConfidence": 35,
   "minAssessed": 3,

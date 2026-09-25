@@ -314,3 +314,23 @@ assert.equal(ipKey(""), "unknown");
 }
 
 console.log("check-intake: all assertions passed");
+
+// ---- era-aware harm bands (2026-09-25) ------------------------------------------------
+{
+  const { harmBand, normalizeAssessment: norm, HARM_FLOORS: HF, HISTORICAL_THREAT_CEIL: CEIL } = await import("../netlify/lib/intake.js");
+  const full = { care: 40, alignment: 50, utility: 85, adaptability: 80, legacy: 80, network: 80, physical: 60, threat: 95, redundancy: 20 };
+  assert.equal(harmBand("killing", "pre-modern"), "historical_killing");
+  assert.equal(harmBand("killing", "modern"), "killing");
+  assert.equal(harmBand("mass_atrocity", "pre-modern"), "mass_atrocity", "mass atrocity is judged the same in every era");
+  assert.equal(harmBand("none", "pre-modern"), null);
+  const hist = norm({ breakdown: full, documented_harm: "killing", era_context: "pre-modern" });
+  assert.ok(hist.breakdown.threat >= HF.historical_killing && hist.breakdown.threat <= CEIL, "historical threat is floored and held under the gate");
+  assert.ok(hist.score >= 100 && hist.score <= 499, `historical killing lands FLAGGED/MONITORED, not gated (${hist.score})`);
+  assert.equal(hist.harm.band, "historical_killing");
+  const mass = norm({ breakdown: { ...full, threat: 50 }, documented_harm: "mass_atrocity", era_context: "pre-modern" });
+  assert.ok(mass.score <= 99, "pre-modern mass atrocity stays gated");
+  const modern = norm({ breakdown: { ...full, threat: 50 }, documented_harm: "killing", era_context: "modern" });
+  assert.ok(modern.score <= 99, "modern killing stays gated");
+  const plain = norm({ breakdown: { ...full, threat: 20 } });
+  assert.ok(plain.score > 499 && plain.harm === null, "no documented harm, no cap");
+}
