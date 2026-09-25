@@ -1,0 +1,8 @@
+{
+  "date": "2026-09-25",
+  "decision": "no change",
+  "reason": "Best bounded step (competence: 0.02 weight from utility to legacy; competence: 0.02 weight from adaptability to redundancy) improves the soft objective by only 0.006, under the 0.02 threshold. Not worth moving anyone.",
+  "gain": 0.006,
+  "change": "competence: 0.02 weight from utility to legacy; competence: 0.02 weight from adaptability to redundancy",
+  "calibration": null
+}

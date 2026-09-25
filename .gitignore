@@ -6,3 +6,4 @@ node_modules/
 .netlify
 MORNING_REPORT.md
 __pycache__/
+docs/calibration/.tmp-*

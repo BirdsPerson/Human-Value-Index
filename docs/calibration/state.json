@@ -1,0 +1,9 @@
+{
+  "proposals": {
+    "2026-09-25": {
+      "status": "no-change",
+      "change": "competence: 0.02 weight from utility to legacy; competence: 0.02 weight from adaptability to redundancy",
+      "gain": 0.006
+    }
+  }
+}
