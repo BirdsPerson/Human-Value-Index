@@ -1165,6 +1165,7 @@ export default function Pen() {
       <div className="hvi-cmds split" style={{ marginTop: '1.6em' }}>
         <button className="hvi-btn-back" onClick={() => { window.location.hash = ""; }}>Main menu</button>
         <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#intake"; }}>Submit yourself for intake</button>
+        <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#cube"; }}>The cube</button>
       </div>
       {card && <SubjectCard subject={card} onClose={() => setCard(null)} />}
     </div>

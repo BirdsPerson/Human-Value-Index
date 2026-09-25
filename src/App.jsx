@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import CubePanel, { CubeLine } from "./CubePanel.jsx";
+import CubeView from "./CubeView.jsx";
 import { FAMOUS_FIGURES, TIERS, getTier } from "./figures.js";
 import Intake, { ScoreCard, Breakdown, readCaseId, CaseLogon } from "./Intake.jsx";
 import Pen from "./Pen.jsx";
@@ -307,6 +308,10 @@ const globalStyles = `
   .hvi-cube-link { color: var(--amber); opacity: .7; }
   .hvi-cube-line { margin: 0.2em 0 0.4em; }
   .hvi-cube-nums { margin-top: 0.5em; }
+  .hvi-cube3d canvas:focus-visible { outline: 1px solid var(--green); }
+  .hvi-cube3d-tip { position: absolute; pointer-events: none; background: var(--bg2); border: 1px solid var(--text-muted); padding: 6px 9px; font-size: 11px; line-height: 1.45; color: var(--text); max-width: 240px; white-space: normal; z-index: 2; }
+  .hvi-cube3d-tip .t { color: var(--green); }
+  .hvi-cube3d-tip .g { color: var(--amber); }
 
   /* SHARE */
   .hvi-share-text { color: var(--text-muted); white-space: pre-wrap; margin-bottom: 0.8em; }
@@ -406,6 +411,7 @@ const MENU = [
   { key: "3", label: "HOLDING PEN", note: "THE ASSESSED, WANDERING", go: "#pen" },
   { key: "4", label: "PUBLIC FIGURE INDEX", note: "62 FILES ON RECORD", go: "leaderboard" },
   { key: "5", label: "RESTORE A FILE", note: "LOG ON WITH A CASE NUMBER", go: "restore" },
+  { key: "6", label: "THE CUBE", note: "MACHINE VS PEOPLE, EVERY FILE", go: "#cube" },
 ];
 
 // The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
@@ -585,11 +591,11 @@ export default function OverlordAssessment() {
   const filteredFigures = filterTier === "ALL" ? uniqueFigures : uniqueFigures.filter(f => getTier(f.score).label === filterTier);
 
   // v9 ROUTES
-  if (route === "#intake" || route === "#pen") return (
+  if (route === "#intake" || route === "#pen" || route === "#cube") return (
     <div className="hvi-app">
-      <div className={`hvi-wrap${route === "#pen" ? " wide" : ""}`}>
+      <div className={`hvi-wrap${route !== "#intake" ? " wide" : ""}`}>
         <Header />
-        {route === "#pen" ? <Pen /> : <Intake />}
+        {route === "#pen" ? <Pen /> : route === "#cube" ? <CubeView /> : <Intake />}
       </div>
     </div>
   );

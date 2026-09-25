@@ -1,5 +1,8 @@
 import { TermBox } from "./term.jsx";
-import { cube as computeCube, judged, gapLine, QUADRANT_LINES, JUDGE_LINES, REALITY_INDEX } from "./cube.js";
+import { gapLine, QUADRANT_LINES, JUDGE_LINES } from "./cube.js";
+import { cubeOf } from "./cubeData.js";
+import Cube3D from "./Cube3D.jsx";
+import { segmentOf } from "./cube3d.js";
 
 // The machine's view of a subject on warmth x competence, drawn as a text-mode plot.
 // Takes the server's cube fields when present, otherwise derives them from a breakdown.
@@ -42,16 +45,7 @@ function PlotLine({ line }) {
 
 const edge = (l, r) => l + " ".repeat(Math.max(1, COLS - l.length - r.length)) + r;
 
-export function cubeOf(s) {
-  let q = null;
-  if (s && typeof s.warmth === "number" && typeof s.competence === "number" && s.quadrant) {
-    q = { warmth: s.warmth, competence: s.competence, quadrant: s.quadrant, judge: s.judge || "UNRATIFIED", realityIndex: s.realityIndex ?? REALITY_INDEX };
-  } else if (s?.breakdown) q = computeCube(s.breakdown);
-  if (!q) return null;
-  // A server-judged card already carries people; a static figure carries raw people data.
-  const people = s.people && typeof s.people.likability === "number" ? s.people : null;
-  return judged(q, people);
-}
+export { cubeOf };
 
 export function CubeLine({ subject }) {
   const q = cubeOf(subject);
@@ -69,18 +63,15 @@ export default function CubePanel({ subject, title = "WARMTH × COMPETENCE" }) {
   if (!q) return null;
   const placed = q.quadrant !== "UNPLACED";
   const p = q.people;
-  const rows = plotRows(q.warmth, q.competence, p ? p.likability : null);
+  const seg = placed ? segmentOf({ ...subject, ...q, name: subject.name || "YOU" }) : null;
   return (
-    <TermBox title={title} right={p ? "MACHINE ● PEOPLE ○" : "MACHINE VIEW"}>
-      <div className="hvi-rows hvi-cube" role="img"
-        aria-label={`Machine placement: warmth (conduct) ${q.warmth}, competence ${q.competence}, quadrant ${q.quadrant}, ${q.judge}.${p ? ` People: likability ${p.likability}, ${p.quadrant}, gap ${p.gap}.` : " People: not yet rated."}`}>
-        <div className="muted">COMPETENCE ↑</div>
-        <div className="muted">{edge("ENVIED", "ADMIRED")}</div>
-        {rows.map((line, i) => (placed ? <PlotLine key={i} line={line} />
-          : <div key={i}><span className="ghost">{line.replace(/[●○╌]/g, "·")}</span></div>))}
-        <div className="muted">{edge("DISMISSED", "TRUSTED RESERVE")}</div>
-        <div className="muted">{edge("", p ? "● CONDUCT ○ LIKABILITY →" : "WARMTH →")}</div>
-      </div>
+    <TermBox title={title} right={p ? "● MACHINE ○ PEOPLE" : "● MACHINE"}>
+      {placed ? (
+        <Cube3D single height={340} segments={seg ? [seg] : []}
+          label={`Two-judge cube. Machine face: warmth (conduct) ${q.warmth}, competence ${q.competence}, quadrant ${q.quadrant}.${p ? ` People face: likability ${p.likability}, ${p.quadrant}, gap ${p.gap}.` : " People face: not yet rated."} Judge state ${q.judge}. Drag or use arrow keys to rotate.`} />
+      ) : (
+        <div className="hvi-case-note ghost">UNPLACED. Too few sections assessed to place this file in the cube.</div>
+      )}
       <div className="hvi-cube-nums">● MACHINE: WARMTH (CONDUCT) {q.warmth} · COMPETENCE {q.competence}</div>
       {p ? (<>
         <div className="hvi-cube-nums">○ PEOPLE: LIKABILITY {p.likability} · {p.quadrant} · GAP {p.gap > 0 ? "+" : ""}{p.gap}</div>
