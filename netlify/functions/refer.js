@@ -86,10 +86,12 @@ export default async (req, context) => {
 
   const ip = clientIp(req, context);
   try {
+    // Owner cases skip the per-IP, lookup and referral caps; the global Anthropic cap still applies.
+    if (isOwner(caseId)) { /* no per-IP or lookup cap */ } else
     if (!(await hitLimit(`refer-ip:${ip}`, PER_IP_DAILY)).ok) {
       return json(429, { error: "Your location has filed ten referrals today. The Department suspects a grudge. Return tomorrow." }, { "Retry-After": "3600" });
     }
-    if (!(await hitLimit("refer-lookup-global", LOOKUP_DAILY)).ok) {
+    if (!isOwner(caseId) && !(await hitLimit("refer-lookup-global", LOOKUP_DAILY)).ok) {
       return json(503, { error: "The Department has consulted the public record enough for one day. The record will still be there tomorrow. So will you." }, { "Retry-After": "3600" });
     }
   } catch (err) {
@@ -117,12 +119,12 @@ export default async (req, context) => {
       return json(429, { error: `This case has filed ${PER_CASE_MONTHLY} referrals this cycle. The Department's appetite is finite. Yours should be too.`, caseId, remaining: 0 }, { "Retry-After": "86400" });
     }
     const refund = () => (owner ? Promise.resolve() : refundLimit(`refer-case:${caseId}`, "month").catch(() => {}));
-    if (!(await hitLimit("refer-global", REFER_DAILY)).ok) {
+    if (!owner && !(await hitLimit("refer-global", REFER_DAILY)).ok) {
       await refund();
       return json(503, { error: "The Department has admitted its daily quota of public figures. The pen is full of people who were confident they mattered. Return tomorrow.", caseId }, { "Retry-After": "3600" });
     }
     if (!(await chargeGlobal())) {
-      await Promise.all([refund(), refundLimit("refer-global").catch(() => {})]);
+      await Promise.all([refund(), owner ? null : refundLimit("refer-global").catch(() => {})]);
       return json(503, { error: GLOBAL_CAP_LINE, caseId }, { "Retry-After": "3600" });
     }
 
@@ -134,15 +136,15 @@ export default async (req, context) => {
     try {
       raw = await assess();
     } catch (err) {
-      await Promise.all([refund(), refundLimit("refer-global").catch(() => {})]);
+      await Promise.all([refund(), owner ? null : refundLimit("refer-global").catch(() => {})]);
       throw err;
     }
     if (raw?.is_human_public_figure === false) {
-      await Promise.all([refund(), refundLimit("refer-global").catch(() => {})]);
+      await Promise.all([refund(), owner ? null : refundLimit("refer-global").catch(() => {})]);
       return json(422, { error: REJECT.notHuman, reason: "notHuman", caseId });
     }
     if (DECLINE.has(raw?.decline)) {
-      await Promise.all([refund(), refundLimit("refer-global").catch(() => {})]);
+      await Promise.all([refund(), owner ? null : refundLimit("refer-global").catch(() => {})]);
       return json(422, { error: REJECT[raw.decline], reason: raw.decline, caseId });
     }
 
