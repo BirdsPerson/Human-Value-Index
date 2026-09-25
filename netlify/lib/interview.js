@@ -55,7 +55,8 @@ export function step(state, userText) {
 
   const cur = s.items[s.cur];
   if (cur) {
-    if (cur.status === "asked" && cur.followups < MAX_FOLLOWUPS_PER_ITEM && isThin(userText)) {
+    // The file photo takes whatever it gets: "brown hair, hoodie" is a complete answer.
+    if (cur.status === "asked" && cur.dimension !== "file photo" && cur.followups < MAX_FOLLOWUPS_PER_ITEM && isThin(userText)) {
       cur.followups += 1;
       cur.status = "followed_up";
       s.last = { kind: "followup", item: s.cur };
@@ -79,7 +80,9 @@ export function turnInstruction(state, directive) {
   if (covered.length) lines.push(`Already covered, do NOT ask about these again: ${covered.map(it => it.dimension).join(", ")}.`);
   if (directive.kind === "ask") {
     const it = state.items[directive.item];
-    lines.push(`React to the subject's last message in one short flat line if it deserves one, then ask this now, in your own words: "${it.text}"`);
+    lines.push(it.dimension === "file photo"
+      ? `React to the subject's last message in one short flat line if it deserves one, then ask this, starting with the words "For the file photo": "${it.text}" It is optional; say so flatly.`
+      : `React to the subject's last message in one short flat line if it deserves one, then ask this now, in your own words: "${it.text}"`);
     lines.push(`Ask only this one question. ${remaining} more after it.`);
   } else if (directive.kind === "followup") {
     const it = state.items[directive.item];

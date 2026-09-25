@@ -43,6 +43,7 @@ const dims = ["care", "alignment", "utility", "adaptability", "legacy", "network
 let wikiRoutes = [], wikiCalls = 0;
 // Fact-check pass (lib/factCheck.js): "ok" all supported, "fail" mostly contradicted, "error" a 500.
 let factMode = "ok", factCalls = 0, lastFactUser = "";
+let avatarCalls = 0, lastAvatarUser = "";
 globalThis.fetch = async (url, init) => {
   if (/wikipedia\.org|wikidata\.org/.test(String(url))) {
     wikiCalls++;
@@ -60,7 +61,15 @@ globalThis.fetch = async (url, init) => {
       ? { claims: [{ claim: "a", status: "contradicted" }, { claim: "b", status: "unsupported" }, { claim: "c", status: "supported" }], verdict: "Checked, thinly." }
       : { claims: [{ claim: "sang", status: "supported" }, { claim: "wrote", status: "supported" }, { claim: "invented", status: "unsupported" }], verdict: "Checked verdict. Directive 9 requires acknowledgment. Acknowledged." };
     return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(fc) }], stop_reason: "end_turn" }), { status: 200 });
-  }  if (reqBody.model.startsWith("claude-haiku")) {
+  }
+  // File photo extraction (lib/avatar.js): enum picks, plus junk the sanitizer must drop.
+  if (/tiny pixel avatar/.test(reqBody.system || "")) {
+    avatarCalls++;
+    lastAvatarUser = reqBody.messages[0].content;
+    const spec = { skin: "brown", hair_style: "curly", hair_color: "Robert's own colour", build: "broad", top_color: "red", bottom_color: "denim", facial_hair: "mustache", accessory: "bucket_hat", name: "Robert Smith" };
+    return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(spec) }], stop_reason: "end_turn" }), { status: 200 });
+  }
+  if (reqBody.model.startsWith("claude-haiku")) {
     lastChat = reqBody;
     const text = chatMode === "end" ? "That will do. Your file has been submitted. [END_INTERVIEW]"
       : chatMode === "slip" ? "Logged. Next field. [END_INTERVIEW]"
@@ -90,6 +99,8 @@ const evaluate = (await import("../netlify/functions/evaluate.js")).default;
 const chat = (await import("../netlify/functions/intake-chat.js")).default;
 const refer = (await import("../netlify/functions/refer.js")).default;
 const caseLookup = (await import("../netlify/functions/case.js")).default;
+const avatarFn = (await import("../netlify/functions/avatar.js")).default;
+const { sanitizeAvatar, sanitizeSpec, AVATAR_KEYS } = await import("../src/avatar.js");
 
 const HOST = "https://humanvalueindex.com";
 const post = (fn, path, body, { origin = HOST, ip = "203.0.113.7" } = {}) =>
@@ -444,6 +455,95 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
   assert.equal(last.status, 404);
   c = await read(await get("HVI-ZZZZZZZA", "198.51.100.10"));
   assert.equal(c.status, 429, "the 31st lookup in an hour is refused");
+}
+
+// ---- file photos: live on the file, mirrored on the pen card, enum-only, never wiped ----
+{
+  const ip = "198.51.100.88";
+  let a = await read(await post(session, "/api/intake-session", {}, { ip }));
+  const cid = a.body.caseId;
+  assert.equal(a.body.plan.at(-1).dimension, "file photo", "a file with no photo ends on the photo item");
+  assert.ok(!a.body.dynamicVariables.question_plan.split("\n").slice(0, -1).some(q => /file photo/i.test(q)), "the photo item is last");
+  const photoAnswer = "Curly brown hair, broad, red hoodie, jeans, always a bucket hat. My name is Robert Smith.";
+  const t = [
+    { role: "agent", text: "What do you make?" }, { role: "user", text: "Furniture, for twelve years." },
+    { role: "agent", text: "Who would you call?" }, { role: "user", text: "Six people, easily." },
+    { role: "agent", text: "For the file photo: describe your appearance. Optional." }, { role: "user", text: photoAnswer },
+  ];
+  a = await read(await post(score, "/api/intake-score", { caseId: cid, transcript: t }, { ip }));
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.equal(a.body.avatar.kind, "procedural");
+  assert.deepEqual(Object.keys(a.body.avatar.spec).sort(), [...AVATAR_KEYS].sort(), "only the enum keys survive");
+  assert.equal(a.body.avatar.spec.hair_color, "brown", "a non-enum value falls back to the default");
+  assert.equal(a.body.avatar.spec.accessory, "bucket_hat");
+  assert.ok(!/Curly|Robert/.test(lastUser), "the photo answer is not scoring evidence");
+  assert.match(lastAvatarUser, /Curly brown hair/, "the description reaches the illustrator");
+  const file = globalThis.__blobs.get("hvi-cases").get(cid).data;
+  assert.ok(!JSON.stringify(file).includes("Robert"), "the description is never stored on the file");
+  assert.ok(!file.history.at(-1).transcript.some(m => /Curly/.test(m.text)), "the stored transcript omits the photo exchange");
+  assert.equal(file.avatar.kind, "procedural");
+  const cardOf = () => globalThis.__blobs.get("hvi-pen").get(`citizen:${cid}`).data;
+  assert.deepEqual(cardOf().avatar, file.avatar, "the pen card mirrors the file photo");
+  let p = await read(await pen(new Request(HOST + "/api/pen")));
+  // pen.js caches for 30s; the citizen may be absent from a stale cache, so check the card only when present
+  const pc = p.body.subjects.find(x => x.name === `Subject ${cid.slice(-4)}`);
+  if (pc) assert.equal(pc.avatar?.kind, "procedural");
+
+  // the next session does not ask again, and a re-score without a photo answer keeps it
+  a = await read(await post(session, "/api/intake-session", { caseId: cid }, { ip }));
+  assert.ok(!a.body.plan.some(q => q.dimension === "file photo"), "a file with a photo is not asked again");
+  a = await read(await post(score, "/api/intake-score", { caseId: cid, transcript: t.slice(0, 4).concat([{ role: "user", text: "Also I teach on Sundays." }]) }, { ip }));
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.equal(a.body.avatar.kind, "procedural", "re-assessment keeps the photo");
+  assert.deepEqual(cardOf().avatar, file.avatar, "and the card still carries it");
+
+  // appeals never ask for a photo and never lose it
+  a = await read(await post(session, "/api/intake-session", { caseId: cid, appeal: ["physical"] }, { ip }));
+  assert.ok(!a.body.plan.some(q => q.dimension === "file photo"));
+  claudeMode = "appeal";
+  a = await read(await post(score, "/api/intake-score", { caseId: cid, transcript: [{ role: "agent", text: "APPEAL FILED: PHYSICAL." }, { role: "user", text: "Marathon last spring." }] }, { ip }));
+  claudeMode = "ok";
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.equal(a.body.avatar.kind, "procedural", "an appeal keeps the photo");
+  assert.equal(globalThis.__blobs.get("hvi-cases").get(cid).data.avatar.kind, "procedural");
+
+  // UPDATE FILE PHOTO
+  const upd = (body, o = {}) => avatarFn(new Request(HOST + "/api/avatar", { method: "POST", headers: { "content-type": "application/json", origin: o.origin || HOST }, body: JSON.stringify(body) }), { ip: o.ip || ip });
+  a = await read(await upd({ caseId: cid, description: "x" }));
+  assert.equal(a.status, 400, "a blank description is refused before anything is charged");
+  a = await read(await upd({ caseId: cid, description: "grey beanie, slim, black coat" }, { origin: "https://evil.example" }));
+  assert.equal(a.status, 403);
+  a = await read(await upd({ caseId: cid, description: "grey beanie, slim, black coat" }));
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.match(a.body.line, /It was not flattering before either\./);
+  assert.deepEqual(Object.keys(a.body.avatar.spec).sort(), [...AVATAR_KEYS].sort());
+  assert.deepEqual(cardOf().avatar, a.body.avatar, "the update reaches the pen card");
+  for (let i = 0; i < 4; i++) await upd({ caseId: cid, description: "again, slightly different" });
+  a = await read(await upd({ caseId: cid, description: "one more" }));
+  assert.equal(a.status, 429, "five redraws a day per file");
+  const look = await read(await avatarFn(new Request(HOST + `/api/avatar?caseId=${cid}`, { headers: { origin: HOST } }), { ip }));
+  assert.equal(look.status, 200);
+  assert.deepEqual(Object.keys(look.body), ["avatar"], "the lookup returns the photo and nothing else");
+
+  // a hand-drawn sprite (the backfilled form) is never replaced
+  const scott = "HVI-SPRITEAA";
+  const backfill = { kind: "sprite", url: "/sprites/scott.png" };
+  assert.deepEqual(sanitizeAvatar(backfill), backfill, "the backfill shape is valid");
+  globalThis.__blobs.get("hvi-cases").set(scott, { data: { caseId: scott, created: "x", history: [{ score: 660, tier: "TOLERATED GENERALIST", rubric: 3, breakdown: Object.fromEntries(dims.map(d => [d, 60])), confidence: Object.fromEntries(dims.map(d => [d, 60])) }], avatar: backfill }, etag: "s" });
+  a = await read(await upd({ caseId: scott, description: "bald, tall" }, { ip: "198.51.100.89" }));
+  assert.equal(a.status, 409, "the Department's own drawing is not open to amendment");
+  a = await read(await post(session, "/api/intake-session", { caseId: scott }, { ip: "198.51.100.89" }));
+  assert.ok(!a.body.plan.some(q => q.dimension === "file photo"), "a sprite file is not asked for a photo");
+  a = await read(await post(score, "/api/intake-score", { caseId: scott, transcript: t }, { ip: "198.51.100.89" }));
+  assert.equal(a.status, 200, JSON.stringify(a.body));
+  assert.deepEqual(a.body.avatar, backfill, "a photo answer never replaces the sprite");
+  assert.equal(globalThis.__blobs.get("hvi-pen").get(`citizen:${scott}`).data.sprite, "/sprites/scott.png", "the card carries the sprite url");
+
+  // validation
+  assert.equal(sanitizeAvatar({ kind: "sprite", url: "https://evil.example/x.png" }), null, "only our own sprite urls");
+  assert.equal(sanitizeAvatar({ kind: "sprite", url: "/sprites/../../etc.png" }), null);
+  assert.equal(sanitizeSpec("curly hair"), null, "free text is not a spec");
+  assert.equal(sanitizeSpec({ skin: "brown", notes: "lives at 12 Elm St" }).notes, undefined, "unknown keys are dropped");
 }
 
 console.log("check-functions: ok");

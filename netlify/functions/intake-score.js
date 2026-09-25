@@ -4,6 +4,8 @@ import { callClaude, ScoreError } from "../lib/score.js";
 import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP, restrictToDims, appealOutcome, appealRulings, appealStamp, cube } from "../lib/intake.js";
 import { getCase, updateCase, putPenCard, hitLimit, refundLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
+import { splitPhotoExchange, extractSpec } from "../lib/avatar.js";
+import { sanitizeAvatar } from "../../src/avatar.js";
 
 const PER_CASE_DAILY = 5;
 // Not in the spec's list, but case numbers are free to mint; this caps Anthropic spend per IP.
@@ -30,9 +32,10 @@ export function appealBrief(last, appeal, touch) {
   return `APPEAL:\nThe subject disputes these sections of the file:\n${lines.join("\n")}\n${adjacent.length ? `Adjacent sections also in scope: ${adjacent.join(", ")}.\n` : ""}Score ONLY the appealed and adjacent sections from this conversation; give every other section confidence 0. The rest of the file is not under review.\nIn the verdict, do NOT state whether the appeal is upheld or denied: the Department's ledger stamps that. Rule on EACH appealed section in turn: say coldly what the new evidence showed for it, compared with what was on file.\n\n`;
 }
 
-function respond(json, caseId, history, entry) {
+function respond(json, caseId, history, entry, avatar = null) {
   return json(200, {
     caseId,
+    avatar: sanitizeAvatar(avatar),
     visit: (history.findIndex(h => h.sid && h.sid === entry.sid) + 1) || history.length,
     score: entry.score,
     tier: entry.tier,
@@ -84,7 +87,7 @@ export default async (req, context) => {
     const record = await getCase(caseId);
     if (!record) return json(404, { error: `Case ${caseId} does not exist. Either you invented it or the Department lost it. The Department does not lose things.` });
     const lastEntry = record.history[record.history.length - 1];
-    if (lastEntry?.sid === sid) return respond(json, caseId, record.history, lastEntry);
+    if (lastEntry?.sid === sid) return respond(json, caseId, record.history, lastEntry, record.avatar);
     // An appeal only applies on top of a current-rubric file; otherwise score it as a full visit.
     const appeal = Array.isArray(record.pending?.appeal) && lastEntry && rubricOf(lastEntry) >= RUBRIC ? record.pending.appeal : null;
     const touch = appeal ? (record.pending.touch || appeal) : null;
@@ -103,9 +106,16 @@ export default async (req, context) => {
       return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
     }
 
+    // The file photo answer is not evidence: cut it before scoring and never store it.
+    const { rest: scored, description } = splitPhotoExchange(transcript);
+    let spec = null;
+    if (description && record.avatar?.kind !== "sprite") {
+      try { if (await chargeGlobal()) spec = await extractSpec(description); } catch (err) { console.warn("file photo extraction failed", err?.message); }
+    }
+
     let raw;
     try {
-      raw = await callClaude(SYSTEM_PROMPT + TRANSCRIPT_ADDENDUM, previousFile(lastEntry, record.history.length) + appealBrief(lastEntry, appeal, touch) + `(If you cite a directive, cite Directive ${2 + Math.floor(Math.random() * 97)}.)\n\nINTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(transcript)}`);
+      raw = await callClaude(SYSTEM_PROMPT + TRANSCRIPT_ADDENDUM, previousFile(lastEntry, record.history.length) + appealBrief(lastEntry, appeal, touch) + `(If you cite a directive, cite Directive ${2 + Math.floor(Math.random() * 97)}.)\n\nINTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(scored)}`);
     } catch (err) {
       // The Engine failed, not the subject: give the slots back so a resubmit isn't charged twice.
       await Promise.all([refundLimit(`score-case:${caseId}`), refundLimit(`score-ip:${ip}`)]).catch(() => {});
@@ -131,10 +141,12 @@ export default async (req, context) => {
         verdict: r.verdict, flags: r.flags, commendations: r.commendations, delta: r.delta, capped: r.capped,
         rawScore: r.rawScore, capNote: r.capNote, rubric: r.rubric, rubricReset: Boolean(r.rubricReset), newlyAssessed: r.newlyAssessed || [], provisional: r.provisional, provisionalNote: r.provisionalNote, asked, raw,
         // The subject's own words, kept (already capped at 20k chars) so a future rubric can re-score the file.
-        transcript: transcript.map(m => ({ role: m.role, text: m.text })),
+        transcript: scored.map(m => ({ role: m.role, text: m.text })),
         ...(appeal ? { appeal, appealOutcome: outcome, appealRulings: rulings } : {}),
       };
       cur.history.push(entry);
+      // The photo lives on the file, beside the history; a hand-drawn sprite is never replaced.
+      if (spec && cur.avatar?.kind !== "sprite") cur.avatar = { kind: "procedural", spec };
       // Only clear the plan this interview used; a newer session's plan stays.
       if (cur.pending && cur.pending.at === pendingAt) delete cur.pending;
       return cur;
@@ -147,10 +159,12 @@ export default async (req, context) => {
       name: `Subject ${last4}`,
       // Private citizens show score and tier only; the verdict stays with the subject.
       score: entry.score, tier: entry.tier, quadrant: entry.quadrant, warmth: entry.warmth, competence: entry.competence,
-      sprite: null, kind: "citizen", updated: entry.at,
+      // The card mirrors the file's photo, so a re-score can never wipe it.
+      avatar: sanitizeAvatar(saved.avatar), sprite: saved.avatar?.kind === "sprite" ? saved.avatar.url : null,
+      kind: "citizen", updated: entry.at,
     });
 
-    return respond(json, caseId, saved.history, entry);
+    return respond(json, caseId, saved.history, entry, saved.avatar);
   } catch (err) {
     if (err instanceof ScoreError) return json(err.status, { error: err.message });
     console.error("intake-score failed", err);

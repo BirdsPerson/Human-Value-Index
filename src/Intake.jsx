@@ -3,6 +3,7 @@ import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import { getTier } from "./figures.js";
 import { AGENT_ID } from "./agentConfig.js";
 import { TermBox, Rule, Typed, BigNumber, Bar, textSpark, pad, padL } from "./term.jsx";
+import FilePhoto from "./FilePhoto.jsx";
 
 // ponytail: identity is a case number in localStorage. Clear storage and you are
 // a new subject. Email magic link replaces this later; until then the ceiling is
@@ -280,6 +281,37 @@ function injectIntakeStyles() {
 
 function fmt(s) { return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; }
 
+// UPDATE FILE PHOTO: a new description, redrawn server-side from enum values only.
+function PhotoUpdate({ caseId, onUpdated }) {
+  const [open, setOpen] = useState(false);
+  const [val, setVal] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  async function submit(e) {
+    e.preventDefault();
+    if (busy || !val.trim()) return;
+    setBusy(true); setMsg(null);
+    try {
+      const r = await postJSON("/api/avatar", { caseId, description: val.trim() });
+      onUpdated(r.avatar); setMsg({ text: r.line, ok: true }); setVal(""); setOpen(false);
+    } catch (err) { setMsg({ text: err.message, ok: false }); }
+    setBusy(false);
+  }
+  return (
+    <div className="hvi-photo-update">
+      {open ? (
+        <form onSubmit={submit} className="hvi-refer-row">
+          <label className="p" htmlFor="hvi-photo-desc">DESCRIBE:</label>
+          <input id="hvi-photo-desc" className="hvi-refer-input" value={val} maxLength={400} disabled={busy} autoFocus
+            onChange={e => setVal(e.target.value)} placeholder="hair, build, usual clothes, one thing you carry" autoComplete="off" />
+          <button className="hvi-btn-next" type="submit" disabled={busy || !val.trim()}>{busy ? "Drawing" : "Submit"}</button>
+        </form>
+      ) : <button className="hvi-link-btn" onClick={() => { setOpen(true); setMsg(null); }}>Update file photo</button>}
+      {msg && <div className={msg.ok ? "hvi-case-note" : "hvi-flag-item hvi-flag"} role="status">{msg.ok ? "" : "!! "}{msg.text}</div>}
+    </div>
+  );
+}
+
 export default function Intake() {
   useEffect(() => { injectIntakeStyles(); }, []);
 
@@ -297,6 +329,7 @@ export default function Intake() {
   const [appealSel, setAppealSel] = useState([]);
   const [fileVisits, setFileVisits] = useState(null);   // visits on record, from the logon lookup
   const [showRestore, setShowRestore] = useState(false);
+  const [avatar, setAvatar] = useState(() => { const l = readLastResult(); return l && l.caseId === readCaseId() ? l.avatar || null : null; });
 
   const convRef = useRef(null);
   const linesRef = useRef([]);
@@ -325,9 +358,20 @@ export default function Intake() {
     return () => { dead = true; };
   }, [caseId]);
 
+  // The file photo lives on the server file; fetch it when this browser has not seen it.
+  useEffect(() => {
+    if (!caseId || avatar) return;
+    let dead = false;
+    fetch(`/api/avatar?caseId=${encodeURIComponent(caseId)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!dead && d?.avatar) setAvatar(d.avatar); })
+      .catch(() => {});
+    return () => { dead = true; };
+  }, [caseId, avatar]);
+
   const toggleAppeal = (d) => setAppealSel(sel => (sel.includes(d) ? sel.filter(x => x !== d) : sel.length >= MAX_APPEAL ? sel : [...sel, d]));
   function restored(id, visits) {
-    caseRef.current = id; setCaseId(id); setFileVisits(visits); setShowRestore(false); setResult(null); setAppealSel([]);
+    caseRef.current = id; setCaseId(id); setFileVisits(visits); setShowRestore(false); setResult(null); setAppealSel([]); setAvatar(null);
   }
 
   useEffect(() => {
@@ -457,7 +501,8 @@ export default function Intake() {
     try {
       const r = await postJSON("/api/intake-score", { caseId: caseRef.current, transcript: lines });
       setResult(r);
-      writeLastResult({ caseId: caseRef.current, score: r.score, tier: r.tier, breakdown: r.breakdown, confidence: r.confidence, verdict: r.verdict, warmth: r.warmth, competence: r.competence, quadrant: r.quadrant, judge: r.judge, realityIndex: r.realityIndex, rubric: r.rubric ?? 3, at: Date.now() });
+      writeLastResult({ caseId: caseRef.current, score: r.score, tier: r.tier, breakdown: r.breakdown, confidence: r.confidence, verdict: r.verdict, warmth: r.warmth, competence: r.competence, quadrant: r.quadrant, judge: r.judge, realityIndex: r.realityIndex, rubric: r.rubric ?? 3, avatar: r.avatar || null, at: Date.now() });
+      if (r.avatar) setAvatar(r.avatar);
       setFileVisits(r.history?.length || 1);
       setStage("result");
     } catch (e) {
@@ -521,8 +566,13 @@ export default function Intake() {
   const last = readLastResult();
   const returning = last?.caseId === caseId;
   const onRecord = Boolean(caseId && (returning || result || fileVisits > 0));
+  const photoSubject = caseId ? { kind: "citizen", you: true, caseId, name: `Subject ${caseId.slice(-4)}`, avatar, score: result?.score ?? (returning ? last?.score : undefined) } : null;
+  const bigPhoto = typeof window === "undefined" || window.innerWidth > 560;
   const caseBox = (
     <TermBox title="CASE FILE">
+      <div className="hvi-file-head">
+      {photoSubject && <FilePhoto subject={photoSubject} scale={bigPhoto ? 3 : 2} />}
+      <div className="hvi-file-text">
       <div><span className="hvi-case-note">CASE NUMBER: </span><span className="hvi-case-num">{caseId || "UNASSIGNED"}</span></div>
       {caseId && <div className="hvi-writedown">WRITE THIS DOWN. IT IS THE ONLY KEY TO YOUR FILE ON ANOTHER DEVICE.</div>}
       <div className="hvi-case-note">
@@ -534,6 +584,13 @@ export default function Intake() {
       {showRestore
         ? <CaseLogon onRestored={restored} autoFocus />
         : <button className="hvi-link-btn" onClick={() => setShowRestore(true)}>{caseId ? "Log on with a different case number" : "Already have a case number? Log on"}</button>}
+      {onRecord && avatar?.kind !== "sprite" && <PhotoUpdate caseId={caseId} onUpdated={(a) => {
+        setAvatar(a);
+        const l = readLastResult();
+        if (l && l.caseId === caseId) writeLastResult({ ...l, avatar: a });
+      }} />}
+      </div>
+      </div>
     </TermBox>
   );
   const appeals = onRecord && (

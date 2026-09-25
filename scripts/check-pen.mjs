@@ -132,4 +132,32 @@ assert.equal(pts[0][1], 45);  // min at bottom
   assert.equal(pts.find(p => p.name === "JFK").people.likability, JFK.people.likability);
 }
 
+
+// ---- citizen file photos: every enum renders, frames differ, junk never draws ----
+{
+  const { avatarPixels, avatarPalette, AVATAR_ENUMS, DEFAULT_SPEC, sanitizeSpec } = await import("../src/avatar.js");
+  const { splitPhotoExchange } = await import("../netlify/lib/avatar.js");
+  const vals = (k) => (Array.isArray(AVATAR_ENUMS[k]) ? AVATAR_ENUMS[k] : Object.keys(AVATAR_ENUMS[k]));
+  for (const k of ["hair_style", "accessory", "facial_hair", "build", "skin", "hair_color", "top_color"]) {
+    for (const v of vals(k)) {
+      const spec = { ...DEFAULT_SPEC, [k]: v };
+      const px = avatarPixels(spec, 0), pal = avatarPalette(spec);
+      assert.equal(px.length, 32 * 48, `${k}=${v} is a full sprite`);
+      const used = new Set(px);
+      for (const i of used) assert.ok(i === 0 || pal[i], `${k}=${v} uses only palette slots that exist (slot ${i})`);
+      assert.ok([...px].filter(x => x).length > 300, `${k}=${v} draws a body`);
+    }
+  }
+  const a0 = avatarPixels(DEFAULT_SPEC, 0), a1 = avatarPixels(DEFAULT_SPEC, 1);
+  assert.ok(a0.some((v, i) => v !== a1[i]), "the stride frame differs from the standing frame");
+  assert.deepEqual([...avatarPixels({ skin: "<svg>", accessory: "gun" }, 0)], [...avatarPixels(DEFAULT_SPEC, 0)], "junk values draw the default");
+  assert.equal(sanitizeSpec(null), null);
+  // the photo exchange is found by the Officer's wording, answer and all
+  const t = [{ role: "agent", text: "Q1" }, { role: "user", text: "A1" }, { role: "agent", text: "For the file photo, then. What do you look like?" }, { role: "user", text: "tall, red coat" }, { role: "agent", text: "Filed." }];
+  const sp = splitPhotoExchange(t);
+  assert.equal(sp.description, "tall, red coat");
+  assert.deepEqual(sp.rest.map(m => m.text), ["Q1", "A1", "Filed."]);
+  assert.equal(splitPhotoExchange(t.slice(0, 2)).description, null, "no photo question, no description");
+}
+
 console.log("check-pen: ok");

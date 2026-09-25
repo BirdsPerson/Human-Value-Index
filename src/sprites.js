@@ -3,6 +3,8 @@
 // Everything above paintPlaceholder() is pure (no DOM) so scripts/check-pen.mjs
 // can run it under plain node.
 
+import { avatarPixels, avatarPalette } from "./avatar.js";
+
 export const SPRITE_W = 32;
 export const SPRITE_H = 48;
 
@@ -198,6 +200,26 @@ export function sparkPoints(values, w, h, pad = 4) {
 
 // ---------------------------------------------------------------------------
 // Browser only below.
+
+// A citizen's procedural file photo as a sprite sheet (frames side by side).
+export function paintAvatar(spec, frames = 2) {
+  const pal = avatarPalette(spec);
+  const c = document.createElement("canvas");
+  c.width = SPRITE_W * frames; c.height = SPRITE_H;
+  const ctx = c.getContext("2d");
+  const img = ctx.createImageData(c.width, c.height);
+  for (let f = 0; f < frames; f++) {
+    const px = avatarPixels(spec, f);
+    for (let y = 0; y < SPRITE_H; y++) for (let x = 0; x < SPRITE_W; x++) {
+      const p = pal[px[y * SPRITE_W + x]];
+      if (!p) continue;
+      const o = (y * c.width + f * SPRITE_W + x) * 4;
+      img.data[o] = p[0]; img.data[o + 1] = p[1]; img.data[o + 2] = p[2]; img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
 
 // Returns a canvas sprite sheet (frames side by side) coloured by tier.
 export function paintPlaceholder(slug, tierColor, frames = 2) {

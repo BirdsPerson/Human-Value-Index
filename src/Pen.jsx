@@ -3,8 +3,9 @@ import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import { FAMOUS_FIGURES, getTier, slugify, slugCandidates } from "./figures.js";
 import {
   SPRITE_W, SPRITE_H, gaitFor, clamp,
-  paintPlaceholder, loadManifest, loadImage, mulberry32,
+  paintPlaceholder, paintAvatar, loadManifest, loadImage, mulberry32,
 } from "./sprites.js";
+import FilePhoto from "./FilePhoto.jsx";
 import {
   FLOORS, F, FH, ROOF_H, BUILDING_H, FOUNDATION, SHAFT_X, SHAFT_W, ROOM_X0, WALL_TOP, WALK_TOP, DOOR_W,
   floorTop, walkTop, walkBot, roomX1, doorX, floorAt, prefsFor, chooseFloor, stayFor, isLow,
@@ -159,6 +160,8 @@ function injectPenStyles() {
   if (el.textContent !== penStyles) el.textContent = penStyles;
 }
 
+// Subjects walking the building at once; the rest of a large roster stays in the registry.
+const BUILDING_POP = 110;
 const GRAVITY = 700;        // sprite px / s^2
 const VIEW_PAD = 5;         // phone view: sprite px above the floor slab
 
@@ -186,7 +189,8 @@ function SubjectCard({ subject, onClose }) {
       <div className="hvi-card-panel" role="dialog" aria-modal="true" aria-labelledby="hvi-card-name" onClick={e => e.stopPropagation()}>
         <TermBox title="SUBJECT FILE" right="PEN B">
           <div className="hvi-card-head">
-            <div>
+            <FilePhoto subject={subject} scale={typeof window !== "undefined" && window.innerWidth <= 560 ? 2 : 3} />
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div className="hvi-card-kind">{kind}</div>
               <div className="hvi-card-name" id="hvi-card-name">{subject.name}</div>
             </div>
@@ -473,7 +477,7 @@ export default function Pen() {
       const floor = opts.floor ?? chooseFloor(prefs, sim.counts, rnd);
       sim.counts[floor]++;
       const e = {
-        s, tier, slug, img: placeholderFor(slug, tier.color), frames: 2, real: false, gait, prefs, floor, dest: -1,
+        s, tier, slug, img: s.avatar?.kind === "procedural" ? paintAvatar(s.avatar.spec, 2) : placeholderFor(slug, tier.color), frames: 2, real: false, gait, prefs, floor, dest: -1,
         x: 0, y: 0, tx: 0, ty: 0, dir: rnd() < 0.5 ? -1 : 1, state: "idle", timer: rnd() * 3, animT: rnd() * 2,
         stayT: opts.stay ?? rnd() * stayFor(rnd, sim.reduced),
         vy: 0, landY: 0, ang: 0, va: 0, say: null, sayW: 0, sayUntil: 0, nameW: 0, you: !!opts.you,
@@ -670,7 +674,7 @@ export default function Pen() {
       sim.manifest = manifest;
     });
     function attachSprite(e, manifest) {
-      const src = typeof e.s.sprite === "string" && e.s.sprite ? e.s.sprite : null;
+      const src = (e.s.avatar?.kind === "sprite" && e.s.avatar.url) || (typeof e.s.sprite === "string" && e.s.sprite ? e.s.sprite : null);
       const slug = slugCandidates(e.s.name).concat(e.slug).find(k => manifest && manifest[k]);
       if (!src && !slug) return;
       const meta = (slug && manifest[slug]) || {};
@@ -684,12 +688,19 @@ export default function Pen() {
     // ---- citizens and referred figures ----------------------------------------
     // Polled while the pen is open: new referrals drop into the lobby, and a referral whose
     // likeness the Mac job has since drawn swaps its placeholder for the real sprite.
+    const rosterNames = new Set();   // offsite registry entries already added
     function pollPen(first) {
       return fetch("/api/pen").then(r => r.ok ? r.json() : Promise.reject(r.status)).then(data => {
         if (cancelled) return;
         const byName = new Map(sim.ents.map(e => [e.s.name, e]));
         const queued = new Set(sim.arrivals.map(a => a.s.name));
         const subjects = (data?.subjects || []).filter(s => s && s.name && typeof s.score === "number" && (s.kind !== "figure" || s.referred));
+        // The building holds a sample: rooms seat ~74, so past BUILDING_POP the roster-engine
+        // figures go to the registry (and the cube) without walking in. People referred by
+        // hand and citizens always enter; engine figures fill what room is left.
+        let room = BUILDING_POP - sim.ents.length - sim.arrivals.length;
+        const offsite = [];
+        subjects.sort((a, b) => (a.engine === b.engine ? 0 : a.engine ? 1 : -1));
         let sawMe = false, added = 0;
         for (const s of subjects) {
           const e = byName.get(s.name);
@@ -699,6 +710,8 @@ export default function Pen() {
             continue;
           }
           if (queued.has(s.name) || added >= 60) continue;
+          if (s.engine && room <= 0) { if (!rosterNames.has(s.name)) { offsite.push({ ...s, kind: "figure", offsite: true }); rosterNames.add(s.name); } continue; }
+          room--;
           added++;
           const you = !!myName && s.name === myName;
           sawMe = sawMe || you;
@@ -707,6 +720,7 @@ export default function Pen() {
           const own = mine && mine.caseId === myCase ? { verdict: mine.verdict, breakdown: mine.breakdown, rubric: mine.rubric ?? 1, you: true } : {};
           sim.arrivals.push({ s: s.referred ? { ...s, kind: "figure" } : { ...s, ...own, kind: "citizen", you }, you });
         }
+        if (offsite.length) setRoster(r => [...r, ...offsite]);
         if (first) queueSelfIfMissing(sawMe);
       }).catch(() => {
         if (cancelled || !first) return;
@@ -734,7 +748,7 @@ export default function Pen() {
       // The stored result must belong to this case number: a reopened file has a new
       // number and nothing on it yet.
       if (sawMe || !last || !myName || last.caseId !== myCase) return;
-      sim.arrivals.unshift({ s: { name: myName, score: last.score, tier: last.tier, breakdown: last.breakdown, verdict: last.verdict, rubric: last.rubric ?? 1, kind: "citizen", you: true }, you: true });
+      sim.arrivals.unshift({ s: { name: myName, score: last.score, tier: last.tier, breakdown: last.breakdown, verdict: last.verdict, rubric: last.rubric ?? 1, avatar: last.avatar || null, kind: "citizen", you: true }, you: true });
     }
 
     // New arrivals come in through the lobby's ceiling hatch and stay there a while.
@@ -1153,6 +1167,7 @@ export default function Pen() {
             return (
               <button key={s.name} className="hvi-row-btn" onClick={() => openFromList(s)}
                 aria-label={`${s.name}, ${s.score}, ${t.label}${where ? `, located: ${where}` : ""}. Open file.`}>
+                <FilePhoto subject={s} scale={1} compact />
                 <span className="name">{s.name}{s.you ? " (YOU)" : ""}</span>
                 <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
                 {where && <span className="tag" aria-hidden="true">{pad(where, 10)}</span>}

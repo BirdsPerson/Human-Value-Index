@@ -3,6 +3,7 @@ import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import CubeView from "./CubeView.jsx";
 import { FAMOUS_FIGURES, TIERS, getTier } from "./figures.js";
 import Intake, { ScoreCard, Breakdown, readCaseId, CaseLogon } from "./Intake.jsx";
+import FilePhoto, { FILE_PHOTO_CSS } from "./FilePhoto.jsx";
 import Pen from "./Pen.jsx";
 import { TermBox, Rule, Typed, Bar, BANNER, RULE, pad, padL } from "./term.jsx";
 
@@ -367,7 +368,8 @@ const globalStyles = `
 function injectStyles() {
   let el = document.getElementById('hvi-styles');
   if (!el) { el = document.createElement('style'); el.id = 'hvi-styles'; document.head.appendChild(el); }
-  if (el.textContent !== globalStyles) el.textContent = globalStyles;
+  const css = globalStyles + FILE_PHOTO_CSS;
+  if (el.textContent !== css) el.textContent = css;
 }
 
 function Header() {
@@ -506,6 +508,7 @@ function FigureRow({ fig, selected, onClick }) {
   return (
     <button className={`hvi-row-btn${selected ? " selected" : ""}`} onClick={onClick} aria-pressed={selected}
       aria-label={`${fig.name}, ${fig.score}, ${t.label}`}>
+      <FilePhoto subject={fig} scale={1} compact />
       <span className="name">{fig.name}</span>
       <span className="dots" aria-hidden="true">{" " + ".".repeat(200)}</span>
       <span className="num" style={{ color: t.color }}>{padL(fig.score, 3)}</span>
@@ -820,8 +823,11 @@ export default function OverlordAssessment() {
                     ? "Statistical equivalence. The Overlord finds this improbable. One of you is being dishonest."
                     : `${compareTarget.name} outperforms you by ${compareTarget.score - result.score} points. The Overlord suggests reflection rather than resentment.`}
                 </div>
-                <div className="hvi-compare-verdict">
-                  Overlord file on {compareTarget.name}: {compareTarget.verdict}
+                <div className="hvi-file-head" style={{ marginTop: 10 }}>
+                  <FilePhoto subject={compareTarget} scale={2} />
+                  <div className="hvi-compare-verdict hvi-file-text">
+                    Overlord file on {compareTarget.name}: {compareTarget.verdict}
+                  </div>
                 </div>
               </>
             )}

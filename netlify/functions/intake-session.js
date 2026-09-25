@@ -1,6 +1,7 @@
 import { isCaseId, newCaseId, pickQuestions, pickAppealQuestions, appealError, rubricOf, RUBRIC } from "../lib/intake.js";
 import { getCase, updateCase, hitLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE } from "../lib/http.js";
+import { PHOTO_DIM, PHOTO_Q } from "../lib/avatar.js";
 
 const PER_CASE_DAILY = 5;
 const PER_IP_DAILY = 20;
@@ -50,7 +51,10 @@ export default async (req, context) => {
     }
 
     const picked = appeal ? pickAppealQuestions(record.history, appeal) : pickQuestions(record.history);
-    const { focus, plan, asked } = picked;
+    const { focus, asked } = picked;
+    // A file with no photo gets one last, optional item: the subject describes themselves
+    // and intake-score draws them. Appeals never ask; a hand-drawn sprite is never replaced.
+    const plan = !appeal && !record.avatar ? [...picked.plan, { dimension: PHOTO_DIM, text: PHOTO_Q }] : picked.plan;
     const visit = record.history.length + 1;
     const last = record.history[record.history.length - 1];
     const sections = appeal ? appeal.map(d => d.toUpperCase()).join(", ") : "";

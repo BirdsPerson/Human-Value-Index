@@ -91,6 +91,8 @@ export function pointOf(subject) {
   const octant = q.octant || null;
   return {
     name: subject.name || "SUBJECT",
+    // enough of the subject to draw its file photo in the tooltip
+    photo: { name: subject.name, slug: subject.slug, score: subject.score, sprite: subject.sprite, avatar: subject.avatar, kind: subject.kind, you: subject.you },
     q,
     p,
     rated,

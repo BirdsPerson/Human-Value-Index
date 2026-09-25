@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CORNERS, EDGES, AXES, MIDPLANES, OCTANT_ANCHORS, project, clampPitch, REST } from "./cube3d.js";
 import { OCTANT_LINES } from "./cube.js";
+import FilePhoto from "./FilePhoto.jsx";
 
 // The octant cube as a WarGames vector display: green phosphor wireframe, three
 // intersecting midplanes (the 50 lines on conduct, competence and likability), one point
@@ -223,6 +224,7 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
         onKeyDown={onKey} />
       <div ref={tipRef} className="hvi-cube3d-tip" hidden={!hover} aria-live="polite">
         {hover && q && (<>
+          {hover.photo && <div style={{ float: "left", marginRight: 8 }}><FilePhoto subject={hover.photo} scale={1} compact /></div>}
           <div className="t">{hover.name}</div>
           <div>CONDUCT {q.warmth} · COMPETENCE {q.competence} · LIKABILITY {hover.rated ? q.people.likability : "UNRATED"}</div>
           {hover.rated ? (<>
