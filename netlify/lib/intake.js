@@ -35,11 +35,13 @@ const isNum = v => typeof v === "number" && Number.isFinite(v);
 
 // The Machine Score: round(10 * (0.45·W + 0.55·C)), then the harm gate. No assessed
 // dimensions -> 500 (neutral, provisional).
-export function computeScore(b) {
+export function computeScore(b, severity = null) {
   const w = axisMean(b, WARMTH_AXIS), c = axisMean(b, COMPETENCE_AXIS);
   if (w.value === null && c.value === null) return 500;
   const score = Math.round(10 * ((1 - REALITY_INDEX) * (w.value ?? 50) + REALITY_INDEX * (c.value ?? 50)));
-  if (harmGated(b)) return Math.min(score, HARM_GATE.cap);
+  // A gated file is placed inside 0-cap by the severity of the documented harm; the rest of
+  // the record no longer lifts it. Without a severity (interviews) it keeps the old clamp.
+  if (harmGated(b)) { const g = severityScore(severity); return g ?? Math.min(score, HARM_GATE.cap); }
   return Math.max(0, Math.min(1000, seriousHarm(b) ? Math.min(score, HARM_GATE.seriousCap) : score));
 }
 
@@ -53,6 +55,38 @@ export const harmGated = b => isNum(b?.threat) && (b.threat >= HARM_GATE.threatA
 // pre-modern ruler's dynastic killings. The file can't rise above MONITORED CIVILIAN;
 // the rest of the record decides how far below.
 export const seriousHarm = b => isNum(b?.threat) && isNum(HARM_GATE.seriousThreat) && b.threat >= HARM_GATE.seriousThreat;
+// Graded bottom (calibration.json "severity"): scale, role, duration, accountability, each an
+// enum. score = cap - sum(points), floored at 0. Directing harm weighs more than doing it, so
+// those who controlled harm rank below their instruments, all else equal.
+export const SEVERITY = CAL.severity;
+export const SEVERITY_FIELDS = ["kind", "scale", "role", "duration", "accountability"];
+export function validSeverity(sev) {
+  if (!sev || typeof sev !== "object") return null;
+  const out = {};
+  for (const f of SEVERITY_FIELDS) {
+    if (typeof sev[f] !== "string" || !(sev[f] in SEVERITY[f])) return null;
+    out[f] = sev[f];
+  }
+  return out;
+}
+export function severityScore(sev, cal = { severity: SEVERITY, cap: HARM_GATE.cap }) {
+  const v = validSeverity(sev);
+  if (!v) return null;
+  const pts = SEVERITY_FIELDS.reduce((t, f) => t + cal.severity[f][v[f]], 0);
+  return Math.max(0, Math.round(cal.cap - pts));
+}
+// Median of several readings' severities, field by field, by rank; null unless most are valid.
+export function medianSeverity(list) {
+  const valid = list.map(validSeverity).filter(Boolean);
+  if (valid.length * 2 <= list.length) return null;
+  const out = {};
+  for (const f of SEVERITY_FIELDS) {
+    const order = Object.keys(SEVERITY[f]);
+    const ranks = valid.map(s => order.indexOf(s[f])).sort((a, b) => a - b);
+    out[f] = order[ranks[(ranks.length - 1) >> 1]];
+  }
+  return out;
+}
 export const assessedCount = b => Object.keys(WEIGHTS).filter(d => isNum(b?.[d])).length;
 
 // ponytail: a case number is the whole identity. Anyone holding it is the subject.
@@ -241,7 +275,9 @@ export function normalizeAssessment(raw) {
   if (band === "historical_killing" || band === "political_resistance") breakdown.threat = Math.min(breakdown.threat, HISTORICAL_THREAT_CEIL);
   // The headline is always the published formula over the breakdown. The model's own
   // number drifted ~40 points below its own formula, so it is ignored.
-  const score = computeScore(breakdown);
+  // "kind" is the band the harm was classified into, not a model field.
+  const severity = band ? validSeverity(r.harm_severity && typeof r.harm_severity === "object" ? { ...r.harm_severity, kind: band } : null) : null;
+  const score = computeScore(breakdown, severity);
   const strs = v => (Array.isArray(v) ? v.filter(s => typeof s === "string").slice(0, 3) : []);
   return {
     score,
@@ -251,7 +287,7 @@ export function normalizeAssessment(raw) {
     verdict: typeof r.verdict === "string" && r.verdict.trim() ? cap(r.verdict.trim(), MAX_VERDICT) : "The Assessment Engine declined to elaborate. Take that as you will.",
     flags: strs(r.flags),
     commendations: strs(r.commendations),
-    harm: typeof r.documented_harm === "string" ? { documented: r.documented_harm, era: typeof r.era_context === "string" ? r.era_context : null, band } : null,
+    harm: typeof r.documented_harm === "string" ? { documented: r.documented_harm, era: typeof r.era_context === "string" ? r.era_context : null, band, severity } : null,
   };
 }
 
@@ -302,6 +338,29 @@ export const PROVISIONAL_NOTE = "FILE INCOMPLETE. Fewer than three sections carr
 //    so an under-sampled file can reach a fair score in a visit or two.
 //  - assessed before, not now: carried forward unchanged.
 // Confidence is carried forward as the max seen, so the question plan keeps moving on.
+// Median of several readings of the same transcript (interviews are scored SCORE_RUNS times).
+// One reading swings a citizen's score by +-15-30 with nothing changed; the per-dimension
+// median of confidence and value cancels most of it. A dimension whose median confidence is
+// under MIN_CONFIDENCE stays unassessed. Verdict, flags and commendations come from the
+// reading closest to the median.
+export const SCORE_RUNS = 3;
+export function medianAssessment(readings) {
+  const rs = readings.filter(Boolean);
+  if (!rs.length) throw new Error("no readings");
+  if (rs.length === 1) return rs[0];
+  const med = xs => { const v = xs.filter(isNum).sort((a, b) => a - b); if (!v.length) return null; const m = v.length >> 1; return v.length % 2 ? v[m] : Math.round((v[m - 1] + v[m]) / 2); };
+  const hasConf = rs.some(r => r.confidence);
+  const breakdown = {}, confidence = {};
+  for (const d of DIMENSIONS) {
+    const conf = hasConf ? med(rs.map(r => r.confidence?.[d] ?? 0)) ?? 0 : 100;
+    confidence[d] = conf;
+    breakdown[d] = conf < MIN_CONFIDENCE ? null : med(rs.map(r => r.breakdown?.[d]));
+  }
+  const dist = r => DIMENSIONS.reduce((t, d) => t + (isNum(r.breakdown?.[d]) && isNum(breakdown[d]) ? Math.abs(r.breakdown[d] - breakdown[d]) : (r.breakdown?.[d] == null) !== (breakdown[d] == null) ? 50 : 0), 0);
+  const closest = rs.reduce((a, b) => (dist(b) < dist(a) ? b : a));
+  return { ...closest, breakdown, confidence: hasConf ? confidence : null, score: computeScore(breakdown), provisional: assessedCount(breakdown) < MIN_ASSESSED, runs: rs.length, runScores: rs.map(r => r.score) };
+}
+
 export function applyCap(prev, next) {
   const stamp = r => ({ ...r, rubric: RUBRIC, provisional: assessedCount(r.breakdown) < MIN_ASSESSED, provisionalNote: assessedCount(r.breakdown) < MIN_ASSESSED ? PROVISIONAL_NOTE : null });
   if (!prev || typeof prev.score !== "number") {

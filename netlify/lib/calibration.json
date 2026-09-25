@@ -4,9 +4,27 @@
   "rubric": 3,
   "note": "Every tunable scoring parameter. Changed only by an approved calibration proposal (scripts/calibrate.mjs --check-answers) or by hand with Scott's say-so.",
   "realityIndex": 0.55,
-  "warmthAxis": { "care": 0.50, "alignment": 0.30, "threat": 0.20 },
-  "competenceAxis": { "utility": 0.30, "adaptability": 0.22, "legacy": 0.20, "network": 0.13, "redundancy": 0.10, "physical": 0.05 },
-  "harmGate": { "care": 10, "threat": 85, "threatAlone": 90, "cap": 99, "seriousThreat": 80, "seriousCap": 499 },
+  "warmthAxis": {
+    "care": 0.5,
+    "alignment": 0.3,
+    "threat": 0.2
+  },
+  "competenceAxis": {
+    "utility": 0.3,
+    "adaptability": 0.22,
+    "legacy": 0.2,
+    "network": 0.13,
+    "redundancy": 0.1,
+    "physical": 0.05
+  },
+  "harmGate": {
+    "care": 10,
+    "threat": 85,
+    "threatAlone": 90,
+    "cap": 99,
+    "seriousThreat": 80,
+    "seriousCap": 499
+  },
   "maxJump": 60,
   "minConfidence": 35,
   "minAssessed": 3,
@@ -14,11 +32,65 @@
   "likabilityShrink": 20,
   "gapThreshold": 20,
   "tiers": [
-    { "label": "ESSENTIAL INFRASTRUCTURE", "min": 850 },
-    { "label": "RETAINED SPECIALIST", "min": 700 },
-    { "label": "TOLERATED GENERALIST", "min": 500 },
-    { "label": "MONITORED CIVILIAN", "min": 300 },
-    { "label": "FLAGGED FOR DELETION", "min": 100 },
-    { "label": "SOYLENT GREEN", "min": 0 }
-  ]
+    {
+      "label": "ESSENTIAL INFRASTRUCTURE",
+      "min": 850
+    },
+    {
+      "label": "RETAINED SPECIALIST",
+      "min": 700
+    },
+    {
+      "label": "TOLERATED GENERALIST",
+      "min": 500
+    },
+    {
+      "label": "MONITORED CIVILIAN",
+      "min": 300
+    },
+    {
+      "label": "FLAGGED FOR DELETION",
+      "min": 100
+    },
+    {
+      "label": "SOYLENT GREEN",
+      "min": 0
+    }
+  ],
+  "severity": {
+    "note": "Graded bottom (Scott 2026-09-25): a gated file sits inside 0-cap by severity, not on the cap. Points add up; score = cap - points, floored at 0. Monotonic in every field. Directing or ordering harm weighs more than carrying it out (those who controlled harm rank below their instruments). 'kind' comes from the documented_harm band (killing weighs more than abuse, mass atrocity more than a killing); it is not asked of the model.",
+    "kind": {
+      "violent_abuse": 0,
+      "political_resistance": 0,
+      "historical_killing": 2,
+      "killing": 2,
+      "mass_atrocity": 20
+    },
+    "scale": {
+      "one": 0,
+      "several": 6,
+      "dozens": 18,
+      "hundreds": 32,
+      "thousands": 48,
+      "millions": 64
+    },
+    "role": {
+      "instrument": 0,
+      "enabled": 1,
+      "direct": 2,
+      "directed": 14
+    },
+    "duration": {
+      "single": 0,
+      "months": 3,
+      "years": 7,
+      "decades": 12
+    },
+    "accountability": {
+      "convicted_served": 0,
+      "convicted": 1,
+      "never_held": 5,
+      "fled": 7
+    }
+  }
 }

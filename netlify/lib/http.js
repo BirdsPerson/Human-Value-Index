@@ -50,6 +50,8 @@ export const GLOBAL_CAP_LINE = "The Assessment Engine has met its daily quota of
 export const LIMITER_DOWN_LINE = "The Department's queue ledger is unavailable, and the Engine does not work off the books. Try again shortly.";
 
 // Throws on Blobs failure; callers fail closed.
-export async function chargeGlobal() {
-  return (await hitLimit("global-anthropic", GLOBAL_ANTHROPIC_DAILY)).ok;
+// n = how many Anthropic calls the request is about to make (an interview is scored three
+// times and the median kept, so it charges 3).
+export async function chargeGlobal(n = 1) {
+  return (await hitLimit("global-anthropic", GLOBAL_ANTHROPIC_DAILY, "day", n)).ok;
 }

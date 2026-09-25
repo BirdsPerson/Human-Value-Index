@@ -168,7 +168,7 @@ export default async (req, context) => {
       console.error("refer fact-check failed; verdict withheld", err?.message || err);
     }
 
-    const score = computeScore(a.breakdown);
+    const score = computeScore(a.breakdown, a.harm?.severity);
     const look = safeLook(typeof raw?.sprite_look === "string" ? raw.sprite_look.replace(/\s+/g, " ").trim().slice(0, MAX_LOOK) : "");
     const card = {
       slug, name: displayName, wikiTitle: wiki.title, wikidata: wiki.wikidata,
@@ -176,7 +176,7 @@ export default async (req, context) => {
       verdictStatus, living: wiki.living, born: wiki.born, died: wiki.died,
       factCheck: fc ? { checked: fc.checked, removed: fc.removed, regenerated: Boolean(fc.regenerated), at: new Date().toISOString() } : null,
       noDangle: raw?.no_dangle === true,
-      flags: a.flags, commendations: a.commendations,
+      flags: a.flags, commendations: a.commendations, harm: a.harm,
       sprite: null, spriteStatus: "pending", spriteAttempts: 0, look,
       referredBy: caseId.slice(-4), at: new Date().toISOString(),
     };

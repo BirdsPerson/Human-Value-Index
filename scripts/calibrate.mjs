@@ -58,7 +58,7 @@ function productionReferrals() {
 // ---- roster --------------------------------------------------------------------------
 async function roster(referrals) {
   const { FAMOUS_FIGURES } = await import(`../src/figures.js?${Date.now()}`);
-  const refs = referrals.map(({ card }) => ({ name: card.name, breakdown: card.breakdown, people: card.people || null, referral: true }));
+  const refs = referrals.map(({ card }) => ({ name: card.name, breakdown: card.breakdown, harm: card.harm || null, people: card.people || null, referral: true }));
   const names = new Set(FAMOUS_FIGURES.map(f => f.name));
   return { figures: FAMOUS_FIGURES, all: [...FAMOUS_FIGURES, ...refs.filter(r => !names.has(r.name))] };
 }
@@ -311,7 +311,7 @@ async function checkProposal() {
     const refs = productionReferrals();
     const index = blobGet("hvi-figures", "index");
     for (const { key, card } of refs) {
-      const s = L.scoreWith(next, card.breakdown), q = L.cubeWith(next, card.breakdown);
+      const s = L.scoreWith(next, card.breakdown, card.harm?.severity), q = L.cubeWith(next, card.breakdown);
       const upd = { score: s, tier: L.tierWith(next, s), warmth: q.warmth, competence: q.competence, quadrant: q.quadrant };
       blobSet("hvi-figures", key, { ...card, ...upd });
       if (index?.cards) index.cards = index.cards.map(c => (c.slug === card.slug ? { ...c, ...upd } : c));

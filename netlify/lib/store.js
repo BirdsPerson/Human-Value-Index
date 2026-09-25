@@ -73,13 +73,13 @@ export async function listPenCards(max = PEN_MAX) {
 // Conditional writes (etag) so two concurrent requests can't both read 4 and write 5.
 // window "day" (YYYY-MM-DD) or "minute" (YYYY-MM-DDTHH:MM) buckets the key.
 // ponytail: old keys are never deleted; a few bytes each, prune if it ever matters.
-export async function hitLimit(key, max, window = "day") {
+export async function hitLimit(key, max, window = "day", amount = 1) {
   const store = limits();
   const k = `${bucket(window)}:${key}`;
   for (let attempt = 0; attempt < 4; attempt++) {
     const cur = await store.getWithMetadata(k, { type: "json" });
-    const count = (cur?.data?.count || 0) + 1;
-    if (count > max) return { ok: false, count: count - 1 };
+    const count = (cur?.data?.count || 0) + amount;
+    if (count > max) return { ok: false, count: count - amount };
     const opts = cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true };
     const res = await store.setJSON(k, { count }, opts);
     if (res.modified) return { ok: true, count };

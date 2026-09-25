@@ -67,7 +67,7 @@ for (const { kind, name, before, r } of results.filter(x => x.kind === "figure")
   // Keep every other field on the line (born, died, no_dangle, ...); recompute score and cube.
   const extra = Object.entries(before).filter(([k]) => !["name", "score", "tier", "warmth", "competence", "quadrant", "breakdown", "verdict", "people", "harm"].includes(k))
     .map(([k, v]) => `, ${k}: ${JSON.stringify(v)}`).join("");
-  const line = `  { name: ${JSON.stringify(name)}, score: ${r.score}, tier: ${JSON.stringify(getTier(r.score))}, warmth: ${c.warmth}, competence: ${c.competence}, quadrant: ${JSON.stringify(c.quadrant)}${extra}${r.harm ? `, harm: ${JSON.stringify({ documented: r.harm.documented, era: r.harm.era, band: r.harm.band })}` : ""}, breakdown: ${lit(bd)}, verdict: ${JSON.stringify(r.verdict)} },`;
+  const line = `  { name: ${JSON.stringify(name)}, score: ${r.score}, tier: ${JSON.stringify(getTier(r.score))}, warmth: ${c.warmth}, competence: ${c.competence}, quadrant: ${JSON.stringify(c.quadrant)}${extra}${r.harm ? `, harm: ${JSON.stringify({ documented: r.harm.documented, era: r.harm.era, band: r.harm.band, ...(r.harm.severity ? { severity: r.harm.severity } : {}) })}` : ""}, breakdown: ${lit(bd)}, verdict: ${JSON.stringify(r.verdict)} },`;
   const re = new RegExp(`^  \\{ name: ${JSON.stringify(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")},.*$`, "m");
   if (!re.test(src)) throw new Error(`no line for ${kind} ${name}`);
   src = src.replace(re, () => line);
@@ -80,7 +80,7 @@ if (refDone.length) {
   const at = new Date().toISOString();
   for (const { slug, card, r } of refDone) {
     const next = { ...card, score: r.score, tier: getTier(r.score), ...cube(r.breakdown), breakdown: r.breakdown, verdict: r.verdict,
-      harm: r.harm ? { documented: r.harm.documented, era: r.harm.era, band: r.harm.band } : card.harm ?? null,
+      harm: r.harm ? { documented: r.harm.documented, era: r.harm.era, band: r.harm.band, severity: r.harm.severity ?? null } : card.harm ?? null,
       flags: r.flags, commendations: r.commendations, factCheck: r.factCheck ?? card.factCheck ?? null, rescoredAt: at };
     blobSet("hvi-figures", slug, next);
   }

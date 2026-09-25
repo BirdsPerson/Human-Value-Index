@@ -28,7 +28,7 @@ import { homedir, tmpdir } from "node:os";
 import { SYSTEM_PROMPT } from "../netlify/lib/systemPrompt.js";
 import { PUBLIC_RECORD, REFERRAL_ADDENDUM, ENGINE_ADDENDUM, PLACES, directiveFor } from "../netlify/lib/publicRecord.js";
 import { parseModelJson } from "../netlify/lib/score.js";
-import { normalizeAssessment, computeScore, getTier, cube } from "../netlify/lib/intake.js";
+import { normalizeAssessment, computeScore, getTier, cube, medianSeverity } from "../netlify/lib/intake.js";
 import { FACT_CHECK_SYSTEM, SOURCE_MAX, summarizeFactCheck } from "../netlify/lib/factCheck.js";
 import { fetchArticleText, placeReferral } from "../netlify/lib/refer.js";
 import { medianBreakdown, distance, dispersion, RUNS } from "./rescore-lib.mjs";
@@ -142,7 +142,7 @@ async function stageScoring(run) {
     const places = (Array.isArray(closest.raw.places) ? closest.raw.places : []).filter(p => PLACES.includes(p)).slice(0, 4);
     run.scored[c.cid] = {
       breakdown, verdict: closest.a.verdict, flags: closest.a.flags, commendations: closest.a.commendations,
-      harm: closest.a.harm ? { ...closest.a.harm, runs: readings.map(x => x.a.harm?.band ?? null) } : null,
+      harm: closest.a.harm ? { ...closest.a.harm, severity: medianSeverity(readings.map(x => x.a.harm?.severity ?? null)), runs: readings.map(x => x.a.harm?.band ?? null) } : null,
       spread: dispersion(readings.map(x => x.a.breakdown)).score, reads: readings.length,
       look: look.replace(/\s+/g, " ").trim().slice(0, MAX_LOOK), places,
       noDangle: readings.filter(x => x.raw.no_dangle === true).length * 2 > readings.length,
@@ -251,7 +251,7 @@ async function stageStore(run) {
   for (const c of run.cohort) {
     const s = run.scored[c.cid];
     if (s.dropped || !s.slug || run.stored.includes(s.slug)) continue;
-    const score = computeScore(s.breakdown);
+    const score = computeScore(s.breakdown, s.harm?.severity);
     const card = {
       slug: s.slug, name: c.title.replace(/\s*\([^)]*\)\s*$/, ""), wikiTitle: c.title, wikidata: c.wikidata,
       score, tier: getTier(score), ...cube(s.breakdown), breakdown: s.breakdown, confidence: null, verdict: s.verdict,

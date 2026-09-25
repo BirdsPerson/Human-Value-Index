@@ -29,7 +29,12 @@ Return the same JSON as above, plus one field:
     "none": nothing of the above is documented. Allegations, acquittals and disputed claims are "none" here; leading a country in war is not "killing" unless documented atrocities or ordered executions are.
   If you choose "mass_atrocity", "killing", "violent_abuse" or "political_resistance", the verdict must name the documented act plainly (who, what), so the file states its own grounds.
   "era_context": "pre-modern" if the documented harm was done before 1800, or "modern" otherwise (use "modern" when documented_harm is "none" or "nonviolent").
-    Scale and era matter: a pre-modern ruler's executions of rivals, relatives or spouses within the norms of their court are serious and stated plainly, but they are not the same as modern predation or mass atrocity. Weigh them against the rest of the record rather than letting them erase it. Mass atrocity is judged the same in every era.`;
+    Scale and era matter: a pre-modern ruler's executions of rivals, relatives or spouses within the norms of their court are serious and stated plainly, but they are not the same as modern predation or mass atrocity. Weigh them against the rest of the record rather than letting them erase it. Mass atrocity is judged the same in every era.
+  "harm_severity": required when documented_harm is "mass_atrocity", "killing", "violent_abuse" or "political_resistance"; otherwise null. An object of four enums, each judged from the settled record only:
+    "scale": how many people were harmed: "one", "several" (2-9), "dozens", "hundreds", "thousands", "millions".
+    "role": "directed" if they ordered, commanded or ran the operation others carried out (a ruler, boss or ringleader); "direct" if they did it themselves; "enabled" if they facilitated, recruited, procured or covered for someone else's harm; "instrument" if they carried out harm under another's control or coercion. When several apply, choose the most culpable: directed > direct > enabled > instrument.
+    "duration": "single" act, "months", "years" or "decades".
+    "accountability": "convicted_served" (convicted and served a sentence), "convicted" (convicted, sentence not served or still serving), "never_held" (never tried or convicted, including dying before trial), "fled" (escaped justice by flight or protection).`;
 
 // Referrals add a gate and a sprite brief. The Wikipedia summary arrives as context, so
 // the model is scoring a person it can identify, not a string a stranger typed.

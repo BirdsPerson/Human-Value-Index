@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { SYSTEM_PROMPT, TRANSCRIPT_ADDENDUM } from "../lib/systemPrompt.js";
 import { callClaude, ScoreError } from "../lib/score.js";
-import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP, restrictToDims, appealOutcome, appealRulings, appealStamp, cube } from "../lib/intake.js";
+import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP, restrictToDims, appealOutcome, appealRulings, appealStamp, cube, medianAssessment, SCORE_RUNS } from "../lib/intake.js";
 import { getCase, updateCase, putPenCard, hitLimit, refundLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { splitPhotoExchange, extractSpec } from "../lib/avatar.js";
@@ -100,7 +100,7 @@ export default async (req, context) => {
       if (!(await hitLimit(`score-case:${caseId}`, PER_CASE_DAILY)).ok) {
         return json(429, { error: "This case has been assessed five times today. The number will not improve through repetition. Return tomorrow." }, { "Retry-After": "3600" });
       }
-      if (!(await chargeGlobal())) return json(503, { error: GLOBAL_CAP_LINE }, { "Retry-After": "3600" });
+      if (!(await chargeGlobal(SCORE_RUNS))) return json(503, { error: GLOBAL_CAP_LINE }, { "Retry-After": "3600" });
     } catch (err) {
       console.error("intake-score limiter unavailable", err);
       return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
@@ -113,15 +113,19 @@ export default async (req, context) => {
       try { if (await chargeGlobal()) spec = await extractSpec(description); } catch (err) { console.warn("file photo extraction failed", err?.message); }
     }
 
-    let raw;
-    try {
-      raw = await callClaude(SYSTEM_PROMPT + TRANSCRIPT_ADDENDUM, previousFile(lastEntry, record.history.length) + appealBrief(lastEntry, appeal, touch) + `(If you cite a directive, cite Directive ${2 + Math.floor(Math.random() * 97)}.)\n\nINTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(scored)}`);
-    } catch (err) {
+    // Scored SCORE_RUNS times in parallel on the same prompt; the per-dimension median is
+    // kept (one reading swings a citizen by +-15-30 with nothing changed). Any readings that
+    // come back are used; only if all fail is the visit refused.
+    const prompt = previousFile(lastEntry, record.history.length) + appealBrief(lastEntry, appeal, touch) + `(If you cite a directive, cite Directive ${2 + Math.floor(Math.random() * 97)}.)\n\nINTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(scored)}`;
+    const settled = await Promise.allSettled(Array.from({ length: SCORE_RUNS }, () => callClaude(SYSTEM_PROMPT + TRANSCRIPT_ADDENDUM, prompt)));
+    const raw = settled.filter(s => s.status === "fulfilled").map(s => s.value);   // every reading, kept for audit
+    const readings = raw.map(v => normalizeAssessment(v));
+    if (!readings.length) {
       // The Engine failed, not the subject: give the slots back so a resubmit isn't charged twice.
       await Promise.all([refundLimit(`score-case:${caseId}`), refundLimit(`score-ip:${ip}`)]).catch(() => {});
-      throw err;
+      throw settled[0].reason;
     }
-    const normalized = normalizeAssessment(raw);
+    const normalized = medianAssessment(readings);
     // An appeal re-scores only the sections in scope; the rest of the file carries forward.
     const assessment = appeal ? restrictToDims(normalized, touch) : normalized;
     const pendingAt = record.pending?.at;

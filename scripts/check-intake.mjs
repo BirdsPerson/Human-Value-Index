@@ -351,3 +351,67 @@ console.log("check-intake: all assertions passed");
   assert.ok(terror.score <= 99, "terrorism / modern killing stays at the gate");
   console.log("check-intake: political resistance band ok");
 }
+
+// Graded bottom (Scott 2026-09-25): gated files sit inside 0-99 by severity, not all on 99.
+{
+  const { severityScore, validSeverity, medianSeverity, SEVERITY, SEVERITY_FIELDS, computeScore: cs, normalizeAssessment: norm } = I;
+  const base = { kind: "killing", scale: "hundreds", role: "direct", duration: "years", accountability: "convicted" };
+  // monotonic: every step up any field lowers (or holds) the score
+  for (const f of SEVERITY_FIELDS) {
+    const order = Object.keys(SEVERITY[f]);
+    for (let i = 1; i < order.length; i++) {
+      assert.ok(severityScore({ ...base, [f]: order[i] }) <= severityScore({ ...base, [f]: order[i - 1] }), `${f}: ${order[i]} must not score above ${order[i - 1]}`);
+    }
+  }
+  // those who directed harm rank below their instruments, all else equal
+  assert.ok(severityScore({ ...base, role: "directed" }) < severityScore({ ...base, role: "instrument" }), "director below instrument");
+  assert.ok(severityScore({ ...base, role: "direct" }) < severityScore({ ...base, role: "enabled" }), "perpetrator below enabler");
+  // anchors: a single modern killing, convicted and served -> upper 90s; the worst -> near 0
+  const one = severityScore({ kind: "killing", scale: "one", role: "direct", duration: "single", accountability: "convicted_served" });
+  assert.ok(one >= 95 && one <= 99, `single killing, convicted and served, lands in the upper 90s (${one})`);
+  assert.ok(severityScore({ ...base, kind: "mass_atrocity" }) < severityScore({ ...base, kind: "violent_abuse" }), "atrocity below abuse, all else equal");
+  const worst = severityScore({ kind: "mass_atrocity", scale: "millions", role: "directed", duration: "decades", accountability: "fled" });
+  assert.ok(worst <= 5, `the most severe lands near 0 (${worst})`);
+  assert.equal(validSeverity({ ...base, scale: "zillions" }), null, "enums only");
+  assert.equal(severityScore(null), null);
+  assert.deepEqual(medianSeverity([{ ...base, scale: "dozens" }, { ...base, scale: "thousands" }, base]), base, "median by rank per field");
+  assert.equal(medianSeverity([base, null, null]), null, "a minority of readings is not a severity");
+  // the rest of the file no longer lifts a gated subject; ungated files ignore severity
+  const monster = { care: 5, alignment: 3, utility: 15, adaptability: 40, legacy: 5, network: 20, physical: 50, threat: 95, redundancy: 55 };
+  const genius = { ...monster, utility: 95, adaptability: 95, legacy: 95 };
+  assert.equal(cs(monster, base), cs(genius, base), "competence doesn't lift a gated file");
+  assert.equal(cs(monster, base), severityScore(base));
+  assert.equal(cs(monster), 99, "no severity (interviews): the old clamp");
+  const decent = { ...monster, care: 70, threat: 20 };
+  assert.equal(cs(decent, base), cs(decent), "severity only applies behind the gate");
+  // normalizeAssessment reads harm_severity only when a harm band applies
+  const n = norm({ breakdown: monster, documented_harm: "mass_atrocity", era_context: "modern", harm_severity: { scale: "millions", role: "directed", duration: "decades", accountability: "never_held" } });
+  assert.equal(n.harm.severity.scale, "millions");
+  assert.equal(n.harm.severity.kind, "mass_atrocity", "kind comes from the band");
+  assert.equal(n.score, severityScore(n.harm.severity));
+  const none = norm({ breakdown: { ...monster, threat: 20 }, documented_harm: "none", harm_severity: base });
+  assert.equal(none.harm.severity, null, "no band, no severity");
+}
+console.log("graded bottom ok");
+
+// Stable player scores: median of SCORE_RUNS readings; unevidenced dims carry forward.
+{
+  const { medianAssessment, normalizeAssessment: norm, applyCap: cap, SCORE_RUNS, RUBRIC: R } = I;
+  assert.equal(SCORE_RUNS, 3);
+  const mk = (v, conf = 80) => norm({ breakdown: Object.fromEntries(DIMS.map(d => [d, d === "threat" ? 20 : v])), confidence: Object.fromEntries(DIMS.map(d => [d, conf])), verdict: `v${v}` });
+  const m = medianAssessment([mk(40), mk(90), mk(60)]);
+  assert.equal(m.breakdown.care, 60, "per-dimension median");
+  assert.equal(m.verdict, "v60", "verdict from the reading closest to the median");
+  assert.deepEqual(m.runScores.length, 3);
+  // a dimension most readings couldn't assess stays unassessed
+  const lo = medianAssessment([mk(60, 10), mk(60, 20), mk(60, 90)]);
+  assert.equal(lo.breakdown.care, null, "median confidence under the floor -> unassessed");
+  // repeat visit: a dimension without new evidence this time carries forward unchanged
+  const prevB = Object.fromEntries(DIMS.map(d => [d, d === "threat" ? 20 : 55]));
+  const prev = { rubric: R, score: I.computeScore(prevB), breakdown: prevB, confidence: Object.fromEntries(DIMS.map(d => [d, 80])) };
+  const next = norm({ breakdown: { ...prevB, physical: 90, care: 5 }, confidence: { ...Object.fromEntries(DIMS.map(d => [d, 0])), physical: 90 } });
+  const r = cap(prev, next);
+  assert.equal(r.breakdown.care, 55, "care had no evidence this visit: carried forward");
+  assert.ok(r.breakdown.physical > 55, "physical had evidence: moved");
+}
+console.log("stable player scores ok");

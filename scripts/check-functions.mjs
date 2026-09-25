@@ -32,7 +32,7 @@ registerHooks({
 });
 
 // Expected failure paths log loudly; keep the output to the verdict.
-console.error = console.warn = () => {};
+const __err = console.error; console.error = console.warn = (...a) => { if (process.env.DEBUG_CHECK) __err(...a); };
 
 // ---- fake Anthropic ----
 process.env.ANTHROPIC_API_KEY = "test";
@@ -131,12 +131,12 @@ assert.ok(Number.isInteger(r.body.warmth) && Number.isInteger(r.body.competence)
 assert.equal(r.body.delta, null);
 assert.equal(r.body.history.length, 1);
 assert.ok(r.body.verdict.length <= 700, "verdict capped");
-assert.equal(claudeCalls, 1);
+assert.equal(claudeCalls, 3, "an interview is scored three times and the median kept");
 
 // identical resubmit: same file back, no model call, no new visit
 const again = await read(await post(score, "/api/intake-score", { caseId, transcript }));
 assert.equal(again.status, 200);
-assert.equal(claudeCalls, 1, "resubmit must not call the model");
+assert.equal(claudeCalls, 3, "resubmit must not call the model");
 assert.equal(again.body.visit, 1);
 assert.equal(again.body.history.length, 1);
 

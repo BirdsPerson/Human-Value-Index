@@ -7,11 +7,11 @@ import * as L from "./calibration-lib.mjs";
 
 // 1. The explicit-calibration scorer is the live scorer.
 for (const f of FAMOUS_FIGURES) {
-  assert.equal(L.scoreWith(CAL, f.breakdown), computeScore(f.breakdown), `score drift: ${f.name}`);
+  assert.equal(L.scoreWith(CAL, f.breakdown, f.harm?.severity), computeScore(f.breakdown, f.harm?.severity), `score drift: ${f.name}`);
   const q = cube(f.breakdown), w = L.cubeWith(CAL, f.breakdown);
   assert.deepEqual([w.warmth, w.competence, w.quadrant], [q.warmth, q.competence, q.quadrant], `cube drift: ${f.name}`);
   assert.equal(L.tierWith(CAL, f.score), getTier(f.score), `tier drift: ${f.name}`);
-  assert.equal(f.score, L.scoreWith(CAL, f.breakdown), `stored score differs from calibration: ${f.name}`);
+  assert.equal(f.score, L.scoreWith(CAL, f.breakdown, f.harm?.severity), `stored score differs from calibration: ${f.name}`);
 }
 
 // 2. Step bounds: every neighbour is at most one STEP from the calibration, axes still sum to 1.

@@ -61,7 +61,7 @@ await pool(figures, 6, async f => {
   f.born = w.born ?? null;
   f.died = w.died ?? null;
   const before = f.score;
-  f.score = computeScore(f.breakdown);
+  f.score = computeScore(f.breakdown, f.harm?.severity);
   f.tier = getTier(f.score);
   const row = { name: f.name, before, after: f.score, died: f.died, removed: [], checked: null, changed: false };
   if (!NO_CHECK && (only.length === 0 || only.includes(f.name))) {

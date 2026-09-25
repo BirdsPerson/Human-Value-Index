@@ -79,11 +79,11 @@ const all = [baseline, ...CANDIDATES];
 const figs = FAMOUS_FIGURES;
 const names = figs.map(f => f.name);
 
-const storedMismatch = figs.filter(f => computeScore(f.breakdown) !== f.score).map(f => ({ name: f.name, stored: f.score, computed: computeScore(f.breakdown) }));
+const storedMismatch = figs.filter(f => computeScore(f.breakdown, f.harm?.severity) !== f.score).map(f => ({ name: f.name, stored: f.score, computed: computeScore(f.breakdown, f.harm?.severity) }));
 
 const out = { generated: new Date().toISOString(), figures: figs.length, groups: { villains: VILLAINS, monsters: figs.filter(MONSTER).map(f => f.name), cruel: CRUEL, saints: SAINTS, admired_ref: ADMIRED_REF }, stored_vs_computed_mismatch: storedMismatch, candidates: {} };
 
-const baseScores = figs.map(f => computeScore(f.breakdown));
+const baseScores = figs.map(f => computeScore(f.breakdown, f.harm?.severity));
 const baseRank = ranks(baseScores.map(s => -s));
 
 for (const c of all) {

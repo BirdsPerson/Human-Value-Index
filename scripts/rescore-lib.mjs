@@ -7,7 +7,7 @@
 import { SYSTEM_PROMPT } from "../netlify/lib/systemPrompt.js";
 import { PUBLIC_RECORD, directiveFor } from "../netlify/lib/publicRecord.js";
 import { callClaude } from "../netlify/lib/score.js";
-import { normalizeAssessment, computeScore } from "../netlify/lib/intake.js";
+import { normalizeAssessment, computeScore, medianSeverity } from "../netlify/lib/intake.js";
 import { factCheck } from "../netlify/lib/factCheck.js";
 import { fetchArticleText } from "../netlify/lib/refer.js";
 import { DIMENSIONS } from "../netlify/lib/questionPools.js";
@@ -70,6 +70,8 @@ export async function rescoreOne({ name, died = null, wikiTitle = name }, { runs
   const readings = await Promise.all(Array.from({ length: runs }, () => once(name, died, calls)));
   const breakdowns = readings.map(r => r.breakdown);
   const breakdown = medianBreakdown(breakdowns);
+  // Graded bottom: the median severity across the readings that classified one.
+  const severity = medianSeverity(readings.map(r => r.harm?.severity ?? null));
   const closest = readings.reduce((best, r) => (distance(r.breakdown, breakdown) < distance(best.breakdown, breakdown) ? r : best));
   let verdict = closest.verdict, fc = null;
   if (check) {
@@ -87,8 +89,8 @@ export async function rescoreOne({ name, died = null, wikiTitle = name }, { runs
   return {
     name, breakdown, verdict, flags: closest.flags, commendations: closest.commendations,
     // Auditable harm classification: the closest reading's, plus every run's band.
-    harm: closest.harm ? { ...closest.harm, runs: readings.map(r => r.harm?.band ?? null) } : null,
-    score: computeScore(breakdown), spread: dispersion(breakdowns), runScores: breakdowns.map(b => computeScore(b)),
+    harm: closest.harm ? { ...closest.harm, severity, runs: readings.map(r => r.harm?.band ?? null) } : null,
+    score: computeScore(breakdown, severity), spread: dispersion(breakdowns), runScores: readings.map(r => computeScore(r.breakdown, r.harm?.severity)),
     factCheck: fc ? { checked: fc.checked, removed: fc.removed, at: new Date().toISOString() } : null,
   };
 }
