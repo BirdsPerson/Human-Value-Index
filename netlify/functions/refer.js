@@ -1,4 +1,5 @@
 import { SYSTEM_PROMPT } from "../lib/systemPrompt.js";
+import { safeLook } from "../lib/look.js";
 import { PUBLIC_RECORD, REFERRAL_ADDENDUM, directiveFor } from "../lib/publicRecord.js";
 import { callClaude, ScoreError } from "../lib/score.js";
 import { factCheck } from "../lib/factCheck.js";
@@ -168,7 +169,7 @@ export default async (req, context) => {
     }
 
     const score = computeScore(a.breakdown);
-    const look = typeof raw?.sprite_look === "string" ? raw.sprite_look.replace(/\s+/g, " ").trim().slice(0, MAX_LOOK) : "";
+    const look = safeLook(typeof raw?.sprite_look === "string" ? raw.sprite_look.replace(/\s+/g, " ").trim().slice(0, MAX_LOOK) : "");
     const card = {
       slug, name: displayName, wikiTitle: wiki.title, wikidata: wiki.wikidata,
       score, tier: getTier(score), ...cube(a.breakdown), breakdown: a.breakdown, confidence: null, verdict: a.verdict,

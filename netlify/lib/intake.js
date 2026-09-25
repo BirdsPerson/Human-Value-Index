@@ -208,7 +208,11 @@ export function appealStamp(outcome, rulings) {
 //   of their court (Cleopatra/Arsinoe, Henry VIII/his wives) -> threat 80-84: over the
 //   serious-harm line (score <= 499), under the gate, so the rest of the record decides
 //   between FLAGGED and MONITORED.
-export const HARM_FLOORS = { mass_atrocity: 95, killing: 90, violent_abuse: 80, historical_killing: 80 };
+//   political_resistance: a killing aimed at an official or agent of an oppressive regime in
+//   resistance to it (Frankfurter/Gustloff) -> the same 80-84 band as historical killing: serious,
+//   capped at 499 by the serious-harm line, never gated. Terrorism against civilians, killing an
+//   elected leader and mass-casualty attacks are classified "killing"/"mass_atrocity" instead.
+export const HARM_FLOORS = { mass_atrocity: 95, killing: 90, violent_abuse: 80, historical_killing: 80, political_resistance: 80 };
 export const HISTORICAL_THREAT_CEIL = Math.min(HARM_GATE.threat, HARM_GATE.threatAlone) - 1;
 // documented_harm + era_context -> the band that is actually applied.
 export function harmBand(documented, era) {
@@ -232,9 +236,9 @@ export function normalizeAssessment(raw) {
   const floor = band ? HARM_FLOORS[band] : null;
   if (floor != null && typeof breakdown.threat === "number") breakdown.threat = Math.max(breakdown.threat, floor);
   else if (floor != null) breakdown.threat = floor;
-  // Historical killings stay serious but are kept out of the harm gate: that band is for
-  // mass atrocity and modern predation.
-  if (band === "historical_killing") breakdown.threat = Math.min(breakdown.threat, HISTORICAL_THREAT_CEIL);
+  // Historical killings and resistance killings stay serious but are kept out of the harm
+  // gate: that band is for mass atrocity and modern predation.
+  if (band === "historical_killing" || band === "political_resistance") breakdown.threat = Math.min(breakdown.threat, HISTORICAL_THREAT_CEIL);
   // The headline is always the published formula over the breakdown. The model's own
   // number drifted ~40 points below its own formula, so it is ignored.
   const score = computeScore(breakdown);

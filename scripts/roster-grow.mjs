@@ -21,6 +21,7 @@
 // Budgets are checked before anything is spent: HVI_ROSTER_MAX_DOLLARS (default 3) against
 // a token estimate at batch prices, and HVI_ROSTER_MAX_CREDITS (default 20) against the
 // Higgsfield cost of the grids plus any single-figure redraws.
+import { unsafeLook, NEUTRAL_LOOK } from "../netlify/lib/look.js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
@@ -135,7 +136,9 @@ async function stageScoring(run) {
     const readings = ok.map(r => ({ raw: r, a: normalizeAssessment({ ...r, confidence: undefined }) }));
     const breakdown = medianBreakdown(readings.map(x => x.a.breakdown));
     const closest = readings.reduce((best, x) => (distance(x.a.breakdown, breakdown) < distance(best.a.breakdown, breakdown) ? x : best));
-    const look = [closest, ...readings].map(x => x.raw.sprite_look).find(l => typeof l === "string" && l.trim()) || "";
+    // First clean look among the readings; a banned term in every one falls back to neutral.
+    const looks = [closest, ...readings].map(x => x.raw.sprite_look).filter(l => typeof l === "string" && l.trim());
+    const look = looks.find(l => !unsafeLook(l)) || (looks.length ? NEUTRAL_LOOK : "");
     const places = (Array.isArray(closest.raw.places) ? closest.raw.places : []).filter(p => PLACES.includes(p)).slice(0, 4);
     run.scored[c.cid] = {
       breakdown, verdict: closest.a.verdict, flags: closest.a.flags, commendations: closest.a.commendations,

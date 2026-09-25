@@ -161,3 +161,19 @@ console.log("check-refer ok");
   a3.ok(["RATIFIED", "CONTESTED"].includes(withPeople.judge));
   a3.equal(withPeople.score, 500, "people never move the headline");
 }
+
+// ---- sprite looks: no crime props or weapons (2026-09-25) -----------------------------
+{
+  const { unsafeLook, safeLook, NEUTRAL_LOOK } = await import("../netlify/lib/look.js");
+  const { default: assert } = await import("node:assert/strict");
+  for (const bad of ["grey prison-issue jacket, short hair", "wearing handcuffs", "holding a pistol", "blood-stained apron", "a mugshot pose", "orange jumpsuit", "sword raised"]) {
+    assert.ok(unsafeLook(bad), `rejects: ${bad}`);
+    assert.equal(safeLook(bad), NEUTRAL_LOOK);
+  }
+  for (const ok of ["blue-and-white striped Breton shirt, holding a palette", "white lab coat, glowing flask", "dark suit, gold watch", "chalk in hand, grey cardigan"]) {
+    assert.equal(unsafeLook(ok), null, `accepts: ${ok}`);
+    assert.equal(safeLook(ok), ok);
+  }
+  assert.equal(safeLook(""), "");
+  console.log("look validator ok");
+}

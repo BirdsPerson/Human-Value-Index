@@ -334,3 +334,20 @@ console.log("check-intake: all assertions passed");
   const plain = norm({ breakdown: { ...full, threat: 20 } });
   assert.ok(plain.score > 499 && plain.harm === null, "no documented harm, no cap");
 }
+
+// ---- political resistance (Scott, 2026-09-25: "contextual") ---------------------------
+{
+  const { harmBand, normalizeAssessment: norm, HARM_FLOORS: HF, HISTORICAL_THREAT_CEIL: CEIL, HARM_GATE: HG } = await import("../netlify/lib/intake.js");
+  const rec = { care: 60, alignment: 60, utility: 55, adaptability: 55, legacy: 55, network: 45, physical: 55, threat: 30, redundancy: 50 };
+  assert.equal(harmBand("political_resistance", "modern"), "political_resistance");
+  assert.equal(harmBand("political_resistance", "pre-modern"), "political_resistance");
+  const res = norm({ breakdown: rec, documented_harm: "political_resistance", era_context: "modern" });
+  assert.ok(res.breakdown.threat >= HF.political_resistance && res.breakdown.threat <= CEIL, "resistance threat floored, held under the gate");
+  assert.ok(res.breakdown.threat >= HG.seriousThreat, "resistance is above the serious-harm floor");
+  assert.ok(res.score > 99 && res.score <= HG.seriousCap, `resistance is serious but not gated (${res.score})`);
+  assert.equal(res.harm.band, "political_resistance");
+  // Terrorism against civilians is classified "killing" by the prompt and stays gated.
+  const terror = norm({ breakdown: rec, documented_harm: "killing", era_context: "modern" });
+  assert.ok(terror.score <= 99, "terrorism / modern killing stays at the gate");
+  console.log("check-intake: political resistance band ok");
+}

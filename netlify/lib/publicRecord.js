@@ -24,9 +24,10 @@ Return the same JSON as above, plus one field:
     "mass_atrocity": committed or ordered killing, torture or persecution at scale: massacres, genocide, mass executions, famine or terror imposed as policy, in any era.
     "killing": personally killed someone, was convicted of murder or manslaughter, or ordered the execution or killing of specific rivals, spouses, relatives, dissidents or civilians (individual acts, not at the scale above).
     "violent_abuse": sustained physical or sexual abuse of dependents or others.
+    "political_resistance": killed or attempted to kill an official or agent of an oppressive regime (a dictatorship, occupier, colonial or persecuting power) as an act of resistance to it. Example: David Frankfurter shooting the Nazi functionary Wilhelm Gustloff in 1936. It is still a killing: name the act plainly. It is NOT this category, and stays "killing" or "mass_atrocity": attacks on civilians or bystanders (terrorism), assassinating a democratically elected leader or official (e.g. John Wilkes Booth, Yigal Amir), or any mass-casualty attack (e.g. a bombing that kills civilians alongside officials).
     "nonviolent": fraud, theft, corruption or other harm without violence.
     "none": nothing of the above is documented. Allegations, acquittals and disputed claims are "none" here; leading a country in war is not "killing" unless documented atrocities or ordered executions are.
-  If you choose "mass_atrocity", "killing" or "violent_abuse", the verdict must name the documented act plainly (who, what), so the file states its own grounds.
+  If you choose "mass_atrocity", "killing", "violent_abuse" or "political_resistance", the verdict must name the documented act plainly (who, what), so the file states its own grounds.
   "era_context": "pre-modern" if the documented harm was done before 1800, or "modern" otherwise (use "modern" when documented_harm is "none" or "nonviolent").
     Scale and era matter: a pre-modern ruler's executions of rivals, relatives or spouses within the norms of their court are serious and stated plainly, but they are not the same as modern predation or mass atrocity. Weigh them against the rest of the record rather than letting them erase it. Mass atrocity is judged the same in every era.`;
 
