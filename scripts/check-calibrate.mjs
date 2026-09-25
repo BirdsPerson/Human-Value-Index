@@ -69,4 +69,42 @@ assert.equal(out.changed, 1);
 assert.match(out.src, /born: null, breakdown: \{care: 70\}, verdict: "v" \},$/);
 assert.match(out.src, new RegExp(`score: ${L.scoreWith(CAL, stub[1].breakdown)}, tier: "`));
 
+// ---- roster drift (weekly sample) ----------------------------------------------------------
+{
+  const names = ["e", "a", "d", "b", "c", "f", "g"];
+  const w0 = L.driftSample(names, 0, 5), w1 = L.driftSample(names, 1, 5);
+  assert.deepEqual(w0, ["a", "b", "c", "d", "e"]);
+  assert.deepEqual(w1, ["f", "g", "a", "b", "c"], "the sample rotates week to week and wraps");
+  assert.equal(L.driftSample(["x", "y"], 3, 5).length, 2, "never more than the roster");
+  const calm = L.driftStats([{ name: "x", stored: 500, fresh: 520 }, { name: "y", stored: 600, fresh: 590 }]);
+  assert.equal(calm.mad, 15); assert.equal(calm.stale, false);
+  const off = L.driftStats([{ name: "x", stored: 500, fresh: 560 }, { name: "y", stored: 600, fresh: 560 }]);
+  assert.equal(off.mad, 50); assert.equal(off.stale, true); assert.equal(off.worst.name, "x");
+  assert.equal(L.driftStats([{ name: "x", stored: 500, fresh: 525 }]).stale, false, "exactly the threshold is not stale");
+  const ans = "## From the desk\n\n**Roster drift 2026-09-27: rescore the roster?**\n\n> **Rescore roster** Answered on the desk.\n";
+  assert.equal(L.findDriftAnswer(ans, "2026-09-27"), "rescore");
+  assert.equal(L.findDriftAnswer(ans.replace("Rescore roster", "Ignore"), "2026-09-27"), "ignore");
+  assert.equal(L.findDriftAnswer(ans, "2026-10-04"), null, "an old answer never triggers a newer drift item");
+  assert.equal(L.findDriftAnswer("**Roster drift 2026-09-27: rescore?**\n", "2026-09-27"), null, "no answer, nothing runs");
+  assert.equal(L.pickOpenDrift({ drift: { "2026-09-20": { status: "rescored" }, "2026-09-27": { status: "open" } } }), "2026-09-27");
+  assert.equal(L.pickOpenDrift({ drift: { "2026-09-27": { status: "rescoring" } } }), null, "a rescore in progress is never picked again");
+  assert.equal(L.pickOpenDrift({}), null);
+}
+
+// ---- median-of-3 rescoring (pure parts) ------------------------------------------------------
+{
+  const R = await import("./rescore-lib.mjs");
+  assert.equal(R.medianOf([60, 40, 50]), 50);
+  assert.equal(R.medianOf([60, null, 50]), 55, "two of three assessed: median of those two");
+  assert.equal(R.medianOf([60, null, null]), null, "mostly unassessed stays unassessed");
+  const a = { care: 80, alignment: 60 }, b = { care: 60, alignment: 70 }, c = { care: 70, alignment: 55 };
+  const m = R.medianBreakdown([a, b, c]);
+  assert.equal(m.care, 70); assert.equal(m.alignment, 60);
+  assert.ok(R.distance(c, m) < R.distance(a, m), "the closest reading supplies the verdict");
+  const d = R.dispersion([a, b, c]);
+  assert.equal(d.dims.care, 20); assert.equal(d.dims.alignment, 15);
+  assert.equal(R.statusLine("2000-04-03"), "STATUS: deceased (died 2000-04-03)");
+  assert.equal(R.statusLine(null), "STATUS: living");
+}
+
 console.log("check-calibrate: ok");

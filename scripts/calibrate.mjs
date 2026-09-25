@@ -78,17 +78,20 @@ function stripSection(md, title) {
   const re = new RegExp(`\\n## ${title}\\n[\\s\\S]*?(?=\\n## |$)`);
   return md.replace(re, "\n");
 }
-function upsertReport({ bullet, section }) {
+function upsertReport({ bullet = null, bullets = [], section, strip = ["Calibration proposal"] }) {
   let md = fs.existsSync(REPORT) ? fs.readFileSync(REPORT, "utf8") : `# Human Value Index — ${today}\n`;
-  md = stripBullet(md, "Calibration proposal");
-  md = stripSection(md, "Calibration");
-  if (bullet) {
+  for (const prefix of strip) md = stripBullet(md, prefix);
+  if (section) md = stripSection(md, "Calibration");
+  const add = [bullet, ...bullets].filter(Boolean);
+  if (add.length) {
     if (!/\n## Needs you\n/.test(md)) {
       const firstH2 = md.search(/\n## /);
       md = firstH2 < 0 ? `${md.trimEnd()}\n\n## Needs you\n` : `${md.slice(0, firstH2)}\n\n## Needs you\n${md.slice(firstH2)}`;
     }
-    md = md.replace(/\n## Needs you\n/, `\n## Needs you\n\n${bullet}\n`);
+    md = md.replace(/\n## Needs you\n/, `\n## Needs you\n\n${add.join("\n\n")}\n`);
   }
+  // an emptied "Needs you" heading still counts as a desk item: drop it
+  md = md.replace(/\n## Needs you\n\s*(?=\n## |$)/, "\n");
   if (section) md = `${md.trimEnd()}\n\n## Calibration\n\n${section}\n`;
   md = md.replace(/\n{3,}/g, "\n\n");
   write(REPORT, md);
@@ -150,6 +153,31 @@ function reportMd({ cal, p, learned, prodInfo }) {
 }
 
 // ---- PROPOSE mode ----------------------------------------------------------------------
+// ---- roster drift ----------------------------------------------------------------------
+// The key comes from Netlify into this process's environment only; nothing writes it.
+function ensureKey() {
+  if (!process.env.ANTHROPIC_API_KEY) process.env.ANTHROPIC_API_KEY = run("netlify", ["env:get", "ANTHROPIC_API_KEY", "--context", "production"]).trim();
+  return Boolean(process.env.ANTHROPIC_API_KEY);
+}
+// Re-scores a rotating sample fresh (median of 3, no fact-check) and compares with stored.
+// Cost: 5 figures x 3 Sonnet calls = 15 calls a week.
+async function driftCheck(all, referrals) {
+  const { rescoreOne } = await import("./rescore-lib.mjs");
+  const cards = new Map(referrals.map(({ card }) => [card.name, card]));
+  const bench = readJSON(P("docs/methodology/benchmarks.json"), {}).figures || {};
+  const sample = L.driftSample(all.map(f => f.name), L.weekNumber());
+  const calls = { sonnet: 0, haiku: 0 };
+  const pairs = [];
+  for (const name of sample) {
+    const f = all.find(x => x.name === name), card = cards.get(name);
+    const died = f?.died ?? card?.died ?? null;
+    const r = await rescoreOne({ name, died, wikiTitle: card?.wikiTitle || bench[name]?.enwiki_title || name }, { check: false, calls });
+    pairs.push({ name, stored: f?.score ?? card?.score, fresh: r.score });
+    log(`drift sample ${name}: stored ${pairs.at(-1).stored}, fresh ${r.score}`);
+  }
+  return { ...L.driftStats(pairs), sample, calls };
+}
+
 async function proposeMode() {
   const cal = readJSON(CAL_PATH);
   const bench = readJSON(P("docs/methodology/benchmarks.json"), {}).figures || {};
@@ -179,6 +207,28 @@ async function proposeMode() {
   state.proposals[today] = { status: p.worth ? "open" : "no-change", change: p.best?.change || null, gain: p.gain };
   write(STATE, JSON.stringify(state, null, 2));
 
+  // roster drift (skipped on a dry run: it spends model calls)
+  let drift = null;
+  if (!DRY && !process.argv.includes("--no-drift")) {
+    try {
+      if (ensureKey()) drift = await driftCheck(all, referrals);
+    } catch (e) { log("drift check failed:", String(e.stderr || e.message).slice(0, 300)); }
+  }
+  if (drift) {
+    state.drift = state.drift || {};
+    for (const [d, x] of Object.entries(state.drift)) if (x.status === "open" && d !== today) x.status = "superseded";
+    state.drift[today] = { status: drift.stale ? "open" : "ok", mad: drift.mad, worst: drift.worst, sample: drift.sample, calls: drift.calls.sonnet };
+    write(STATE, JSON.stringify(state, null, 2));
+  }
+  const driftLine = drift
+    ? `Roster drift: a fresh median-of-3 reading of ${drift.sample.join(", ")} differs from stored by ${drift.mad} points on average (threshold ${L.DRIFT_THRESHOLD}; worst ${drift.worst?.name} ${drift.worst?.diff >= 0 ? "+" : ""}${drift.worst?.diff}).`
+    : "Roster drift: not checked this run.";
+  const driftBullet = drift?.stale ? [
+    `- Roster drift ${today}: rescore the roster?`,
+    `  The stored scores have drifted from what today's rules produce: a fresh reading of ${drift.sample.length} figures differs by ${drift.mad} points on average (threshold ${L.DRIFT_THRESHOLD}). Rescore reads every figure 3 times under the current prompts (about 220 Sonnet + 70 Haiku calls), runs every check, and ships only if all pass.`,
+    `  Options: Rescore roster, Ignore`,
+  ].join("\n") : null;
+
   const m = p.base.m;
   const summary = `ρ vs YouGov liking ${fmtRho(m.rho.yougovLikedShare)}, tier spread ${m.tierEvenness}, moral rules ${Object.values(m.invariants).filter(Boolean).length}/${Object.keys(m.invariants).length}${m.saintsLow.length ? ` (below median: ${m.saintsLow.join(", ")})` : ""}.`;
   const appealsLine = learned ? (learned.sufficient.appeals ? `${learned.totalAppealRulings} appeal rulings read.` : `Appeals: too few to learn from yet (n=${learned.totalAppealRulings}).`) : "Appeals: production unreadable this run.";
@@ -189,10 +239,10 @@ async function proposeMode() {
   ].join("\n") : null;
   const section = [
     `- **Weekly self-review ${today}: ${p.decision}.** ${p.reason}`,
-    `  ${summary} ${appealsLine} Report: docs/calibration/${today}.md`,
+    `  ${summary} ${appealsLine} ${driftLine} Report: docs/calibration/${today}.md`,
     ...(learned?.proposals?.length ? [`  Text proposals: ${learned.proposals.join(" ")}`] : []),
   ].join("\n");
-  upsertReport({ bullet, section });
+  upsertReport({ bullets: [bullet, driftBullet], section, strip: ["Calibration proposal", "Roster drift"] });
   refreshDesk();
   return p;
 }
@@ -218,7 +268,7 @@ function runChecks() {
   return fails;
 }
 
-async function checkAnswersMode() {
+async function checkProposal() {
   const state = readJSON(STATE, { proposals: {} });
   const date = L.pickOpen(state);
   if (!date) { log("no open proposal"); return; }
@@ -279,6 +329,55 @@ async function checkAnswersMode() {
   upsertReport({ bullet: null, section: `- **Calibration proposal ${date}: applied.** ${prop.change}. Commit ${commit.slice(0, 7)}, deploy ${deploy}.` });
   refreshDesk();
   log(`applied ${date}: commit ${commit.slice(0, 7)}, deploy ${deploy}`);
+}
+
+// ---- roster drift answer ------------------------------------------------------------------
+async function checkDrift() {
+  const state = readJSON(STATE, { proposals: {} });
+  const date = L.pickOpenDrift(state);
+  if (!date) { log("no open drift item"); return; }
+  const md = fs.existsSync(P("DESK_ANSWERS.md")) ? fs.readFileSync(P("DESK_ANSWERS.md"), "utf8") : "";
+  const answer = L.findDriftAnswer(md, date);
+  log(`open drift item ${date}: answer = ${answer || "none yet"}`);
+  if (!answer) return;
+  if (DRY) { log(`[dry-run] would ${answer} roster drift ${date}`); return; }
+  const handled = status => { const st = readJSON(STATE, { proposals: {} }); st.drift[date] = { ...st.drift[date], status, handledAt: new Date().toISOString() }; write(STATE, JSON.stringify(st, null, 2)); };
+  if (answer === "ignore") {
+    handled("ignored");
+    upsertReport({ section: `- **Roster drift ${date}: ignored.** The stored roster stands.`, strip: ["Roster drift"] });
+    refreshDesk();
+    return;
+  }
+  handled("rescoring");   // marked first, so a crash never runs it twice
+  ensureKey();
+  const beforeFig = fs.readFileSync(P("src/figures.js"), "utf8");
+  const rescore = extra => run(process.execPath, [P("scripts/rescore-figures.mjs"), ...extra], { env: process.env, timeout: 90 * 60e3 });
+  try { rescore(["--no-referrals"]); } catch (e) {
+    fs.writeFileSync(P("src/figures.js"), beforeFig); handled("failed");
+    upsertReport({ section: `- **Roster drift ${date}: rescore FAILED, nothing shipped.** ${String(e.stderr || e.message).split("\n").find(Boolean)}`, strip: ["Roster drift"] });
+    refreshDesk(); return;
+  }
+  const fails = runChecks();
+  if (fails.length) {
+    fs.writeFileSync(P("src/figures.js"), beforeFig); handled("failed");
+    upsertReport({ section: `- **Roster drift ${date}: rescore refused by the checks, nothing shipped.** ${fails.join("; ")}`, strip: ["Roster drift"] });
+    refreshDesk(); log("drift rescore failed:", fails.join(" | ")); return;
+  }
+  // the roster passed: now bring the production referral cards to the same rules
+  try { rescore(["--only-referrals"]); } catch (e) { log("referral rescore failed (roster ships anyway):", String(e.stderr || e.message).slice(0, 200)); }
+  run("git", ["add", "src/figures.js", "dist", "docs"]);
+  run("git", ["commit", "-m", `Roster rescore (median of 3), approved on the desk\n\nWeekly drift check ${date} found the stored roster stale; every check passed.\n\nClaude-Session: https://claude.ai/code/session_017TJjVfyVhZuguVscARLr1E`]);
+  run("git", ["push", "-q", "origin", "HEAD"]);
+  const commit = run("git", ["rev-parse", "HEAD"]).trim();
+  const deploy = waitDeploy(commit);
+  handled(deploy === "ready" ? "rescored" : `rescored-deploy-${deploy}`);
+  upsertReport({ section: `- **Roster drift ${date}: roster rescored.** Commit ${commit.slice(0, 7)}, deploy ${deploy}. Report: docs/rescore-${today}.md`, strip: ["Roster drift"] });
+  refreshDesk();
+}
+
+async function checkAnswersMode() {
+  await checkDrift();
+  await checkProposal();
 }
 
 const mode = process.argv.includes("--check-answers") ? checkAnswersMode : proposeMode;

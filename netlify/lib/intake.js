@@ -196,6 +196,9 @@ export function appealStamp(outcome, rulings) {
 // Coerce whatever the model returned into a well-formed assessment. When the model
 // reports confidence (interviews), dimensions under MIN_CONFIDENCE become null =
 // UNASSESSED. Without confidence (survey, public record) every dimension is assessed.
+// Threat floors for settled public-record harm (see PUBLIC_RECORD "documented_harm").
+export const HARM_FLOORS = { killing: 90, violent_abuse: 80 };
+
 export function normalizeAssessment(raw) {
   const r = raw && typeof raw === "object" ? raw : {};
   const hasConf = r.confidence && typeof r.confidence === "object";
@@ -205,6 +208,12 @@ export function normalizeAssessment(raw) {
     confidence[d] = conf;
     breakdown[d] = conf < MIN_CONFIDENCE ? null : Math.round(clamp(num(r.breakdown?.[d], 50), 0, 100));
   }
+  // Public-record mode classifies the documented harm; the code, not the model's number,
+  // enforces the floor. The model reliably names "executed two wives" and still scores
+  // threat 82, just under the gate. Absent (interviews), nothing changes.
+  const floor = HARM_FLOORS[r.documented_harm];
+  if (floor != null && typeof breakdown.threat === "number") breakdown.threat = Math.max(breakdown.threat, floor);
+  else if (floor != null) breakdown.threat = floor;
   // The headline is always the published formula over the breakdown. The model's own
   // number drifted ~40 points below its own formula, so it is ignored.
   const score = computeScore(breakdown);

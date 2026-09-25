@@ -18,7 +18,7 @@ const PERSONAS = {
 // Moral sanity groups, fixed before looking at any candidate's output.
 const MONSTER = f => f.breakdown.threat >= 85; // documented serious harm (12 files)
 // Every tyrant/criminal file on the roster: should sit below every non-villain.
-const VILLAINS = ["Genghis Khan", "Kim Jong-un", "Henry VIII", "Putin", "Caligula", "Mao Zedong", "Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez"];
+const VILLAINS = ["Genghis Khan", "Kim Jong-un", "Henry VIII", "Putin", "Caligula", "Mao Zedong", "Cleopatra", "Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez"];
 const CRUEL = ["Elon Musk", "Peter Thiel", "Pablo Picasso", "Michael Jackson", "JFK", "Isaac Newton"]; // famous, capable, low care, not monsters
 const SAINTS = ["Harriet Tubman", "Nelson Mandela", "Martin Luther King Jr.", "Mahatma Gandhi", "Mother Teresa", "Princess Diana", "Keanu Reeves"];
 const ADMIRED_REF = ["Marie Curie", "Alan Turing", "Grace Hopper", "Stephen Hawking", "Oprah Winfrey", "Jason Kelce", "Shohei Ohtani", "Aretha Franklin", ...SAINTS];

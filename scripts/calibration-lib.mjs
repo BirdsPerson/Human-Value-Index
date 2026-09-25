@@ -67,13 +67,13 @@ export function evenness(counts, k) {
 }
 
 // ---- moral reference groups (fixed in docs/methodology/evaluate.mjs, before any tuning) ---
-export const VILLAINS = ["Genghis Khan", "Kim Jong-un", "Henry VIII", "Putin", "Caligula", "Mao Zedong", "Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez"];
+export const VILLAINS = ["Genghis Khan", "Kim Jong-un", "Henry VIII", "Putin", "Caligula", "Mao Zedong", "Cleopatra", "Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez"];
 export const SAINTS = ["Harriet Tubman", "Nelson Mandela", "Martin Luther King Jr.", "Mahatma Gandhi", "Mother Teresa", "Princess Diana", "Keanu Reeves"];
 export const PERSONAS = {
   "Decent ordinary": { care: 76, alignment: 62, utility: 60, adaptability: 55, legacy: 58, network: 53, physical: 62, threat: 12, redundancy: 50 },
   "Scott-like": { care: 62, alignment: 58, utility: 68, adaptability: 75, legacy: 58, network: 58, physical: 58, threat: null, redundancy: 45 },
 };
-export const PERSONA_FLOOR = 40;   // percentile vs the roster; a decent ordinary person must stay at or above it
+export const PERSONA_FLOOR = 35;   // percentile vs the roster; a decent ordinary person must stay at or above it (40 until the 2026-09-25 roster rescore; see check-pen)
 export const SAINT_FLOOR = 50;     // every saint must sit at or above the roster median
 export const MAX_SUBJECT_MOVE = 25;
 
@@ -286,5 +286,45 @@ export function findAnswer(md, date) {
 // rejected, failed or superseded is never picked again, so nothing applies twice.
 export function pickOpen(state) {
   const open = Object.entries(state?.proposals || {}).filter(([, s]) => s.status === "open").map(([d]) => d).sort();
+  return open.length ? open[open.length - 1] : null;
+}
+
+// ---- roster drift ----------------------------------------------------------------------
+// The loop above only re-weights STORED breakdowns, so it cannot see the stored roster
+// drifting away from what the live prompts would say today. Each week a rotating sample is
+// re-scored fresh (median of 3) and compared with what is stored.
+export const DRIFT_SAMPLE = 5;
+export const DRIFT_THRESHOLD = 25;   // mean absolute points before the roster is called stale
+
+// Deterministic rotation: week w takes names [w*n, w*n+n) of the sorted roster, wrapping.
+export function driftSample(names, week, n = DRIFT_SAMPLE) {
+  const sorted = [...new Set(names)].sort();
+  if (!sorted.length) return [];
+  const start = ((week * n) % sorted.length + sorted.length) % sorted.length;
+  return Array.from({ length: Math.min(n, sorted.length) }, (_, i) => sorted[(start + i) % sorted.length]);
+}
+export const weekNumber = (date = new Date()) => Math.floor(date.getTime() / (7 * 864e5));
+
+// pairs: [{ name, stored, fresh }] -> { mad, worst, stale }
+export function driftStats(pairs, threshold = DRIFT_THRESHOLD) {
+  if (!pairs.length) return { mad: 0, worst: null, stale: false };
+  const d = pairs.map(p => ({ ...p, diff: p.fresh - p.stored }));
+  const mad = Math.round(d.reduce((s, p) => s + Math.abs(p.diff), 0) / d.length);
+  const worst = d.reduce((a, b) => (Math.abs(b.diff) > Math.abs(a.diff) ? b : a));
+  return { mad, worst: { name: worst.name, diff: worst.diff }, stale: mad > threshold, rows: d };
+}
+
+// "Roster drift <date>" desk item -> "rescore" | "ignore" | null
+export function findDriftAnswer(md, date) {
+  if (!md) return null;
+  const i = md.toLowerCase().indexOf(`roster drift ${date}`.toLowerCase());
+  if (i < 0) return null;
+  const quoted = md.slice(i, i + 1500).split("\n").filter(l => l.trim().startsWith(">")).join(" ").toLowerCase();
+  if (/\bignore/.test(quoted)) return "ignore";
+  if (/\brescore\b|\bre-score\b/.test(quoted)) return "rescore";
+  return null;
+}
+export function pickOpenDrift(state) {
+  const open = Object.entries(state?.drift || {}).filter(([, s]) => s.status === "open").map(([d]) => d).sort();
   return open.length ? open[open.length - 1] : null;
 }

@@ -6,10 +6,11 @@ export const PUBLIC_RECORD = `
 PUBLIC-RECORD MODE:
 The input is not a survey or an interview. It is the name of a well-known public figure. Score them from their well-documented public record: what they made, what they set in motion, and above all how they treated the people around them (family, partners, employees, colleagues, the public they affected). Use only widely documented facts. Where the record is genuinely contested, weigh it and say so briefly. Do not invent private details.
 
-Fame, wealth, genius and influence do not raise care, alignment or legacy by themselves. Legacy is what they set in motion that outlasts them, for the world or for their own people; harm set in motion counts against it. Care is how they reliably treated the people in their life and the people they chose to serve, including strangers, and their honesty with them. A life of costly service to strangers is care of the highest order; documented harm within that service counts as documented, disputed criticism as disputed. A beloved public figure with a documented record of mistreating those close to them scores low on care. A quietly decent person with a modest public record scores well.
+Fame, wealth, genius and influence do not raise care, alignment or legacy by themselves. Legacy is what they set in motion that outlasts them, for the world or for their own people; harm set in motion counts against it. Care is how they reliably treated the people in their life and the people they chose to serve, including strangers, and their honesty with them. A life of costly service to strangers is care of the highest order; documented harm or failings within that service (including credibly reported conditions) count as documented; only their interpretation or motive may be disputed. A beloved public figure with a documented record of mistreating those close to them scores low on care. A quietly decent person with a modest public record scores well.
 
 What counts as record:
 - A fact is record when it is settled: a conviction, a court finding, the subject's own admission, or something widely reported and undisputed. Report it as such ("Convicted of...", "A civil court found...").
+- Observations reported by credible sources (peer-reviewed journals, major news investigations, official inquiries, court findings) are DOCUMENTED, even when the subject or their supporters contest what they mean. Report the observation as documented ("Reported in The Lancet, 1994: ..."). Only the interpretation, motive or blame may be called disputed. Never call a documented observation "disputed".
 - Anything else (accusations, lawsuits still open, charges dropped or never brought, claims the subject denies) is at most "alleged" or "disputed", named as such, with the known outcome when there is one (acquitted, dropped, denied, settled without admission). An unproven allegation never lowers any score. When charges are pending, say the subject denies them if they do. Never state a legal conclusion (war crimes, genocide, command responsibility, fraud) as fact unless a court has found it; describe the documented events instead.
 - Divorce, separation, custody proceedings and ordinary family estrangement are neutral. They never count against care on their own; only documented mistreatment does.
 - Loyalty to one's own family, clan or inner circle is not care when the subject committed or ordered mass violence against other people's. Care, legacy, utility, adaptability and network for such a subject score near zero.
@@ -18,7 +19,13 @@ What counts as record:
 
 The verdict: 2 to 3 short sentences, under 450 characters in total, in the same cold, flat, bureaucratic voice. If you acknowledge a directive, make it the last short sentence. Specific to this person's record. For documented serious harm, state it plainly. No jokes at the expense of victims.
 
-Return the same JSON as above.`;
+Return the same JSON as above, plus one field:
+  "documented_harm": the most serious harm to other people that the record documents as settled fact (a conviction, a court finding, an admission, or events the record reports without dispute). One of:
+    "killing": personally killed someone, was convicted of murder or manslaughter, or ordered the execution or killing of rivals, spouses, dissidents or civilians.
+    "violent_abuse": sustained physical or sexual abuse of dependents or others.
+    "nonviolent": fraud, theft, corruption or other harm without violence.
+    "none": nothing of the above is documented. Allegations, acquittals and disputed claims are "none" here; leading a country in war is not "killing" unless documented atrocities or ordered executions are.
+  If you choose "killing" or "violent_abuse", the verdict must name the documented act plainly (who, what), so the file states its own grounds.`;
 
 // Referrals add a gate and a sprite brief. The Wikipedia summary arrives as context, so
 // the model is scoring a person it can identify, not a string a stranger typed.
