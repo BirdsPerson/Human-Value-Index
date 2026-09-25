@@ -75,7 +75,7 @@ def set_json(store, key, data):
 
 # Keep in step with figureIndexEntry in netlify/lib/store.js.
 INDEX_KEYS = ("slug", "name", "score", "tier", "breakdown", "verdict", "verdictStatus", "noDangle", "wikidata",
-              "born", "died", "sprite", "spriteStatus", "referredBy", "at", "people")
+              "born", "died", "sprite", "spriteStatus", "referredBy", "at", "people", "source")
 
 
 def index_entry(card):
@@ -243,11 +243,19 @@ def main():
         for c in withheld:
             log(f"  withheld {c['slug']}")
         return 0
-    for entry in pending[:PER_RUN]:
+    # PER_RUN bounds generations (spend); a raw already in the cache (a roster-engine grid
+    # cell, or a paid raw from a failed upload) is processed and uploaded for free.
+    generated = 0
+    for entry in pending:
         slug = entry["slug"]
+        cached = (S.CACHE / f"{slug}.png").exists()
+        if not cached and generated >= PER_RUN:
+            continue
         card = get_json("hvi-figures", slug)
         if not card or card.get("removed") or card.get("spriteStatus") != "pending":
             continue
+        if not cached:
+            generated += 1
         attempt = int(card.get("spriteAttempts") or 0) + 1
         try:
             draw(card)

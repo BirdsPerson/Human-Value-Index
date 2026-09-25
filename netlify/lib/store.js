@@ -111,7 +111,8 @@ export async function peekLimit(key, window = "day") {
 // hvi-figures: slug -> card, plus an "index" blob the pen reads in one GET. The Mac
 // sprite job (scripts/referral_sprites.py) is the reader for spriteStatus "pending".
 const FIG_INDEX = "index";
-const FIG_MAX = 300;
+// ponytail: one index blob; the roster engine adds ~48 a week, so 5000 is ~2 years. Page the index past that.
+const FIG_MAX = 5000;
 
 // The index shares the store, so its key is never read as a figure ("Index" is a name).
 export async function getFigure(slug) {
@@ -146,6 +147,7 @@ export const figureIndexEntry = c => ({
   slug: c.slug, name: c.name, score: c.score, tier: c.tier, breakdown: c.breakdown, verdict: c.verdict,
   verdictStatus: c.verdictStatus, noDangle: Boolean(c.noDangle), wikidata: c.wikidata, born: c.born ?? null, died: c.died ?? null,
   sprite: c.sprite ?? null, spriteStatus: c.spriteStatus, referredBy: c.referredBy, at: c.at, people: c.people ?? null,
+  source: c.source ?? null,
 });
 
 export async function listFigures() {

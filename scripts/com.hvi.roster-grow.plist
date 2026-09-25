@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.hvi.roster-grow</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/birdsperson/.nvm/versions/node/v24.15.0/bin/node</string>
+    <string>/Users/birdsperson/projects/human-value-index/scripts/roster-grow.mjs</string>
+    <string>--n</string><string>48</string>
+    <string>--max-wait-min</string><string>360</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/birdsperson/projects/human-value-index</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/Users/birdsperson/.nvm/versions/node/v24.15.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key><string>/Users/birdsperson</string>
+  </dict>
+  <!-- Saturdays 03:00. An unfinished run (a batch still processing) is advanced first. -->
+  <key>StartCalendarInterval</key><dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/birdsperson/Library/Logs/hvi-roster-grow.log</string>
+  <key>StandardErrorPath</key><string>/Users/birdsperson/Library/Logs/hvi-roster-grow.log</string>
+</dict>
+</plist>

@@ -224,4 +224,6 @@ export const publicFigure = c => ({
   underReview: !verdictPublished(c), noDangle: Boolean(c.noDangle),
   born: c.born ?? null, died: c.died ?? null,
   sprite: c.sprite ?? null, spriteStatus: c.spriteStatus || "pending", kind: "figure", referred: true,
+  // Roster-engine figures fill the registry and the cube; the building samples them.
+  engine: c.source === "roster-engine",
 });

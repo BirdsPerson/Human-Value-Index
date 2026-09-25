@@ -47,3 +47,14 @@ Add two fields to the JSON:
 export function directiveFor(name) {
   return 3 + ([...String(name)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 997, 7) % 88);
 }
+
+// Roster-engine batches add the city brief: where this person would be found. The city
+// (Arts Quarter, dive-bar street, University, Stadium, Archive...) reads these later.
+export const PLACES = ["dive bar", "cafe", "park", "street", "market", "library", "university", "lab", "studio", "theatre", "concert hall", "stadium", "gym", "cathedral", "temple", "hospital", "school", "courthouse", "city hall", "parliament", "barracks", "bank", "office tower", "harbour", "museum", "casino", "prison", "farm", "workshop", "archive"];
+export const ENGINE_ADDENDUM = `
+
+ROSTER MODE:
+This person was drawn from a broad sample of historical and living public figures, many of them only moderately famous. Score the ordinary-middle as carefully as the famous: a modest, decent, competent life scores as such, and fame is not evidence of anything.
+
+Add one more field to the JSON:
+  "places": 2 to 4 settings from this list where this person would most plausibly be found in a city, most characteristic first: ${PLACES.join(", ")}.`;
