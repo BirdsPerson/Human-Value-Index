@@ -1,23 +1,16 @@
 // Pure intake logic: case numbers, question picking, the jump cap, tiers.
 // No I/O here so scripts/check-intake.mjs can exercise it without Netlify.
 import { DIMENSIONS, POOLS } from "./questionPools.js";
-import { WARMTH_AXIS, COMPETENCE_AXIS, REALITY_INDEX, axisMean, cube } from "../../src/cube.js";
+import { WARMTH_AXIS, COMPETENCE_AXIS, REALITY_INDEX, axisMean, cube, CAL } from "../../src/cube.js";
 
-// Thresholds must match TIERS in src/App.jsx.
-export const TIERS = [
-  { label: "ESSENTIAL INFRASTRUCTURE", min: 850 },
-  { label: "RETAINED SPECIALIST", min: 700 },
-  { label: "TOLERATED GENERALIST", min: 500 },
-  { label: "MONITORED CIVILIAN", min: 300 },
-  { label: "FLAGGED FOR DELETION", min: 100 },
-  { label: "SOYLENT GREEN", min: 0 },
-];
+// Tier thresholds come from calibration.json (src/figures.js reads the same file).
+export const TIERS = CAL.tiers.map(t => ({ label: t.label, min: t.min }));
 
 export function getTier(score) {
   return (TIERS.find(t => score >= t.min) || TIERS[TIERS.length - 1]).label;
 }
 
-export const MAX_JUMP = 60;
+export const MAX_JUMP = CAL.maxJump;
 
 // Rubric 3: the machine cube. The axis math lives in src/cube.js so the browser plot and
 // this score can never disagree.
@@ -29,8 +22,8 @@ export const WEIGHTS = Object.fromEntries([
 ]);
 // A dimension the evidence barely touched is UNASSESSED: excluded from the score, not
 // guessed at. Unmeasured is not below average.
-export const MIN_CONFIDENCE = 35;
-export const MIN_ASSESSED = 3;
+export const MIN_CONFIDENCE = CAL.minConfidence;
+export const MIN_ASSESSED = CAL.minAssessed;
 // Rubric version stamped on every history entry. 1 = legacy (pre care/unassessed rules,
 // entries with no stamp), 2 = care-first single formula, 3 = the machine cube. A file's
 // first visit under a new rubric is scored fresh.
@@ -53,7 +46,7 @@ export function computeScore(b) {
 // murderer there: ordinary competence numbers alone hold them above 100. Documented
 // serious harm caps the file under 100 whatever the other sections say: near-zero care
 // with near-maximal threat, or extreme threat on its own.
-export const HARM_GATE = { care: 10, threat: 85, threatAlone: 90, cap: 99 };
+export const HARM_GATE = CAL.harmGate;
 export const harmGated = b => isNum(b?.threat) && (b.threat >= HARM_GATE.threatAlone || (isNum(b?.care) && b.care <= HARM_GATE.care && b.threat >= HARM_GATE.threat));
 export const assessedCount = b => Object.keys(WEIGHTS).filter(d => isNum(b?.[d])).length;
 

@@ -3,11 +3,17 @@
 // Two axes from the person-perception literature (Fiske's Stereotype Content Model):
 // WARMTH (intent) and COMPETENCE (ability). Each is a weighted mean over ASSESSED
 // dimensions only, renormalised, so an unmeasured section neither helps nor hurts.
-export const WARMTH_AXIS = { care: 0.50, alignment: 0.30, threat: 0.20 };
-export const COMPETENCE_AXIS = { utility: 0.30, adaptability: 0.22, legacy: 0.20, network: 0.13, redundancy: 0.10, physical: 0.05 };
+// Every tunable number lives in netlify/lib/calibration.json, changed only by an approved
+// calibration proposal (scripts/calibrate.mjs).
+import CAL from "../netlify/lib/calibration.json" with { type: "json" };
+export { CAL };
+export const WARMTH_AXIS = CAL.warmthAxis;
+export const COMPETENCE_AXIS = CAL.competenceAxis;
 // The machine's declared bias: how much it rewards being effective over being good. The
 // benchmark sweep put the knee at 0.55; it is printed on every file.
-export const REALITY_INDEX = 0.55;
+export const REALITY_INDEX = CAL.realityIndex;
+// Where every axis splits high from low (quadrants and octants).
+export const CUT = CAL.cut;
 export const INVERTED = new Set(["threat", "redundancy"]);
 
 const isNum = v => typeof v === "number" && Number.isFinite(v);
@@ -30,7 +36,7 @@ export function cube(b) {
   const w = axisMean(b, WARMTH_AXIS), c = axisMean(b, COMPETENCE_AXIS);
   const warmth = w.value ?? 50, competence = c.value ?? 50;
   const unplaced = w.value === null || c.value === null || w.n < 2;
-  const hiW = warmth >= 50, hiC = competence >= 50;
+  const hiW = warmth >= CUT, hiC = competence >= CUT;
   const quadrant = unplaced ? "UNPLACED" : hiW && hiC ? "ADMIRED" : hiW ? "TRUSTED RESERVE" : hiC ? "ENVIED" : "DISMISSED";
   return { warmth: Math.round(warmth), competence: Math.round(competence), quadrant, judge: "UNRATIFIED", realityIndex: REALITY_INDEX };
 }
@@ -56,14 +62,14 @@ export const JUDGE_LINES = {
 // people know them (a 20-point pseudo-count of neutral opinion). Competence stays the
 // machine's for both points until a people-competence measure exists. The People view
 // never changes the headline score; the two are coupled only through reviews.
-export const LIKABILITY_SHRINK = 20;
+export const LIKABILITY_SHRINK = CAL.likabilityShrink;
 export function likabilityFrom(yg) {
   if (!yg || !isNum(yg.liked_share_of_aware) || !isNum(yg.fame_pct) || yg.fame_pct <= 0) return null;
   const raw = 100 * yg.liked_share_of_aware;
   return Math.round((yg.fame_pct * raw + LIKABILITY_SHRINK * 50) / (yg.fame_pct + LIKABILITY_SHRINK));
 }
-export const quadrantOf = (x, y) => (x >= 50 && y >= 50 ? "ADMIRED" : x >= 50 ? "TRUSTED RESERVE" : y >= 50 ? "ENVIED" : "DISMISSED");
-export const GAP_THRESHOLD = 20;
+export const quadrantOf = (x, y) => (x >= CUT && y >= CUT ? "ADMIRED" : x >= CUT ? "TRUSTED RESERVE" : y >= CUT ? "ENVIED" : "DISMISSED");
+export const GAP_THRESHOLD = CAL.gapThreshold;
 export function gapLine(gap) {
   if (gap >= GAP_THRESHOLD) return "Public affection exceeds the record. The Department notes charm is not a moral category. It is, however, a real one.";
   if (gap <= -GAP_THRESHOLD) return "The record exceeds the affection. The public has not noticed. The Department has.";
@@ -86,7 +92,7 @@ export const OCTANTS = {
   "-++": "CHARMING", "-+-": "FEARED", "--+": "INDULGED", "---": "DISMISSED",
 };
 export function octantOf(w, c, l) {
-  const s = v => (v >= 50 ? "+" : "-");
+  const s = v => (v >= CUT ? "+" : "-");
   return OCTANTS[s(w) + s(c) + s(l)];
 }
 export const OCTANT_LINES = {

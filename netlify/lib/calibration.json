@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "date": "2026-09-25",
+  "rubric": 3,
+  "note": "Every tunable scoring parameter. Changed only by an approved calibration proposal (scripts/calibrate.mjs --check-answers) or by hand with Scott's say-so.",
+  "realityIndex": 0.55,
+  "warmthAxis": { "care": 0.50, "alignment": 0.30, "threat": 0.20 },
+  "competenceAxis": { "utility": 0.30, "adaptability": 0.22, "legacy": 0.20, "network": 0.13, "redundancy": 0.10, "physical": 0.05 },
+  "harmGate": { "care": 10, "threat": 85, "threatAlone": 90, "cap": 99 },
+  "maxJump": 60,
+  "minConfidence": 35,
+  "minAssessed": 3,
+  "cut": 50,
+  "likabilityShrink": 20,
+  "gapThreshold": 20,
+  "tiers": [
+    { "label": "ESSENTIAL INFRASTRUCTURE", "min": 850 },
+    { "label": "RETAINED SPECIALIST", "min": 700 },
+    { "label": "TOLERATED GENERALIST", "min": 500 },
+    { "label": "MONITORED CIVILIAN", "min": 300 },
+    { "label": "FLAGGED FOR DELETION", "min": 100 },
+    { "label": "SOYLENT GREEN", "min": 0 }
+  ]
+}

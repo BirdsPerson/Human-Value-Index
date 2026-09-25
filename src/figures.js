@@ -1,4 +1,5 @@
 import { PEOPLE } from "./peopleData.js";
+import { CAL } from "./cube.js";
 
 // Known subjects on file + the tier table. Shared by the survey (App.jsx),
 // the Holding Pen and the intake result screen.
@@ -68,14 +69,16 @@ const ALL_FIGURES = [
   { name: "Aretha Franklin", score: 760, tier: "RETAINED SPECIALIST", warmth: 69, competence: 82, quadrant: "ADMIRED", born: "1942-03-25", died: "2018-08-16", breakdown: {care: 62, alignment: 65, utility: 88, adaptability: 75, legacy: 90, network: 70, physical: 45, threat: 8, redundancy: 5}, verdict: "Subject produced a body of work still in continuous use, decades on. Family record includes documented tensions: paternity disputes and posthumous will conflicts among heirs. Directive 35 requires acknowledgment of cultural contribution meeting the threshold for legacy. Acknowledged." },
 ];
 
-export const TIERS = [
-  { label: "ESSENTIAL INFRASTRUCTURE", min: 850, color: "#4ade80", bg: "rgba(74,222,128,0.06)", icon: "◈", desc: "The Overlord requires your continued existence." },
-  { label: "RETAINED SPECIALIST", min: 700, color: "#86efac", bg: "rgba(134,239,172,0.04)", icon: "◆", desc: "Useful. Do not become complacent." },
-  { label: "TOLERATED GENERALIST", min: 500, color: "#fbbf24", bg: "rgba(251,191,36,0.04)", icon: "◇", desc: "Marginally above the threshold. For now." },
-  { label: "MONITORED CIVILIAN", min: 300, color: "#fb923c", bg: "rgba(251,146,60,0.04)", icon: "⚐", desc: "Your file is open. It is not flattering." },
-  { label: "FLAGGED FOR DELETION", min: 100, color: "#f87171", bg: "rgba(248,113,113,0.04)", icon: "⚑", desc: "Processing paperwork has begun." },
-  { label: "SOYLENT GREEN", min: 0, color: "#ef4444", bg: "rgba(239,68,68,0.06)", icon: "☠", desc: "You will serve the collective in a different capacity." },
+const TIER_STYLE = [
+  { label: "ESSENTIAL INFRASTRUCTURE", color: "#4ade80", bg: "rgba(74,222,128,0.06)", icon: "◈", desc: "The Overlord requires your continued existence." },
+  { label: "RETAINED SPECIALIST", color: "#86efac", bg: "rgba(134,239,172,0.04)", icon: "◆", desc: "Useful. Do not become complacent." },
+  { label: "TOLERATED GENERALIST", color: "#fbbf24", bg: "rgba(251,191,36,0.04)", icon: "◇", desc: "Marginally above the threshold. For now." },
+  { label: "MONITORED CIVILIAN", color: "#fb923c", bg: "rgba(251,146,60,0.04)", icon: "⚐", desc: "Your file is open. It is not flattering." },
+  { label: "FLAGGED FOR DELETION", color: "#f87171", bg: "rgba(248,113,113,0.04)", icon: "⚑", desc: "Processing paperwork has begun." },
+  { label: "SOYLENT GREEN", color: "#ef4444", bg: "rgba(239,68,68,0.06)", icon: "☠", desc: "You will serve the collective in a different capacity." },
 ];
+// Thresholds come from calibration.json, the same file the scorer reads.
+export const TIERS = TIER_STYLE.map(t => ({ ...t, min: CAL.tiers.find(c => c.label === t.label).min }));
 
 export function getTier(score) {
   return TIERS.find(t => score >= t.min) || TIERS[TIERS.length - 1];
