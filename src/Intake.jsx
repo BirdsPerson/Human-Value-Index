@@ -4,6 +4,7 @@ import { getTier } from "./figures.js";
 import { AGENT_ID } from "./agentConfig.js";
 import { TermBox, Rule, Typed, BigNumber, Bar, textSpark, pad, padL } from "./term.jsx";
 import FilePhoto from "./FilePhoto.jsx";
+import SecureFile from "./SecureFile.jsx";
 
 // ponytail: identity is a case number in localStorage. Clear storage and you are
 // a new subject. Email magic link replaces this later; until then the ceiling is
@@ -23,6 +24,23 @@ export function readLastResult() {
 }
 function writeLastResult(r) {
   try { localStorage.setItem(LAST_KEY, JSON.stringify(r)); } catch { /* noted, ignored */ }
+}
+
+// The server file is the truth; localStorage is only the offline fallback. Pulls the
+// current (never voided) entry for this case and overwrites the cache, then tells any
+// open view to redraw.
+export async function syncFile(caseId) {
+  if (!caseId) return null;
+  try {
+    const res = await fetch(`/api/file?caseId=${encodeURIComponent(caseId)}`, { cache: "no-store" });
+    if (!res.ok && res.status !== 404) return null;          // offline or metered: keep the cache
+    const d = await res.json().catch(() => null);
+    const cached = readLastResult();
+    if (d?.latest) writeLastResult({ caseId, ...d.latest, avatar: d.avatar || null, history: d.history, at: Date.now() });
+    else if (cached?.caseId === caseId) { try { localStorage.removeItem(LAST_KEY); } catch { /* ignore */ } }
+    try { window.dispatchEvent(new CustomEvent("hvi-file", { detail: caseId })); } catch { /* ignore */ }
+    return d;
+  } catch { return null; }
 }
 
 const FALLBACK_LINE = "The Overlord's vocal apparatus is undergoing maintenance. You will type. Slowly, presumably.";
@@ -344,6 +362,20 @@ export default function Intake() {
 
   useEffect(() => () => { genRef.current++; convRef.current?.endSession().catch(() => {}); }, []);
 
+  // A server sync replaced the cached file: redraw, and take its photo.
+  const [, setFileTick] = useState(0);
+  useEffect(() => {
+    const on = (e) => {
+      if (e.detail !== caseRef.current) return;
+      const l = readLastResult();
+      if (l?.caseId === e.detail && l.avatar) setAvatar(l.avatar);
+      if (l?.caseId === e.detail && Array.isArray(l.history)) setFileVisits(l.history.length);
+      setFileTick(t => t + 1);
+    };
+    window.addEventListener("hvi-file", on);
+    return () => window.removeEventListener("hvi-file", on);
+  }, []);
+
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [transcript]);
 
   // A number issued on another visit may or may not hold a file: ask once, so the
@@ -589,6 +621,7 @@ export default function Intake() {
         const l = readLastResult();
         if (l && l.caseId === caseId) writeLastResult({ ...l, avatar: a });
       }} />}
+      <SecureFile onCase={(id) => restored(id, null)} />
       </div>
       </div>
     </TermBox>

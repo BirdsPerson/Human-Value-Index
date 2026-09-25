@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import CubeView from "./CubeView.jsx";
 import { FAMOUS_FIGURES, TIERS, getTier } from "./figures.js";
-import Intake, { ScoreCard, Breakdown, readCaseId, CaseLogon } from "./Intake.jsx";
+import Intake, { ScoreCard, Breakdown, readCaseId, CaseLogon, syncFile } from "./Intake.jsx";
+import SecureFile from "./SecureFile.jsx";
 import FilePhoto, { FILE_PHOTO_CSS } from "./FilePhoto.jsx";
 import Pen from "./Pen.jsx";
 import { TermBox, Rule, Typed, Bar, BANNER, RULE, pad, padL } from "./term.jsx";
@@ -421,6 +422,7 @@ const MENU = [
   { key: "4", label: "PUBLIC FIGURE INDEX", note: "62 FILES ON RECORD", go: "leaderboard" },
   { key: "5", label: "RESTORE A FILE", note: "LOG ON WITH A CASE NUMBER", go: "restore" },
   { key: "6", label: "THE CUBE", note: "MACHINE VS PEOPLE, EVERY FILE", go: "#cube" },
+  { key: "7", label: "SECURE YOUR FILE", note: "TIE IT TO AN EMAIL. IT FOLLOWS YOU ANYWHERE", go: "secure" },
 ];
 
 // The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
@@ -429,7 +431,8 @@ function Logon({ onPick: pick }) {
   const [caseId, setCaseId] = useState(() => readCaseId());
   const [restoring, setRestoring] = useState(false);
   const [restoredMsg, setRestoredMsg] = useState(null);
-  const onPick = (m) => (m.go === "restore" ? setRestoring(true) : pick(m));
+  const [securing, setSecuring] = useState(false);
+  const onPick = (m) => (m.go === "restore" ? setRestoring(true) : m.go === "secure" ? setSecuring(true) : pick(m));
   const lines = [
     ...BOOT_LINES.map(l => ({ ...l, cps: 140 })),
     { text: "", type: "ghost" },
@@ -489,6 +492,11 @@ function Logon({ onPick: pick }) {
               <CaseLogon autoFocus onRestored={(id, visits) => { setCaseId(id); setRestoring(false); setRestoredMsg(`FILE ${id} RESTORED. ${visits} VISIT${visits === 1 ? "" : "S"} ON RECORD. GREETINGS, RETURNING SUBJECT.`); }} />
             </div>
           )}
+          {securing && (
+            <div style={{ margin: "0.4em 0 0.8em" }}>
+              <SecureFile autoFocus onCase={(id) => { setCaseId(id); setRestoredMsg(`FILE ${id} RESTORED FROM YOUR ACCOUNT.`); }} />
+            </div>
+          )}
           {restoredMsg && <div className="bright" role="status">{restoredMsg}</div>}
           {caseId && <div className="dim">CASE {caseId} // WRITE THIS DOWN. IT IS THE ONLY KEY TO YOUR FILE ON ANOTHER DEVICE.</div>}
           <div className="hvi-prompt">SELECT: <span className="cur">█</span></div>
@@ -533,6 +541,15 @@ export default function OverlordAssessment() {
   const [submitError, setSubmitError] = useState(null);
   const [route, setRoute] = useState(() => window.location.hash);
   const [logonKey, setLogonKey] = useState(0);
+
+  // The server file is the truth: refresh the cached result on load and whenever the
+  // case number changes (restore, account sync, new intake).
+  useEffect(() => {
+    syncFile(readCaseId());
+    const on = (e) => { if (e.detail) syncFile(e.detail); };
+    window.addEventListener("hvi-case", on);
+    return () => window.removeEventListener("hvi-case", on);
+  }, []);
 
   useEffect(() => {
     const onHash = () => { setRoute(window.location.hash); window.scrollTo(0, 0); };

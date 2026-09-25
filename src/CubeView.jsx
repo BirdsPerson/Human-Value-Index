@@ -25,6 +25,8 @@ export default function CubeView() {
     return () => { off = true; };
   }, []);
 
+  const [fileTick, setFileTick] = useState(0);
+  useEffect(() => { const on = () => setFileTick(t => t + 1); window.addEventListener("hvi-file", on); return () => window.removeEventListener("hvi-file", on); }, []);
   const all = useMemo(() => {
     const seen = new Set(), out = [];
     for (const s of [...FAMOUS_FIGURES, ...referred]) {
@@ -36,7 +38,7 @@ export default function CubeView() {
     const g = mine && pointOf({ ...mine, name: "YOU" });
     if (g) out.push(g);
     return out;
-  }, [referred]);
+  }, [referred, fileTick]);
 
   const shown = all.filter(g => passes(g, filter));
   const q = query.trim().toLowerCase();
