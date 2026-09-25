@@ -77,3 +77,33 @@ export function judged(q, people) {
   const gap = people.likability - q.warmth;
   return { ...q, judge: pq === q.quadrant ? "RATIFIED" : "CONTESTED", people: { ...people, quadrant: pq, gap } };
 }
+
+// ---- The octants: warmth × competence × likability, all split at 50 -----------------
+// Three midplanes (x=50, y=50, z=50) intersect at the centre; every rated subject sits
+// in exactly one of eight cells. An unrated subject has only its 2D quadrant.
+export const OCTANTS = {
+  "+++": "ADMIRED", "++-": "UNSUNG", "+-+": "BELOVED", "+--": "OVERLOOKED",
+  "-++": "CHARMING", "-+-": "FEARED", "--+": "INDULGED", "---": "DISMISSED",
+};
+export function octantOf(w, c, l) {
+  const s = v => (v >= 50 ? "+" : "-");
+  return OCTANTS[s(w) + s(c) + s(l)];
+}
+export const OCTANT_LINES = {
+  ADMIRED: "Trusted, capable and liked. Rare. Do not become complacent.",
+  UNSUNG: "Effective and decent. Unnoticed. The Department noticed.",
+  BELOVED: "Trusted and liked. Output pending.",
+  OVERLOOKED: "Decent. Unseen. Recoverable.",
+  CHARMING: "Liked beyond the record. Charm is not a moral category. It is, however, a real one.",
+  FEARED: "Capable. Not trusted. Not liked. Tolerated because useful.",
+  INDULGED: "Liked for reasons the record does not supply.",
+  DISMISSED: "Neither trusted, effective nor liked. The file remains open.",
+};
+// Colour families for the display: the good corner, the charm corner, the harm corner.
+export const OCTANT_FAMILY = {
+  ADMIRED: "good", UNSUNG: "good", BELOVED: "good",
+  CHARMING: "charm", INDULGED: "charm",
+  FEARED: "harm", DISMISSED: "harm",
+  OVERLOOKED: "dim",
+};
+export const OCTANT_ORDER = ["ADMIRED", "UNSUNG", "BELOVED", "OVERLOOKED", "CHARMING", "FEARED", "INDULGED", "DISMISSED"];

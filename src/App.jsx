@@ -312,6 +312,13 @@ const globalStyles = `
   .hvi-cube3d-tip { position: absolute; pointer-events: none; background: var(--bg2); border: 1px solid var(--text-muted); padding: 6px 9px; font-size: 11px; line-height: 1.45; color: var(--text); max-width: 240px; white-space: normal; z-index: 2; }
   .hvi-cube3d-tip .t { color: var(--green); }
   .hvi-cube3d-tip .g { color: var(--amber); }
+  .oct-good { color: var(--green); }
+  .oct-charm { color: var(--amber); }
+  .oct-harm { color: var(--red); }
+  .oct-dim { color: var(--text-muted); }
+  .hvi-cube-octant { margin: 0.1em 0 0.6em; letter-spacing: 0.06em; }
+  .hvi-cube-octant .hvi-tier-desc { letter-spacing: 0; }
+  .hvi-cube-legend { display: flex; flex-wrap: wrap; gap: 0.4em 1.4em; margin-top: 0.6em; font-size: 11px; }
 
   /* SHARE */
   .hvi-share-text { color: var(--text-muted); white-space: pre-wrap; margin-bottom: 0.8em; }

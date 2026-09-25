@@ -1,37 +1,36 @@
 import { useEffect, useRef, useState } from "react";
-import { CORNERS, EDGES, crossLines, project, clampPitch, REST, MACHINE_Z, PEOPLE_Z, worldPoint, distToSegment } from "./cube3d.js";
+import { CORNERS, EDGES, AXES, MIDPLANES, OCTANT_ANCHORS, project, clampPitch, REST } from "./cube3d.js";
+import { OCTANT_LINES } from "./cube.js";
 
-// The two-judge cube as a WarGames vector display: green phosphor wireframe, one
-// segment per subject from the MACHINE face (front) to the PEOPLE face (back).
-// One rAF loop that runs only while something moves; paused offscreen.
+// The octant cube as a WarGames vector display: green phosphor wireframe, three
+// intersecting midplanes (the 50 lines on conduct, competence and likability), one point
+// per subject. One rAF loop that runs only while something moves; paused offscreen.
 const SWING = 0.6;             // rad either side of the idle angle
 const SWING_RATE = 0.22;       // rad/s of swing phase
 const IDLE_AFTER = 3000;       // ms after the last interaction before auto-rotation resumes
-const HIT = 9;                 // px hover radius
+const HIT = 10;                // px hover radius
 
 function tokens() {
   const cs = getComputedStyle(document.documentElement);
   const v = (n, f) => (cs.getPropertyValue(n).trim() || f);
   return {
-    green: v("--green", "#4ade80"), amber: v("--amber", "#fbbf24"), text: v("--text", "#c8f5d8"),
-    muted: v("--text-muted", "#4b7c5e"), ghost: v("--text-ghost", "#2d5040"), bg: v("--bg", "#0a0f0a"),
+    green: v("--green", "#4ade80"), greenDim: v("--green-dim", "#22c55e"), amber: v("--amber", "#fbbf24"), red: v("--red", "#f87171"),
+    text: v("--text", "#c8f5d8"), muted: v("--text-muted", "#4b7c5e"), ghost: v("--text-ghost", "#2d5040"), bg: v("--bg", "#0a0f0a"),
     font: v("--mono", "ui-monospace, Menlo, monospace"),
   };
 }
+const familyColor = (T, fam) => (fam === "good" ? T.green : fam === "charm" ? T.amber : fam === "harm" ? T.red : T.muted);
+const PLANE_TINT = { x: "green", y: "green", z: "amber" };
 
-const QUAD_LABELS = [
-  [75, 90, "ADMIRED"], [25, 90, "ENVIED"], [25, 10, "DISMISSED"], [75, 10, "TRUSTED RESERVE"],
-];
-
-export default function Cube3D({ segments, highlight = null, single = false, height = 360, label, onHover }) {
+export default function Cube3D({ points, highlight = null, single = false, height = 360, label, onHover }) {
   const wrapRef = useRef(null), canvasRef = useRef(null), tipRef = useRef(null);
   const st = useRef({ yaw: REST.yaw, pitch: REST.pitch, w: 0, h: 0, dpr: 1, visible: true, dragging: null,
     lastInput: 0, hover: null, raf: 0, last: 0, dirty: true, reduced: false, tok: null, screen: [], phase: 0, base: REST.yaw });
   const [hover, setHover] = useState(null);
-  const segsRef = useRef(segments); segsRef.current = segments;
+  const ptsRef = useRef(points); ptsRef.current = points;
   const hiRef = useRef(highlight); hiRef.current = highlight;
 
-  useEffect(() => { st.current.dirty = true; kick(); }, [segments, highlight]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { st.current.dirty = true; kick(); }, [points, highlight]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   function draw() {
     const s = st.current, c = canvasRef.current;
@@ -39,63 +38,85 @@ export default function Cube3D({ segments, highlight = null, single = false, hei
     const ctx = c.getContext("2d"), T = s.tok || (s.tok = tokens());
     ctx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
     ctx.clearRect(0, 0, s.w, s.h);
-    const view = { yaw: s.yaw, pitch: s.pitch, scale: Math.min(s.w, s.h) * (single ? (s.w < 440 ? 0.31 : 0.27) : 0.3), cx: s.w / 2, cy: s.h / 2 };
+    const narrow = s.w < 440;
+    const view = { yaw: s.yaw, pitch: s.pitch, scale: Math.min(s.w, s.h) * (single ? (narrow ? 0.27 : 0.28) : 0.255), cx: s.w / 2, cy: s.h / 2 };
     const P = p => project(p, view);
-    const fs = s.w < 440 ? 9.5 : 11;
+    const fs = narrow ? 9.5 : 11;
     ctx.font = `${fs}px ${T.font}`;
     ctx.lineCap = "round";
+    const path = pts => { ctx.beginPath(); pts.forEach((p, i) => { const q = P(p); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); }); };
 
-    // faces' quadrant crosses and labels first, faint
-    for (const z of [MACHINE_Z, PEOPLE_Z]) {
-      ctx.strokeStyle = T.ghost; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
-      for (const [a, b] of crossLines(z)) { const A = P(a), B = P(b); ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); }
-      ctx.setLineDash([]);
-      // quadrant names: the machine face always; the people face only in the full view
-      if (z === MACHINE_Z || !single) {
-        ctx.fillStyle = T.ghost; ctx.textAlign = "center";
-        for (const [x, y, t] of QUAD_LABELS) { const q = P(worldPoint(x, y, z)); ctx.globalAlpha = z === MACHINE_Z ? 0.95 : 0.5; ctx.fillText(t, q.x, q.y); }
-        ctx.globalAlpha = 1;
-      }
+    // the three midplanes: translucent fill, quarter grid, outline. They visibly cross.
+    for (const m of MIDPLANES) {
+      const tint = T[PLANE_TINT[m.axis]];
+      path(m.outline); ctx.closePath();
+      ctx.globalAlpha = 0.05; ctx.fillStyle = tint; ctx.fill();
+      ctx.globalAlpha = 0.5; ctx.strokeStyle = T.ghost; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+      for (const [a, b] of m.grid) { path([a, b]); ctx.stroke(); }
+      ctx.setLineDash([]); ctx.globalAlpha = 0.75; ctx.strokeStyle = T.ghost;
+      path(m.outline); ctx.closePath(); ctx.stroke();
     }
-    // the 12 edges
-    ctx.strokeStyle = T.muted; ctx.lineWidth = 1;
-    ctx.beginPath();
+    ctx.globalAlpha = 1;
+    // the 12 cube edges
+    ctx.strokeStyle = T.muted; ctx.lineWidth = 1; ctx.beginPath();
     for (const [i, j] of EDGES) { const A = P(CORNERS[i]), B = P(CORNERS[j]); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); }
     ctx.stroke();
-    // face and axis labels
-    ctx.fillStyle = T.green; ctx.textAlign = "left";
-    const mLab = P([-1, -1, MACHINE_Z]), pLab = P([-1, 1, PEOPLE_Z]);
-    ctx.fillText("MACHINE", mLab.x + 4, mLab.y + fs + 3);
-    ctx.fillStyle = T.amber; ctx.fillText("PEOPLE", pLab.x + 4, pLab.y - 5);
-    ctx.fillStyle = T.muted;
-    const xa = P([0.2, -1, MACHINE_Z]); ctx.textAlign = "center"; ctx.fillText("CONDUCT / LIKABILITY →", xa.x, xa.y + 2 * fs + 6);
-    const ya = P([-1, 0.55, MACHINE_Z]); ctx.textAlign = "right"; ctx.fillText("COMPETENCE ↑", ya.x - 5, ya.y);
-
-    // subjects, far first so near lines paint over
-    const segs = segsRef.current || [];
-    const hi = hiRef.current, hov = s.hover;
-    const screen = [];
-    for (const g of segs) {
-      const M = P(g.m), E = P(g.p || g.stub);
-      screen.push({ g, M, E, depth: (M.depth + E.depth) / 2 });
+    // the three axes through the centre, with labelled positive ends
+    for (const ax of AXES) {
+      const A = P(ax.a), B = P(ax.b);
+      ctx.strokeStyle = ax.id === "z" ? T.amber : T.green; ctx.globalAlpha = 0.85; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+      ctx.globalAlpha = 1; ctx.fillStyle = ax.id === "z" ? T.amber : T.green;
+      // label an axis end, kept inside the canvas so narrow screens don't clip it
+      const end = (E, text) => {
+        const right = E.x >= view.cx, up = E.y < view.cy, wid = ctx.measureText(text).width;
+        let x = Math.abs(E.x - view.cx) < 12 ? E.x - wid / 2 : right ? E.x + 6 : E.x - 6 - wid;
+        x = Math.max(2, Math.min(s.w - wid - 2, x));
+        ctx.textAlign = "left";
+        ctx.fillText(text, x, E.y + (up ? -6 : fs + 4));
+      };
+      end(B, `HIGH ${ax.label}`);
+      ctx.globalAlpha = 0.55; end(A, `LOW ${ax.label}`); ctx.globalAlpha = 1;
     }
-    screen.sort((a, b) => b.depth - a.depth);
+    const O = P([0, 0, 0]);
+    ctx.fillStyle = T.text; ctx.beginPath(); ctx.arc(O.x, O.y, 2, 0, Math.PI * 2); ctx.fill();
+    // octant names, faint, in the full view
+    if (!single) {
+      ctx.textAlign = "center";
+      for (const [name, at] of Object.entries(OCTANT_ANCHORS)) {
+        const q = P(at); ctx.globalAlpha = Math.max(0.25, Math.min(0.8, 0.9 - q.depth * 0.35));
+        ctx.fillStyle = T.ghost; ctx.fillText(name, q.x, q.y);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // subjects, far first so near points paint over
+    const pts = ptsRef.current || [];
+    const hi = hiRef.current, hov = s.hover;
+    const screen = pts.map(g => ({ g, S: P(g.p), F: g.foot ? P(g.foot) : null }));
+    screen.sort((a, b) => b.S.depth - a.S.depth);
     const anyFocus = hi || hov;
     for (const it of screen) {
-      const { g, M, E } = it;
+      const { g, S, F } = it;
       const focused = (hi && g.name === hi) || (hov && hov === g);
-      const col = g.judge === "CONTESTED" ? T.amber : g.judge === "RATIFIED" ? T.green : T.muted;
-      ctx.globalAlpha = anyFocus && !focused ? 0.28 : 1;
-      ctx.strokeStyle = focused ? T.text : col;
-      ctx.lineWidth = focused ? 2.2 : single ? 1.8 : 1.2;
-      ctx.setLineDash(g.p ? [] : [2, 3]);
-      ctx.beginPath(); ctx.moveTo(M.x, M.y); ctx.lineTo(E.x, E.y); ctx.stroke();
-      ctx.setLineDash([]);
-      const r = single ? 4 : focused ? 3.5 : 2.4;
-      ctx.fillStyle = focused ? T.text : T.green; ctx.beginPath(); ctx.arc(M.x, M.y, r * M.f, 0, Math.PI * 2); ctx.fill();
-      if (g.p) { ctx.fillStyle = focused ? T.text : T.amber; ctx.beginPath(); ctx.arc(E.x, E.y, r * E.f, 0, Math.PI * 2); ctx.fill(); }
-      if (single && !g.p) { ctx.fillStyle = T.muted; ctx.textAlign = "left"; ctx.fillText("NOT YET RATED", E.x + 6, E.y - 4); }
-      if (focused && !single) { ctx.fillStyle = T.text; ctx.textAlign = "left"; ctx.fillText(g.name.toUpperCase(), M.x + 7, M.y - 6); }
+      const col = familyColor(T, g.family);
+      ctx.globalAlpha = anyFocus && !focused ? 0.25 : 1;
+      // drop line to the agreement plane (likability = conduct): the gap, drawn
+      if (F && (single || focused)) {
+        ctx.strokeStyle = focused || single ? T.amber : T.ghost; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+        ctx.beginPath(); ctx.moveTo(S.x, S.y); ctx.lineTo(F.x, F.y); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = T.amber; ctx.beginPath(); ctx.arc(F.x, F.y, 1.6, 0, Math.PI * 2); ctx.fill();
+      }
+      const r = (single ? 5 : focused ? 4.2 : 3) * S.f;
+      ctx.beginPath(); ctx.arc(S.x, S.y, r, 0, Math.PI * 2);
+      if (g.rated) { ctx.fillStyle = focused ? T.text : col; ctx.fill(); }
+      else { ctx.strokeStyle = focused ? T.text : T.muted; ctx.lineWidth = 1.3; ctx.stroke(); }
+      if (single) {
+        ctx.fillStyle = g.rated ? col : T.muted; ctx.textAlign = "left";
+        ctx.fillText(g.rated ? g.octant : "NOT YET RATED", S.x + 8, S.y - 6);
+      } else if (focused) {
+        ctx.fillStyle = T.text; ctx.textAlign = "left"; ctx.fillText(g.name.toUpperCase(), S.x + 7, S.y - 6);
+      }
     }
     ctx.globalAlpha = 1;
     s.screen = screen;
@@ -108,7 +129,6 @@ export default function Cube3D({ segments, highlight = null, single = false, hei
     const dt = s.last ? Math.min(0.05, (t - s.last) / 1000) : 0;
     s.last = t;
     const idle = !s.reduced && !s.dragging && performance.now() - s.lastInput > IDLE_AFTER;
-    // idle: swing gently around the last resting angle so the MACHINE face stays toward the viewer
     if (idle && s.visible) { s.phase += SWING_RATE * dt; s.yaw = s.base + SWING * Math.sin(s.phase); s.dirty = true; }
     if (s.dirty && s.visible) draw();
     if (s.visible && (idle || s.dragging || s.dirty)) s.raf = requestAnimationFrame(frame);
@@ -126,7 +146,7 @@ export default function Cube3D({ segments, highlight = null, single = false, hei
     const onMq = () => { s.reduced = !!mq.matches; kick(); };
     mq?.addEventListener?.("change", onMq);
     const size = () => {
-      const w = wrap.clientWidth, h = Math.min(height, Math.round(w * (single ? 0.82 : 0.78)));
+      const w = wrap.clientWidth, h = Math.min(height, Math.round(w * (single ? 0.86 : 0.8)));
       const dpr = Math.min(3, window.devicePixelRatio || 1);
       s.w = w; s.h = h; s.dpr = dpr;
       c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
@@ -145,7 +165,7 @@ export default function Cube3D({ segments, highlight = null, single = false, hei
   function pick(px, py) {
     let best = null, bd = HIT;
     for (const it of st.current.screen) {
-      const d = distToSegment(px, py, it.M.x, it.M.y, it.E.x, it.E.y);
+      const d = Math.hypot(px - it.S.x, py - it.S.y);
       if (d < bd) { bd = d; best = it; }
     }
     return best;
@@ -155,8 +175,8 @@ export default function Cube3D({ segments, highlight = null, single = false, hei
     if (s.hover !== g) { s.hover = g; s.dirty = true; kick(); setHover(g); onHover?.(g); }
     const tip = tipRef.current;
     if (tip && it) {
-      const left = Math.min(Math.max(4, px + 12), s.w - 230);
-      tip.style.left = left + "px"; tip.style.top = Math.max(4, py - 70) + "px";
+      const left = Math.min(Math.max(4, px + 12), s.w - 250);
+      tip.style.left = left + "px"; tip.style.top = Math.max(4, py - 86) + "px";
     }
   }
   const pos = e => { const r = canvasRef.current.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
@@ -204,11 +224,11 @@ export default function Cube3D({ segments, highlight = null, single = false, hei
       <div ref={tipRef} className="hvi-cube3d-tip" hidden={!hover} aria-live="polite">
         {hover && q && (<>
           <div className="t">{hover.name}</div>
-          <div>● M: CONDUCT {q.warmth} · COMP {q.competence} · {q.quadrant}</div>
-          {q.people ? (<>
-            <div>○ P: LIKABILITY {q.people.likability} · COMP {q.competence} · {q.people.quadrant}</div>
-            <div className="g">GAP {q.people.gap > 0 ? "+" : ""}{q.people.gap} · {q.judge}</div>
-          </>) : <div className="g">○ P: NOT YET RATED · {q.judge}</div>}
+          <div>CONDUCT {q.warmth} · COMPETENCE {q.competence} · LIKABILITY {hover.rated ? q.people.likability : "UNRATED"}</div>
+          {hover.rated ? (<>
+            <div className="g">{hover.octant} · GAP {hover.gap > 0 ? "+" : ""}{hover.gap} · {hover.judge}</div>
+            <div>{OCTANT_LINES[hover.octant]}</div>
+          </>) : <div className="g">{q.quadrant} (LIKABILITY UNRATED)</div>}
         </>)}
       </div>
     </div>
