@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { SYSTEM_PROMPT } from "../netlify/lib/systemPrompt.js";
 import { PUBLIC_RECORD, directiveFor } from "../netlify/lib/publicRecord.js";
 import { callClaude } from "../netlify/lib/score.js";
-import { computeScore, getTier, normalizeAssessment } from "../netlify/lib/intake.js";
+import { computeScore, getTier, normalizeAssessment, cube } from "../netlify/lib/intake.js";
 import { FAMOUS_FIGURES } from "../src/figures.js";
 import { DIMENSIONS } from "../netlify/lib/questionPools.js";
 
@@ -53,7 +53,12 @@ let src = readFileSync(path, "utf8");
 const lit = o => JSON.stringify(o).replace(/"([a-z]+)":/g, "$1: ").replace(/,(?=[a-z]+: )/g, ", ");
 for (const [name, r] of results) {
   const bd = Object.fromEntries(DIMENSIONS.map(d => [d, r.breakdown[d]]));
-  const line = `  { name: ${JSON.stringify(name)}, score: ${r.score}, tier: ${JSON.stringify(r.tier)}, breakdown: ${lit(bd)}, verdict: ${JSON.stringify(r.verdict)} },`;
+  // Keep every other field on the line (born, died, ...); recompute the cube from the new breakdown.
+  const f = FAMOUS_FIGURES.find(x => x.name === name);
+  const c = cube(bd);
+  const extra = Object.entries(f).filter(([k]) => !["name", "score", "tier", "warmth", "competence", "quadrant", "breakdown", "verdict"].includes(k))
+    .map(([k, v]) => `, ${k}: ${JSON.stringify(v)}`).join("");
+  const line = `  { name: ${JSON.stringify(name)}, score: ${r.score}, tier: ${JSON.stringify(r.tier)}, warmth: ${c.warmth}, competence: ${c.competence}, quadrant: ${JSON.stringify(c.quadrant)}${extra}, breakdown: ${lit(bd)}, verdict: ${JSON.stringify(r.verdict)} },`;
   const re = new RegExp(`^  \\{ name: ${JSON.stringify(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")},.*$`, "m");
   if (!re.test(src)) throw new Error(`no line for ${name}`);
   src = src.replace(re, () => line);
