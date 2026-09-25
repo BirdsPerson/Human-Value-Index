@@ -78,9 +78,10 @@ export function avatarPixels(spec, frame = 0) {
   const set = (x, y, c) => { if (x >= 0 && x < W && y >= 0 && y < H) px[y * W + x] = c; };
   const rect = (x0, y0, w, h, c) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y, c); };
 
-  const cx = 16, headW = 12, headH = 11, headTop = 5, hx = cx - headW / 2;
+  // docs/avatar-design-system.md: head ~1/4 of a 45px body, feet on row 46, 1px outline room top and bottom.
+  const cx = 16, headW = 12, headH = 11, headTop = 4, hx = cx - headW / 2;
   const torsoW = { slim: 10, average: 12, broad: 16 }[s.build];
-  const torsoTop = headTop + headH + 1, torsoBot = 34, tx = cx - torsoW / 2;
+  const torsoTop = headTop + headH + 1, torsoBot = 32, tx = cx - torsoW / 2;
   const swing = frame === 1 ? 1 : 0;
 
   // head, face
@@ -119,12 +120,12 @@ export function avatarPixels(spec, frame = 0) {
   rect(rx, ry, 3, armLen, AX.TOPS); rect(rx, ry + armLen, 3, 2, AX.SKIN);
 
   // legs, shoes
-  for (let y = torsoBot; y < H - 2; y++) {
+  for (let y = torsoBot; y < H - 3; y++) {
     const k = frame === 1 ? Math.floor((y - torsoBot) / 4) : 0;
     rect(cx - 5 - k, y, 4, 1, AX.BOT); rect(cx + 1 + k, y, 4, 1, AX.BOT);
   }
   const k = frame === 1 ? 3 : 0;
-  rect(cx - 6 - k, H - 2, 5, 2, AX.SHOE); rect(cx + 1 + k, H - 2, 5, 2, AX.SHOE);
+  rect(cx - 6 - k, H - 3, 5, 2, AX.SHOE); rect(cx + 1 + k, H - 3, 5, 2, AX.SHOE);
 
   // accessory: headwear sits over hair, held things sit in the left hand (moves with the swing)
   const hand = { x: lx, y: ly + armLen };

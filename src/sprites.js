@@ -37,15 +37,15 @@ export function placeholderPixels(seed, frame = 0) {
   const W = SPRITE_W, H = SPRITE_H;
   const px = new Uint8Array(W * H);
   const rnd = mulberry32(seed);
-  const drop = Math.floor(rnd() * 5);             // shorter subjects start lower
+  rnd();                                          // keeps the seeded sequence stable after dropping per-subject height
   const headW = rnd() < 0.5 ? 10 : 12;
   const headH = 10;
   const hair = Math.floor(rnd() * 4);            // 0 flat, 1 spiky, 2 bald, 3 long
   const torsoW = 12 + 2 * Math.floor(rnd() * 3);
   const cx = 16;
-  const headTop = 5 + drop;
+  const headTop = 4;                              // docs/avatar-design-system.md: one body height for everyone
   const torsoTop = headTop + headH + 1;
-  const torsoBot = 34;
+  const torsoBot = 32;
   const set = (x, y, c) => { if (x >= 0 && x < W && y >= 0 && y < H) px[y * W + x] = c; };
   const rect = (x0, y0, w, h, c) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y, c); };
 
@@ -75,14 +75,14 @@ export function placeholderPixels(seed, frame = 0) {
   rect(tx + torsoW, torsoTop + 1 + swing + armLen, 3, 2, PX.SKIN);
 
   // legs + shoes
-  for (let y = torsoBot; y < H - 1; y++) {
+  for (let y = torsoBot; y < H - 3; y++) {
     const k = frame === 1 ? Math.floor((y - torsoBot) / 4) : 0;
     rect(cx - 5 - k, y, 4, 1, PX.LEGS);
     rect(cx + 1 + k, y, 4, 1, PX.LEGS);
   }
   const k = frame === 1 ? 3 : 0;
-  rect(cx - 6 - k, H - 2, 5, 2, PX.OUTLINE);
-  rect(cx + 1 + k, H - 2, 5, 2, PX.OUTLINE);
+  rect(cx - 6 - k, H - 3, 5, 2, PX.OUTLINE);
+  rect(cx + 1 + k, H - 3, 5, 2, PX.OUTLINE);
 
   // 1px outline around everything that is not already outline
   const out = px.slice();

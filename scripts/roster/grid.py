@@ -26,20 +26,14 @@ import sprites as S  # noqa: E402
 COLS, ROWS = 4, 4
 GRID_DIR = S.CACHE / "grids"
 
-STYLE = (
-    "Every character: full-body 16-bit pixel art video game sprite, cute chibi proportions (big head about 40% of "
-    "total height, about 2.5 heads tall), standing, front three-quarter view facing slightly left, the signature prop "
-    "drawn oversized so it reads at tiny size, chunky visible pixels as if drawn on a 32x48 pixel grid, limited "
-    "16-colour palette, flat cel shading with light from the top-left, 1-pixel dark outline, no anti-aliasing, no "
-    "dithering, entire body visible head to feet. All sixteen share one consistent art style and the same scale."
-)
+STYLE = S.SPEC.GRID_STYLE  # the house design system (scripts/sprite_spec.py)
 
 
 def grid_prompt(looks):
     cells = []
     for i, look in enumerate(looks):
         r, c = divmod(i, COLS)
-        cells.append(f"Row {r + 1}, column {c + 1}: {look}.")
+        cells.append(f"Row {r + 1}, column {c + 1}: {S.SPEC.normalize_look(look)}.")
     return (
         f"A sprite sheet: a 4 by 4 grid of sixteen different characters, one character per cell, evenly spaced in "
         f"four rows and four columns with wide empty gaps between them so no two characters touch or overlap. "
@@ -65,9 +59,13 @@ def generate_grid(looks, dest):
 
 
 def figure_mask(rgb):
-    """True where a pixel is not the magenta background (same tolerance family as key_out)."""
+    """True where a pixel is not the background. The background colour is sampled from the
+    sheet's corners, not assumed: the model sometimes paints a darker magenta than #FF00FF."""
     a = rgb.astype(int)
-    d = np.sqrt(((a - np.array(S.KEY)) ** 2).sum(-1))
+    k = 16
+    corners = np.concatenate([a[:k, :k], a[:k, -k:], a[-k:, :k], a[-k:, -k:]]).reshape(-1, 3)
+    bg = np.median(corners, axis=0)
+    d = np.sqrt(((a - bg) ** 2).sum(-1))
     return d > 110
 
 

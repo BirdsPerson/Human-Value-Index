@@ -61,7 +61,7 @@ assert.equal(a.length, SPRITE_W * SPRITE_H);
 assert.deepEqual(a, b);
 assert.notDeepEqual(a, c, "walk frame should differ");
 const row = (px, y) => Array.from(px.slice(y * SPRITE_W, (y + 1) * SPRITE_W));
-assert.ok(row(a, SPRITE_H - 1).some(v => v !== PX.EMPTY), "no feet");
+assert.ok(row(a, SPRITE_H - 2).some(v => v !== PX.EMPTY), "no feet");   // design system: feet on row 46, row 47 is outline room
 assert.ok(a.includes(PX.OUTLINE) && a.includes(PX.BODY) && a.includes(PX.EYE));
 
 // movement: bounds hold, tiers separate

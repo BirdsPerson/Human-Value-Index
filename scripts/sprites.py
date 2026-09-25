@@ -27,13 +27,16 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import sprite_spec as SPEC  # noqa: E402  the one design-system source
+
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "public" / "sprites"
 PREVIEW = ROOT / "docs" / "sprite-previews"
 CACHE = Path(os.environ.get("HVI_SPRITE_CACHE", Path.home() / ".cache" / "hvi-sprites"))
 MODEL = "nano_banana_pro"
-W, H = 32, 48
-COLOURS = 16
+W, H = SPEC.W, SPEC.H
+COLOURS = SPEC.COLOURS
 OUTLINE = (24, 16, 32, 255)  # one ink colour for every figure, so the pen reads as one set
 KEY = (255, 0, 255)       # magenta: no famous outfit or glowing prop is magenta
 FINE_COLOURS = 48         # pre-quantize before voting
@@ -101,7 +104,7 @@ LOOKS = {
     "genghis-khan": "stocky, long drooping thin black mustache and wispy chin beard, tall conical Mongol hat with a thick brown fur brim and red top, long padded deep-red Mongol deel robe with gold trim and a wide gold sash, brown leather riding boots, one hand holding up a large shining golden paiza tablet",
     "mother-teresa": "small stooped elderly woman, white cotton sari with three bright blue stripes along the border, draped over the head as a veil and wrapped around the body, a small wooden cross pinned at the shoulder, brown sandals, hands pressed together in prayer holding a large string of brown wooden rosary beads",
     "mahatma-gandhi": "very thin elderly man, completely bald head, round wire-rimmed spectacles, white homespun khadi dhoti wrapped around the waist and a white shawl draped over one shoulder, bare thin arms and legs, brown sandals, holding a tall wooden walking staff taller than himself",
-    "elon-musk": "tall broad-shouldered white man with fair skin, short dark brown hair, plain black t-shirt under a black blazer, dark jeans, black boots, holding up a big white-and-silver model rocket with a bright orange flame at its base",
+    "elon-musk": "tall broad-shouldered white man with fair skin, short dark brown hair, plain black t-shirt under a black blazer, dark jeans, black boots, a small white-and-silver model rocket held upright in the right hand against the chest",
     "taylor-swift": "tall and slender, long wavy honey-blonde hair with straight-cut bangs, sparkly sequined iridescent silver-blue bodysuit, knee-high glittering silver boots, holding a sparkly acoustic guitar",
     "kobe-bryant": "tall athletic, shaved head, thin goatee, purple and gold Los Angeles Lakers basketball jersey number 24, gold basketball shorts with purple trim, white sneakers, holding an orange basketball on one palm",
     "dennis-rodman": "tall and lean, short spiky hair dyed in bright rainbow stripes, red Chicago Bulls basketball jersey number 91 with black trim, red basketball shorts, black sneakers, holding an orange basketball under one arm",
@@ -112,14 +115,7 @@ LOOKS = {
 }
 GENERIC_LOOK = "wearing their single most recognisable signature outfit and hairstyle, holding their one most iconic signature prop"
 
-PROMPT = (
-    "Full-body 16-bit pixel art video game sprite of {name}: {look}. "
-    "Cute chibi proportions (big head about 40% of total height, about 2.5 heads tall), standing, front three-quarter view facing slightly left. "
-    "The signature prop is drawn oversized, about as big as the head, so it still reads at tiny size. Chunky visible pixels as if drawn on a 32x48 pixel grid, limited 16-colour palette, "
-    "flat cel shading with light from the top-left, 1-pixel dark outline around the whole figure, "
-    "no anti-aliasing, no dithering. Single character centered, entire body visible head to feet with margin, "
-    "on a perfectly flat solid pure magenta (#FF00FF) background, no shadow, no ground, no text."
-)
+PROMPT = SPEC.SINGLE_PROMPT  # takes {look}; {name} is accepted and ignored
 
 
 def slug(name):
@@ -132,7 +128,7 @@ def slug(name):
 def generate(name, dest, look=None):
     # look: an explicit brief (referrals pass the scoring model's safety-constrained one);
     # otherwise the hand-written LOOKS entry, then the generic brief.
-    prompt = PROMPT.format(name=name, look=look or LOOKS.get(slug(name), GENERIC_LOOK))
+    prompt = PROMPT.format(name=name, look=SPEC.normalize_look(look or LOOKS.get(slug(name), GENERIC_LOOK)))
     cmd = ["higgsfield", "generate", "create", MODEL, "--prompt", prompt,
            "--resolution", "1k", "--aspect_ratio", "2:3", "--wait", "--json"]
     res = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
@@ -266,12 +262,51 @@ def snap_to_house(pal):
     return house[d.argmin(1)].astype(np.uint8)
 
 
-def fit(idx, ink, accents=frozenset(), max_w=W - 2, max_h=H - 3):
-    """Scale to fit max_w x max_h: outline adds 1px each side, plus 1px headroom for the walk bob."""
+def fit(idx, ink, accents=frozenset(), max_w=SPEC.MAX_W, target_h=SPEC.FIGURE_H):
+    """Scale by HEIGHT so every body is SPEC.FIGURE_H tall. A prop wider than the width budget
+    is trimmed equally from both sides; it never shrinks the body (the old fit-the-box rule did,
+    which is why a guitar made its owner 37px tall and a bare hand made theirs 47)."""
     h, w = idx.shape
-    s = min(max_w / w, max_h / h)
-    return mode_downsample(idx, ink, max(1, round(w * s)), max(1, round(h * s)), accents=accents)
+    s = target_h / h
+    tw = max(1, round(w * s))
+    small = mode_downsample(idx, ink, tw, target_h, accents=accents)
+    if tw > max_w:
+        cut = tw - max_w
+        small = small[:, cut // 2: cut // 2 + max_w]
+    return small
 
+
+
+def drop_specks(f, max_px=SPEC.SPECK_PX):
+    """Floating sparkles, stars and glints are detail the house style forbids: any shape not
+    touching the body and no bigger than max_px is erased. A real detached prop is bigger,
+    and validate_sheet() still rejects it."""
+    solid = f != -1
+    labels = np.zeros(f.shape, dtype=np.int32)
+    sizes = {}
+    n = 0
+    for y, x in zip(*np.nonzero(solid)):
+        if labels[y, x]:
+            continue
+        n += 1
+        stack, count = [(y, x)], 0
+        labels[y, x] = n
+        while stack:
+            cy, cx = stack.pop(); count += 1
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    ny, nx = cy + dy, cx + dx
+                    if 0 <= ny < f.shape[0] and 0 <= nx < f.shape[1] and solid[ny, nx] and not labels[ny, nx]:
+                        labels[ny, nx] = n; stack.append((ny, nx))
+        sizes[n] = count
+    if len(sizes) <= 1:
+        return f
+    body = max(sizes, key=sizes.get)
+    g = f.copy()
+    for lab, count in sizes.items():
+        if lab != body and count <= max_px:
+            g[labels == lab] = -1
+    return g
 
 def place(small):
     """Centre horizontally, feet on the bottom inner row (row H-2), 1px outline room all round."""
@@ -321,11 +356,54 @@ def process(raw_path):
     a = crop(key_out(Image.open(raw_path)))
     idx, pal = palette_indices(a)
     small, pal = reduce_palette(fit(idx, ink_mask(a), accent_classes(idx, pal)), pal)
-    f1 = place(small)
+    f1 = drop_specks(place(small))
     f2 = walk_frame(f1)
     sheet = np.concatenate([render(f1, pal), render(f2, pal)], axis=1)
     return Image.fromarray(sheet, "RGBA")
 
+
+
+def _parts(solid):
+    """Connected shapes (8-neighbour) in a boolean mask, largest first, as pixel counts."""
+    seen = np.zeros_like(solid)
+    sizes = []
+    for y, x in zip(*np.nonzero(solid)):
+        if seen[y, x]:
+            continue
+        stack, n = [(y, x)], 0
+        seen[y, x] = True
+        while stack:
+            cy, cx = stack.pop(); n += 1
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    ny, nx = cy + dy, cx + dx
+                    if 0 <= ny < solid.shape[0] and 0 <= nx < solid.shape[1] and solid[ny, nx] and not seen[ny, nx]:
+                        seen[ny, nx] = True; stack.append((ny, nx))
+        sizes.append(n)
+    return sorted(sizes, reverse=True)
+
+
+def validate_sheet(sheet):
+    """Why a processed sheet breaks the design system, or None."""
+    a = np.asarray(sheet.convert("RGBA"))
+    f1 = a[:, :W]
+    solid = f1[..., 3] > 0
+    if not solid.any():
+        return "empty"
+    ys, xs = np.nonzero(solid)
+    height = ys.max() - ys.min() + 1
+    if not SPEC.FIGURE_H <= height <= SPEC.FIGURE_H + 2:      # body + outline top and bottom
+        return f"height {height}"
+    colours = {tuple(c) for c in f1[solid][:, :3]}
+    if len(colours) > SPEC.COLOURS:
+        return f"{len(colours)} colours"
+    box = solid[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+    if box.mean() > 0.9:           # a real backdrop fills the frame; a wheelchair fills ~0.84
+        return f"backdrop ({box.mean():.2f} of the box is filled)"
+    parts = _parts(solid)
+    if len(parts) > SPEC.MAX_PARTS and parts[1] > 4:
+        return f"detached part ({parts[1]}px)"
+    return None
 
 def preview(sheet, dest, scale=8):
     bg = Image.new("RGBA", sheet.size, (236, 232, 222, 255))
@@ -440,7 +518,18 @@ if __name__ == "__main__":
     ap.add_argument("--force", action="store_true", help="regenerate even if cached (spends credits)")
     ap.add_argument("--reprocess", action="store_true", help="rebuild sheets from cached raws")
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--check-catalog", action="store_true", help="validate every public/sprites sheet against the design system")
     args = ap.parse_args()
+    if args.check_catalog:
+        bad = {}
+        for pth in sorted(OUT.glob("*.png")):
+            if pth.name.startswith("_"):
+                continue
+            why = validate_sheet(Image.open(pth))
+            if why:
+                bad[pth.stem] = why
+        print(f"catalog: {len(list(OUT.glob('*.png')))} sheets, {len(bad)} off-spec {bad}")
+        sys.exit(1 if bad else 0)
     if args.selftest:
         selftest(); sys.exit(0)
     names = figure_names() if args.all else args.names
