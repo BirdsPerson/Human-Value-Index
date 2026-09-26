@@ -343,4 +343,8 @@ export const publicFigure = c => ({
   engine: c.source === "roster-engine",
   // A case-by-case harm finding is shown on the card; a pending one stays internal.
   harmReview: validHarmReview(c.harmReview) ? { decision: c.harmReview.decision, note: c.harmReview.note } : null,
+  // City inputs (src/city/sim.js): place tendencies and field drive jobs and haunts.
+  places: Array.isArray(c.places) ? c.places.filter(p => typeof p === "string").slice(0, 4) : null,
+  stratum: c.stratum ? { domain: c.stratum.domain ?? null, occupation: c.stratum.occupation ?? null } : null,
+  description: typeof c.description === "string" ? c.description.slice(0, 120) : null,
 });

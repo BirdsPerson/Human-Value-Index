@@ -148,6 +148,7 @@ export const figureIndexEntry = c => ({
   verdictStatus: c.verdictStatus, noDangle: Boolean(c.noDangle), wikidata: c.wikidata, born: c.born ?? null, died: c.died ?? null,
   sprite: c.sprite ?? null, spriteStatus: c.spriteStatus, referredBy: c.referredBy, at: c.at, people: c.people ?? null, harmReview: c.harmReview ?? null, harmReviewPending: Boolean(c.harmReviewPending),
   source: c.source ?? null,
+  places: c.places ?? null, stratum: c.stratum ?? null, description: c.description ?? null,
 });
 
 export async function listFigures() {
