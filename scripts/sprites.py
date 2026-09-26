@@ -29,6 +29,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sprite_spec as SPEC  # noqa: E402  the one design-system source
+import sprite_qa as QA  # noqa: E402  nothing ships without passing the gate
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "public" / "sprites"
@@ -63,7 +64,7 @@ LOOKS = {
     "pablo-escobar": "stocky man, curly black hair, thick black mustache, light-blue short-sleeve polo shirt, blue jeans, white sneakers, holding an oversized classic black-and-white football (soccer ball) under one arm, 1980s Medellin football-club patron look",
     "oj-simpson": "tall athletic man, dark brown skin, short black hair, 1970s Buffalo Bills American football uniform: royal blue jersey with red and white shoulder stripes and no numbers, white pants, blue socks, holding an oversized white football helmet with a red stripe under one arm",
     "aaron-hernandez": "tall muscular young man, light brown skin, short black buzz-cut hair, New England Patriots American football uniform: navy blue jersey with red and white shoulder trim and no numbers, silver pants, navy socks, holding an oversized brown American football in one hand",
-    "aretha-franklin": "full-figured woman, dark brown skin, short black curled hair, wearing the famous grey felt hat with an enormous oversized sparkling rhinestone-edged grey bow on the front, long elegant grey coat to the ankles, holding a vintage silver microphone, the Queen of Soul",
+    "aretha-franklin": "short dark curled hair, elegant long royal-purple gown, holding a microphone in one hand close to the body",
     "oprah-winfrey": "big voluminous shoulder-length wavy dark brown hair with caramel highlights, warm brown skin, royal purple talk-show host pantsuit with padded shoulders, gold hoop earrings, black heels, one arm raised in a cheerful wave, the other hand holding up an oversized shiny gold microphone",
     "bruce-lee": "short neat black hair, lean muscular build, bright yellow full-body jumpsuit with a thick black stripe running down each side of the arms and legs, black-and-yellow sneakers, standing in a confident martial-arts ready stance with both fists raised in front of the chest",
     "stephen-hawking": "short brown hair, large rectangular glasses, slim figure in a dark navy suit jacket over a light blue shirt, sitting in a big black electric wheelchair with chunky wheels and a small grey computer screen on the armrest, a glowing blue-purple spiral galaxy floating beside his head",
@@ -83,7 +84,7 @@ LOOKS = {
     "muhammad-ali": "tall slim athletic build, dark brown skin, short black hair, wearing a long white satin robe with black trim tied at the waist, white athletic shoes, holding up a huge shiny gold championship belt with a big round gold medallion above his head in celebration",
     "nelson-mandela": "elderly, short cropped grey-white hair, dark brown skin, wearing a loose colourful long-sleeved Madiba batik shirt in bright gold, orange and brown patterns, dark trousers, one fist raised in the air, the other hand holding a small open book",
     "ada-lovelace": "dark brown hair parted in the middle and pulled into looped braids over the ears, wearing a wide off-the-shoulder 1840s royal-blue satin ball gown with a full bell skirt to the floor and a white lace trim, holding up a large brass gear-wheel cog of Babbage's Analytical Engine",
-    "martin-luther-king-jr": "dark brown skin, short black hair, thin black mustache, wearing a dark charcoal suit, white shirt and dark tie, standing at a wooden lectern podium with a microphone, one hand raised open-palm while giving a speech",
+    "martin-luther-king-jr": "short black hair, thin black mustache, dark charcoal suit, white shirt, dark tie, one hand raised as if speaking",
     "harriet-tubman": "dark brown skin, a plain white headwrap scarf tied around the head, long dark-brown 1860s dress with a white collar and a long skirt to the ankles, a grey wool shawl over the shoulders, holding up a large glowing brass oil lantern with warm yellow light, the North Star shining above",
     "leonardo-da-vinci": "elderly, very long flowing white hair and a very long flowing white beard down to the chest, dark-red Renaissance robe to the ankles with a black cap, holding up a large parchment sheet showing a sketch of a flying machine with wings",
     "cleopatra": "straight glossy black bob haircut with blunt bangs, a gold cobra uraeus headband on the forehead, heavy black eyeliner, wide gold and turquoise beaded collar necklace, long white linen Egyptian dress to the ankles with a gold belt, holding an oversized golden crook sceptre",
@@ -125,10 +126,12 @@ def slug(name):
 
 # ---------- generation ----------
 
-def generate(name, dest, look=None):
+def generate(name, dest, look=None, attempt=1, skin=None):
     # look: an explicit brief (referrals pass the scoring model's safety-constrained one);
-    # otherwise the hand-written LOOKS entry, then the generic brief.
-    prompt = PROMPT.format(name=name, look=SPEC.normalize_look(look or LOOKS.get(slug(name), GENERIC_LOOK)))
+    # otherwise the hand-written LOOKS entry, then the generic brief. attempt > 1 is a retry
+    # after a failed QA gate: a different background and an insistence on one clothed person.
+    band = skin or QA.skin_of(slug(name))
+    prompt = SPEC.single_prompt(SPEC.with_skin(SPEC.normalize_look(look or LOOKS.get(slug(name), GENERIC_LOOK)), band), attempt)
     cmd = ["higgsfield", "generate", "create", MODEL, "--prompt", prompt,
            "--resolution", "1k", "--aspect_ratio", "2:3", "--wait", "--json"]
     res = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
@@ -470,6 +473,10 @@ def run(names, force=False, reprocess=False):
             elif reprocess:
                 print(f"reproc {s} (cached raw, 0 credits)")
             sheet = process(raw)
+            ok, why = QA.gate(sheet, LOOKS.get(s, GENERIC_LOOK), keyed=key_out(Image.open(raw)),
+                              validate_sheet=validate_sheet, skin=QA.skin_of(s))
+            if not ok:
+                raise RuntimeError("QA gate: " + "; ".join(why))
             sheet.save(sheet_path)
             preview(sheet, PREVIEW / f"{s}.png")
             done.append(s)

@@ -53,3 +53,14 @@ Grid cells that fail validation are redrawn one at a time. `python3 scripts/spri
 ## History
 - **The audit (pass 1)** found 92 sprites at 37–47px tall, with chibi early figures (head about 40%) and slimmer later ones. Details are in `docs/avatar-variants/`: `audit.json`, `audit-contact.png`, `compare.png`.
 - **Pass 2 (2026-09-25)** redrew the whole catalog in this style: `scripts/redraw_catalog.py`. The before/after contact sheet is `docs/avatar-variants/redraw-before-after.png`.
+
+## QA gate and skin tone (2026-09-26)
+
+Nothing is published (public/sprites, hvi-sprites) unless it passes `scripts/sprite_qa.py gate()`:
+
+1. **Raw image:** exactly one figure (separate person-sized shapes, or two people side by side joined by a ground line or overlap, are rejected), head not cut by the top edge, keying hasn't hollowed the figure (≤30% holes).
+2. **Sheet:** the design-system rules (`validate_sheet`), a distinct head, a torso that isn't mostly bare skin.
+3. **Skin tone, a hard likeness requirement:** every subject has a band in `scripts/skin.json` (very fair, fair, medium, olive, light brown, brown, dark brown, very dark), classified by Claude Sonnet 5 from the person's Wikipedia lead image (`scripts/skin_backfill.py`; manual overrides are noted in the file). The band is put first in every look (`sprite_spec.with_skin`). The gate needs (a) a natural skin colour in the band among the lower head's colours (pixels; catches grey or green faces and light/dark swaps), and (b) the vision reading of the drawn skin within two lightness steps of the band (`SKIN_ORDER`; a skin-only failure is confirmed 2 of 3 readings).
+4. **Vision:** Claude Sonnet 5 reports people count, clothed, full body, outfit match, natural face colour and drawn skin band; code decides.
+
+Retries (up to 3) insist on one clothed person and move the background off magenta. A figure that still fails keeps the placeholder. `scripts/sprite_audit.py` re-checks the whole catalog (repo and production) and writes `docs/sprite-audit-<date>.md`.

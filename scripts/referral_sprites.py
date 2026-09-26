@@ -38,6 +38,10 @@ PER_RUN = 6          # ponytail: bounds one run's spend (~12 credits); the rest 
 _spec = importlib.util.spec_from_file_location("sprites", ROOT / "scripts" / "sprites.py")
 S = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(S)
+sys.path.insert(0, str(ROOT / "scripts"))
+import sprite_qa as QA  # noqa: E402
+import skin_backfill as SKIN  # noqa: E402
+from PIL import Image  # noqa: E402
 
 
 def log(msg):
@@ -76,7 +80,7 @@ def set_json(store, key, data):
 # Keep in step with figureIndexEntry in netlify/lib/store.js.
 INDEX_KEYS = ("slug", "name", "qualifier", "score", "tier", "breakdown", "verdict", "verdictStatus", "noDangle", "wikidata",
               "born", "died", "sprite", "spriteStatus", "referredBy", "at", "people", "source",
-              "harmReview", "harmReviewPending", "places", "stratum", "description")
+              "harmReview", "harmReviewPending", "places", "stratum", "description", "skin")
 
 
 def index_entry(card):
@@ -139,10 +143,10 @@ PLUMBING_HINTS = ("login", "log in", "auth", "unauthori", "forbidden", "credit",
                   "quota", "payment", "401", "402", "403", "network", "enotfound", "econn", "timed out", "timeout")
 
 
-def generate(card, raw):
+def generate(card, raw, attempt=1, skin=None):
     name = card.get("name") or card.get("wikiTitle")   # qualifier already stripped
     try:
-        S.generate(name, raw, look=card.get("look") or NEUTRAL_LOOK)
+        S.generate(name, raw, look=card.get("look") or NEUTRAL_LOOK, attempt=attempt, skin=skin)
     except FileNotFoundError as e:
         raise Plumbing(f"higgsfield CLI not found: {e}") from e
     except subprocess.TimeoutExpired as e:
@@ -158,19 +162,35 @@ def generate(card, raw):
         raise Plumbing(f"download failed: {e}") from e
 
 
-def draw(card):
+def draw(card, attempt=1):
     slug = card["slug"]
     if card.get("look"):
         remember_look(slug, card["look"])
     raw = S.CACHE / f"{slug}.png"
+    # Skin tone is a hard likeness requirement: no band, no drawing.
+    skin = card.get("skin") or SKIN.ensure_skin(slug, card.get("name"), card.get("wikiTitle"))
+    if not skin:
+        raise FigureFailed("no recorded skin tone (classification failed); not drawing a real person without one")
+    card["skin"] = skin
     if not raw.exists():
-        generate(card, raw)
+        generate(card, raw, attempt, skin)
     try:
         sheet = S.process(raw)
     except Exception as e:
         # A cached raw that fails to process would fail forever; drop it so the retry regenerates.
         raw.unlink(missing_ok=True)
         raise FigureFailed(f"process failed: {e}") from e
+    # The QA gate (scripts/sprite_qa.py): nothing is uploaded or marked ready unless the raw holds
+    # exactly one un-eaten figure, the sheet meets the design system, and Claude sees one fully
+    # clothed person matching the look. A failed gate drops the raw so the retry regenerates
+    # with a different background and an insistence on one clothed person.
+    ok, why = QA.gate(sheet, card.get("look") or NEUTRAL_LOOK, keyed=S.key_out(Image.open(raw)),
+                      validate_sheet=S.validate_sheet, skin=skin)
+    if ok is not True:
+        if why and why[0].startswith(("vision check unavailable", "vision check failed")):
+            raise Plumbing("; ".join(why))          # no charge: the raw stays for the next run
+        raw.unlink(missing_ok=True)
+        raise FigureFailed("QA gate: " + "; ".join(why))
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         path = f.name
     try:
@@ -273,12 +293,14 @@ def main():
             generated += 1
         attempt = int(card.get("spriteAttempts") or 0) + 1
         try:
-            draw(card)
-            card.update(spriteStatus="ready", sprite=f"/api/sprite/{slug}?v={int(time.time())}", spriteAttempts=attempt,
+            draw(card, attempt)
+            card.pop("spriteQuarantined", None)
+            card.update(spriteQA="passed", spriteStatus="ready", sprite=f"/api/sprite/{slug}?v={int(time.time())}", spriteAttempts=attempt,
                         spriteAt=datetime.now(timezone.utc).isoformat())
             log(f"ready  {slug} (attempt {attempt})")
         except FigureFailed as e:  # one bad figure must not sink the run
             card["spriteAttempts"] = attempt
+            card["spriteQA"] = str(e)[:300]
             if attempt >= MAX_ATTEMPTS:
                 card["spriteStatus"] = "failed"
             log(f"FAIL   {slug} (attempt {attempt}/{MAX_ATTEMPTS}{', giving up' if attempt >= MAX_ATTEMPTS else ''}): {str(e)[:200]}")

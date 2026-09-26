@@ -25,11 +25,24 @@ STYLE = (
     "shoulders plus one hand. Chunky visible pixels as if drawn on a 32x48 pixel grid, 1-pixel dark "
     "outline, no anti-aliasing, no dithering, entire body visible head to feet"
 )
-BACKGROUND = ("on a perfectly flat solid pure magenta (#FF00FF) background, no backdrop, no scenery, "
-              "no shadow, no ground, no text")
+BACKGROUNDS = {"magenta": "pure magenta (#FF00FF)", "green": "pure bright green (#00FF00)", "cyan": "pure cyan (#00FFFF)"}
+BACKGROUND_TMPL = ("on a perfectly flat solid {bg} background, no backdrop, no scenery, "
+                   "no shadow, no ground, no text")
+BACKGROUND = BACKGROUND_TMPL.format(bg=BACKGROUNDS["magenta"])
 
 # Single figure. {look} only: names trip the public-figure filter and add nothing at 32px.
 SINGLE_PROMPT = "Full-body " + STYLE + ". The character: {look}. Single character centered with margin, " + BACKGROUND + "."
+# Retries after a failed QA gate (scripts/sprite_qa.py): insist on one clothed person, and move
+# off magenta so a pink or skin-toned outfit can't be keyed out.
+RETRY_EMPHASIS = ("ONE single person alone in the image, never two, no second character, no reflection, "
+                  "fully clothed in the described outfit")
+
+
+def single_prompt(look, attempt=1):
+    bg = BACKGROUNDS["magenta"] if attempt <= 1 else (BACKGROUNDS["green"] if attempt == 2 else BACKGROUNDS["cyan"])
+    extra = "" if attempt <= 1 else RETRY_EMPHASIS + ". "
+    return ("Full-body " + STYLE + ". The character: " + look + ". " + extra +
+            "Single character centered with margin, " + BACKGROUND_TMPL.format(bg=bg) + ".")
 
 # One cell of a 4x4 sheet; grid.py wraps these in the sheet instructions.
 GRID_STYLE = ("Every character: full-body " + STYLE + ". All sixteen share one consistent art style and "
@@ -52,3 +65,30 @@ def normalize_look(look):
     if HAND_RULE not in out:
         out += ", " + HAND_RULE
     return out
+
+
+# ---- skin tone: a hard likeness requirement (2026-09-26: MLK drawn light, Lincoln dark) ----
+# Every subject has a band (scripts/skin.json, grounded in the Wikipedia lead image). The band goes
+# into every prompt, into the vision check, and the gate compares the sprite's face lightness (CIE L*)
+# against the band's range. Ranges overlap on purpose: the check catches wrong, not slightly off.
+SKIN_BANDS = ["very fair", "fair", "medium", "olive", "light brown", "brown", "dark brown", "very dark"]
+# Lightness order for comparing bands: olive is a hue beside medium, not a step darker.
+SKIN_ORDER = {"very fair": 0, "fair": 1, "medium": 2, "olive": 2.5, "light brown": 3, "brown": 4, "dark brown": 5, "very dark": 6}
+SKIN_L = {                      # acceptable face L* on the finished 12-colour sprite
+    "very fair": (64, 100), "fair": (60, 100), "medium": (46, 88), "olive": (46, 84),
+    "light brown": (38, 76), "brown": (20, 66), "dark brown": (14, 56), "very dark": (8, 48),
+}
+SKIN_PHRASE = {
+    "very fair": "very fair pale skin", "fair": "fair light skin", "medium": "medium skin tone",
+    "olive": "olive skin", "light brown": "light brown skin", "brown": "brown skin",
+    "dark brown": "dark brown skin", "very dark": "very dark brown skin",
+}
+_SKIN_WORDS = re.compile(r"\b(skin|complexion)\b", re.I)
+
+
+def with_skin(look, band):
+    """Put the recorded skin band at the front of the look, replacing any skin words the look had."""
+    if not band or band not in SKIN_PHRASE:
+        return look
+    parts = [p for p in (look or "").split(",") if not _SKIN_WORDS.search(p)]
+    return ", ".join([SKIN_PHRASE[band]] + [p.strip() for p in parts if p.strip()])

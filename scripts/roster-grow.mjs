@@ -219,7 +219,7 @@ async function stageSprites(run) {
   if (run.sprites.creditsBefore == null) run.sprites.creditsBefore = higgsCredits();
   for (let g = 0; g * GRID < drawable.length; g++) {
     if (run.sprites.grids[g]?.done) continue;
-    const chunk = drawable.slice(g * GRID, (g + 1) * GRID).map(c => ({ slug: run.scored[c.cid].slug, look: run.scored[c.cid].look }));
+    const chunk = drawable.slice(g * GRID, (g + 1) * GRID).map(c => ({ slug: run.scored[c.cid].slug, look: run.scored[c.cid].look, name: c.title, wikiTitle: c.title }));   // name/title: skin-tone classification (grid.py)
     const dir = `${tmpdir()}/hvi-roster`;
     mkdirSync(dir, { recursive: true });
     const inPath = `${dir}/${run.id}-g${g}-in.json`, outPath = `${dir}/${run.id}-g${g}.json`;

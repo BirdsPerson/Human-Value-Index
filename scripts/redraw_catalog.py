@@ -58,7 +58,12 @@ def process_raw_image(img):
 
 def save_result(slug, sheet, results, source):
     NEW.mkdir(parents=True, exist_ok=True)
-    why = S.validate_sheet(sheet)
+    # The full QA gate (scripts/sprite_qa.py), vision included: a failure is recorded, never shipped.
+    why = S.QA.sheet_checks(sheet, S.validate_sheet)
+    if why is None:
+        ok, reasons = S.QA.vision_check(sheet, (LOOKS_OVERRIDE.get(slug) if "LOOKS_OVERRIDE" in globals() else None) or S.LOOKS.get(slug),
+                                        skin=S.QA.skin_of(slug))
+        why = None if ok is True else "QA gate: " + "; ".join(reasons)
     sheet.save(NEW / f"{slug}.png")
     results[slug] = {"ok": why is None, "reason": why, "source": source}
 
@@ -128,7 +133,7 @@ def grids():
 
 
 def single(look, dest):
-    prompt = SPEC.SINGLE_PROMPT.format(look=SPEC.normalize_look(look))
+    prompt = SPEC.SINGLE_PROMPT.format(look=SPEC.normalize_look(look))   # one-off 2026-09-26 redraw; new work uses sprites.generate (skin-aware)
     cmd = ["higgsfield", "generate", "create", S.MODEL, "--prompt", prompt,
            "--resolution", "1k", "--aspect_ratio", "2:3", "--wait", "--json"]
     res = subprocess.run(cmd, capture_output=True, text=True, timeout=900)

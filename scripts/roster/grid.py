@@ -126,7 +126,10 @@ def main(cohort_path, out_path):
     cohort = json.loads(Path(cohort_path).read_text())
     if not 1 <= len(cohort) <= COLS * ROWS:
         raise SystemExit("cohort must have 1..16 entries")
-    looks = [c["look"] for c in cohort]
+    # Skin tone is part of every look (a hard likeness requirement); classify any subject missing one.
+    import skin_backfill as SKIN
+    looks = [S.SPEC.with_skin(c["look"], SKIN.ensure_skin(c["slug"], c.get("name") or c["slug"], c.get("wikiTitle")))
+             for c in cohort]
     # A short cohort still fills the sheet: repeats of the last look pad the grid and are dropped.
     while len(looks) < COLS * ROWS:
         looks.append(looks[-1])
@@ -151,6 +154,12 @@ def main(cohort_path, out_path):
             framed.save(raw)
             try:
                 S.process(raw)          # the same processing the upload job will run
+                # First QA layer here (one figure, not cut, interior intact); the upload job runs the
+                # full gate, vision included, before anything is marked ready.
+                reason = S.QA.raw_checks(S.key_out(Image.open(raw)))
+                if reason:
+                    reason = "QA gate: " + reason
+                    raw.unlink(missing_ok=True)
             except Exception as e:     # noqa: BLE001
                 reason = f"process failed: {e}"
                 raw.unlink(missing_ok=True)
