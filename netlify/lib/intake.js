@@ -43,15 +43,22 @@ export function computeScore(b, severity = null, review = null) {
   // A per-subject harm review (Scott's case-by-case call) overrides the automatic gate:
   // "ungate" lets the breakdown stand as scored (no gate, no serious-harm cap); "gate" forces it.
   if (r?.decision === "ungate") return Math.max(0, Math.min(1000, score));
+  // "serious": no gate, no severity placement, but the serious-harm line still holds
+  // (threat floor and the 499 cap), so the file lands in FLAGGED/MONITORED on its record.
+  if (r?.decision === "serious") {
+    const t = Math.max(isNum(b?.threat) ? b.threat : 0, HARM_GATE.seriousThreat);
+    const s2 = t === b?.threat ? score : computeScore({ ...b, threat: t }, null, { decision: "ungate" });
+    return Math.max(0, Math.min(s2, HARM_GATE.seriousCap));
+  }
   // A gated file is placed inside 0-cap by the severity of the documented harm; the rest of
   // the record no longer lifts it. Without a severity (interviews) it keeps the old clamp.
   if (r?.decision === "gate" || harmGated(b)) { const g = severityScore(severity); return g ?? Math.min(score, HARM_GATE.cap); }
   return Math.max(0, Math.min(1000, seriousHarm(b) ? Math.min(score, HARM_GATE.seriousCap) : score));
 }
 
-// Case-by-case harm finding on one subject: {decision: "ungate"|"gate", note, by, at}.
+// Case-by-case harm finding on one subject: {decision: "ungate"|"serious"|"gate", note, by, at}.
 // Stored on the figure/card; every scoring path passes it through.
-export const HARM_REVIEW_DECISIONS = ["ungate", "gate"];
+export const HARM_REVIEW_DECISIONS = ["ungate", "serious", "gate"];
 export function validHarmReview(r) {
   if (!r || typeof r !== "object" || !HARM_REVIEW_DECISIONS.includes(r.decision)) return null;
   return { decision: r.decision, note: typeof r.note === "string" ? r.note.slice(0, 300) : "", by: typeof r.by === "string" ? r.by : null, at: typeof r.at === "string" ? r.at : null };
@@ -68,7 +75,7 @@ export function needsHarmReview({ breakdown, harm, harmReview = null, headOfStat
 // Gated as actually scored, review included.
 export const effectivelyGated = (b, review = null) => {
   const r = validHarmReview(review);
-  return r?.decision === "gate" || (r?.decision !== "ungate" && harmGated(b));
+  return r?.decision === "gate" || (r?.decision !== "ungate" && r?.decision !== "serious" && harmGated(b));
 };
 
 // "Under 100 is reserved for actual monsters." A weighted average can't get a mass
@@ -298,6 +305,11 @@ export function normalizeAssessment(raw, { harmReview = null } = {}) {
   const floor = band && review?.decision !== "ungate" ? HARM_FLOORS[band] : null;
   if (floor != null && typeof breakdown.threat === "number") breakdown.threat = Math.max(breakdown.threat, floor);
   else if (floor != null) breakdown.threat = floor;
+  // Lawful combat as a soldier is not murder (Scott, 2026-09-26): never gated, never capped
+  // as serious harm. The model's own threat number stands below the serious line.
+  if (r.documented_harm === "combat" && review?.decision !== "gate" && typeof breakdown.threat === "number") breakdown.threat = Math.min(breakdown.threat, HARM_GATE.seriousThreat - 1);
+  // A "serious" review keeps the serious threat floor even when no band was classified.
+  if (review?.decision === "serious") breakdown.threat = Math.max(typeof breakdown.threat === "number" ? breakdown.threat : 0, HARM_GATE.seriousThreat);
   // Historical killings and resistance killings stay serious but are kept out of the harm
   // gate: that band is for mass atrocity and modern predation.
   if (floor != null && (band === "historical_killing" || band === "political_resistance")) breakdown.threat = Math.min(breakdown.threat, HISTORICAL_THREAT_CEIL);

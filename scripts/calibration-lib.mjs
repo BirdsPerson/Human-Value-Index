@@ -25,12 +25,17 @@ export function severityScoreWith(cal, sev) {
   return Math.max(0, Math.round(cal.harmGate.cap - pts));
 }
 // A case-by-case harm review on the subject (intake.js validHarmReview) wins over the gate.
-export const gatedWith = (cal, b, review = null) => review?.decision === "gate" || (review?.decision !== "ungate" && harmGatedWith(cal, b));
+export const gatedWith = (cal, b, review = null) => review?.decision === "gate" || (review?.decision !== "ungate" && review?.decision !== "serious" && harmGatedWith(cal, b));
 export function scoreWith(cal, b, sev = null, review = null) {
   const w = axisMean(b, cal.warmthAxis), c = axisMean(b, cal.competenceAxis);
   if (w.value === null && c.value === null) return 500;
   const score = Math.round(10 * ((1 - cal.realityIndex) * (w.value ?? 50) + cal.realityIndex * (c.value ?? 50)));
   if (review?.decision === "ungate") return Math.max(0, Math.min(1000, score));
+  if (review?.decision === "serious") {
+    const t = Math.max(isNum(b?.threat) ? b.threat : 0, cal.harmGate.seriousThreat);
+    const s2 = t === b?.threat ? score : scoreWith(cal, { ...b, threat: t }, null, { decision: "ungate" });
+    return Math.max(0, Math.min(s2, cal.harmGate.seriousCap));
+  }
   if (gatedWith(cal, b, review)) { const g = severityScoreWith(cal, sev); return g ?? Math.min(score, cal.harmGate.cap); }
   const serious = isNum(b?.threat) && isNum(cal.harmGate.seriousThreat) && b.threat >= cal.harmGate.seriousThreat;
   return Math.max(0, Math.min(1000, serious ? Math.min(score, cal.harmGate.seriousCap) : score));

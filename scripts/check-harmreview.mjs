@@ -40,6 +40,35 @@ for (const r of [null, UNGATE, { decision: "gate" }]) {
 }
 assert.equal(L.gatedWith(CAL, obama, UNGATE), false);
 
+// ---- "serious": no gate, but the serious-harm line holds (Kissinger, 2026-09-26) -----
+const SERIOUS = { decision: "serious", note: "Serious harm, not atrocity tier.", by: "scott" };
+const kiss = { care: 20, alignment: 25, utility: 85, adaptability: 80, legacy: 80, network: 95, physical: 50, threat: 95, redundancy: 20 };
+const kissSev = { kind: "mass_atrocity", scale: "thousands", role: "directed", duration: "years", accountability: "never_held" };
+const sScore = computeScore(kiss, kissSev, SERIOUS);
+assert.ok(sScore <= CAL.harmGate.seriousCap, "serious keeps the 499 cap");
+assert.ok(sScore > computeScore(kiss, kissSev), "serious sits above its own gated score");
+assert.ok(sScore > CAL.harmGate.cap, "serious lands above every gated subject (gated max = cap)");
+assert.equal(effectivelyGated(kiss, SERIOUS), false);
+assert.equal(L.gatedWith(CAL, kiss, SERIOUS), false);
+assert.equal(L.scoreWith(CAL, kiss, kissSev, SERIOUS), sScore, "calibration scorer agrees on serious");
+// the serious threat floor applies even to a low threat reading
+const mild = { ...kiss, threat: 30, care: 70, alignment: 70 };
+assert.equal(computeScore(mild, null, SERIOUS), Math.min(computeScore({ ...mild, threat: CAL.harmGate.seriousThreat }, null, UNGATE), CAL.harmGate.seriousCap));
+assert.equal(L.scoreWith(CAL, mild, null, SERIOUS), computeScore(mild, null, SERIOUS));
+const nsev = normalizeAssessment({ breakdown: { ...kiss, threat: 40 }, documented_harm: "none", era_context: "modern", verdict: "v" }, { harmReview: SERIOUS });
+assert.ok(nsev.breakdown.threat >= CAL.harmGate.seriousThreat, "serious floor raises threat in normalizeAssessment");
+assert.ok(nsev.score <= CAL.harmGate.seriousCap && nsev.score > CAL.harmGate.cap);
+assert.deepEqual(validHarmReview(SERIOUS).decision, "serious");
+
+// ---- combat: a soldier in war is not gated or capped (Zaitsev, 2026-09-26) ----------
+const soldier = { care: 60, alignment: 60, utility: 65, adaptability: 70, legacy: 60, network: 50, physical: 85, threat: 92, redundancy: 40 };
+const combat = normalizeAssessment({ breakdown: soldier, documented_harm: "combat", era_context: "modern", verdict: "v" });
+assert.ok(combat.breakdown.threat < CAL.harmGate.seriousThreat, "combat keeps threat below the serious line");
+assert.equal(combat.harm.band, null, "combat has no harm band");
+assert.ok(combat.score > CAL.harmGate.seriousCap, "combat is weighed normally, not capped");
+const warCrime = normalizeAssessment({ breakdown: { ...soldier, threat: 50 }, documented_harm: "killing", era_context: "modern", verdict: "v" });
+assert.ok(warCrime.score < 100, "a documented war crime stays killing and stays gated");
+
 // ---- normalizeAssessment: ungate skips the threat floor ---------------------------
 const raw = { breakdown: { ...obama, threat: 55 }, documented_harm: "killing", era_context: "modern", harm_severity: sev, harm_official_capacity: true, verdict: "v" };
 const floored = normalizeAssessment(raw);

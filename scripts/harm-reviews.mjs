@@ -25,11 +25,11 @@ export function sectionText(cards, figures = FAMOUS_FIGURES) {
   const reviewed = (cards || []).filter(c => c && c.harmReview && !c.removed);
   const lines = [HEADING, ""];
   lines.push(pending.length
-    ? `Public figures who held state office and landed in the harm gate through state force wait for a case-by-case call (ungate: weighed, not gated; or gate). The gate applies until decided.`
+    ? `Public figures who held state office and landed in the harm gate through state force wait for a case-by-case call (ungate: weighed, not gated; serious: no gate but the 499 serious-harm cap; or gate). The gate applies until decided.`
     : `No harm reviews pending.`);
   for (const c of pending) {
     const band = c.harm?.band ? `, band ${c.harm.band}` : "";
-    lines.push(`- ${c.name}${c.qualifier ? ` (${c.qualifier})` : ""}: gated at ${c.score}${band}. Decide ungate or gate.`);
+    lines.push(`- ${c.name}${c.qualifier ? ` (${c.qualifier})` : ""}: gated at ${c.score}${band}. Decide ungate, serious or gate.`);
   }
   if (reviewed.length) {
     lines.push("", "Decided:");
