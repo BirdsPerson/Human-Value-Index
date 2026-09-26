@@ -157,7 +157,7 @@ const penStyles = `
   .hvi-pen-list .hvi-row-btn .tag { color: var(--text-ghost); }
 `;
 
-function injectPenStyles() {
+export function injectPenStyles() {
   let el = document.getElementById('hvi-pen-styles');
   if (!el) { el = document.createElement('style'); el.id = 'hvi-pen-styles'; document.head.appendChild(el); }
   if (el.textContent !== penStyles) el.textContent = penStyles;
@@ -172,7 +172,8 @@ function pick(arr, rnd) { return arr[Math.floor(rnd() * arr.length)]; }
 
 // ---------------------------------------------------------------------------
 
-function SubjectCard({ subject, onClose }) {
+// where/back/assignment: the city opens the same file with its own location and job.
+export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return subject to pen", assignment = null }) {
   const closeRef = useRef(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -190,12 +191,13 @@ function SubjectCard({ subject, onClose }) {
   return (
     <div className="hvi-card-overlay" onClick={onClose}>
       <div className="hvi-card-panel" role="dialog" aria-modal="true" aria-labelledby="hvi-card-name" onClick={e => e.stopPropagation()}>
-        <TermBox title="SUBJECT FILE" right="PEN B">
+        <TermBox title="SUBJECT FILE" right={where}>
           <div className="hvi-card-head">
             <FilePhoto subject={subject} scale={typeof window !== "undefined" && window.innerWidth <= 560 ? 2 : 3} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="hvi-card-kind">{kind}</div>
               <div className="hvi-card-name" id="hvi-card-name">{displayName(subject)}</div>
+              {assignment && <div className="hvi-card-kind" style={{ color: "var(--green)" }}>{assignment}</div>}
             </div>
             <button ref={closeRef} className="hvi-btn-next" onClick={onClose}>Release</button>
           </div>
@@ -223,7 +225,7 @@ function SubjectCard({ subject, onClose }) {
           {subject.you && subject.rubric < 3 && <div className="hvi-delta" style={{ margin: "8px 0" }}>SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.</div>}
           <CubePanel subject={subject} />
           <Breakdown breakdown={subject.breakdown} />
-          <button className="hvi-btn-primary" onClick={onClose}>Return subject to pen</button>
+          <button className="hvi-btn-primary" onClick={onClose}>{back}</button>
         </TermBox>
       </div>
     </div>
@@ -444,7 +446,10 @@ const WALK_BOT_CAR = 84;   // feet inside the elevator car, floor-relative
 const TEXTURE = { exec: "░", bar: "· ", lobby: "░", break: "╌ ", archive: "▒", proc: "▓" };
 const TEXTURE_COLOR = { exec: "#13251a", bar: "#16291c", lobby: "#13251a", break: "#13251a", archive: "#101d14", proc: "#1c0e0e" };
 
-export default function Pen() {
+// embedded: the building alone (DEPT HQ inside the city), without the pen's own chrome.
+// The subject registry stays: it is the keyboard route to everyone in the building.
+// cardProps(subject) -> {where, back, assignment} lets the host label the file it opens.
+export default function Pen({ embedded = false, cardProps = null } = {}) {
   useEffect(() => { injectPenStyles(); }, []);
 
   const [roster, setRoster] = useState(() => FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name), kind: "figure" })));
@@ -1196,11 +1201,11 @@ export default function Pen() {
 
   return (
     <div>
-      <div className="hvi-pen-top">
+      {!embedded && <div className="hvi-pen-top">
         <span>HOLDING PEN B // <b>{roster.length}</b> SUBJECTS // {citizens} CITIZEN{citizens === 1 ? "" : "S"} // {FLOORS.length} FLOORS</span>
         <span>{occ || "OCCUPANCY UNDER REVIEW."}</span>
-      </div>
-      <ReferralBar simRef={simRef} />
+      </div>}
+      {!embedded && <ReferralBar simRef={simRef} />}
       {narrow && (
         <div className="hvi-floor-nav" role="group" aria-label="Floor">
           {FLOORS.map((f, i) => (
@@ -1220,11 +1225,11 @@ export default function Pen() {
         </div>
         <div role="status" className="sr-only">{srStatus}</div>
       </TermBox>
-      <div className="hvi-pen-help">
+      {!embedded && <div className="hvi-pen-help">
         DRAG A SUBJECT TO INSPECT IT. THEY DISLIKE THIS. DROP IT TO READ THE FILE.<br />
         {narrow ? "SWIPE SIDEWAYS TO CHANGE FLOORS. CARRY A SUBJECT TO THE EDGE TO TAKE IT WITH YOU." : "CARRY A SUBJECT TO ANOTHER FLOOR IF YOU MUST. THE ELEVATOR IS FOR THEM, NOT YOU."}<br />
         DROPPING SUBJECTS ON PROCESSING IS NOT A SHORTCUT. THE PAPERWORK STILL HAS TO CLEAR.
-      </div>
+      </div>}
       <details className="hvi-pen-list-wrap">
         <summary>Subject registry ({roster.length}) // keyboard access</summary>
         <div className="hvi-pen-list">
@@ -1244,12 +1249,13 @@ export default function Pen() {
           })}
         </div>
       </details>
-      <div className="hvi-cmds split" style={{ marginTop: '1.6em' }}>
+      {!embedded && <div className="hvi-cmds split" style={{ marginTop: '1.6em' }}>
         <button className="hvi-btn-back" onClick={() => { window.location.hash = ""; }}>Main menu</button>
         <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#intake"; }}>Submit yourself for intake</button>
         <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#cube"; }}>The cube</button>
-      </div>
-      {card && <SubjectCard subject={card} onClose={() => setCard(null)} />}
+        <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#city"; }}>The Substrate</button>
+      </div>}
+      {card && <SubjectCard subject={card} onClose={() => setCard(null)} {...(cardProps ? cardProps(card) : {})} />}
     </div>
   );
 }

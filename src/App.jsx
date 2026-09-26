@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import CubeView from "./CubeView.jsx";
 import { FAMOUS_FIGURES, TIERS, getTier, displayName } from "./figures.js";
@@ -6,6 +6,7 @@ import Intake, { ScoreCard, Breakdown, readCaseId, CaseLogon, syncFile } from ".
 import SecureFile from "./SecureFile.jsx";
 import FilePhoto, { FILE_PHOTO_CSS } from "./FilePhoto.jsx";
 import Pen from "./Pen.jsx";
+const City = lazy(() => import("./city/City.jsx"));
 import { TermBox, Rule, Typed, Bar, BANNER, RULE, pad, padL } from "./term.jsx";
 
 const QUESTIONS = [
@@ -423,6 +424,7 @@ const MENU = [
   { key: "5", label: "RESTORE A FILE", note: "LOG ON WITH A CASE NUMBER", go: "restore" },
   { key: "6", label: "THE CUBE", note: "MACHINE VS PEOPLE, EVERY FILE", go: "#cube" },
   { key: "7", label: "SECURE YOUR FILE", note: "TIE IT TO AN EMAIL. IT FOLLOWS YOU ANYWHERE", go: "secure" },
+  { key: "8", label: "THE SUBSTRATE", note: "THE CITY. EVERYONE HAS A JOB NOW", go: "#city" },
 ];
 
 // The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
@@ -618,11 +620,13 @@ export default function OverlordAssessment() {
   const filteredFigures = filterTier === "ALL" ? uniqueFigures : uniqueFigures.filter(f => getTier(f.score).label === filterTier);
 
   // v9 ROUTES
-  if (route === "#intake" || route === "#pen" || route === "#cube") return (
+  const isCity = route === "#city" || route.startsWith("#city/") || route.startsWith("#city?");
+  if (route === "#intake" || route === "#pen" || route === "#cube" || isCity) return (
     <div className="hvi-app">
       <div className={`hvi-wrap${route !== "#intake" ? " wide" : ""}`}>
         <Header />
-        {route === "#pen" ? <Pen /> : route === "#cube" ? <CubeView /> : <Intake />}
+        {isCity ? <Suspense fallback={<div className="dim">MOUNTING THE SUBSTRATE...</div>}><City route={route} /></Suspense>
+          : route === "#pen" ? <Pen /> : route === "#cube" ? <CubeView /> : <Intake />}
       </div>
     </div>
   );
