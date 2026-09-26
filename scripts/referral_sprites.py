@@ -75,7 +75,8 @@ def set_json(store, key, data):
 
 # Keep in step with figureIndexEntry in netlify/lib/store.js.
 INDEX_KEYS = ("slug", "name", "qualifier", "score", "tier", "breakdown", "verdict", "verdictStatus", "noDangle", "wikidata",
-              "born", "died", "sprite", "spriteStatus", "referredBy", "at", "people", "source")
+              "born", "died", "sprite", "spriteStatus", "referredBy", "at", "people", "source",
+              "harmReview", "harmReviewPending")
 
 
 def index_entry(card):
@@ -220,6 +221,18 @@ def arg_after(flag):
     return sys.argv[i + 1]
 
 
+def sync_harm_reviews(idx):
+    # Heads of state gated through state force wait for Scott's case-by-case call; keep the
+    # "## Harm reviews" section of MORNING_REPORT.md current. Best-effort: never blocks sprites.
+    try:
+        res = subprocess.run(["node", str(ROOT / "scripts" / "harm-reviews.mjs"), "--stdin"], cwd=ROOT,
+                             input=json.dumps(idx), capture_output=True, text=True, timeout=180)
+        if res.returncode != 0:
+            log(f"harm reviews: {res.stderr.strip()[:200]}")
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log(f"harm reviews skipped: {e}")
+
+
 def main():
     if "--takedown" in sys.argv:
         takedown(arg_after("--takedown"))
@@ -237,6 +250,8 @@ def main():
     # check couldn't run, so the pen shows score and tier only. Listed, not acted on.
     withheld = [c for c in cards if c.get("verdictStatus") != "published"]
     log(f"queue: {len(pending)} pending of {len(cards)} referred figures; {len(withheld)} verdicts withheld")
+    if not dry:
+        sync_harm_reviews(idx)
     if dry:
         for c in pending:
             log(f"  pending {c['slug']}")

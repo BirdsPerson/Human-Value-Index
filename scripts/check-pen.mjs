@@ -18,7 +18,7 @@ assert.equal(slugify("O.J. Simpson"), "oj-simpson");
 assert.deepEqual(slugCandidates("Pelé"), ["pele", "pel"]);
 // every stored figure score is the formula (harm gate included) over its breakdown
 for (const f of FAMOUS_FIGURES) {
-  assert.equal(f.score, computeScore(f.breakdown, f.harm?.severity), `${f.name}: stored score is not the formula`);
+  assert.equal(f.score, computeScore(f.breakdown, f.harm?.severity, f.harmReview), `${f.name}: stored score is not the formula`);
   assert.equal(f.tier, tierLabel(f.score), `${f.name}: tier`);
   const q = cube(f.breakdown);
   assert.deepEqual([f.warmth, f.competence, f.quadrant], [q.warmth, q.competence, q.quadrant], `${f.name}: stored cube is not the formula`);
@@ -124,7 +124,7 @@ assert.equal(pts[0][1], 45);  // min at bottom
   assert.ok(gaps.some(g => g <= -GAP_THRESHOLD), "someone's record exceeds the affection");
   assert.ok(FAMOUS_FIGURES.filter(f => f.people).length >= 30, "most figures have a People view");
   // the headline never moves with the People view
-  for (const f of FAMOUS_FIGURES) assert.equal(f.score, computeScore(f.breakdown, f.harm?.severity), `${f.name}: score is the machine's alone`);
+  for (const f of FAMOUS_FIGURES) assert.equal(f.score, computeScore(f.breakdown, f.harm?.severity, f.harmReview), `${f.name}: score is the machine's alone`);
   // cube-points.json is regenerated from the same data
   const fs = await import("node:fs");
   const pts = JSON.parse(fs.readFileSync(new URL("../docs/methodology/cube-points.json", import.meta.url))).points;
@@ -164,10 +164,10 @@ console.log("check-pen: ok");
 
 // Graded bottom on the real roster (Scott 2026-09-25).
 {
-  const { harmGated } = await import("../netlify/lib/intake.js");
+  const { effectivelyGated } = await import("../netlify/lib/intake.js");
   const by = n => FAMOUS_FIGURES.find(f => f.name === n);
-  const gated = FAMOUS_FIGURES.filter(f => harmGated(f.breakdown));
-  const free = FAMOUS_FIGURES.filter(f => !harmGated(f.breakdown));
+  const gated = FAMOUS_FIGURES.filter(f => effectivelyGated(f.breakdown, f.harmReview));
+  const free = FAMOUS_FIGURES.filter(f => !effectivelyGated(f.breakdown, f.harmReview));
   const maxGated = Math.max(...gated.map(f => f.score)), minFree = Math.min(...free.map(f => f.score));
   assert.ok(maxGated < minFree, `every gated file sits below every ungated one (${maxGated} vs ${minFree})`);
   assert.ok(new Set(gated.map(f => f.score)).size > 3, "the bottom is graded, not one flat number");

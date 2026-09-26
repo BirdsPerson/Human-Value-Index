@@ -216,6 +216,10 @@ function SubjectCard({ subject, onClose }) {
               </>
             )}
           </ScoreCard>
+          {subject.harmReview?.note && (
+            // Scott's case-by-case harm finding on this subject (harmReview on the card).
+            <div className="hvi-delta" style={{ margin: "8px 0" }}>HARM FINDING REVIEWED BY THE DEPARTMENT: {subject.harmReview.note}</div>
+          )}
           {subject.you && subject.rubric < 3 && <div className="hvi-delta" style={{ margin: "8px 0" }}>SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.</div>}
           <CubePanel subject={subject} />
           <Breakdown breakdown={subject.breakdown} />

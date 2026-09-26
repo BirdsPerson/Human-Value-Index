@@ -28,9 +28,9 @@ import { homedir, tmpdir } from "node:os";
 import { SYSTEM_PROMPT } from "../netlify/lib/systemPrompt.js";
 import { PUBLIC_RECORD, REFERRAL_ADDENDUM, ENGINE_ADDENDUM, PLACES, directiveFor } from "../netlify/lib/publicRecord.js";
 import { parseModelJson } from "../netlify/lib/score.js";
-import { normalizeAssessment, computeScore, getTier, cube, medianSeverity } from "../netlify/lib/intake.js";
-import { FACT_CHECK_SYSTEM, SOURCE_MAX, summarizeFactCheck } from "../netlify/lib/factCheck.js";
-import { fetchArticleText, placeReferral, resolveCandidates, needsChoice, qualifierFrom } from "../netlify/lib/refer.js";
+import { normalizeAssessment, computeScore, getTier, cube, medianSeverity, harmGated, needsHarmReview } from "../netlify/lib/intake.js";
+import { FACT_CHECK_SYSTEM, SOURCE_MAX, summarizeFactCheck, factCheckUser } from "../netlify/lib/factCheck.js";
+import { fetchArticleText, placeReferral, resolveCandidates, needsChoice, qualifierFrom, isHeadOfStateOrGov } from "../netlify/lib/refer.js";
 import { medianBreakdown, distance, dispersion, RUNS } from "./rescore-lib.mjs";
 import { buildCohort } from "./roster/candidates.mjs";
 import { createBatch, getBatch, batchResults, resultText, resultUsage, estimateDollars, actualDollars, approxTokens } from "./roster/batch.mjs";
@@ -159,13 +159,13 @@ async function stageFactcheck(run) {
   if (!run.checkBatch) {
     const requests = [];
     for (const c of keep) {
-      const source = (await fetchArticleText(c.title, fetch, SOURCE_MAX).catch(() => "")) || c.extract;
+      const source = (await fetchArticleText(c.title, fetch).catch(() => "")) || c.extract;
       requests.push({
         custom_id: `${c.cid}_fc`,
         params: {
           model: CHECK_MODEL, max_tokens: 1500,
           system: [{ type: "text", text: FACT_CHECK_SYSTEM, cache_control: { type: "ephemeral", ttl: "1h" } }],
-          messages: [{ role: "user", content: `SUBJECT: ${c.title}\nSTATUS: ${c.living ? "living" : "deceased"}\n\nSOURCE:\n${source}\n\nVERDICT:\n${run.scored[c.cid].verdict}` }],
+          messages: [{ role: "user", content: factCheckUser({ name: c.title, deceased: !c.living, source, verdict: run.scored[c.cid].verdict }) }],
         },
       });
     }
@@ -252,6 +252,9 @@ async function stageStore(run) {
     const s = run.scored[c.cid];
     if (s.dropped || !s.slug || run.stored.includes(s.slug)) continue;
     const score = computeScore(s.breakdown, s.harm?.severity);
+    // Leaders gated through state force go to Scott's case-by-case harm review.
+    if (s.headOfState === undefined) { s.headOfState = harmGated(s.breakdown) && s.harm ? await isHeadOfStateOrGov(c.wikidata) : null; saveState(state); }
+    const harmReviewPending = needsHarmReview({ breakdown: s.breakdown, harm: s.harm, headOfState: s.headOfState });
     const base = c.title.replace(/\s*\([^)]*\)\s*$/, "");
     // Namesakes show a qualifier everywhere ("Jack Johnson (boxer)"), same rule as referrals.
     if (s.qualifier === undefined) {
@@ -264,7 +267,7 @@ async function stageStore(run) {
       score, tier: getTier(score), ...cube(s.breakdown), breakdown: s.breakdown, confidence: null, verdict: s.verdict,
       verdictStatus: s.verdictStatus || "withheld", living: c.living, born: c.born, died: c.died,
       factCheck: s.factCheck || null, noDangle: Boolean(s.noDangle), flags: s.flags, commendations: s.commendations,
-      harm: s.harm, spread: s.spread, places: s.places, people: null,
+      harm: s.harm, headOfState: s.headOfState ?? null, harmReviewPending, spread: s.spread, places: s.places, people: null,
       sprite: null, spriteStatus: noRedraw.has(s.slug) ? "failed" : "pending", spriteAttempts: 0, look: s.look,
       source: "roster-engine", stratum: c.stratum, run: run.id, referredBy: "ENGN", at: new Date().toISOString(),
     };

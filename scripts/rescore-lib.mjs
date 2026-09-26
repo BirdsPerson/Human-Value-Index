@@ -50,13 +50,14 @@ export function dispersion(breakdowns) {
 // The model is told who is dead from Wikidata-backed data, never left to its memory.
 export const statusLine = died => `STATUS: ${died ? `deceased (died ${died})` : "living"}`;
 
-async function once(name, died, calls) {
+async function once(name, died, calls, harmReview = null, note = null) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       calls.sonnet++;
       const raw = await callClaude(SYSTEM_PROMPT + PUBLIC_RECORD,
-        `PUBLIC FIGURE: ${name}\n${statusLine(died)}\n(If you cite a directive, cite Directive ${directiveFor(name)}.)`);
-      return normalizeAssessment({ ...raw, confidence: undefined });
+        `PUBLIC FIGURE: ${name}\n${statusLine(died)}\n(If you cite a directive, cite Directive ${directiveFor(name)}.)${note ? `\nDEPARTMENT NOTE: ${note}` : ""}`);
+      // A case-by-case harm review on the subject survives every rescore.
+      return normalizeAssessment({ ...raw, confidence: undefined }, { harmReview });
     } catch (e) {
       console.error(`retry ${attempt} ${name}: ${e.message}`);
       await new Promise(r => setTimeout(r, 3000 * attempt));
@@ -66,8 +67,8 @@ async function once(name, died, calls) {
 }
 
 // Returns the median reading plus everything needed to report and audit it.
-export async function rescoreOne({ name, died = null, wikiTitle = name }, { runs = RUNS, check = true, calls = { sonnet: 0, haiku: 0 } } = {}) {
-  const readings = await Promise.all(Array.from({ length: runs }, () => once(name, died, calls)));
+export async function rescoreOne({ name, died = null, wikiTitle = name, harmReview = null, note = null }, { runs = RUNS, check = true, calls = { sonnet: 0, haiku: 0 } } = {}) {
+  const readings = await Promise.all(Array.from({ length: runs }, () => once(name, died, calls, harmReview, note)));
   const breakdowns = readings.map(r => r.breakdown);
   const breakdown = medianBreakdown(breakdowns);
   // Graded bottom: the median severity across the readings that classified one.
@@ -90,7 +91,8 @@ export async function rescoreOne({ name, died = null, wikiTitle = name }, { runs
     name, breakdown, verdict, flags: closest.flags, commendations: closest.commendations,
     // Auditable harm classification: the closest reading's, plus every run's band.
     harm: closest.harm ? { ...closest.harm, severity, runs: readings.map(r => r.harm?.band ?? null) } : null,
-    score: computeScore(breakdown, severity), spread: dispersion(breakdowns), runScores: readings.map(r => computeScore(r.breakdown, r.harm?.severity)),
+    harmReview: harmReview ?? null,
+    score: computeScore(breakdown, severity, harmReview), spread: dispersion(breakdowns), runScores: readings.map(r => computeScore(r.breakdown, r.harm?.severity, harmReview)),
     factCheck: fc ? { checked: fc.checked, removed: fc.removed, at: new Date().toISOString() } : null,
   };
 }

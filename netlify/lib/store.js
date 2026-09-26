@@ -146,7 +146,7 @@ export async function indexFigure(card) {
 export const figureIndexEntry = c => ({
   slug: c.slug, name: c.name, qualifier: c.qualifier ?? null, score: c.score, tier: c.tier, breakdown: c.breakdown, verdict: c.verdict,
   verdictStatus: c.verdictStatus, noDangle: Boolean(c.noDangle), wikidata: c.wikidata, born: c.born ?? null, died: c.died ?? null,
-  sprite: c.sprite ?? null, spriteStatus: c.spriteStatus, referredBy: c.referredBy, at: c.at, people: c.people ?? null,
+  sprite: c.sprite ?? null, spriteStatus: c.spriteStatus, referredBy: c.referredBy, at: c.at, people: c.people ?? null, harmReview: c.harmReview ?? null, harmReviewPending: Boolean(c.harmReviewPending),
   source: c.source ?? null,
 });
 

@@ -1,4 +1,4 @@
-import { cube } from "./intake.js";
+import { cube, validHarmReview } from "./intake.js";
 import { judged } from "../../src/cube.js";
 // Referral logic: name validation, the Wikipedia gate, slugs and dedupe against the
 // figures already on file. The Wikipedia calls take an injectable fetch so
@@ -313,6 +313,17 @@ export async function fetchArticleText(title, fetchImpl = fetch, max = 120000) {
   return String(page?.extract || "").slice(0, max);
 }
 
+// Wikidata P39 "position held" includes an office that is (a subclass of) head of state
+// Q48352 or head of government Q2285706. One ASK query; null when the lookup fails.
+export async function isHeadOfStateOrGov(qid, fetchImpl = fetch) {
+  if (!/^Q\d+$/.test(String(qid || ""))) return null;
+  const q = `ASK { wd:${qid} wdt:P39 ?p . ?p wdt:P279* ?c . VALUES ?c { wd:Q48352 wd:Q2285706 } }`;
+  try {
+    const data = await getJson(fetchImpl, `https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(q)}`, 10000);
+    return typeof data?.boolean === "boolean" ? data.boolean : null;
+  } catch { return null; }
+}
+
 // Calendar-month bucket for the per-case quota (UTC).
 export const monthKey = (d = new Date()) => d.toISOString().slice(0, 7);
 export const PER_CASE_MONTHLY = 3;
@@ -330,4 +341,6 @@ export const publicFigure = c => ({
   sprite: c.sprite ?? null, spriteStatus: c.spriteStatus || "pending", kind: "figure", referred: true,
   // Roster-engine figures fill the registry and the cube; the building samples them.
   engine: c.source === "roster-engine",
+  // A case-by-case harm finding is shown on the card; a pending one stays internal.
+  harmReview: validHarmReview(c.harmReview) ? { decision: c.harmReview.decision, note: c.harmReview.note } : null,
 });

@@ -16,7 +16,7 @@ export const FACT_CHECK_SYSTEM = `You are the fact-checking clerk for the Depart
 Return ONLY JSON, no markdown fences:
 {"claims": [{"claim": "short paraphrase", "status": "supported" | "contradicted" | "unsupported"}], "verdict": "the cleaned verdict"}`;
 
-export const SOURCE_MAX = 30000;   // ponytail: cost cap (~7k tokens). Late personal-life sections can fall off; raise if verdicts lose care facts
+export const SOURCE_MAX = 30000;   // cost cap (~7k tokens); selectSource spends it on the intro + the sections the verdict is about
 const MAX_VERDICT = 700;
 const STATUSES = new Set(["supported", "contradicted", "unsupported"]);
 
@@ -42,8 +42,54 @@ export function summarizeFactCheck(raw, original) {
   };
 }
 
+// The source budget is spent on the intro plus the sections the verdict actually talks
+// about, not the first N characters: a president's drone program or a late personal-life
+// section otherwise falls off the end and true claims get cut as "unsupported".
+// Wikipedia plain-text extracts mark sections as "== Heading ==".
+const STOP = new Set("about above after again against their there these those which while would could should being other under where years record documented subject department directive acknowledged acknowledgment requires including remains public".split(" "));
+export const keywordsOf = text => [...new Set(String(text || "").toLowerCase().match(/[a-z0-9][a-z0-9'-]{3,}/g) || [])].filter(w => !STOP.has(w));
+export function splitSections(text) {
+  const re = /^(={2,6})\s*(.+?)\s*\1\s*$/gm;
+  const out = [];
+  let last = 0, heading = null, m;
+  while ((m = re.exec(text))) {
+    out.push({ heading, body: text.slice(last, m.index) });
+    heading = m[2];
+    last = m.index + m[0].length;
+  }
+  out.push({ heading, body: text.slice(last) });
+  return out.filter(x => x.heading !== null || x.body.trim());
+}
+export function selectSource(text, verdict, max = SOURCE_MAX) {
+  const src = String(text || "");
+  if (src.length <= max) return src;
+  const secs = splitSections(src).map((x, i) => ({ ...x, i }));
+  const keys = keywordsOf(verdict);
+  const score = x => {
+    const h = String(x.heading || "").toLowerCase(), b = x.body.toLowerCase();
+    return keys.reduce((t, k) => t + (h.includes(k) ? 3 : 0) + (b.includes(k) ? 1 : 0), 0);
+  };
+  const render = x => (x.heading ? `== ${x.heading} ==\n` : "") + x.body.trim() + "\n";
+  const intro = secs.find(x => x.heading === null);
+  const picked = new Map();
+  let used = 0;
+  if (intro) { const t = render(intro).slice(0, Math.floor(max / 3)); picked.set(intro.i, t); used += t.length; }
+  const ranked = secs.filter(x => x !== intro).map(x => ({ x, s: score(x) })).filter(r => r.s > 0).sort((a, b) => b.s - a.s || a.x.i - b.x.i);
+  for (const { x } of ranked) {
+    if (used >= max) break;
+    const t = render(x).slice(0, max - used);
+    if (t.length < 200 && t.length < render(x).length) continue;
+    picked.set(x.i, t); used += t.length;
+  }
+  // Leftover budget: the article in order, so short verdicts still see the main body.
+  for (const x of secs) { if (used >= max) break; if (picked.has(x.i)) continue; const t = render(x).slice(0, max - used); picked.set(x.i, t); used += t.length; }
+  return [...picked.entries()].sort((a, b) => a[0] - b[0]).map(e => e[1]).join("\n").slice(0, max);
+}
+export const factCheckUser = ({ name, deceased, source, verdict, max = SOURCE_MAX }) =>
+  `SUBJECT: ${name}\nSTATUS: ${deceased ? "deceased" : "living"}\n\nSOURCE:\n${selectSource(source, verdict, max)}\n\nVERDICT:\n${verdict}`;
+
 export async function factCheck({ name, deceased, source, verdict, max = SOURCE_MAX }) {
-  const user = `SUBJECT: ${name}\nSTATUS: ${deceased ? "deceased" : "living"}\n\nSOURCE:\n${String(source || "").slice(0, max)}\n\nVERDICT:\n${verdict}`;
+  const user = factCheckUser({ name, deceased, source, verdict, max });
   const raw = parseModelJson(await claudeText({ system: FACT_CHECK_SYSTEM, messages: [{ role: "user", content: user }], model: "claude-haiku-4-5-20251001", maxTokens: 1500 }));
   return summarizeFactCheck(raw, verdict);
 }

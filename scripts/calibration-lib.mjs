@@ -24,11 +24,14 @@ export function severityScoreWith(cal, sev) {
   }
   return Math.max(0, Math.round(cal.harmGate.cap - pts));
 }
-export function scoreWith(cal, b, sev = null) {
+// A case-by-case harm review on the subject (intake.js validHarmReview) wins over the gate.
+export const gatedWith = (cal, b, review = null) => review?.decision === "gate" || (review?.decision !== "ungate" && harmGatedWith(cal, b));
+export function scoreWith(cal, b, sev = null, review = null) {
   const w = axisMean(b, cal.warmthAxis), c = axisMean(b, cal.competenceAxis);
   if (w.value === null && c.value === null) return 500;
   const score = Math.round(10 * ((1 - cal.realityIndex) * (w.value ?? 50) + cal.realityIndex * (c.value ?? 50)));
-  if (harmGatedWith(cal, b)) { const g = severityScoreWith(cal, sev); return g ?? Math.min(score, cal.harmGate.cap); }
+  if (review?.decision === "ungate") return Math.max(0, Math.min(1000, score));
+  if (gatedWith(cal, b, review)) { const g = severityScoreWith(cal, sev); return g ?? Math.min(score, cal.harmGate.cap); }
   const serious = isNum(b?.threat) && isNum(cal.harmGate.seriousThreat) && b.threat >= cal.harmGate.seriousThreat;
   return Math.max(0, Math.min(1000, serious ? Math.min(score, cal.harmGate.seriousCap) : score));
 }
@@ -99,7 +102,7 @@ export const MAX_SUBJECT_MOVE = 25;
 // figures: [{name, breakdown, people?: {likability}}]; bench: benchmarks.json .figures
 export function measure(cal, figures, bench = {}, prev = null) {
   const rows = figures.map(f => {
-    const score = scoreWith(cal, f.breakdown, f.harm?.severity), q = cubeWith(cal, f.breakdown);
+    const score = scoreWith(cal, f.breakdown, f.harm?.severity, f.harmReview), q = cubeWith(cal, f.breakdown);
     const l = f.people?.likability;
     return { name: f.name, score, tier: tierWith(cal, score), ...q, octant: isNum(l) && q.quadrant !== "UNPLACED" ? octantWith(cal, q.warmth, q.competence, l) : null };
   });
@@ -282,7 +285,7 @@ export function rescoreFiguresSource(src, cal, figures) {
     const esc = JSON.stringify(f.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`^(  \\{ name: ${esc}, )score: -?\\d+, tier: "[^"]*", warmth: -?\\d+, competence: -?\\d+, quadrant: "[^"]*"`, "m");
     if (!re.test(out)) throw new Error(`figures.js: no rewritable line for ${f.name}`);
-    const s = scoreWith(cal, f.breakdown, f.harm?.severity), q = cubeWith(cal, f.breakdown);
+    const s = scoreWith(cal, f.breakdown, f.harm?.severity, f.harmReview), q = cubeWith(cal, f.breakdown);
     const next = out.replace(re, (_, head) => `${head}score: ${s}, tier: ${JSON.stringify(tierWith(cal, s))}, warmth: ${q.warmth}, competence: ${q.competence}, quadrant: ${JSON.stringify(q.quadrant)}`);
     if (next !== out) changed++;
     out = next;

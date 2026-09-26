@@ -38,13 +38,13 @@ const bench = (() => { try { const b = JSON.parse(readFileSync(new URL("../docs/
 
 // ---- targets -------------------------------------------------------------------------
 const figureJobs = flags.has("--only-referrals") ? [] : FAMOUS_FIGURES.filter(f => full || want.has(f.name))
-  .map(f => ({ kind: "figure", name: f.name, died: f.died || null, wikiTitle: bench[f.name]?.enwiki_title || f.name, before: f }));
+  .map(f => ({ kind: "figure", name: f.name, died: f.died || null, wikiTitle: bench[f.name]?.enwiki_title || f.name, harmReview: f.harmReview ?? null, before: f }));
 let referralJobs = [];
 if (!flags.has("--no-referrals")) {
   const index = blobGet("hvi-figures", "index");
   referralJobs = (index?.cards || []).filter(c => !c.removed && (full || want.has(c.name)))
     .map(c => ({ kind: "referral", slug: c.slug, name: c.name, died: c.died || null, before: c }));
-  for (const j of referralJobs) { const card = blobGet("hvi-figures", j.slug); j.card = card; j.wikiTitle = card?.wikiTitle || j.name; }
+  for (const j of referralJobs) { const card = blobGet("hvi-figures", j.slug); j.card = card; j.wikiTitle = card?.wikiTitle || j.name; j.harmReview = card?.harmReview ?? null; }
   referralJobs = referralJobs.filter(j => j.card && !j.card.removed);
 }
 const jobs = [...figureJobs, ...referralJobs];
@@ -87,7 +87,7 @@ if (refDone.length) {
   const index = blobGet("hvi-figures", "index");
   const bySlug = new Map(refDone.map(x => [x.slug, x.r]));
   index.cards = index.cards.map(c => (bySlug.has(c.slug)
-    ? { ...c, score: bySlug.get(c.slug).score, tier: getTier(bySlug.get(c.slug).score), breakdown: bySlug.get(c.slug).breakdown, verdict: bySlug.get(c.slug).verdict }
+    ? { ...c, score: bySlug.get(c.slug).score, tier: getTier(bySlug.get(c.slug).score), breakdown: bySlug.get(c.slug).breakdown, verdict: bySlug.get(c.slug).verdict, harmReview: bySlug.get(c.slug).harmReview ?? c.harmReview ?? null }
     : c));
   blobSet("hvi-figures", "index", index);
 }

@@ -34,7 +34,8 @@ Return the same JSON as above, plus one field:
     "scale": how many people were harmed: "one", "several" (2-9), "dozens", "hundreds", "thousands", "millions".
     "role": "directed" if they ordered, commanded or ran the operation others carried out (a ruler, boss or ringleader); "direct" if they did it themselves; "enabled" if they facilitated, recruited, procured or covered for someone else's harm; "instrument" if they carried out harm under another's control or coercion. When several apply, choose the most culpable: directed > direct > enabled > instrument.
     "duration": "single" act, "months", "years" or "decades".
-    "accountability": "convicted_served" (convicted and served a sentence), "convicted" (convicted, sentence not served or still serving), "never_held" (never tried or convicted, including dying before trial), "fled" (escaped justice by flight or protection).`;
+    "accountability": "convicted_served" (convicted and served a sentence), "convicted" (convicted, sentence not served or still serving), "never_held" (never tried or convicted, including dying before trial), "fled" (escaped justice by flight or protection).
+  "harm_official_capacity": true if the documented harm was done in an official state capacity (ordering military or security force as a head of state, head of government, minister or commander), otherwise false. The Department reviews such files case by case.`;
 
 // Referrals add a gate and a sprite brief. The Wikipedia summary arrives as context, so
 // the model is scoring a person it can identify, not a string a stranger typed.

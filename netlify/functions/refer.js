@@ -3,9 +3,9 @@ import { safeLook } from "../lib/look.js";
 import { PUBLIC_RECORD, REFERRAL_ADDENDUM, directiveFor } from "../lib/publicRecord.js";
 import { callClaude, ScoreError } from "../lib/score.js";
 import { factCheck } from "../lib/factCheck.js";
-import { isCaseId, normalizeAssessment, computeScore, getTier, cube } from "../lib/intake.js";
+import { isCaseId, normalizeAssessment, computeScore, getTier, cube, harmGated, needsHarmReview } from "../lib/intake.js";
 import { slugify } from "../../src/figures.js";
-import { nameError, cleanName, resolveWikipedia, resolveTitle, resolveCandidates, needsChoice, qualifierFrom, matchesName, onFileByQid, fetchArticleText, onFileFigure, placeReferral, publicFigure, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
+import { nameError, cleanName, resolveWikipedia, resolveTitle, resolveCandidates, needsChoice, qualifierFrom, matchesName, onFileByQid, fetchArticleText, onFileFigure, placeReferral, publicFigure, isHeadOfStateOrGov, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
 import { displayName } from "../../src/figures.js";
 import { getCase, hitLimit, refundLimit, peekLimit, getFigure, createFigure, listFigures } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
@@ -213,6 +213,9 @@ export default async (req, context) => {
     }
 
     const score = computeScore(a.breakdown, a.harm?.severity);
+    // Leaders gated through state force are flagged for Scott's case-by-case review.
+    const headOfState = harmGated(a.breakdown) && a.harm ? await isHeadOfStateOrGov(wiki.wikidata) : null;
+    const harmReviewPending = needsHarmReview({ breakdown: a.breakdown, harm: a.harm, headOfState });
     const look = safeLook(typeof raw?.sprite_look === "string" ? raw.sprite_look.replace(/\s+/g, " ").trim().slice(0, MAX_LOOK) : "");
     const card = {
       slug, name: stripped, qualifier, wikiTitle: wiki.title, wikidata: wiki.wikidata,
@@ -220,7 +223,7 @@ export default async (req, context) => {
       verdictStatus, living: wiki.living, born: wiki.born, died: wiki.died,
       factCheck: fc ? { checked: fc.checked, removed: fc.removed, regenerated: Boolean(fc.regenerated), at: new Date().toISOString() } : null,
       noDangle: raw?.no_dangle === true,
-      flags: a.flags, commendations: a.commendations, harm: a.harm,
+      flags: a.flags, commendations: a.commendations, harm: a.harm, headOfState, harmReviewPending,
       sprite: null, spriteStatus: "pending", spriteAttempts: 0, look,
       referredBy: caseId.slice(-4), at: new Date().toISOString(),
     };
