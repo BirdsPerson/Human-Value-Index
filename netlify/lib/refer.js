@@ -3,7 +3,7 @@ import { judged } from "../../src/cube.js";
 // Referral logic: name validation, the Wikipedia gate, slugs and dedupe against the
 // figures already on file. The Wikipedia calls take an injectable fetch so
 // scripts/check-refer.mjs can run them offline.
-import { FAMOUS_FIGURES, slugify } from "../../src/figures.js";
+import { FAMOUS_FIGURES, slugify, displayName as displayNameOf } from "../../src/figures.js";
 
 export const MAX_NAME = 80;
 // Letters (any script), spaces and the punctuation real names use.
@@ -126,26 +126,130 @@ async function getJsonOnce(fetchImpl, url, ms) {
 // name -> { ok: true, title, extract, description, wikidata } or { ok: false, reason }.
 // reason is a REJECT key. Gate: a real search hit, not a disambiguation page, and a
 // Wikidata item that is an instance of human (Q5). Fictional people, places and bands fail.
+// Takes Wikipedia's top hit: callers that care about namesakes ask resolveCandidates first.
 export async function resolveWikipedia(name, fetchImpl = fetch) {
   try {
     const q = encodeURIComponent(name);
     const search = await getJson(fetchImpl, `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${q}&srlimit=1&format=json&origin=*`);
     const hit = search?.query?.search?.[0];
     if (!hit?.title) return { ok: false, reason: "none" };
-    const summary = await getJson(fetchImpl, `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(hit.title.replace(/ /g, "_"))}`);
-    const p31 = await claimIds(fetchImpl, summary?.wikibase_item, "P31");
-    // Birth and death only for a human: they decide minor and living.
-    let life = {};
-    if (p31.includes(HUMAN)) {
-      const [born, died] = await Promise.all(["P569", "P570"].map(p => claimTimes(fetchImpl, summary.wikibase_item, p)));
-      life = { born: born[0] || null, died: died[0] || null };
-    }
-    return classifySummary(summary, p31, life);
+    return await resolveTitleOnce(hit.title, fetchImpl);
   } catch (err) {
     console.error("wikipedia lookup failed", err?.message || err);
     return { ok: false, reason: "lookup" };
   }
 }
+
+// An exact Wikipedia title (picked from a candidate list) -> the same verdict shape.
+export async function resolveTitle(title, fetchImpl = fetch) {
+  try {
+    return await resolveTitleOnce(title, fetchImpl);
+  } catch (err) {
+    console.error("wikipedia title lookup failed", err?.message || err);
+    return { ok: false, reason: "lookup" };
+  }
+}
+
+async function resolveTitleOnce(title, fetchImpl) {
+  const summary = await getJson(fetchImpl, `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(String(title).replace(/ /g, "_"))}`);
+  const p31 = await claimIds(fetchImpl, summary?.wikibase_item, "P31");
+  // Birth and death only for a human: they decide minor and living.
+  let life = {};
+  if (p31.includes(HUMAN)) {
+    const [born, died] = await Promise.all(["P569", "P570"].map(p => claimTimes(fetchImpl, summary.wikibase_item, p)));
+    life = { born: born[0] || null, died: died[0] || null };
+  }
+  return classifySummary(summary, p31, life);
+}
+
+// ---- namesakes ------------------------------------------------------------
+// "Jack Johnson" is a boxer, a musician and several others. Wikipedia's primary topic
+// is not an answer to which one the subject meant. Candidates are humans whose title is
+// the typed name, bare or with a qualifier ("Jack Johnson (musician)"), gathered from
+// the search results and the name's disambiguation page, ordered by notability
+// (Wikidata sitelinks). ~4 requests: search, links, page props, one SPARQL query.
+export const MAX_CANDIDATES = 8;
+// A candidate this many times more notable than the next is what nearly everyone means
+// ("Michael Jackson" is not the writer): proceed without asking.
+export const DOMINANCE = 10;
+export const baseSlug = title => titleSlug(title);
+export const matchesName = (title, name) => baseSlug(title) === slugify(name);
+
+export async function resolveCandidates(name, fetchImpl = fetch) {
+  try {
+    const q = encodeURIComponent(name);
+    const search = await getJson(fetchImpl, `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${q}&srlimit=10&format=json&origin=*`);
+    const titles = new Set((search?.query?.search || []).map(h => h.title).filter(t => matchesName(t, name)));
+    // The bare name and "<name> (disambiguation)": when either is a disambiguation page,
+    // its links carry the namesakes the search missed.
+    const pages = await getJson(fetchImpl, `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(`${name}|${name} (disambiguation)`)}&prop=pageprops|links&pllimit=500&plnamespace=0&redirects=1&format=json&origin=*`);
+    for (const pg of Object.values(pages?.query?.pages || {})) {
+      if (pg.missing !== undefined || !pg.title) continue;
+      if (pg.pageprops && "disambiguation" in pg.pageprops) {
+        for (const l of pg.links || []) if (matchesName(l.title, name)) titles.add(l.title);
+      } else if (matchesName(pg.title, name)) titles.add(pg.title);
+    }
+    const list = [...titles].slice(0, 30);
+    if (!list.length) return { ok: true, candidates: [] };
+    const meta = await getJson(fetchImpl, `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(list.join("|"))}&prop=pageprops|description&redirects=1&format=json&origin=*`);
+    const byQid = new Map();
+    for (const pg of Object.values(meta?.query?.pages || {})) {
+      const qid = pg?.pageprops?.wikibase_item;
+      if (!qid || !/^Q\d+$/.test(qid) || pg.pageprops.disambiguation !== undefined) continue;
+      if (!matchesName(pg.title, name) || byQid.has(qid)) continue;
+      byQid.set(qid, { title: pg.title, description: String(pg.description || "").slice(0, 160), qid });
+    }
+    if (!byQid.size) return { ok: true, candidates: [] };
+    const facts = await humanFacts([...byQid.keys()], fetchImpl);
+    const candidates = [...byQid.values()].filter(c => facts.has(c.qid))
+      .map(c => ({ ...c, ...facts.get(c.qid) }))
+      .sort((a, b) => b.sitelinks - a.sitelinks || a.title.localeCompare(b.title))
+      .slice(0, MAX_CANDIDATES);
+    return { ok: true, candidates };
+  } catch (err) {
+    console.error("namesake lookup failed", err?.message || err);
+    return { ok: false, reason: "lookup" };
+  }
+}
+
+// One SPARQL query: which of these items are humans, their notability and life years.
+async function humanFacts(qids, fetchImpl) {
+  const values = qids.filter(q => /^Q\d+$/.test(q)).map(q => `wd:${q}`).join(" ");
+  const sparql = `SELECT ?item ?sl ?born ?died WHERE { VALUES ?item { ${values} } ?item wdt:P31 wd:Q5 . OPTIONAL { ?item wikibase:sitelinks ?sl } OPTIONAL { ?item wdt:P569 ?born } OPTIONAL { ?item wdt:P570 ?died } }`;
+  const data = await getJson(fetchImpl, `https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(sparql)}`, 10000);
+  const out = new Map();
+  for (const b of data?.results?.bindings || []) {
+    const qid = String(b.item?.value || "").split("/").pop();
+    if (!qid || out.has(qid)) continue;
+    out.set(qid, { sitelinks: Number(b.sl?.value) || 0, born: yearOf(b.born?.value), died: yearOf(b.died?.value) });
+  }
+  return out;
+}
+// SPARQL dateTime ("1878-03-31T00:00:00Z", "-0470-01-01T...") -> "1878" / "-470". Blank nodes -> null.
+export const yearOf = v => { const m = /^(-?)0*(\d+)-/.exec(String(v || "")); return m ? `${m[1]}${m[2]}` : null; };
+
+// Pure: ask the referrer to pick when two or more humans share the name and none of them
+// dwarfs the rest.
+export function needsChoice(candidates) {
+  if (!Array.isArray(candidates) || candidates.length < 2) return false;
+  const [a, b] = candidates;
+  return !(a.sitelinks >= DOMINANCE * Math.max(1, b.sitelinks));
+}
+
+// "Prince (musician)" -> "musician"; "Jack Johnson" + "American boxer (1878–1946)" -> "boxer".
+export function qualifierFrom(title, description) {
+  const paren = /\(([^)]+)\)\s*$/.exec(String(title || ""));
+  if (paren) return paren[1].trim().toLowerCase().slice(0, 40);
+  let d = String(description || "").replace(/\([^)]*\)/g, " ").replace(/\b\d{3,4}s?\b/g, " ").replace(/[–—-]\s*$/, "").trim();
+  d = d.split(/,|;| and | who | from /)[0].trim();
+  const words = d.split(/\s+/).filter(Boolean);
+  while (words.length > 1 && /^[A-Z]/.test(words[0])) words.shift();   // drop "American", "English"...
+  const q = words.slice(0, 3).join(" ").toLowerCase().replace(/[^a-z0-9 '\-]/g, "").trim();
+  return q || null;
+}
+
+// The name as shown everywhere: namesakes carry their qualifier ("Jack Johnson (boxer)").
+export { displayName } from "../../src/figures.js";
 
 async function claims(fetchImpl, qid, prop) {
   if (!qid || !/^Q\d+$/.test(qid)) return [];
@@ -219,7 +323,7 @@ export const remainingThisMonth = used => Math.max(0, PER_CASE_MONTHLY - (used |
 // shows score and tier only.
 export const verdictPublished = c => c?.verdictStatus === "published";
 export const publicFigure = c => ({
-  slug: c.slug, name: c.name, score: c.score, tier: c.tier, ...judged(cube(c.breakdown), c.people ?? null),
+  slug: c.slug, name: displayNameOf(c), baseName: c.name, qualifier: c.qualifier ?? null, score: c.score, tier: c.tier, ...judged(cube(c.breakdown), c.people ?? null),
   breakdown: verdictPublished(c) ? c.breakdown : null, verdict: verdictPublished(c) ? c.verdict : null,
   underReview: !verdictPublished(c), noDangle: Boolean(c.noDangle),
   born: c.born ?? null, died: c.died ?? null,

@@ -326,7 +326,60 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
 
   // the same person as a figure on file (by Wikidata id) is on file, whatever the name typed
   r = await read(await post(refer, "/api/refer", { name: "Prince Rogers", caseId }, { ip: "192.0.2.52" }));
-  assert.equal(r.status, 200); assert.equal(r.body.status, "on-file"); assert.equal(r.body.subject.name, "Prince");
+  assert.equal(r.status, 200); assert.equal(r.body.status, "on-file"); assert.equal(r.body.subject.name, "Prince (musician)");   // shown with its qualifier
+
+  const peekLimitFor = async id => [...(globalThis.__blobs.get("hvi-limits")?.entries() || [])]
+    .filter(([k]) => k.endsWith(`refer-case:${id}`)).reduce((n, [, v]) => n + (v.data?.count || 0), 0);
+  // Namesakes: "Jack Johnson" is a boxer (on file here), a musician and a hockey player.
+  // The desk asks which one and charges nothing; a pick comes back as an exact title.
+  {
+    const figs = globalThis.__blobs.get("hvi-figures");
+    const boxer = { slug: "jack-johnson", name: "Jack Johnson", wikidata: "Q316689", score: 668, tier: "TOLERATED GENERALIST", verdictStatus: "published", breakdown: {}, verdict: "v" };
+    figs.set("jack-johnson", { data: boxer, etag: "b1" });
+    const idx = figs.get("index")?.data || { cards: [] };
+    figs.set("index", { data: { cards: [boxer, ...idx.cards] }, etag: "i-jj" });
+    wikiRoutes.unshift(
+      [/srsearch=Jack%20Johnson&srlimit=10/, { query: { search: [{ title: "Jack Johnson" }, { title: "Jack Johnson (musician)" }, { title: "Jack Johnson (album)" }] } }],
+      [/titles=Jack%20Johnson%7CJack%20Johnson%20\(disambiguation\)&prop=pageprops\|links/, { query: { pages: { "9": { title: "Jack Johnson (disambiguation)", pageprops: { disambiguation: "" }, links: [{ title: "Jack Johnson (ice hockey)" }, { title: "Jack Johnson (album)" }, { title: "Jackie Johnson" }] } } } }],
+      [/prop=pageprops\|description/, { query: { pages: {
+        "1": { title: "Jack Johnson", description: "American boxer (1878–1946)", pageprops: { wikibase_item: "Q316689" } },
+        "2": { title: "Jack Johnson (musician)", description: "American singer-songwriter (born 1975)", pageprops: { wikibase_item: "Q297097" } },
+        "3": { title: "Jack Johnson (ice hockey)", description: "American ice hockey player", pageprops: { wikibase_item: "Q1390184" } },
+        "4": { title: "Jack Johnson (album)", description: "2005 album", pageprops: { wikibase_item: "Q999001" } } } } }],
+      [/query\.wikidata\.org\/sparql/, { results: { bindings: [
+        { item: { value: "http://www.wikidata.org/entity/Q316689" }, sl: { value: "40" }, born: { value: "1878-03-31T00:00:00Z" }, died: { value: "1946-06-10T00:00:00Z" } },
+        { item: { value: "http://www.wikidata.org/entity/Q297097" }, sl: { value: "43" }, born: { value: "1975-05-18T00:00:00Z" } },
+        { item: { value: "http://www.wikidata.org/entity/Q1390184" }, sl: { value: "18" }, born: { value: "1987-01-13T00:00:00Z" } }] } }],
+      [/summary\/Jack_Johnson_\(musician\)/, { title: "Jack Johnson (musician)", type: "standard", description: "American singer-songwriter", extract: "x", wikibase_item: "Q297097" }],
+      human("Q297097"),
+      [/summary\/Jack_Johnson_\(album\)/, { title: "Jack Johnson (album)", type: "standard", extract: "x", wikibase_item: "Q999001" }],
+      [/Q999001&property=P31/, { claims: { P31: [{ mainsnak: { datavalue: { value: { id: "Q482994" } } } }] } }],
+    );
+    const calls = claudeCalls, month = await peekLimitFor(caseId);
+    r = await read(await post(refer, "/api/refer", { name: "Jack Johnson", caseId }, { ip: "192.0.2.60" }));
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.status, "choose");
+    assert.deepEqual(r.body.candidates.map(c => c.title), ["Jack Johnson (musician)", "Jack Johnson", "Jack Johnson (ice hockey)"], "humans only, by notability");
+    assert.deepEqual(r.body.candidates[1].onFile, { score: 668, slug: "jack-johnson" }, "the boxer is marked on file");
+    assert.equal(r.body.candidates[0].onFile, null);
+    assert.equal(r.body.candidates[1].born, "1878"); assert.equal(r.body.candidates[1].died, "1946");
+    assert.equal(claudeCalls, calls, "asking costs no scoring");
+    assert.equal(await peekLimitFor(caseId), month, "asking costs no quota");
+    // the pick: an exact title, scored and filed with a qualifier
+    r = await read(await post(refer, "/api/refer", { name: "Jack Johnson", title: "Jack Johnson (musician)", caseId }, { ip: "192.0.2.60" }));
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    assert.equal(r.body.subject.name, "Jack Johnson (musician)");
+    assert.equal(r.body.subject.qualifier, "musician");
+    assert.equal(r.body.subject.slug, "jack-johnson-musician");
+    assert.equal(figs.get("jack-johnson-musician").data.name, "Jack Johnson", "the card keeps the bare name");
+    // a title that isn't a person, or doesn't answer to the name
+    r = await read(await post(refer, "/api/refer", { name: "Jack Johnson", title: "Jack Johnson (album)", caseId }, { ip: "192.0.2.60" }));
+    assert.equal(r.status, 422); assert.equal(r.body.reason, "notHuman");
+    r = await read(await post(refer, "/api/refer", { name: "Jack Johnson", title: "Fred Rogers", caseId }, { ip: "192.0.2.60" }));
+    assert.equal(r.status, 400);
+    // hand the monthly slot back so the quota tests below start where they expect
+    for (const [k, v] of globalThis.__blobs.get("hvi-limits").entries()) if (k.endsWith(`refer-case:${caseId}`)) v.data = { ...v.data, count: month };
+  }
 
   // most claims fail the check: re-score once, check again, publish what survives
   factMode = "fail";

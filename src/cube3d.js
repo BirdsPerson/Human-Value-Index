@@ -1,3 +1,4 @@
+import { displayName } from "./figures.js";
 // The octant cube as 3D geometry. Pure math, no DOM: the canvas component and
 // scripts/check-cube.mjs both use it.
 //
@@ -90,7 +91,7 @@ export function pointOf(subject) {
   const p = worldPoint(q.warmth, q.competence, l);
   const octant = q.octant || null;
   return {
-    name: subject.name || "SUBJECT",
+    name: displayName(subject) || "SUBJECT",
     // enough of the subject to draw its file photo in the tooltip
     photo: { name: subject.name, slug: subject.slug, score: subject.score, sprite: subject.sprite, avatar: subject.avatar, kind: subject.kind, you: subject.you },
     q,

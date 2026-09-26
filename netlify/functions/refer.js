@@ -5,8 +5,9 @@ import { callClaude, ScoreError } from "../lib/score.js";
 import { factCheck } from "../lib/factCheck.js";
 import { isCaseId, normalizeAssessment, computeScore, getTier, cube } from "../lib/intake.js";
 import { slugify } from "../../src/figures.js";
-import { nameError, cleanName, resolveWikipedia, fetchArticleText, onFileFigure, placeReferral, publicFigure, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
-import { getCase, hitLimit, refundLimit, peekLimit, getFigure, createFigure } from "../lib/store.js";
+import { nameError, cleanName, resolveWikipedia, resolveTitle, resolveCandidates, needsChoice, qualifierFrom, matchesName, onFileByQid, fetchArticleText, onFileFigure, placeReferral, publicFigure, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
+import { displayName } from "../../src/figures.js";
+import { getCase, hitLimit, refundLimit, peekLimit, getFigure, createFigure, listFigures } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
 // Referrals come only from citizens with a completed assessment on file: the monthly
@@ -30,7 +31,7 @@ const isOwner = id => OWNER.has(id);
 
 // Figures on file are static and fully public; referred ones go through publicFigure.
 const onFileCard = f => ({
-  slug: slugify(f.name), name: f.name, score: f.score, tier: f.tier, breakdown: f.breakdown, verdict: f.verdict,
+  slug: slugify(f.name), name: displayName(f), qualifier: f.qualifier ?? null, score: f.score, tier: f.tier, breakdown: f.breakdown, verdict: f.verdict,
   sprite: null, spriteStatus: "ready", kind: "figure", referred: false,
 });
 
@@ -65,23 +66,36 @@ export default async (req, context) => {
   const name = cleanName(body.name);
   const caseId = body?.caseId;
   if (caseId != null && !isCaseId(caseId)) return json(400, { error: "That is not a case number. Case numbers look like HVI-XXXXXXXX. You were told this." });
+  // A pick from the candidate list: the exact Wikipedia title of one namesake.
+  const title = body?.title == null ? null : String(body.title).replace(/\s+/g, " ").trim();
+  if (title != null && (!title || title.length > 160 || !matchesName(title, name))) {
+    return json(400, { error: "That title does not answer to the name you gave. The Department notices these things." });
+  }
 
-  // Exact name already on file ("Prince", "JFK"): answer before Wikipedia, which may
-  // resolve a bare name to something else entirely (the title, not the musician).
-  const typed = onFileFigure(slugify(name));
-  if (typed) return json(200, onFileBody(onFileCard(typed)));
+  let assessed;
   try {
-    const prior = await getFigure(slugify(name));
-    if (prior?.removed) return json(410, { error: REJECT.withdrawn, reason: "withdrawn" });
-    if (prior?.name) return json(200, onFileBody(publicFigure(prior)));
-  } catch { /* fall through to the full lookup */ }
-
-  // Only an assessed citizen refers. Checked before anything is charged.
-  try {
-    if (!isOwner(caseId) && (!caseId || !(await getCase(caseId))?.history?.length)) return json(403, { error: NOT_ASSESSED, reason: "unassessed" });
+    assessed = isOwner(caseId) || Boolean(caseId && (await getCase(caseId))?.history?.length);
   } catch (err) {
     console.error("refer case read failed", err);
     return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
+  }
+
+  // Unassessed visitors can still look up a name already on file (free, no Wikipedia);
+  // they can't refer. Assessed referrers go through the namesake check first, so "Jack
+  // Johnson" asks which one instead of handing back whoever holds the slug.
+  const typedOnFile = async () => {
+    const typed = onFileFigure(slugify(name));
+    if (typed) return json(200, onFileBody(onFileCard(typed)));
+    try {
+      const prior = await getFigure(slugify(name));
+      if (prior?.removed) return json(410, { error: REJECT.withdrawn, reason: "withdrawn" });
+      if (prior?.name) return json(200, onFileBody(publicFigure(prior)));
+    } catch { /* fall through */ }
+    return null;
+  };
+  if (!assessed) {
+    if (!title) { const hit = await typedOnFile(); if (hit) return hit; }
+    return json(403, { error: NOT_ASSESSED, reason: "unassessed" });
   }
 
   const ip = clientIp(req, context);
@@ -99,7 +113,33 @@ export default async (req, context) => {
     return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
   }
 
-  const wiki = await resolveWikipedia(name);
+  let wiki, qualifier = null;
+  if (title) {
+    wiki = await resolveTitle(title);
+    if (wiki.ok) {
+      const c = await resolveCandidates(name);
+      if (c.ok && needsChoice(c.candidates)) qualifier = qualifierFrom(wiki.title, wiki.description);
+    }
+  } else {
+    const c = await resolveCandidates(name);
+    if (c.ok && needsChoice(c.candidates)) {
+      // Nothing is charged beyond the lookup: the referrer picks, then POSTs the title.
+      let byQid = new Map();
+      try { byQid = new Map((await listFigures()).filter(f => f.wikidata).map(f => [f.wikidata, f])); } catch { /* unmarked */ }
+      const candidates = c.candidates.map(k => {
+        const fig = onFileByQid(k.qid);
+        const ref = byQid.get(k.qid);
+        const onFile = fig ? { score: fig.score, slug: slugify(fig.name) } : ref ? { score: ref.score, slug: ref.slug } : null;
+        return { title: k.title, description: k.description, born: k.born, died: k.died, qid: k.qid, onFile };
+      });
+      return json(200, { status: "choose", reason: "choose", name, message: `Multiple subjects answer to "${name}". Specify.`, candidates });
+    }
+    if (c.ok && c.candidates.length) wiki = await resolveTitle(c.candidates[0].title);
+    else {
+      if (!c.ok) { const hit = await typedOnFile(); if (hit) return hit; }
+      wiki = await resolveWikipedia(name);
+    }
+  }
   if (!wiki.ok) return json(wiki.reason === "lookup" ? 503 : 422, { error: REJECT[wiki.reason] || REJECT.none, reason: wiki.reason });
 
   try {
@@ -109,9 +149,11 @@ export default async (req, context) => {
     if (place.existing) return json(200, onFileBody(publicFigure(place.existing)));
     if (!place.slug) return json(422, { error: REJECT.ambiguous, reason: "ambiguous" });
     const slug = place.slug;
-    // The stripped title reads better; a namesake keeps its qualifier so the pen can tell them apart.
+    // The card keeps the bare name; a namesake carries a qualifier so every view can tell
+    // them apart ("Jack Johnson (boxer)"). A slug that had to be qualified is a namesake too.
     const stripped = wiki.title.replace(/\s*\([^)]*\)\s*$/, "");
-    const displayName = slugify(stripped) === slug ? stripped : wiki.title;
+    if (!qualifier && slugify(stripped) !== slug) qualifier = qualifierFrom(wiki.title, wiki.description);
+    const shown = displayName({ name: stripped, qualifier });
 
     const owner = isOwner(caseId);
     const month = owner ? { ok: true, count: 0 } : await hitLimit(`refer-case:${caseId}`, PER_CASE_MONTHLY, "month");
@@ -173,7 +215,7 @@ export default async (req, context) => {
     const score = computeScore(a.breakdown, a.harm?.severity);
     const look = safeLook(typeof raw?.sprite_look === "string" ? raw.sprite_look.replace(/\s+/g, " ").trim().slice(0, MAX_LOOK) : "");
     const card = {
-      slug, name: displayName, wikiTitle: wiki.title, wikidata: wiki.wikidata,
+      slug, name: stripped, qualifier, wikiTitle: wiki.title, wikidata: wiki.wikidata,
       score, tier: getTier(score), ...cube(a.breakdown), breakdown: a.breakdown, confidence: null, verdict: a.verdict,
       verdictStatus, living: wiki.living, born: wiki.born, died: wiki.died,
       factCheck: fc ? { checked: fc.checked, removed: fc.removed, regenerated: Boolean(fc.regenerated), at: new Date().toISOString() } : null,
@@ -189,7 +231,7 @@ export default async (req, context) => {
       return json(200, { ...onFileBody(publicFigure(won || card)), caseId });
     }
     const used = owner ? null : await peekLimit(`refer-case:${caseId}`, "month").catch(() => month.count);
-    return json(201, { status: "created", message: `New arrival processed: ${displayName}. Likeness pending.`, subject: publicFigure(card), caseId, remaining: owner ? null : remainingThisMonth(used) });
+    return json(201, { status: "created", message: `New arrival processed: ${shown}. Likeness pending.`, subject: publicFigure(card), caseId, remaining: owner ? null : remainingThisMonth(used) });
   } catch (err) {
     if (err instanceof ScoreError) return json(err.status, { error: err.message });
     console.error("refer failed", err);

@@ -177,3 +177,46 @@ console.log("check-refer ok");
   assert.equal(safeLook(""), "");
   console.log("look validator ok");
 }
+
+// --- namesakes (disambiguation)
+{
+  const { needsChoice, qualifierFrom, yearOf, matchesName, resolveCandidates, DOMINANCE } = await import("../netlify/lib/refer.js");
+  const { displayName } = await import("../src/figures.js");
+  assert.equal(needsChoice([]), false);
+  assert.equal(needsChoice([{ sitelinks: 40 }]), false, "one person: proceed");
+  assert.equal(needsChoice([{ sitelinks: 43 }, { sitelinks: 40 }]), true, "comparable namesakes: ask");
+  assert.equal(needsChoice([{ sitelinks: 322 }, { sitelinks: 26 }]), false, `a ${DOMINANCE}x dominant subject proceeds`);
+  assert.equal(qualifierFrom("Prince (musician)", ""), "musician");
+  assert.equal(qualifierFrom("Jack Johnson", "American boxer (1878–1946)"), "boxer");
+  assert.equal(qualifierFrom("Joe Jackson", "American talent manager and patriarch of the Jackson family (1928–2018)"), "talent manager");
+  assert.equal(qualifierFrom("Jack Johnson", "American singer-songwriter and surfer"), "singer-songwriter");
+  assert.equal(yearOf("1878-03-31T00:00:00Z"), "1878");
+  assert.equal(yearOf("-0470-01-01T00:00:00Z"), "-470");
+  assert.equal(yearOf(undefined), null);
+  assert.equal(matchesName("Jack Johnson (musician)", "jack johnson"), true);
+  assert.equal(matchesName("Jackie Johnson", "Jack Johnson"), false);
+  assert.equal(displayName({ name: "Jack Johnson", qualifier: "boxer" }), "Jack Johnson (boxer)");
+  assert.equal(displayName({ name: "Jack Johnson (boxer)", qualifier: "boxer" }), "Jack Johnson (boxer)", "never doubled");
+  assert.equal(displayName({ name: "Albert Einstein" }), "Albert Einstein");
+  // resolveCandidates on a stub: humans only, deduped, ordered by notability, capped
+  const routes = [
+    [/srlimit=10/, { query: { search: [{ title: "Ann Lee" }, { title: "Ann Lee (singer)" }, { title: "Ann Lee (album)" }] } }],
+    [/prop=pageprops\|links/, { query: { pages: { "1": { title: "Ann Lee", pageprops: {} } } } }],
+    [/prop=pageprops\|description/, { query: { pages: {
+      "1": { title: "Ann Lee", description: "Shaker leader (1736–1784)", pageprops: { wikibase_item: "Q1" } },
+      "2": { title: "Ann Lee (singer)", description: "British singer", pageprops: { wikibase_item: "Q2" } },
+      "3": { title: "Ann Lee (album)", description: "album", pageprops: { wikibase_item: "Q3" } } } } }],
+    [/query\.wikidata\.org/, { results: { bindings: [
+      { item: { value: "http://www.wikidata.org/entity/Q2" }, sl: { value: "30" } },
+      { item: { value: "http://www.wikidata.org/entity/Q1" }, sl: { value: "25" }, born: { value: "1736-02-29T00:00:00Z" } }] } }],
+  ];
+  const f = async url => { const hit = routes.find(([re]) => re.test(String(url))); return new Response(hit ? JSON.stringify(hit[1]) : "null", { status: hit ? 200 : 404 }); };
+  const c = await resolveCandidates("Ann Lee", f);
+  assert.equal(c.ok, true);
+  assert.deepEqual(c.candidates.map(x => x.title), ["Ann Lee (singer)", "Ann Lee"], "album dropped, notability order");
+  assert.equal(c.candidates[1].born, "1736");
+  assert.equal(needsChoice(c.candidates), true);
+  const down = await resolveCandidates("Ann Lee", async () => { throw new Error("offline"); });
+  assert.deepEqual(down, { ok: false, reason: "lookup" }, "a failed lookup says so (the desk falls back)");
+}
+console.log("check-refer: namesakes ok");

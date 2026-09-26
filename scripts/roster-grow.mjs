@@ -30,7 +30,7 @@ import { PUBLIC_RECORD, REFERRAL_ADDENDUM, ENGINE_ADDENDUM, PLACES, directiveFor
 import { parseModelJson } from "../netlify/lib/score.js";
 import { normalizeAssessment, computeScore, getTier, cube, medianSeverity } from "../netlify/lib/intake.js";
 import { FACT_CHECK_SYSTEM, SOURCE_MAX, summarizeFactCheck } from "../netlify/lib/factCheck.js";
-import { fetchArticleText, placeReferral } from "../netlify/lib/refer.js";
+import { fetchArticleText, placeReferral, resolveCandidates, needsChoice, qualifierFrom } from "../netlify/lib/refer.js";
 import { medianBreakdown, distance, dispersion, RUNS } from "./rescore-lib.mjs";
 import { buildCohort } from "./roster/candidates.mjs";
 import { createBatch, getBatch, batchResults, resultText, resultUsage, estimateDollars, actualDollars, approxTokens } from "./roster/batch.mjs";
@@ -252,8 +252,15 @@ async function stageStore(run) {
     const s = run.scored[c.cid];
     if (s.dropped || !s.slug || run.stored.includes(s.slug)) continue;
     const score = computeScore(s.breakdown, s.harm?.severity);
+    const base = c.title.replace(/\s*\([^)]*\)\s*$/, "");
+    // Namesakes show a qualifier everywhere ("Jack Johnson (boxer)"), same rule as referrals.
+    if (s.qualifier === undefined) {
+      const k = await resolveCandidates(base).catch(() => ({ ok: false }));
+      s.qualifier = (k.ok && needsChoice(k.candidates)) || /\([^)]+\)\s*$/.test(c.title) ? qualifierFrom(c.title, c.description) : null;
+      saveState(state);
+    }
     const card = {
-      slug: s.slug, name: c.title.replace(/\s*\([^)]*\)\s*$/, ""), wikiTitle: c.title, wikidata: c.wikidata,
+      slug: s.slug, name: base, qualifier: s.qualifier, wikiTitle: c.title, wikidata: c.wikidata,
       score, tier: getTier(score), ...cube(s.breakdown), breakdown: s.breakdown, confidence: null, verdict: s.verdict,
       verdictStatus: s.verdictStatus || "withheld", living: c.living, born: c.born, died: c.died,
       factCheck: s.factCheck || null, noDangle: Boolean(s.noDangle), flags: s.flags, commendations: s.commendations,

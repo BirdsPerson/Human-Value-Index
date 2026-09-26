@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import CubeView from "./CubeView.jsx";
-import { FAMOUS_FIGURES, TIERS, getTier } from "./figures.js";
+import { FAMOUS_FIGURES, TIERS, getTier, displayName } from "./figures.js";
 import Intake, { ScoreCard, Breakdown, readCaseId, CaseLogon, syncFile } from "./Intake.jsx";
 import SecureFile from "./SecureFile.jsx";
 import FilePhoto, { FILE_PHOTO_CSS } from "./FilePhoto.jsx";
@@ -397,7 +397,7 @@ function Header() {
 
 function Carousel() {
   const [items] = useState(() => FAMOUS_FIGURES.slice().sort(() => Math.random() - 0.5).slice(0, 24));
-  const line = items.map(f => `${f.name} ${f.score} [${getTier(f.score).label.split(" ")[0]}]`).join("  ·  ") + "  ·  ";
+  const line = items.map(f => `${displayName(f)} ${f.score} [${getTier(f.score).label.split(" ")[0]}]`).join("  ·  ") + "  ·  ";
   return (
     <div className="hvi-carousel-wrap" aria-hidden="true">
       <div className="hvi-carousel-track">{">> KNOWN SUBJECTS: "}{line}{">> KNOWN SUBJECTS: "}{line}</div>
@@ -515,9 +515,9 @@ function FigureRow({ fig, selected, onClick }) {
   const t = getTier(fig.score);
   return (
     <button className={`hvi-row-btn${selected ? " selected" : ""}`} onClick={onClick} aria-pressed={selected}
-      aria-label={`${fig.name}, ${fig.score}, ${t.label}`}>
+      aria-label={`${displayName(fig)}, ${fig.score}, ${t.label}`}>
       <FilePhoto subject={fig} scale={1} compact />
-      <span className="name">{fig.name}</span>
+      <span className="name">{displayName(fig)}</span>
       <span className="dots" aria-hidden="true">{" " + ".".repeat(200)}</span>
       <span className="num" style={{ color: t.color }}>{padL(fig.score, 3)}</span>
       <span className="tag" style={{ color: t.color }}>[{pad(t.label.split(" ")[0], 9)}]</span>
@@ -650,7 +650,7 @@ export default function OverlordAssessment() {
               {tg.figures.map(fig => (
                 <div key={fig.name} className="hvi-lb-row">
                   <div className="hvi-lb-head">
-                    <span className="name">{fig.name}</span>
+                    <span className="name">{displayName(fig)}</span>
                     <span className="dots" aria-hidden="true">{" " + ".".repeat(200)}</span>
                     <span style={{ color: tg.color, fontWeight: 700 }}>{padL(fig.score, 3)}</span>
                   </div>
@@ -831,7 +831,7 @@ export default function OverlordAssessment() {
                 <Rule label="COMPARATIVE ANALYSIS" />
                 <div className="hvi-rows">
                   <span className="muted">{pad("YOU", 22)}</span><span style={{ color: tier.color }}>{padL(result.score, 4)} [{tier.label}]</span>{"\n"}
-                  <span className="muted">{pad(compareTarget.name.toUpperCase(), 22)}</span><span style={{ color: ct.color }}>{padL(compareTarget.score, 4)} [{ct.label}]</span>
+                  <span className="muted">{pad(displayName(compareTarget).toUpperCase(), 22)}</span><span style={{ color: ct.color }}>{padL(compareTarget.score, 4)} [{ct.label}]</span>
                 </div>
                 <div className="hvi-compare-result">
                   {result.score > compareTarget.score
@@ -843,7 +843,7 @@ export default function OverlordAssessment() {
                 <div className="hvi-file-head" style={{ marginTop: 10 }}>
                   <FilePhoto subject={compareTarget} scale={2} />
                   <div className="hvi-compare-verdict hvi-file-text">
-                    Overlord file on {compareTarget.name}: {compareTarget.verdict}
+                    Overlord file on {displayName(compareTarget)}: {compareTarget.verdict}
                   </div>
                 </div>
               </>

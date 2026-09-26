@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import CubePanel, { CubeLine } from "./CubePanel.jsx";
-import { FAMOUS_FIGURES, getTier, slugify, slugCandidates } from "./figures.js";
+import { FAMOUS_FIGURES, getTier, slugify, slugCandidates, displayName } from "./figures.js";
 import {
   SPRITE_W, SPRITE_H, gaitFor, clamp,
   paintPlaceholder, paintAvatar, loadManifest, loadImage, mulberry32,
@@ -149,6 +149,9 @@ const penStyles = `
   .hvi-refer-out.err { color: var(--red, #f87171); }
   .hvi-refer-out.ok { color: var(--amber); }
   .hvi-refer-quota { color: var(--text-ghost); font-size: 12px; margin-top: 0.2em; }
+  .hvi-refer-choices { list-style: none; margin: 0.3em 0 0.4em; padding: 0; }
+  .hvi-refer-pick { background: none; border: 0; padding: 1px 4px; font: inherit; color: var(--text); text-align: left; cursor: pointer; width: 100%; white-space: normal; }
+  .hvi-refer-pick:hover, .hvi-refer-pick.on, .hvi-refer-pick:focus-visible { background: var(--green, #4ade80); color: var(--bg, #000); outline: none; }
   .hvi-floor-nav { display: flex; flex-wrap: wrap; gap: 0.2em 1ch; margin: 0 0 0.5em; }
   .hvi-floor-nav .hvi-cmd { padding: 0 0.5ch; }
   .hvi-pen-list .hvi-row-btn .tag { color: var(--text-ghost); }
@@ -192,7 +195,7 @@ function SubjectCard({ subject, onClose }) {
             <FilePhoto subject={subject} scale={typeof window !== "undefined" && window.innerWidth <= 560 ? 2 : 3} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="hvi-card-kind">{kind}</div>
-              <div className="hvi-card-name" id="hvi-card-name">{subject.name}</div>
+              <div className="hvi-card-name" id="hvi-card-name">{displayName(subject)}</div>
             </div>
             <button ref={closeRef} className="hvi-btn-next" onClick={onClose}>Release</button>
           </div>
@@ -227,12 +230,22 @@ function SubjectCard({ subject, onClose }) {
 // FILE A REFERRAL > _   Type a public figure's name, Enter. /api/refer checks Wikipedia,
 // scores them on the same rubric, and they drop in with a placeholder until the Mac job
 // draws their likeness.
+// "JACK JOHNSON — American boxer (1878–1946) [ON FILE: 668]"
+export function candidateLine(c) {
+  const d = String(c.description || "");
+  const years = c.born || c.died ? `${c.born || "?"}–${c.died || ""}` : "";
+  const withYears = years && !/\d{3,4}/.test(d) ? `${d}${d ? " " : ""}(${years})` : d;
+  return `${String(c.title).toUpperCase()}${withYears ? ` — ${withYears}` : ""}${c.onFile ? ` [ON FILE: ${c.onFile.score}]` : ""}`;
+}
+
 function ReferralBar({ simRef }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState(null);         // { text, tone }
   const [remaining, setRemaining] = useState(null);
   const [needRestore, setNeedRestore] = useState(null);   // the name to retry once a file is restored
+  const [choices, setChoices] = useState(null);           // { name, candidates } when namesakes answer
+  const [pick, setPick] = useState(0);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -244,11 +257,12 @@ function ReferralBar({ simRef }) {
     return () => { dead = true; };
   }, []);
 
-  async function submit(e, retryName) {
+  async function submit(e, retryName, title) {
     e?.preventDefault();
     const n = (retryName ?? name).trim();
     if (!n || busy) return;
     setNeedRestore(null);
+    setChoices(null);
     setBusy(true);
     setOut({ text: "PROCESSING REFERRAL...", tone: "" });
     const ctl = new AbortController();
@@ -256,7 +270,7 @@ function ReferralBar({ simRef }) {
     try {
       const r = await fetch("/api/refer", {
         method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal,
-        body: JSON.stringify({ name: n, caseId: readCaseId() || undefined }),
+        body: JSON.stringify({ name: n, title: title || undefined, caseId: readCaseId() || undefined }),
       });
       const d = await r.json().catch(() => ({}));
       if (d.caseId) writeCaseId(d.caseId);
@@ -265,6 +279,13 @@ function ReferralBar({ simRef }) {
         setOut({ text: d.error || "The referral desk is closed. The Department does not say why.", tone: "err" });
         // Not assessed usually means this browser lost the case number: offer the restore here.
         if (d.reason === "unassessed") setNeedRestore(n);
+        return;
+      }
+      if (d.status === "choose" && Array.isArray(d.candidates) && d.candidates.length) {
+        setChoices({ name: d.name || n, candidates: d.candidates.slice(0, 8) });
+        setPick(0);
+        setOut({ text: `MULTIPLE SUBJECTS ANSWER TO "${(d.name || n).toUpperCase()}". SPECIFY:`, tone: "" });
+        requestAnimationFrame(() => document.getElementById("hvi-refer-pick-0")?.focus());
         return;
       }
       const subject = d.subject;
@@ -286,6 +307,19 @@ function ReferralBar({ simRef }) {
     }
   }
 
+  // A picked namesake already on file opens its card; a new one is filed by its exact title.
+  function choose(c) {
+    if (!c) return;
+    const who = choices?.name || name;
+    if (c.onFile?.slug) {
+      setChoices(null);
+      const opened = simRef.current?.open?.(c.onFile.slug);
+      setOut({ text: `${c.title.toUpperCase()}: SUBJECT ALREADY ON FILE. VALUE INDEX ${c.onFile.score}.${opened ? "" : " FIND THEM IN THE REGISTRY."}`, tone: "" });
+      return;
+    }
+    submit(null, who, c.title);
+  }
+
   return (
     <div className="hvi-refer">
       <form className="hvi-refer-row" onSubmit={submit}>
@@ -299,6 +333,27 @@ function ReferralBar({ simRef }) {
       <div id="hvi-refer-out" className={`hvi-refer-out${out?.tone ? " " + out.tone : ""}`} role="status" aria-live="polite">
         {out ? <Typed key={out.text} as="span" text={out.text} cps={50} cursorAfter={busy} /> : null}
       </div>
+      {choices && (
+        <ol className="hvi-refer-choices" aria-label={`Subjects named ${choices.name}`}
+          onKeyDown={e => {
+            const k = e.key, n = choices.candidates.length;
+            if (/^[1-8]$/.test(k) && Number(k) <= n) { e.preventDefault(); choose(choices.candidates[Number(k) - 1]); }
+            else if (k === "ArrowDown" || k === "ArrowUp") {
+              e.preventDefault();
+              const next = (pick + (k === "ArrowDown" ? 1 : n - 1)) % n;
+              setPick(next); document.getElementById(`hvi-refer-pick-${next}`)?.focus();
+            } else if (k === "Escape") { setChoices(null); setOut(null); inputRef.current?.focus(); }
+          }}>
+          {choices.candidates.map((c, i) => (
+            <li key={c.qid}>
+              <button id={`hvi-refer-pick-${i}`} type="button" className={`hvi-refer-pick${i === pick ? " on" : ""}`}
+                onFocus={() => setPick(i)} onClick={() => choose(c)}>
+                [{i + 1}] {candidateLine(c)}
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
       {needRestore && (
         <div className="hvi-refer-restore">
           <div className="hvi-refer-quota">ALREADY ASSESSED ON ANOTHER BROWSER? RESTORE A FILE &gt; HVI-________</div>
@@ -733,6 +788,14 @@ export default function Pen() {
     function updateRoster(name, patch) {
       setRoster(r => r.map(x => (x.name === name ? { ...x, ...patch } : x)));
     }
+    // A namesake picked from the referral list that is already on file: open its card.
+    sim.open = (slug) => {
+      const e = sim.ents.find(x => x.slug === slug || x.s.slug === slug || slugify(x.s.name) === slug);
+      if (!e) return false;
+      sim.hop(e.s.name);
+      setCard({ ...e.s });
+      return true;
+    };
     // The referral bar hands new arrivals straight in, without waiting for the next poll.
     sim.refer = (subject) => {
       if (!subject?.name || typeof subject.score !== "number") return false;
@@ -1078,7 +1141,7 @@ export default function Pen() {
         const head = (e.y - SPRITE_H - 2) * S + oy;
         if (e.say) drawBubble(e.say, e.sayW, e.x * S, head - (e.you ? 6 * S : 0), e.state === "held");
         else if (e === sim.hover || e === sim.held) {
-          const label = e.s.name.toUpperCase();
+          const label = displayName(e.s).toUpperCase();
           if (!e.nameW) e.nameW = ctx.measureText(label).width;
           drawBubble(label, e.nameW, e.x * S, head, false);
         }
@@ -1166,9 +1229,9 @@ export default function Pen() {
             const where = rooms[s.name];
             return (
               <button key={s.name} className="hvi-row-btn" onClick={() => openFromList(s)}
-                aria-label={`${s.name}, ${s.score}, ${t.label}${where ? `, located: ${where}` : ""}. Open file.`}>
+                aria-label={`${displayName(s)}, ${s.score}, ${t.label}${where ? `, located: ${where}` : ""}. Open file.`}>
                 <FilePhoto subject={s} scale={1} compact />
-                <span className="name">{s.name}{s.you ? " (YOU)" : ""}</span>
+                <span className="name">{displayName(s)}{s.you ? " (YOU)" : ""}</span>
                 <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
                 {where && <span className="tag" aria-hidden="true">{pad(where, 10)}</span>}
                 <span className="num" style={{ color: t.color }}>{padL(s.score, 3)}</span>
