@@ -241,7 +241,7 @@ export function candidateLine(c) {
   const d = String(c.description || "");
   const years = c.born || c.died ? `${c.born || "?"}–${c.died || ""}` : "";
   const withYears = years && !/\d{3,4}/.test(d) ? `${d}${d ? " " : ""}(${years})` : d;
-  return `${String(c.title).toUpperCase()}${withYears ? ` — ${withYears}` : ""}${c.onFile ? ` [ON FILE: ${c.onFile.score}]` : ""}`;
+  return `${String(c.title).toUpperCase()}${withYears ? ` — ${withYears}` : ""}${c.excluded ? " [SEALED BY POLICY]" : c.onFile ? ` [ON FILE: ${c.onFile.score}]` : ""}`;
 }
 
 function ReferralBar({ simRef }) {
@@ -316,6 +316,10 @@ function ReferralBar({ simRef }) {
   // A picked namesake already on file opens its card; a new one is filed by its exact title.
   function choose(c) {
     if (!c) return;
+    if (c.excluded) {   // founders and prophets of the world's faiths: listed, not selectable
+      setOut({ text: "THE DEPARTMENT DOES NOT ASSESS THE FOUNDERS OF THE WORLD'S FAITHS. THOSE FILES ARE SEALED BY POLICY.", tone: "" });
+      return;
+    }
     const who = choices?.name || name;
     if (c.onFile?.slug) {
       setChoices(null);
@@ -353,6 +357,7 @@ function ReferralBar({ simRef }) {
           {choices.candidates.map((c, i) => (
             <li key={c.qid}>
               <button id={`hvi-refer-pick-${i}`} type="button" className={`hvi-refer-pick${i === pick ? " on" : ""}`}
+                aria-disabled={c.excluded ? "true" : undefined}
                 onFocus={() => setPick(i)} onClick={() => choose(c)}>
                 [{i + 1}] {candidateLine(c)}
               </button>

@@ -8,6 +8,7 @@ import { slugify } from "../../src/figures.js";
 import { nameError, cleanName, resolveWikipedia, resolveTitle, resolveCandidates, needsChoice, qualifierFrom, matchesName, onFileByQid, fetchArticleText, onFileFigure, placeReferral, publicFigure, isHeadOfStateOrGov, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
 import { displayName } from "../../src/figures.js";
 import { getCase, hitLimit, refundLimit, peekLimit, getFigure, createFigure, listFigures } from "../lib/store.js";
+import { EXCLUDED_LINE, excludedAmong } from "../lib/excluded.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
 // Referrals come only from citizens with a completed assessment on file: the monthly
@@ -88,6 +89,7 @@ export default async (req, context) => {
     if (typed) return json(200, onFileBody(onFileCard(typed)));
     try {
       const prior = await getFigure(slugify(name));
+      if (prior?.removed && prior?.excluded) return json(403, { error: EXCLUDED_LINE, reason: "excluded" });
       if (prior?.removed) return json(410, { error: REJECT.withdrawn, reason: "withdrawn" });
       if (prior?.name) return json(200, onFileBody(publicFigure(prior)));
     } catch { /* fall through */ }
@@ -113,6 +115,13 @@ export default async (req, context) => {
     return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
   }
 
+  // Founders and prophets of the world's faiths are not assessed (lib/excluded.js). The
+  // refusal is free: the lookup slots it took are handed back.
+  const excludedRefusal = async () => {
+    if (!isOwner(caseId)) await Promise.all([refundLimit(`refer-ip:${ip}`), refundLimit("refer-lookup-global")]).catch(() => {});
+    return json(403, { error: EXCLUDED_LINE, reason: "excluded" });
+  };
+
   let wiki, qualifier = null;
   if (title) {
     wiki = await resolveTitle(title);
@@ -126,11 +135,13 @@ export default async (req, context) => {
       // Nothing is charged beyond the lookup: the referrer picks, then POSTs the title.
       let byQid = new Map();
       try { byQid = new Map((await listFigures()).filter(f => f.wikidata).map(f => [f.wikidata, f])); } catch { /* unmarked */ }
+      const sealed = await excludedAmong(c.candidates.map(k => k.qid));
+      if (c.candidates.every(k => sealed.has(k.qid))) return excludedRefusal();
       const candidates = c.candidates.map(k => {
         const fig = onFileByQid(k.qid);
         const ref = byQid.get(k.qid);
         const onFile = fig ? { score: fig.score, slug: slugify(fig.name) } : ref ? { score: ref.score, slug: ref.slug } : null;
-        return { title: k.title, description: k.description, born: k.born, died: k.died, qid: k.qid, onFile };
+        return { title: k.title, description: k.description, born: k.born, died: k.died, qid: k.qid, onFile, excluded: sealed.has(k.qid) };
       });
       return json(200, { status: "choose", reason: "choose", name, message: `Multiple subjects answer to "${name}". Specify.`, candidates });
     }
@@ -140,11 +151,13 @@ export default async (req, context) => {
       wiki = await resolveWikipedia(name);
     }
   }
+  if (wiki.ok && wiki.wikidata && (await excludedAmong([wiki.wikidata])).has(wiki.wikidata)) return excludedRefusal();
   if (!wiki.ok) return json(wiki.reason === "lookup" ? 503 : 422, { error: REJECT[wiki.reason] || REJECT.none, reason: wiki.reason });
 
   try {
     const place = await placeReferral(wiki, getFigure);
     if (place.onFile) return json(200, onFileBody(onFileCard(place.onFile)));
+    if (place.existing?.removed && place.existing?.excluded) return excludedRefusal();
     if (place.existing?.removed) return json(410, { error: REJECT.withdrawn, reason: "withdrawn" });
     if (place.existing) return json(200, onFileBody(publicFigure(place.existing)));
     if (!place.slug) return json(422, { error: REJECT.ambiguous, reason: "ambiguous" });

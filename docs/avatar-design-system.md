@@ -33,6 +33,9 @@ Silhouette, hair, signature outfit colours, and **one** prop. Nothing else.
 ## Forbidden
 - Backgrounds, backdrops, scenery, ground shadows, text, logos and names. Jersey numbers are allowed only when they are the identity.
 - Weapons, crime props, prison clothing, blood and victims. `netlify/lib/look.js` enforces this on every generated look.
+- Depictions of the founders and prophets of the world's faiths (policy, 2026-09-26; `netlify/lib/excluded.js`). They are not scored or drawn at all.
+
+Allowed (Scott, 2026-09-26): **historical accuracy over caution for clothing.** Period uniforms and the insignia the person actually wore (a party uniform and armband, a military tunic) are permitted in looks. Weapons stay forbidden even when historically carried.
 - Names in generation prompts. Prompts use looks only: the public-figure filter blocks names, and one blocked name would sink a whole grid.
 
 ## Enforcement

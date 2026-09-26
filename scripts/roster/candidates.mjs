@@ -11,6 +11,7 @@
 // is (classifySummary): a real human, not a minor, life dates from Wikidata.
 //
 //   node scripts/roster/candidates.mjs 16        # print a cohort (no writes)
+import { EXCLUDED_QIDS, excludedAmong } from "../../netlify/lib/excluded.js";
 import { classifySummary } from "../../netlify/lib/refer.js";
 import { FIGURE_QIDS } from "../../netlify/lib/refer.js";
 
@@ -121,6 +122,9 @@ export async function resolveQid(qid) {
   return r.ok ? { ...r, wikidata: qid } : r;
 }
 
+// Founders and prophets of the world's faiths: never drafted (netlify/lib/excluded.js).
+export const skipByPolicy = async (qid, fetchImpl = fetch) => (await excludedAmong([qid], fetchImpl)).has(qid);
+
 // Rows not already on file, deduped by Wikidata id (not by name: namesakes are different people).
 export function freshRows(rows, taken) {
   const seen = new Set();
@@ -133,6 +137,8 @@ const bornYear = born => { const m = /^(-?\d+)/.exec(String(born || "")); return
 // taken: Set of Wikidata ids already on file (the 62 + production cards) plus this run's.
 export async function buildCohort(n, taken = new Set(), { log = () => {} } = {}) {
   for (const q of Object.values(FIGURE_QIDS)) taken.add(q);
+  // Founders and prophets of the world's faiths are never assessed (netlify/lib/excluded.js).
+  for (const q of Object.keys(EXCLUDED_QIDS)) taken.add(q);
   const slots = planSlots(n);
   const out = [];
   const domains = Object.keys(DOMAINS).filter(d => d !== "crime");
@@ -141,6 +147,7 @@ export async function buildCohort(n, taken = new Set(), { log = () => {} } = {})
   async function take(pool, source, fetchRows, meta) {
     for (const row of freshRows(await fetchRows(), taken)) {
       taken.add(row.qid);
+      if (await skipByPolicy(row.qid)) { log(`skip ${row.qid} (${row.label || ""}): excluded by policy`); continue; }
       const wiki = await resolveQid(row.qid).catch(e => ({ ok: false, reason: e.message }));
       if (!wiki.ok) { log(`skip ${row.qid} (${row.label || ""}): ${wiki.reason}`); continue; }
       const era = eraOf(bornYear(wiki.born), wiki.living);

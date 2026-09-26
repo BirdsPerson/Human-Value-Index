@@ -381,6 +381,53 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
     for (const [k, v] of globalThis.__blobs.get("hvi-limits").entries()) if (k.endsWith(`refer-case:${caseId}`)) v.data = { ...v.data, count: month };
   }
 
+  // Founders and prophets of the world's faiths (netlify/lib/excluded.js): refused before
+  // anything is charged; in a namesake list they're shown sealed, not selectable.
+  {
+    const ipCount = ip => [...(globalThis.__blobs.get("hvi-limits")?.entries() || [])]
+      .filter(([k]) => k.endsWith(`refer-ip:${ip}`)).reduce((n, [, v]) => n + (v.data?.count || 0), 0);
+    wikiRoutes.unshift(
+      [/srsearch=Muhammad&srlimit=10/, { query: { search: [{ title: "Muhammad" }] } }],
+      [/titles=Muhammad%7CMuhammad%20\(disambiguation\)&prop=pageprops\|links/, { query: { pages: { "1": { title: "Muhammad", pageprops: {} } } } }],
+      [/titles=Muhammad&prop=pageprops\|description/, { query: { pages: { "1": { title: "Muhammad", description: "Founder of Islam", pageprops: { wikibase_item: "Q9458" } } } } }],
+      [/summary\/Muhammad$/, { title: "Muhammad", type: "standard", description: "Founder of Islam", extract: "x", wikibase_item: "Q9458" }],
+      human("Q9458"),
+      [/summary\/Jesus$/, { title: "Jesus", type: "standard", description: "Central figure of Christianity", extract: "x", wikibase_item: "Q302" }],
+      human("Q302"),
+      [/srsearch=Jesus&srlimit=10/, { query: { search: [{ title: "Jesus" }, { title: "Jesus (footballer)" }] } }],
+      [/titles=Jesus%7CJesus%20\(disambiguation\)&prop=pageprops\|links/, { query: { pages: { "1": { title: "Jesus", pageprops: {} } } } }],
+      [/prop=pageprops\|description/, { query: { pages: {
+        "1": { title: "Jesus", description: "Central figure of Christianity", pageprops: { wikibase_item: "Q302" } },
+        "2": { title: "Jesus (footballer)", description: "Brazilian footballer (born 1990)", pageprops: { wikibase_item: "Q555555" } } } } }],
+    );
+    const sparqlBefore = wikiRoutes.findIndex(([re]) => String(re).includes("query"));
+    wikiRoutes.unshift([/query\.wikidata\.org\/sparql/, { results: { bindings: [
+      { item: { value: "http://www.wikidata.org/entity/Q9458" }, sl: { value: "300" } },
+      { item: { value: "http://www.wikidata.org/entity/Q302" }, sl: { value: "300" } },
+      { item: { value: "http://www.wikidata.org/entity/Q555555" }, sl: { value: "40" }, born: { value: "1990-01-01T00:00:00Z" } }] } }]);
+    const calls = claudeCalls, month = await peekLimitFor(caseId), ipBefore = ipCount("192.0.2.70");
+    r = await read(await post(refer, "/api/refer", { name: "Muhammad", caseId }, { ip: "192.0.2.70" }));
+    assert.equal(r.status, 403, JSON.stringify(r.body)); assert.equal(r.body.reason, "excluded");
+    assert.match(r.body.error, /founders of the world's faiths/);
+    assert.equal(claudeCalls, calls, "no scoring"); assert.equal(await peekLimitFor(caseId), month, "no quota");
+    assert.equal(ipCount("192.0.2.70"), ipBefore, "the lookup slot is handed back");
+    // a namesake list shows the prophet sealed, the footballer selectable
+    r = await read(await post(refer, "/api/refer", { name: "Jesus", caseId }, { ip: "192.0.2.70" }));
+    assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.status, "choose");
+    const [jc, fb] = r.body.candidates;
+    assert.equal(jc.title, "Jesus"); assert.equal(jc.excluded, true);
+    assert.equal(fb.title, "Jesus (footballer)"); assert.equal(fb.excluded, false);
+    // picking the sealed one by title is refused the same way
+    r = await read(await post(refer, "/api/refer", { name: "Jesus", title: "Jesus", caseId }, { ip: "192.0.2.70" }));
+    assert.equal(r.status, 403); assert.equal(r.body.reason, "excluded");
+    // a withdrawn-by-policy tombstone answers with the policy line, not "withdrawn"
+    globalThis.__blobs.get("hvi-figures").set("muhammad", { data: { slug: "muhammad", removed: true, excluded: true, wikidata: "Q9458" }, etag: "t1" });
+    r = await read(await post(refer, "/api/refer", { name: "Muhammad" }, { ip: "192.0.2.71" }));
+    assert.equal(r.status, 403); assert.equal(r.body.reason, "excluded");
+    wikiRoutes.splice(0, 1);   // drop this block's sparql stub so later tests see their own
+    assert.equal(claudeCalls, calls, "none of it cost a scoring call");
+  }
+
   // most claims fail the check: re-score once, check again, publish what survives
   factMode = "fail";
   const calls1 = claudeCalls;

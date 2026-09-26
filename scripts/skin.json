@@ -46,7 +46,7 @@
   "basis": "knowledge",
   "confidence": "low",
   "image": false,
-  "note": "No image available; Albert Tom\u00e0s is not a widely documented public figure to me, so this is a generic estimate based on typical Spanish skin tone rather than specific evidence. Low confidence."
+  "note": "No image available; Albert Tomàs is not a widely documented public figure to me, so this is a generic estimate based on typical Spanish skin tone rather than specific evidence. Low confidence."
  },
  "anatoly-onoprienko": {
   "band": "fair",
@@ -830,7 +830,7 @@
   "basis": "photo",
   "confidence": "high",
   "image": true,
-  "note": "Consistent with well-documented appearance in photos of Pel\u00e9, wearing Brazil national team kit."
+  "note": "Consistent with well-documented appearance in photos of Pelé, wearing Brazil national team kit."
  },
  "peter-thiel": {
   "band": "fair",
@@ -896,11 +896,11 @@
   "note": "Black-and-white photo limits certainty, but tonal contrast suggests fair skin typical of Central European heritage."
  },
  "ron-jeremy": {
-  "band": "medium",
-  "basis": "photo",
-  "confidence": "medium",
+  "band": "fair",
+  "basis": "manual",
+  "confidence": "high",
   "image": true,
-  "note": "Man with tanned/olive-medium complexion, dark hair and mustache, visible in warm indoor lighting."
+  "note": "manual override 2026-09-26: white man with a lightly tanned complexion; the photo classification (medium) produced a dark-brown drawing"
  },
  "ronaldinho": {
   "band": "brown",

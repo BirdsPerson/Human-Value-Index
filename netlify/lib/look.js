@@ -1,6 +1,8 @@
 // Sprite looks come from the model. The prompt forbids crime props and weapons; this is the
 // code-side backstop, shared by the referral function and the roster engine.
 // ponytail: word list, not a classifier; extend it when a bad look slips through.
+// Deliberately NOT banned (Scott, 2026-09-26): period uniforms and the insignia the person
+// actually wore. Historical accuracy over caution for clothing; weapons stay banned.
 const BANNED = [
   "prison", "prisoner", "inmate", "jail", "jailed", "convict", "handcuff", "handcuffs", "shackle", "shackles",
   "manacle", "manacles", "mugshot", "mug shot", "orange jumpsuit", "prison stripes", "booking photo",

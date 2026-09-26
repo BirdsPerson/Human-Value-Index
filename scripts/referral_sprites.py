@@ -12,6 +12,7 @@ The pen polls /api/pen and swaps the placeholder for /api/sprite/<slug>.
   python3 scripts/referral_sprites.py --dry-run        # list the queues, generate nothing
   python3 scripts/referral_sprites.py --retry-failed   # put every "failed" card back in the queue
   python3 scripts/referral_sprites.py --takedown <slug>  # withdraw a referred figure for good
+  python3 scripts/referral_sprites.py --takedown <slug> --excluded  # withdraw by policy (founders/prophets)
 
 Blobs are reached through the Netlify CLI (site linked in this repo), so run from the
 repo directory. A failure that belongs to one figure (Higgsfield's filter on real people
@@ -213,13 +214,18 @@ def set_card(slug, **changes):
     return card
 
 
-def takedown(slug):
+def takedown(slug, excluded=False):
     card = get_json("hvi-figures", slug)
     if not card:
         raise SystemExit(f"no referred figure {slug!r}")
     # A tombstone, not a delete: the slug stays taken, so the person can't be re-referred.
-    set_json("hvi-figures", slug, {"slug": slug, "removed": True, "wikidata": card.get("wikidata"),
-                                   "removedAt": datetime.now(timezone.utc).isoformat()})
+    # excluded: withdrawn by policy (netlify/lib/excluded.js), so a re-referral gets the
+    # "sealed by policy" line rather than "withdrawn".
+    tomb = {"slug": slug, "removed": True, "wikidata": card.get("wikidata"),
+            "removedAt": datetime.now(timezone.utc).isoformat()}
+    if excluded:
+        tomb["excluded"] = True
+    set_json("hvi-figures", slug, tomb)
     update_index({"slug": slug}, remove=True)
     try:
         cli("blobs:delete", "hvi-sprites", slug, "--force")
@@ -255,7 +261,7 @@ def sync_harm_reviews(idx):
 
 def main():
     if "--takedown" in sys.argv:
-        takedown(arg_after("--takedown"))
+        takedown(arg_after("--takedown"), excluded="--excluded" in sys.argv)
         return 0
     dry = "--dry-run" in sys.argv
     idx = get_json("hvi-figures", "index") or {"cards": []}
