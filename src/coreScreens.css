@@ -10,6 +10,12 @@
 :is(.hvi-cube-panel, .hvi-file-text, .hvi-casefile) .hvi-case-note { margin-top: var(--s2); }
 .hvi-err { color: var(--harm); margin: var(--s3) 0; padding-left: 3ch; text-indent: -3ch; }
 .hvi-warnline { color: var(--warn); margin: var(--s3) 0; padding-left: 3ch; text-indent: -3ch; }
+/* ---------- directives from the Archive (QuestLog.jsx) ---------- */
+.hvi-quest-h { color: var(--fg-mute); font-size: var(--t-xs); letter-spacing: 0.08em; margin: var(--s4) 0 var(--s1); }
+.hvi-quest-line { margin: var(--s2) 0; }
+.hvi-quest-held { border-left: var(--bw) solid var(--accent); padding-left: var(--s3); margin-top: var(--s3); }
+.hvi-quest-where { margin: var(--s2) 0; }
+.hvi-quest-card { margin: var(--s3) 0; }
 .hvi-sec-label { color: var(--fg-mute); font-size: var(--t-xs); letter-spacing: 0.08em; margin: var(--s4) 0 var(--s1); }
 
 /* ---------- score card: the payoff ---------- */

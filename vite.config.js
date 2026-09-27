@@ -33,4 +33,7 @@ function spriteAtlas() {
 
 export default defineConfig({
   plugins: [react(), spriteAtlas()],
+  // Dev only: /api/* goes to `netlify functions:serve --port 9999` (local Blobs sandbox).
+  // The functions' same-origin check sees the functions host, so the proxy presents it.
+  server: { proxy: { '/api': { target: 'http://localhost:9999', changeOrigin: true, headers: { origin: 'http://localhost:9999' } } } },
 })

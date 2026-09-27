@@ -207,7 +207,8 @@ function pick(arr, rnd) { return arr[Math.floor(rnd() * arr.length)]; }
 // ---------------------------------------------------------------------------
 
 // where/back/assignment: the city opens the same file with its own location and job.
-export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return subject to pen", assignment = null }) {
+// extra: a host panel under the name (the city's quest offer / REPORT CONTACT).
+export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return subject to pen", assignment = null, extra = null }) {
   const closeRef = useRef(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -240,6 +241,7 @@ export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return 
               {assignment && <div className="hvi-card-assign">{assignment}</div>}
             </div>
           </div>
+          {extra}
           <ScoreCard score={subject.score} tierLabel={subject.tier} verdict={subject.verdict} label="VALUE INDEX">
             <CubeLine subject={subject} />
             {subject.kind === "citizen" && !subject.verdict && (

@@ -9,6 +9,7 @@ import { readCaseId, writeCaseId, readLastResult, writeLastResult, ScoreCard, Br
   assessedMeta, FlagsList, flagsMeta } from "./caseFile.jsx";
 import { Frame, Button, ButtonRow, Disclosure, TextField, Command, CommandList, ListRow } from "./ui/components.jsx";
 import { useBarAction } from "./ui/barAction.js";
+import { QuestLog } from "./QuestLog.jsx";
 
 // The shared file pieces moved to caseFile.jsx; re-exported so older imports keep working.
 export { readCaseId, writeCaseId, readLastResult, syncFile, ScoreCard, Breakdown, AppealPanel, CaseLogon, DIM_ORDER, MAX_APPEAL } from "./caseFile.jsx";
@@ -448,6 +449,7 @@ export default function Intake({ view = "intake" }) {
   }, [draft, stage]);
 
   const [cubeSeen, setCubeSeen] = useState(false);   // the canvas mounts on first open
+  const [questSeen, setQuestSeen] = useState(false); // the Archive is asked on first open
   // Back from the magic link (/?auth=…#intake): the answer is inside SECURE BY EMAIL, so open it.
   const [authBack] = useState(() => { try { return /[?&]auth=/.test(window.location.search); } catch { return false; } });
 
@@ -512,6 +514,11 @@ export default function Intake({ view = "intake" }) {
       {history && history.length > 0 && (
         <Disclosure title="VALUE OVER TIME" meta={`${history.length} VISIT${history.length === 1 ? "" : "S"}`}>
           <Sparkline history={history} />
+        </Disclosure>
+      )}
+      {caseId && (
+        <Disclosure id="hvi-quests" title="DIRECTIVES" meta="FROM THE ARCHIVE" onToggle={o => { if (o) setQuestSeen(true); }}>
+          {questSeen && <QuestLog caseId={caseId} />}
         </Disclosure>
       )}
       <Disclosure id="hvi-appeal" title="APPEAL A SECTION" meta={appealSel.length ? `${appealSel.length} MARKED` : ""}>

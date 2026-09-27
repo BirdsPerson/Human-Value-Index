@@ -12,6 +12,9 @@ import City3D, { ViewToggle, useCityViewMode } from "./City3D.jsx";
 import DistrictView from "./DistrictView.jsx";
 import BuildingView from "./BuildingView.jsx";
 import { buildingHref, parseCityRoute } from "./city3d.js";
+import { readCaseId } from "../caseFile.jsx";
+import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
+import { questFor } from "../quests.js";
 
 // #city: the Substrate (2D map or 3D). #city/<district>: one district from the inside.
 // #city/<district>/<building>[?floor=N]: one building in cross-section.
@@ -132,10 +135,13 @@ export default function City({ route }) {
   const open = useCallback((s) => setCard({ ...s }), []);
   const close = useCallback(() => setCard(null), []);
   const [mode, setMode] = useCityViewMode();
+  // Directives: a quest-giver's file carries its offer, or REPORT CONTACT inside its building.
+  const quests = useQuests(readCaseId());
   // The open file does not re-render with the census clock.
   const cardEl = useMemo(() => card && (
-    <SubjectCard subject={card} onClose={close} where="THE SUBSTRATE" back="Return subject to the Substrate" assignment={`ASSIGNMENT: ${jobLine(card)}`} />
-  ), [card, close]);
+    <SubjectCard subject={card} onClose={close} where="THE SUBSTRATE" back="Return subject to the Substrate" assignment={`ASSIGNMENT: ${jobLine(card)}`}
+      extra={<QuestCardPanel quests={quests} q={card.kind === "figure" ? questFor(card.slug) : null} buildingId={b?.id || null} />} />
+  ), [card, close, quests, b]);
   const d = districtId && DISTRICT[districtId];
   const here = d && stats.districts.find(x => x.id === d.id);
   const bn = b ? stats.buildings[b.id] || 0 : 0;
