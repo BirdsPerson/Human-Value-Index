@@ -9,7 +9,12 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Backlog (priority order)
 
-1. [next] **Side quests → vouches.** Figures (dead only; living figures never speak)
+1. [in progress: slice 1 shipped 2026-09-27, see Done] **Side quests → vouches.**
+   Remaining slices: (b) vouch → score effect [needs Scott: see MORNING_REPORT];
+   (c) more kinds: bring someone, witness a city event; (d) real-world Directives
+   reported back via appeal; (e) text-chat quests on Haiku (capped); (f) offers from
+   roster-engine dead figures, not just the 7 hand-written ones.
+   Original brief: Figures (dead only; living figures never speak)
    offer quests in their own voice, matched to their value lens. Two kinds:
    in-game (visit a place, bring someone, talk to a figure, witness an event in the
    city) and real-world Directives (reported back via appeal). Completing one earns a
@@ -53,4 +58,11 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Done
 
+- 2026-09-27 Side quests slice 1 (3bd6439): 7 dead figures (one per category) offer a
+  "find me" directive; accept on MY FILE > DIRECTIVES, find the figure in the city,
+  open its file inside the same building, REPORT CONTACT; /api/quest re-checks contact
+  against the sim server-side; vouch stored on the case and listed on MY FILE. Caps: 1
+  held, 2/day, 60 s minimum, each figure once, 60 calls/IP/hour, intake required. No
+  score effect yet. Check: scripts/check-quests.mjs. `node scripts/run-checks.mjs` runs
+  every check.
 - 2026-09-26 City v1 (c9175a6), City v2 train/buildings/3D (ee5602d), design + mobile pass (5a7478c), public launch.
