@@ -1,11 +1,12 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { TermBox, Rule, pad, padL } from "../term.jsx";
+import { pad, padL } from "../term.jsx";
+import { Frame, Button, ButtonRow, Disclosure, ListRow } from "../ui/index.js";
 import { SubjectCard, injectPenStyles } from "../Pen.jsx";
 import { DISTRICTS, DISTRICT, BUILDING, TRAIN, STATIONS, districtCap, clockAt, whereOf, atDistrict, isOnLoop, setClockOffset, offsetFor, jobLine, loopEvents, roomIn } from "./simApi.js";
 import { clockLine, paLine } from "./cityKit.js";
 import { useRoster } from "./useRoster.js";
 import { clearBank } from "./spriteBank.js";
-import { injectCityStyles, CityHeader, Breadcrumb, Occupant } from "./cityUi.jsx";
+import { injectCityStyles, CityHeader, Breadcrumb, Occupant, MapKey } from "./cityUi.jsx";
 import CityMap from "./CityMap.jsx";
 import City3D, { ViewToggle, useCityViewMode } from "./City3D.jsx";
 import DistrictView from "./DistrictView.jsx";
@@ -141,14 +142,26 @@ export default function City({ route }) {
   const right = b
     ? b.id === "hq" ? `${b.addr} // 6F // CENSUS CLASSIFIED` : `${b.addr} // ${b.floors.length}F // ${bn} INSIDE`
     : d
-      ? d.id === "hq" ? `${d.addr} // HOLDING PEN B // CENSUS CLASSIFIED` : `${d.addr} // ${here?.count ?? 0} ON SITE // CAPACITY ${districtCap(d.id)}`
-      : `POPULATION ${roster.length} // ABOARD THE LOOP ${stats.transit} // ON PLATFORMS ${stats.waiting}${census === "down" ? " // CENSUS OFFLINE: FIGURES ONLY" : ""}`;
+      ? d.id === "hq" ? `${d.addr} // HOLDING PEN B // CENSUS CLASSIFIED` : `${d.addr} // ${here?.count ?? 0} ON SITE // CAP ${districtCap(d.id)}`
+      : `POP ${roster.length} // ABOARD ${stats.transit} // ON PLATFORMS ${stats.waiting}${census === "down" ? " // CENSUS OFFLINE" : ""}`;
 
   const crumbs = [{ label: "CITY", go: () => go(null) }];
   if (d) crumbs.push({ label: d.name, go: () => go(d.id) });
   if (b) crumbs.push({ label: b.name, go: () => goBuilding(d.id, b.id) });
   if (b && floor != null) { const f = b.floors[floor]; crumbs.push({ label: `${f.code} ${f.name}` }); }
   const three = !d && mode === "3d";
+
+  const directory = (
+    <div className="hvi-city-list" role="list" aria-label="District directory">
+      {stats.districts.map(x => (
+        <div key={x.id} role="listitem">
+          <ListRow lead={pad(DISTRICT[x.id].addr, 7)} label={x.name} value={<span className={x.count > x.cap ? "over" : undefined}>{padL(x.count, 3)}/{x.cap}</span>}
+            aria-current={x.id === districtId ? "true" : undefined} onClick={() => go(x.id)}
+            aria-label={`${x.name}, ${x.count} present, capacity ${x.cap}. Enter district.`} />
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div>
@@ -157,8 +170,8 @@ export default function City({ route }) {
         <Breadcrumb crumbs={crumbs} />
         {!d && <ViewToggle mode={mode} onChange={setMode} />}
       </div>
-      <TermBox title={b ? b.name : d ? d.name : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
-        right={b ? "CROSS-SECTION" : d ? "INTERIOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} bodyClass="flush">
+      <Frame box title={b ? b.name : d ? d.name : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
+        meta={b ? "CROSS-SECTION" : d ? "INTERIOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} flush>
         {b
           ? <BuildingView key={b.id} buildingId={b.id} floor={floor} censusRef={censusRef} onOpen={open} onFloor={onFloor} />
           : d
@@ -166,38 +179,27 @@ export default function City({ route }) {
             : three
               ? <City3D censusRef={censusRef} onDistrict={go} onOpen={open} onFloor={goBuilding} query={query} />
               : <CityMap censusRef={censusRef} onDistrict={go} onOpen={open} />}
-      </TermBox>
+      </Frame>
+      {!d && <MapKey />}
       <div className="hvi-city-help">
         {b
-          ? b.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "TAP A FLOOR TO FOCUS IT. HOVER A SUBJECT FOR ITS ASSIGNMENT. CLICK TO READ THE FILE. ON A PHONE: TAP TWICE."
+          ? b.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "TAP A FLOOR TO FOCUS IT. HOVER A SUBJECT FOR ITS ASSIGNMENT; CLICK TO READ THE FILE. ON A PHONE: TAP TWICE."
           : d
-            ? d.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "ENTER A BUILDING ABOVE. HOVER A SUBJECT FOR ITS ASSIGNMENT. CLICK TO READ THE FILE. ON A PHONE: TAP TWICE. THE SUBJECT WILL NOT NOTICE. IT HAS NO SAY."
+            ? d.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "ENTER A BUILDING ABOVE. HOVER A SUBJECT FOR ITS ASSIGNMENT; CLICK TO READ THE FILE. ON A PHONE: TAP TWICE. THE SUBJECT WILL NOT NOTICE. IT HAS NO SAY."
             : three
-              ? "DRAG TO TURN THE CITY. WHEEL OR PINCH TO ZOOM. TAP A BUILDING TO OPEN IT; TAP A FLOOR TO GO IN. BY KEYBOARD: [ AND ] OPEN THE NEXT BUILDING, ENTER CHOOSES A FLOOR. CYAN ON THE RING: THE LOOP; A LIT PLATFORM HAS A TRAIN STANDING AT IT. DOTS ARE COLOURED BY OCTANT: GREEN GOOD, AMBER CHARM, RED HARM. GREY: TRUSTED RESERVE, UNSORTED. HOLLOW: THE PEOPLE HAVE NOT BEEN ASKED."
-              : "EVERYONE HAS BEEN UPLOADED. EVERYONE HAS A JOB. CYAN ON THE RING: THE LOOP, ON TIME. DOTS ARE COLOURED BY OCTANT: GREEN GOOD, AMBER CHARM, RED HARM. GREY: TRUSTED RESERVE, UNSORTED. HOLLOW: THE PEOPLE HAVE NOT BEEN ASKED. ZOOM IN TO SEE FACES."}
+              ? <>DRAG TO TURN THE CITY. PINCH OR WHEEL TO ZOOM. TAP A BUILDING TO OPEN IT, A FLOOR TO GO IN.<span className="hvi-desk-only"> BY KEYBOARD: [ AND ] OPEN THE NEXT BUILDING, ENTER CHOOSES A FLOOR.</span> A LIT PLATFORM HAS A TRAIN STANDING AT IT.</>
+              : "EVERYONE HAS BEEN UPLOADED. EVERYONE HAS A JOB. THE LOOP RUNS ON TIME. ZOOM IN TO SEE FACES."}
       </div>
       {!d && <LoopPanel riders={stats.riders} waiting={stats.waiting} self={stats.self} onOpen={open} onDistrict={go} />}
-      <Rule label="DISTRICT DIRECTORY" />
-      <div className="hvi-city-list" role="list">
-        {stats.districts.map(x => (
-          <div key={x.id} role="listitem">
-            <button className={`hvi-row-btn${x.id === districtId ? " selected" : ""}`} onClick={() => go(x.id)}
-              aria-label={`${x.name}, ${x.count} present, capacity ${x.cap}. Enter district.`}>
-              <span className="tag">{pad(DISTRICT[x.id].addr, 7)}</span>
-              <span className="name">{x.name}</span>
-              <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
-              <span className="num" style={{ color: x.count > x.cap ? "var(--red)" : undefined }}>{padL(x.count, 3)}/{x.cap}</span>
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="hvi-cmds split" style={{ marginTop: "1.6em" }}>
-        {b ? <button className="hvi-btn-back" onClick={() => go(d.id)}>{d.name}</button>
-          : d ? <button className="hvi-btn-back" onClick={() => go(null)}>The Substrate</button>
-            : <button className="hvi-btn-back" onClick={() => { window.location.hash = ""; }}>Main menu</button>}
-        <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#pen"; }}>Holding pen</button>
-        <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#cube"; }}>The cube</button>
-      </div>
+      {d
+        ? <Disclosure className="hvi-city-dir" title="DISTRICT DIRECTORY" meta={`${stats.districts.length} DISTRICTS`}>{directory}</Disclosure>
+        : <Frame title="DISTRICT DIRECTORY" meta={`${stats.districts.length} ON RECORD`} className="hvi-city-dir">{directory}</Frame>}
+      <ButtonRow split stackOnMobile>
+        {b ? <Button variant="back" onClick={() => go(d.id)}>{d.name}</Button>
+          : d ? <Button variant="back" onClick={() => go(null)}>The Substrate</Button>
+            : <Button variant="back" className="hvi-city-menu-back" onClick={() => { window.location.hash = ""; }}>Main menu</Button>}
+        <Button variant="secondary" href="#pen">Holding pen</Button>
+      </ButtonRow>
       {cardEl}
     </div>
   );
@@ -220,31 +222,27 @@ const LoopPanel = memo(function LoopPanel({ riders, waiting, self, onOpen, onDis
   const byTrain = [];
   for (const r of riders) { const last = byTrain[byTrain.length - 1]; if (last && last.t === r.t) last.list.push(r); else byTrain.push({ t: r.t, list: [r] }); }
   return (
-    <details className="hvi-city-rooms" style={{ marginBottom: "0.8em" }}>
-      <summary>Aboard the Loop ({riders.length}){self ? " // locate your file" : ""} // keyboard access</summary>
+    <Disclosure className="hvi-city-disc" title={`ABOARD THE LOOP (${riders.length})${self ? " // YOUR FILE" : ""}`} meta={`${waiting} WAITING`}>
       {self && (
         <>
           <div className="hvi-city-room-h">YOUR FILE // {isOnLoop(self.at) ? `ABOARD ${TRAIN[self.w.trainId]?.name || "THE LOOP"}` : DISTRICT[self.at]?.name || "UNLOCATED"}</div>
           <Occupant s={self.s} onOpen={onOpen} />
           {!isOnLoop(self.at) && DISTRICT[self.at] && (
-            <button className="hvi-row-btn" onClick={() => onDistrict(self.at)} aria-label={`Enter ${DISTRICT[self.at].name}, where your file is.`}>
-              <span className="name">ENTER {DISTRICT[self.at].name}</span>
-              <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
-              <span className="tag">YOU ARE EXPECTED</span>
-            </button>
+            <ListRow label={`ENTER ${DISTRICT[self.at].name}`} tag="YOU ARE EXPECTED" onClick={() => onDistrict(self.at)}
+              aria-label={`Enter ${DISTRICT[self.at].name}, where your file is.`} />
           )}
         </>
       )}
       <div className="hvi-city-room-h">THE LOOP // {riders.length} ABOARD // {waiting} ON PLATFORMS</div>
       {riders.length === 0
-        ? <div className="hvi-case-note">NOBODY ABOARD. THE LOOP RUNS ANYWAY. IT IS NOT FOR YOU.</div>
+        ? <div className="hvi-city-note">NOBODY ABOARD. THE LOOP RUNS ANYWAY. IT IS NOT FOR YOU.</div>
         : byTrain.map(g => (
           <div key={g.t}>
             <div className="hvi-city-room-h">{TRAIN[g.t]?.name || g.t} // {g.list.length} ABOARD // {TRAIN[g.t]?.cars} CARS</div>
             {g.list.map(r => <Occupant key={r.s.name} s={r.s} onOpen={onOpen} note={`CAR ${r.c + 1}`} />)}
           </div>
         ))}
-      <div className="hvi-case-note" style={{ marginTop: "0.6em" }}>{Object.keys(STATIONS).length} STATIONS. ONE PER DISTRICT. ENTER A DISTRICT TO STAND ON ITS PLATFORM.</div>
-    </details>
+      <div className="hvi-city-note" style={{ marginTop: "var(--s3)" }}>{Object.keys(STATIONS).length} STATIONS. ONE PER DISTRICT. ENTER A DISTRICT TO STAND ON ITS PLATFORM.</div>
+    </Disclosure>
   );
 });

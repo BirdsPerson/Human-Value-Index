@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { readCaseId, writeCaseId } from "./Intake.jsx";
+import { readCaseId, writeCaseId } from "./caseFile.jsx";
+import { TextField, Button } from "./ui/components.jsx";
 
 // Email magic link: tie a case file to a real address so it follows you to any device.
 // The address never comes back to the browser except masked.
@@ -68,23 +69,24 @@ export default function SecureFile({ onCase, autoFocus = false }) {
   }
 
   if (!me) return null;
+  const note = msg && <div className="hvi-form-msg" role="status">{msg}</div>;
   if (me.signedIn) return (
     <div className="hvi-secure">
-      <div className="bright">FILE SECURED // {me.email}</div>
-      {me.cases?.length > 0 && <div className="dim">FILES ON THIS ADDRESS: {me.cases.join(", ")}</div>}
-      <button className="hvi-link-btn" onClick={logout}>Log out on this device</button>
-      {msg && <div className="hvi-logon-msg" role="status">{msg}</div>}
+      <div className="hvi-secure-ok">FILE SECURED // <span className="as-typed">{me.email}</span></div>
+      {me.cases?.length > 0 && <div className="hvi-note">FILES ON THIS ADDRESS: {me.cases.join(", ")}</div>}
+      <Button variant="secondary" onClick={logout}>Log out on this device</Button>
+      {note}
     </div>
   );
   return (
-    <form className="hvi-logon-form hvi-secure" onSubmit={request}>
-      <div className="dim">SECURE YOUR FILE: TIE IT TO AN EMAIL ADDRESS SO IT FOLLOWS YOU TO ANY DEVICE. NO PASSWORD. THE DEPARTMENT SENDS A LINK.</div>
-      <label className="p" htmlFor="hvi-secure-email">EMAIL:</label>
-      <input id="hvi-secure-email" className="hvi-refer-input" type="email" value={email} autoFocus={autoFocus} disabled={busy}
+    <form className="hvi-secure hvi-form" onSubmit={request}>
+      <div className="hvi-note hvi-form-lead">TIE YOUR FILE TO AN EMAIL ADDRESS SO IT FOLLOWS YOU TO ANY DEVICE. NO PASSWORD. THE DEPARTMENT SENDS A LINK.</div>
+      <TextField id="hvi-secure-email" label="EMAIL" type="email" inputMode="email" value={email} autoFocus={autoFocus} disabled={busy}
         onChange={e => setEmail(e.target.value)} placeholder="you@example.com" maxLength={254} autoComplete="email"
+        autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="send"
         aria-label="Email address" onKeyDown={e => e.stopPropagation()} />
-      <button className="hvi-btn-secondary" type="submit" disabled={busy || !email.includes("@")}>Send link</button>
-      {msg && <div className="hvi-logon-msg" role="status">{msg}</div>}
+      <Button type="submit" variant="secondary" disabled={busy || !email.includes("@")}>{busy ? "Sending" : "Send link"}</Button>
+      {note}
     </form>
   );
 }

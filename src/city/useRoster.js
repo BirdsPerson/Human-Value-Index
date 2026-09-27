@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { FAMOUS_FIGURES, slugify } from "../figures.js";
-import { readCaseId, readLastResult } from "../Intake.jsx";
+import { readCaseId, readLastResult } from "../caseFile.jsx";
 
 // Everyone uploaded into the Substrate: the figures on file, every citizen and referral
 // the census returns, and this browser's own file. Loaded once per visit to #city.

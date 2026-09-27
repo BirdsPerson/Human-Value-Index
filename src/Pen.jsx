@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import { FAMOUS_FIGURES, getTier, slugify, slugCandidates, displayName } from "./figures.js";
 import {
   SPRITE_W, SPRITE_H, gaitFor, clamp,
-  paintPlaceholder, paintAvatar, loadManifest, loadImage, mulberry32,
+  paintPlaceholder, paintAvatar, loadManifest, loadImage, loadRepoSprite, mulberry32,
 } from "./sprites.js";
 import FilePhoto from "./FilePhoto.jsx";
 import {
@@ -11,8 +12,9 @@ import {
   floorTop, walkTop, walkBot, roomX1, doorX, floorAt, prefsFor, chooseFloor, stayFor, isLow,
   makeLift, stepLift, leaveLift, stepSubject, arrive, countFloors, occupancyLine, procZone,
 } from "./building.js";
-import { ScoreCard, Breakdown, readCaseId, writeCaseId, readLastResult, CaseLogon } from "./Intake.jsx";
-import { TermBox, Rule, Typed, pad, padL } from "./term.jsx";
+import { ScoreCard, Breakdown, readCaseId, writeCaseId, readLastResult, CaseLogon } from "./caseFile.jsx";
+import { Rule, Typed } from "./term.jsx";
+import { Frame, Button, ButtonRow, Chip, ChipStrip, Command, CommandList, Disclosure, TextField, ListRow, PaLine } from "./ui";
 
 const FONT = "'Fira Mono', ui-monospace, Menlo, monospace";
 
@@ -118,43 +120,75 @@ const DOOR_OPEN_CAPTIONS = [
 ];
 
 const penStyles = `
-  .hvi-pen-top { display: flex; justify-content: space-between; gap: 0 2ch; flex-wrap: wrap; margin-bottom: 0.4em; color: var(--text-muted); font-size: 12px; }
-  .hvi-pen-top b { color: var(--green); font-weight: 700; }
+  .hvi-pen-top { display: flex; justify-content: space-between; gap: 0 2ch; flex-wrap: wrap; margin: 0 0 var(--s3); color: var(--fg-mute); font-size: var(--t-xs); }
+  .hvi-pen-top b { color: var(--accent); font-weight: 700; }
+  .hvi-pen-top .occ { color: var(--fg-dim); }
   .hvi-pen-stage { position: relative; background: #060a06; }
-  .hvi-pen-canvas { display: block; width: 100%; touch-action: pan-y; cursor: default; }
+  .hvi-pen-canvas { display: block; width: 100%; touch-action: pan-y; cursor: default; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .hvi-pen-canvas.grab { cursor: grab; }
   .hvi-pen-canvas.grabbing { cursor: grabbing; }
-  .hvi-pen-caption { display: flex; gap: 1ch; align-items: baseline; padding: 0.3em 1ch; color: var(--text-dim); min-height: 2.2em; font-size: 12px; }
-  .hvi-pen-caption .tag { color: var(--green); flex: none; white-space: pre; }
-  .hvi-pen-caption.hot { color: var(--amber); }
-  .hvi-pen-help { color: var(--text-ghost); font-size: 12px; margin: 0 0 1.6em; }
-  .hvi-pen-list-wrap summary { color: var(--text-muted); cursor: pointer; padding: 0.3em 0; list-style: none; }
-  .hvi-pen-list-wrap summary::-webkit-details-marker { display: none; }
-  .hvi-pen-list-wrap summary::before { content: "[+] "; color: var(--green); }
-  .hvi-pen-list-wrap[open] summary::before { content: "[-] "; }
-  .hvi-pen-list-wrap summary:focus-visible { background: var(--green); color: var(--bg); outline: none; }
-  .hvi-pen-list { columns: 2 34ch; column-gap: 3ch; margin-top: 0.6em; }
-  .hvi-pen-list .hvi-row-btn { break-inside: avoid; }
-  .hvi-card-overlay { position: fixed; inset: 0; background: rgba(3,6,3,0.9); z-index: 150; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 24px 16px; }
+  .hvi-pen-caption { padding: var(--s1) 1ch; min-height: calc(2 * var(--lh) * var(--t-xs)); }
+  .hvi-pen-caption.hot { color: var(--warn); }
+  .hvi-pen-help { color: var(--fg-mute); font-size: var(--t-xs); margin: calc(var(--s5) * -1 + var(--s2)) 0 var(--s5); }
+  .hvi-pen-help p { margin: 0 0 var(--s1); }
+  .hvi-pen-floors { margin: 0 0 var(--s1); }
+  .hvi-pen-floors .ui-chipstrip { justify-content: space-between; }
+  .hvi-pen-registry { margin-bottom: var(--s5); }
+  .hvi-pen-registry .ui-field { margin-top: 0; }
+  .hvi-pen-list { columns: 2 40ch; column-gap: var(--s5); }
+  .hvi-pen-list > * { break-inside: avoid; }
+  .hvi-pen-list .ui-row .lead .hvi-photo-thumb { margin: -2px 0; }
+  .hvi-pen-list .ui-row .tag { min-width: 10ch; text-align: right; }
+  .hvi-pen-list .ui-row .val { min-width: 3ch; text-align: right; }
+  .hvi-pen-none { color: var(--fg-mute); font-size: var(--t-xs); padding: var(--s2) var(--s1); }
+
+  /* the subject file: a dialog over the pen. Phones get the whole screen and the way
+     back sits at the bottom, under the thumb. */
+  .hvi-card-overlay { position: fixed; inset: 0; background: rgba(3,6,3,0.92); z-index: 150; display: flex; align-items: flex-start; justify-content: center;
+    overflow-y: auto; overscroll-behavior: contain; padding: calc(var(--s5) + var(--safe-t)) var(--s4) var(--s5); }
   .hvi-card-panel { width: 100%; max-width: 72ch; background: var(--bg); position: relative; }
-  .hvi-card-kind { color: var(--text-ghost); font-size: 12px; }
-  .hvi-card-name { color: var(--text); font-weight: 700; margin-bottom: 0.8em; }
-  .hvi-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 2ch; flex-wrap: wrap; }
-  .hvi-refer { margin: 0 0 1.2em; }
-  .hvi-refer-row { display: flex; align-items: baseline; gap: 1ch; }
-  .hvi-refer-row .p { flex: none; color: var(--green); white-space: pre; }
-  .hvi-refer-input { flex: 1; min-width: 0; background: transparent; border: 0; border-radius: 0; outline: none; color: var(--text); font: inherit; padding: 0; caret-color: var(--green); caret-shape: block; }
-  .hvi-refer-input:disabled { color: var(--text-dim); }
-  .hvi-refer-out { min-height: 1.3em; margin-top: 0.3em; color: var(--text-dim); }
-  .hvi-refer-out.err { color: var(--red, #f87171); }
-  .hvi-refer-out.ok { color: var(--amber); }
-  .hvi-refer-quota { color: var(--text-ghost); font-size: 12px; margin-top: 0.2em; }
-  .hvi-refer-choices { list-style: none; margin: 0.3em 0 0.4em; padding: 0; }
-  .hvi-refer-pick { background: none; border: 0; padding: 1px 4px; font: inherit; color: var(--text); text-align: left; cursor: pointer; width: 100%; white-space: normal; }
-  .hvi-refer-pick:hover, .hvi-refer-pick.on, .hvi-refer-pick:focus-visible { background: var(--green, #4ade80); color: var(--bg, #000); outline: none; }
-  .hvi-floor-nav { display: flex; flex-wrap: wrap; gap: 0.2em 1ch; margin: 0 0 0.5em; }
-  .hvi-floor-nav .hvi-cmd { padding: 0 0.5ch; }
-  .hvi-pen-list .hvi-row-btn .tag { color: var(--text-ghost); }
+  .hvi-card-panel > .tb { margin-bottom: 0; }
+  .hvi-card-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin: calc(var(--s2) * -1) 0 var(--s2); }
+  .hvi-card-kind { color: var(--fg-mute); font-size: var(--t-xs); min-width: 0; }
+  .hvi-card-head { display: flex; align-items: flex-start; gap: var(--s4); margin-bottom: var(--s4); }
+  .hvi-card-id { flex: 1; min-width: 0; padding-top: var(--s3); }
+  .hvi-card-name { color: var(--fg); font-weight: 700; text-transform: uppercase; font-size: var(--t-l); line-height: var(--lh-tight); overflow-wrap: break-word; }
+  .hvi-card-assign { color: var(--accent); font-size: var(--t-xs); margin-top: var(--s2); }
+  .hvi-card-note { color: var(--warn); font-size: var(--t-xs); margin: var(--s2) 0; }
+  .hvi-card-foot { position: sticky; bottom: 0; background: var(--bg); border-top: var(--bw) solid var(--line); margin: var(--s4) 0 0;
+    padding-bottom: var(--safe-b); z-index: 2; }
+  .hvi-card-foot .ui-btn-row { margin: 0; }
+  @media (max-width: 560px) {
+    .hvi-card-overlay { padding: calc(var(--s2) + var(--safe-t)) calc(var(--s2) + var(--safe-r)) 0 calc(var(--s2) + var(--safe-l)); background: var(--bg); }
+    .hvi-card-panel { min-height: 100%; }
+    .hvi-card-name { font-size: var(--t-m); }
+  }
+
+  /* FILE A REFERRAL */
+  .hvi-refer { margin: 0 0 var(--s4); }
+  .hvi-refer-form { display: flex; align-items: flex-start; gap: var(--s2); }
+  .hvi-refer-form .ui-field { flex: 1; min-width: 0; margin: 0; }
+  .hvi-refer-form .ui-input { color: var(--fg-dim); }
+  .hvi-refer-form .ui-btn { flex: none; }
+  @media (max-width: 480px) {
+    /* the prompt sits over the field so the name gets the width; [ FILE ] stays by the thumb */
+    .hvi-refer-form { align-items: flex-end; }
+    .hvi-refer-form .ui-field { flex-direction: column; gap: 0; }
+    .hvi-refer-form .ui-field > label { line-height: var(--lh); }
+  }
+  .hvi-refer-out { min-height: 1.5em; margin-top: var(--s1); color: var(--fg-dim); font-size: var(--t-s); }
+  .hvi-refer-out.empty { min-height: 0; margin: 0; }
+  .hvi-refer-out.err { color: var(--harm); }
+  .hvi-refer-out.ok { color: var(--warn); }
+  .hvi-refer-quota { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s1); }
+  .hvi-refer-choices { margin: var(--s2) 0; }
+  .hvi-refer-choices .ui-cmd .s { text-transform: uppercase; }
+  .hvi-refer-choices .ui-cmd.sealed:not([aria-current="true"]) .l { color: var(--fg-mute); }
+  .hvi-refer-choices .ui-cmd .onfile { color: var(--accent); }
+  .hvi-refer-choices .ui-cmd[aria-current="true"] .onfile { color: var(--accent-ink); }
+  /* Intake's photo description borrows the referral input. */
+  .hvi-refer-input { flex: 1; min-width: 0; background: transparent; border: 0; border-radius: 0; outline: none; color: var(--fg); font: inherit; padding: 0; caret-color: var(--accent); caret-shape: block; }
+  .hvi-refer-input:disabled { color: var(--fg-dim); }
 `;
 
 export function injectPenStyles() {
@@ -188,18 +222,23 @@ export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return 
     : subject.kind === "citizen" ? "CITIZEN // SELF-SUBMITTED FILE"
     : subject.referred ? `PUBLIC FIGURE // REFERRED BY A CITIZEN${subject.sprite ? "" : " // LIKENESS PENDING"}`
     : "PUBLIC FIGURE // FILE ON RECORD";
-  return (
+  const narrow = typeof window !== "undefined" && window.innerWidth <= 560;
+  // Portalled to <body>: the dialog sits above the shell (header and command bar) instead
+  // of inside the page's stacking context, where the bar would draw over it.
+  return createPortal(
     <div className="hvi-card-overlay" onClick={onClose}>
       <div className="hvi-card-panel" role="dialog" aria-modal="true" aria-labelledby="hvi-card-name" onClick={e => e.stopPropagation()}>
-        <TermBox title="SUBJECT FILE" right={where}>
+        <Frame box title="SUBJECT FILE" meta={where}>
+          <div className="hvi-card-top">
+            <span className="hvi-card-kind">{kind}</span>
+            <Button ref={closeRef} variant="back" onClick={onClose} aria-label="Release subject: close the file">Release</Button>
+          </div>
           <div className="hvi-card-head">
-            <FilePhoto subject={subject} scale={typeof window !== "undefined" && window.innerWidth <= 560 ? 2 : 3} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="hvi-card-kind">{kind}</div>
+            <FilePhoto subject={subject} scale={narrow ? 2 : 3} />
+            <div className="hvi-card-id">
               <div className="hvi-card-name" id="hvi-card-name">{displayName(subject)}</div>
-              {assignment && <div className="hvi-card-kind" style={{ color: "var(--green)" }}>{assignment}</div>}
+              {assignment && <div className="hvi-card-assign">{assignment}</div>}
             </div>
-            <button ref={closeRef} className="hvi-btn-next" onClick={onClose}>Release</button>
           </div>
           <ScoreCard score={subject.score} tierLabel={subject.tier} verdict={subject.verdict} label="VALUE INDEX">
             <CubeLine subject={subject} />
@@ -220,15 +259,20 @@ export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return 
           </ScoreCard>
           {subject.harmReview?.note && (
             // Scott's case-by-case harm finding on this subject (harmReview on the card).
-            <div className="hvi-delta" style={{ margin: "8px 0" }}>HARM FINDING REVIEWED BY THE DEPARTMENT: {subject.harmReview.note}</div>
+            <div className="hvi-card-note">HARM FINDING REVIEWED BY THE DEPARTMENT: {subject.harmReview.note}</div>
           )}
-          {subject.you && subject.rubric < 3 && <div className="hvi-delta" style={{ margin: "8px 0" }}>SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.</div>}
+          {subject.you && subject.rubric < 3 && <div className="hvi-card-note">SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.</div>}
           <CubePanel subject={subject} />
           <Breakdown breakdown={subject.breakdown} />
-          <button className="hvi-btn-primary" onClick={onClose}>{back}</button>
-        </TermBox>
+          <div className="hvi-card-foot">
+            <ButtonRow stackOnMobile>
+              <Button variant="primary" block onClick={onClose}>{back}</Button>
+            </ButtonRow>
+          </div>
+        </Frame>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -242,6 +286,13 @@ export function candidateLine(c) {
   const years = c.born || c.died ? `${c.born || "?"}–${c.died || ""}` : "";
   const withYears = years && !/\d{3,4}/.test(d) ? `${d}${d ? " " : ""}(${years})` : d;
   return `${String(c.title).toUpperCase()}${withYears ? ` — ${withYears}` : ""}${c.excluded ? " [SEALED BY POLICY]" : c.onFile ? ` [ON FILE: ${c.onFile.score}]` : ""}`;
+}
+
+// The pick list's second line: the description and years, without the title.
+function candidateSub(c) {
+  const d = String(c.description || "");
+  const years = c.born || c.died ? `${c.born || "?"}–${c.died || ""}` : "";
+  return (years && !/\d{3,4}/.test(d) ? `${d}${d ? " " : ""}(${years})` : d) || "NO DESCRIPTION ON RECORD";
 }
 
 function ReferralBar({ simRef }) {
@@ -330,40 +381,44 @@ function ReferralBar({ simRef }) {
     submit(null, who, c.title);
   }
 
+  const onPickKey = (e) => {
+    const k = e.key, n = choices.candidates.length;
+    if (/^[1-8]$/.test(k) && Number(k) <= n) { e.preventDefault(); choose(choices.candidates[Number(k) - 1]); }
+    else if (k === "ArrowDown" || k === "ArrowUp") {
+      e.preventDefault();
+      const next = (pick + (k === "ArrowDown" ? 1 : n - 1)) % n;
+      setPick(next); document.getElementById(`hvi-refer-pick-${next}`)?.focus();
+    } else if (k === "Escape") { setChoices(null); setOut(null); inputRef.current?.focus(); }
+  };
+
   return (
     <div className="hvi-refer">
-      <form className="hvi-refer-row" onSubmit={submit}>
-        <label className="p" htmlFor="hvi-refer-input">FILE A REFERRAL &gt;</label>
-        <input id="hvi-refer-input" ref={inputRef} className="hvi-refer-input" value={name} maxLength={80}
-          autoComplete="off" spellCheck="false" disabled={busy}
-          placeholder="a public figure's name"
+      <form className="hvi-refer-form" onSubmit={submit}>
+        <TextField id="hvi-refer-input" ref={inputRef} label="FILE A REFERRAL" value={name} maxLength={80}
+          spellCheck="false" autoCapitalize="words" enterKeyHint="send" disabled={busy}
+          placeholder="a public figure"
           aria-describedby="hvi-refer-out hvi-refer-quota"
           onChange={e => setName(e.target.value)} />
+        <Button type="submit" variant="primary" disabled={busy || !name.trim()}>File</Button>
       </form>
-      <div id="hvi-refer-out" className={`hvi-refer-out${out?.tone ? " " + out.tone : ""}`} role="status" aria-live="polite">
+      <div id="hvi-refer-out" className={`hvi-refer-out${out?.tone ? " " + out.tone : ""}${out ? "" : " empty"}`} role="status" aria-live="polite">
         {out ? <Typed key={out.text} as="span" text={out.text} cps={50} cursorAfter={busy} /> : null}
       </div>
       {choices && (
-        <ol className="hvi-refer-choices" aria-label={`Subjects named ${choices.name}`}
-          onKeyDown={e => {
-            const k = e.key, n = choices.candidates.length;
-            if (/^[1-8]$/.test(k) && Number(k) <= n) { e.preventDefault(); choose(choices.candidates[Number(k) - 1]); }
-            else if (k === "ArrowDown" || k === "ArrowUp") {
-              e.preventDefault();
-              const next = (pick + (k === "ArrowDown" ? 1 : n - 1)) % n;
-              setPick(next); document.getElementById(`hvi-refer-pick-${next}`)?.focus();
-            } else if (k === "Escape") { setChoices(null); setOut(null); inputRef.current?.focus(); }
-          }}>
-          {choices.candidates.map((c, i) => (
-            <li key={c.qid}>
-              <button id={`hvi-refer-pick-${i}`} type="button" className={`hvi-refer-pick${i === pick ? " on" : ""}`}
-                aria-disabled={c.excluded ? "true" : undefined}
-                onFocus={() => setPick(i)} onClick={() => choose(c)}>
-                [{i + 1}] {candidateLine(c)}
-              </button>
-            </li>
-          ))}
-        </ol>
+        // One highlight: the pick (keyboard focus or the first) is inverse video; hover
+        // only underlines. Wikipedia's description sits on its own line, in the UI's caps.
+        <div className="hvi-refer-choices" onKeyDown={onPickKey}>
+          <CommandList label={`Subjects named ${choices.name}`}>
+            {choices.candidates.map((c, i) => (
+              <Command key={c.qid} id={`hvi-refer-pick-${i}`} n={i + 1} selected={i === pick}
+                className={c.excluded ? "sealed" : undefined} aria-disabled={c.excluded ? "true" : undefined}
+                aria-label={candidateLine(c)} kbd={c.excluded ? "×" : "›"}
+                label={String(c.title).toUpperCase()}
+                sub={<>{candidateSub(c)}{c.excluded ? " · SEALED BY POLICY" : c.onFile ? <span className="onfile"> · ON FILE: {c.onFile.score}</span> : ""}</>}
+                onFocus={() => setPick(i)} onClick={() => choose(c)} />
+            ))}
+          </CommandList>
+        </div>
       )}
       {needRestore && (
         <div className="hvi-refer-restore">
@@ -466,6 +521,7 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
   const [floorSel, setFloorSel] = useState(F.lobby);
   const [rooms, setRooms] = useState({});
   const [occ, setOcc] = useState("");
+  const [find, setFind] = useState("");
 
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
@@ -747,7 +803,7 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
       const slug = slugCandidates(e.s.name).concat(e.slug).find(k => manifest && manifest[k]);
       if (!src && !slug) return;
       const meta = (slug && manifest[slug]) || {};
-      loadImage(src || `/sprites/${slug}.png`).then(img => {
+      (src ? loadImage(src) : loadRepoSprite(slug)).then(img => {
         if (!img || cancelled) return;
         e.img = img; e.real = true;
         e.frames = Math.max(1, meta.frames || Math.floor(img.width / (meta.w || SPRITE_W)) || 1);
@@ -1034,9 +1090,25 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
       const pad = Math.round(4 * sim.dpr), h = sim.fontPx + pad * 2;
       let x = Math.round(cx - tw / 2 - pad);
       x = clamp(x, 2, canvas.width - tw - pad * 2 - 2);
-      const y = Math.max(2, Math.round(top - h));
+      const bw = Math.round(tw + pad * 2);
+      let y = Math.max(2, Math.round(top - h));
+      // Two subjects talking at once used to print one bubble over the other: stack
+      // this one above whatever it would cover, and drop it if that leaves the canvas.
+      const placed = sim.bubbles || (sim.bubbles = []);
+      for (let tries = 0; tries < 4; tries++) {
+        let hit = null;
+        for (let i = 0; i < placed.length; i += 4) {
+          if (x < placed[i] + placed[i + 2] && x + bw > placed[i] && y < placed[i + 1] + placed[i + 3] && y + h > placed[i + 1]) { hit = placed[i + 1]; break; }
+        }
+        if (hit === null) break;
+        y = hit - h - 2;
+        if (tries === 3) y = -1;
+      }
+      if (y < 2 && !hot) return;
+      y = Math.max(2, y);
+      placed.push(x, y, bw, h);
       ctx.fillStyle = hot ? "#fbbf24" : "#d1fae5";
-      ctx.fillRect(x, y, Math.round(tw + pad * 2), h);
+      ctx.fillRect(x, y, bw, h);
       ctx.fillStyle = "#0a0f0a";
       ctx.fillText(text, x + pad, y + pad);
     }
@@ -1149,6 +1221,7 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
       // labels + speech on top of everyone
       ctx.font = `${sim.fontPx}px ${FONT}`;
       ctx.textBaseline = "top";
+      if (sim.bubbles) sim.bubbles.length = 0;
       for (let i = 0; i < o.length; i++) {
         const e = o[i];
         if (e.y < viewTop || e.y - SPRITE_H > viewBot || hidden(e)) continue;
@@ -1203,63 +1276,64 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
   const citizens = roster.filter(s => s.kind === "citizen").length;
   const openFromList = (s) => { simRef.current?.hop?.(s.name); setCard({ ...s }); };
   const fl = FLOORS[floorSel];
+  const q = find.trim().toLowerCase();
+  const listed = q ? sorted.filter(s => displayName(s).toLowerCase().includes(q) || String(s.name).toLowerCase().includes(q)) : sorted;
 
   return (
-    <div>
+    <div className="hvi-pen">
       {!embedded && <div className="hvi-pen-top">
-        <span>HOLDING PEN B // <b>{roster.length}</b> SUBJECTS // {citizens} CITIZEN{citizens === 1 ? "" : "S"} // {FLOORS.length} FLOORS</span>
-        <span>{occ || "OCCUPANCY UNDER REVIEW."}</span>
+        <span>PEN B // <b>{roster.length}</b> SUBJECTS // {citizens} CITIZEN{citizens === 1 ? "" : "S"}</span>
+        <span className="occ">{occ || "OCCUPANCY UNDER REVIEW."}</span>
       </div>}
       {!embedded && <ReferralBar simRef={simRef} />}
       {narrow && (
-        <div className="hvi-floor-nav" role="group" aria-label="Floor">
-          {FLOORS.map((f, i) => (
-            <button key={f.id} className={`hvi-cmd${i === floorSel ? " on" : ""}`} aria-pressed={i === floorSel}
-              onClick={() => simRef.current?.goFloor?.(i)}>[{f.short}]</button>
-          ))}
+        // Phones show one floor at a time. The six floors fit on one line; it scrolls if not.
+        <div className="hvi-pen-floors">
+          <ChipStrip label="Floor">
+            {FLOORS.map((f, i) => (
+              <Chip key={f.id} pressed={i === floorSel} tone={f.id === "proc" ? "harm" : undefined}
+                aria-label={`${f.code} ${f.name}`} onClick={() => simRef.current?.goFloor?.(i)}>{f.short}</Chip>
+            ))}
+          </ChipStrip>
         </div>
       )}
-      <TermBox title={narrow ? `${fl.code} ${fl.name}` : "HOLDING PEN B"} right={narrow ? (floorSel === F.archive ? "DECEASED. STILL ASSESSED." : "SWIPE: FLOORS") : "FACILITY CROSS-SECTION"} bodyClass="flush">
+      {/* The building is one of the app's two live displays (with the cube): box-drawn. */}
+      <Frame box title={narrow ? `${fl.code} ${fl.name}` : "HOLDING PEN B"}
+        meta={narrow ? (floorSel === F.archive ? "DECEASED. STILL ASSESSED." : "SWIPE: FLOORS") : "FACILITY CROSS-SECTION"} bodyClass="flush">
         <div className="hvi-pen-stage" ref={wrapRef}>
           <canvas ref={canvasRef} className={`hvi-pen-canvas${cursor ? " " + cursor : ""}`} role="img"
             aria-label="The Holding Pen: a six-floor cross-section of the Department of Human Assessment. Subjects ride an elevator between the Executive Floor, the Bar, the Lobby, the Break Room, the Archive and PROCESSING. Use the subject registry below to open files by keyboard." />
         </div>
         <Rule />
-        <div className={`hvi-pen-caption${caption.hot ? " hot" : ""}`} aria-hidden="true">
-          <span className="tag">PA&gt;</span><Typed key={caption.text} as="span" text={caption.text} cps={45} />
+        <div className="hvi-pen-caption" aria-hidden="true">
+          <PaLine key={caption.text} text={caption.text} tone={caption.hot ? "warn" : undefined} />
         </div>
         <div role="status" className="sr-only">{srStatus}</div>
-      </TermBox>
+      </Frame>
       {!embedded && <div className="hvi-pen-help">
-        DRAG A SUBJECT TO INSPECT IT. THEY DISLIKE THIS. DROP IT TO READ THE FILE.<br />
-        {narrow ? "SWIPE SIDEWAYS TO CHANGE FLOORS. CARRY A SUBJECT TO THE EDGE TO TAKE IT WITH YOU." : "CARRY A SUBJECT TO ANOTHER FLOOR IF YOU MUST. THE ELEVATOR IS FOR THEM, NOT YOU."}<br />
-        DROPPING SUBJECTS ON PROCESSING IS NOT A SHORTCUT. THE PAPERWORK STILL HAS TO CLEAR.
+        <p>{narrow ? "HOLD A SUBJECT TO LIFT IT. THEY DISLIKE THIS. LET GO TO READ THE FILE." : "DRAG A SUBJECT TO INSPECT IT. THEY DISLIKE THIS. DROP IT TO READ THE FILE."}</p>
+        <p>{narrow ? "SWIPE SIDEWAYS FOR ANOTHER FLOOR. CARRY A SUBJECT TO THE EDGE TO TAKE IT WITH YOU." : "CARRY A SUBJECT TO ANOTHER FLOOR IF YOU MUST. THE ELEVATOR IS FOR THEM, NOT YOU."}</p>
+        <p>DROPPING SUBJECTS ON PROCESSING IS NOT A SHORTCUT. THE PAPERWORK STILL HAS TO CLEAR.</p>
       </div>}
-      <details className="hvi-pen-list-wrap">
-        <summary>Subject registry ({roster.length}) // keyboard access</summary>
-        <div className="hvi-pen-list">
-          {sorted.map(s => {
+      <Disclosure className="hvi-pen-registry" title="SUBJECT REGISTRY" meta={`${roster.length} ON FILE`}>
+        <TextField label="FIND" value={find} onChange={e => setFind(e.target.value)} placeholder="a name in the building"
+          spellCheck="false" enterKeyHint="search" />
+        <div className="hvi-pen-list" role="list" aria-label="Subjects, highest value first">
+          {listed.map(s => {
             const t = getTier(s.score);
             const where = rooms[s.name];
             return (
-              <button key={s.name} className="hvi-row-btn" onClick={() => openFromList(s)}
-                aria-label={`${displayName(s)}, ${s.score}, ${t.label}${where ? `, located: ${where}` : ""}. Open file.`}>
-                <FilePhoto subject={s} scale={1} compact />
-                <span className="name">{displayName(s)}{s.you ? " (YOU)" : ""}</span>
-                <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
-                {where && <span className="tag" aria-hidden="true">{pad(where, 10)}</span>}
-                <span className="num" style={{ color: t.color }}>{padL(s.score, 3)}</span>
-              </button>
+              <div role="listitem" key={s.name}>
+                <ListRow lead={<FilePhoto subject={s} scale={1} compact />} onClick={() => openFromList(s)}
+                  label={`${displayName(s)}${s.you ? " (YOU)" : ""}`} value={s.score} tone={t.color}
+                  tag={where || undefined} tagOptional
+                  aria-label={`${displayName(s)}, ${s.score}, ${t.label}${where ? `, located: ${where}` : ""}. Open file.`} />
+              </div>
             );
           })}
+          {!listed.length && <div className="hvi-pen-none">NO SUCH SUBJECT IN THE BUILDING. THE DEPARTMENT DOES NOT INVENT SUBJECTS.</div>}
         </div>
-      </details>
-      {!embedded && <div className="hvi-cmds split" style={{ marginTop: '1.6em' }}>
-        <button className="hvi-btn-back" onClick={() => { window.location.hash = ""; }}>Main menu</button>
-        <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#intake"; }}>Submit yourself for intake</button>
-        <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#cube"; }}>The cube</button>
-        <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#city"; }}>The Substrate</button>
-      </div>}
+      </Disclosure>
       {card && <SubjectCard subject={card} onClose={() => setCard(null)} {...(cardProps ? cardProps(card) : {})} />}
     </div>
   );

@@ -4,6 +4,7 @@ import { DISTRICT, PLACES, atDistrict, placesOf, placeName, placeCap, placeKind,
 import { roomGrid } from "./cityKit.js";
 import RoomStage, { ROOM_H } from "./RoomStage.jsx";
 import { Occupant } from "./cityUi.jsx";
+import { Disclosure, ListRow } from "../ui/index.js";
 
 // One district from the inside: its buildings (tap one to go in), then its station
 // platform and its rooms as terminal rooms, stacked on phones and tiled on wide screens,
@@ -34,8 +35,10 @@ function DistrictView({ districtId, censusRef, onOpen, onBuilding, counts }) {
   if (districtId === "hq") {
     return (
       <div>
-        <div className="hvi-case-note" style={{ marginBottom: "0.8em" }}>{d?.blurb} THE BUILDING BELOW IS THE HOLDING PEN. IT IS ALSO HEADQUARTERS. THE DEPARTMENT DOES NOT WASTE REAL ESTATE. IT HOLDS EVERY FILE, NOT EVERY BODY: THE BODIES ARE AT WORK.</div>
-        <BuildingList districtId={districtId} onBuilding={onBuilding} counts={counts} />
+        <div className="hvi-city-in">
+          <div className="hvi-city-note">{d?.blurb} THE BUILDING BELOW IS THE HOLDING PEN. IT IS ALSO HEADQUARTERS. THE DEPARTMENT DOES NOT WASTE REAL ESTATE. IT HOLDS EVERY FILE, NOT EVERY BODY: THE BODIES ARE AT WORK.</div>
+          <BuildingList districtId={districtId} onBuilding={onBuilding} counts={counts} />
+        </div>
         <HqPlatform censusRef={censusRef} onOpen={onOpen} />
         <Pen embedded cardProps={embeddedCard} />
       </div>
@@ -56,12 +59,8 @@ export function BuildingList({ districtId, onBuilding, counts = {} }) {
         const secret = b.id === "hq";   // HQ keeps its own books
         return (
           <div key={b.id} role="listitem">
-            <button className="hvi-row-btn" onClick={() => onBuilding(b.id)} aria-label={`${b.name}, ${fl} floor${fl === 1 ? "" : "s"}, ${secret ? "census classified" : `${n} present`}. Enter building.`}>
-              <span className="tag">{b.addr}</span>
-              <span className="name">{b.name}</span>
-              <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
-              <span className="num">{fl}F // {secret ? "CLASSIFIED" : `${n} PRESENT`}</span>
-            </button>
+            <ListRow lead={b.addr} label={b.name} value={`${fl}F`} tag={secret ? "CLASSIFIED" : `${n} IN`} onClick={() => onBuilding(b.id)}
+              aria-label={`${b.name}, ${fl} floor${fl === 1 ? "" : "s"}, ${secret ? "census classified" : `${n} present`}. Enter building.`} />
           </div>
         );
       })}
@@ -80,15 +79,16 @@ function HqPlatform({ censusRef, onOpen }) {
   if (!st) return null;
   const n = (present[PLATFORM] || []).length;
   return (
-    <div style={{ marginBottom: "0.9em" }}>
+    <div>
       <RoomStage cells={cells} layout={layout} assign={assign} censusRef={censusRef} onOpen={onOpen} onPresent={setPresent} stationId="hq"
         ariaLabel={`${st.name}: the platform, ${n} on it. The list below names them.`} />
-      <details className="hvi-city-rooms">
-        <summary>Platform ({n} present) // keyboard access</summary>
-        {n === 0
-          ? <div className="hvi-case-note">NOBODY WAITING. THE LOOP COMES ANYWAY.</div>
-          : present[PLATFORM].map(s => <Occupant key={s.name} s={s} onOpen={onOpen} />)}
-      </details>
+      <div className="hvi-city-in">
+        <Disclosure title={`PLATFORM (${n} PRESENT)`} meta="LIST">
+          {n === 0
+            ? <div className="hvi-city-note">NOBODY WAITING. THE LOOP COMES ANYWAY.</div>
+            : present[PLATFORM].map(s => <Occupant key={s.name} s={s} onOpen={onOpen} />)}
+        </Disclosure>
+      </div>
     </div>
   );
 }
@@ -118,21 +118,24 @@ function Rooms({ districtId, censusRef, onOpen, onBuilding }) {
 
   return (
     <div>
-      <div className="hvi-case-note" style={{ marginBottom: "0.8em" }}>{d?.blurb}</div>
-      <BuildingList districtId={districtId} onBuilding={onBuilding} counts={bcounts} />
+      <div className="hvi-city-in">
+        <div className="hvi-city-note">{d?.blurb}</div>
+        <BuildingList districtId={districtId} onBuilding={onBuilding} counts={bcounts} />
+      </div>
       <RoomStage cells={cells} layout={layout} assign={assign} censusRef={censusRef} onOpen={onOpen} onPresent={setPresent} stationId={st ? districtId : null}
         ariaLabel={`${d?.name || "District"}: the station platform and ${places.length} rooms, ${total} subjects present, ${waiting} on the platform. The room directory below lists them by keyboard.`} />
-      <details className="hvi-city-rooms">
-        <summary>Room directory ({total} present) // keyboard access</summary>
-        {cells.map(c => (
-          <div key={c.id}>
-            <div className="hvi-city-room-h">{c.title} // {(present[c.id] || []).length}{c.cap ? `/${c.cap}` : " ON THE PLATFORM"}</div>
-            {(present[c.id] || []).length === 0
-              ? <div className="hvi-case-note">{c.id === PLATFORM ? "NOBODY WAITING. THE LOOP COMES ANYWAY." : "EMPTY. THE ROOM IS ALSO BEING ASSESSED."}</div>
-              : (present[c.id] || []).map(s => <Occupant key={s.name} s={s} onOpen={onOpen} />)}
-          </div>
-        ))}
-      </details>
+      <div className="hvi-city-in">
+        <Disclosure title={`ROOM DIRECTORY (${total} PRESENT)`} meta={`${cells.length} ROOMS`}>
+          {cells.map(c => (
+            <div key={c.id}>
+              <div className="hvi-city-room-h">{c.title} // {(present[c.id] || []).length}{c.cap ? `/${c.cap}` : " ON THE PLATFORM"}</div>
+              {(present[c.id] || []).length === 0
+                ? <div className="hvi-city-note">{c.id === PLATFORM ? "NOBODY WAITING. THE LOOP COMES ANYWAY." : "EMPTY. THE ROOM IS ALSO BEING ASSESSED."}</div>
+                : (present[c.id] || []).map(s => <Occupant key={s.name} s={s} onOpen={onOpen} />)}
+            </div>
+          ))}
+        </Disclosure>
+      </div>
     </div>
   );
 }

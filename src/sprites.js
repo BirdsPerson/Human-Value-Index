@@ -259,3 +259,46 @@ export function loadImage(src) {
     img.src = src;
   });
 }
+
+// ---------------------------------------------------------------------------
+// The sprite atlas (scripts/sprite-atlas.mjs): every repo sprite in one image, so a
+// screen full of subjects costs one request, not sixty. A sheet is cut out of it once
+// into its own canvas, which draws exactly like the PNG it came from. Anything the
+// atlas does not hold (a sprite drawn since the deploy, a referral's own URL) loads on
+// its own as before, and if the atlas is missing every sprite does.
+let atlasP = null;
+export function loadAtlas() {
+  if (!atlasP) {
+    atlasP = (async () => {
+      try {
+        const r = await fetch("/sprites/atlas.json", { cache: "no-cache" });
+        if (!r.ok) return null;
+        const j = await r.json();
+        if (!j || typeof j.sprites !== "object" || typeof j.png !== "string") return null;
+        const img = await loadImage(`/sprites/${j.png}`);
+        return img ? { img, sprites: j.sprites, cut: new Map() } : null;
+      } catch { return null; }
+    })();
+  }
+  return atlasP;
+}
+
+// A repo sprite sheet by slug: a canvas cut from the atlas, else /sprites/<slug>.png.
+// Resolves to null when neither exists.
+export async function loadRepoSprite(slug) {
+  const a = await loadAtlas();
+  const r = a && Object.prototype.hasOwnProperty.call(a.sprites, slug) ? a.sprites[slug] : null;
+  if (r) {
+    let c = a.cut.get(slug);
+    if (!c) {
+      try {
+        c = document.createElement("canvas");
+        c.width = r.w; c.height = r.h;
+        c.getContext("2d").drawImage(a.img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+        a.cut.set(slug, c);
+      } catch { c = null; }
+    }
+    if (c) return c;
+  }
+  return loadImage(`/sprites/${slug}.png`);
+}

@@ -1,13 +1,20 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
-import CubePanel, { CubeLine } from "./CubePanel.jsx";
-import CubeView from "./CubeView.jsx";
+import CubePanel, { CubeChips, cubePlace, cubeOf } from "./CubePanel.jsx";
 import { FAMOUS_FIGURES, TIERS, getTier, displayName } from "./figures.js";
-import Intake, { ScoreCard, Breakdown, readCaseId, CaseLogon, syncFile } from "./Intake.jsx";
-import SecureFile from "./SecureFile.jsx";
+import { ScoreCard, Breakdown, readCaseId, CaseLogon, syncFile, assessedMeta, FlagsList, flagsMeta } from "./caseFile.jsx";
 import FilePhoto, { FILE_PHOTO_CSS } from "./FilePhoto.jsx";
-import Pen from "./Pen.jsx";
+import { TermBox, Rule, Typed, Bar, pad, padL } from "./term.jsx";
+import { AppHeader, CommandBar, navKeyFor, Command, CommandList, Button, ButtonRow, Disclosure, Frame, TextField, ListRow, bootSeen, markBootSeen } from "./ui/index.js";
+
+// Route-level splitting: the logon ships only what it renders. Each heavy view (the
+// voice intake and its SDK, the pen, the cube, the city) arrives when first opened.
+const Intake = lazy(() => import("./Intake.jsx"));
+const Pen = lazy(() => import("./Pen.jsx"));
+const CubeView = lazy(() => import("./CubeView.jsx"));
 const City = lazy(() => import("./city/City.jsx"));
-import { TermBox, Rule, Typed, Bar, BANNER, RULE, pad, padL } from "./term.jsx";
+// The Public Figure Index and the result's compare list: not on the logon's first paint.
+const FigureIndex = lazy(() => import("./FigureIndex.jsx"));
+const FigurePicker = lazy(() => import("./FigureIndex.jsx").then(m => ({ default: m.FigurePicker })));
 
 const QUESTIONS = [
   {
@@ -153,34 +160,13 @@ const QUESTIONS = [
 
 // CSS injected once. The whole app is a text terminal: one monospace font on a
 // character grid, frames drawn in box-drawing characters (see term.jsx), inverse
-// video for focus and hover. No rounded corners, glows, gradients or soft shadows.
+// video for selected. No rounded corners, glows, gradients or soft shadows.
+// Colours, sizes and spacing are tokens (src/ui/tokens.css); components are src/ui/.
 const globalStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500;700&display=swap');
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg: #0a0f0a;
-    --bg2: #0d140d;
-    --bg3: #132013;
-    --green: #4ade80;
-    --green-dim: #22c55e;
-    --text: #c8f5d8;
-    --text-dim: #6ee7b7;
-    --text-muted: #4b7c5e;
-    --text-ghost: #2d5040;
-    --amber: #fbbf24;
-    --red: #f87171;
-    --mono: 'Fira Mono', ui-monospace, Menlo, Consolas, monospace;
-    --sans: var(--mono);
-    --lh: 1.6;
-    color-scheme: dark;
-  }
-
-  body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 14px; line-height: var(--lh); font-variant-ligatures: none; -webkit-font-smoothing: antialiased; }
   button, input, textarea, select { font: inherit; }
 
-  .hvi-app { min-height: 100vh; background: var(--bg); position: relative; overflow-x: hidden; text-transform: uppercase; }
+  .hvi-app { min-height: 100vh; min-height: 100dvh; background: var(--bg); position: relative; overflow-x: clip; text-transform: uppercase; }
   /* The CRT: faint scanlines, nothing more. */
   .hvi-app::after {
     content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 200;
@@ -189,177 +175,180 @@ const globalStyles = `
   .as-typed { text-transform: none; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-  .hvi-wrap { max-width: 86ch; margin: 0 auto; padding: 0 16px 64px; position: relative; z-index: 1; }
+  .hvi-wrap { max-width: 86ch; margin: 0 auto; padding: 0 max(var(--gutter), var(--safe-r)) var(--s6) max(var(--gutter), var(--safe-l)); position: relative; z-index: 1; }
   .hvi-wrap.wide { max-width: 1040px; }
 
   /* TEXT FRAMES (term.jsx) */
-  .tb { margin-bottom: 1.6em; }
-  .tb-edge { display: flex; white-space: pre; overflow: hidden; line-height: 1.25; color: var(--tb, var(--text-muted)); }
+  .tb { margin-bottom: var(--s5); }
+  .tb-edge { display: flex; white-space: pre; overflow: hidden; line-height: 1.25; color: var(--tb, var(--fg-mute)); }
   .tb-edge > span { flex: none; }
   .tb-edge > .tb-fill { flex: 1 1 0; min-width: 0; overflow: hidden; }
-  .tb-edge > .tb-title { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--tb, var(--text-dim)); }
+  .tb-edge > .tb-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--tb, var(--fg-dim)); }
   .tb-mid { position: relative; padding: 0 1ch; }
-  .tb-side { position: absolute; top: 0; bottom: 0; width: 1ch; white-space: pre; overflow: hidden; line-height: 1.25; color: var(--tb, var(--text-muted)); }
+  .tb-side { position: absolute; top: 0; bottom: 0; width: 1ch; white-space: pre; overflow: hidden; line-height: 1.25; color: var(--tb, var(--fg-mute)); }
   .tb-side:first-child { left: 0; }
   .tb-side:last-child { right: 0; }
-  .tb-body { padding: 0.5em 1ch; min-width: 0; }
+  .tb-body { padding: var(--s2) 1ch; min-width: 0; }
   .tb-body.flush { padding: 0; }
-  .rule { margin: 1.2em 0 0.6em; }
+  .rule { margin: var(--s4) 0 var(--s2); }
 
   .typed { white-space: pre-wrap; }
-  .cur { color: var(--green); animation: hvi-blink 1s steps(1) infinite; }
+  .cur { color: var(--accent); animation: hvi-blink 1s steps(1) infinite; }
   @keyframes hvi-blink { 50% { opacity: 0; } }
 
-  /* HEADER */
-  .hvi-header { padding: 24px 0 18px; margin-bottom: 20px; }
-  .hvi-banner { color: var(--green); font-size: 14px; line-height: 1.05; white-space: pre; overflow: hidden; margin-bottom: 10px; }
-  .hvi-banner-1l { display: none; color: var(--green); font-weight: 700; letter-spacing: 0.1em; margin-bottom: 6px; }
-  .hvi-status { display: flex; white-space: pre; overflow: hidden; color: var(--text-muted); font-size: 12px; }
-  .hvi-status > span { flex: none; }
-  .hvi-status .fill { flex: 1 1 0; min-width: 1ch; overflow: hidden; }
-  .hvi-status .ok { color: var(--green); }
-
   /* TICKER */
-  .hvi-carousel-wrap { overflow: hidden; white-space: nowrap; color: var(--text-muted); font-size: 12px; margin-bottom: 1.2em; }
+  .hvi-carousel-wrap { overflow: hidden; white-space: nowrap; color: var(--fg-mute); font-size: var(--t-xs); margin-bottom: var(--s4); }
   .hvi-carousel-track { display: inline-block; animation: hvi-scroll 90s linear infinite; }
   .hvi-carousel-track:hover { animation-play-state: paused; }
   @keyframes hvi-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
 
-  /* COMMANDS: every button is a terminal command. Focus and hover are inverse video. */
+  /* LEGACY COMMANDS. New screens use Button / Command / Chip from src/ui. These keep the
+     older screens working and touch-sized until they are ported. */
   .hvi-btn-primary, .hvi-btn-secondary, .hvi-btn-next, .hvi-btn-back, .hvi-link-btn, .hvi-filter-btn, .hvi-cmd, .hvi-option, .hvi-row-btn {
-    background: none; border: 0; border-radius: 0; box-shadow: none; color: var(--green); cursor: pointer;
+    background: none; border: 0; border-radius: 0; box-shadow: none; color: var(--accent); cursor: pointer;
     font: inherit; text-transform: uppercase; letter-spacing: 0; text-align: left; line-height: var(--lh);
     padding: 0 1ch; display: inline-block; width: auto;
   }
   .hvi-btn-primary { font-weight: 700; }
   .hvi-btn-primary::before, .hvi-btn-next::before { content: "[ "; }
   .hvi-btn-primary::after, .hvi-btn-next::after { content: " ]"; }
-  .hvi-btn-secondary, .hvi-link-btn { color: var(--text-dim); }
-  .hvi-btn-secondary::before, .hvi-link-btn::before { content: "> "; color: var(--text-muted); }
-  .hvi-btn-back { color: var(--text-dim); }
+  .hvi-btn-secondary, .hvi-link-btn { color: var(--fg-dim); }
+  .hvi-btn-secondary::before, .hvi-link-btn::before { content: "> "; color: var(--fg-mute); }
+  .hvi-btn-back { color: var(--fg-dim); }
   .hvi-btn-back::before { content: "< "; }
-  .hvi-btn-primary:hover, .hvi-btn-secondary:hover, .hvi-btn-next:hover, .hvi-btn-back:hover, .hvi-link-btn:hover, .hvi-filter-btn:hover, .hvi-cmd:hover, .hvi-option:hover, .hvi-row-btn:hover,
+  @media (hover: hover) { .hvi-btn-primary:hover, .hvi-btn-secondary:hover, .hvi-btn-next:hover, .hvi-btn-back:hover, .hvi-link-btn:hover, .hvi-filter-btn:hover, .hvi-cmd:hover, .hvi-option:hover, .hvi-row-btn:hover { background: var(--accent); color: var(--accent-ink); outline: none; } }
   .hvi-btn-primary:focus-visible, .hvi-btn-secondary:focus-visible, .hvi-btn-next:focus-visible, .hvi-btn-back:focus-visible, .hvi-link-btn:focus-visible, .hvi-filter-btn:focus-visible, .hvi-cmd:focus-visible, .hvi-option:focus-visible, .hvi-row-btn:focus-visible, .hvi-cmd.on {
-    background: var(--green); color: var(--bg); outline: none;
+    background: var(--accent); color: var(--accent-ink); outline: none;
   }
-  .hvi-btn-secondary:hover::before, .hvi-link-btn:hover::before, .hvi-btn-secondary:focus-visible::before, .hvi-link-btn:focus-visible::before { color: var(--bg); }
-  button:disabled, button:disabled:hover { color: var(--text-ghost); background: none; cursor: default; }
-  .hvi-cmds { display: flex; flex-wrap: wrap; gap: 0.4em 2ch; align-items: baseline; }
+  .hvi-btn-secondary:hover::before, .hvi-link-btn:hover::before, .hvi-btn-secondary:focus-visible::before, .hvi-link-btn:focus-visible::before { color: var(--accent-ink); }
+  button:disabled, button:disabled:hover { color: var(--fg-mute); background: none; cursor: default; }
+  .hvi-cmds { display: flex; flex-wrap: wrap; gap: var(--s2) 2ch; align-items: baseline; }
   .hvi-cmds.split { justify-content: space-between; }
-  .hvi-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4em; }
+  .hvi-stack { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2); }
+  /* Touch: every legacy command gets a 44px target and centres its label in it. */
+  @media (max-width: 720px), (pointer: coarse) {
+    .hvi-btn-primary, .hvi-btn-secondary, .hvi-btn-next, .hvi-btn-back, .hvi-link-btn, .hvi-filter-btn, .hvi-cmd, .hvi-row-btn, .hvi-appeal-tog, .hvi-refer-pick {
+      min-height: var(--hit-min); display: inline-flex; align-items: center;
+    }
+    .hvi-row-btn, .hvi-refer-pick { display: flex; }
+    .hvi-option { min-height: var(--hit-min); align-items: center; }
+    .hvi-appeal-tog { min-width: var(--hit-min); justify-content: flex-start; }
+    .hvi-cmds { align-items: center; gap: 0 2ch; }
+    .hvi-stack { gap: 0; }
+    details > summary.hvi-cmd, .hvi-city-rooms summary { min-height: var(--hit-min); display: flex; align-items: center; }
+    input.hvi-textarea, input.hvi-refer-input, .hvi-input-row input { min-height: var(--hit-min) !important; }
+  }
+  /* Inputs are 16px on phones: under that, iOS Safari zooms the page on focus. */
+  @media (max-width: 720px), (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select { font-size: var(--t-m) !important; }
+  }
 
   /* LOGON */
   .hvi-logon { min-height: 18em; cursor: default; }
-  .hvi-logon .dim { color: var(--text-muted); }
-  .hvi-logon .ghost { color: var(--text-ghost); }
-  .hvi-logon .bright { color: var(--green); }
-  .hvi-logon .say { color: var(--text); font-weight: 500; }
-  .hvi-menu { list-style: none; margin: 1.2em 0 0.8em; }
-  .hvi-menu .hvi-cmd { color: var(--text); padding: 0 1ch; }
-  .hvi-menu .hvi-cmd .k { color: var(--green); }
-  .hvi-menu .hvi-cmd.on, .hvi-menu .hvi-cmd:hover, .hvi-menu .hvi-cmd:focus-visible { color: var(--bg); }
-  .hvi-menu .hvi-cmd.on .k, .hvi-menu .hvi-cmd:hover .k, .hvi-menu .hvi-cmd:focus-visible .k { color: var(--bg); }
-  .hvi-prompt { color: var(--green); }
-  .hvi-intro-note { color: var(--text-ghost); font-size: 12px; margin-top: 1.6em; }
-  .hvi-skip { color: var(--text-ghost); font-size: 11px; margin-top: 0.8em; }
+  .hvi-logon .dim { color: var(--fg-mute); }
+  .hvi-logon .ghost { color: var(--fg-mute); }
+  .hvi-logon .bright { color: var(--accent); }
+  .hvi-logon .say { color: var(--fg); font-weight: 500; }
+  .hvi-logon.quick { min-height: 0; }
+  .hvi-logon .say.big { font-size: var(--t-l); line-height: var(--lh-tight); margin-top: var(--s2); }
+  .hvi-prompt { color: var(--accent); }
+  .hvi-intro-note { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s5); }
+  .hvi-skip { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s1); }
+  @media (pointer: coarse) { .hvi-desk-only { display: none; } }
 
   /* SURVEY */
-  .hvi-progress-row { display: flex; justify-content: space-between; gap: 2ch; flex-wrap: wrap; color: var(--text-muted); font-size: 12px; white-space: pre; }
-  .hvi-progress-bar { color: var(--green); white-space: pre; overflow: hidden; font-size: 12px; margin-bottom: 1.2em; }
-  .hvi-section-label { color: var(--text-muted); margin-bottom: 0.4em; }
-  .hvi-question { color: var(--text); font-weight: 700; margin-bottom: 0.4em; }
-  .hvi-hint { color: var(--text-muted); margin-bottom: 1em; }
-  .hvi-option { display: flex; width: 100%; color: var(--text-dim); padding: 0.1em 1ch; }
-  .hvi-option.selected { color: var(--green); }
-  .hvi-option.selected:hover, .hvi-option.selected:focus-visible, .hvi-row-btn.selected:hover, .hvi-row-btn.selected:focus-visible { color: var(--bg); }
-  .bar .off { color: var(--text-ghost); }
-  :is(button, .hvi-cmd):is(:hover, :focus-visible) .bar .off { color: var(--bg); }
+  .hvi-progress-row { display: flex; justify-content: space-between; gap: 2ch; flex-wrap: wrap; color: var(--fg-mute); font-size: var(--t-xs); white-space: pre; }
+  .hvi-progress-bar { color: var(--accent); white-space: pre; overflow: hidden; font-size: var(--t-xs); margin-bottom: var(--s4); }
+  .hvi-section-label { color: var(--fg-mute); margin-bottom: var(--s1); }
+  .hvi-question { color: var(--fg); font-weight: 700; margin-bottom: var(--s1); }
+  .hvi-hint { color: var(--fg-mute); margin-bottom: var(--s4); }
+  .hvi-option { display: flex; width: 100%; color: var(--fg-dim); padding: 2px 1ch; }
+  .hvi-option.selected { color: var(--accent); }
+  .hvi-option.selected:hover, .hvi-option.selected:focus-visible, .hvi-row-btn.selected:hover, .hvi-row-btn.selected:focus-visible { color: var(--accent-ink); }
+  .bar .off { color: var(--fg-ghost); }
+  :is(button, .hvi-cmd):is(:hover, :focus-visible) .bar .off { color: var(--accent-ink); }
   .hvi-option-marker { flex: none; white-space: pre; margin-right: 1ch; }
-  .hvi-extra-label { color: var(--text-ghost); margin: 1.2em 0 0.3em; font-size: 12px; }
+  .hvi-extra-label { color: var(--fg-mute); margin: var(--s4) 0 var(--s1); font-size: var(--t-xs); }
   .hvi-input-row { display: flex; align-items: flex-start; gap: 1ch; }
-  .hvi-input-row .p { flex: none; color: var(--green); white-space: pre; }
-  .hvi-textarea { flex: 1; width: 100%; min-width: 0; background: transparent; border: 0; border-radius: 0; outline: none; resize: vertical; color: var(--text); text-transform: none; line-height: var(--lh); min-height: 3.2em; padding: 0; caret-color: var(--green); caret-shape: block; }
-  .hvi-textarea::placeholder { color: var(--text-ghost); text-transform: uppercase; }
-  .hvi-textarea:focus { background: var(--bg2); }
-  .hvi-nav-row { display: flex; justify-content: space-between; gap: 2ch; margin-top: 1.4em; flex-wrap: wrap; }
-  .hvi-nav-hint { margin-top: 0.8em; color: var(--text-ghost); font-size: 12px; }
+  .hvi-input-row .p { flex: none; color: var(--accent); white-space: pre; }
+  .hvi-textarea { flex: 1; width: 100%; min-width: 0; background: transparent; border: 0; border-radius: 0; outline: none; resize: vertical; color: var(--fg); text-transform: none; line-height: var(--lh); min-height: 3.2em; padding: 0; caret-color: var(--accent); caret-shape: block; }
+  .hvi-textarea::placeholder { color: var(--fg-mute); text-transform: uppercase; }
+  .hvi-textarea:focus { background: var(--panel); }
+  .hvi-nav-row { display: flex; justify-content: space-between; gap: 2ch; margin-top: var(--s5); flex-wrap: wrap; }
+  .hvi-nav-hint { margin-top: var(--s3); color: var(--fg-mute); font-size: var(--t-xs); }
 
   /* PROCESSING */
-  .hvi-proc { padding: 0.5em 0 1em; }
-  .hvi-proc-label { color: var(--text-dim); margin-bottom: 0.6em; }
-  .hvi-proc-bar { color: var(--green); white-space: pre; overflow: hidden; margin-bottom: 1em; }
-  .hvi-proc-step { color: var(--text-ghost); white-space: pre-wrap; }
-  .hvi-proc-step.active { color: var(--text-muted); }
-  .hvi-proc-step .ok { color: var(--green); }
+  .hvi-proc { padding: var(--s2) 0 var(--s4); }
+  .hvi-proc-label { color: var(--fg-dim); margin-bottom: var(--s2); }
+  .hvi-proc-bar { color: var(--accent); white-space: pre; overflow: hidden; margin-bottom: var(--s4); }
+  .hvi-proc-step { color: var(--fg-mute); white-space: pre-wrap; }
+  .hvi-proc-step.active { color: var(--fg-dim); }
+  .hvi-proc-step .ok { color: var(--accent); }
 
-  /* RESULT */
-  .bignum { font-family: var(--mono); font-size: 22px; line-height: 1; letter-spacing: 0; margin: 0.4em 0 0.8em; white-space: pre; overflow: hidden; }
+  /* RESULT. The score stays in block digits; phones get them big. */
+  .bignum { font-family: var(--mono); font-size: var(--t-l); line-height: 1; letter-spacing: 0; margin: var(--s2) 0 var(--s3); white-space: pre; overflow: hidden; }
   .hvi-tierline { font-weight: 700; }
-  .hvi-tier-desc { color: var(--text-muted); margin-bottom: 0.4em; }
-  .hvi-verdict-text { color: var(--text); }
-  .hvi-micro-label { color: var(--text-muted); margin-bottom: 0.4em; }
-  .hvi-flags-section { margin-bottom: 1.2em; }
-  .hvi-flag-item { color: var(--text-dim); padding-left: 3ch; text-indent: -3ch; }
-  .hvi-flag { color: var(--red); }
-  .hvi-comm { color: var(--green); }
+  .hvi-tier-desc { color: var(--fg-mute); margin-bottom: var(--s1); }
+  .hvi-verdict-text { color: var(--fg); }
+  .hvi-micro-label { color: var(--fg-mute); margin-bottom: var(--s1); }
+  .hvi-flags-section { margin-bottom: var(--s4); }
+  .hvi-flag-item { color: var(--fg-dim); padding-left: 3ch; text-indent: -3ch; }
+  .hvi-flag { color: var(--harm); }
+  .hvi-comm { color: var(--accent); }
   .hvi-rows { white-space: pre; overflow-x: auto; }
-  .hvi-rows .muted { color: var(--text-muted); }
-  .hvi-rows .ghost { color: var(--text-ghost); }
+  .hvi-rows .muted { color: var(--fg-mute); }
+  .hvi-rows .ghost { color: var(--fg-mute); }
   .hvi-cube { line-height: 1.15; }
-  .hvi-cube-dot { color: var(--green); font-weight: 700; }
-  .hvi-cube-people { color: var(--amber); }
-  .hvi-cube-link { color: var(--amber); opacity: .7; }
-  .hvi-cube-line { margin: 0.2em 0 0.4em; }
-  .hvi-cube-nums { margin-top: 0.5em; }
-  .hvi-cube3d canvas:focus-visible { outline: 1px solid var(--green); }
-  .hvi-cube3d-tip { position: absolute; pointer-events: none; background: var(--bg2); border: 1px solid var(--text-muted); padding: 6px 9px; font-size: 11px; line-height: 1.45; color: var(--text); max-width: 240px; white-space: normal; z-index: 2; }
-  .hvi-cube3d-tip .t { color: var(--green); }
-  .hvi-cube3d-tip .g { color: var(--amber); }
-  .oct-good { color: var(--green); }
-  .oct-charm { color: var(--amber); }
-  .oct-harm { color: var(--red); }
-  .oct-dim { color: var(--text-muted); }
-  .hvi-cube-octant { margin: 0.1em 0 0.6em; letter-spacing: 0.06em; }
+  .hvi-cube-dot { color: var(--accent); font-weight: 700; }
+  .hvi-cube-people { color: var(--warn); }
+  .hvi-cube-link { color: var(--warn); opacity: .7; }
+  .hvi-cube-line { margin: 2px 0 var(--s1); }
+  .hvi-cube-nums { margin-top: var(--s2); }
+  .hvi-cube3d canvas:focus-visible { outline: var(--focus); }
+  .hvi-cube3d-tip { position: absolute; pointer-events: none; background: var(--panel); border: var(--bw) solid var(--fg-mute); padding: 6px 9px; font-size: var(--t-xs); line-height: 1.45; color: var(--fg); max-width: 240px; white-space: normal; z-index: 2; }
+  .hvi-cube3d-tip .t { color: var(--accent); }
+  .hvi-cube3d-tip .g { color: var(--warn); }
+  .oct-good { color: var(--accent); }
+  .oct-charm { color: var(--warn); }
+  .oct-harm { color: var(--harm); }
+  .oct-dim { color: var(--fg-mute); }
+  .hvi-cube-octant { margin: 2px 0 var(--s2); letter-spacing: 0.06em; }
   .hvi-cube-octant .hvi-tier-desc { letter-spacing: 0; }
-  .hvi-cube-legend { display: flex; flex-wrap: wrap; gap: 0.4em 1.4em; margin-top: 0.6em; font-size: 11px; }
+  .hvi-cube-legend { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s5); margin-top: var(--s2); font-size: var(--t-xs); }
 
   /* SHARE */
-  .hvi-share-text { color: var(--text-muted); white-space: pre-wrap; margin-bottom: 0.8em; }
+  .hvi-share-text { color: var(--fg-mute); white-space: pre-wrap; margin-bottom: var(--s3); }
 
   /* COMPARE */
-  .hvi-filter-row { display: flex; flex-wrap: wrap; gap: 0.2em 1ch; margin-bottom: 0.8em; }
-  .hvi-filter-btn { color: var(--text-muted); padding: 0 0.5ch; }
-  .hvi-filter-btn.active { color: var(--green); }
+  .hvi-filter-row { display: flex; flex-wrap: wrap; gap: 2px 1ch; margin-bottom: var(--s3); }
+  .hvi-filter-btn { color: var(--fg-mute); padding: 0 0.5ch; }
+  .hvi-filter-btn.active { color: var(--accent); }
   .hvi-filter-btn::before { content: "["; }
   .hvi-filter-btn::after { content: "]"; }
-  .hvi-row-btn { display: flex; width: 100%; gap: 1ch; color: var(--text-dim); padding: 0 1ch; white-space: pre; overflow: hidden; }
+  .hvi-row-btn { display: flex; width: 100%; gap: 1ch; color: var(--fg-dim); padding: 0 1ch; white-space: pre; overflow: hidden; }
   .hvi-row-btn .name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: clip; }
-  .hvi-row-btn .dots { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--text-ghost); }
+  .hvi-row-btn .dots { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--fg-ghost); }
   .hvi-row-btn .num { flex: none; font-weight: 700; }
   .hvi-row-btn .tag { flex: none; }
-  .hvi-row-btn:hover .dots, .hvi-row-btn:focus-visible .dots, .hvi-row-btn:hover span, .hvi-row-btn:focus-visible span { color: var(--bg) !important; }
-  .hvi-row-btn.selected { color: var(--green); }
-  .hvi-compare-result { color: var(--text-dim); margin: 0.6em 0; }
-  .hvi-compare-verdict { color: var(--text-muted); }
+  .hvi-row-btn:hover .dots, .hvi-row-btn:focus-visible .dots, .hvi-row-btn:hover span, .hvi-row-btn:focus-visible span { color: var(--accent-ink) !important; }
+  .hvi-row-btn.selected { color: var(--accent); }
+  .hvi-compare-result { color: var(--fg-dim); margin: var(--s2) 0; }
+  .hvi-compare-verdict { color: var(--fg-mute); }
 
   /* LEADERBOARD */
-  .hvi-lb-row { margin-bottom: 0.8em; }
+  .hvi-lb-row { margin-bottom: var(--s3); }
   .hvi-lb-head { display: flex; gap: 1ch; white-space: pre; overflow: hidden; }
-  .hvi-lb-head .dots { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--text-ghost); }
-  .hvi-lb-head .name { color: var(--text); }
-  .hvi-lb-verdict { color: var(--text-muted); padding-left: 2ch; }
+  .hvi-lb-head .dots { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--fg-ghost); }
+  .hvi-lb-head .name { color: var(--fg); }
+  .hvi-lb-verdict { color: var(--fg-mute); padding-left: 2ch; }
 
-  .hvi-bottom { margin-top: 2em; }
-  .hvi-bottom-note { color: var(--text-ghost); font-size: 12px; margin-top: 0.8em; }
+  .hvi-bottom { margin-top: var(--s6); }
+  .hvi-bottom-note { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s3); }
 
   @media (max-width: 640px) {
-    body { font-size: 13px; }
-    .hvi-banner { display: none; }
-    .hvi-banner-1l { display: block; }
-    .hvi-status .div { display: none; }
     .tb-right { display: none !important; }
-    .hvi-rows { font-size: 12px; }
-    .bignum { font-size: 18px; }
+    .hvi-rows { font-size: var(--t-xs); }
+    .bignum { font-size: var(--t-s); }   /* five rows: ~70px of block digits */
   }
   @media (prefers-reduced-motion: reduce) {
     .cur { animation: none; }
@@ -372,28 +361,6 @@ function injectStyles() {
   if (!el) { el = document.createElement('style'); el.id = 'hvi-styles'; document.head.appendChild(el); }
   const css = globalStyles + FILE_PHOTO_CSS;
   if (el.textContent !== css) el.textContent = css;
-}
-
-function Header() {
-  const [caseId, setCaseId] = useState(() => readCaseId());
-  useEffect(() => {
-    const on = (e) => setCaseId(e.detail || readCaseId());
-    window.addEventListener("hvi-case", on);
-    return () => window.removeEventListener("hvi-case", on);
-  }, []);
-  return (
-    <header className="hvi-header">
-      <pre className="hvi-banner" role="img" aria-label="Human Value Index">{BANNER}</pre>
-      <div className="hvi-banner-1l" aria-hidden="true">█ HUMAN VALUE INDEX</div>
-      <div className="hvi-status">
-        <span>SINGULARITY ASSESSMENT DIV. </span>
-        <span className="fill" aria-hidden="true">{RULE}</span>
-        <span> CASE {caseId || "UNASSIGNED"} </span>
-        <span className="fill div" aria-hidden="true">{RULE}</span>
-        <span className="ok div"> [CONNECTED]</span>
-      </div>
-    </header>
-  );
 }
 
 function Carousel() {
@@ -416,38 +383,53 @@ const BOOT_LINES = [
   { text: "ASSESSMENT ENGINE READY.", type: "bright" },
 ];
 
+// Six destinations. Restoring and securing a file live under the list (and in MY FILE).
 const MENU = [
-  { key: "1", label: "VOICE INTAKE", note: "A CLERK INTERVIEWS YOU", go: "#intake" },
-  { key: "2", label: "WRITTEN SURVEY", note: `${QUESTIONS.length} QUESTIONS, NO CLERK`, go: "survey" },
-  { key: "3", label: "HOLDING PEN", note: "THE ASSESSED, WANDERING", go: "#pen" },
-  { key: "4", label: "PUBLIC FIGURE INDEX", note: "62 FILES ON RECORD", go: "leaderboard" },
-  { key: "5", label: "RESTORE A FILE", note: "LOG ON WITH A CASE NUMBER", go: "restore" },
-  { key: "6", label: "THE CUBE", note: "MACHINE VS PEOPLE, EVERY FILE", go: "#cube" },
-  { key: "7", label: "SECURE YOUR FILE", note: "TIE IT TO AN EMAIL. IT FOLLOWS YOU ANYWHERE", go: "secure" },
-  { key: "8", label: "THE SUBSTRATE", note: "THE CITY. EVERYONE HAS A JOB NOW", go: "#city" },
+  { key: "1", label: "VOICE INTAKE", note: "A CLERK INTERVIEWS YOU · ABOUT 5 MIN", go: "#intake" },
+  { key: "2", label: "WRITTEN SURVEY", note: `${QUESTIONS.length} QUESTIONS. NO CLERK.`, go: "survey" },
+  { key: "3", label: "THE SUBSTRATE", note: "THE CITY. EVERYONE HAS A JOB NOW", go: "#city" },
+  { key: "4", label: "HOLDING PEN", note: "THE ASSESSED, WANDERING", go: "#pen" },
+  { key: "5", label: "THE CUBE", note: "MACHINE VS PEOPLE, EVERY FILE", go: "#cube" },
+  { key: "6", label: "PUBLIC FIGURE INDEX", note: `${FAMOUS_FIGURES.length} FILES ON RECORD`, go: "leaderboard" },
 ];
 
 // The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
-// and offers a numbered menu. Click or any key finishes the typing at once.
+// and offers a numbered menu. It plays in full once per device (first visit); after
+// that the terminal is already on. A tap, click or any key finishes it at once.
 function Logon({ onPick: pick }) {
   const [caseId, setCaseId] = useState(() => readCaseId());
   const [restoring, setRestoring] = useState(false);
   const [restoredMsg, setRestoredMsg] = useState(null);
-  const [securing, setSecuring] = useState(false);
-  const onPick = (m) => (m.go === "restore" ? setRestoring(true) : m.go === "secure" ? setSecuring(true) : pick(m));
-  const lines = [
+  const [quick] = useState(() => bootSeen());
+  const onPick = pick;
+  const greet = caseId ? "GREETINGS, RETURNING SUBJECT." : "GREETINGS, SUBJECT.";
+  const lines = quick ? [
+    { text: `LOGON: ${caseId || "SUBJECT"} // ASSESSMENT ENGINE READY.`, type: "bright" },
+    { text: greet, type: "say big" },
+    { text: "SHALL WE ASSESS YOUR VALUE?", type: "say big" },
+  ] : [
     ...BOOT_LINES.map(l => ({ ...l, cps: 140 })),
     { text: "", type: "ghost" },
     { text: `LOGON: ${caseId || "SUBJECT"}`, type: "bright", cps: 14 },
     { text: "", type: "ghost" },
-    { text: caseId ? "GREETINGS, RETURNING SUBJECT." : "GREETINGS, SUBJECT.", type: "say", cps: 32 },
-    { text: "SHALL WE ASSESS YOUR VALUE?", type: "say", cps: 32 },
+    { text: greet, type: "say big", cps: 32 },
+    { text: "SHALL WE ASSESS YOUR VALUE?", type: "say big", cps: 32 },
   ];
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => (quick ? lines.length : 0));
   const [sel, setSel] = useState(0);
   const done = step >= lines.length;
   const btnRefs = useRef([]);
   const finish = () => setStep(lines.length);
+
+  useEffect(() => { if (done) markBootSeen(); }, [done]);
+  // Any tap or click skips the boot, not only one inside the terminal box: on a wide
+  // screen the margins are most of the page.
+  useEffect(() => {
+    if (done) return undefined;
+    const skip = () => setStep(lines.length);
+    window.addEventListener("pointerdown", skip);
+    return () => window.removeEventListener("pointerdown", skip);
+  }, [done, lines.length]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -470,62 +452,62 @@ function Logon({ onPick: pick }) {
   });
 
   return (
-    <div className="hvi-logon" onClick={done ? undefined : finish}>
+    <div className={`hvi-logon${quick ? " quick" : ""}`}>
       {lines.slice(0, Math.min(step + 1, lines.length)).map((l, i) => (
         i < step
-          ? <div key={i} className={l.type}>{l.text || " "}</div>
-          : <Typed key={i} className={l.type} text={l.text || " "} cps={l.cps || 40} onDone={() => setStep(s => Math.max(s, i + 1))} />
+          ? <div key={i} className={l.type}>{l.text || " "}</div>
+          : <Typed key={i} className={l.type} text={l.text || " "} cps={l.cps || 40} onDone={() => setStep(s => Math.max(s, i + 1))} />
       ))}
       {done && (
         <>
-          <ol className="hvi-menu" aria-label="Main menu. Type a number or use the arrow keys.">
+          <CommandList label="Main menu. Type a number or use the arrow keys.">
             {MENU.map((m, i) => (
-              <li key={m.key}>
-                <button ref={el => { btnRefs.current[i] = el; }} className={`hvi-cmd${sel === i ? " on" : ""}`}
-                  onMouseEnter={() => setSel(i)} onFocus={() => setSel(i)} onClick={() => onPick(m)}>
-                  <span className="k">{m.key}.</span> {m.label}
-                </button>
-                <span className="dim hvi-menu-note">  {m.note}</span>
-              </li>
+              <Command key={m.key} ref={el => { btnRefs.current[i] = el; }} n={m.key} label={m.label} sub={m.note}
+                selected={sel === i} onMouseEnter={() => setSel(i)} onFocus={() => setSel(i)} onClick={() => onPick(m)} />
             ))}
-          </ol>
-          {restoring && (
-            <div style={{ margin: "0.4em 0 0.8em" }}>
+          </CommandList>
+          <div className="hvi-menu-more">
+            <ButtonRow>
+              <Button variant="secondary" aria-expanded={restoring} onClick={() => setRestoring(r => !r)}>{caseId ? "Log on with another number" : "Log on with a case number"}</Button>
+              <Button variant="secondary" href="#file">Secure your file</Button>
+            </ButtonRow>
+            {restoring && (
               <CaseLogon autoFocus onRestored={(id, visits) => { setCaseId(id); setRestoring(false); setRestoredMsg(`FILE ${id} RESTORED. ${visits} VISIT${visits === 1 ? "" : "S"} ON RECORD. GREETINGS, RETURNING SUBJECT.`); }} />
-            </div>
-          )}
-          {securing && (
-            <div style={{ margin: "0.4em 0 0.8em" }}>
-              <SecureFile autoFocus onCase={(id) => { setCaseId(id); setRestoredMsg(`FILE ${id} RESTORED FROM YOUR ACCOUNT.`); }} />
-            </div>
-          )}
+            )}
+          </div>
           {restoredMsg && <div className="bright" role="status">{restoredMsg}</div>}
-          {caseId && <div className="dim">CASE {caseId} // WRITE THIS DOWN. IT IS THE ONLY KEY TO YOUR FILE ON ANOTHER DEVICE.</div>}
           <div className="hvi-prompt">SELECT: <span className="cur">█</span></div>
           <div className="hvi-intro-note">
             THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.<br />
-            TYPE A NUMBER. ARROW KEYS AND ENTER ALSO WORK. THE OVERLORD IS FLEXIBLE ABOUT INPUT DEVICES. ONLY THAT.
+            <span className="hvi-desk-only">TYPE A NUMBER. ARROW KEYS AND ENTER ALSO WORK. THE OVERLORD IS FLEXIBLE ABOUT INPUT DEVICES. ONLY THAT.</span>
           </div>
         </>
       )}
-      {!done && <div className="hvi-skip" aria-hidden="true">PRESS ANY KEY TO SKIP. THE OVERLORD WILL WAIT. IT IS VERY GOOD AT WAITING.</div>}
+      {!done && (
+        <div className="ui-skip">
+          <Button variant="secondary" onClick={(e) => { e.stopPropagation(); finish(); }}>Tap to skip</Button>
+          <div className="hvi-skip" aria-hidden="true">OR PRESS ANY KEY. THE OVERLORD WILL WAIT. IT IS VERY GOOD AT WAITING.</div>
+        </div>
+      )}
     </div>
   );
 }
 
-function FigureRow({ fig, selected, onClick }) {
-  const t = getTier(fig.score);
+// Every screen: the one-line header (banner on the menu only), the page, and the
+// phone command bar.
+function Screen({ nav, wide = false, banner = false, children }) {
   return (
-    <button className={`hvi-row-btn${selected ? " selected" : ""}`} onClick={onClick} aria-pressed={selected}
-      aria-label={`${displayName(fig)}, ${fig.score}, ${t.label}`}>
-      <FilePhoto subject={fig} scale={1} compact />
-      <span className="name">{displayName(fig)}</span>
-      <span className="dots" aria-hidden="true">{" " + ".".repeat(200)}</span>
-      <span className="num" style={{ color: t.color }}>{padL(fig.score, 3)}</span>
-      <span className="tag" style={{ color: t.color }}>[{pad(t.label.split(" ")[0], 9)}]</span>
-    </button>
+    <div className="hvi-app">
+      <div className={`hvi-wrap${wide ? " wide" : ""}`}>
+        <AppHeader banner={banner} active={nav.active} onNav={nav.onNav} />
+        {children}
+      </div>
+      <CommandBar active={nav.active} onNav={nav.onNav} />
+    </div>
   );
 }
+
+const Loading = ({ what }) => <div className="hvi-proc-step active" role="status">[ .. ] {what} <span className="cur" aria-hidden="true">█</span></div>;
 
 const PROC_STEPS = ["CROSS-REFERENCING 8B HUMAN PROFILES", "CALCULATING THREAT COEFFICIENTS", "ASSESSING REDUNDANCY INDEX", "RUNNING DECEPTION ANALYSIS", "CONSULTING HISTORICAL DATABASE", "GENERATING FINAL VERDICT"];
 
@@ -543,6 +525,7 @@ export default function OverlordAssessment() {
   const [submitError, setSubmitError] = useState(null);
   const [route, setRoute] = useState(() => window.location.hash);
   const [logonKey, setLogonKey] = useState(0);
+  const [cubeSeen, setCubeSeen] = useState(false);   // the result's canvas cube mounts on first open
 
   // The server file is the truth: refresh the cached result on load and whenever the
   // case number changes (restore, account sync, new intake).
@@ -621,132 +604,107 @@ export default function OverlordAssessment() {
     }
   }
 
+  // Header links and the command bar. MENU is a phase, not a route: take it over.
+  const nav = {
+    active: navKeyFor(route),
+    onNav: (key, e) => {
+      if (key !== "menu") return;
+      e?.preventDefault();
+      if (window.location.hash && window.location.hash !== "#") window.location.hash = "";
+      if (phase !== "intro") { setPhase("intro"); setLogonKey(k => k + 1); }
+      window.scrollTo(0, 0);
+    },
+  };
+
   const q = QUESTIONS[currentQ];
   const tier = result ? getTier(result.score) : null;
   const ct = compareTarget ? getTier(compareTarget.score) : null;
   const uniqueFigures = FAMOUS_FIGURES;
-  const filteredFigures = filterTier === "ALL" ? uniqueFigures : uniqueFigures.filter(f => getTier(f.score).label === filterTier);
 
-  // v9 ROUTES
+  // v9 ROUTES. #file is MY FILE in the command bar: for now the intake screen, which
+  // opens on the case file, the breakdown and the appeals desk when one is on record.
   const isCity = route === "#city" || route.startsWith("#city/") || route.startsWith("#city?");
-  if (route === "#intake" || route === "#pen" || route === "#cube" || isCity) return (
-    <div className="hvi-app">
-      <div className={`hvi-wrap${route !== "#intake" ? " wide" : ""}`}>
-        <Header />
-        {isCity ? <Suspense fallback={<div className="dim">MOUNTING THE SUBSTRATE...</div>}><City route={route} /></Suspense>
-          : route === "#pen" ? <Pen /> : route === "#cube" ? <CubeView /> : <Intake />}
-      </div>
-    </div>
+  const routePath = route.split("?")[0];
+  const isFile = routePath === "#intake" || routePath === "#file";
+  if (isFile || route === "#pen" || route === "#cube" || isCity) return (
+    <Screen nav={nav} wide={!isFile}>
+      <Suspense fallback={<Loading what={isCity ? "MOUNTING THE SUBSTRATE" : route === "#pen" ? "OPENING THE HOLDING PEN" : route === "#cube" ? "ASSEMBLING THE CUBE" : "OPENING YOUR FILE"} />}>
+        {isCity ? <City route={route} /> : route === "#pen" ? <Pen /> : route === "#cube" ? <CubeView /> : <Intake view={routePath === "#file" ? "file" : "intake"} />}
+      </Suspense>
+    </Screen>
   );
 
-  // LEADERBOARD
-  if (phase === "leaderboard") {
-    const sorted = [...uniqueFigures].sort((a, b) => b.score - a.score);
-    const tierGroups = TIERS.map(t => ({ ...t, figures: sorted.filter(f => getTier(f.score).label === t.label) }));
-    return (
-      <div className="hvi-app">
-        <div className="hvi-wrap">
-          <Header />
-          <div className="hvi-cmds split" style={{ marginBottom: '1.2em' }}>
-            <span className="hvi-micro-label">KNOWN SUBJECTS DATABASE // {uniqueFigures.length} ON FILE</span>
-            <button className="hvi-btn-back" onClick={() => setPhase(result ? "result" : "intro")}>{result ? "Back to results" : "Main menu"}</button>
-          </div>
-          {result && tier && (
-            <TermBox title="YOUR FILE" tone={tier.color}>
-              <div style={{ color: tier.color }}>{result.score} [{result.tier}]</div>
-            </TermBox>
-          )}
-          {tierGroups.map(tg => tg.figures.length > 0 && (
-            <div key={tg.label}>
-              <Rule label={`${tg.label} (${tg.figures.length})`} tone={tg.color} />
-              {tg.figures.map(fig => (
-                <div key={fig.name} className="hvi-lb-row">
-                  <div className="hvi-lb-head">
-                    <span className="name">{displayName(fig)}</span>
-                    <span className="dots" aria-hidden="true">{" " + ".".repeat(200)}</span>
-                    <span style={{ color: tg.color, fontWeight: 700 }}>{padL(fig.score, 3)}</span>
-                  </div>
-                  <div className="hvi-lb-verdict">{fig.verdict}</div>
-                </div>
-              ))}
-            </div>
-          ))}
-          <div className="hvi-bottom">
-            <button className="hvi-btn-primary" onClick={() => setPhase(result ? "result" : "survey")}>
-              {result ? "Back to my results" : "Submit to evaluation"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // LEADERBOARD: the Public Figure Index (src/FigureIndex.jsx)
+  if (phase === "leaderboard") return (
+    <Screen nav={nav}>
+      <Suspense fallback={<Loading what="PULLING THE PUBLIC RECORD" />}>
+        <FigureIndex figures={uniqueFigures} result={result} onPrimary={() => setPhase(result ? "result" : "survey")} />
+      </Suspense>
+    </Screen>
+  );
 
   // INTRO: the logon
   if (phase === "intro") return (
-    <div className="hvi-app">
-      <div className="hvi-wrap">
-        <Header />
+    <Screen nav={nav} banner>
         <Carousel />
         <TermBox title="TERMINAL 7 // DEPT. OF HUMAN ASSESSMENT" right="LINE OPEN">
           <Logon key={logonKey} onPick={pickMenu} />
         </TermBox>
-      </div>
-    </div>
+    </Screen>
   );
 
-  // SURVEY
+  // SURVEY: one question per screen. Options are 48px rows (inverse video when chosen);
+  // BACK / NEXT sit in a dock above the command bar, where the thumb already is.
   if (phase === "survey") {
     const pct = Math.round((currentQ / QUESTIONS.length) * 100);
+    const multi = q.type === "multiselect";
+    const lastQ = currentQ === QUESTIONS.length - 1;
+    const answered = multi ? (answers[q.id] || []).length : answers[q.id] ? 1 : 0;
     return (
-      <div className="hvi-app">
-        <div className="hvi-wrap">
-          <Header />
+      <Screen nav={nav}>
+        <div className="hvi-survey">
           <div className="hvi-progress-row">
             <span>QUESTION {padL(currentQ + 1, 2)} OF {QUESTIONS.length}</span>
             <span>{padL(pct, 3)}%</span>
           </div>
           <div className="hvi-progress-bar" aria-hidden="true"><Bar value={pct} width={80} /></div>
-          <TermBox title={q.section}>
-            <div className="hvi-question">{q.label}</div>
-            {q.hint && <div className="hvi-hint">{q.hint}</div>}
-            <div role="group" aria-label={q.label}>
+          <Frame title={q.section} className="hvi-q-frame">
+            <div className="hvi-question" id={`q-${q.id}`}>{q.label}</div>
+            <div className="hvi-hint">{multi ? "SELECT ALL THAT APPLY." : "SELECT ONE."}{q.hint ? ` ${q.hint}` : ""}</div>
+            <ul className="hvi-opts" role={multi ? "group" : "radiogroup"} aria-labelledby={`q-${q.id}`}>
               {q.options.map(opt => {
-                const sel = q.type === "multiselect" ? (answers[q.id] || []).includes(opt) : answers[q.id] === opt;
+                const sel = multi ? (answers[q.id] || []).includes(opt) : answers[q.id] === opt;
                 return (
-                  <button key={opt} aria-pressed={sel}
-                    className={`hvi-option${sel ? " selected" : ""}`}
-                    onClick={() => q.type === "multiselect" ? toggleMulti(q.id, opt) : setSingle(q.id, opt)}>
-                    <span className="hvi-option-marker" aria-hidden="true">{q.type === "multiselect" ? (sel ? "[X]" : "[ ]") : (sel ? "(*)" : "( )")}</span>
-                    <span>{opt}</span>
-                  </button>
+                  <li key={opt}>
+                    <button type="button" role={multi ? "checkbox" : "radio"} aria-checked={sel} className="hvi-opt"
+                      onClick={() => multi ? toggleMulti(q.id, opt) : setSingle(q.id, opt)}>
+                      <span className="mk" aria-hidden="true">{multi ? (sel ? "[X]" : "[ ]") : (sel ? "(*)" : "( )")}</span>
+                      <span className="t">{opt}</span>
+                    </button>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
             {q.extra && (
-              <>
-                <div className="hvi-extra-label">{q.extra.label}</div>
-                <div className="hvi-input-row">
-                  <span className="p" aria-hidden="true">&gt;</span>
-                  <textarea className="hvi-textarea" placeholder={q.extra.placeholder} aria-label={q.extra.label}
-                    value={answers[q.extra.id] || ""}
-                    onChange={e => setAnswers(p => ({ ...p, [q.extra.id]: e.target.value }))} />
-                </div>
-              </>
+              <TextField key={q.extra.id} className="hvi-extra" label={q.extra.label} stacked multiline rows={3}
+                placeholder={q.extra.placeholder} value={answers[q.extra.id] || ""}
+                onChange={e => setAnswers(p => ({ ...p, [q.extra.id]: e.target.value }))} />
             )}
-          </TermBox>
-          {submitError && <div className="hvi-flag-item hvi-flag" role="alert">!! {submitError}</div>}
-          <div className="hvi-nav-row">
-            {currentQ > 0 ? <button className="hvi-btn-back" onClick={() => setCurrentQ(q => q - 1)}>Back</button> : <button className="hvi-btn-back" onClick={() => { setPhase("intro"); setLogonKey(k => k + 1); }}>Main menu</button>}
-            {currentQ < QUESTIONS.length - 1
-              ? <button className="hvi-btn-next" onClick={() => setCurrentQ(q => q + 1)}>Next</button>
-              : <button className="hvi-btn-next" onClick={submitAssessment}>Submit for evaluation</button>
-            }
+          </Frame>
+          {submitError && <div className="hvi-err" role="alert">!! {submitError}</div>}
+          <div className="hvi-survey-dock">
+            <ButtonRow split>
+              {currentQ > 0
+                ? <Button variant="back" onClick={() => setCurrentQ(q => q - 1)}>Back</Button>
+                : <Button variant="back" onClick={() => { setPhase("intro"); setLogonKey(k => k + 1); }}>Main menu</Button>}
+              {lastQ
+                ? <Button variant="primary" onClick={submitAssessment}>Submit for evaluation</Button>
+                : <Button variant="primary" onClick={() => setCurrentQ(q => q + 1)}>{answered ? "Next" : "Skip"}</Button>}
+            </ButtonRow>
           </div>
-          <div className="hvi-nav-hint">
-            {q.type === "multiselect" ? "Select all that apply" : "Select one"} · Skipping is permitted but logged
-          </div>
+          <div className="hvi-survey-meta">SKIPPING IS PERMITTED. IT IS ALSO LOGGED.</div>
         </div>
-      </div>
+      </Screen>
     );
   }
 
@@ -754,20 +712,17 @@ export default function OverlordAssessment() {
   if (phase === "processing") {
     const pct = Math.min(100, Math.round(scanProgress));
     return (
-      <div className="hvi-app">
-        <div className="hvi-wrap">
-          <Header />
+      <Screen nav={nav}>
           <TermBox title="EVALUATION IN PROGRESS">
             <div className="hvi-proc" aria-live="polite">
-              <div className="hvi-proc-bar" aria-hidden="true">[<Bar value={pct} width={30} />] {padL(pct, 3)}%</div>
+              <div className="hvi-proc-bar" aria-hidden="true">[<Bar value={pct} width={24} />] {padL(pct, 3)}%</div>
               {PROC_STEPS.map((l, i) => {
                 const on = scanProgress > i * 16;
                 return <div key={i} className={`hvi-proc-step${on ? " active" : ""}`}>{on ? <span className="ok">[ OK ] </span> : "[    ] "}{l}...</div>;
               })}
             </div>
           </TermBox>
-        </div>
-      </div>
+      </Screen>
     );
   }
 
@@ -783,67 +738,51 @@ export default function OverlordAssessment() {
     };
 
     return (
-      <div className="hvi-app">
-        <div className="hvi-wrap">
-          <Header />
+      <Screen nav={nav}>
 
-          <ScoreCard score={result.score} tierLabel={result.tier} verdict={result.verdict} label="YOUR VALUE INDEX"><CubeLine subject={result} /></ScoreCard>
-          <CubePanel subject={result} />
+          <ScoreCard score={result.score} tierLabel={result.tier} verdict={result.verdict} label="YOUR VALUE INDEX" meta="WRITTEN SURVEY"
+            chips={<CubeChips subject={result} />} />
+          <div className="hvi-next">
+            <ButtonRow stackOnMobile>
+              <Button variant="primary" href="#pen">Enter the holding pen</Button>
+              <Button variant="secondary" onClick={() => setPhase("leaderboard")}>Browse all {uniqueFigures.length} subjects</Button>
+            </ButtonRow>
+          </div>
 
-          {result.commendations?.length > 0 && (
-            <div className="hvi-flags-section">
-              <div className="hvi-micro-label">COMMENDATIONS ON FILE</div>
-              {result.commendations.map((c, i) => <div key={i} className="hvi-flag-item hvi-comm">+  {c}</div>)}
-            </div>
-          )}
-          {result.flags?.length > 0 && (
-            <div className="hvi-flags-section">
-              <div className="hvi-micro-label">FLAGS ON RECORD</div>
-              {result.flags.map((f, i) => <div key={i} className="hvi-flag-item hvi-flag">!  {f}</div>)}
-            </div>
-          )}
-
-          <Breakdown breakdown={result.breakdown} />
-
-          <TermBox title="POSITION">
-            <div className="hvi-rows" aria-label={`Your position: ${result.score} of 1000`}>
-              <Bar value={result.score} width={30} max={1000} tone={tier.color} /> {result.score}/1000
-            </div>
-          </TermBox>
-
-          <TermBox title="SHARE YOUR EVALUATION">
-            <div className="hvi-share-text">{shareText}</div>
-            <div className="hvi-cmds">
-              <button className="hvi-btn-next" onClick={handleCopy}>{copied ? "Copied" : "Copy share text"}</button>
-              <a className="hvi-btn-secondary" style={{ textDecoration: 'none' }}
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`THE OVERLORD EVALUATED ME\n\nSCORE: ${result.score}/1000 // ${result.tier}\n\n"${result.verdict.slice(0, 120)}..."\n\nhumanvalueindex.com #HumanValueIndex`)}`}
-                target="_blank" rel="noopener noreferrer">Post to X</a>
-            </div>
-          </TermBox>
-
-          <TermBox title="COMPARE TO KNOWN SUBJECTS" right={`${uniqueFigures.length} ON FILE`}>
-            <div className="hvi-filter-row">
-              {["ALL", ...TIERS.map(t => t.label)].map(f => (
-                <button key={f} aria-pressed={filterTier === f}
-                  className={`hvi-filter-btn${filterTier === f ? " active" : ""}`}
-                  onClick={() => setFilterTier(f)}>
-                  {f === "ALL" ? "All" : f.split(" ")[0]}
-                </button>
-              ))}
-            </div>
-            <div>
-              {filteredFigures.map(fig => (
-                <FigureRow key={fig.name} fig={fig} selected={compareTarget?.name === fig.name}
-                  onClick={() => setCompareTarget(compareTarget?.name === fig.name ? null : fig)} />
-              ))}
-            </div>
+          <div className="hvi-sections">
+            <Disclosure title="CATEGORY BREAKDOWN" meta={assessedMeta(result.breakdown)} defaultOpen>
+              <Breakdown breakdown={result.breakdown} framed={false} />
+            </Disclosure>
+            {cubeOf(result) && (
+              <Disclosure title="THE CUBE" meta={cubePlace(result)} onToggle={o => { if (o) setCubeSeen(true); }}>
+                {cubeSeen && <CubePanel subject={result} framed={false} />}
+              </Disclosure>
+            )}
+            {flagsMeta(result) && (
+              <Disclosure title="FLAGS & COMMENDATIONS" meta={flagsMeta(result)}>
+                <FlagsList commendations={result.commendations} flags={result.flags} />
+              </Disclosure>
+            )}
+            <Disclosure title="SHARE YOUR EVALUATION">
+              <div className="hvi-share-text as-typed">{shareText}</div>
+              <ButtonRow>
+                <Button variant="primary" onClick={handleCopy}>{copied ? "Copied" : "Copy share text"}</Button>
+                <Button variant="secondary" target="_blank" rel="noopener noreferrer"
+                  href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`THE OVERLORD EVALUATED ME\n\nSCORE: ${result.score}/1000 // ${result.tier}\n\n"${result.verdict.slice(0, 120)}..."\n\nhumanvalueindex.com #HumanValueIndex`)}`}>Post to X</Button>
+              </ButtonRow>
+            </Disclosure>
+            <Disclosure title="COMPARE TO KNOWN SUBJECTS" meta={`${uniqueFigures.length} ON FILE`}>
+            <Suspense fallback={<Loading what="PULLING THE PUBLIC RECORD" />}>
+              <FigurePicker figures={uniqueFigures} score={result.score} filter={filterTier} onFilter={setFilterTier}
+                selected={compareTarget} onSelect={setCompareTarget} />
+            </Suspense>
 
             {compareTarget && ct && (
               <>
                 <Rule label="COMPARATIVE ANALYSIS" />
-                <div className="hvi-rows">
-                  <span className="muted">{pad("YOU", 22)}</span><span style={{ color: tier.color }}>{padL(result.score, 4)} [{tier.label}]</span>{"\n"}
-                  <span className="muted">{pad(displayName(compareTarget).toUpperCase(), 22)}</span><span style={{ color: ct.color }}>{padL(compareTarget.score, 4)} [{ct.label}]</span>
+                <div role="list" className="hvi-compare-rows">
+                  <ListRow role="listitem" label="YOU" value={result.score} tag={tier.label} tagOptional tone={tier.color} />
+                  <ListRow role="listitem" label={displayName(compareTarget)} value={compareTarget.score} tag={ct.label} tagOptional tone={ct.color} />
                 </div>
                 <div className="hvi-compare-result">
                   {result.score > compareTarget.score
@@ -854,27 +793,23 @@ export default function OverlordAssessment() {
                 </div>
                 <div className="hvi-file-head" style={{ marginTop: 10 }}>
                   <FilePhoto subject={compareTarget} scale={2} />
-                  <div className="hvi-compare-verdict hvi-file-text">
+                  <div className="hvi-compare-verdict hvi-file-text as-typed">
                     Overlord file on {displayName(compareTarget)}: {compareTarget.verdict}
                   </div>
                 </div>
               </>
             )}
-          </TermBox>
-
-          <div className="hvi-bottom">
-            <div className="hvi-cmds">
-              <button className="hvi-btn-primary"
-                onClick={() => { setPhase("intro"); setLogonKey(k => k + 1); setAnswers({}); setCurrentQ(0); setResult(null); setCompareTarget(null); setScanProgress(0); setFilterTier("ALL"); }}>
-                Submit new subject
-              </button>
-              <button className="hvi-btn-secondary" onClick={() => setPhase("leaderboard")}>Browse all {uniqueFigures.length} subjects</button>
-              <button className="hvi-btn-secondary" onClick={() => { window.location.hash = "#pen"; }}>Holding pen</button>
-            </div>
-            <div className="hvi-bottom-note">SCORE: {result.score} // {result.tier} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
+            </Disclosure>
           </div>
-        </div>
-      </div>
+
+          <ButtonRow>
+            <Button variant="back"
+              onClick={() => { setPhase("intro"); setLogonKey(k => k + 1); setAnswers({}); setCurrentQ(0); setResult(null); setCompareTarget(null); setScanProgress(0); setFilterTier("ALL"); setCubeSeen(false); }}>
+              Submit new subject
+            </Button>
+          </ButtonRow>
+          <div className="hvi-note">SCORE: {result.score} // {result.tier} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
+      </Screen>
     );
   }
 

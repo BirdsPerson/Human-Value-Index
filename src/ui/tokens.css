@@ -1,0 +1,71 @@
+/* HVI design tokens. The one place colours, type sizes, spacing and borders are defined.
+   docs/design-system.md explains each role. Green phosphor on near-black; three text
+   levels; three semantic hues (accent / warn / harm) and nothing else is coloured. */
+
+:root {
+  /* surfaces */
+  --bg: #0a0f0a;          /* the page */
+  --panel: #0d140d;       /* raised: command bar, focused fields, tooltips */
+  --panel-hi: #132013;    /* a raised surface's hover */
+  --line: #1f4a2c;        /* CSS frames and dividers */
+  --line-hi: #2f6a42;     /* active frame, command bar edge */
+
+  /* text */
+  --fg: #c8f5d8;          /* primary */
+  --fg-dim: #86c9a0;      /* secondary */
+  --fg-mute: #4b7c5e;     /* tertiary: meta, disabled (still readable, 3.9:1) */
+  --fg-ghost: #2d5040;    /* decoration only: dot leaders, empty bar track. Never for words. */
+
+  /* semantic */
+  --accent: #4ade80;      /* actions, selected (inverse video), good tiers */
+  --accent-ink: #06210f;  /* text on --accent */
+  --accent-dim: #22c55e;
+  --warn: #fbbf24;        /* middle tiers, CHARMING / INDULGED, caution */
+  --harm: #f87171;        /* low tiers, FEARED / DISMISSED, errors */
+
+  /* type: Fira Mono only. Five steps; nothing else. */
+  --mono: 'Fira Mono', ui-monospace, Menlo, Consolas, monospace;
+  --t-xs: 12px;           /* meta, labels, the floor */
+  --t-s: 14px;            /* body */
+  --t-m: 16px;            /* inputs (no iOS zoom), primary rows, verdicts */
+  --t-l: 20px;            /* screen headings */
+  --t-xl: 28px;           /* display */
+  --lh: 1.5;              /* body */
+  --lh-tight: 1.3;        /* display */
+
+  /* space */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px;
+  --gutter: var(--s4);
+
+  /* touch */
+  --hit: 48px;            /* rows, commands, the bar */
+  --hit-min: 44px;        /* the floor for any tap target (chips, tabs, toggles) */
+
+  /* borders */
+  --bw: 1px;
+  --focus: 2px solid var(--accent);
+
+  /* chrome */
+  --head-h: 44px;
+  --bar-h: 56px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+
+  /* Legacy names. Screens written before the tokens still use these; new code uses
+     the role names above. Remove an alias once nothing references it. */
+  --bg2: var(--panel);
+  --bg3: var(--panel-hi);
+  --green: var(--accent);
+  --green-dim: var(--accent-dim);
+  --text: var(--fg);
+  --text-dim: var(--fg-dim);
+  --text-muted: var(--fg-mute);
+  --text-ghost: var(--fg-ghost);
+  --amber: var(--warn);
+  --red: var(--harm);
+  --sans: var(--mono);
+
+  color-scheme: dark;
+}

@@ -1,9 +1,11 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import TouchGate from "../ui/TouchGate.jsx";
+import { Button, Chip, Chips, ListRow } from "../ui/index.js";
 import { SPRITE_W, SPRITE_H } from "../sprites.js";
 import { clockAt, whereOf, jobLine, activityLine, roomIn, DISTRICT, DISTRICTS } from "./simApi.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
-import { FONT, SubjectTip } from "./cityUi.jsx";
+import { FONT, SubjectTip, ZoomBar } from "./cityUi.jsx";
 import {
   buildScene, viewFor, P, depthOf, panTarget, pointInPoly, hull, locate, subjectPoint, trains, carArc, loopAt, toWorld,
   floorHeight, clampPitch3, clampZoom, ease, buildingHref, floorLabel, BUILDING, BUILDINGS, REST3D, FLOOR_H, LOOP_H, SPAN, CAR_LEN, EMPTY_FLOOR,
@@ -48,24 +50,15 @@ export function useCityViewMode(initial = "2d") {
 }
 export function ViewToggle({ mode, onChange }) {
   return (
-    <span className="hvi-city-viewtoggle" role="group" aria-label="City view">
-      <button type="button" className={`hvi-cmd${mode === "2d" ? " on" : ""}`} aria-pressed={mode === "2d"} onClick={() => onChange("2d")}>[2D MAP]</button>
-      <button type="button" className={`hvi-cmd${mode === "3d" ? " on" : ""}`} aria-pressed={mode === "3d"} onClick={() => onChange("3d")}>[3D]</button>
-    </span>
+    <Chips role="group" aria-label="City view">
+      <Chip pressed={mode === "2d"} onClick={() => onChange("2d")}>2D MAP</Chip>
+      <Chip pressed={mode === "3d"} onClick={() => onChange("3d")}>3D</Chip>
+    </Chips>
   );
 }
 
-const css3d = `
-  .hvi-city-viewtoggle { display: inline-flex; gap: 2px; }
-  .hvi-city-viewtoggle .hvi-cmd { padding: 0 0.6ch; font-size: 12px; }
-  .hvi-city-viewtoggle .hvi-cmd.on { background: var(--green); color: var(--bg); }
-  .hvi-city3d-floors { padding: 0.4em 1ch 0.6em; border-top: 1px solid #16291c; }
-  .hvi-city3d-floors .h { color: var(--text-muted); font-size: 12px; margin-bottom: 0.2em; }
-  .hvi-city3d-floors .hvi-row-btn .tag { color: var(--text-ghost); }
-  .hvi-city3d-floors .note { color: var(--text-ghost); font-size: 12px; }
-  .hvi-city3d-floors .hvi-row-btn .name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .hvi-city3d-floors .hvi-row-btn .tag { flex: none; }
-`;
+// Styles for the floor panel live with the rest of the city's (cityUi.jsx).
+const css3d = "";
 function injectCss() {
   let el = document.getElementById("hvi-city3d-styles");
   if (!el) { el = document.createElement("style"); el.id = "hvi-city3d-styles"; document.head.appendChild(el); }
@@ -428,7 +421,7 @@ function City3D({ censusRef, onDistrict, onOpen, onFloor, query = "" }) {
     // label already placed is skipped, so 400px stays legible.
     function drawLabels(Q, v, storeyPx, narrow) {
       const placed = [];
-      const fs = narrow ? 10 : 11;
+      const fs = narrow ? 11 : 12;
       ctx.font = `700 ${fs}px ${FONT}`; ctx.textBaseline = "top"; ctx.textAlign = "left";
       // lead: {x, y} a leader line runs from, to the plate's near edge (drawn under the plate)
       const lab = (text, x, y, col, force, lead) => {
@@ -708,29 +701,27 @@ function City3D({ censusRef, onDistrict, onOpen, onFloor, query = "" }) {
   const secret = sel && CLASSIFIED(BUILDING[sel.id]);
   return (
     <div className="hvi-city-stage" ref={wrapRef}>
-      <canvas ref={canvasRef} className={`hvi-city-canvas${cursor ? " " + cursor : ""}`} tabIndex={0} role="application" aria-roledescription="3D city map"
-        aria-label="The Substrate in three dimensions: district outlines on the ground, every building a stack of floors, the Loop train on its raised ring. Arrow keys turn it, shift and arrows move it, plus and minus zoom, zero resets. Right and left square brackets open the next or previous building; Enter moves to its floor list; Escape seals it again. The district directory below also enters any district." />
+      <TouchGate>
+        <canvas ref={canvasRef} className={`hvi-city-canvas${cursor ? " " + cursor : ""}`} tabIndex={0} role="application" aria-roledescription="3D city map"
+          aria-label="The Substrate in three dimensions: district outlines on the ground, every building a stack of floors, the Loop train on its raised ring. Arrow keys turn it, shift and arrows move it, plus and minus zoom, zero resets. Right and left square brackets open the next or previous building; Enter moves to its floor list; Escape seals it again. The district directory below also enters any district." />
+      </TouchGate>
       <div className="sr-only" role="status" aria-live="polite">{status}</div>
-      <div className="hvi-city-zoom">
-        <button className="hvi-cmd" aria-label="Zoom in" onClick={() => apiRef.current.zoom?.(1.4)}>[+]</button>
-        <button className="hvi-cmd" aria-label="Zoom out" onClick={() => apiRef.current.zoom?.(1 / 1.4)}>[-]</button>
-        <button className="hvi-cmd" aria-label="Reset the view" onClick={() => apiRef.current.reset?.()}>[RESET]</button>
-      </div>
+      <ZoomBar api={apiRef} resetLabel="RESET" resetAria="Reset the view" hint="TAP A BUILDING TO OPEN IT" />
       <SubjectTip ref={tipRef} tip={tip} onOpen={(s) => cb.current.onOpen?.(s)} />
       {sel && (
         <div className="hvi-city3d-floors" ref={floorsRef} role="region" aria-label={`${sel.name}: floors`}
           onKeyDown={(ev) => { if (ev.key === "Escape") { apiRef.current.close?.(); canvasRef.current?.focus(); } }}>
           <div className="h">{sel.name} // {DISTRICT[sel.districtId]?.name} // {sel.floors.length} FLOOR{sel.floors.length === 1 ? "" : "S"} // {secret ? "CENSUS CLASSIFIED. ENTRY IS BY THE HOLDING PEN." : "SELECT A FLOOR. YOUR VISIT IS LOGGED."}</div>
-          {sel.floors.map(f => (
-            <button key={f.index} type="button" className="hvi-row-btn" onClick={() => goFloor(sel.districtId, sel.id, f.index)}
-              aria-label={`${f.label}. ${secret ? "Enter the building" : "Enter this floor"}.`}>
-              <span className="name">{f.label}</span>
-              <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
-              <span className="tag">{secret ? "RESTRICTED" : f.count ? "INSPECT" : "VACANT (MONITORED)"}</span>
-            </button>
-          ))}
+          <div role="list">
+            {sel.floors.map(f => (
+              <div role="listitem" key={f.index}>
+                <ListRow label={f.label} tag={secret ? "RESTRICTED" : f.count ? "INSPECT" : "VACANT (MONITORED)"} tagOptional={!secret && !f.count}
+                  onClick={() => goFloor(sel.districtId, sel.id, f.index)} aria-label={`${f.label}. ${secret ? "Enter the building" : "Enter this floor"}.`} />
+              </div>
+            ))}
+          </div>
           {!secret && sel.floors.every(f => !f.count) && <div className="note">{EMPTY_FLOOR}</div>}
-          <button type="button" className="hvi-cmd" onClick={() => { apiRef.current.close?.(); canvasRef.current?.focus(); }}>[SEAL BUILDING]</button>
+          <Button variant="back" onClick={() => { apiRef.current.close?.(); canvasRef.current?.focus(); }}>Seal building</Button>
         </div>
       )}
     </div>

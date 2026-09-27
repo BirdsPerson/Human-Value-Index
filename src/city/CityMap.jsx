@@ -1,9 +1,10 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import TouchGate from "../ui/TouchGate.jsx";
 import { SPRITE_W, SPRITE_H, hashStr } from "../sprites.js";
 import { DISTRICTS, PLACES, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, placesOf, placeName, districtCap, activityLine, jobLine, clockAt, whereOf, trainsAt } from "./simApi.js";
 import { CELL_W, CELL_H, layoutDistricts, FAMILY_COLOR, familyOf, lodFor, roomLabel } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
-import { FONT, SubjectTip } from "./cityUi.jsx";
+import { FONT, SubjectTip, ZoomBar } from "./cityUi.jsx";
 
 // THE SUBSTRATE: the whole city as one canvas. District blocks drawn in box characters,
 // the Loop as a railed ring with a platform at every district and its trains on it
@@ -448,7 +449,8 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       // district labels with live counts, fixed screen size, pinned inside each block.
       // Counts only: capacity lives in the directory, where it can be compared.
       const C = censusRef.current;
-      ctx.font = `700 10px ${FONT}`;
+      const LF = V.cssW < 600 ? 11 : 12, LH = LF + 3;   // label type: never under 11px, even on a phone
+      ctx.font = `700 ${LF}px ${FONT}`;
       ctx.textBaseline = "top";
       const lcw = ctx.measureText("M").width;
       for (const bl of layout.blocks) {
@@ -463,18 +465,18 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
         name = name.slice(0, Math.max(1, maxC));
         // pinned to the visible part of the block, so a zoomed-in district keeps its name
         const lx = Math.max(x0 + (V.textLod ? cw * 1.5 : 4), Math.min(4, x0 + wpx - 60));
-        const ly = Math.max(V.textLod ? y0 + ch * 0.5 - 6 : y0 + 3, Math.min(4, y0 + bl.h * ch - 30));
-        const lw = (two ? Math.max(name.length, cnt.length) : name.length + cnt.length + 1) * lcw + 6, lh = two ? 25 : 13;
+        const ly = Math.max(V.textLod ? y0 + ch * 0.5 - 6 : y0 + 3, Math.min(4, y0 + bl.h * ch - LH * 2 - 4));
+        const lw = (two ? Math.max(name.length, cnt.length) : name.length + cnt.length + 1) * lcw + 6, lh = two ? LH * 2 - 1 : LH;
         ctx.fillStyle = "rgba(6,10,6,0.86)";
         ctx.fillRect(lx - 3, ly - 1, lw, lh);
         ctx.fillStyle = "#86efac";
         ctx.fillText(name, lx, ly);
         ctx.fillStyle = cap && n > cap ? "#f87171" : "#4d8a62";
-        ctx.fillText(cnt, two ? lx : lx + (name.length + 1) * lcw, two ? ly + 12 : ly);
+        ctx.fillText(cnt, two ? lx : lx + (name.length + 1) * lcw, two ? ly + LH - 1 : ly);
         // the district's address, right on the frame, when there is room for it
         const aw = (bl.addr.length + 2) * lcw, ax = x0 + wpx - cw * 1.5 - aw;
         if (V.textLod && ax > lx - 3 + lw + lcw) {
-          ctx.fillStyle = "rgba(6,10,6,0.86)"; ctx.fillRect(ax, ly - 1, aw, 13);
+          ctx.fillStyle = "rgba(6,10,6,0.86)"; ctx.fillRect(ax, ly - 1, aw, LH);
           ctx.fillStyle = "#3d6b50"; ctx.fillText(` ${bl.addr} `, ax, ly);
         }
       }
@@ -648,13 +650,11 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
 
   return (
     <div className="hvi-city-stage" ref={wrapRef}>
-      <canvas ref={canvasRef} className={`hvi-city-canvas${cursor ? " " + cursor : ""}`} role="img"
-        aria-label="The Substrate: a map of the city's districts, the Loop train with a station at every district, and every subject on it. By keyboard: the Loop list below names everyone aboard and finds your own file; the district directory enters a district." />
-      <div className="hvi-city-zoom">
-        <button className="hvi-cmd" aria-label="Zoom in" onClick={() => apiRef.current.zoom?.(1.4)}>[+]</button>
-        <button className="hvi-cmd" aria-label="Zoom out" onClick={() => apiRef.current.zoom?.(1 / 1.4)}>[-]</button>
-        <button className="hvi-cmd" aria-label="Fit the whole city" onClick={() => apiRef.current.fit?.()}>[FIT]</button>
-      </div>
+      <TouchGate>
+        <canvas ref={canvasRef} className={`hvi-city-canvas${cursor ? " " + cursor : ""}`} role="img"
+          aria-label="The Substrate: a map of the city's districts, the Loop train with a station at every district, and every subject on it. By keyboard: the Loop list below names everyone aboard and finds your own file; the district directory enters a district." />
+      </TouchGate>
+      <ZoomBar api={apiRef} hint="TAP A DISTRICT TO ENTER" />
       <SubjectTip ref={tipRef} tip={tip} onOpen={(s) => onOpenRef.current(s)} />
     </div>
   );

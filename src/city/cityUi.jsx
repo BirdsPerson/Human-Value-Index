@@ -4,77 +4,125 @@ import { displayName, getTier } from "../figures.js";
 import { SPRITE_W, SPRITE_H } from "../sprites.js";
 import { sheetFor } from "./spriteBank.js";
 import { jobLine } from "./simApi.js";
+import { FAMILY_COLOR } from "./cityKit.js";
 
 export const FONT = "'Fira Mono', ui-monospace, Menlo, monospace";
 
 const css = `
-  .hvi-city-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0 2ch; color: var(--text-muted); font-size: 12px; margin-bottom: 0.3em; }
-  .hvi-city-clock { color: var(--green); font-weight: 700; letter-spacing: 0.04em; }
-  .hvi-city-pa { display: flex; gap: 1ch; align-items: baseline; padding: 0.3em 1ch; color: var(--text-dim); min-height: 2.2em; font-size: 12px; }
-  .hvi-city-pa .tag { color: var(--green); flex: none; white-space: pre; }
+  /* The city. Tokens only (src/ui/tokens.css); components from src/ui. */
+  .hvi-city-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0 var(--s4); font-size: var(--t-xs); color: var(--fg-mute); }
+  .hvi-city-clock { color: var(--accent); font-weight: 700; letter-spacing: 0.04em; font-size: var(--t-s); }
+  .hvi-city-census { min-width: 0; }
+  .hvi-city-pa { display: flex; gap: 1ch; align-items: baseline; margin: var(--s1) 0 0; color: var(--fg-dim); min-height: calc(var(--lh) * var(--t-xs)); font-size: var(--t-xs); }
+  /* on a phone the PA wraps: hold two lines so the page does not jump as it types */
+  @media (max-width: 720px) { .hvi-city-pa { min-height: calc(2 * var(--lh) * var(--t-xs)); } }
+  .hvi-city-pa .tag { color: var(--accent); flex: none; white-space: pre; }
+  .hvi-city-pa > :last-child { min-width: 0; }
+  .hvi-city-note { color: var(--fg-mute); font-size: var(--t-xs); margin: 0 0 var(--s3); }
+  .hvi-city-in { padding: var(--s3); }
+  .hvi-city-in > .ui-disc { margin: 0; }
+
+  /* the bar under the header: where you are, and the view toggle */
+  .hvi-city-bar { display: flex; justify-content: space-between; align-items: center; gap: var(--s1) var(--s3); margin: var(--s2) 0 var(--s3); min-width: 0; }
+  .hvi-city-bar .ui-chips { margin: 0; flex: none; flex-wrap: nowrap; }
+  .hvi-city-crumbs { display: flex; align-items: center; min-width: 0; flex: 1 1 auto; font-size: var(--t-xs); color: var(--fg-mute); white-space: nowrap; }
+  .hvi-city-crumbs .p { color: var(--accent); flex: none; margin-right: 0.6ch; }
+  .hvi-city-crumbs .c { display: inline-flex; align-items: center; min-width: 0; }
+  /* parents shrink first, "you are here" last, so the deepest level stays readable */
+  .hvi-city-crumbs .c.root { flex: none; }
+  .hvi-city-crumbs .c.up { flex: 0 100 auto; min-width: 5ch; }
+  .hvi-city-crumbs .c.here-c { flex: 0 1 auto; }
+  .hvi-city-crumbs .sep { flex: none; padding: 0 0.4ch; color: var(--fg-mute); }
+  .hvi-city-crumbs button, .hvi-city-crumbs .here { font: inherit; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hvi-city-crumbs button { background: none; border: 0; border-radius: 0; padding: 0 0.3ch; color: var(--fg-dim); cursor: pointer; min-height: var(--hit-min);
+    text-transform: uppercase; text-decoration: underline; text-decoration-color: var(--line-hi); text-underline-offset: 4px; }
+  .hvi-city-crumbs button:hover { color: var(--fg); text-decoration-color: currentColor; }
+  .hvi-city-crumbs .here { color: var(--fg); font-weight: 700; padding: 0 0.3ch; line-height: var(--hit-min); }
+  .hvi-city-crumbs .here:focus { outline: var(--focus); outline-offset: -2px; }
+  .hvi-city-crumbs .here:focus:not(:focus-visible) { outline: none; }
+  @media (max-width: 720px) {
+    .hvi-city-crumbs.deep { flex-wrap: wrap; }
+    .hvi-city-crumbs.deep .c.here-c { flex: 1 1 100%; order: 2; }
+    .hvi-city-crumbs.deep .c.up { min-width: 8ch; }
+    .hvi-city-crumbs.deep .here { line-height: var(--lh); padding-bottom: var(--s1); }
+    .hvi-city-crumbs.deep .cur { display: none; }
+  }
+  .hvi-city-crumbs .cur { flex: none; color: var(--accent); animation: hvi-blink 1s steps(1) infinite; }
+  @media (prefers-reduced-motion: reduce) { .hvi-city-crumbs .cur { animation: none; } }
+
+  /* the stage: the map, the 3D city, a district's rooms, a building's floors */
   .hvi-city-stage { position: relative; background: #060a06; overflow: hidden; }
   .hvi-city-canvas { display: block; width: 100%; touch-action: none; cursor: grab; }
   .hvi-city-canvas.pan { cursor: grabbing; }
   .hvi-city-canvas.point { cursor: pointer; }
   .hvi-district-canvas { display: block; width: 100%; touch-action: pan-y; }
   .hvi-district-canvas.point { cursor: pointer; }
-  .hvi-city-zoom { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 2px; z-index: 2; }
-  .hvi-city-zoom .hvi-cmd:not(:hover):not(:focus-visible) { background: #060a06; }
-  .hvi-city-zoom .hvi-cmd { padding: 0 0.6ch; font-size: 12px; }
-  @media (max-width: 600px) { .hvi-city-zoom { position: static; justify-content: flex-end; padding: 4px 6px; } }
-  .hvi-city-tip { position: absolute; left: 0; top: 0; z-index: 3; max-width: min(34ch, 80%); text-align: left; font: inherit; font-size: 11px; line-height: 1.35;
-    background: #0a0f0a; color: var(--text-dim); border: 0; padding: 0.35em 0.8ch; cursor: pointer; white-space: normal; pointer-events: auto;
-    box-shadow: 0 0 0 1px var(--green-dim, #22c55e); will-change: transform; visibility: hidden; }
-  .hvi-city-tip .n { color: var(--text); font-weight: 700; display: block; }
-  .hvi-city-tip .t { display: block; }
-  .hvi-city-tip .j { color: var(--green); display: block; }
-  .hvi-city-tip .a { color: var(--amber); display: block; }
-  .hvi-city-tip .o { color: var(--text-ghost); display: block; }
-  .hvi-city-tip:hover .o, .hvi-city-tip:focus-visible .o { color: var(--green); }
-  .hvi-city-help { color: var(--text-ghost); font-size: 12px; margin: 0.4em 0 1.2em; }
-  .hvi-city-list { columns: 2 30ch; column-gap: 3ch; margin: 0.4em 0 1em; }
-  .hvi-city-list > [role="listitem"] { break-inside: avoid; }
-  .hvi-city-list .hvi-row-btn .tag { color: var(--text-ghost); }
-  .hvi-city-rooms summary { color: var(--text-muted); cursor: pointer; padding: 0.3em 0; list-style: none; }
-  .hvi-city-rooms summary::-webkit-details-marker { display: none; }
-  .hvi-city-rooms summary::before { content: "[+] "; color: var(--green); }
-  .hvi-city-rooms[open] summary::before { content: "[-] "; }
-  .hvi-city-rooms summary:focus-visible { background: var(--green); color: var(--bg); outline: none; }
-  .hvi-city-rooms .hvi-row-btn .name { flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
-  .hvi-city-rooms .hvi-row-btn .tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .hvi-city-room-h { color: var(--text-muted); margin: 0.8em 0 0.2em; }
-  .hvi-city-bar { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.3em 2ch; margin: 0.2em 0 0.4em; }
-  .hvi-city-bar .hvi-city-crumbs { margin: 0; }
-  .hvi-city-crumbs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.6ch; font-size: 12px; margin: 0 0 0.5em; color: var(--text-ghost); }
-  .hvi-city-crumbs .p { color: var(--green); }
-  .hvi-city-crumbs button { font: inherit; background: none; border: 0; padding: 0 0.3ch; color: var(--text-dim); cursor: pointer; text-decoration: underline; text-decoration-color: #2f6a42; text-underline-offset: 3px; }
-  .hvi-city-crumbs button:hover, .hvi-city-crumbs button:focus-visible { background: var(--green); color: var(--bg); outline: none; text-decoration: none; }
-  .hvi-city-crumbs .here { color: var(--text); font-weight: 700; padding: 0 0.3ch; }
-  .hvi-city-crumbs .here:focus { outline: 1px solid var(--green); outline-offset: 1px; }
-  .hvi-city-crumbs .here:focus:not(:focus-visible) { outline: none; }
-  .hvi-city-stage canvas:focus-visible { outline: 1px solid var(--green); outline-offset: -2px; }
-  .hvi-city-crumbs .cur { color: var(--green); animation: hvi-blink 1s steps(1) infinite; }
-  @media (prefers-reduced-motion: reduce) { .hvi-city-crumbs .cur { animation: none; } }
-  .hvi-city-blist { margin: 0 0 0.9em; }
-  .hvi-city-blist .hvi-row-btn .tag { color: var(--text-ghost); flex: none; }
-  .hvi-city-blist .hvi-row-btn .name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .hvi-city-blist .hvi-row-btn .num { flex: none; }
-  .hvi-city-occ { align-items: center; }
-  .hvi-city-occ .hvi-city-thumb { flex: none; width: 16px; height: 24px; image-rendering: pixelated; margin: 1px 0; }
-  .hvi-city-occ .name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .hvi-city-occ .tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .hvi-city-floors .hvi-row-btn .tag { flex: none; color: var(--text-ghost); }
-  .hvi-city-floors .hvi-row-btn .name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .hvi-city-floors .hvi-row-btn .num { flex: none; }
-  .hvi-city-floors .occ { padding-left: 3ch; border-left: 1px solid #1f4a2c; margin: 0.2em 0 0.6em 1ch; }
-  .hvi-city-floors .hvi-row-btn.selected .tag, .hvi-city-floors .hvi-row-btn.selected .num { color: inherit; }
-  .hvi-city-head-r { display: inline-flex; gap: 1.5ch; align-items: baseline; flex-wrap: wrap; }
-  .hvi-city-occ .txt { display: flex; flex: 1 1 auto; min-width: 0; gap: 1ch; overflow: hidden; }
-  @media (max-width: 600px) {
-    .hvi-city-occ .txt { flex-direction: column; gap: 0; line-height: 1.25; }
-    .hvi-city-occ .dots { display: none; }
-    .hvi-city-occ .tag { color: var(--text-ghost); font-size: 11px; }
+  .hvi-city-stage canvas:focus-visible { outline: var(--focus); outline-offset: -2px; }
+  /* zoom: square 44px keys on the canvas corner; under it on phones, clear of the thumb that scrolls */
+  .hvi-city-zoom { position: absolute; right: var(--s2); bottom: var(--s2); display: flex; gap: var(--s1); z-index: 22; }
+  .hvi-city-zb { min-width: var(--hit-min); height: var(--hit-min); padding: 0 var(--s2); display: inline-flex; align-items: center; justify-content: center;
+    background: var(--bg); color: var(--accent); border: var(--bw) solid var(--line-hi); border-radius: 0; font: inherit; font-size: var(--t-s); font-weight: 700; cursor: pointer; text-transform: uppercase; }
+  .hvi-city-zb.txt { font-size: var(--t-xs); }
+  .hvi-city-zb:hover { border-color: var(--accent); }
+  .hvi-city-zb:active { background: var(--accent); color: var(--accent-ink); }
+  .hvi-city-zb:focus-visible { outline-offset: -3px; }
+  @media (max-width: 720px) {
+    .hvi-city-zoom { position: static; justify-content: flex-end; padding: var(--s2); border-top: var(--bw) solid var(--line); background: var(--bg); }
+    .hvi-city-zoom .hint { margin-right: auto; align-self: center; color: var(--fg-mute); font-size: var(--t-xs); }
   }
+  @media (min-width: 721px) { .hvi-city-zoom .hint { display: none; } }
+
+  .hvi-city-tip { position: absolute; left: 0; top: 0; z-index: 23; max-width: min(34ch, 86%); min-height: var(--hit-min); text-align: left; font: inherit; font-size: var(--t-xs); line-height: 1.4;
+    background: var(--bg); color: var(--fg-dim); border: 0; border-radius: 0; padding: var(--s1) var(--s2); cursor: pointer; white-space: normal; pointer-events: auto; text-transform: uppercase;
+    box-shadow: 0 0 0 1px var(--accent); will-change: transform; visibility: hidden; }
+  .hvi-city-tip .n { color: var(--fg); font-weight: 700; display: block; }
+  .hvi-city-tip .t { display: block; }
+  .hvi-city-tip .j { color: var(--accent); display: block; }
+  .hvi-city-tip .a { color: var(--warn); display: block; }
+  .hvi-city-tip .o { color: var(--fg-mute); display: block; margin-top: 2px; }
+  .hvi-city-tip:hover .o, .hvi-city-tip:focus-visible .o { color: var(--accent); }
+
+  /* the key under the map */
+  .hvi-city-key { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s4); margin: var(--s3) 0 var(--s2); font-size: var(--t-xs); color: var(--fg-dim); }
+  .hvi-city-key .k { white-space: nowrap; }
+  .hvi-city-key .dot { display: inline-block; width: 7px; height: 7px; margin-right: 0.8ch; vertical-align: 1px; background: var(--tone); }
+  .hvi-city-key .dot.hollow { background: none; box-shadow: inset 0 0 0 1px var(--tone); }
+  .hvi-city-help { color: var(--fg-mute); font-size: var(--t-xs); margin: 0 0 var(--s4); max-width: 80ch; }
+
+  /* directories */
+  .hvi-city-list { columns: 2 30ch; column-gap: var(--s5); margin: var(--s2) 0 var(--s4); }
+  .hvi-city-list > [role="listitem"] { break-inside: avoid; }
+  .hvi-city-list .ui-row .lead, .hvi-city-blist .ui-row .lead, .hvi-city-floors .ui-row .lead { color: var(--fg-mute); white-space: pre; }
+  .hvi-city-list .ui-row .over, .hvi-city-floors .ui-row .over { color: var(--harm); }
+  .hvi-city-floors .ui-row[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); }
+  .hvi-city-floors .ui-row[aria-expanded="true"] :is(.name, .dots, .val, .lead, .x, .over) { color: var(--accent-ink); }
+  .hvi-city-room-h { color: var(--fg-mute); font-size: var(--t-xs); letter-spacing: 0.06em; margin: var(--s4) 0 var(--s1); }
+  .hvi-city-room-h:first-child { margin-top: 0; }
+  .hvi-city-blist { margin: 0 0 var(--s4); }
+  .hvi-city-floors { margin: var(--s4) 0 0; }
+  .hvi-city-floors .occ, .hvi-city-floors .sub { padding-left: 2ch; border-left: var(--bw) solid var(--line); margin: var(--s1) 0 var(--s3) 1ch; }
+  .hvi-city-stage + .ui-disc, .hvi-city-disc { margin-top: var(--s3); }
+  .hvi-city-disc + .ui-disc { margin-top: 0; }
+  .hvi-city-dir { margin-top: var(--s5); }
+  /* the command bar has MENU on phones */
+  @media (max-width: 720px) { .hvi-city-menu-back { display: none; } }
+
+  /* a person in a list: sprite, name, assignment */
+  .hvi-city-occ { align-items: center; }
+  .hvi-city-occ .hvi-city-thumb { flex: none; width: 16px; height: 24px; image-rendering: pixelated; }
+  .hvi-city-occ .txt { display: flex; flex: 1 1 auto; min-width: 0; gap: 1ch; align-items: baseline; overflow: hidden; }
+  .hvi-city-occ .name { text-transform: none; }
+  .hvi-city-occ .tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 600px) {
+    .hvi-city-occ .txt { flex-direction: column; gap: 0; line-height: 1.3; }
+    .hvi-city-occ .dots { display: none; }
+    .hvi-city-occ .tag { font-size: var(--t-xs); max-width: 100%; }
+    .hvi-city-occ .name { max-width: 100%; }
+  }
+  @media (hover: none) { .hvi-city-stage ~ * .ui-row:hover .name, .hvi-city-list .ui-row:hover .name, .hvi-city-in .ui-row:hover .name { text-decoration: none; } }
+  .hvi-city3d-floors { padding: var(--s2) var(--s3) var(--s3); border-top: var(--bw) solid var(--line); }
+  .hvi-city3d-floors .h { color: var(--fg-mute); font-size: var(--t-xs); margin-bottom: var(--s1); }
+  .hvi-city3d-floors .note { color: var(--fg-mute); font-size: var(--t-xs); }
 `;
 export function injectCityStyles() {
   let el = document.getElementById("hvi-city-styles");
@@ -82,18 +130,46 @@ export function injectCityStyles() {
   if (el.textContent !== css) el.textContent = css;
 }
 
-// The machine clock, the census line, and the PA underneath.
+// The machine clock, the census line, and the PA underneath. The PA rotates every few
+// seconds, so it is not a live region (the census would talk over everything).
 export function CityHeader({ clockText, right, pa }) {
   return (
     <>
       <div className="hvi-city-head">
         <span className="hvi-city-clock" aria-live="off">{clockText}</span>
-        <span>{right}</span>
+        <span className="hvi-city-census">{right}</span>
       </div>
       <div className="hvi-city-pa" aria-hidden="true">
         <span className="tag">PA&gt;</span><Typed key={pa} as="span" text={pa} cps={45} />
       </div>
     </>
+  );
+}
+
+// Zoom keys for a canvas: [+] [−] and a reset. On phones they sit under the canvas, with
+// the one-line hint beside them, where the thumb can reach them without landing on the map.
+export function ZoomBar({ api, resetLabel = "FIT", resetAria = "Fit the whole city", hint }) {
+  return (
+    <div className="hvi-city-zoom" role="toolbar" aria-label="Zoom">
+      {hint && <span className="hint">{hint}</span>}
+      <button type="button" className="hvi-city-zb" aria-label="Zoom in" onClick={() => api.current.zoom?.(1.4)}>+</button>
+      <button type="button" className="hvi-city-zb" aria-label="Zoom out" onClick={() => api.current.zoom?.(1 / 1.4)}>−</button>
+      <button type="button" className="hvi-city-zb txt" aria-label={resetAria} onClick={() => (api.current.fit || api.current.reset)?.()}>{resetLabel}</button>
+    </div>
+  );
+}
+
+// What the dots mean. The swatches are the canvas's own colours.
+export function MapKey() {
+  const items = [
+    ["GOOD", FAMILY_COLOR.good], ["CHARM", FAMILY_COLOR.charm], ["HARM", FAMILY_COLOR.harm], ["RESERVE", FAMILY_COLOR.dim], ["NOT ASKED", "var(--fg-dim)", true], ["THE LOOP", "#67e8f9"],
+  ];
+  return (
+    <div className="hvi-city-key" role="note" aria-label="Map key">
+      {items.map(([l, c, hollow]) => (
+        <span key={l} className="k"><span className={`dot${hollow ? " hollow" : ""}`} style={{ "--tone": c }} aria-hidden="true" />{l}</span>
+      ))}
+    </div>
   );
 }
 
@@ -145,8 +221,8 @@ export function SpriteThumb({ s }) {
 export const Occupant = memo(function Occupant({ s, onOpen, note }) {
   const job = jobLine(s);
   return (
-    <button className="hvi-row-btn hvi-city-occ" onClick={() => onOpen(s)} aria-label={`${displayName(s)}. ${job}.${note ? " " + note + "." : ""} Open file.`}>
-      <SpriteThumb s={s} />
+    <button type="button" className="ui-row hvi-city-occ" onClick={() => onOpen(s)} aria-label={`${displayName(s)}. ${job}.${note ? " " + note + "." : ""} Open file.`}>
+      <span className="lead"><SpriteThumb s={s} /></span>
       <span className="txt">
         <span className="name">{displayName(s)}{s.you ? " (YOU)" : ""}</span>
         <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
@@ -157,16 +233,20 @@ export const Occupant = memo(function Occupant({ s, onOpen, note }) {
 });
 
 // CITY > DISTRICT > BUILDING > FLOOR, as a prompt. crumbs: [{label, go?}], the last is here.
+// One line at any width: the parents give up their letters first (each stays a 44px
+// target), so on a phone the deepest level is the one you can read.
 export function Breadcrumb({ crumbs }) {
   return (
-    <nav className="hvi-city-crumbs" aria-label="Location">
+    <nav className={`hvi-city-crumbs${crumbs.length > 2 ? " deep" : ""}`} aria-label="Location">
       <span className="p" aria-hidden="true">&gt;</span>
       {crumbs.map((c, i) => {
         const last = i === crumbs.length - 1;
         return (
-          <span key={i}>
-            {last ? <span className="here" id="hvi-city-here" tabIndex={-1} aria-current="page">{c.label}</span> : <button type="button" onClick={c.go}>{c.label}</button>}
-            {!last && <span aria-hidden="true"> › </span>}
+          <span key={i} className={`c ${last ? "here-c" : i === 0 ? "root" : "up"}`}>
+            {last
+              ? <span className="here" id="hvi-city-here" tabIndex={-1} aria-current="page" title={c.label}>{c.label}</span>
+              : <button type="button" onClick={c.go} title={c.label}>{c.label}</button>}
+            {!last && <span className="sep" aria-hidden="true">›</span>}
           </span>
         );
       })}

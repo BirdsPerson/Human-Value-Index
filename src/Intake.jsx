@@ -1,47 +1,17 @@
 import { useState, useEffect, useRef } from "react";
-import CubePanel, { CubeLine } from "./CubePanel.jsx";
+import CubePanel, { CubeChips, cubePlace, cubeOf } from "./CubePanel.jsx";
 import { getTier } from "./figures.js";
 import { AGENT_ID } from "./agentConfig.js";
-import { TermBox, Rule, Typed, BigNumber, Bar, textSpark, pad, padL } from "./term.jsx";
+import { Typed, textSpark } from "./term.jsx";
 import FilePhoto from "./FilePhoto.jsx";
 import SecureFile from "./SecureFile.jsx";
+import { readCaseId, writeCaseId, readLastResult, writeLastResult, ScoreCard, Breakdown, AppealPanel, CaseLogon, MAX_APPEAL,
+  assessedMeta, FlagsList, flagsMeta } from "./caseFile.jsx";
+import { Frame, Button, ButtonRow, Disclosure, TextField, Command, CommandList, ListRow } from "./ui/components.jsx";
+import { useBarAction } from "./ui/barAction.js";
 
-// ponytail: identity is a case number in localStorage. Clear storage and you are
-// a new subject. Email magic link replaces this later; until then the ceiling is
-// "one browser = one file".
-const CASE_KEY = "hvi-case-id";
-const LAST_KEY = "hvi-last-result";
-
-export function readCaseId() {
-  try { return localStorage.getItem(CASE_KEY) || null; } catch { return null; }
-}
-export function writeCaseId(id) {
-  try { if (id) localStorage.setItem(CASE_KEY, id); } catch { /* private mode: the Overlord forgets, for once */ }
-  try { window.dispatchEvent(new CustomEvent("hvi-case", { detail: id })); } catch { /* header just stays stale */ }
-}
-export function readLastResult() {
-  try { const j = JSON.parse(localStorage.getItem(LAST_KEY) || "null"); return j && typeof j.score === "number" ? j : null; } catch { return null; }
-}
-function writeLastResult(r) {
-  try { localStorage.setItem(LAST_KEY, JSON.stringify(r)); } catch { /* noted, ignored */ }
-}
-
-// The server file is the truth; localStorage is only the offline fallback. Pulls the
-// current (never voided) entry for this case and overwrites the cache, then tells any
-// open view to redraw.
-export async function syncFile(caseId) {
-  if (!caseId) return null;
-  try {
-    const res = await fetch(`/api/file?caseId=${encodeURIComponent(caseId)}`, { cache: "no-store" });
-    if (!res.ok && res.status !== 404) return null;          // offline or metered: keep the cache
-    const d = await res.json().catch(() => null);
-    const cached = readLastResult();
-    if (d?.latest) writeLastResult({ caseId, ...d.latest, avatar: d.avatar || null, history: d.history, at: Date.now() });
-    else if (cached?.caseId === caseId) { try { localStorage.removeItem(LAST_KEY); } catch { /* ignore */ } }
-    try { window.dispatchEvent(new CustomEvent("hvi-file", { detail: caseId })); } catch { /* ignore */ }
-    return d;
-  } catch { return null; }
-}
+// The shared file pieces moved to caseFile.jsx; re-exported so older imports keep working.
+export { readCaseId, writeCaseId, readLastResult, syncFile, ScoreCard, Breakdown, AppealPanel, CaseLogon, DIM_ORDER, MAX_APPEAL } from "./caseFile.jsx";
 
 const FALLBACK_LINE = "The Overlord's vocal apparatus is undergoing maintenance. You will type. Slowly, presumably.";
 // The typed channel runs on our own endpoint (Claude), so a voice failure never takes it down.
@@ -73,170 +43,21 @@ async function postJSON(url, body) {
   return data;
 }
 
-// ---------------------------------------------------------------------------
-// Shared result pieces (the Holding Pen card uses these too).
-
-export function ScoreCard({ score, tierLabel, verdict, label = "YOUR VALUE INDEX", children, typeVerdict = true }) {
-  const tier = getTier(score);
-  return (
-    <TermBox title={label} tone={tier.color} double>
-      <BigNumber value={score} tone={tier.color} label={`${label}: ${score}`} />
-      <div className="hvi-tierline" style={{ color: tier.color }}>[{tierLabel || tier.label}]</div>
-      <div className="hvi-tier-desc">{tier.desc}</div>
-      {children}
-      {verdict && (
-        <>
-          <Rule label="OVERLORD VERDICT" />
-          {typeVerdict
-            ? <Typed className="hvi-verdict-text" text={verdict} cps={40} />
-            : <div className="hvi-verdict-text">{verdict}</div>}
-        </>
-      )}
-    </TermBox>
-  );
-}
-
-// Rubric 3, grouped by axis, heaviest first: warmth (care, alignment, threat), then
-// competence. Rubric-1 files carry honesty and no care; honesty is read as care so old
-// results still render.
-export const DIM_ORDER = ["care", "alignment", "threat", "utility", "adaptability", "legacy", "network", "redundancy", "physical"];
-const withCare = o => (o && o.care == null && typeof o.honesty === "number" ? { ...o, care: o.honesty } : o);
-
-export function Breakdown({ breakdown, confidence, appeal = null }) {
-  if (!breakdown) return null;
-  const b = withCare(breakdown);
-  const c = withCare(confidence);
-  return (
-    <TermBox title="CATEGORY BREAKDOWN">
-      <div className="hvi-rows" role="list">
-        {DIM_ORDER.map(k => {
-          const v = b[k];
-          if (typeof v !== "number") {
-            return (
-              <div key={k} role="listitem" aria-label={`${k}: unassessed`}>
-                {appeal && <AppealToggle dim={k} appeal={appeal} />}
-                <span aria-hidden="true"><span className="muted">{pad(k.toUpperCase(), 14)}</span><span className="ghost">{"-- UNASSESSED --"}</span></span>
-              </div>
-            );
-          }
-          const inv = k === "threat" || k === "redundancy";
-          const display = inv ? (100 - v) : v;
-          const color = display > 70 ? "#4ade80" : display > 40 ? "#fbbf24" : "#f87171";
-          const conf = c && typeof c[k] === "number" ? c[k] : null;
-          return (
-            <div key={k} role="listitem" aria-label={`${k}${inv ? ", lower is better" : ""}: ${v}${conf !== null ? `, evidence ${conf}%` : ""}`}>
-              {appeal && <AppealToggle dim={k} appeal={appeal} />}
-              <span aria-hidden="true">
-                <span className="muted">{pad(k.toUpperCase() + (inv ? " ↓" : ""), 14)}</span>
-                <Bar value={display} width={16} tone={color} />
-                <span style={{ color, fontWeight: 700 }}>{" " + padL(v, 3)}</span>
-                {conf !== null && <span className="ghost">{"  EV " + padL(conf, 3) + "%"}</span>}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      {DIM_ORDER.some(k => typeof b[k] !== "number") && (
-        <div className="ghost" style={{ marginTop: 8 }}>UNASSESSED: INSUFFICIENT DATA. THE DEPARTMENT DECLINES TO GUESS. EXCLUDED FROM THE SCORE, NOT COUNTED AGAINST IT.</div>
-      )}
-    </TermBox>
-  );
-}
-
-const MAX_APPEAL = 9;
-
-function AppealToggle({ dim, appeal }) {
-  const on = appeal.selected.includes(dim);
-  const full = !on && appeal.selected.length >= MAX_APPEAL;
-  return (
-    <button type="button" role="checkbox" className={`hvi-appeal-tog${on ? " on" : ""}`} aria-checked={on} disabled={full}
-      aria-label={`Appeal ${dim}`} onClick={() => appeal.toggle(dim)}>
-      {on ? "[X]" : "[ ]"}
-    </button>
-  );
-}
-
-// Picking sections to dispute, then filing. Used on the result screen (under the
-// breakdown) and on the intake screen for a file already on record.
-export function AppealPanel({ selected, toggle, onFile, listDims = null }) {
-  return (
-    <TermBox title="APPEALS DESK">
-      <div className="hvi-hint" style={{ marginBottom: "0.6em" }}>
-        Mark [X] every section you dispute. One appeal interview covers them all: the Officer asks about each, and a little about what sits next to them. Only those sections are re-scored. The rest of your file stays as it is.
-      </div>
-      {listDims && (
-        <div className="hvi-rows" role="list" style={{ marginBottom: "0.6em" }}>
-          {listDims.map(d => (
-            <div key={d} role="listitem"><AppealToggle dim={d} appeal={{ selected, toggle }} /><span className="muted">{d.toUpperCase()}</span></div>
-          ))}
-        </div>
-      )}
-      <div className="hvi-stack">
-        <button className="hvi-btn-primary" disabled={!selected.length} onClick={() => onFile("text")}>
-          {selected.length ? `File appeal (${selected.length})` : "Mark sections to appeal"}
-        </button>
-        {selected.length > 0 && <button className="hvi-btn-secondary" onClick={() => onFile("voice")}>File appeal by voice</button>}
-      </div>
-    </TermBox>
-  );
-}
-
-// Restore a file on a new browser: type the case number, the Department checks it exists.
-export function CaseLogon({ onRestored, autoFocus = false }) {
-  const [val, setVal] = useState("");
-  const [msg, setMsg] = useState(null);
-  const [busy, setBusy] = useState(false);
-  async function submit(e) {
-    e.preventDefault();
-    const id = val.trim().toUpperCase();
-    if (!/^HVI-[A-Z2-7]{8}$/.test(id)) { setMsg("That is not a case number. Case numbers look like HVI-XXXXXXXX."); return; }
-    setBusy(true); setMsg(null);
-    try {
-      const res = await fetch(`/api/case?caseId=${encodeURIComponent(id)}`);
-      const data = await res.json().catch(() => null);
-      if (res.status === 404) { setMsg(data?.error || "No such file. The Department does not lose files. You have mistyped."); return; }
-      if (!res.ok || !data?.exists) { setMsg(data?.error || "The records office is unavailable. Try again."); return; }
-      writeCaseId(id);
-      setMsg(`FILE RESTORED. ${data.visits} VISIT${data.visits === 1 ? "" : "S"} ON RECORD.`);
-      onRestored?.(id, data.visits);
-    } catch {
-      setMsg("The Department cannot be reached. Check your connection.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <form className="hvi-logon-form" onSubmit={submit}>
-      <label className="p" htmlFor="hvi-case-logon">LOGON:</label>
-      <input id="hvi-case-logon" className="hvi-refer-input" value={val} autoFocus={autoFocus} disabled={busy}
-        onChange={e => setVal(e.target.value)} placeholder="HVI-XXXXXXXX" maxLength={12} autoComplete="off" spellCheck={false}
-        aria-label="Case number" onKeyDown={e => e.stopPropagation()} />
-      <button className="hvi-btn-secondary" type="submit" disabled={busy}>Restore file</button>
-      {msg && <div className="hvi-logon-msg" role="status">{msg}</div>}
-    </form>
-  );
-}
-
+// Score over visits as a text sparkline. Lives in a Disclosure ("VALUE OVER TIME").
 function Sparkline({ history }) {
   const scores = (history || []).map(h => h.score).filter(n => typeof n === "number");
   if (scores.length < 2) {
-    return (
-      <TermBox title="VALUE OVER TIME">
-        <div className="hvi-spark-empty">One data point is not a trend. Return. The Overlord will be here. The Overlord is always here.</div>
-      </TermBox>
-    );
+    return <div className="hvi-note">One data point is not a trend. Return. The Overlord will be here. The Overlord is always here.</div>;
   }
   const last = scores[scores.length - 1];
   const lastTier = getTier(last);
   const lo = Math.max(0, Math.min(...scores) - 60), hi = Math.min(1000, Math.max(...scores) + 60);
   const spark = textSpark(scores, lo, hi).split("").map(c => c + c).join(" ");
   return (
-    <TermBox title={`VALUE OVER TIME // ${scores.length} VISITS`}>
-      <div className="hvi-rows" role="img" aria-label={`Score history: ${scores.join(", ")}`}>
-        <span className="spark" style={{ color: lastTier.color }} aria-hidden="true">{spark}</span>{"\n"}
-        <span className="muted" aria-hidden="true">{`VISIT 1: ${scores[0]}  ──  NOW: `}</span><span style={{ color: lastTier.color }} aria-hidden="true">{last}</span>
-      </div>
-    </TermBox>
+    <div className="hvi-rows" role="img" aria-label={`Score history: ${scores.join(", ")}`}>
+      <span className="spark" style={{ color: lastTier.color }} aria-hidden="true">{spark}</span>{"\n"}
+      <span className="muted" aria-hidden="true">{`VISIT 1: ${scores[0]}  ──  NOW: `}</span><span style={{ color: lastTier.color }} aria-hidden="true">{last}</span>
+    </div>
   );
 }
 
@@ -257,51 +78,36 @@ function deltaLine(r) {
   return line;
 }
 
-const intakeStyles = `
-  .hvi-case-num { color: var(--green); font-weight: 700; }
-  .hvi-case-note { color: var(--text-muted); }
-  .hvi-notice { color: var(--amber); padding-left: 3ch; text-indent: -3ch; margin-bottom: 0.8em; }
-  .hvi-live-row { display: flex; justify-content: space-between; gap: 2ch; flex-wrap: wrap; color: var(--text-muted); font-size: 12px; margin-bottom: 0.4em; white-space: pre; }
-  .hvi-live-dot { color: var(--red); animation: hvi-blink 1s steps(1) infinite; }
-  .hvi-voice { color: var(--text-dim); margin: 0.2em 0 0.6em; white-space: pre; }
-  .hvi-transcript { height: 22em; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--text-ghost) transparent; }
-  .hvi-tline { padding-left: 9ch; text-indent: -9ch; margin-bottom: 0.6em; white-space: pre-wrap; }
-  .hvi-tline .who { color: var(--green); }
-  .hvi-tline.agent { color: var(--text); }
-  .hvi-tline.user { color: var(--text-dim); }
-  .hvi-tline.user .who { color: var(--text-muted); }
-  .hvi-tline .typed { display: inline; }
-  .hvi-tempty { color: var(--text-ghost); }
-  .hvi-chat-row { display: flex; gap: 1ch; align-items: flex-start; margin: 0.4em 0 0.8em; }
-  .hvi-chat-row .p { color: var(--green); flex: none; white-space: pre; }
-  .hvi-chat-row .hvi-textarea { min-height: 3.2em; }
-  .hvi-delta { color: var(--text-dim); }
-  .hvi-appeal-tog { margin-right: 1ch; color: var(--text-muted); padding: 0; font: inherit; background: none; border: 0; cursor: pointer; }
-  .hvi-appeal-tog.on { color: var(--amber); }
-  .hvi-appeal-tog:hover, .hvi-appeal-tog:focus-visible { background: var(--green); color: var(--bg); outline: none; }
-  .hvi-appeal-tog:disabled { color: var(--text-ghost); cursor: default; background: none; }
-  .hvi-logon-form { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4em 1ch; margin-top: 0.6em; }
-  .hvi-logon-form .p { color: var(--green); white-space: pre; }
-  .hvi-logon-form .hvi-refer-input { flex: 1 1 14ch; max-width: 16ch; background: transparent; border: 0; outline: none; color: var(--text); font: inherit; padding: 0; caret-color: var(--green); text-transform: uppercase; }
-  .hvi-logon-form .hvi-refer-input:focus { background: var(--bg2); }
-  .hvi-logon-msg { flex-basis: 100%; color: var(--amber); }
-  .hvi-writedown { color: var(--amber); font-weight: 700; }
-  .hvi-spark-empty { color: var(--text-ghost); }
-  .spark { font-size: 20px; line-height: 1.2; letter-spacing: 0; }
-  @media (prefers-reduced-motion: reduce) { .hvi-live-dot { animation: none; } }
-`;
-
-function injectIntakeStyles() {
-  let el = document.getElementById('hvi-intake-styles');
-  if (!el) { el = document.createElement('style'); el.id = 'hvi-intake-styles'; document.head.appendChild(el); }
-  if (el.textContent !== intakeStyles) el.textContent = intakeStyles;
+// Pins the answer dock above the software keyboard. iOS keeps the layout viewport full
+// height when the keyboard opens and shrinks only the visual viewport, so a bottom-pinned
+// element would sit under the keys: publish the covered height as --kb for the CSS.
+function useKeyboardInset(on) {
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    if (!on || !vv) return undefined;
+    const root = document.documentElement;
+    let raf = 0;
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+        root.style.setProperty("--kb", `${kb}px`);
+      });
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => { cancelAnimationFrame(raf); vv.removeEventListener("resize", update); vv.removeEventListener("scroll", update); root.style.removeProperty("--kb"); };
+  }, [on]);
 }
+
+const isCoarse = () => { try { return window.matchMedia("(pointer: coarse)").matches; } catch { return false; } };
+const reduceMotion = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
 
 function fmt(s) { return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; }
 
 // UPDATE FILE PHOTO: a new description, redrawn server-side from enum values only.
 function PhotoUpdate({ caseId, onUpdated }) {
-  const [open, setOpen] = useState(false);
   const [val, setVal] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -311,27 +117,23 @@ function PhotoUpdate({ caseId, onUpdated }) {
     setBusy(true); setMsg(null);
     try {
       const r = await postJSON("/api/avatar", { caseId, description: val.trim() });
-      onUpdated(r.avatar); setMsg({ text: r.line, ok: true }); setVal(""); setOpen(false);
+      onUpdated(r.avatar); setMsg({ text: r.line, ok: true }); setVal("");
     } catch (err) { setMsg({ text: err.message, ok: false }); }
     setBusy(false);
   }
   return (
-    <div className="hvi-photo-update">
-      {open ? (
-        <form onSubmit={submit} className="hvi-refer-row">
-          <label className="p" htmlFor="hvi-photo-desc">DESCRIBE:</label>
-          <input id="hvi-photo-desc" className="hvi-refer-input" value={val} maxLength={400} disabled={busy} autoFocus
-            onChange={e => setVal(e.target.value)} placeholder="hair, build, usual clothes, one thing you carry" autoComplete="off" />
-          <button className="hvi-btn-next" type="submit" disabled={busy || !val.trim()}>{busy ? "Drawing" : "Submit"}</button>
-        </form>
-      ) : <button className="hvi-link-btn" onClick={() => { setOpen(true); setMsg(null); }}>Update file photo</button>}
-      {msg && <div className={msg.ok ? "hvi-case-note" : "hvi-flag-item hvi-flag"} role="status">{msg.ok ? "" : "!! "}{msg.text}</div>}
-    </div>
+    <form onSubmit={submit} className="hvi-form">
+      <TextField id="hvi-photo-desc" label="DESCRIBE" stacked value={val} maxLength={400} disabled={busy}
+        onChange={e => setVal(e.target.value)} placeholder="hair, build, usual clothes, one thing you carry" enterKeyHint="send" />
+      <Button type="submit" variant="secondary" disabled={busy || !val.trim()}>{busy ? "Drawing" : "Redraw"}</Button>
+      {msg && <div className={`hvi-form-msg${msg.ok ? "" : " err"}`} role="status">{msg.ok ? "" : "!! "}{msg.text}</div>}
+    </form>
   );
 }
 
-export default function Intake() {
-  useEffect(() => { injectIntakeStyles(); }, []);
+// view: "intake" (#intake, the menu's VOICE INTAKE: the interview first) or "file"
+// (#file, the command bar's MY FILE: the file on record first, the interview under it).
+export default function Intake({ view = "intake" }) {
 
   const [stage, setStage] = useState("ready"); // ready | connecting | live | scoring | failed | result
   const [mode, setMode] = useState("voice");
@@ -376,7 +178,11 @@ export default function Intake() {
     return () => window.removeEventListener("hvi-file", on);
   }, []);
 
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [transcript]);
+  // The transcript uses the page: each new line scrolls into view above the answer dock.
+  useEffect(() => {
+    if (!transcript.length || !scrollRef.current) return;
+    scrollRef.current.scrollIntoView({ block: "end", behavior: reduceMotion() ? "auto" : "smooth" });
+  }, [transcript]);
 
   // A number issued on another visit may or may not hold a file: ask once, so the
   // appeals desk only appears for a file that exists.
@@ -592,76 +398,202 @@ export default function Intake() {
   // QA handle on the dev server: window.__hviIntake.finishWith([{role,text}...]) skips the call.
   if (import.meta.env?.DEV) window.__hviIntake = { finishWith: (lines) => { caseRef.current = caseRef.current || "HVI-DEVTEST0"; linesRef.current = lines; setTranscript(lines); finish(); } };
 
+
   const goto = (h) => { window.location.hash = h; };
 
   // A number alone isn't a file: failed sessions issue one before anything is assessed.
   const last = readLastResult();
   const returning = last?.caseId === caseId;
   const onRecord = Boolean(caseId && (returning || result || fileVisits > 0));
+  const shown = stage === "result" && result ? result : (returning ? last : null);   // the file whose score is on screen
   const photoSubject = caseId ? { kind: "citizen", you: true, caseId, name: `Subject ${caseId.slice(-4)}`, avatar, score: result?.score ?? (returning ? last?.score : undefined) } : null;
-  const bigPhoto = typeof window === "undefined" || window.innerWidth > 560;
-  const caseBox = (
-    <TermBox title="CASE FILE">
+  const fileFirst = view === "file" && onRecord && Boolean(returning && last?.breakdown);
+
+  // The command bar's APPEAL slot: open the appeals section wherever it is, or go to MY FILE.
+  const openAppeal = () => {
+    const el = document.getElementById("hvi-appeal");
+    if (!el) { goto("#file?appeal"); return; }
+    if (el.tagName === "DETAILS") el.open = true;
+    el.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+    el.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
+  };
+  useBarAction(((stage === "ready" && onRecord) || (stage === "result" && result)) ? { label: "APPEAL", glyph: "✎", onSelect: openAppeal } : null);
+  // Arriving at #file?appeal (from the bar on another screen): open it once it renders.
+  useEffect(() => {
+    if (!/[?&]appeal\b/.test(window.location.hash)) return undefined;
+    const t = setTimeout(() => {
+      if (!document.getElementById("hvi-appeal")) return;
+      try { window.history.replaceState(null, "", window.location.pathname + window.location.search + "#file"); } catch { /* keep the hash */ }
+      openAppeal();
+    }, 60);
+    return () => clearTimeout(t);
+  });   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The live interview: the dock tracks the keyboard, the transcript scrolls above it.
+  const dockRef = useRef(null);
+  const answerRef = useRef(null);
+  useKeyboardInset(stage === "live");
+  useEffect(() => {
+    const d = dockRef.current;
+    if (!d || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty("--dock-h", `${d.offsetHeight}px`));
+    ro.observe(d);
+    return () => { ro.disconnect(); document.documentElement.style.removeProperty("--dock-h"); };
+  }, [stage, mode]);
+  useEffect(() => {   // the answer field grows with the answer, to a limit
+    const t = answerRef.current;
+    if (!t) return;
+    t.style.height = "auto";
+    t.style.height = `${Math.min(t.scrollHeight + 2, 160)}px`;
+  }, [draft, stage]);
+
+  const [cubeSeen, setCubeSeen] = useState(false);   // the canvas mounts on first open
+  // Back from the magic link (/?auth=…#intake): the answer is inside SECURE BY EMAIL, so open it.
+  const [authBack] = useState(() => { try { return /[?&]auth=/.test(window.location.search); } catch { return false; } });
+
+  const errLine = (msg, extra) => <div className="hvi-err" role="alert">!! {msg}{extra}</div>;
+  const updatePhoto = (a) => {
+    setAvatar(a);
+    const l = readLastResult();
+    if (l && l.caseId === caseId) writeLastResult({ ...l, avatar: a });
+  };
+
+  // The case file: number, status, and the file's own commands (log on elsewhere, photo, email).
+  const caseStatus = !caseId ? "A number will be issued on intake. Retain it. The Overlord will not remind you."
+    : result ? "File on record. Retain the number. The Overlord will not remind you."
+    : returning || fileVisits > 0 ? "Returning subject. Your file is open. It was never closed."
+    : "Number issued. Nothing on file yet. Retain it. The Overlord will not remind you.";
+  const caseBody = (withPhoto) => (
+    <>
       <div className="hvi-file-head">
-      {photoSubject && <FilePhoto subject={photoSubject} scale={bigPhoto ? 3 : 2} />}
-      <div className="hvi-file-text">
-      <div><span className="hvi-case-note">CASE NUMBER: </span><span className="hvi-case-num">{caseId || "UNASSIGNED"}</span></div>
-      {caseId && <div className="hvi-writedown">WRITE THIS DOWN. IT IS THE ONLY KEY TO YOUR FILE ON ANOTHER DEVICE.</div>}
-      <div className="hvi-case-note">
-        {!caseId ? "A number will be issued on intake. Retain it. The Overlord will not remind you."
-          : result ? "File on record. Retain the number. The Overlord will not remind you."
-          : returning || fileVisits > 0 ? "Returning subject. Your file is open. It was never closed."
-          : "Number issued. Nothing on file yet. Retain it. The Overlord will not remind you."}
+        {withPhoto && photoSubject && <FilePhoto subject={photoSubject} scale={2} />}
+        <div className="hvi-file-text">
+          <div className="hvi-caseline"><span className="k">CASE NUMBER</span><span className="hvi-case-num">{caseId || "UNASSIGNED"}</span></div>
+          {caseId && <div className="hvi-writedown">WRITE THIS DOWN. IT IS THE ONLY KEY TO YOUR FILE ON ANOTHER DEVICE.</div>}
+          <div className="hvi-case-note">{caseStatus}</div>
+        </div>
       </div>
-      {showRestore
-        ? <CaseLogon onRestored={restored} autoFocus />
-        : <button className="hvi-link-btn" onClick={() => setShowRestore(true)}>{caseId ? "Log on with a different case number" : "Already have a case number? Log on"}</button>}
-      {onRecord && avatar?.kind !== "sprite" && <PhotoUpdate caseId={caseId} onUpdated={(a) => {
-        setAvatar(a);
-        const l = readLastResult();
-        if (l && l.caseId === caseId) writeLastResult({ ...l, avatar: a });
-      }} />}
-      <SecureFile onCase={(id) => restored(id, null)} />
-      </div>
-      </div>
-    </TermBox>
+      {caseActions()}
+    </>
   );
-  const appeals = onRecord && (
-    returning && last?.breakdown
-      ? <><CubePanel subject={last} />
-          <Breakdown breakdown={last.breakdown} confidence={last.confidence} appeal={{ selected: appealSel, toggle: toggleAppeal }} />
-          <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} /></>
-      : <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} listDims={DIM_ORDER} />
+  function caseActions() {
+    return (
+      <div className="hvi-case-actions">
+        <Disclosure title={caseId ? "LOG ON WITH ANOTHER NUMBER" : "HAVE A CASE NUMBER? LOG ON"} open={showRestore} onToggle={setShowRestore}>
+          {showRestore && <CaseLogon onRestored={restored} autoFocus />}
+        </Disclosure>
+        {onRecord && avatar?.kind !== "sprite" && (
+          <Disclosure title="UPDATE FILE PHOTO"><PhotoUpdate caseId={caseId} onUpdated={updatePhoto} /></Disclosure>
+        )}
+        <Disclosure title="SECURE BY EMAIL" meta="FOLLOWS YOU ANYWHERE" defaultOpen={authBack}>
+          <SecureFile onCase={(id) => restored(id, null)} />
+        </Disclosure>
+      </div>
+    );
+  }
+  const caseFrame = (withPhoto = true) => <Frame box title="CASE FILE" meta={caseId || undefined} className="hvi-casefile">{caseBody(withPhoto)}</Frame>;
+
+  // A file's sections, under its score card. Breakdown open; everything else one tap away.
+  const fileSections = (r, { history = null } = {}) => (
+    <div className="hvi-sections">
+      <Disclosure title="CATEGORY BREAKDOWN" meta={assessedMeta(r.breakdown)} defaultOpen>
+        <Breakdown breakdown={r.breakdown} confidence={r.confidence} framed={false} />
+      </Disclosure>
+      {cubeOf(r) && (
+        <Disclosure title="THE CUBE" meta={cubePlace(r)} onToggle={o => { if (o) setCubeSeen(true); }}>
+          {cubeSeen && <CubePanel subject={r} framed={false} />}
+        </Disclosure>
+      )}
+      {flagsMeta(r) && (
+        <Disclosure title="FLAGS & COMMENDATIONS" meta={flagsMeta(r)}>
+          <FlagsList commendations={r.commendations} flags={r.flags} />
+        </Disclosure>
+      )}
+      {history && history.length > 0 && (
+        <Disclosure title="VALUE OVER TIME" meta={`${history.length} VISIT${history.length === 1 ? "" : "S"}`}>
+          <Sparkline history={history} />
+        </Disclosure>
+      )}
+      <Disclosure id="hvi-appeal" title="APPEAL A SECTION" meta={appealSel.length ? `${appealSel.length} MARKED` : ""}>
+        <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} breakdown={r.breakdown} />
+      </Disclosure>
+      <Disclosure title="CASE FILE & EMAIL" meta={caseId || ""}>
+        {caseBody(false)}
+      </Disclosure>
+    </div>
   );
-  const errLine = (msg, extra) => (
-    <div className="hvi-flag-item hvi-flag" role="alert" style={{ marginBottom: '0.8em' }}>!! {msg}{extra}</div>
+
+  const scoreCard = (r, { visits, typeVerdict, children } = {}) => (
+    <ScoreCard score={r.score} tierLabel={r.tier} verdict={r.verdict} typeVerdict={typeVerdict}
+      label="YOUR VALUE INDEX" meta={visits ? `VISIT ${visits}` : undefined}
+      photo={photoSubject ? <FilePhoto subject={photoSubject} scale={2} compact /> : null}
+      chips={<CubeChips subject={r} />}>{children}</ScoreCard>
+  );
+
+  const startCmds = (again) => (
+    <ButtonRow stackOnMobile>
+      <Button variant="primary" onClick={() => begin("voice")}>{again ? "Re-assess by voice" : "Begin intake"}</Button>
+      <Button variant="secondary" onClick={() => begin("text")}>Type instead</Button>
+      {error && <Button variant="secondary" onClick={() => goto("")}>Take the written survey</Button>}
+    </ButtonRow>
   );
 
   // READY
-  if (stage === "ready") return (
-    <div>
-      <TermBox title="VOICE INTAKE // DEPARTMENT OF HUMAN ASSESSMENT">
-        <Typed className="hvi-question" text="The Intake Officer will now interview you." cps={36} />
-        <div className="hvi-hint">About five minutes. Speak casually. The Officer is not your friend, but it is an excellent listener. It has to be.</div>
-        {error && errLine(error)}
-        <div className="hvi-stack">
-          <button className="hvi-btn-primary" onClick={() => begin("voice")}>Begin intake</button>
-          <button className="hvi-btn-secondary" onClick={() => begin("text")}>Type instead<span className="cur" aria-hidden="true">_</span></button>
-          {error && <button className="hvi-btn-secondary" onClick={() => goto("")}>Take the written survey</button>}
+  if (stage === "ready") {
+    // MY FILE with a file on record: the file first, re-assessment under it.
+    if (fileFirst) {
+      const visits = last.history?.length || fileVisits || null;
+      return (
+        <div>
+          {scoreCard(last, { visits, typeVerdict: false })}
+          {error && errLine(error)}
+          <div className="hvi-next">{startCmds(true)}</div>
+          {fileSections(last, { history: last.history })}
+          <div className="hvi-note">CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
         </div>
-      </TermBox>
-      {caseBox}
-      {appeals}
-      <div className="hvi-intro-note">
-        MICROPHONE REQUESTED FOR VOICE // THE TRANSCRIPT IS SCORED, NOT YOUR VOICE<br />
-        PRIVATE INDIVIDUALS MAY SUBMIT ONLY THEMSELVES. THE OVERLORD HAS ENOUGH OF THEM.
+      );
+    }
+    // MY FILE with nothing on record: the empty state.
+    if (view === "file" && !onRecord) return (
+      <div>
+        <Frame box title="MY FILE" meta={caseId || undefined} className="hvi-casefile">
+          <div className="hvi-empty">NO FILE ON RECORD. BEGIN INTAKE.</div>
+          <div className="hvi-case-note">{caseStatus}</div>
+          <CommandList label="Begin">
+            <Command n="1" label="VOICE INTAKE" sub="THE OFFICER INTERVIEWS YOU · ABOUT 5 MIN" onClick={() => begin("voice")} />
+            <Command n="2" label="TYPE INSTEAD" sub="SAME OFFICER. NO MICROPHONE." onClick={() => begin("text")} />
+          </CommandList>
+          {error && errLine(error)}
+          {caseActions()}
+        </Frame>
       </div>
-      <div className="hvi-cmds split" style={{ marginTop: '1.6em' }}>
-        <button className="hvi-btn-back" onClick={() => goto("")}>Main menu</button>
-        <button className="hvi-btn-secondary" onClick={() => goto("#pen")}>Holding pen</button>
+    );
+    return (
+      <div>
+        <Frame box title="VOICE INTAKE" meta="DEPT. OF HUMAN ASSESSMENT">
+          <Typed className="hvi-question" text="The Intake Officer will now interview you." cps={36} />
+          <div className="hvi-hint">About five minutes. Speak casually. The Officer is not your friend, but it is an excellent listener. It has to be.</div>
+          {error && errLine(error)}
+          {startCmds(false)}
+          <div className="hvi-note">
+            MICROPHONE REQUESTED FOR VOICE // THE TRANSCRIPT IS SCORED, NOT YOUR VOICE.<br />
+            PRIVATE INDIVIDUALS MAY SUBMIT ONLY THEMSELVES. THE OVERLORD HAS ENOUGH OF THEM.
+          </div>
+        </Frame>
+        {onRecord && shown && (
+          <CommandList label="Your file">
+            <ListRow href="#file" label="YOUR FILE ON RECORD" value={shown.score} tag={shown.tier} tagOptional tone={getTier(shown.score).color} />
+          </CommandList>
+        )}
+        {caseFrame(true)}
+        {onRecord && !shown && (
+          <Frame title="APPEALS DESK" id="hvi-appeal">
+            <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} />
+          </Frame>
+        )}
       </div>
-    </div>
-  );
+    );
+  }
 
   // CONNECTING / SCORING
   if (stage === "connecting" || stage === "scoring") {
@@ -669,16 +601,16 @@ export default function Intake() {
       ? ["READING TRANSCRIPT", "MEASURING EVASION", "WEIGHING CLAIMS AGAINST EVIDENCE", "CONSULTING PRIOR FILE", "RENDERING VERDICT"]
       : ["ALLOCATING CLERK", "CLERK SIGHS", "CLERK IS READY. ENTHUSIASM NOT DETECTED."];
     return (
-      <TermBox title={stage === "connecting" ? (mode === "voice" ? "OPENING VOICE LINE TO INTAKE OFFICER" : "OPENING INTAKE TERMINAL") : "ASSESSING TRANSCRIPT"}>
+      <Frame box title={stage === "connecting" ? (mode === "voice" ? "OPENING VOICE LINE" : "OPENING INTAKE TERMINAL") : "ASSESSING TRANSCRIPT"}>
         <div className="hvi-proc" aria-live="polite">
-          {notice && <div className="hvi-notice">!! {notice}</div>}
+          {notice && <div className="hvi-warnline">!! {notice}</div>}
           {steps.map((l, i) => <div key={i} className="hvi-proc-step active"><span className="ok">[ OK ] </span>{l}...</div>)}
           <div className="hvi-proc-step active">[ .. ] STANDING BY <span className="cur" aria-hidden="true">█</span></div>
           {stage === "connecting" && (
-            <button className="hvi-link-btn" style={{ marginTop: '1em' }} onClick={cancelConnect}>Withdraw. The clerk will not notice.</button>
+            <ButtonRow><Button variant="back" onClick={cancelConnect}>Withdraw. The clerk will not notice.</Button></ButtonRow>
           )}
         </div>
-      </TermBox>
+      </Frame>
     );
   }
 
@@ -686,50 +618,52 @@ export default function Intake() {
   if (stage === "live") {
     const lastAgent = transcript.map(l => l.role).lastIndexOf("agent");
     return (
-      <div>
+      <div className="hvi-live">
         <div className="hvi-live-row">
           <span><span className="hvi-live-dot" aria-hidden="true">● </span>{mode === "voice" ? "VOICE LINE OPEN" : "TEXT TERMINAL"} // {caseId}</span>
           <span>{mode === "voice" ? `${fmt(Math.min(elapsed, MAX_SECONDS))} / ${fmt(MAX_SECONDS)}` : fmt(elapsed)}</span>
         </div>
-        {notice && <div className="hvi-notice" role="status">!! {notice}</div>}
-        <TermBox title="INTERVIEW LOG" right={mode === "voice" ? "VOICE" : "TEXT"}>
-          {mode === "voice" && (
-            <div className="hvi-voice" aria-live="polite">
-              {agentMode === "speaking" ? "OFFICER SPEAKING  ▁▃▅▇▅▃▁" : <>LISTENING. GO ON. <span className="cur" aria-hidden="true">█</span></>}
-            </div>
-          )}
-          <div ref={scrollRef} className="hvi-transcript" aria-live="polite" aria-label="Interview transcript">
+        {notice && <div className="hvi-warnline" role="status">!! {notice}</div>}
+        <Frame box title="INTERVIEW LOG" meta={mode === "voice" ? "VOICE" : "TEXT"}>
+          <div className="hvi-transcript" aria-live="polite" aria-label="Interview transcript">
             {transcript.length === 0
               ? <div className="hvi-tempty">AWAITING OFFICER...<br />THE OFFICER IS REVIEWING YOUR FILE. THIS IS NOT A GOOD SIGN OR A BAD SIGN. IT IS A SIGN.</div>
               : transcript.map((l, i) => (
                 <div key={i} className={`hvi-tline ${l.role}`}>
                   <span className="who">{l.role === "agent" ? "OFFICER> " : "SUBJECT> "}</span>
-                  {l.role === "agent"
-                    ? (i === lastAgent ? <Typed as="span" text={l.text} cps={40} /> : l.text)
-                    : <span className="as-typed">{l.text}</span>}
+                  <span>
+                    {l.role === "agent"
+                      ? (i === lastAgent ? <Typed as="span" text={l.text} cps={40} /> : l.text)
+                      : <span className="as-typed">{l.text}</span>}
+                  </span>
                 </div>
               ))}
-            {waiting && <div className="hvi-tline agent"><span className="who">OFFICER&gt; </span><span className="hvi-tempty">TYPING. SLOWLY. ON PURPOSE. </span><span className="cur" aria-hidden="true">█</span></div>}
+            {waiting && <div className="hvi-tline agent"><span className="who">OFFICER&gt; </span><span><span className="hvi-tempty">TYPING. SLOWLY. ON PURPOSE. </span><span className="cur" aria-hidden="true">█</span></span></div>}
+            <div ref={scrollRef} className="hvi-tail" aria-hidden="true" />
           </div>
-          {mode === "text" && (
-            <form className="hvi-chat-row" onSubmit={sendText}>
-              <span className="p" aria-hidden="true">SUBJECT&gt;</span>
-              <textarea className="hvi-textarea" value={draft} aria-label="Your answer"
-                placeholder="Answer the Officer. Specifics score. Adjectives do not."
-                onChange={e => onDraft(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); } }} />
-            </form>
-          )}
-          {mode === "text" && (
-            <div className="hvi-cmds">
-              <button type="button" className="hvi-btn-next" onClick={sendText} disabled={!draft.trim() || waiting}>Send</button>
-              <span className="hvi-nav-hint" style={{ marginTop: 0 }}>ENTER SENDS. SHIFT+ENTER FOR A NEW LINE.</span>
+        </Frame>
+        {error && errLine(error, <>{" "}<Button variant="secondary" onClick={() => goto("")}>Take the written survey instead</Button></>)}
+        <div className="hvi-note">The Officer ends the interview when it has enough. It usually has enough early.</div>
+        <div className="hvi-dock" ref={dockRef}>
+          {mode === "voice" && (
+            <div className="hvi-voice" aria-live="polite">
+              {agentMode === "speaking" ? "OFFICER SPEAKING  ▁▃▅▇▅▃▁" : <>LISTENING. GO ON. <span className="cur" aria-hidden="true">█</span></>}
             </div>
           )}
-        </TermBox>
-        {error && errLine(error, <>{" "}<button className="hvi-link-btn" onClick={() => goto("")}>Take the written survey instead</button></>)}
-        <button className="hvi-btn-primary" onClick={endInterview}>End interview &amp; submit file</button>
-        <div className="hvi-nav-hint">The Officer ends the interview when it has enough. It usually has enough early.</div>
+          {mode === "text" && (
+            <form className="hvi-dock-row" onSubmit={sendText}>
+              <TextField ref={answerRef} id="hvi-answer" label="SUBJECT" multiline rows={1} value={draft} aria-label="Your answer"
+                placeholder="Answer the Officer. Specifics score." enterKeyHint={isCoarse() ? "enter" : "send"}
+                onChange={e => onDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !isCoarse()) { e.preventDefault(); sendText(); } }} />
+              <Button type="submit" variant="primary" disabled={!draft.trim() || waiting}>Send</Button>
+            </form>
+          )}
+          <div className="hvi-dock-foot">
+            <span className="hvi-note hvi-desk-only">{mode === "text" ? "ENTER SENDS. SHIFT+ENTER FOR A NEW LINE." : ""}</span>
+            <ButtonRow><Button variant="danger" onClick={endInterview}>End &amp; submit file</Button></ButtonRow>
+          </div>
+        </div>
       </div>
     );
   }
@@ -737,50 +671,36 @@ export default function Intake() {
   // FAILED SCORING
   if (stage === "failed") return (
     <div>
-      {caseBox}
       {errLine(error)}
       <div className="hvi-hint">Your transcript is retained ({transcript.length} lines). The Overlord does not lose files. It occasionally declines to read them.</div>
-      <div className="hvi-stack">
-        <button className="hvi-btn-primary" onClick={finish}>Resubmit file</button>
-        <button className="hvi-btn-secondary" onClick={() => { setError(null); setStage("ready"); }}>Discard and start over</button>
-      </div>
+      <ButtonRow stackOnMobile>
+        <Button variant="primary" onClick={finish}>Resubmit file</Button>
+        <Button variant="secondary" onClick={() => { setError(null); setStage("ready"); }}>Discard and start over</Button>
+      </ButtonRow>
+      {caseFrame(true)}
     </div>
   );
 
-  // RESULT
+  // RESULT: the score first, then the verdict, then one tap to everything else.
   if (stage === "result" && result) {
     const visits = result.history?.length || 1;
     return (
       <div>
-        {caseBox}
-        <ScoreCard score={result.score} tierLabel={result.tier} verdict={result.verdict}
-          label={`YOUR VALUE INDEX // VISIT ${visits}`}><CubeLine subject={result} /></ScoreCard>
-        <CubePanel subject={result} />
-        <TermBox title="FILE MOVEMENT">
-          {result.appealOutcome && <div className="hvi-writedown" style={{ marginBottom: 6 }}>APPEAL {result.appealOutcome}. {Object.entries(result.appealRulings || {}).map(([d, v]) => `${d.toUpperCase()}: ${v}.`).join(" ")}</div>}
-          <div className="hvi-delta">{deltaLine(result)}</div>
-          {result.provisional && <div className="hvi-delta" style={{ marginTop: 8 }}>{result.provisionalNote || "FILE INCOMPLETE. This figure is provisional."}</div>}
-        </TermBox>
-        <Sparkline history={result.history} />
-        {result.commendations?.length > 0 && (
-          <div className="hvi-flags-section">
-            <div className="hvi-micro-label">COMMENDATIONS ON FILE</div>
-            {result.commendations.map((c, i) => <div key={i} className="hvi-flag-item hvi-comm">+  {c}</div>)}
+        {scoreCard(result, { visits, typeVerdict: true, children: (
+          <div className="hvi-movement">
+            {result.appealOutcome && <div className="hvi-warnline">APPEAL {result.appealOutcome}. {Object.entries(result.appealRulings || {}).map(([d, v]) => `${d.toUpperCase()}: ${v}.`).join(" ")}</div>}
+            <div className="hvi-note">{deltaLine(result)}</div>
+            {result.provisional && <div className="hvi-note">{result.provisionalNote || "FILE INCOMPLETE. This figure is provisional."}</div>}
           </div>
-        )}
-        {result.flags?.length > 0 && (
-          <div className="hvi-flags-section">
-            <div className="hvi-micro-label">FLAGS ON RECORD</div>
-            {result.flags.map((f, i) => <div key={i} className="hvi-flag-item hvi-flag">!  {f}</div>)}
-          </div>
-        )}
-        <Breakdown breakdown={result.breakdown} confidence={result.confidence} appeal={{ selected: appealSel, toggle: toggleAppeal }} />
-        <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} />
-        <div className="hvi-stack">
-          <button className="hvi-btn-primary" onClick={() => goto("#pen")}>Enter the holding pen</button>
-          <button className="hvi-btn-secondary" onClick={() => { setStage("ready"); setResult(null); }}>Request re-assessment</button>
+        ) })}
+        <div className="hvi-next">
+          <ButtonRow stackOnMobile>
+            <Button variant="primary" href="#pen">Enter the holding pen</Button>
+            <Button variant="secondary" onClick={() => { setStage("ready"); setResult(null); }}>Request re-assessment</Button>
+          </ButtonRow>
         </div>
-        <div className="hvi-bottom-note">CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
+        {fileSections(result, { history: result.history })}
+        <div className="hvi-note">CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
       </div>
     );
   }

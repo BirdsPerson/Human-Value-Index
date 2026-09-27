@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import TouchGate from "./ui/TouchGate.jsx";
 import { CORNERS, EDGES, AXES, MIDPLANES, OCTANT_ANCHORS, project, clampPitch, REST } from "./cube3d.js";
 import { OCTANT_LINES } from "./cube.js";
 import FilePhoto from "./FilePhoto.jsx";
@@ -15,8 +16,8 @@ function tokens() {
   const cs = getComputedStyle(document.documentElement);
   const v = (n, f) => (cs.getPropertyValue(n).trim() || f);
   return {
-    green: v("--green", "#4ade80"), greenDim: v("--green-dim", "#22c55e"), amber: v("--amber", "#fbbf24"), red: v("--red", "#f87171"),
-    text: v("--text", "#c8f5d8"), muted: v("--text-muted", "#4b7c5e"), ghost: v("--text-ghost", "#2d5040"), bg: v("--bg", "#0a0f0a"),
+    green: v("--accent", "#4ade80"), greenDim: v("--accent-dim", "#22c55e"), amber: v("--warn", "#fbbf24"), red: v("--harm", "#f87171"),
+    text: v("--fg", "#c8f5d8"), muted: v("--fg-mute", "#4b7c5e"), ghost: v("--fg-ghost", "#2d5040"), bg: v("--bg", "#0a0f0a"),
     font: v("--mono", "ui-monospace, Menlo, monospace"),
   };
 }
@@ -28,6 +29,7 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
   const st = useRef({ yaw: REST.yaw, pitch: REST.pitch, w: 0, h: 0, dpr: 1, visible: true, dragging: null,
     lastInput: 0, hover: null, raf: 0, last: 0, dirty: true, reduced: false, tok: null, screen: [], phase: 0, base: REST.yaw });
   const [hover, setHover] = useState(null);
+  const [docked, setDocked] = useState(false);   // phones: the details sit under the cube, not over it
   const ptsRef = useRef(points); ptsRef.current = points;
   const hiRef = useRef(highlight); hiRef.current = highlight;
 
@@ -39,13 +41,19 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
     const ctx = c.getContext("2d"), T = s.tok || (s.tok = tokens());
     ctx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
     ctx.clearRect(0, 0, s.w, s.h);
-    const narrow = s.w < 440;
+    const narrow = s.w < 480;
     const view = { yaw: s.yaw, pitch: s.pitch, scale: Math.min(s.w, s.h) * (single ? (narrow ? 0.27 : 0.28) : 0.255), cx: s.w / 2, cy: s.h / 2 };
     const P = p => project(p, view);
-    const fs = narrow ? 9.5 : 11;
+    const fs = narrow ? 11 : 12;
     ctx.font = `${fs}px ${T.font}`;
     ctx.lineCap = "round";
     const path = pts => { ctx.beginPath(); pts.forEach((p, i) => { const q = P(p); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); }); };
+
+    // Labels are collected while drawing and placed last, most important first, so no
+    // two ever overlap: a label tries its spots in order and is dropped if all collide
+    // (unless it must show, in which case it takes its first spot).
+    const labels = [];
+    const label = (text, spots, color, { alpha = 1, prio = 0, must = false } = {}) => labels.push({ text, spots, color, alpha, prio, must });
 
     // the three midplanes: translucent fill, quarter grid, outline. They visibly cross.
     for (const m of MIDPLANES) {
@@ -62,33 +70,32 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
     ctx.strokeStyle = T.muted; ctx.lineWidth = 1; ctx.beginPath();
     for (const [i, j] of EDGES) { const A = P(CORNERS[i]), B = P(CORNERS[j]); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); }
     ctx.stroke();
-    // the three axes through the centre, with labelled positive ends
+    // the three axes through the centre, with labelled ends
     for (const ax of AXES) {
       const A = P(ax.a), B = P(ax.b);
-      ctx.strokeStyle = ax.id === "z" ? T.amber : T.green; ctx.globalAlpha = 0.85; ctx.lineWidth = 1.3;
+      const col = ax.id === "z" ? T.amber : T.green;
+      ctx.strokeStyle = col; ctx.globalAlpha = 0.85; ctx.lineWidth = 1.3;
       ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
-      ctx.globalAlpha = 1; ctx.fillStyle = ax.id === "z" ? T.amber : T.green;
-      // label an axis end, kept inside the canvas so narrow screens don't clip it
-      const end = (E, text) => {
+      ctx.globalAlpha = 1;
+      // an axis end's spots: beside the tip, then above/below it, then pushed further out
+      const endSpots = (E, text) => {
         const right = E.x >= view.cx, up = E.y < view.cy, wid = ctx.measureText(text).width;
-        let x = Math.abs(E.x - view.cx) < 12 ? E.x - wid / 2 : right ? E.x + 6 : E.x - 6 - wid;
-        x = Math.max(2, Math.min(s.w - wid - 2, x));
-        ctx.textAlign = "left";
-        ctx.fillText(text, x, E.y + (up ? -6 : fs + 4));
+        const cx = Math.abs(E.x - view.cx) < 12 ? E.x - wid / 2 : right ? E.x + 6 : E.x - 6 - wid;
+        const dy = up ? -6 : fs + 4;
+        return [[cx, E.y + dy], [cx, E.y - dy + (up ? fs : -fs)], [E.x - wid / 2, E.y + dy + (up ? -fs : fs)], [cx, E.y + dy + (up ? -fs - 2 : fs + 2)]];
       };
-      end(B, `HIGH ${ax.label}`);
-      ctx.globalAlpha = 0.55; end(A, `LOW ${ax.label}`); ctx.globalAlpha = 1;
+      label(`HIGH ${ax.label}`, endSpots(B, `HIGH ${ax.label}`), col, { prio: 2, must: true });
+      label(`LOW ${ax.label}`, endSpots(A, `LOW ${ax.label}`), col, { prio: 1, alpha: 0.6 });
     }
     const O = P([0, 0, 0]);
     ctx.fillStyle = T.text; ctx.beginPath(); ctx.arc(O.x, O.y, 2, 0, Math.PI * 2); ctx.fill();
-    // octant names, faint, in the full view
-    if (!single) {
-      ctx.textAlign = "center";
+    // octant names, faint, in the full view; phones drop them (the legend and the chips name them)
+    if (!single && !narrow) {
       for (const [name, at] of Object.entries(OCTANT_ANCHORS)) {
-        const q = P(at); ctx.globalAlpha = Math.max(0.25, Math.min(0.8, 0.9 - q.depth * 0.35));
-        ctx.fillStyle = T.ghost; ctx.fillText(name, q.x, q.y);
+        const q = P(at), wid = ctx.measureText(name).width;
+        label(name, [[q.x - wid / 2, q.y], [q.x - wid / 2, q.y + fs + 2], [q.x - wid / 2, q.y - fs - 2]], T.ghost,
+          { alpha: Math.max(0.35, Math.min(0.85, 0.95 - q.depth * 0.35)), prio: 0 });
       }
-      ctx.globalAlpha = 1;
     }
 
     // subjects, far first so near points paint over
@@ -112,12 +119,35 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
       ctx.beginPath(); ctx.arc(S.x, S.y, r, 0, Math.PI * 2);
       if (g.rated) { ctx.fillStyle = focused ? T.text : col; ctx.fill(); }
       else { ctx.strokeStyle = focused ? T.text : T.muted; ctx.lineWidth = 1.3; ctx.stroke(); }
-      if (single) {
-        ctx.fillStyle = g.rated ? col : T.muted; ctx.textAlign = "left";
-        ctx.fillText(g.rated ? g.octant : "NOT YET RATED", S.x + 8, S.y - 6);
-      } else if (focused) {
-        ctx.fillStyle = T.text; ctx.textAlign = "left"; ctx.fillText(g.name.toUpperCase(), S.x + 7, S.y - 6);
+      const tag = single ? (g.rated ? g.octant : "NOT YET RATED") : focused ? g.name.toUpperCase() : null;
+      if (tag) {
+        const wid = ctx.measureText(tag).width;
+        label(tag, [[S.x + 8, S.y - 6], [S.x - 8 - wid, S.y - 6], [S.x + 8, S.y + fs + 4], [S.x - 8 - wid, S.y + fs + 4]],
+          single ? (g.rated ? col : T.muted) : T.text, { prio: 3, must: true });
       }
+    }
+    ctx.globalAlpha = 1;
+
+    // place and draw the labels: highest priority first, each on a knocked-out ground
+    const placed = [];
+    const hit = (a) => placed.some(b => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h);
+    // the faint octant names also keep off the points, so they never hide a subject
+    const onPoint = (a) => screen.some(({ S }) => S.x > a.x - 4 && S.x < a.x + a.w + 4 && S.y > a.y - 4 && S.y < a.y + a.h + 4);
+    labels.sort((a, b) => b.prio - a.prio);
+    ctx.textAlign = "left";
+    for (const L of labels) {
+      const wid = ctx.measureText(L.text).width;
+      const box = ([x, y]) => {
+        const cx = Math.max(2, Math.min(s.w - wid - 2, x)), cy = Math.max(fs + 2, Math.min(s.h - 3, y));
+        return { x: cx - 2, y: cy - fs, w: wid + 4, h: fs + 4, tx: cx, ty: cy };
+      };
+      let at = null;
+      for (const sp of L.spots) { const b = box(sp); if (!hit(b) && (L.prio > 0 || !onPoint(b))) { at = b; break; } }
+      if (!at && L.must) at = box(L.spots[0]);
+      if (!at) continue;
+      placed.push(at);
+      if (L.prio > 0) { ctx.globalAlpha = 0.72; ctx.fillStyle = T.bg; ctx.fillRect(at.x, at.y, at.w, at.h); }
+      ctx.globalAlpha = L.alpha; ctx.fillStyle = L.color; ctx.fillText(L.text, at.tx, at.ty);
     }
     ctx.globalAlpha = 1;
     s.screen = screen;
@@ -147,7 +177,8 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
     const onMq = () => { s.reduced = !!mq.matches; kick(); };
     mq?.addEventListener?.("change", onMq);
     const size = () => {
-      const w = wrap.clientWidth, h = Math.min(height, Math.round(w * (single ? 0.86 : 0.8)));
+      const w = wrap.clientWidth, h = Math.min(height, Math.round(w * (single ? 0.86 : w < 480 ? 0.95 : 0.8)));
+      setDocked(!single && w < 480);
       const dpr = Math.min(3, window.devicePixelRatio || 1);
       s.w = w; s.h = h; s.dpr = dpr;
       c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
@@ -175,7 +206,7 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
     const s = st.current, g = it ? it.g : null;
     if (s.hover !== g) { s.hover = g; s.dirty = true; kick(); setHover(g); onHover?.(g); }
     const tip = tipRef.current;
-    if (tip && it) {
+    if (tip && it && !(s.w < 480 && !single)) {
       const left = Math.min(Math.max(4, px + 12), s.w - 250);
       tip.style.left = left + "px"; tip.style.top = Math.max(4, py - 86) + "px";
     }
@@ -217,12 +248,15 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
   const q = hover?.q;
   return (
     <div ref={wrapRef} className="hvi-cube3d" style={{ position: "relative", width: "100%" }}>
+      <TouchGate off={single}>
       <canvas ref={canvasRef} tabIndex={0} role="img" aria-label={label}
         style={{ display: "block", width: "100%", touchAction: single ? "pan-y" : "none", cursor: "grab", outlineOffset: 2 }}
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
         onPointerLeave={e => { if (e.pointerType === "mouse" && !st.current.dragging) setHov(null); }}
         onKeyDown={onKey} />
-      <div ref={tipRef} className="hvi-cube3d-tip" hidden={!hover} aria-live="polite">
+      </TouchGate>
+      <div ref={tipRef} className={`hvi-cube3d-tip${docked ? " docked" : ""}`} hidden={!hover} aria-live="polite"
+        style={docked ? { position: "static", maxWidth: "none", marginTop: "var(--s2)", minHeight: "var(--hit)" } : undefined}>
         {hover && q && (<>
           {hover.photo && <div style={{ float: "left", marginRight: 8 }}><FilePhoto subject={hover.photo} scale={1} compact /></div>}
           <div className="t">{hover.name}</div>

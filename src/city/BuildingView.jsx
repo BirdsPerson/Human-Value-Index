@@ -3,6 +3,7 @@ import Pen from "../Pen.jsx";
 import { DISTRICT, PLACES, BUILDING, placeName, placeKind, jobLine, roomIn } from "./simApi.js";
 import RoomStage, { ROOM_H } from "./RoomStage.jsx";
 import { Occupant } from "./cityUi.jsx";
+import { ListRow } from "../ui/index.js";
 
 // #city/<district>/<building>[?floor=N]: one building in cross-section, SimTower-style.
 // Floors stacked top to bottom with the lift shaft down the left; each floor's rooms
@@ -32,7 +33,7 @@ function BuildingView({ buildingId, floor, censusRef, onOpen, onFloor }) {
   if (b.id === "hq") {
     return (
       <div>
-        <div className="hvi-case-note" style={{ marginBottom: "0.8em" }}>DEPARTMENT HEADQUARTERS. SIX FLOORS, THREE OF THEM BELOW THE STREET, WHICH IS WHERE THE DEPARTMENT KEEPS WHAT IT DOES NOT DISCUSS. THIS BUILDING RUNS ITS OWN SIMULATION: THE HOLDING PEN. THE CITY'S CENSUS DOES NOT APPLY INSIDE. NOTHING DOES.</div>
+        <div className="hvi-city-note hvi-city-in">DEPARTMENT HEADQUARTERS. SIX FLOORS, THREE OF THEM BELOW THE STREET, WHICH IS WHERE THE DEPARTMENT KEEPS WHAT IT DOES NOT DISCUSS. THIS BUILDING RUNS ITS OWN SIMULATION: THE HOLDING PEN. THE CITY'S CENSUS DOES NOT APPLY INSIDE. NOTHING DOES.</div>
         <Pen embedded cardProps={embeddedCard} />
       </div>
     );
@@ -89,32 +90,26 @@ function Floors({ b, floor, censusRef, onOpen, onFloor }) {
 
   return (
     <div>
-      <div className="hvi-case-note" style={{ marginBottom: "0.8em" }}>
-        {b.name} // {b.addr} // {b.floors.length} FLOOR{b.floors.length === 1 ? "" : "S"}{below ? ` (${below} BELOW THE STREET)` : ""} // {total} PRESENT. {d?.name}. EVERY FLOOR IS OBSERVED. THE LIFT IS OBSERVED MOST OF ALL.
+      <div className="hvi-city-note hvi-city-in">
+        {b.floors.length} FLOOR{b.floors.length === 1 ? "" : "S"}{below ? ` (${below} BELOW THE STREET)` : ""} // {total} PRESENT // {d?.name}. EVERY FLOOR IS OBSERVED. THE LIFT IS OBSERVED MOST OF ALL.
       </div>
       <RoomStage key={b.id} cells={cells} layout={layout} assign={assign} censusRef={censusRef} onOpen={onOpen} onPresent={setPresent} onCell={onCell} focusId={focusCell} focusScroll={focusScroll}
         ariaLabel={`${b.name}, in cross-section: ${b.floors.length} floors, ${total} subjects present. The floor directory below lists everyone by floor.`} />
-      <div className="hvi-city-floors" role="list" aria-label="Floor directory">
-        <div className="hvi-city-room-h">FLOOR DIRECTORY // {floor != null ? "FOCUSED FLOOR EXPANDED" : "SELECT A FLOOR"}</div>
+      <div className="hvi-city-floors hvi-city-in" role="list" aria-label="Floor directory">
+        <div className="hvi-city-room-h">FLOOR DIRECTORY // {floor != null ? "FOCUSED FLOOR OPEN" : "SELECT A FLOOR"}</div>
         {floorsDesc.map(f => {
           const people = byFloor[f.index] || [];
           const on = f.index === floor;
           return (
             <div key={f.index} role="listitem">
-              <button className={`hvi-row-btn${on ? " selected" : ""}`} aria-expanded={on} onClick={() => pickFloor(on ? null : f.index)}
+              <ListRow lead={f.code.padStart(2, " ")} label={f.name}
+                value={<span className={people.length > f.cap && !on ? "over" : undefined}>{people.length}/{f.cap}</span>}
+                expanded={on} onExpand={(n) => pickFloor(n ? f.index : null)}
                 aria-label={`Floor ${f.code}, ${f.name}. ${people.length} present, capacity ${f.cap}. ${on ? "Collapse" : "Focus this floor"}.`}>
-                <span className="tag">{f.code.padStart(2, " ")}</span>
-                <span className="name">{f.name}</span>
-                <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
-                <span className="num" style={{ color: people.length > f.cap && !on ? "var(--red)" : undefined }}>{people.length}/{f.cap}</span>
-              </button>
-              {on && (
-                <div className="occ">
-                  {people.length === 0
-                    ? <div className="hvi-case-note">VACANT. THE LIGHTS STAY ON. THE DEPARTMENT IS WATCHING THE EMPTINESS.</div>
-                    : people.map(({ s, c }) => <Occupant key={s.name} s={s} onOpen={onOpen} note={c.tag ? placeName(c.placeId) : undefined} />)}
-                </div>
-              )}
+                {people.length === 0
+                  ? <div className="hvi-city-note">VACANT. THE LIGHTS STAY ON. THE DEPARTMENT IS WATCHING THE EMPTINESS.</div>
+                  : people.map(({ s, c }) => <Occupant key={s.name} s={s} onOpen={onOpen} note={c.tag ? placeName(c.placeId) : undefined} />)}
+              </ListRow>
             </div>
           );
         })}

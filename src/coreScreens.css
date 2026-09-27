@@ -1,0 +1,184 @@
+/* Core screens: the logon menu, the survey, the intake interview, the result and the
+   case file (score card, breakdown, appeals, case logon, secure-by-email). Tokens only
+   (src/ui/tokens.css); components come from src/ui. Imported by caseFile.jsx, so it
+   ships in the entry chunk with the menu and is present on every screen that shows a file. */
+
+/* ---------- shared text ---------- */
+.hvi-note { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s2); }
+.hvi-case-note { color: var(--fg-dim); }
+.hvi-case-note.ghost { color: var(--fg-mute); font-size: var(--t-xs); }
+:is(.hvi-cube-panel, .hvi-file-text, .hvi-casefile) .hvi-case-note { margin-top: var(--s2); }
+.hvi-err { color: var(--harm); margin: var(--s3) 0; padding-left: 3ch; text-indent: -3ch; }
+.hvi-warnline { color: var(--warn); margin: var(--s3) 0; padding-left: 3ch; text-indent: -3ch; }
+.hvi-sec-label { color: var(--fg-mute); font-size: var(--t-xs); letter-spacing: 0.08em; margin: var(--s4) 0 var(--s1); }
+
+/* ---------- score card: the payoff ---------- */
+.hvi-score .tb-body { padding-top: var(--s3); padding-bottom: var(--s3); }
+.hvi-score-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s4); }
+.hvi-score-num { display: flex; align-items: flex-end; gap: var(--s2); min-width: 0; }
+.hvi-score .bignum { font-size: 24px; line-height: 1; margin: var(--s2) 0 0; }
+.hvi-score-of { color: var(--fg-mute); font-size: var(--t-xs); padding-bottom: 2px; white-space: nowrap; }
+.hvi-score-photo { flex: none; }
+.hvi-score-photo .hvi-photo-thumb { border-color: var(--line); padding: 2px; }
+.hvi-score-chips { margin: var(--s4) 0 var(--s2); }
+.hvi-score .hvi-tier-desc { color: var(--fg-mute); font-size: var(--t-xs); margin: 0; }
+.hvi-verdict { margin-top: var(--s4); padding-top: var(--s3); border-top: var(--bw) dashed var(--line); }
+.hvi-verdict-label { color: var(--fg-mute); font-size: var(--t-xs); letter-spacing: 0.08em; margin-bottom: var(--s1); }
+.hvi-verdict-text { color: var(--fg); font-size: var(--t-m); line-height: var(--lh); max-width: 68ch; }
+.hvi-score .hvi-cube-line { margin-top: var(--s2); }
+@media (max-width: 640px) {
+  .hvi-score .bignum { font-size: 17px; }   /* 5 rows: ~85px of block digits */
+  .hvi-score-hero { gap: var(--s3); }
+}
+
+/* The actions that follow the verdict, then the file's sections. */
+.hvi-next { margin: var(--s4) 0 var(--s5); }
+.hvi-sections { margin: var(--s5) 0; }
+.hvi-sections .ui-disc-body > .tb:last-child { margin-bottom: 0; }
+
+/* ---------- breakdown ---------- */
+.hvi-meters { margin: var(--s1) 0; }
+
+/* ---------- flags + commendations ---------- */
+.hvi-flag-list { list-style: none; margin: var(--s1) 0 var(--s3); padding: 0; }
+.hvi-flag-list li { display: grid; grid-template-columns: 2ch minmax(0, 1fr); gap: 1ch; padding: var(--s1) 0; color: var(--fg-dim); }
+.hvi-flag-list .mk { font-weight: 700; }
+.hvi-flag-list .comm .mk { color: var(--accent); }
+.hvi-flag-list .flag .mk { color: var(--harm); }
+
+/* ---------- appeals checklist ---------- */
+.hvi-appeal-how { margin: 0 0 var(--s2); }
+.hvi-appeal-list { border-top: var(--bw) solid var(--line); }
+.hvi-appeal-row { border-bottom: var(--bw) solid var(--line) !important; min-height: var(--hit) !important; }
+.hvi-appeal-row .mk { color: var(--fg-mute); white-space: pre; }
+.hvi-appeal-row.on-mark .mk, .hvi-appeal-row.on-mark .name { color: var(--warn); }
+.hvi-appeal-row:disabled { cursor: default; }
+.hvi-appeal-row:disabled .name { color: var(--fg-mute); text-decoration: none; }
+.hvi-appeal-go { margin-top: var(--s3); }
+
+/* ---------- forms (case logon, secure by email, file photo) ---------- */
+.hvi-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0 var(--s3); margin: var(--s2) 0; }
+.hvi-form > .ui-field { flex: 1 1 18ch; margin: 0; min-width: 0; }
+.hvi-form > .ui-btn { flex: none; }
+.hvi-form-lead { flex-basis: 100%; margin: 0 0 var(--s1); }
+.hvi-form-msg { flex-basis: 100%; color: var(--warn); font-size: var(--t-xs); margin-top: var(--s2); }
+.hvi-form-msg.err { color: var(--harm); }
+.hvi-caseno { text-transform: uppercase !important; letter-spacing: 0.04em; }
+.hvi-secure { margin-top: var(--s3); }
+.hvi-secure-ok { color: var(--accent); overflow-wrap: anywhere; }
+
+/* ---------- case file ---------- */
+.hvi-casefile .tb-body { padding-top: var(--s3); padding-bottom: var(--s3); }
+.hvi-caseline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 1ch; }
+.hvi-caseline .k { color: var(--fg-mute); font-size: var(--t-xs); }
+.hvi-case-num { color: var(--accent); font-weight: 700; font-size: var(--t-m); letter-spacing: 0.04em; }
+.hvi-writedown { color: var(--warn); font-size: var(--t-xs); margin-top: var(--s1); }
+.hvi-case-actions { margin-top: var(--s3); border-top: var(--bw) solid var(--line); }
+.hvi-case-actions > .ui-disc:first-child { border-top: 0; }
+.hvi-empty { color: var(--fg); font-size: var(--t-m); font-weight: 700; margin: var(--s2) 0; }
+
+/* ---------- the cube section ---------- */
+.hvi-cube-axes { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s5); margin: var(--s3) 0 0; font-size: var(--t-xs); }
+.hvi-cube-axes > div { display: flex; gap: 1ch; }
+.hvi-cube-axes dt { color: var(--fg-mute); }
+.hvi-cube-axes dd { margin: 0; color: var(--fg); font-weight: 700; }
+.hvi-judge-line { color: var(--fg-mute); font-size: var(--t-xs); }
+
+/* ---------- logon menu ---------- */
+.hvi-logon .ui-cmd-list { margin: var(--s4) 0 var(--s2); }
+.hvi-menu-more { margin: 0 0 var(--s2); }
+.hvi-menu-more .ui-btn-row { margin: 0; }
+.hvi-menu-case { color: var(--fg-mute); font-size: var(--t-xs); margin: var(--s2) 0; }
+.hvi-logon .hvi-prompt { margin-top: var(--s2); }
+@media (max-width: 720px) {
+  /* Command rows run edge to edge of the frame on a phone: more thumb, same grid. */
+  .hvi-logon .ui-cmd-list { margin-left: -1ch; margin-right: -1ch; }
+}
+
+/* ---------- survey ---------- */
+.hvi-q-frame { margin-top: var(--s5); }
+.hvi-question { color: var(--fg); font-weight: 700; font-size: var(--t-m); line-height: var(--lh-tight); margin-bottom: var(--s2); }
+.hvi-hint { color: var(--fg-mute); font-size: var(--t-xs); margin-bottom: var(--s3); }
+.hvi-opts { list-style: none; margin: var(--s2) 0 0; padding: 0; border-top: var(--bw) solid var(--line); }
+.hvi-opts > li { border-bottom: var(--bw) solid var(--line); }
+.hvi-opt { display: grid; grid-template-columns: 3ch minmax(0, 1fr); column-gap: 1ch; align-items: center; width: 100%;
+  min-height: var(--hit); padding: var(--s2) var(--s1); background: none; border: 0; border-radius: 0; color: var(--fg-dim);
+  font: inherit; text-align: left; text-transform: uppercase; cursor: pointer; }
+.hvi-opt .mk { color: var(--fg-mute); white-space: pre; }
+@media (hover: hover) { .hvi-opt:hover .t { text-decoration: underline; text-underline-offset: 4px; } }
+.hvi-opt:focus-visible { outline-offset: -2px; }
+.hvi-opt[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); }
+.hvi-opt[aria-checked="true"] .mk { color: var(--accent-ink); }
+.hvi-extra { margin-top: var(--s4); }
+.hvi-survey-dock { position: sticky; bottom: 0; z-index: 40; background: var(--bg); border-top: var(--bw) solid var(--line);
+  margin: var(--s4) 0 0; padding: var(--s1) 0; }
+.hvi-survey-dock .ui-btn-row { margin: 0; flex-wrap: nowrap; }
+.hvi-survey-meta { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s2); }
+@media (max-width: 720px) {
+  /* Above the command bar, within thumb reach. */
+  .hvi-survey-dock { bottom: calc(var(--bar-h) + var(--safe-b)); }
+  .hvi-kb-open .hvi-survey-dock { position: static; }
+}
+
+/* ---------- intake: the interview ---------- */
+.hvi-live-row { display: flex; justify-content: space-between; gap: 2ch; flex-wrap: wrap; color: var(--fg-mute); font-size: var(--t-xs); margin-bottom: var(--s2); white-space: pre; }
+.hvi-live-dot { color: var(--harm); animation: hvi-blink 1s steps(1) infinite; }
+.hvi-voice { color: var(--fg-dim); margin: var(--s1) 0 var(--s3); white-space: pre; }
+.hvi-transcript { min-height: 8em; }
+.hvi-tline { display: grid; grid-template-columns: 9ch minmax(0, 1fr); margin-bottom: var(--s3); white-space: pre-wrap; }
+.hvi-tline .who { color: var(--accent); white-space: pre; }
+.hvi-tline.agent { color: var(--fg); }
+.hvi-tline.user { color: var(--fg-dim); }
+.hvi-tline.user .who { color: var(--fg-mute); }
+.hvi-tline .typed { display: inline; }
+.hvi-tempty { color: var(--fg-mute); }
+.hvi-tail { height: 1px; scroll-margin-bottom: calc(var(--dock-h, 160px) + var(--s4)); }
+@media (max-width: 560px) {
+  /* The speaker tag on its own line: the answer gets the whole width. */
+  .hvi-tline { grid-template-columns: minmax(0, 1fr); }
+}
+/* The answer dock: pinned to the bottom of the visible viewport. --kb is the height the
+   software keyboard covers (visualViewport, Intake.jsx); the command bar hides while a
+   field has focus, so with the keyboard up the dock sits right on top of the keys. */
+.hvi-dock { position: sticky; bottom: 0; z-index: 40; background: var(--bg); border-top: var(--bw) solid var(--line-hi);
+  margin: var(--s3) calc(var(--gutter) * -1) 0; padding: var(--s2) var(--gutter); }
+.hvi-dock-row { display: flex; align-items: flex-end; gap: var(--s2); }
+.hvi-dock-row > .ui-field { flex: 1; margin: 0; min-width: 0; }
+.hvi-dock-row textarea.ui-input { resize: none; min-height: var(--hit-min); max-height: 9em; }
+/* Phones: SUBJECT > on its own line, as in the transcript, so the answer gets the width. */
+@media (max-width: 560px) {
+  .hvi-dock-row > .ui-field { flex-wrap: wrap; row-gap: 0; }
+  .hvi-dock-row > .ui-field > label { flex-basis: 100%; line-height: var(--lh); font-size: var(--t-xs); }
+}
+.hvi-dock-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
+.hvi-dock-foot .ui-btn-row { margin: 0; }
+.hvi-dock .hvi-note { margin: 0; }
+@media (max-width: 720px) {
+  /* A short interview left the dock floating mid-screen with dead space under it: the
+     live screen fills the space between header and command bar, so the dock rests
+     on the bar, within thumb reach, from the first question on. */
+  .hvi-live { display: flex; flex-direction: column;
+    min-height: calc(100svh - var(--head-h) - var(--s4) - var(--safe-t) - var(--bar-h) - var(--safe-b)); }
+  .hvi-live > .hvi-dock { margin-top: auto; }
+  .hvi-dock { bottom: calc(var(--bar-h) + var(--safe-b)); }
+  .hvi-kb-open .hvi-dock { bottom: var(--kb, 0px); }
+}
+@media (pointer: coarse), (max-width: 720px) { .hvi-desk-only { display: none; } }
+@media (prefers-reduced-motion: reduce) { .hvi-live-dot { animation: none; } }
+
+/* ---------- processing ---------- */
+.hvi-proc-bar { max-width: 100%; }
+
+/* ---------- result extras (survey result) ---------- */
+.hvi-compare-rows { margin: var(--s2) 0; }
+.hvi-compare-verdict { color: var(--fg-dim); }
+.hvi-share-text { color: var(--fg-dim); white-space: pre-wrap; margin-bottom: var(--s2); font-size: var(--t-xs); }
+@media (max-width: 420px) {
+  /* Photo above the words: a name beside a photo wrapped one word per line. */
+  .hvi-file-head { flex-direction: column; }
+}
+.hvi-next .ui-btn-row { margin: 0; }
+.hvi-score { margin-bottom: var(--s4); }
+/* Section names are up to 12 characters (ADAPTABILITY, REDUNDANCY ↓): never clip them. */
+.hvi-meters .ui-meter { grid-template-columns: 13ch max-content 4ch minmax(0, 1fr); }
+@media (max-width: 420px) { .hvi-meters .ui-meter { grid-template-columns: 13ch minmax(0, 1fr) 3ch; } }
