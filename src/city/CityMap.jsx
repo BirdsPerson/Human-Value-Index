@@ -1,12 +1,13 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SPRITE_W, SPRITE_H, hashStr } from "../sprites.js";
-import { DISTRICTS, PLACES, BUS, placesOf, placeName, districtCap, activityLine, jobLine, clockAt, whereOf } from "./simApi.js";
+import { DISTRICTS, PLACES, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, placesOf, placeName, districtCap, activityLine, jobLine, clockAt, whereOf, trainsAt } from "./simApi.js";
 import { CELL_W, CELL_H, layoutDistricts, FAMILY_COLOR, familyOf, lodFor, roomLabel } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FONT, SubjectTip } from "./cityUi.jsx";
 
 // THE SUBSTRATE: the whole city as one canvas. District blocks drawn in box characters,
-// the data-bus loop as a dotted ring with cars on it, and every subject as a dot (far),
+// the Loop as a railed ring with a platform at every district and its trains on it
+// (from the sim's timetable, so a rider's dot sits in its car), every subject as a dot (far),
 // a small sprite (nearer) or a full sprite (close). Drag to pan, pinch or wheel to zoom,
 // tap a district to enter it. One rAF loop, paused offscreen; the static layer is only
 // redrawn when the camera moves.
@@ -50,9 +51,26 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
     // ---- geometry, fixed for the session -------------------------------------------
     const layout = layoutDistricts(DISTRICTS);
     const { toMap } = layout;
-    const loopAt = (s) => toMap(BUS.at(s));
+    const LINE = LOOP_LINE;
+    const loopAt = (s) => toMap(LINE.at(s));
+    const r0 = toMap(LINE.loop), ring = { x: r0.x, y: r0.y, w: LINE.loop.w, h: LINE.loop.h };
+    const onTopOrBottom = (y) => Math.abs(y - LINE.loop.y) < 1e-6 || Math.abs(y - (LINE.loop.y + LINE.loop.h)) < 1e-6;
+    // Stations: a platform beside the track on the district's side, as long as the longest
+    // train plus a margin, and a path from it down to the district's gate.
+    const halfPlat = Math.max(...TRAINS.map(t => t.length)) / 2 + 0.4, P0 = 0.5, P1 = 1.3;
     const stops = {};
-    for (const id in BUS.stops) { const st = BUS.stops[id], a = toMap(st), g = toMap(st.gate); stops[id] = { s: st.s, x: a.x, y: a.y, doorX: g.x, doorY: g.y }; }
+    for (const id of STATION_ORDER) {
+      const st = STATIONS[id], a = toMap(st), g = toMap(st.gate);
+      let plat;
+      if (st.n.y !== 0) {
+        const x0 = Math.max(ring.x, a.x - halfPlat), x1 = Math.min(ring.x + ring.w, a.x + halfPlat), ya = a.y + st.n.y * P0, yb = a.y + st.n.y * P1;
+        plat = { x: x0, y: Math.min(ya, yb), w: x1 - x0, h: Math.abs(yb - ya) };
+      } else {
+        const y0 = Math.max(ring.y, a.y - halfPlat), y1 = Math.min(ring.y + ring.h, a.y + halfPlat), xa = a.x + st.n.x * P0, xb = a.x + st.n.x * P1;
+        plat = { x: Math.min(xa, xb), y: y0, w: Math.abs(xb - xa), h: y1 - y0 };
+      }
+      stops[id] = { s: st.s, x: a.x, y: a.y, n: st.n, doorX: g.x, doorY: g.y, plat, name: st.name, addr: st.addr, px: a.x + st.n.x * P1, py: a.y + st.n.y * P1 };
+    }
     const slots = {};
     for (const b of layout.blocks) {
       slots[b.id] = {};
@@ -63,7 +81,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
 
     const V = {
       cssW: 300, cssH: 300, dpr: 1, cam: { x: 0, y: 0, z: 1 }, fitZ: 1, dirty: true, reduced: !!mq?.matches,
-      adv: 0.6, t: 0, busT: 0, seenV: -1, ents: new Map(), vis: [], tip: null, hover: null, need: true,
+      adv: 0.6, t: 0, seenV: -1, ents: new Map(), vis: [], tip: null, hover: null, need: true,
     };
     const { ox, oy } = layout;
 
@@ -135,29 +153,54 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
         for (let r = r0 - (r0 % 2); r < r1; r += 2) b.fillText(line, SX(c0 - (c0 % 4)), SY(r));
       }
 
-      // the data bus: a dotted ring, spurs to each district, a stop marker per district
-      const dot = Math.max(1, Math.round(ch * 0.14));
-      b.fillStyle = "#2f6a42";
-      for (let s = 0; s < BUS.length; s += 1) {
-        const { x, y } = loopAt(s);
-        const px = SX(x), py = SY(y);
-        if (px < -4 || py < -4 || px > V.cssW + 4 || py > V.cssH + 4) continue;
-        const big = Math.round(s) % 4 === 0;
-        b.fillRect(px - (big ? dot : dot / 2), py - (big ? dot : dot / 2), big ? dot * 2 : dot, big ? dot * 2 : dot);
+      // the Loop: two rails round the ring, sleepers when close, a platform at every
+      // district and a dotted path from it down to the district's gate
+      const lw = Math.max(1, ch * 0.09), o = Math.max(1.5, ch * 0.2);
+      const RX = SX(ring.x), RY = SY(ring.y), RW = ring.w * cw, RH = ring.h * ch;
+      if (textLod) {
+        b.fillStyle = "#16291c";
+        const tk = Math.max(1, ch * 0.08);
+        for (let s = 0; s < LINE.length; s += 1) {
+          const p = loopAt(s), px = SX(p.x), py = SY(p.y);
+          if (px < -8 || py < -8 || px > V.cssW + 8 || py > V.cssH + 8) continue;
+          if (onTopOrBottom(p.y - oy)) b.fillRect(px - tk / 2, py - o - tk, tk, 2 * (o + tk));
+          else b.fillRect(px - o - tk, py - tk / 2, 2 * (o + tk), tk);
+        }
       }
+      b.strokeStyle = "#2f6a42"; b.lineWidth = lw;
+      b.strokeRect(RX - o, RY - o, RW + 2 * o, RH + 2 * o);
+      b.strokeRect(RX + o, RY + o, RW - 2 * o, RH - 2 * o);
+      const dot = Math.max(1, Math.round(ch * 0.14));
       b.fillStyle = "#1f4a2c";
       for (const id in stops) {
         const st = stops[id];
-        const d = Math.hypot(st.doorX - st.x, st.doorY - st.y), n = Math.max(1, Math.round(d / 0.7));
-        for (let i = 1; i < n; i++) b.fillRect(SX(st.x + ((st.doorX - st.x) * i) / n) - dot / 2, SY(st.y + ((st.doorY - st.y) * i) / n) - dot / 2, dot, dot);
+        const d = Math.hypot(st.doorX - st.px, st.doorY - st.py), n = Math.max(1, Math.round(d / 0.7));
+        for (let i = 1; i < n; i++) b.fillRect(SX(st.px + ((st.doorX - st.px) * i) / n) - dot / 2, SY(st.py + ((st.doorY - st.py) * i) / n) - dot / 2, dot, dot);
       }
-      // stops: hollow boxes in the bus's own green, so none reads as a subject at the gate
-      b.strokeStyle = "#3d6b50"; b.lineWidth = Math.max(1, dot * 0.6);
-      for (const id in stops) { const st = stops[id]; b.strokeRect(SX(st.x) - dot * 1.5, SY(st.y) - dot * 1.5, dot * 3, dot * 3); }
+      for (const id in stops) {
+        const pl = stops[id].plat, n = stops[id].n;
+        const x = SX(pl.x), y = SY(pl.y), w = pl.w * cw, h = pl.h * ch;
+        b.fillStyle = "#0a2227"; b.fillRect(x, y, w, h);
+        b.strokeStyle = "#0e7490"; b.lineWidth = Math.max(1, lw * 0.8); b.strokeRect(x, y, w, h);
+        // the painted edge on the track side
+        b.fillStyle = "#a16207";
+        const e = Math.max(1, ch * 0.07);
+        if (n.y < 0) b.fillRect(x, y + h - e, w, e); else if (n.y > 0) b.fillRect(x, y, w, e);
+        else if (n.x < 0) b.fillRect(x + w - e, y, e, h); else b.fillRect(x, y, e, h);
+      }
       if (textLod) {
         b.fillStyle = "#3d6b50";
-        const { x: lx, y: ly } = loopAt(BUS.loop.w * 0.02);
-        b.fillText(" DATA BUS // LOOP 0xB05 // NO STANDING ", SX(lx), SY(ly) - ch * 1.05);
+        // Right-aligned so it ends before the north-east corner, in the stretch between
+        // DEPT HQ's platform and the corner; the tail goes when that stretch is too short.
+        const { x: lx, y: ly } = loopAt(LINE.loop.w * 0.975);
+        const room = LINE.loop.w * 0.42 * cw;
+        const signs = [
+          ` THE LOOP // ${TRAINS.length} TRAINS // EVERY ${Math.round(LINE.headway * 60)} MIN // NO STANDING `,
+          ` THE LOOP // ${TRAINS.length} TRAINS // EVERY ${Math.round(LINE.headway * 60)} MIN `,
+          ` THE LOOP // ${TRAINS.length} TRAINS `,
+        ];
+        const sign = signs.find(t => b.measureText(t).width <= room);
+        if (sign) { b.textAlign = "right"; b.fillText(sign, SX(lx), SY(ly) + ch * 0.35); b.textAlign = "left"; }
       }
 
       // districts
@@ -223,11 +266,16 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
     }
 
     // Target in world px, cached per census entry (not per frame).
-    function setW(e, w) { e.w = w; e.tx = (w.x + ox) * CELL_W; e.ty = (w.y + oy) * CELL_H; }
+    // Riders sit along their car, not all on its centre.
+    function setW(e, w) {
+      e.w = w;
+      let x = w.x, y = w.y;
+      if (w.sub === "riding") { const off = (((e.seed >>> 3) % 11) / 10 - 0.5) * LINE.carLen * 0.7; if (onTopOrBottom(w.y)) x += off; else y += off; }
+      e.tx = (x + ox) * CELL_W; e.ty = (y + oy) * CELL_H;
+    }
 
     function update(dt) {
       V.t += dt;
-      if (!V.reduced) V.busT += dt;
       const C = censusRef.current;
       if (C.v !== V.seenV) {
         V.seenV = C.v; V.need = true;
@@ -237,7 +285,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
         if (V.tip) { const e = V.ents.get(V.tip); if (e) refreshTip(e, C.mt); }
       }
       // Commuters in view (plus a margin) are placed from the machine clock every frame,
-      // since the bus covers several cells a second; everyone else, and every commuter
+      // since the Loop covers several cells a second; everyone else, and every commuter
       // off screen, holds the spot the last census gave them.
       const mt = V.reduced ? 0 : clockAt(Date.now()).mt;
       const k = Math.min(1, dt * 4);
@@ -280,11 +328,14 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       const ax = Math.round(sx);
       ctx.fillRect(ax - 3, ay, 7, 1); ctx.fillRect(ax - 2, ay + 1, 5, 1); ctx.fillRect(ax - 1, ay + 2, 3, 1); ctx.fillRect(ax, ay + 3, 1, 1);
     }
-    // Drawn as a dot (far away, or dormant indoors) rather than a sprite.
-    const asDot = (e, lod) => lod === "dot" || e.w.activity === "home";
+    // Indoors (dormant at home) or aboard a car: a lit window in their colour, not a sprite.
+    const indoors = (e) => e.w.activity === "home" || e.w.sub === "riding";
+    // Drawn as a dot (far away, or indoors) rather than a sprite.
+    const asDot = (e, lod) => lod === "dot" || indoors(e);
 
     function draw() {
       if (V.dirty) drawStatic();
+      const C0 = censusRef.current;
       const { dpr } = V;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(bg, 0, 0);
@@ -292,24 +343,38 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       ctx.imageSmoothingEnabled = false;
       const c = V.cam, ch = CELL_H * c.z, cw = CELL_W * c.z;
 
-      // bus cars, evenly spaced, one lap in about 45 seconds
-      const L = BUS.length, N = Math.max(3, Math.round(L / 26));
-      const lapSec = BUS.lapHours * 60;   // 1 real minute = 1 machine hour
-      for (let i = 0; i < N; i++) {
-        const s = (V.busT / lapSec) * L + (i * L) / N;
-        const { x: ax, y: ay } = loopAt(s), { x: bx, y: by } = loopAt(s + 0.5);
-        const horiz = Math.abs(bx - ax) > Math.abs(by - ay);
-        const px = (ax * CELL_W - c.x) * c.z, py = (ay * CELL_H - c.y) * c.z;
-        const w = horiz ? cw * 2.4 : cw * 1.2, h = horiz ? ch * 0.6 : ch * 1.3;
-        if (px + w < 0 || py + h < 0 || px - w > V.cssW || py - h > V.cssH) continue;
-        // cyan: outside the octant palette, so a car never reads as a charm subject
-        ctx.fillStyle = "#155e75";
-        ctx.fillRect(px - w / 2, py - h / 2, w, h);
-        ctx.fillStyle = "#67e8f9";
-        const fx = horiz ? (bx > ax ? px + w / 2 - Math.max(1, cw * 0.3) : px - w / 2) : px - w / 2;
-        const fy = horiz ? py - h / 2 : (by > ay ? py + h / 2 - Math.max(1, ch * 0.15) : py - h / 2);
-        ctx.fillRect(fx, fy, horiz ? Math.max(1, cw * 0.3) : w, horiz ? h : Math.max(1, ch * 0.15));
+      // the Loop's trains, where the timetable has them (the same trainsAt the riders are
+      // placed by). A train at a platform lights the platform: its doors are open.
+      const T = trainsAt(V.reduced ? (C0.mt ?? clockAt(Date.now()).mt) : clockAt(Date.now()).mt);
+      const carW = Math.max(3, cw * 1.05);
+      ctx.lineCap = "butt"; ctx.lineJoin = "miter";
+      for (const t of T) {
+        if (t.dwell && stops[t.stationId]) {
+          const pl = stops[t.stationId].plat;
+          ctx.strokeStyle = "#67e8f9"; ctx.lineWidth = 1;
+          ctx.strokeRect((pl.x * CELL_W - c.x) * c.z, (pl.y * CELL_H - c.y) * c.z, pl.w * cw, pl.h * ch);
+        }
+        for (const car of t.cars) {
+          const A = loopAt(car.s - LINE.carLen / 2), M = loopAt(car.s), B = loopAt(car.s + LINE.carLen / 2);
+          const ax = (A.x * CELL_W - c.x) * c.z, ay = (A.y * CELL_H - c.y) * c.z, mx = (M.x * CELL_W - c.x) * c.z, my = (M.y * CELL_H - c.y) * c.z, bx = (B.x * CELL_W - c.x) * c.z, by = (B.y * CELL_H - c.y) * c.z;
+          if (Math.max(ax, bx) < -20 || Math.min(ax, bx) > V.cssW + 20 || Math.max(ay, by) < -20 || Math.min(ay, by) > V.cssH + 20) continue;
+          // cyan: outside the octant palette, so a car never reads as a charm subject
+          ctx.strokeStyle = "#0e7490"; ctx.lineWidth = carW;
+          ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(mx, my); ctx.lineTo(bx, by); ctx.stroke();
+          if (carW >= 5) {
+            ctx.strokeStyle = "#67e8f9"; ctx.lineWidth = Math.max(1, carW * 0.25);
+            ctx.setLineDash([Math.max(1, cw * 0.3), Math.max(1, cw * 0.25)]);
+            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(mx, my); ctx.lineTo(bx, by); ctx.stroke();
+            ctx.setLineDash([]);
+          }
+          if (car.index === 0) {
+            // the lead car's lamp, on its nose
+            const r = Math.max(1.5, carW * 0.28);
+            ctx.fillStyle = "#e0fbff"; ctx.fillRect(bx - r, by - r, 2 * r, 2 * r);
+          }
+        }
       }
+      ctx.lineCap = "butt"; ctx.lineJoin = "miter";
 
       // subjects: cull to the viewport, sort the visible by depth
       const lod = lodFor(ch);
@@ -335,10 +400,11 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
         for (const e of vis) {
           // Dormant subjects are indoors: a lit window in their colour, not a sprite. A
           // sleeping block reads as a block of windows instead of a mob on the roof.
-          if (e.w.activity === "home") {
-            ctx.globalAlpha = 0.7;
+          if (indoors(e)) {
+            const ride = e.w.sub === "riding", ww = ride ? Math.max(2, Math.round(wr * 0.8)) : wr;
+            ctx.globalAlpha = ride ? 1 : 0.7;
             ctx.fillStyle = e.fam;
-            ctx.fillRect(Math.round((e.sx - wr / 2) * dpr) / dpr, Math.round((e.sy - wr) * dpr) / dpr, wr, wr);
+            ctx.fillRect(Math.round((e.sx - ww / 2) * dpr) / dpr, Math.round((e.sy - (ride ? ww / 2 : ww)) * dpr) / dpr, ww, ww);
             ctx.globalAlpha = 1;
             if (e.s.you) youArrow(e.sx, e.sy - wr - 7);
             continue;
@@ -583,7 +649,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
   return (
     <div className="hvi-city-stage" ref={wrapRef}>
       <canvas ref={canvasRef} className={`hvi-city-canvas${cursor ? " " + cursor : ""}`} role="img"
-        aria-label="The Substrate: a map of the city's districts, the data-bus loop and every subject on it. By keyboard: the bus list below names everyone riding and finds your own file; the district directory enters a district." />
+        aria-label="The Substrate: a map of the city's districts, the Loop train with a station at every district, and every subject on it. By keyboard: the Loop list below names everyone aboard and finds your own file; the district directory enters a district." />
       <div className="hvi-city-zoom">
         <button className="hvi-cmd" aria-label="Zoom in" onClick={() => apiRef.current.zoom?.(1.4)}>[+]</button>
         <button className="hvi-cmd" aria-label="Zoom out" onClick={() => apiRef.current.zoom?.(1 / 1.4)}>[-]</button>

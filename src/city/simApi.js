@@ -3,13 +3,18 @@
 
 import * as SIM from "./sim.js";
 
-export const { DISTRICTS, PLACES, JOBS, BUS } = SIM;
+export const { DISTRICTS, PLACES, JOBS, BUS, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, BUILDINGS, BUILDING, HEADWAY } = SIM;
 export const DISTRICT = Object.fromEntries(DISTRICTS.map(d => [d.id, d]));
+// Where a rider physically is (whereAt's atDistrictId). v1 called it "bus".
+export const ON_LOOP = "loop";
+export const isOnLoop = (at) => at === ON_LOOP || at === "bus";
 
 export const placeName = (id) => PLACES[id]?.name || String(id || "").toUpperCase();
 export const placeCap = (id) => PLACES[id]?.cap || 0;
 export const placeKind = (id) => PLACES[id]?.kind || "place";
-export const districtName = (id) => (id === "bus" ? "THE DATA BUS" : DISTRICT[id]?.name || String(id || "").toUpperCase());
+export const districtName = (id) => (isOnLoop(id) ? "THE LOOP" : DISTRICT[id]?.name || String(id || "").toUpperCase());
+export const buildingsOf = (districtId) => (DISTRICT[districtId]?.buildings || []).map(id => BUILDING[id]);
+export const buildingOfPlace = (placeId) => BUILDING[PLACES[placeId]?.building] || null;
 export const placesOf = (districtId) => DISTRICT[districtId]?.places || [];
 export const districtCap = (districtId) => placesOf(districtId).reduce((n, p) => n + placeCap(p), 0);
 
@@ -32,9 +37,26 @@ export function clockAt(realMs) {
 }
 
 export const whereOf = (subject, mt) => SIM.whereAt(subject, mt);
-// Where the subject physically is: a district id, or "bus" while riding.
+// Which floor of its place's building a subject keeps while there (stable per stay).
+export const floorFor = (subject, placeId) => SIM.floorOf(placeId, SIM.keyOf(subject));
+export const stationOf = (districtId) => STATIONS[districtId] || null;
+// Where the subject physically is: a district id, or "loop" while riding.
 export const atDistrict = (w) => w.atDistrictId || w.districtId;
 export const jobOf = (subject) => SIM.assignJob(subject);
+// Which building (and floor, and room) a census entry counts toward: the one the subject is
+// on a floor of, or the one it is walking into from the street ("arrive") or out of
+// ("leave") inside that building's district. One rule for every count the city shows:
+// the header, the building rooms, the district's building list, the 3D floor labels.
+export function roomIn(w, s) {
+  if (!w) return null;
+  if (w.activity !== "commute") return w.buildingId ? { buildingId: w.buildingId, floor: w.floor, placeId: w.placeId, mode: "here" } : null;
+  if (w.sub !== "walking") return null;
+  const at = atDistrict(w);
+  const to = PLACES[w.placeId], from = PLACES[w.fromPlaceId];
+  if (to?.building && to.district === at) return { buildingId: to.building, floor: floorFor(s, w.placeId), placeId: w.placeId, mode: "arrive" };
+  if (from?.building && from.district === at) return { buildingId: from.building, floor: floorFor(s, w.fromPlaceId), placeId: w.fromPlaceId, mode: "leave" };
+  return null;
+}
 
 // "Radiant Systems Engineer // RANK: CHIEF OF THE CORE"
 export function jobLine(subject) {
@@ -43,3 +65,9 @@ export function jobLine(subject) {
 }
 // "ON SHIFT // RADIANT CORE, THE WORKS."
 export const activityLine = (subject, mt) => SIM.statusLine(subject, mt);
+
+// The Loop, for the renderers: trains now, the platform board, and the PA.
+export const trainsAt = (mt) => SIM.trainsAt(mt);
+export const timetable = (stationId, mt, n) => SIM.timetable(stationId, mt, n);
+export const loopEvents = (fromMt, toMt) => SIM.loopEvents(fromMt, toMt);
+export const occupancyAt = (subjects, mt) => SIM.occupancy(subjects, mt);

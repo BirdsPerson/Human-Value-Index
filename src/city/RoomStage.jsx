@@ -1,0 +1,447 @@
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { SPRITE_W, SPRITE_H, gaitFor, stepEntity, mulberry32 } from "../sprites.js";
+import { getTier } from "../figures.js";
+import { activityLine, jobLine, clockAt, trainsAt, timetable, TRAIN } from "./simApi.js";
+import { sheetFor } from "./spriteBank.js";
+import { FONT, SubjectTip } from "./cityUi.jsx";
+
+// Rooms as terminal boxes on one canvas, with the subjects the census puts in each one
+// walking about inside. The district view tiles a district's rooms (and its station
+// platform); the building view stacks one row per floor. The caller says where each
+// room sits (layout) and who belongs in which (assign); this does the rest.
+//
+//   cells   [{id, title, tag, kind: work|leisure|mixed|home|platform, tint?}]
+//   layout  (cssW) -> {rects: [{x, y, w, h}] (one per cell), height, gutter?: [{x, y, text, color}]}
+//   assign  (w, s) -> {cell, mode} | null. mode: here | arrive (through the door) |
+//           leave (out by the door) | alight (off a train, onto the platform)
+// One rAF loop, paused offscreen; rooms scrolled out of the window are not drawn.
+
+export const ROOM_H = 150;          // CSS px per room
+const FLOOR_TOP = 86;               // feet stand between these two, room-relative
+const FLOOR_PAD = 16;
+const DOOR_X = 18;
+
+const KIND_LABEL = { work: "WORK", leisure: "LEISURE", mixed: "WORK / LEISURE", home: "RESIDENTIAL", platform: "THE LOOP" };
+const WALL = {
+  work: ["╤══╤   ╤══╤   ╤══╤   ", "│▭▭│   │▭▭│   │▭▭│   "],
+  leisure: ["¡!¡ ¡!¡ ¡¡! ¡!¡ !¡!   ", "────────────────────  "],
+  mixed: ["╤══╤   ¡!¡ ¡!¡   ", "│▭▭│   ───────   "],
+  home: ["▭ ▭ ▭ ▭ ▭ ▭ ▭ ▭ ", "═══════════════ "],
+  platform: ["╪═══╪═══╪═══╪═══", "╪═══╪═══╪═══╪═══"],
+};
+
+const pad2 = (n) => String(n).padStart(2, "0");
+
+export default memo(RoomStage);
+function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent, focusId = null, stationId = null, ariaLabel, focusScroll }) {
+  const wrapRef = useRef(null);
+  const canvasRef = useRef(null);
+  const tipRef = useRef(null);
+  const [tip, setTip] = useState(null);
+  const [cursor, setCursor] = useState("");
+  const cb = useRef({}); cb.current = { onOpen, onCell, onPresent, assign, layout, focusScroll };
+  const api = useRef({});
+  const tipSize = useRef([0, 0]);
+  useLayoutEffect(() => {
+    const el = tipRef.current;
+    tipSize.current = el ? [el.offsetWidth, el.offsetHeight] : [0, 0];
+    api.current.poke?.();
+  }, [tip]);
+  // A new focus repaints the frames and brings that room into the window.
+  useEffect(() => { api.current.focus?.(focusId); }, [focusId]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current, wrap = wrapRef.current;
+    const ctx = canvas.getContext("2d");
+    const bg = document.createElement("canvas");
+    const mq = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    const rnd = mulberry32((Date.now() ^ 0xc17) >>> 0);
+    const V = { cssW: 300, h: ROOM_H, dpr: 1, k: 1, rects: [], gutter: [], reduced: !!mq?.matches, seenV: -1, ents: new Map(), want: new Map(), counts: {}, tip: null, hover: null, cw: 7, top: 0, need: true, sig: "", focus: focusId, scrolled: false };
+    const idx = Object.fromEntries(cells.map((c, i) => [c.id, i]));
+    const plat = cells.map(c => c.kind === "platform");
+    const floorBot = (i) => V.rects[i].h - FLOOR_PAD;
+    const worldFor = (i) => ({ w: V.rects[i].w, floorTop: FLOOR_TOP, floorBottom: floorBot(i), doorX: DOOR_X, doorW: 10 });
+
+    // ---- sizing and the room backdrops -----------------------------------------------
+    function resize() {
+      const cssW = Math.max(280, Math.floor(wrap.clientWidth));
+      const dpr = Math.min(3, window.devicePixelRatio || 1);
+      V.cssW = cssW; V.dpr = dpr; V.k = Math.max(1, Math.round(dpr));
+      const L = cb.current.layout(cssW);
+      V.rects = L.rects; V.gutter = L.gutter || []; V.h = L.height;
+      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(V.h * dpr);
+      canvas.style.height = V.h + "px";
+      bg.width = canvas.width; bg.height = canvas.height;
+      for (const e of V.ents.values()) { const w = V.rects[idx[e.room]].w; e.x = Math.min(e.x, w - 14); e.tx = Math.min(e.tx, w - 14); }
+      paintRooms();
+      measure();
+      if (V.focus && !V.scrolled) scrollToFocus();
+    }
+    function measure() { V.top = canvas.getBoundingClientRect().top; V.dirty = false; V.need = true; }
+    // Scrolling only marks the position stale; the next frame reads it once (one layout
+    // read per frame, not one per scroll event).
+    function onScroll() { V.dirty = true; V.need = true; }
+    function scrollToFocus() {
+      const i = idx[V.focus];
+      if (i === undefined) return;
+      V.scrolled = true;
+      const y = canvas.getBoundingClientRect().top + window.scrollY + V.rects[i].y - 70;
+      try { window.scrollTo({ top: Math.max(0, y), behavior: V.reduced ? "auto" : "smooth" }); } catch { window.scrollTo(0, Math.max(0, y)); }
+    }
+    function paintRooms() {
+      const b = bg.getContext("2d");
+      b.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+      b.fillStyle = "#060a06";
+      b.fillRect(0, 0, V.cssW, V.h);
+      b.font = `11px ${FONT}`;
+      b.textBaseline = "top";
+      const cw = Math.max(4, b.measureText("M").width), ch = 13;
+      V.cw = cw;
+      for (const g of V.gutter) { b.fillStyle = g.color || "#2f6a42"; b.font = g.bold ? `700 11px ${FONT}` : `11px ${FONT}`; b.fillText(g.text, g.x, g.y); }
+      b.font = `11px ${FONT}`;
+      cells.forEach((c, i) => {
+        const { x: x0, y: y0, w: rw, h: rh } = V.rects[i];
+        const cols = Math.floor((rw - 4) / cw);
+        const kind = c.kind || "mixed";
+        const focused = V.focus === c.id;
+        const tint = focused ? "#4ade80" : c.tint || (kind === "platform" ? "#0e7490" : "#2f6a42");
+        const name = ` ${c.title} `;
+        const tag = ` ${c.tag || KIND_LABEL[kind] || kind.toUpperCase()} `;
+        const room = cols - 2 - name.length - tag.length - 1;
+        const top = room >= 0 ? "┌─" + name + "─".repeat(room) + tag + "┐" : "┌─" + name.slice(0, Math.max(3, cols - 4)) + "─┐";
+        b.fillStyle = tint;
+        b.fillText(top.slice(0, cols), x0 + 2, y0 + 2);
+        const rows = Math.floor((rh - 6) / ch);
+        for (let r = 1; r < rows - 1; r++) { b.fillText(focused ? "║" : "│", x0 + 2, y0 + 2 + r * ch); b.fillText(focused ? "║" : "│", x0 + 2 + (cols - 1) * cw, y0 + 2 + r * ch); }
+        b.fillText("└" + "─".repeat(cols - 2) + "┘", x0 + 2, y0 + 2 + (rows - 1) * ch);
+        // back wall: decor by kind (the platform's is the track), a floor line, the floor
+        const wall = WALL[kind] || WALL.mixed;
+        b.fillStyle = kind === "platform" ? "#164e5a" : "#1f4a2c";
+        for (let r = 0; r < wall.length; r++) b.fillText(wall[r].repeat(Math.ceil(cols / wall[r].length)).slice(0, cols - 6), x0 + 2 + 4 * cw, y0 + 2 + (2 + r) * ch);
+        if (kind === "platform") {
+          // the platform edge, painted, with the warning the Department is obliged to give
+          // the platform edge, painted in the one colour the Department reserves for warnings
+          b.fillStyle = "#5c4a0c";
+          b.fillText("▀".repeat(cols - 2), x0 + 2 + cw, y0 + FLOOR_TOP - 16);
+        } else {
+          b.fillStyle = "#13251a";
+          b.fillText("▓".repeat(cols - 2), x0 + 2 + cw, y0 + FLOOR_TOP - 16);
+        }
+        b.fillStyle = "#16291c";
+        for (let y = y0 + FLOOR_TOP - 8, r = 0; y < y0 + rh - FLOOR_PAD; y += ch, r++) b.fillText((r % 2 ? " ·" : "· ").repeat(Math.ceil(cols / 2)).slice(0, cols - 2), x0 + 2 + cw, y);
+        // the door, set into the left wall (the platform's is the way down to the street)
+        b.fillStyle = "#060a06";
+        b.fillRect(x0 + 2, y0 + FLOOR_TOP - 34, cw, 30);
+        b.fillStyle = "#4ade80";
+        b.fillText("▐", x0 + 2, y0 + FLOOR_TOP - 32); b.fillText("▐", x0 + 2, y0 + FLOOR_TOP - 19);
+        b.fillStyle = "#2f6a42";
+        b.fillText(kind === "platform" ? "STREET" : "IN/OUT", x0 + 2 + cw * 1.5, y0 + FLOOR_TOP - 32);
+      });
+    }
+
+    // ---- who is where ------------------------------------------------------------------
+    // Out by the door, or (from a platform, when the census has them aboard) into the car.
+    const exit = (e, board) => {
+      e.leaving = true; e.gone = false; e.state = "exit"; e.board = !!board;
+      if (board) { e.tx = e.x; e.ty = FLOOR_TOP - 6; } else { e.tx = DOOR_X; e.ty = FLOOR_TOP + 6; }
+    };
+    function sync() {
+      const C = censusRef.current;
+      if (C.v === V.seenV) return;
+      const firstLook = V.seenV === -1;
+      V.seenV = C.v; V.need = true;
+      const want = new Map(), aboard = new Set();
+      const fn = cb.current.assign;
+      for (const { s, w } of C.list) {
+        const m = fn(w, s);
+        if (m && idx[m.cell] !== undefined) want.set(s.name, { s, r: m.cell, mode: m.mode });
+        else if (w.sub === "riding") aboard.add(s.name);
+      }
+      V.want = want;
+      const counts = {}, lists = {};
+      for (const { s, r } of want.values()) { counts[r] = (counts[r] || 0) + 1; (lists[r] = lists[r] || []).push(s); }
+      V.counts = counts;
+      for (const [name, e] of V.ents) {
+        const w = want.get(name);
+        if (!w || w.r !== e.room) { if (e.gone) V.ents.delete(name); else if (!e.leaving) exit(e, plat[idx[e.room]] && aboard.has(name)); }
+      }
+      for (const [name, { s, r, mode }] of want) {
+        const e = V.ents.get(name);
+        if (e) e.s = s;
+        if (e && e.room !== r) continue;   // still walking out of another room; enters next census
+        if (e) {
+          if (mode === "leave") { if (!e.leaving) exit(e, false); }
+          else if (e.leaving) { e.leaving = false; e.gone = false; e.state = "idle"; e.timer = 0.5; }
+          continue;
+        }
+        const i = idx[r], rw = V.rects[i].w;
+        let g = gaitFor(getTier(s.score).label, V.reduced);
+        // On a platform nobody strolls: they have a train to meet.
+        if (plat[i] && !V.reduced) g = { ...g, speed: Math.max(g.speed, 48) };
+        // Anyone already there when we first look is somewhere inside; later arrivals come
+        // through the door, or step off the train onto the platform.
+        const fromDoor = !firstLook && !V.reduced && (mode === "arrive" || mode === "here");
+        const fromCar = !firstLook && !V.reduced && mode === "alight";
+        const inside = !fromDoor && !fromCar;
+        const ent = {
+          s, room: r, gait: g, dir: 1, animT: rnd() * 2, timer: rnd() * 2, state: inside ? "idle" : "walk", leaving: false, gone: false, board: false,
+          x: inside || fromCar ? 20 + rnd() * (rw - 40) : DOOR_X,
+          y: fromCar ? FLOOR_TOP - 4 : FLOOR_TOP + 4 + rnd() * (floorBot(i) - FLOOR_TOP - 6), tx: 0, ty: 0,
+        };
+        ent.tx = inside ? ent.x : fromCar ? ent.x + (rnd() - 0.5) * 40 : 40 + rnd() * Math.max(20, rw - 70);
+        ent.ty = fromCar ? FLOOR_TOP + 8 + rnd() * (floorBot(i) - FLOOR_TOP - 12) : ent.y;
+        ent.tx = Math.max(16, Math.min(rw - 16, ent.tx));
+        if (mode === "leave") exit(ent, false);
+        V.ents.set(name, ent);
+      }
+      const sig = cells.map(c => (lists[c.id] || []).map(s => s.name).join("\u0001")).join("\u0002");
+      if (sig !== V.sig) { V.sig = sig; cb.current.onPresent?.(lists); }
+      if (V.tip) { const e = V.ents.get(V.tip); if (e && !e.gone) showTip(e); }
+    }
+
+    // ---- step and draw -----------------------------------------------------------------
+    function update(dt) {
+      sync();
+      for (const [name, e] of V.ents) {
+        if (e.gone) continue;
+        if (e.state === "exit") {
+          const dx = e.tx - e.x, dy = e.ty - e.y, dist = Math.hypot(dx, dy), step = Math.max(e.gait.speed, 24) * dt;
+          e.animT += dt;
+          if (Math.abs(dx) > 0.5) e.dir = dx < 0 ? -1 : 1;
+          if (dist <= step || V.reduced) {
+            const w = V.want.get(name);
+            if (w && w.r === e.room && w.mode === "leave") e.gone = true; else V.ents.delete(name);
+            if (V.tip === name) hideTip();
+            V.need = true;
+            continue;
+          }
+          e.x += (dx / dist) * step; e.y += (dy / dist) * step;
+          continue;
+        }
+        if (e.state === "walk" && !V.reduced && e.ty !== undefined && e.y < FLOOR_TOP) {
+          // stepping off the car: straight onto the platform before wandering
+          const dy = e.ty - e.y, step = Math.max(e.gait.speed, 24) * dt;
+          e.animT += dt;
+          if (Math.abs(dy) <= step) { e.y = e.ty; e.state = "idle"; e.timer = 0.5 + rnd(); } else e.y += Math.sign(dy) * step;
+          continue;
+        }
+        if (!V.reduced) stepEntity(e, dt, worldFor(idx[e.room]), rnd);
+      }
+    }
+    function band() { return [Math.max(0, -V.top), Math.min(V.h, window.innerHeight - V.top)]; }
+    function draw() {
+      const { dpr, k } = V;
+      const [top, bot] = band();
+      if (bot <= top) return;
+      const y0d = Math.floor(top * dpr), y1d = Math.ceil(bot * dpr);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(bg, 0, y0d, canvas.width, y1d - y0d, 0, y0d, canvas.width, y1d - y0d);
+      ctx.font = `${11 * dpr}px ${FONT}`;
+      ctx.textBaseline = "top";
+      const mtNow = V.reduced ? (censusRef.current.mt ?? clockAt(Date.now()).mt) : clockAt(Date.now()).mt;
+      cells.forEach((c, i) => {
+        const { x: x0, y: ry, w: rw, h: rh } = V.rects[i];
+        if (ry + rh < top || ry > bot) return;
+        const n = V.counts[c.id] || 0, cap = c.cap || 0;
+        const label = cap ? ` ${n}/${cap} ` : c.kind === "platform" ? ` ${n} ON PLATFORM ` : ` ${n} PRESENT `;
+        const lw = ctx.measureText(label).width;
+        const lx = (x0 + rw - 10) * dpr - lw, ly = (ry + 2 + 13) * dpr;
+        ctx.fillStyle = "#060a06"; ctx.fillRect(lx, ly, lw, 13 * dpr);
+        ctx.fillStyle = cap && n > cap ? "#f87171" : "#4d8a62";
+        ctx.fillText(label, lx, ly);
+        if (c.kind === "platform" && stationId) drawPlatform(x0, ry, rw, mtNow);
+      });
+      const vis = V.vis || (V.vis = []);
+      vis.length = 0;
+      for (const e of V.ents.values()) {
+        if (e.gone) continue;
+        const r = V.rects[idx[e.room]];
+        e.sx = r.x + e.x; e.sy = r.y + e.y;
+        if (e.sy < top - 4 || e.sy - SPRITE_H > bot) continue;
+        vis.push(e);
+      }
+      vis.sort((a, b) => a.sy - b.sy);
+      for (const e of vis) {
+        const sh = sheetFor(e.s);
+        let fi = 0, bob = 0;
+        if (!V.reduced && (e.state === "walk" || e.state === "exit")) {
+          const st = Math.floor(e.animT * e.gait.fps);
+          fi = sh.frames > 1 ? st % sh.frames : 0;
+          bob = e.gait.bob && st % 2 ? -1 : 0;
+        }
+        const dx = Math.round(e.sx * dpr) - 16 * k, dy = Math.round((e.sy + bob) * dpr) - SPRITE_H * k;
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.fillRect(dx + 10 * k, Math.round(e.sy * dpr) - k, 12 * k, 2 * k);
+        if (e.dir < 0) {
+          ctx.setTransform(-1, 0, 0, 1, dx + SPRITE_W * k, 0);
+          ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, 0, dy, SPRITE_W * k, SPRITE_H * k);
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+        } else ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, dx, dy, SPRITE_W * k, SPRITE_H * k);
+        if (e.s.you) {
+          ctx.fillStyle = "#4ade80";
+          const ax = Math.round(e.sx * dpr), ay = dy - 7 * k;
+          ctx.fillRect(ax - 3 * k, ay, 7 * k, k); ctx.fillRect(ax - 2 * k, ay + k, 5 * k, k); ctx.fillRect(ax - k, ay + 2 * k, 3 * k, k); ctx.fillRect(ax, ay + 3 * k, k, k);
+        }
+      }
+      const tipEl = tipRef.current;
+      if (tipEl) {
+        const e = V.tip && V.ents.get(V.tip);
+        if (e && vis.includes(e)) {
+          const [tw, th] = tipSize.current;
+          const tx = Math.max(2, Math.min(V.cssW - tw - 2, e.sx - tw / 2));
+          const ty = Math.max(2, e.sy - SPRITE_H * (k / dpr) - th - 4);
+          tipEl.style.transform = `translate(${Math.round(tx)}px, ${Math.round(ty)}px)`;
+          tipEl.style.visibility = "visible";
+        } else tipEl.style.visibility = "hidden";
+      }
+    }
+
+    // The platform, live: the board (next two trains) and, while one stands here, its cars
+    // along the back of the platform with the doors open.
+    function drawPlatform(x0, ry, rw, mt) {
+      const { dpr } = V;
+      const T = trainsAt(mt).find(t => t.dwell && t.stationId === stationId);
+      if (T) {
+        const n = T.cars.length, x1 = x0 + 12, span = rw - 24, gap = 6, cwid = (span - gap * (n - 1)) / n;
+        const yT = ry + 30, hT = FLOOR_TOP - 48;
+        for (let c = 0; c < n; c++) {
+          const cx = x1 + c * (cwid + gap);
+          ctx.fillStyle = "#0b3a45"; ctx.fillRect(cx * dpr, yT * dpr, cwid * dpr, hT * dpr);
+          ctx.fillStyle = "#155e75"; ctx.fillRect(cx * dpr, (yT + hT - 3) * dpr, cwid * dpr, 3 * dpr);
+          ctx.fillStyle = "#67e8f9";
+          for (let wx = cx + 6; wx < cx + cwid - 10; wx += 14) ctx.fillRect(wx * dpr, (yT + 6) * dpr, 8 * dpr, 7 * dpr);
+          // the open door, centred on the car
+          ctx.fillStyle = "#060a06"; ctx.fillRect((cx + cwid / 2 - 5) * dpr, (yT + 4) * dpr, 10 * dpr, (hT - 7) * dpr);
+          if (c === 0) { ctx.fillStyle = "#e0fbff"; ctx.fillRect((cx + cwid - 4) * dpr, (yT + 4) * dpr, 3 * dpr, 6 * dpr); }
+        }
+        ctx.fillStyle = "#060a06";
+        const lab = ` ${T.name} // DOORS OPEN `;
+        const lw = ctx.measureText(lab).width;
+        ctx.fillRect((x1 + 4) * dpr, (ry + 16) * dpr, lw, 13 * dpr);
+        ctx.fillStyle = "#67e8f9"; ctx.fillText(lab, (x1 + 4) * dpr, (ry + 16) * dpr);
+      }
+      if (T) return;
+      // no train: the board, where the train will stand
+      const next = timetable(stationId, mt, 2).map(a => {
+        const m = Math.max(0, Math.round((a.arrive - mt) * 60));
+        return `${TRAIN[a.trainId]?.name || a.trainId} ${m <= 0 ? "NOW" : pad2(m) + " MIN"}`;
+      });
+      const room = (rw - 110) * dpr;   // leaves the count, top right
+      let text = ` NEXT: ${next.join(" · ")} `;
+      if (ctx.measureText(text).width > room) text = ` NEXT: ${next[0]} `;
+      const tw = ctx.measureText(text).width;
+      const bx = (x0 + 14) * dpr, by = (ry + 16) * dpr;
+      ctx.fillStyle = "#060a06"; ctx.fillRect(bx, by, tw, 13 * dpr);
+      ctx.fillStyle = "#fbbf24"; ctx.fillText(text, bx, by);
+    }
+
+    // ---- input -------------------------------------------------------------------------
+    function hit(mx, my, touch) {
+      const hw = touch ? 16 : 11, pad = touch ? 6 : 2, hh = SPRITE_H * (V.k / V.dpr);
+      let best = null, bd = Infinity;
+      const vis = V.vis || [];
+      for (let i = vis.length - 1; i >= 0; i--) {
+        const e = vis[i];
+        if (Math.abs(mx - e.sx) > hw || my < e.sy - hh - pad || my > e.sy + pad) continue;
+        if (!touch) return e;
+        const dd = Math.abs(mx - e.sx) + Math.abs(my - (e.sy - hh / 2)) * 0.5;
+        if (dd < bd) { bd = dd; best = e; }
+      }
+      return best;
+    }
+    const cellAt = (x, y) => { const i = V.rects.findIndex(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h); return i >= 0 ? cells[i].id : null; };
+    function showTip(e) {
+      V.tip = e.s.name; V.need = true;
+      const act = activityLine(e.s, censusRef.current.mt ?? clockAt(Date.now()).mt);
+      setTip(t => (t && t.s === e.s && t.act === act ? t : { s: e.s, job: jobLine(e.s), act }));
+    }
+    function hideTip() { V.tip = null; V.need = true; setTip(null); }
+    const local = (ev) => { const r = canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+    let down = null;
+    function onDown(ev) { const [x, y] = local(ev); down = { x, y, type: ev.pointerType }; }
+    function onUp(ev) {
+      if (!down) return;
+      const [x, y] = local(ev);
+      const moved = Math.hypot(x - down.x, y - down.y) > 8;
+      const touch = down.type !== "mouse";
+      down = null;
+      if (moved || ev.type === "pointercancel") return;
+      const e = hit(x, y, touch);
+      if (!e) {
+        hideTip();
+        const c = cellAt(x, y);
+        if (c && cb.current.onCell) cb.current.onCell(c);
+        return;
+      }
+      if (!touch || V.tip === e.s.name) { showTip(e); cb.current.onOpen(e.s); } else showTip(e);
+    }
+    function onMove(ev) {
+      if (ev.pointerType !== "mouse") return;
+      const [x, y] = local(ev);
+      const e = hit(x, y, false);
+      if (e !== V.hover) { V.hover = e; if (e) showTip(e); }
+      setCursor(e || (cb.current.onCell && cellAt(x, y) && cellAt(x, y) !== V.focus) ? "point" : "");
+    }
+    canvas.addEventListener("pointerdown", onDown);
+    canvas.addEventListener("pointerup", onUp);
+    canvas.addEventListener("pointercancel", onUp);
+    canvas.addEventListener("pointermove", onMove);
+
+    api.current = {
+      poke: () => { V.need = true; },
+      // focusScroll() false: the focus came from a list below the canvas, whose row keeps
+      // the reader's place (and the keyboard's focus); the canvas does not pull the page up.
+      focus: (id) => { if (id === V.focus) return; V.focus = id; V.gutter = cb.current.layout(V.cssW).gutter || []; paintRooms(); V.need = true; if (id && cb.current.focusScroll?.() !== false) scrollToFocus(); },
+    };
+
+    // ---- loop ---------------------------------------------------------------------------
+    let raf = 0, last = 0, onScreen = true, dead = false;
+    function frame(ts) {
+      const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
+      last = ts;
+      update(dt);
+      if (V.dirty) measure();
+      if (!V.reduced || V.need) { V.need = false; draw(); }
+      raf = requestAnimationFrame(frame);
+    }
+    function run() {
+      const want = !dead && onScreen && !document.hidden;
+      if (want && !raf) { last = 0; raf = requestAnimationFrame(frame); }
+      if (!want && raf) { cancelAnimationFrame(raf); raf = 0; }
+    }
+    const io = typeof IntersectionObserver !== "undefined" ? new IntersectionObserver(([en]) => { onScreen = en.isIntersecting; measure(); run(); }) : null;
+    io?.observe(wrap);
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    document.addEventListener("visibilitychange", run);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => resize()) : null;
+    ro ? ro.observe(wrap) : window.addEventListener("resize", resize);
+    const onMotion = () => { V.reduced = !!mq?.matches; V.need = true; for (const e of V.ents.values()) e.gait = gaitFor(getTier(e.s.score).label, V.reduced); };
+    mq?.addEventListener?.("change", onMotion);
+    resize();
+    document.fonts?.load?.(`16px ${FONT}`).then(() => { if (!dead) paintRooms(); }).catch(() => {});
+    run();
+    return () => {
+      dead = true; run();
+      io?.disconnect();
+      document.removeEventListener("visibilitychange", run);
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      ro ? ro.disconnect() : window.removeEventListener("resize", resize);
+      mq?.removeEventListener?.("change", onMotion);
+      canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointerup", onUp);
+      canvas.removeEventListener("pointercancel", onUp);
+      canvas.removeEventListener("pointermove", onMove);
+    };
+    // cells, layout and stationId are fixed per mount (the parent keys on them); the
+    // callbacks are read through cb, censusRef live.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="hvi-city-stage" ref={wrapRef}>
+      <canvas ref={canvasRef} className={`hvi-district-canvas${cursor ? " " + cursor : ""}`} role="img" aria-label={ariaLabel} />
+      <SubjectTip ref={tipRef} tip={tip} onOpen={(s) => cb.current.onOpen(s)} />
+    </div>
+  );
+}

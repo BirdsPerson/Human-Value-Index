@@ -554,7 +554,15 @@ export default function OverlordAssessment() {
   }, []);
 
   useEffect(() => {
-    const onHash = () => { setRoute(window.location.hash); window.scrollTo(0, 0); };
+    // A new page starts at the top; a change to the query alone (a building's ?floor=)
+    // is the same page, and keeps its scroll and its focus.
+    let prev = window.location.hash;
+    const onHash = () => {
+      const h = window.location.hash, path = (x) => x.split("?")[0];
+      if (path(h) !== path(prev)) window.scrollTo(0, 0);
+      prev = h;
+      setRoute(h);
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);

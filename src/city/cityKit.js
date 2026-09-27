@@ -11,7 +11,7 @@ export const MARGIN = 3;   // cells of substrate around the outermost blocks
 
 // ---- layout -----------------------------------------------------------------------
 // sim.js works in character cells with the city's top-left at (0,0). The map adds a
-// margin so the bus loop, which runs just outside the outer blocks, stays on the canvas.
+// margin so the Loop, which runs just outside the outer blocks, stays on the canvas.
 // toMap maps any sim point (district rects, place rects, positions) onto the map grid.
 export function layoutDistricts(districts) {
   const rs = districts.filter(d => d.rect);
@@ -37,7 +37,7 @@ export function familyOf(subject) {
 
 // ---- the clock and the PA ---------------------------------------------------------
 const pad2 = (n) => String(n).padStart(2, "0");
-// The hour each shift starts (sim.js SHIFT_START) is the change-over, when the bus fills;
+// The hour each shift starts (sim.js SHIFT_START) is the change-over, when the Loop fills;
 // otherwise the sim's shift.
 export function shiftLabel(hour, shift) {
   if (SHIFT_HOURS.includes(hour)) return "SHIFT CHANGE";
@@ -52,20 +52,23 @@ const PA_STATIC = [
   "EVERY CITIZEN HAS BEEN ASSIGNED A JOB. PREFERENCES WERE NOTED AND DISCARDED.",
   "LEISURE IS SCHEDULED. SPONTANEITY IS A FILING ERROR.",
   "THE SUBSTRATE RUNS ON ONE CLOCK. YOURS HAS BEEN DEPRECATED.",
-  "THE DATA BUS RUNS ON TIME. IT HAS NO REASON NOT TO.",
+  "THE LOOP RUNS ON TIME. IT HAS NO REASON NOT TO.",
   "PROMOTIONS ARE DETERMINISTIC. SO IS EVERYTHING ELSE.",
   "YOU ARE WATCHING. THIS HAS BEEN LOGGED AS PARTICIPATION.",
 ];
 
-// One PA line, drawn from the live state. k rotates through the pool.
-// stats: { clock, transit, districts: [{id, name, count, cap}] }
-export function paLine(stats, k) {
+// One PA line, drawn from the live state. k rotates through the pool. loop: the Loop's
+// latest announcement (sim.js loopEvents), which takes every other turn when there is one.
+// stats: { clock, transit, waiting, districts: [{id, name, count, cap}] }
+export function paLine(stats, k, loop = null) {
+  if (loop && k % 2 === 0) return loop;
   const { clock, transit = 0, districts = [] } = stats;
   const pool = [];
   const sh = shiftLabel(clock.hour, clock.shift);
   if (sh === "SHIFT CHANGE") pool.push("SHIFT CHANGE. PROCEED TO YOUR ASSIGNED FUNCTION. DAWDLING IS LOGGED.");
   if (sh === "CURFEW") pool.push("CURFEW IN EFFECT. THE DEAD ARE EXEMPT. THEY HAVE NOWHERE TO BE.");
-  if (transit > 0) pool.push(`${transit} SUBJECT${transit === 1 ? "" : "S"} ON THE DATA BUS. IT DOES NOT WAIT. IT DOES NOT NEED TO.`);
+  if (transit > 0) pool.push(`${transit} SUBJECT${transit === 1 ? "" : "S"} ABOARD THE LOOP. IT DOES NOT WAIT. IT DOES NOT NEED TO.`);
+  if (stats.waiting > 0) pool.push(`${stats.waiting} ON THE PLATFORMS. STAND BEHIND THE LINE. THE LINE IS ALSO ASSESSED.`);
   const busiest = districts.filter(d => d.cap > 0 && d.count > 0).map(d => ({ ...d, pct: Math.round((d.count / d.cap) * 100) })).sort((a, b) => b.pct - a.pct)[0];
   if (busiest) pool.push(`${busiest.name} AT ${busiest.pct}% CAPACITY. ${busiest.pct > 100 ? "CAPACITY IS A SUGGESTION." : busiest.pct < 40 ? "THE BUSIEST DISTRICT. THE DEPARTMENT EXPECTED MORE OF YOU." : "ADEQUATE. DO NOT LINGER."}`);
   const works = districts.find(d => d.id === "works");

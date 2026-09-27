@@ -1,4 +1,4 @@
-// City v1 simulation checks (src/city/sim.js). Pure node, no network.
+// City simulation checks (src/city/sim.js): v1 plus v2's Loop and buildings. Pure node, no network.
 //   node scripts/check-city.mjs
 // Population: the figures on file plus a synthetic roster shaped like what /api/pen
 // actually sends for engine figures (netlify/lib/refer.js publicFigure: qualifier, tier
@@ -9,7 +9,10 @@ import { FAMOUS_FIGURES, slugify, TIERS } from "../src/figures.js";
 import {
   DISTRICTS, PLACES, JOBS, JOB, assignJob, homeOf, schedule, whereAt, machineClock, occupancy,
   statusLine, SEED, toHours, BUS, V_WALK, V_BUS, SHIFT_HOURS, fieldsOf,
+  LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, trainsAt, nextArrival, timetable, loopEvents, HEADWAY, DWELL, V_TRAIN, CAR_CAP,
+  BUILDINGS, BUILDING,
 } from "../src/city/sim.js";
+import { FLOORS as HQ_FLOORS } from "../src/building.js";
 import { shiftLabel } from "../src/city/cityKit.js";
 import { cube } from "../src/cube.js";
 
@@ -63,6 +66,7 @@ console.log(`population: ${figures.length} figures, ${engine.length} engine, ${c
 section("catalogue");
 ok(DISTRICTS.length === 10, `10 districts (got ${DISTRICTS.length})`);
 const ids = ["hq", "arts", "campus", "finance", "strip", "arena", "commons", "archive", "works", "sprawl"];
+const DISTRICT_IDS = new Set(ids);
 ok(ids.every(id => DISTRICTS.some(d => d.id === id)), "district ids match the contract");
 ok(Object.keys(PLACES).length >= 30, `~35 places (got ${Object.keys(PLACES).length})`);
 ok(JOBS.length >= 55, `~60 jobs (got ${JOBS.length})`);
@@ -152,9 +156,108 @@ ok(Math.abs((k1.mt - k0.mt) - 1) < 1e-9, "default scale: 1 real minute = 1 machi
 ok(Math.abs(machineClock(1_000_000_000_000 + 60_000, 120).mt - machineClock(1_000_000_000_000, 120).mt - 2) < 1e-9, "scale is configurable");
 console.log(`  clock: DAY ${clock.day} ${String(clock.hour).padStart(2, "0")}:${String(clock.minute).padStart(2, "0")} ${clock.shift}`);
 
+// ---- the Loop: timetable --------------------------------------------------------------------
+section("the loop");
+{
+  const L = LOOP_LINE.length;
+  ok(BUS === LOOP_LINE && V_BUS === V_TRAIN, "v1 names (BUS, V_BUS) still point at the Loop");
+  ok(STATION_ORDER.length === DISTRICTS.length && DISTRICTS.every(d => STATIONS[d.id]?.districtId === d.id), "one station per district");
+  for (const id of STATION_ORDER) {
+    const st = STATIONS[id], p = LOOP_LINE.at(st.s);
+    ok(st.s >= 0 && st.s < L && Math.hypot(p.x - st.x, p.y - st.y) < 1e-9, `${id} station sits on the ring`);
+    ok(BUS.stops[id] && typeof BUS.stops[id].gate?.x === "number", `${id}: v1 stop shape {s, x, y, gate} kept`);
+  }
+  const maxLen = Math.max(...TRAINS.map(t => t.length));
+  const gaps = STATION_ORDER.map((id, i) => ((STATIONS[STATION_ORDER[(i + 1) % STATION_ORDER.length]].s - STATIONS[id].s) % L + L) % L);
+  ok(Math.min(...gaps) > maxLen + 1, `platforms do not overlap (closest stations ${Math.min(...gaps).toFixed(1)} cells, longest train ${maxLen.toFixed(1)})`);
+  ok(TRAINS.length >= 3 && TRAINS.every(t => t.cars >= 3 && t.cars <= 4), `trains of 3-4 cars (${TRAINS.map(t => t.cars).join(",")})`);
+  // determinism: same answer twice, from a cold module, and for an equivalent clock object
+  const Ts = [0, 1.2345, 24 * 17 + 7.51, 24 * 400 + 23.99, 1e5 + 0.3];
+  const snapT = (fn) => JSON.stringify(Ts.map(t => fn(t)));
+  const coldT = await import("../src/city/sim.js?cold=loop");
+  ok(snapT(trainsAt) === snapT(trainsAt) && snapT(trainsAt) === snapT(coldT.trainsAt), "trainsAt: same machine time -> same trains");
+  ok(JSON.stringify(trainsAt(clock)) === JSON.stringify(trainsAt(clock.mt)), "trainsAt takes a clock or machine hours");
+  // headway, and the train named by the timetable is the one at the platform
+  let hwBad = 0, platBad = 0;
+  for (const id of STATION_ORDER) {
+    const board = timetable(id, 24 * 9 + 6.2, 12);
+    for (let i = 1; i < board.length; i++) if (Math.abs(board[i].arrive - board[i - 1].arrive - HEADWAY) > 1e-9) hwBad++;
+    for (const a of board) {
+      const tr = trainsAt(a.arrive + DWELL / 2).find(t => t.id === a.trainId);
+      if (!tr.dwell || tr.stationId !== id || Math.abs(tr.mid - STATIONS[id].s) > 1e-6) platBad++;
+    }
+  }
+  ok(hwBad === 0, `every station sees a train every ${(HEADWAY * 60).toFixed(1)} machine minutes`);
+  ok(platBad === 0, "the timetabled train is standing at the platform when the board says");
+  // trains move continuously, in station order, and never run into each other
+  let worstT = 0, orderBad = 0, closest = Infinity, dwellStops = 0;
+  const lastStop = {};
+  let prevTr = trainsAt(24 * 50);
+  for (let m = 1; m <= 24 * 60; m++) {
+    const tr = trainsAt(24 * 50 + m / 60);
+    tr.forEach((t, k) => {
+      worstT = Math.max(worstT, Math.hypot(t.x - prevTr[k].x, t.y - prevTr[k].y));
+      if (t.dwell) {
+        if (lastStop[t.id] && lastStop[t.id] !== t.stationId && STATIONS[lastStop[t.id]].next !== t.stationId) orderBad++;
+        if (lastStop[t.id] !== t.stationId) dwellStops++;
+        lastStop[t.id] = t.stationId;
+      }
+    });
+    const mids = tr.map(t => ({ m: t.mid, half: t.length / 2 })).sort((a, b) => a.m - b.m);
+    mids.forEach((x, i) => { const y = mids[(i + 1) % mids.length]; const gap = ((y.m - x.m) % L + L) % L - x.half - y.half; closest = Math.min(closest, gap); });
+    prevTr = tr;
+  }
+  console.log(`  ${TRAINS.length} trains, lap ${(LOOP_LINE.lapHours * 60).toFixed(1)} min, headway ${(HEADWAY * 60).toFixed(1)} min, fastest step ${worstT.toFixed(2)} cells/min, closest trains ${closest.toFixed(1)} cells apart`);
+  ok(worstT <= V_TRAIN / 60 + 1e-6, "trains never outrun the line speed");
+  ok(orderBad === 0 && dwellStops > 0, "trains call at every station in ring order");
+  ok(closest > 1, "trains never overlap");
+  const ev = loopEvents(24 * 50 + 7, 24 * 50 + 8);
+  const arrivals = ev.filter(e => e.kind === "arrive").length;
+  ok(Math.abs(arrivals - STATION_ORDER.length / HEADWAY) <= STATION_ORDER.length, `PA: ~${Math.round(STATION_ORDER.length / HEADWAY)} arrivals an hour (${arrivals})`);
+  ok(ev.every(e => e.text && e.text === e.text.toUpperCase() && !e.text.includes("—")), "PA lines are in the house voice");
+  ok(JSON.stringify(ev) === JSON.stringify(loopEvents(24 * 50 + 7, 24 * 50 + 8)), "PA is deterministic");
+  for (const e of ev.slice(0, 3)) console.log(`  PA ${e.t.toFixed(3)} ${e.text}`);
+  ok(nextArrival("campus", 3.0).arrive >= 3.0, "nextArrival never names a train already gone");
+}
+
+// ---- buildings ---------------------------------------------------------------------------------
+section("buildings");
+{
+  const where = {};
+  for (const b of BUILDINGS) for (const f of b.floors) for (const p of f.places) (where[p] || (where[p] = new Set())).add(b.id);
+  for (const id of Object.keys(PLACES)) {
+    ok(where[id]?.size === 1, `${id} is in exactly one building (${[...(where[id] || [])].join(",") || "none"})`);
+    ok(PLACES[id].building && [...where[id]][0] === PLACES[id].building && PLACES[id].floors.length >= 1, `${id} knows its building and floors`);
+  }
+  for (const b of BUILDINGS) {
+    ok(b.floors.length >= 1 && b.floors.length <= 6, `${b.id}: 1-6 floors (${b.floors.length})`);
+    ok(b.floors.every((f, i) => f.index === i && (i === 0 || f.level > b.floors[i - 1].level)), `${b.id}: floors stack ground-up`);
+    ok(new Set(b.floors.map(f => f.id)).size === b.floors.length, `${b.id}: floor ids unique`);
+    ok(DISTRICT_IDS.has(b.district) && b.places.every(p => PLACES[p].district === b.district), `${b.id}: rooms in its own district`);
+    ok(b.places.every(p => { const r = PLACES[p].rect; return r.x >= b.rect.x - 1e-9 && r.y >= b.rect.y - 1e-9 && r.x + r.w <= b.rect.x + b.rect.w + 1e-9 && r.y + r.h <= b.rect.y + b.rect.h + 1e-9; }), `${b.id}: footprint holds its rooms`);
+  }
+  for (const d of DISTRICTS) {
+    const bs = BUILDINGS.filter(b => b.district === d.id);
+    ok(d.buildings?.length === bs.length && bs.length > 0, `${d.id} lists its buildings`);
+    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) {
+      const a = bs[i].rect, c = bs[j].rect;
+      ok(a.x + a.w <= c.x + 1e-9 || c.x + c.w <= a.x + 1e-9 || a.y + a.h <= c.y + 1e-9 || c.y + c.h <= a.y + 1e-9, `${bs[i].id} and ${bs[j].id} do not overlap`);
+    }
+  }
+  const hq = BUILDING.hq;
+  ok(hq && JSON.stringify(hq.floors.map(f => f.id).reverse()) === JSON.stringify(HQ_FLOORS.map(f => f.id)), "HQ is the six floors of building.js, same ids");
+  console.log(`  ${BUILDINGS.length} buildings, ${BUILDINGS.reduce((n, b) => n + b.floors.length, 0)} floors; tallest ${BUILDINGS.filter(b => b.floors.length === 6).map(b => b.id).join(", ")}`);
+}
+
 // ---- continuity -------------------------------------------------------------------------------
 section("continuity");
+const PHASE = (w) => w.sub === "waiting" ? 1 : w.sub === "riding" ? 2 : w.sub === "alighting" ? 3 : w.sub === "walking" ? (w.stationId && w.stationId === w.districtId && w.fromDistrictId !== w.districtId ? 4 : 0) : -1;
 let worst = { d: 0 }, worstWalk = { d: 0 }, bus = 0;
+const cnt = { walking: 0, waiting: 0, riding: 0, alighting: 0 };
+const bad = { sub: 0, platform: 0, car: 0, order: 0, board: 0, alight: 0, floor: 0, floorHop: 0, bldg: 0, skip: 0 };
+const trainCache = new Map();
+const trainsAtMin = (t) => { let v = trainCache.get(t); if (!v) { v = Object.fromEntries(trainsAt(t).map(x => [x.id, x])); trainCache.set(t, v); } return v; };
+const platformReach = Math.max(...TRAINS.map(t => t.length)) / 2 + LOOP_LINE.platformOffset + 0.6;
 const T0 = 24 * 30;   // day 31
 for (const s of ALL) {
   let prev = whereAt(s, T0);
@@ -163,21 +266,52 @@ for (const s of ALL) {
     const w = whereAt(s, t);
     const d = Math.hypot(w.x - prev.x, w.y - prev.y);
     if (d > worst.d) worst = { d, s: s.slug, t, from: prev, to: w };
-    // Both samples on foot or standing, and not two ends of one commute (a ride shorter
-    // than a minute can sit between two walking samples).
-    const onFoot = prev.leg !== "ride" && w.leg !== "ride" && !(prev.activity === "commute" && w.activity === "commute");
-    if (onFoot && d > worstWalk.d) worstWalk = { d, s: s.slug, t };
+    // Off the train, everyone moves at walking pace or slower: the platform, the doors and
+    // the walk either side included. Only a minute that touches a ride may go faster.
+    const onFoot = prev.leg !== "ride" && w.leg !== "ride";
+    if (onFoot && d > worstWalk.d) worstWalk = { d, s: s.slug, t, from: prev, to: w };
+    if (w.activity === "commute") {
+      if (!(w.sub in cnt)) bad.sub++; else cnt[w.sub]++;
+      if (w.buildingId != null || w.floor != null) bad.bldg++;
+      if (w.sub === "waiting" || w.sub === "alighting") {
+        const st = STATIONS[w.stationId];
+        if (!st || Math.hypot(w.x - st.x, w.y - st.y) > platformReach) bad.platform++;
+      }
+      if (w.sub === "riding") {
+        const tr = trainsAtMin(t)[w.trainId], car = tr?.cars[w.car];
+        if (!car || Math.hypot(car.x - w.x, car.y - w.y) > 1e-6 || w.atDistrictId !== "loop") bad.car++;
+        if (prev.sub === "waiting" && !(tr.dwell && tr.stationId === prev.stationId) && !(trainsAtMin(t - 1 / 60)[w.trainId]?.dwell)) bad.board++;
+      }
+      // The views sample once a machine minute: nobody may go from the car to the street between two samples.
+      if (prev.sub === "riding" && w.sub === "walking") bad.skip++;
+      if (w.sub === "alighting") { const tr = trainsAtMin(t)[w.trainId]; if (!tr.dwell || tr.stationId !== w.stationId || w.stationId !== w.districtId) bad.alight++; }
+      // Within one trip the stages only go forward: walk, wait, ride, alight, walk.
+      if (prev.activity === "commute" && prev.placeId === w.placeId && prev.fromPlaceId === w.fromPlaceId && w.progress >= prev.progress && PHASE(w) < PHASE(prev)) bad.order++;
+    } else {
+      const p = PLACES[w.placeId];
+      if (w.buildingId !== p.building || !p.floors.includes(w.floor) || BUILDING[w.buildingId].floors[w.floor].id !== w.floorId) bad.floor++;
+      if (prev.activity === w.activity && prev.placeId === w.placeId && prev.floor !== w.floor) bad.floorHop++;
+    }
     if (w.leg === "ride") bus++;
     prev = w;
   }
 }
-console.log(`  largest step in one machine minute: ${worst.d.toFixed(2)} cells (${worst.s} at h${(worst.t % 24).toFixed(2)} ${worst.from?.activity}->${worst.to?.activity})`);
-console.log(`  largest step off the bus: ${worstWalk.d.toFixed(2)} cells (limit ${(V_WALK / 60).toFixed(2)}; ${worstWalk.s} at h${((worstWalk.t || 0) % 24).toFixed(2)})`);
+console.log(`  largest step in one machine minute: ${worst.d.toFixed(2)} cells (${worst.s} at h${(worst.t % 24).toFixed(2)} ${worst.from?.sub || worst.from?.activity}->${worst.to?.sub || worst.to?.activity})`);
+console.log(`  largest step off the train: ${worstWalk.d.toFixed(2)} cells (limit ${(V_WALK / 60).toFixed(2)}; ${worstWalk.s} at h${((worstWalk.t || 0) % 24).toFixed(2)} ${worstWalk.from?.sub || worstWalk.from?.activity}->${worstWalk.to?.sub || worstWalk.to?.activity})`);
+console.log(`  commuter-minutes: ${Object.entries(cnt).map(([k, v]) => `${k} ${v}`).join(", ")}`);
 // On foot nobody covers more than V_WALK/60 cells a machine minute; a minute that
-// touches the bus may cover up to V_BUS/60. Anything more is a teleport.
-ok(worstWalk.d <= V_WALK / 60 + 0.01, "off the bus, nobody moves faster than walking pace");
-ok(worst.d <= V_BUS / 60 + 0.01, `nobody moves faster than the bus (${(V_BUS / 60).toFixed(2)} cells/min)`);
-ok(bus > 0, "somebody rides the bus");
+// touches the train may cover up to V_TRAIN/60. Anything more is a teleport.
+ok(worstWalk.d <= V_WALK / 60 + 0.01, "off the train, nobody moves faster than walking pace (platforms and doors included)");
+ok(worst.d <= V_TRAIN / 60 + 0.01, `nobody moves faster than the Loop (${(V_TRAIN / 60).toFixed(2)} cells/min)`);
+ok(bus > 0 && cnt.waiting > 0 && cnt.alighting > 0, "somebody walks, waits, rides and alights");
+ok(bad.sub === 0, `every commuter is walking, on a platform or on a train (${bad.sub} other)`);
+ok(bad.platform === 0, `waiting and alighting happen on the platform (${bad.platform} off it)`);
+ok(bad.car === 0, `a rider is exactly where trainsAt draws their car (${bad.car} mismatches)`);
+ok(bad.board === 0 && bad.alight === 0, `riders board and alight only from a train standing at the platform (${bad.board}/${bad.alight})`);
+ok(bad.skip === 0, `every alighter is on the platform for at least one census (${bad.skip} went car -> street)`);
+ok(bad.order === 0, `trip stages only go forward (${bad.order} reversals)`);
+ok(bad.floor === 0 && bad.bldg === 0, `whereAt floors are valid for the room, and nobody in transit is on a floor (${bad.floor}/${bad.bldg})`);
+ok(bad.floorHop === 0, `nobody changes floor in the middle of a stay (${bad.floorHop})`);
 
 // ---- the dead at night --------------------------------------------------------------------------
 section("the dead");
@@ -213,6 +347,30 @@ for (const r of rows.sort((a, b) => b.avg / b.cap - a.avg / a.cap)) {
   ok(r.peak <= r.cap * PEAK_K, `${r.id} peak ${r.peak} within ${PEAK_K}x capacity ${r.cap}`);
 }
 const unused = rows.filter(r => r.peak === 0).map(r => r.id);
+{
+  // Trains: loads per car, sampled through the week (rush hours included).
+  const carPeak = {}, trainPeak = {};
+  let carSum = 0, carN = 0, runs = 0, flooredBad = 0;
+  for (let day = 40; day < 47; day++) for (let m = 0; m < 24 * 60; m += 5) {
+    const t = (day - 1) * 24 + m / 60, o = occupancy(ALL, t);
+    const onTrains = Object.values(o.trains).reduce((n, x) => n + x.total, 0);
+    if (onTrains !== o.loop || o.bus !== o.loop) runs++;
+    for (const [id, x] of Object.entries(o.trains)) {
+      trainPeak[id] = Math.max(trainPeak[id] || 0, x.total);
+      x.cars.forEach((n, c) => { carPeak[id + c] = Math.max(carPeak[id + c] || 0, n); carSum += n; carN++; });
+    }
+    for (const [bid, b] of Object.entries(o.buildings)) if (b.floors.reduce((a, n) => a + n, 0) !== b.total || b.floors.length !== BUILDING[bid].floors.length) flooredBad++;
+    const inRooms = Object.values(o.places).reduce((a, n) => a + n, 0), inBldgs = Object.values(o.buildings).reduce((a, b) => a + b.total, 0);
+    if (inRooms !== inBldgs) flooredBad++;
+  }
+  const peakCar = Math.max(0, ...Object.values(carPeak));
+  console.log(`  the Loop: busiest car ${peakCar} (seats ${CAR_CAP}); busiest train ${Math.max(0, ...Object.values(trainPeak))}; ${TRAINS.map(t => `${t.id} ${trainPeak[t.id] || 0}/${t.cap}`).join(", ")}`);
+  ok(runs === 0, "occupancy: every rider is on exactly one train");
+  ok(peakCar <= CAR_CAP * PEAK_K, `no car carries more than ${PEAK_K}x its seats (${peakCar})`);
+  ok(TRAINS.every(t => (trainPeak[t.id] || 0) <= t.cap * 1.5), "no train runs at more than 150% of its seats");
+  ok(Object.values(trainPeak).some(n => n > 0), "the trains carry somebody");
+  ok(flooredBad === 0, "occupancy by building and floor adds up to occupancy by room");
+}
 console.log(`  never visited: ${unused.join(", ") || "none"}`);
 ok(unused.length <= 3, "nearly every place gets used");
 
