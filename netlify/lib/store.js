@@ -149,6 +149,8 @@ export const figureIndexEntry = c => ({
   sprite: c.sprite ?? null, spriteStatus: c.spriteStatus, referredBy: c.referredBy, at: c.at, people: c.people ?? null, harmReview: c.harmReview ?? null, harmReviewPending: Boolean(c.harmReviewPending),
   source: c.source ?? null,
   places: c.places ?? null, stratum: c.stratum ?? null, description: c.description ?? null,
+  // The file's movement log (src/movement.js); the Department's changes shown apart from the subject's.
+  scoreHistory: Array.isArray(c.scoreHistory) ? c.scoreHistory.slice(-40) : null,
 });
 
 export async function listFigures() {

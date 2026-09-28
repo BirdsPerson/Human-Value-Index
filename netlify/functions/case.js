@@ -1,6 +1,7 @@
 // Case number logon: does this file exist, and how many visits does it hold? Nothing
 // else leaves this endpoint. Lookups are metered per IP so numbers can't be enumerated.
 import { isCaseId } from "../lib/intake.js";
+import { visitCount } from "../../src/movement.js";
 import { getCase, hitLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
@@ -27,7 +28,7 @@ export default async (req, context) => {
     }
     const record = await getCase(caseId);
     if (!record) return json(404, { exists: false, error: NO_SUCH_FILE });
-    return json(200, { exists: true, caseId, visits: record.history?.length || 0 });
+    return json(200, { exists: true, caseId, visits: visitCount(record.history) });
   } catch (err) {
     console.error("case lookup failed", err);
     return json(500, { error: "The records office is unavailable. Your file is safe. Probably." });

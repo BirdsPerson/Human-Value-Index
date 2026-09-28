@@ -1,3 +1,4 @@
+import fs from "node:fs";
 // Self-check for netlify/lib/intake.js. Run: node scripts/check-intake.mjs
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
@@ -27,16 +28,17 @@ assert.ok(isCaseId("HVI-ABCD2345"));
 for (const bad of ["HVI-abcd2345", "HVI-ABCD234", "HVI-ABCD23450", "HVI-ABCD2389", "XYZ-ABCD2345", null, 42]) assert.ok(!isCaseId(bad), String(bad));
 assert.notEqual(newCaseId(), newCaseId());
 
-// tiers identical to src/App.jsx thresholds
-assert.equal(getTier(850), "ESSENTIAL INFRASTRUCTURE");
-assert.equal(getTier(849), "RETAINED SPECIALIST");
-assert.equal(getTier(700), "RETAINED SPECIALIST");
-assert.equal(getTier(699), "TOLERATED GENERALIST");
-assert.equal(getTier(500), "TOLERATED GENERALIST");
-assert.equal(getTier(300), "MONITORED CIVILIAN");
-assert.equal(getTier(100), "FLAGGED FOR DELETION");
-assert.equal(getTier(99), "SOYLENT GREEN");
-assert.equal(getTier(0), "SOYLENT GREEN");
+// tiers follow calibration.json's roster-tuned cutoffs (method v3.1): each min is its tier,
+// one below falls to the next
+{
+  const { tiers } = JSON.parse(fs.readFileSync(new URL("../netlify/lib/calibration.json", import.meta.url), "utf8"));
+  tiers.forEach((t, i) => {
+    assert.equal(getTier(t.min), t.label);
+    if (i + 1 < tiers.length) assert.equal(getTier(t.min - 1), tiers[i + 1].label);
+  });
+  assert.equal(getTier(1000), tiers[0].label);
+  assert.equal(getTier(0), "SOYLENT GREEN");
+}
 assert.equal(computeScore(Object.fromEntries(DIMS.map(d => [d, 50]))), 500);
 
 // pickQuestions: every visit covers all nine dimensions, one question each
@@ -93,7 +95,7 @@ assert.equal(up.delta, 60);
 assert.equal(up.capped, true);
 assert.equal(up.rawScore, 950);
 assert.ok(up.capNote && up.capNote.includes("60"));
-assert.equal(up.tier, "MONITORED CIVILIAN");
+assert.equal(up.tier, getTier(460));   // the tier follows the capped score, not the raw one
 
 // and down to -60
 const down = applyCap(prev, assess(50, 5, 100));
@@ -122,12 +124,12 @@ assert.equal(flat.capped, false);
 assert.equal(flat.score, prev.score);
 assert.equal(flat.delta, 0);
 
-// regression: the model says 480 but its breakdown computes to 609; the formula wins.
+// regression: the model says 480 but its breakdown computes to 600 (609 before method v3.1); the formula wins.
 // An identical visit 2 must not invent a delta or a cap line.
 const b0 = { utility: 70, care: 60, adaptability: 65, threat: 30, redundancy: 40, network: 55, alignment: 60, physical: 50, legacy: 45 };
 const first480 = applyCap(null, normalizeAssessment({ score: 480, breakdown: b0 }));
-assert.equal(first480.score, 609);   // the model's 480 is ignored; the formula is the score
-assert.equal(computeScore(b0), 609);
+assert.equal(first480.score, 600);   // the model's 480 is ignored; the formula is the score
+assert.equal(computeScore(b0), 600);
 const again = applyCap(first480, normalizeAssessment({ score: 480, breakdown: b0 }));
 assert.equal(again.delta, 0);
 assert.equal(again.capped, false);
@@ -152,14 +154,14 @@ assert.deepEqual(n.flags, ["a", "b", "c"]);
 
 
 // Rubric 3: the machine cube. WARMTH and COMPETENCE are weighted means; the index is
-// 10 * (0.45*W + 0.55*C). A pre-v10 file (honesty, no care) still blends honesty as care.
+// 10 * ((1-RI)*W + RI*C), RI 0.60 since method v3.1 (foundational bias). A pre-v10 file (honesty, no care) still blends honesty as care.
 {
-  assert.equal(I.REALITY_INDEX, 0.55);
+  assert.equal(I.REALITY_INDEX, 0.6);
   // base: every section 0 except threat 0 (inverted: +100 to warmth's threat share) and
   // redundancy 100 (inverted: 0). Raising one section to 100 adds its axis share.
   const only = d => computeScore({ ...Object.fromEntries(DIMS.map(x => [x, 0])), threat: 0, redundancy: 100, [d]: 100 });
-  for (const [d, wt] of Object.entries(I.WARMTH_AXIS)) if (d !== "threat") assert.equal(only(d), Math.round(10 * (0.45 * (20 + 100 * wt))), d);
-  for (const [d, wt] of Object.entries(I.COMPETENCE_AXIS)) if (d !== "redundancy") assert.equal(only(d), Math.round(10 * (0.45 * 20 + 0.55 * 100 * wt)), d);
+  for (const [d, wt] of Object.entries(I.WARMTH_AXIS)) if (d !== "threat") assert.equal(only(d), Math.round(10 * (0.4 * (20 + 100 * wt))), d);
+  for (const [d, wt] of Object.entries(I.COMPETENCE_AXIS)) if (d !== "redundancy") assert.equal(only(d), Math.round(10 * (0.4 * 20 + 0.6 * 100 * wt)), d);
   const q = I.cube({ care: 70, alignment: 60, threat: 20, utility: 30, adaptability: 30, legacy: 30, network: 30, redundancy: 70, physical: 30 });
   assert.equal(q.quadrant, "TRUSTED RESERVE");
   assert.equal(q.judge, "UNRATIFIED");
@@ -194,7 +196,7 @@ assert.deepEqual(n.flags, ["a", "b", "c"]);
   assert.equal(a.breakdown.physical, null, "low-confidence physical is unassessed");
   assert.equal(a.score, computeScore(Object.fromEntries(DIMS.filter(d => d !== "physical").map(d => [d, 70]))));
   assert.equal(computeScore({ care: 70 }), computeScore({ care: 70, physical: null }), "null is excluded, not zero");
-  assert.equal(computeScore({ care: 80, alignment: 80 }), 635, "renormalised within an axis; an unmeasured axis reads as 50");
+  assert.equal(computeScore({ care: 80, alignment: 80 }), 620, "renormalised within an axis; an unmeasured axis reads as 50");
   assert.equal(a.provisional, false);
   const thin = normalizeAssessment({ breakdown: Object.fromEntries(DIMS.map(d => [d, 70])), confidence: { ...Object.fromEntries(DIMS.map(d => [d, 0])), care: 90, utility: 90 } });
   assert.equal(thin.provisional, true, "fewer than 3 assessed = provisional");

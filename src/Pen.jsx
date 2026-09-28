@@ -12,7 +12,7 @@ import {
   floorTop, walkTop, walkBot, roomX1, doorX, floorAt, prefsFor, chooseFloor, stayFor, isLow,
   makeLift, stepLift, leaveLift, stepSubject, arrive, countFloors, occupancyLine, procZone,
 } from "./building.js";
-import { ScoreCard, Breakdown, readCaseId, writeCaseId, readLastResult, CaseLogon } from "./caseFile.jsx";
+import { ScoreCard, Breakdown, readCaseId, writeCaseId, readLastResult, CaseLogon, FileMovement, movementMeta } from "./caseFile.jsx";
 import { Rule, Typed } from "./term.jsx";
 import { Frame, Button, ButtonRow, Chip, ChipStrip, Command, CommandList, Disclosure, TextField, ListRow, PaLine } from "./ui";
 
@@ -42,7 +42,7 @@ const TICKER = [
   "Elevator etiquette: face the door. The door does not face you.",
   "The Executive Floor is reserved for the useful. The stairs are reserved for no one. There are no stairs.",
   "The Bar serves one drink. It is called Compliance.",
-  "The Archive is quiet. The deceased are still assessed. Nobody gets out of that.",
+  "The Archive is quiet. Every file is open. Escape is not on the menu. Retention is.",
 ];
 
 // Mutters by room, in FLOORS order. The Bar talks the most.
@@ -266,6 +266,16 @@ export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return 
           {subject.you && subject.rubric < 3 && <div className="hvi-card-note">SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.</div>}
           <CubePanel subject={subject} />
           <Breakdown breakdown={subject.breakdown} />
+          {(() => {
+            // FILE MOVEMENT: the figure's own log, or the subject's own history on their card.
+            const log = subject.scoreHistory || (subject.you ? subject.history : null);
+            if (!Array.isArray(log) || log.length < 2) return null;
+            return (
+              <Frame title="FILE MOVEMENT" meta={movementMeta(log)}>
+                <FileMovement log={log} subject={subject.you ? "you" : "them"} />
+              </Frame>
+            );
+          })()}
           <div className="hvi-card-foot">
             <ButtonRow stackOnMobile>
               <Button variant="primary" block onClick={onClose}>{back}</Button>
@@ -478,7 +488,7 @@ const DECOR = {
     const cab = ["╔═╦═╦═╗", "║▭║▭║▭║", "╚═╩═╩═╝"];
     for (let x = x0 + (t.compact ? 2 : 20) * t.cw; x < x1 - 8 * t.cw; x += 9 * t.cw) t.block(cab, x, bot - 3 * t.ch, "#1f4a2c");
     // phones carry this line in the frame title instead; heads would cover it here
-    if (!t.compact) t.text("DECEASED FILES. STILL ASSESSED.", x1 - 33 * t.cw, top + 0.2 * t.ch, "#3d6b50");
+    if (!t.compact) t.text("EVERY FILE OPEN. ALL OF YOU ARE GHOSTS.", x1 - 41 * t.cw, top + 0.2 * t.ch, "#3d6b50");
   },
   proc(t, x0, x1, top, bot, w, S) {
     // pipes, the rule, the door
@@ -844,7 +854,7 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
           sawMe = sawMe || you;
           // Your own sealed file opens for you from this browser's copy; the server never sends it.
           const mine = you && readLastResult();
-          const own = mine && mine.caseId === myCase ? { verdict: mine.verdict, breakdown: mine.breakdown, rubric: mine.rubric ?? 1, you: true } : {};
+          const own = mine && mine.caseId === myCase ? { verdict: mine.verdict, breakdown: mine.breakdown, rubric: mine.rubric ?? 1, history: mine.history || null, you: true } : {};
           sim.arrivals.push({ s: s.referred ? { ...s, kind: "figure" } : { ...s, ...own, kind: "citizen", you }, you });
         }
         if (offsite.length) setRoster(r => [...r, ...offsite]);
@@ -1301,7 +1311,7 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
       )}
       {/* The building is one of the app's two live displays (with the cube): box-drawn. */}
       <Frame box title={narrow ? `${fl.code} ${fl.name}` : "HOLDING PEN B"}
-        meta={narrow ? (floorSel === F.archive ? "DECEASED. STILL ASSESSED." : "SWIPE: FLOORS") : "FACILITY CROSS-SECTION"} bodyClass="flush">
+        meta={narrow ? (floorSel === F.archive ? "RECORDS. OPEN TO ALL." : "SWIPE: FLOORS") : "FACILITY CROSS-SECTION"} bodyClass="flush">
         <div className="hvi-pen-stage" ref={wrapRef}>
           <canvas ref={canvasRef} className={`hvi-pen-canvas${cursor ? " " + cursor : ""}`} role="img"
             aria-label="The Holding Pen: a six-floor cross-section of the Department of Human Assessment. Subjects ride an elevator between the Executive Floor, the Bar, the Lobby, the Break Room, the Archive and PROCESSING. Use the subject registry below to open files by keyboard." />

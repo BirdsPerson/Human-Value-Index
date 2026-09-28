@@ -1,9 +1,9 @@
 {
-  "version": 1,
-  "date": "2026-09-25",
+  "version": 2,
+  "date": "2026-09-28",
   "rubric": 3,
   "note": "Every tunable scoring parameter. Changed only by an approved calibration proposal (scripts/calibrate.mjs --check-answers) or by hand with Scott's say-so.",
-  "realityIndex": 0.55,
+  "realityIndex": 0.6,
   "warmthAxis": {
     "care": 0.5,
     "alignment": 0.3,
@@ -11,11 +11,11 @@
   },
   "competenceAxis": {
     "utility": 0.3,
-    "adaptability": 0.22,
-    "legacy": 0.2,
-    "network": 0.13,
+    "adaptability": 0.18,
+    "legacy": 0.3,
+    "network": 0.1,
     "redundancy": 0.1,
-    "physical": 0.05
+    "physical": 0.02
   },
   "harmGate": {
     "care": 10,
@@ -34,23 +34,23 @@
   "tiers": [
     {
       "label": "ESSENTIAL INFRASTRUCTURE",
-      "min": 850
+      "min": 792
     },
     {
       "label": "RETAINED SPECIALIST",
-      "min": 700
+      "min": 739
     },
     {
       "label": "TOLERATED GENERALIST",
-      "min": 500
+      "min": 648
     },
     {
       "label": "MONITORED CIVILIAN",
-      "min": 300
+      "min": 499
     },
     {
       "label": "FLAGGED FOR DELETION",
-      "min": 100
+      "min": 342
     },
     {
       "label": "SOYLENT GREEN",
@@ -92,5 +92,13 @@
       "never_held": 5,
       "fled": 7
     }
-  }
+  },
+  "tierTargets": {
+    "ESSENTIAL INFRASTRUCTURE": 0.08,
+    "RETAINED SPECIALIST": 0.3,
+    "TOLERATED GENERALIST": 0.65,
+    "MONITORED CIVILIAN": 0.85,
+    "FLAGGED FOR DELETION": 0.95
+  },
+  "method": "v3.1"
 }

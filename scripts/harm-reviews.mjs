@@ -25,7 +25,7 @@ export function sectionText(cards, figures = FAMOUS_FIGURES) {
   const reviewed = (cards || []).filter(c => c && c.harmReview && !c.removed);
   const lines = [HEADING, ""];
   lines.push(pending.length
-    ? `Public figures who held state office and landed in the harm gate through state force wait for a case-by-case call (ungate: weighed, not gated; serious: no gate but the 499 serious-harm cap; or gate). The gate applies until decided.`
+    ? `Public figures who held state office and landed in the harm gate through state force wait for a case-by-case call (ungate: weighed, not gated; serious: no gate but the 499 serious-harm cap; or gate). The gate applies until decided. Apply a decision with node scripts/harm-review.mjs <slug> <ungate|serious|gate> "<note>": it rescores the file and logs it as the Department's change.`
     : `No harm reviews pending.`);
   for (const c of pending) {
     const band = c.harm?.band ? `, band ${c.harm.band}` : "";

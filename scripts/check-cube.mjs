@@ -65,17 +65,17 @@ assert.equal(octantOf(49, 50, 50), "CHARMING");
 assert.equal(Object.keys(OCTANTS).length, 8);
 for (const o of OCTANT_ORDER) { assert.ok(OCTANT_LINES[o], o); assert.ok(OCTANT_FAMILY[o], o); }
 
-// JFK: conduct 43, competence 60, likability 69 -> CHARMING, with a positive gap
+// JFK: conduct 43, competence 61 (method v3.1), likability 69 -> CHARMING, with a positive gap
 // A CHARMING fixture: JFK's pre-rescore reading (conduct 43, competence 60) with his
 // YouGov likability. Fixed here so a roster rescore can't silently change what this tests.
 const jfkNow = FAMOUS_FIGURES.find(x => x.name === "JFK");
 const jfk = { name: "JFK", people: jfkNow.people, breakdown: { care: 32, alignment: 48, utility: 62, adaptability: 55, legacy: 62, network: 78, physical: 45, threat: 35, redundancy: 50 } };
 const pj = pointOf(jfk);
 assert.ok(pj && pj.rated);
-assert.equal(pj.q.warmth, 43); assert.equal(pj.q.competence, 60); assert.equal(pj.q.people.likability, 69);
+assert.equal(pj.q.warmth, 43); assert.equal(pj.q.competence, 61); assert.equal(pj.q.people.likability, 69);
 assert.equal(pj.octant, "CHARMING");
 assert.equal(pj.gap, 26);
-assert.deepEqual(pj.p, worldPoint(43, 60, 69));
+assert.deepEqual(pj.p, worldPoint(43, 61, 69));
 // the drop line lands on the plane where likability equals conduct, at the same competence
 assert.equal(pj.foot[0], pj.foot[2]); assert.equal(pj.foot[1], pj.p[1]);
 close(len(pj.p, pj.foot), Math.abs(pj.p[2] - pj.p[0]) / Math.SQRT2);

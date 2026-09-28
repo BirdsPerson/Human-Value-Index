@@ -5,6 +5,7 @@
 // benchmarks, LEARNS from production appeals, and PROPOSES at most one bounded change.
 // It never applies anything: Scott approves or rejects on the desk.
 import { axisMean } from "../src/cube.js";
+import { appendFigureHistory } from "../src/movement.js";
 
 // ---- scoring with an explicit calibration (mirrors netlify/lib/intake.js computeScore and
 // src/cube.js cube(); check-calibrate asserts they agree on every figure) -------------
@@ -282,20 +283,88 @@ export function propose(cal, figures, bench) {
   };
 }
 
+// ---- roster-tuned tier cutoffs (Scott, 2026-09-28) ---------------------------------------
+// Tier mins come from the reference roster's score percentiles, not fixed numbers. Targets
+// are cumulative shares of the UNGATED roster, top down: ESSENTIAL the top 8%, RETAINED the
+// next 22% (to 30%), TOLERATED to 65%, MONITORED to 85%, FLAGGED to 95%, SOYLENT GREEN the
+// rest plus every gated subject. Gated scores sit at or under the gate cap (99), so FLAGGED
+// never drops below cap + 1 and a gated file is SOYLENT whatever the cutoffs say.
+export const TIER_TARGETS = [
+  ["ESSENTIAL INFRASTRUCTURE", 0.08], ["RETAINED SPECIALIST", 0.30], ["TOLERATED GENERALIST", 0.65],
+  ["MONITORED CIVILIAN", 0.85], ["FLAGGED FOR DELETION", 0.95],
+];
+export const TIER_MOVE_THRESHOLD = 10;   // weekly run proposes new cutoffs only past this
+export function rosterScores(cal, figures) {
+  return figures.filter(f => f?.breakdown && !gatedWith(cal, f.breakdown, f.harmReview))
+    .map(f => scoreWith(cal, f.breakdown, f.harm?.severity, f.harmReview)).sort((a, b) => b - a);
+}
+export function tierCutoffs(cal, figures) {
+  const s = rosterScores(cal, figures), n = s.length;
+  if (!n) return cal.tiers.map(t => ({ ...t }));
+  const floor = cal.harmGate.cap + 1;
+  const mins = TIER_TARGETS.map(([label, p]) => ({ label, min: s[Math.max(0, Math.ceil(n * p) - 1)] }));
+  // strictly decreasing, FLAGGED above the gate
+  for (let i = mins.length - 1; i >= 0; i--) {
+    if (i === mins.length - 1) mins[i].min = Math.max(mins[i].min, floor);
+    else mins[i].min = Math.max(mins[i].min, mins[i + 1].min + 1);
+  }
+  return [...mins, { label: "SOYLENT GREEN", min: 0 }];
+}
+// What the tier cutoffs were cut from, kept beside calibration.json (docs/calibration/roster.json)
+// so check-movement can prove cutoffs == percentile targets offline.
+export const rosterSnapshot = figures => figures.filter(f => f?.breakdown)
+  .map(f => ({ name: f.name, breakdown: f.breakdown, harm: f.harm?.severity ? { severity: f.harm.severity } : null, harmReview: f.harmReview || null }));
+export const withTiers = (cal, tiers) => ({ ...cal, tiers, tierTargets: Object.fromEntries(TIER_TARGETS) });
+// Largest move of any tier min between two calibrations.
+export const tierShift = (a, b) => Math.max(0, ...a.map(t => Math.abs(t.min - (b.find(x => x.label === t.label)?.min ?? t.min))));
+
 // ---- figures.js rewrite (formula only, no model calls) -------------------------------
 // Replaces score/tier/warmth/competence/quadrant on each figure line; everything else stays.
-export function rescoreFiguresSource(src, cal, figures) {
+// With `log` ({at, cause, note, method}), appends to the figure's scoreHistory (seeded with a
+// baseline of its old score if empty) whenever the score or tier changes.
+export function rescoreFiguresSource(src, cal, figures, log = null) {
   let out = src, changed = 0;
   for (const f of figures) {
     const esc = JSON.stringify(f.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`^(  \\{ name: ${esc}, )score: -?\\d+, tier: "[^"]*", warmth: -?\\d+, competence: -?\\d+, quadrant: "[^"]*"`, "m");
+    const re = new RegExp(`^(  \\{ name: ${esc}, (?:qualifier: "[^"]*", )?)score: -?\\d+, tier: "[^"]*", warmth: -?\\d+, competence: -?\\d+, quadrant: "[^"]*"`, "m");
     if (!re.test(out)) throw new Error(`figures.js: no rewritable line for ${f.name}`);
     const s = scoreWith(cal, f.breakdown, f.harm?.severity, f.harmReview), q = cubeWith(cal, f.breakdown);
-    const next = out.replace(re, (_, head) => `${head}score: ${s}, tier: ${JSON.stringify(tierWith(cal, s))}, warmth: ${q.warmth}, competence: ${q.competence}, quadrant: ${JSON.stringify(q.quadrant)}`);
+    const tier = tierWith(cal, s);
+    let next = out.replace(re, (_, head) => `${head}score: ${s}, tier: ${JSON.stringify(tier)}, warmth: ${q.warmth}, competence: ${q.competence}, quadrant: ${JSON.stringify(q.quadrant)}`);
+    if (log && (log.always || s !== f.score || tier !== f.tier)) {
+      const hist = appendFigureHistory(f.scoreHistory, { at: log.at, score: s, tier, cause: log.cause, note: log.note, method: log.method },
+        { at: log.baselineAt || null, score: f.score, tier: f.tier, note: "On file before the Department's revision.", method: log.fromMethod || null });
+      next = setFigureHistory(next, f.name, hist);
+    }
     if (next !== out) changed++;
     out = next;
   }
   return { src: out, changed };
+}
+
+// Writes `scoreHistory: [...]` on a figure's line, right after `quadrant: "..."`, replacing
+// any existing log. String-aware bracket matching, so notes may contain anything.
+export function setFigureHistory(src, name, hist) {
+  const head = `  { name: ${JSON.stringify(name)}, `;
+  const start = src.indexOf(head);
+  if (start < 0) throw new Error(`figures.js: no line for ${name}`);
+  const qm = /quadrant: "[^"]*"/.exec(src.slice(start));
+  if (!qm) throw new Error(`figures.js: no quadrant on ${name}`);
+  const after = start + qm.index + qm[0].length;
+  const val = `, scoreHistory: ${JSON.stringify(hist)}`;
+  const key = ", scoreHistory: [";
+  if (src.startsWith(key, after)) {
+    let i = after + key.length, depth = 1, inStr = false;
+    for (; i < src.length && depth; i++) {
+      const ch = src[i];
+      if (inStr) { if (ch === "\\") i++; else if (ch === '"') inStr = false; }
+      else if (ch === '"') inStr = true;
+      else if (ch === "[") depth++;
+      else if (ch === "]") depth--;
+    }
+    return src.slice(0, after) + val + src.slice(i);
+  }
+  return src.slice(0, after) + val + src.slice(after);
 }
 
 // ---- desk answers ----------------------------------------------------------------------

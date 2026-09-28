@@ -347,4 +347,5 @@ export const publicFigure = c => ({
   places: Array.isArray(c.places) ? c.places.filter(p => typeof p === "string").slice(0, 4) : null,
   stratum: c.stratum ? { domain: c.stratum.domain ?? null, occupation: c.stratum.occupation ?? null } : null,
   description: typeof c.description === "string" ? c.description.slice(0, 120) : null,
+  scoreHistory: Array.isArray(c.scoreHistory) ? c.scoreHistory.slice(-40) : null,
 });

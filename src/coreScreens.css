@@ -188,3 +188,20 @@
 /* Section names are up to 12 characters (ADAPTABILITY, REDUNDANCY ↓): never clip them. */
 .hvi-meters .ui-meter { grid-template-columns: 13ch max-content 4ch minmax(0, 1fr); }
 @media (max-width: 420px) { .hvi-meters .ui-meter { grid-template-columns: 13ch minmax(0, 1fr) 3ch; } }
+
+/* FILE MOVEMENT: the subject's changes vs the Department's. */
+.hvi-movement-log { display: grid; gap: var(--s2); }
+.hvi-move-head { font-size: var(--t-xs); letter-spacing: 0.08em; color: var(--fg-dim); margin-top: var(--s2); }
+.hvi-move-head.dept { color: var(--warn); }
+.hvi-move-group { display: grid; gap: var(--s1); }
+.hvi-move-row { display: grid; grid-template-columns: 11ch 16ch 5ch minmax(0, 1fr); gap: var(--s2); align-items: baseline; font-size: var(--t-s); color: var(--fg); }
+.hvi-move-row .hvi-move-when { color: var(--fg-mute); }
+.hvi-move-row .hvi-move-delta { text-align: right; font-variant-numeric: tabular-nums; }
+.hvi-move-row .hvi-move-note { grid-column: 2 / -1; color: var(--fg-dim); font-size: var(--t-xs); }
+.hvi-move-row.cause-method, .hvi-move-row.cause-record, .hvi-move-row.cause-review { color: var(--warn); }
+@media (max-width: 420px) {
+  .hvi-move-row { grid-template-columns: 11ch minmax(0, 1fr) 5ch; }
+  .hvi-move-row .hvi-move-score { display: none; }
+  .hvi-move-row .hvi-move-note { grid-column: 1 / -1; }
+}
+.spark-marks { color: var(--warn); }

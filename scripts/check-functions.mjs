@@ -124,7 +124,7 @@ r = await read(await post(score, "/api/intake-score", { caseId, transcript }));
 assert.equal(r.status, 200, JSON.stringify(r.body));
 assert.equal(r.body.visit, 1);
 assert.equal(r.body.score, 536);   // formula over the stub breakdown; the stub's own 480 is ignored
-assert.equal(r.body.realityIndex, 0.55);
+assert.equal(r.body.realityIndex, 0.6);
 assert.equal(r.body.judge, "UNRATIFIED");
 assert.ok(["ADMIRED", "TRUSTED RESERVE", "ENVIED", "DISMISSED", "UNPLACED"].includes(r.body.quadrant));
 assert.ok(Number.isInteger(r.body.warmth) && Number.isInteger(r.body.competence));

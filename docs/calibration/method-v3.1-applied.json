@@ -1,0 +1,235 @@
+{
+  "at": "2026-09-28T07:48:50.415Z",
+  "method": "v3.1",
+  "note": "RECALIBRATED BY THE DEPARTMENT: FOUNDATIONAL BIAS + ROSTER-TUNED TIERS (method v3.1)",
+  "cutoffs": [
+    {
+      "label": "ESSENTIAL INFRASTRUCTURE",
+      "min": 792
+    },
+    {
+      "label": "RETAINED SPECIALIST",
+      "min": 739
+    },
+    {
+      "label": "TOLERATED GENERALIST",
+      "min": 648
+    },
+    {
+      "label": "MONITORED CIVILIAN",
+      "min": 499
+    },
+    {
+      "label": "FLAGGED FOR DELETION",
+      "min": 342
+    },
+    {
+      "label": "SOYLENT GREEN",
+      "min": 0
+    }
+  ],
+  "top": [
+    {
+      "name": "Harriet Tubman",
+      "from": 865,
+      "to": 870,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Marie Curie",
+      "from": 807,
+      "to": 829,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Paul McCartney",
+      "from": 810,
+      "to": 829,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Abraham Lincoln",
+      "from": 806,
+      "to": 824,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Nelson Mandela",
+      "from": 812,
+      "to": 823,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Dolly Parton",
+      "from": 810,
+      "to": 818,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Leonardo da Vinci",
+      "from": 789,
+      "to": 816,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Stephen Hawking",
+      "from": 798,
+      "to": 813,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Martin Luther King Jr.",
+      "from": 798,
+      "to": 807,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Grace Hopper",
+      "from": 789,
+      "to": 806,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Alan Turing",
+      "from": 782,
+      "to": 804,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Albert Einstein",
+      "from": 777,
+      "to": 802,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Carl Sagan",
+      "from": 776,
+      "to": 792,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Aretha Franklin",
+      "from": 773,
+      "to": 790,
+      "tier": "RETAINED SPECIALIST"
+    },
+    {
+      "name": "Jimmy Carter",
+      "from": 784,
+      "to": 787,
+      "tier": "RETAINED SPECIALIST"
+    },
+    {
+      "name": "Arthur Ashe",
+      "from": 784,
+      "to": 786,
+      "tier": "RETAINED SPECIALIST"
+    },
+    {
+      "name": "George Orwell",
+      "from": 764,
+      "to": 783,
+      "tier": "RETAINED SPECIALIST"
+    },
+    {
+      "name": "Nikola Tesla",
+      "from": 761,
+      "to": 782,
+      "tier": "RETAINED SPECIALIST"
+    },
+    {
+      "name": "Magic Johnson",
+      "from": 779,
+      "to": 782,
+      "tier": "RETAINED SPECIALIST"
+    },
+    {
+      "name": "Menachem Mendel Schneerson",
+      "from": 767,
+      "to": 782,
+      "tier": "RETAINED SPECIALIST"
+    }
+  ],
+  "movers": [
+    {
+      "name": "Isaac Newton",
+      "from": 691,
+      "to": 728,
+      "tier": "TOLERATED GENERALIST",
+      "d": 37
+    },
+    {
+      "name": "Pablo Picasso",
+      "from": 670,
+      "to": 705,
+      "tier": "TOLERATED GENERALIST",
+      "d": 35
+    },
+    {
+      "name": "Sun Tzu",
+      "from": 618,
+      "to": 647,
+      "tier": "MONITORED CIVILIAN",
+      "d": 29
+    },
+    {
+      "name": "Leonardo da Vinci",
+      "from": 789,
+      "to": 816,
+      "tier": "ESSENTIAL INFRASTRUCTURE",
+      "d": 27
+    },
+    {
+      "name": "John D. Rockefeller",
+      "from": 668,
+      "to": 695,
+      "tier": "TOLERATED GENERALIST",
+      "d": 27
+    },
+    {
+      "name": "Albert Einstein",
+      "from": 777,
+      "to": 802,
+      "tier": "ESSENTIAL INFRASTRUCTURE",
+      "d": 25
+    },
+    {
+      "name": "Stanley Kubrick",
+      "from": 723,
+      "to": 748,
+      "tier": "RETAINED SPECIALIST",
+      "d": 25
+    },
+    {
+      "name": "Salvador Dalí",
+      "from": 685,
+      "to": 709,
+      "tier": "TOLERATED GENERALIST",
+      "d": 24
+    },
+    {
+      "name": "Bob Dylan",
+      "from": 750,
+      "to": 773,
+      "tier": "RETAINED SPECIALIST",
+      "d": 23
+    },
+    {
+      "name": "George Washington",
+      "from": 713,
+      "to": 736,
+      "tier": "TOLERATED GENERALIST",
+      "d": 23
+    }
+  ],
+  "citizens": [
+    {
+      "caseId": "HVI-KKN67AUZ",
+      "from": 660,
+      "to": 652,
+      "fromTier": "TOLERATED GENERALIST",
+      "tier": "TOLERATED GENERALIST"
+    }
+  ],
+  "cards": 123
+}

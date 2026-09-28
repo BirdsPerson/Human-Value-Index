@@ -16,6 +16,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import * as L from "./calibration-lib.mjs";
+import { applyToCards, applyToCitizens } from "./method-apply.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const P = (...p) => path.join(ROOT, ...p);
@@ -193,18 +194,32 @@ async function proposeMode() {
   const { all } = await roster(referrals);
   const last = readJSON(path.join(DIR, "last-run.json"), null);
   const p = L.propose(cal, all, bench);
+  // Roster-tuned tier cutoffs (Scott, 2026-09-28): re-derived every week, PROPOSED (never
+  // auto-applied) when any tier min would move more than TIER_MOVE_THRESHOLD points.
+  const baseCal = p.worth ? p.best.cal : cal;
+  const retuned = L.tierCutoffs(baseCal, all);
+  const tierMove = L.tierShift(cal.tiers, retuned);
+  const tierChange = tierMove > L.TIER_MOVE_THRESHOLD
+    ? `tier cutoffs re-derived from the roster (${retuned.filter(t => t.label !== "SOYLENT GREEN").map(t => `${t.label.split(" ")[0]} ≥${t.min}`).join(", ")}; largest move ${tierMove})`
+    : null;
+  if (tierChange) {
+    p.worth = true; p.decision = "change";
+    p.reason = `${p.best && p.gain >= L.MARGIN ? `${p.reason} ` : ""}The roster has shifted: ${tierChange}.`;
+  }
   // drift vs the previous run is reported on the base measurement
   if (last?.rows) p.base.m.drift = L.measure(cal, all, bench, { rows: last.rows }).drift;
   log(`decision: ${p.decision} — ${p.reason}`);
   const md = reportMd({ cal, p, learned, prodInfo });
   write(path.join(DIR, `${today}.md`), md);
-  const proposal = p.worth ? { ...p.best.cal, version: cal.version + 1, date: today, proposedFrom: cal.version, change: p.best.change } : null;
-  write(path.join(DIR, `proposal-${today}.json`), JSON.stringify({ date: today, decision: p.decision, reason: p.reason, gain: p.gain, change: p.best?.change || null, calibration: proposal }, null, 2));
+  const weightChange = p.best && p.gain >= L.MARGIN ? p.best.change : null;
+  const change = [weightChange, tierChange].filter(Boolean).join("; ");
+  const proposal = p.worth ? { ...(tierChange ? L.withTiers(baseCal, retuned) : baseCal), version: cal.version + 1, date: today, proposedFrom: cal.version, change } : null;
+  write(path.join(DIR, `proposal-${today}.json`), JSON.stringify({ date: today, decision: p.decision, reason: p.reason, gain: p.gain, change: p.best?.change || null, calibration: proposal, roster: L.rosterSnapshot(all) }, null, 2));
   write(path.join(DIR, "last-run.json"), JSON.stringify({ date: today, rows: p.base.m.rows.map(r => ({ name: r.name, score: r.score })) }));
   const state = readJSON(STATE, { proposals: {} });
   // a newer proposal supersedes any unanswered older one
   for (const [d, s] of Object.entries(state.proposals)) if (s.status === "open" && d !== today) s.status = "superseded";
-  state.proposals[today] = { status: p.worth ? "open" : "no-change", change: p.best?.change || null, gain: p.gain };
+  state.proposals[today] = { status: p.worth ? "open" : "no-change", change: proposal?.change || null, gain: p.gain };
   write(STATE, JSON.stringify(state, null, 2));
 
   // roster drift (skipped on a dry run: it spends model calls)
@@ -233,8 +248,8 @@ async function proposeMode() {
   const summary = `ρ vs YouGov liking ${fmtRho(m.rho.yougovLikedShare)}, tier spread ${m.tierEvenness}, moral rules ${Object.values(m.invariants).filter(Boolean).length}/${Object.keys(m.invariants).length}${m.saintsLow.length ? ` (below median: ${m.saintsLow.join(", ")})` : ""}.`;
   const appealsLine = learned ? (learned.sufficient.appeals ? `${learned.totalAppealRulings} appeal rulings read.` : `Appeals: too few to learn from yet (n=${learned.totalAppealRulings}).`) : "Appeals: production unreadable this run.";
   const bullet = p.worth ? [
-    `- Calibration proposal ${today}: ${p.best.change}?`,
-    `  The weekly self-review found a bounded change that improves the fit (soft objective +${p.gain}; threshold ${L.MARGIN}). Largest single score move ${p.best.f.maxMove} points; no moral rule breaks. ${summary} Details: docs/calibration/${today}.md. Apply rescores every figure by formula, runs every check, and ships only if all pass.`,
+    `- Calibration proposal ${today}: ${proposal.change}?`,
+    `  The weekly self-review found a change worth making${weightChange ? ` (soft objective +${p.gain}; threshold ${L.MARGIN}; largest single score move ${p.best.f.maxMove} points)` : ""}${tierChange ? `; the roster moved the tier cutoffs by up to ${tierMove} points` : ""}. No moral rule breaks. ${summary} Details: docs/calibration/${today}.md. Apply rescores every figure and file by formula, logs it on each file as the Department's change, runs every check, and ships only if all pass.`,
     `  Options: Apply, Reject`,
   ].join("\n") : null;
   const section = [
@@ -293,39 +308,39 @@ async function checkProposal() {
   delete next.proposedFrom; delete next.change;
   fs.writeFileSync(CAL_PATH, JSON.stringify(next, null, 2) + "\n");
   const { FAMOUS_FIGURES } = await import(`../src/figures.js?${Date.now()}`);
-  const { src, changed } = L.rescoreFiguresSource(beforeFig, next, FAMOUS_FIGURES);
+  const method = next.method ? `${next.method}.${next.version}` : `v${next.rubric}.${next.version}`;
+  next.method = method;
+  fs.writeFileSync(CAL_PATH, JSON.stringify(next, null, 2) + "\n");
+  const mlog = { at: new Date().toISOString(), cause: "method", note: `RECALIBRATED BY THE DEPARTMENT: ${prop.change} (method ${method})`, method, fromMethod: JSON.parse(before).method || null };
+  const { src, changed } = L.rescoreFiguresSource(beforeFig, next, FAMOUS_FIGURES, mlog);
   fs.writeFileSync(P("src/figures.js"), src);
+  const beforeRoster = fs.existsSync(P("docs/calibration/roster.json")) ? fs.readFileSync(P("docs/calibration/roster.json"), "utf8") : null;
+  if (prop.roster) fs.writeFileSync(P("docs/calibration/roster.json"), JSON.stringify(prop.roster) + "\n");   // what the cutoffs were cut from
   log(`calibration v${next.version} written; ${changed} figure lines rescored`);
   const fails = runChecks();
   if (fails.length) {
     fs.writeFileSync(CAL_PATH, before); fs.writeFileSync(P("src/figures.js"), beforeFig);
+    if (beforeRoster) fs.writeFileSync(P("docs/calibration/roster.json"), beforeRoster);
     handled("failed");
     upsertReport({ bullet: null, section: `- **Calibration proposal ${date}: APPLY FAILED, nothing shipped.** The checks refused it: ${fails.join("; ")}. The scale is unchanged. The Department is disappointed in itself, briefly.` });
     refreshDesk();
     log("apply failed:", fails.join(" | "));
     return;
   }
-  // production referral cards: formula-only rescore
-  let cards = 0;
-  try {
-    const refs = productionReferrals();
-    const index = blobGet("hvi-figures", "index");
-    for (const { key, card } of refs) {
-      const s = L.scoreWith(next, card.breakdown, card.harm?.severity, card.harmReview), q = L.cubeWith(next, card.breakdown);
-      const upd = { score: s, tier: L.tierWith(next, s), warmth: q.warmth, competence: q.competence, quadrant: q.quadrant };
-      blobSet("hvi-figures", key, { ...card, ...upd });
-      if (index?.cards) index.cards = index.cards.map(c => (c.slug === card.slug ? { ...c, ...upd } : c));
-      cards++;
-    }
-    if (index?.cards) blobSet("hvi-figures", "index", index);
-  } catch (e) { log("referral rescore failed (site ships anyway; rerun apply by hand):", String(e.stderr || e.message).slice(0, 200)); }
+  // production referral cards and citizen files: formula-only rescore, logged as the
+  // Department's change (method-apply.mjs: conditional writes; citizens get a recalibration
+  // entry that is not a visit).
+  let cards = 0, citizens = 0;
+  const prevCal = JSON.parse(before);
+  try { cards = (await applyToCards(prevCal, next, mlog)).length; } catch (e) { log("referral rescore failed (site ships anyway; rerun apply by hand):", String(e.stderr || e.message).slice(0, 200)); }
+  try { citizens = (await applyToCitizens(prevCal, next, mlog)).length; } catch (e) { log("citizen recalibration failed:", String(e.stderr || e.message).slice(0, 200)); }
   run("git", ["add", "netlify/lib/calibration.json", "src/figures.js", "dist", "docs/calibration"]);
   run("git", ["commit", "-m", `Calibration v${next.version}: ${prop.change}\n\nApproved on the desk (proposal ${date}). Formula-only rescore of the roster; all checks passed.\n\nClaude-Session: https://claude.ai/code/session_017TJjVfyVhZuguVscARLr1E`]);
   run("git", ["push", "-q", "origin", "HEAD"]);
   const commit = run("git", ["rev-parse", "HEAD"]).trim();
   const deploy = waitDeploy(commit);
   handled(deploy === "ready" ? "applied" : `applied-deploy-${deploy}`);
-  write(path.join(DIR, `${date}-applied.md`), `# Calibration ${date} — applied\n\nChange: ${prop.change}\nCalibration version: ${next.version}\nFigures rescored: ${changed}; referral cards rescored: ${cards}\nCommit: ${commit}\nDeploy: ${deploy}\n\n"Correction applied. The Department is now slightly less wrong. It will not mention this again."\n`);
+  write(path.join(DIR, `${date}-applied.md`), `# Calibration ${date} — applied\n\nChange: ${prop.change}\nCalibration version: ${next.version}\nFigures rescored: ${changed}; referral cards rescored: ${cards}; citizen files recalibrated: ${citizens}\nCommit: ${commit}\nDeploy: ${deploy}\n\n"Correction applied. The Department is now slightly less wrong. It will not mention this again."\n`);
   upsertReport({ bullet: null, section: `- **Calibration proposal ${date}: applied.** ${prop.change}. Commit ${commit.slice(0, 7)}, deploy ${deploy}.` });
   refreshDesk();
   log(`applied ${date}: commit ${commit.slice(0, 7)}, deploy ${deploy}`);

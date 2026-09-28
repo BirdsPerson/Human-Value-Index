@@ -6,6 +6,7 @@ import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
+import { visitCount, publicHistory } from "../../src/movement.js";
 
 export const FILE_READS_PER_HOUR = 60;
 const FIELDS = ["score", "tier", "warmth", "competence", "quadrant", "judge", "realityIndex", "breakdown", "confidence", "verdict", "flags", "commendations", "rubric", "simulated", "appeal", "at"];
@@ -15,7 +16,8 @@ export function currentFile(record) {
   const last = history[history.length - 1] || null;
   const latest = last ? Object.fromEntries(FIELDS.filter(k => last[k] !== undefined).map(k => [k, last[k]])) : null;
   if (latest && latest.rubric === undefined) latest.rubric = 1;
-  return { visits: history.length, latest, avatar: record?.avatar || null, history: history.map(h => ({ score: h.score, at: h.at })) };
+  // Recalibrations (the Department's changes) are in the history but are not visits.
+  return { visits: visitCount(history), latest, avatar: record?.avatar || null, history: publicHistory(history) };
 }
 
 export default async (req, context) => {

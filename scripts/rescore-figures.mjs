@@ -18,6 +18,13 @@ import { DIMENSIONS } from "../netlify/lib/questionPools.js";
 import { octantOf } from "../src/cube.js";
 import { rescoreOne, pool, RUNS } from "./rescore-lib.mjs";
 import { VILLAINS, SAINTS } from "./calibration-lib.mjs";
+import { appendFigureHistory } from "../src/movement.js";
+
+// A re-read of the public record is the Department's change, logged on the file (cause "record").
+const RECORD_AT = new Date().toISOString();
+const RECORD_NOTE = "THE DEPARTMENT RE-READ THE PUBLIC RECORD. THE SUBJECT DID NOTHING NEW.";
+const recordLog = (prevLog, before, score, tier) => (score === before.score && tier === before.tier ? prevLog ?? null
+  : appendFigureHistory(prevLog, { at: RECORD_AT, score, tier, cause: "record", note: RECORD_NOTE }, { at: before.at || null, score: before.score, tier: before.tier, note: "On file before the re-read." }));
 
 const args = process.argv.slice(2);
 const flags = new Set(args.filter(a => a.startsWith("--")));
@@ -65,7 +72,8 @@ for (const { kind, name, before, r } of results.filter(x => x.kind === "figure")
   const bd = Object.fromEntries(DIMENSIONS.map(d => [d, r.breakdown[d]]));
   const c = cube(bd);
   // Keep every other field on the line (born, died, no_dangle, ...); recompute score and cube.
-  const extra = Object.entries(before).filter(([k]) => !["name", "score", "tier", "warmth", "competence", "quadrant", "breakdown", "verdict", "people", "harm"].includes(k))
+  const hist = recordLog(before.scoreHistory, before, r.score, getTier(r.score));
+  const extra = (hist ? `, scoreHistory: ${JSON.stringify(hist)}` : "") + Object.entries(before).filter(([k]) => !["name", "score", "tier", "warmth", "competence", "quadrant", "breakdown", "verdict", "people", "harm", "scoreHistory"].includes(k))
     .map(([k, v]) => `, ${k}: ${JSON.stringify(v)}`).join("");
   const line = `  { name: ${JSON.stringify(name)}, score: ${r.score}, tier: ${JSON.stringify(getTier(r.score))}, warmth: ${c.warmth}, competence: ${c.competence}, quadrant: ${JSON.stringify(c.quadrant)}${extra}${r.harm ? `, harm: ${JSON.stringify({ documented: r.harm.documented, era: r.harm.era, band: r.harm.band, ...(r.harm.severity ? { severity: r.harm.severity } : {}) })}` : ""}, breakdown: ${lit(bd)}, verdict: ${JSON.stringify(r.verdict)} },`;
   const re = new RegExp(`^  \\{ name: ${JSON.stringify(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")},.*$`, "m");
@@ -78,16 +86,19 @@ writeFileSync(path, src);
 const refDone = results.filter(x => x.kind === "referral");
 if (refDone.length) {
   const at = new Date().toISOString();
+  const j_hist = new Map();
   for (const { slug, card, r } of refDone) {
     const next = { ...card, score: r.score, tier: getTier(r.score), ...cube(r.breakdown), breakdown: r.breakdown, verdict: r.verdict,
       harm: r.harm ? { documented: r.harm.documented, era: r.harm.era, band: r.harm.band, severity: r.harm.severity ?? null } : card.harm ?? null,
-      flags: r.flags, commendations: r.commendations, factCheck: r.factCheck ?? card.factCheck ?? null, rescoredAt: at };
+      flags: r.flags, commendations: r.commendations, factCheck: r.factCheck ?? card.factCheck ?? null, rescoredAt: at,
+      scoreHistory: recordLog(card.scoreHistory, card, r.score, getTier(r.score)) };
+    j_hist.set(slug, next.scoreHistory);
     blobSet("hvi-figures", slug, next);
   }
   const index = blobGet("hvi-figures", "index");
   const bySlug = new Map(refDone.map(x => [x.slug, x.r]));
   index.cards = index.cards.map(c => (bySlug.has(c.slug)
-    ? { ...c, score: bySlug.get(c.slug).score, tier: getTier(bySlug.get(c.slug).score), breakdown: bySlug.get(c.slug).breakdown, verdict: bySlug.get(c.slug).verdict, harmReview: bySlug.get(c.slug).harmReview ?? c.harmReview ?? null }
+    ? { ...c, score: bySlug.get(c.slug).score, tier: getTier(bySlug.get(c.slug).score), breakdown: bySlug.get(c.slug).breakdown, verdict: bySlug.get(c.slug).verdict, harmReview: bySlug.get(c.slug).harmReview ?? c.harmReview ?? null, scoreHistory: j_hist.get(c.slug) ?? c.scoreHistory ?? null }
     : c));
   blobSet("hvi-figures", "index", index);
 }

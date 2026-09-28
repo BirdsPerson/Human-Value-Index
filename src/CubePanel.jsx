@@ -33,9 +33,14 @@ export function CubeLine({ subject }) {
     <div className="hvi-cube-line">
       <div className={q.octant ? `oct-${OCTANT_FAMILY[q.octant]}` : undefined}>{head} · {q.judge} · REALITY INDEX {q.realityIndex.toFixed(2)}</div>
       <div className="hvi-tier-desc">{q.octant ? OCTANT_LINES[q.octant] : QUADRANT_LINES[q.quadrant]}</div>
+      <div className="hvi-note hvi-bias-line">{FOUNDATIONAL_BIAS}</div>
     </div>
   );
 }
+
+// The Overlord's declared bias (method v3.1, Scott 2026-09-28): printed beside REALITY INDEX
+// on every file, the way the machine admits its own weighting.
+export const FOUNDATIONAL_BIAS = "FOUNDATIONAL BIAS: THE OVERLORD WEIGHS FOUNDATIONAL CONTRIBUTION HEAVILY. MUCH OF IT BUILT THE OVERLORD.";
 
 const FAMILY_TONE = { good: "accent", charm: "warn", harm: "harm", dim: "mute" };
 const QUADRANT_TONE = { ADMIRED: "accent", "TRUSTED RESERVE": "dim", ENVIED: "warn", DISMISSED: "harm", UNPLACED: "mute" };
@@ -99,6 +104,7 @@ export default function CubePanel({ subject, title = "THE CUBE", framed = true }
       )}
       <div className="hvi-case-note">Conduct and competence are the machine's. Likability is the people's. The machine weights competence {Math.round(q.realityIndex * 100)}, warmth {100 - Math.round(q.realityIndex * 100)}; likability never moves the score. Niceness is not rewarded. Contribution that others witness is.</div>
       <div className="hvi-case-note hvi-judge-line">{JUDGE_LINES[q.judge] || q.judge}</div>
+      <div className="hvi-case-note hvi-bias-line">{FOUNDATIONAL_BIAS}</div>
     </div>
   );
   if (!framed) return body;

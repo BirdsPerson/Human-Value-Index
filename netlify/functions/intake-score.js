@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { visitCount, visitNumberOf, publicHistory } from "../../src/movement.js";
 import { SYSTEM_PROMPT, TRANSCRIPT_ADDENDUM } from "../lib/systemPrompt.js";
 import { callClaude, ScoreError } from "../lib/score.js";
 import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP, restrictToDims, appealOutcome, appealRulings, appealStamp, cube, medianAssessment, SCORE_RUNS } from "../lib/intake.js";
@@ -36,7 +37,7 @@ function respond(json, caseId, history, entry, avatar = null) {
   return json(200, {
     caseId,
     avatar: sanitizeAvatar(avatar),
-    visit: (history.findIndex(h => h.sid && h.sid === entry.sid) + 1) || history.length,
+    visit: visitNumberOf(history, entry),
     score: entry.score,
     tier: entry.tier,
     ...cube(entry.breakdown),
@@ -58,7 +59,7 @@ function respond(json, caseId, history, entry, avatar = null) {
     newlyAssessed: entry.newlyAssessed || [],
     provisional: Boolean(entry.provisional),
     provisionalNote: entry.provisionalNote || null,
-    history: history.map(h => ({ score: h.score, at: h.at })),
+    history: publicHistory(history),
   });
 }
 
@@ -116,7 +117,7 @@ export default async (req, context) => {
     // Scored SCORE_RUNS times in parallel on the same prompt; the per-dimension median is
     // kept (one reading swings a citizen by +-15-30 with nothing changed). Any readings that
     // come back are used; only if all fail is the visit refused.
-    const prompt = previousFile(lastEntry, record.history.length) + appealBrief(lastEntry, appeal, touch) + `(If you cite a directive, cite Directive ${2 + Math.floor(Math.random() * 97)}.)\n\nINTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(scored)}`;
+    const prompt = previousFile(lastEntry, visitCount(record.history)) + appealBrief(lastEntry, appeal, touch) + `(If you cite a directive, cite Directive ${2 + Math.floor(Math.random() * 97)}.)\n\nINTAKE INTERVIEW TRANSCRIPT:\n\n${formatTranscript(scored)}`;
     const settled = await Promise.allSettled(Array.from({ length: SCORE_RUNS }, () => callClaude(SYSTEM_PROMPT + TRANSCRIPT_ADDENDUM, prompt)));
     const raw = settled.filter(s => s.status === "fulfilled").map(s => s.value);   // every reading, kept for audit
     const readings = raw.map(v => normalizeAssessment(v));
@@ -147,6 +148,7 @@ export default async (req, context) => {
         // The subject's own words, kept (already capped at 20k chars) so a future rubric can re-score the file.
         transcript: scored.map(m => ({ role: m.role, text: m.text })),
         ...(appeal ? { appeal, appealOutcome: outcome, appealRulings: rulings } : {}),
+        cause: appeal ? "appeal" : "visit",
       };
       cur.history.push(entry);
       // The photo lives on the file, beside the history; a hand-drawn sprite is never replaced.

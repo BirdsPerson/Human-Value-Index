@@ -1,0 +1,7 @@
+{
+  "method": "v3.1",
+  "note": "RECALIBRATED BY THE DEPARTMENT: FOUNDATIONAL BIAS + ROSTER-TUNED TIERS (method v3.1)",
+  "realityIndex": 0.60,
+  "competenceAxis": { "utility": 0.30, "adaptability": 0.18, "legacy": 0.30, "network": 0.10, "redundancy": 0.10, "physical": 0.02 },
+  "approved": "Scott, in chat, 2026-09-28"
+}

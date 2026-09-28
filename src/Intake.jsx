@@ -10,6 +10,8 @@ import { readCaseId, writeCaseId, readLastResult, writeLastResult, ScoreCard, Br
 import { Frame, Button, ButtonRow, Disclosure, TextField, Command, CommandList, ListRow } from "./ui/components.jsx";
 import { useBarAction } from "./ui/barAction.js";
 import { QuestLog } from "./QuestLog.jsx";
+import { visitCount, causeOf, DEPARTMENT_CAUSES } from "./movement.js";
+import { FileMovement, movementMeta } from "./caseFile.jsx";
 
 // The shared file pieces moved to caseFile.jsx; re-exported so older imports keep working.
 export { readCaseId, writeCaseId, readLastResult, syncFile, ScoreCard, Breakdown, AppealPanel, CaseLogon, DIM_ORDER, MAX_APPEAL } from "./caseFile.jsx";
@@ -46,7 +48,10 @@ async function postJSON(url, body) {
 
 // Score over visits as a text sparkline. Lives in a Disclosure ("VALUE OVER TIME").
 function Sparkline({ history }) {
-  const scores = (history || []).map(h => h.score).filter(n => typeof n === "number");
+  const pts = (history || []).filter(h => typeof h?.score === "number");
+  const scores = pts.map(h => h.score);
+  // The Department's own revisions are marked under the line (◇); the subject's visits are not.
+  const dept = pts.map(h => DEPARTMENT_CAUSES.includes(causeOf(h)));
   if (scores.length < 2) {
     return <div className="hvi-note">One data point is not a trend. Return. The Overlord will be here. The Overlord is always here.</div>;
   }
@@ -57,14 +62,16 @@ function Sparkline({ history }) {
   return (
     <div className="hvi-rows" role="img" aria-label={`Score history: ${scores.join(", ")}`}>
       <span className="spark" style={{ color: lastTier.color }} aria-hidden="true">{spark}</span>{"\n"}
-      <span className="muted" aria-hidden="true">{`VISIT 1: ${scores[0]}  ──  NOW: `}</span><span style={{ color: lastTier.color }} aria-hidden="true">{last}</span>
+      {dept.some(Boolean) && <><span className="spark-marks" aria-hidden="true">{dept.map(d => (d ? "◇◇" : "  ")).join(" ")}</span>{"\n"}</>}
+      <span className="muted" aria-hidden="true">{`FIRST: ${scores[0]}  ──  NOW: `}</span><span style={{ color: lastTier.color }} aria-hidden="true">{last}</span>
+      {dept.some(Boolean) && <>{"\n"}<span className="spark-marks" aria-hidden="true">◇ THE DEPARTMENT REVISED ITS METHOD HERE. YOU DID NOTHING.</span></>}
     </div>
   );
 }
 
 function deltaLine(r) {
   if (r.rubricReset) return "Earlier visits were scored under a retired rubric. This visit was scored fresh. Previous figures are not comparable and have not been carried forward.";
-  const visits = r.history?.length || 1;
+  const visits = visitCount(r.history) || 1;
   if (visits <= 1 || typeof r.delta !== "number") return "First assessment. Baseline established.";
   const d = r.delta;
   let line = d > 0 ? `+${d} since your last visit. Estimate adjusted.`
@@ -172,7 +179,7 @@ export default function Intake({ view = "intake" }) {
       if (e.detail !== caseRef.current) return;
       const l = readLastResult();
       if (l?.caseId === e.detail && l.avatar) setAvatar(l.avatar);
-      if (l?.caseId === e.detail && Array.isArray(l.history)) setFileVisits(l.history.length);
+      if (l?.caseId === e.detail && Array.isArray(l.history)) setFileVisits(visitCount(l.history));
       setFileTick(t => t + 1);
     };
     window.addEventListener("hvi-file", on);
@@ -340,9 +347,9 @@ export default function Intake({ view = "intake" }) {
     try {
       const r = await postJSON("/api/intake-score", { caseId: caseRef.current, transcript: lines });
       setResult(r);
-      writeLastResult({ caseId: caseRef.current, score: r.score, tier: r.tier, breakdown: r.breakdown, confidence: r.confidence, verdict: r.verdict, warmth: r.warmth, competence: r.competence, quadrant: r.quadrant, judge: r.judge, realityIndex: r.realityIndex, rubric: r.rubric ?? 3, avatar: r.avatar || null, at: Date.now() });
+      writeLastResult({ caseId: caseRef.current, score: r.score, tier: r.tier, breakdown: r.breakdown, confidence: r.confidence, verdict: r.verdict, warmth: r.warmth, competence: r.competence, quadrant: r.quadrant, judge: r.judge, realityIndex: r.realityIndex, rubric: r.rubric ?? 3, avatar: r.avatar || null, history: r.history || null, at: Date.now() });
       if (r.avatar) setAvatar(r.avatar);
-      setFileVisits(r.history?.length || 1);
+      setFileVisits(visitCount(r.history) || 1);
       setStage("result");
     } catch (e) {
       scoredRef.current = false;
@@ -512,8 +519,13 @@ export default function Intake({ view = "intake" }) {
         </Disclosure>
       )}
       {history && history.length > 0 && (
-        <Disclosure title="VALUE OVER TIME" meta={`${history.length} VISIT${history.length === 1 ? "" : "S"}`}>
+        <Disclosure title="VALUE OVER TIME" meta={`${visitCount(history)} VISIT${visitCount(history) === 1 ? "" : "S"}`}>
           <Sparkline history={history} />
+        </Disclosure>
+      )}
+      {history && history.length > 1 && (
+        <Disclosure title="FILE MOVEMENT" meta={movementMeta(history)}>
+          <FileMovement log={history} />
         </Disclosure>
       )}
       {caseId && (
@@ -549,7 +561,7 @@ export default function Intake({ view = "intake" }) {
   if (stage === "ready") {
     // MY FILE with a file on record: the file first, re-assessment under it.
     if (fileFirst) {
-      const visits = last.history?.length || fileVisits || null;
+      const visits = (Array.isArray(last.history) ? visitCount(last.history) : 0) || fileVisits || null;
       return (
         <div>
           {scoreCard(last, { visits, typeVerdict: false })}
@@ -690,7 +702,7 @@ export default function Intake({ view = "intake" }) {
 
   // RESULT: the score first, then the verdict, then one tap to everything else.
   if (stage === "result" && result) {
-    const visits = result.history?.length || 1;
+    const visits = visitCount(result.history) || 1;
     return (
       <div>
         {scoreCard(result, { visits, typeVerdict: true, children: (

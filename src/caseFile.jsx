@@ -3,6 +3,7 @@ import { getTier } from "./figures.js";
 import { Typed, BigNumber } from "./term.jsx";
 import { Frame, Chip, Chips, Meter, ListRow, TextField, Button } from "./ui/components.jsx";
 import "./coreScreens.css";
+import { movement, CAUSE_LABEL } from "./movement.js";
 
 // The subject's file: identity (case number), the cached result, and the result pieces
 // every screen shares (score card, breakdown, appeals, case logon). Kept out of
@@ -217,5 +218,50 @@ export function CaseLogon({ onRestored, autoFocus = false }) {
       <Button type="submit" variant="secondary" disabled={busy}>{busy ? "Checking" : "Restore file"}</Button>
       {msg && <div className={`hvi-form-msg${bad ? " err" : ""}`} role={bad ? "alert" : "status"}>{msg}</div>}
     </form>
+  );
+}
+
+// FILE MOVEMENT: what moved this file, split by who moved it. The subject's own changes
+// (interviews, appeals, vouches) apart from the Department's (method revisions, re-reads of
+// the public record, harm reviews). Figures and citizens use the same list.
+const fmtDelta = d => (typeof d !== "number" ? "" : d > 0 ? `+${d}` : d < 0 ? `${d}` : "±0");
+const fmtDate = at => (typeof at === "string" ? at.slice(0, 10) : "");
+function MovementRows({ rows, label }) {
+  return (
+    <div className="hvi-move-group" role="list" aria-label={label}>
+      {rows.slice().reverse().map((r, i) => (
+        <div key={`${r.at}-${i}`} className={`hvi-move-row cause-${r.cause}`} role="listitem">
+          <span className="hvi-move-when">{fmtDate(r.at)}</span>
+          <span className="hvi-move-what">{CAUSE_LABEL[r.cause] || r.cause.toUpperCase()}</span>
+          <span className="hvi-move-delta">{fmtDelta(r.delta)}</span>
+          <span className="hvi-move-score">→ {r.score}</span>
+          {r.note && <span className="hvi-move-note">{r.note}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+export function movementMeta(log) {
+  const m = movement(log);
+  const n = m.yours.length + m.department.length;
+  return n ? `${m.yours.length} YOURS · ${m.department.length} THE DEPARTMENT'S` : "";
+}
+export function FileMovement({ log, subject = "you" }) {
+  const m = movement(log);
+  if (!m.yours.length && !m.department.length) return <div className="hvi-note">No movement on file. The Department has not yet found a reason to change its mind. It rarely needs one.</div>;
+  const you = subject === "you";
+  return (
+    <div className="hvi-movement-log">
+      <div className="hvi-move-head">{you ? "YOUR CHANGES" : "THE SUBJECT'S CHANGES"}</div>
+      {m.yours.length ? <MovementRows rows={m.yours} label={you ? "Your changes" : "The subject's changes"} />
+        : <div className="hvi-note">{you ? "None. You have not yet moved your own file." : "None on record."}</div>}
+      <div className="hvi-move-head dept">THE DEPARTMENT'S CHANGES</div>
+      {m.department.length ? (
+        <>
+          <div className="hvi-note">{you ? "THE DEPARTMENT REVISED ITS OPINION OF YOU. YOU WERE NOT CONSULTED." : "THE DEPARTMENT REVISED ITS OPINION. THE SUBJECT WAS NOT CONSULTED."}</div>
+          <MovementRows rows={m.department} label="The Department's changes" />
+        </>
+      ) : <div className="hvi-note">None. The Department's opinion has held.</div>}
+    </div>
   );
 }

@@ -49,7 +49,10 @@ for (const f of FAMOUS_FIGURES) {
   // crossed the fixed persona; flagged to Scott in docs/rescore-2026-09-25.md.
   const persona = computeScore({ care: 76, alignment: 62, utility: 60, adaptability: 55, legacy: 58, network: 53, physical: 62, threat: 12, redundancy: 50 });
   const pct = FAMOUS_FIGURES.filter(f => f.score < persona).length / FAMOUS_FIGURES.length * 100;
-  assert.ok(pct >= 35, `decent persona at p${pct.toFixed(0)}`);
+  // Method v3.1 (foundational bias, 2026-09-28) weighs legacy over care, and the persona's
+  // strength is care: it fell 646 -> 638, p35 -> p34 (21 of 62; JFK at 640 is the one it
+  // lost). Floor lowered to p33 and flagged to Scott in the v3.1 report.
+  assert.ok(pct >= 33, `decent persona at p${pct.toFixed(0)}`);
 }
 assert.equal(getTier(850).label, "ESSENTIAL INFRASTRUCTURE");
 assert.equal(getTier(99).label, "SOYLENT GREEN");

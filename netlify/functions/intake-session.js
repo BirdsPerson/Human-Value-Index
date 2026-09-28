@@ -1,4 +1,5 @@
 import { isCaseId, newCaseId, pickQuestions, pickAppealQuestions, appealError, rubricOf, RUBRIC } from "../lib/intake.js";
+import { visitCount } from "../../src/movement.js";
 import { getCase, updateCase, hitLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE } from "../lib/http.js";
 import { PHOTO_DIM, PHOTO_Q } from "../lib/avatar.js";
@@ -55,7 +56,8 @@ export default async (req, context) => {
     // A file with no photo gets one last, optional item: the subject describes themselves
     // and intake-score draws them. Appeals never ask; a hand-drawn sprite is never replaced.
     const plan = !appeal && !record.avatar ? [...picked.plan, { dimension: PHOTO_DIM, text: PHOTO_Q }] : picked.plan;
-    const visit = record.history.length + 1;
+    // Department recalibrations are logged on the file but are not visits.
+    const visit = visitCount(record.history) + 1;
     const last = record.history[record.history.length - 1];
     const sections = appeal ? appeal.map(d => d.toUpperCase()).join(", ") : "";
     // The voice agent only knows these five variables, so the appeal rides in the
