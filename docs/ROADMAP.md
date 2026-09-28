@@ -47,6 +47,8 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 7. **Pen long-press pickup** on touch, so a swipe that starts on a subject scrolls.
 
+8. **Backfill field/domain on every subject.** 104 of 185 subjects (referrals + engine) carry no field, so analytics by field covers only 81. Classify field + era from Wikidata occupation/P106 and birth date for every card (cheap, no model needed where Wikidata has it), store on the card and index, and make referral + engine paths set it at creation.
+
 ## Guardrails (the loop must obey)
 
 - One item per night; stop at the time budget and report partial work honestly.
