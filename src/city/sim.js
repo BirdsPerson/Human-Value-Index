@@ -540,7 +540,55 @@ const LEISURE_BY_FIELD = {
   royalty: { gallery: 2, "rooftop-lounge": 2 }, activism: { park: 2, market: 2 }, crime: { casino: 2, "dive-bar": 2 },
 };
 
-function leisureWeights(s, seed) {
+// ---- social bias ------------------------------------------------------------------
+// Relationships (src/city/social.js) publish one snapshot per machine day:
+// {ver, boosts: {subjectKey: {placeId: frac}}}. frac > 0 pulls a subject toward a place
+// their friends frequent (added as frac x their own strongest weight); frac < 0 steers
+// them away from a rival's haunt (weight x (1 + frac), floor 0.3). A day without a
+// snapshot behaves exactly as before. Snapshots are fixed once published, so every
+// viewer and the server's quest checks see the same city.
+const SOCIAL = new Map();
+export function setSocialSnapshots(byDay) {
+  let changed = false;
+  for (const [d, snap] of Object.entries(byDay || {})) {
+    const day = Number(d);
+    if (!Number.isFinite(day) || !snap || typeof snap !== "object") continue;
+    if (SOCIAL.get(day)?.ver === snap.ver) continue;
+    SOCIAL.set(day, { ver: String(snap.ver ?? day), boosts: snap.boosts || {} });
+    changed = true;
+  }
+  if (SOCIAL.size > 32) for (const d of [...SOCIAL.keys()].sort((a, b) => a - b).slice(0, SOCIAL.size - 32)) SOCIAL.delete(d);
+  if (changed) memo.clear();
+  return changed;
+}
+export function clearSocialSnapshots() { if (SOCIAL.size) { SOCIAL.clear(); memo.clear(); } }
+const socialVer = (day) => SOCIAL.get(day)?.ver ?? "-";
+
+// Unbiased leisure weights (what a subject likes on their own). social.js reads these to
+// work out where a subject's friends can be found.
+export function baseLeisure(s, seed = SEED) { return leisureWeights(s, seed, null); }
+
+function leisureWeights(s, seed, day = null) {
+  const snap = day == null ? null : SOCIAL.get(day);
+  const boost = snap?.boosts?.[keyOf(s)];
+  if (!boost) return baseLeisureWeights(s, seed);
+  return remember(`lwb|${subjKey(s, seed)}|${day}|${snap.ver}`, () => {
+    const { list } = baseLeisureWeights(s, seed);
+    const owl = isOwl(s, seed);
+    const top = list.reduce((m, [, v]) => Math.max(m, v), 0) || 1;
+    const w = new Map(list);
+    for (const [id, frac] of Object.entries(boost)) {
+      const p = PLACES[id];
+      if (!p || p.kind === "home" || (p.kind === "work" && !owl) || typeof frac !== "number") continue;
+      if (frac >= 0) w.set(id, (w.get(id) || 0) + Math.min(frac, 1.2) * top);
+      else if (w.has(id)) w.set(id, w.get(id) * Math.max(0.3, 1 + Math.max(frac, -1)));
+    }
+    const out = [...w.entries()];
+    return { list: out, total: out.reduce((a, [, v]) => a + v, 0) };
+  });
+}
+
+function baseLeisureWeights(s, seed) {
   return remember("lw|" + subjKey(s, seed), () => {
     const owl = isOwl(s, seed), t = tierIdx(s);
     const w = {};
@@ -558,7 +606,7 @@ function leisureWeights(s, seed) {
   });
 }
 function pickLeisure(s, day, i, seed, avoid) {
-  const { list, total } = leisureWeights(s, seed);
+  const { list, total } = leisureWeights(s, seed, day);
   let r = h01(`${seed}|leis|${keyOf(s)}|${day}|${i}`) * total;
   for (const [id, v] of list) { if ((r -= v) <= 0) return id === avoid && list.length > 1 ? list[(list.findIndex(x => x[0] === id) + 1) % list.length][0] : id; }
   return list[list.length - 1][0];
@@ -851,7 +899,7 @@ function planDay(s, day, seed) {
 // [{from, to, placeId, activity, fromPlaceId?, haunt?}] covering [0, 24) exactly.
 // Yesterday's overnight tail comes first; gaps are home.
 export function schedule(s, day, seed = SEED) {
-  return remember(`sch|${subjKey(s, seed)}|${day}`, () => {
+  return remember(`sch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}`, () => {
     const home = homeOf(s, seed);
     const raw = [
       ...planDay(s, day - 1, seed).map(g => ({ ...g, from: g.from - 24, to: g.to - 24 })),

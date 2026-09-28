@@ -6,6 +6,7 @@
 import { isCaseId } from "../lib/intake.js";
 import { getCase, updateCase, hitLimit } from "../lib/store.js";
 import { applyQuest, questState } from "../lib/quests.js";
+import { loadSocialSnapshots } from "../lib/social-store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
 
@@ -23,6 +24,9 @@ export default async (req, context) => {
   }
   const caseId = String((req.method === "GET" ? new URL(req.url).searchParams.get("caseId") : body?.caseId) || "").trim().toUpperCase();
   if (!isCaseId(caseId)) return json(400, { error: "That is not a case number." });
+  // Friends pull each other toward shared haunts (src/city/social.js); the contact and
+  // meeting checks must see the same city the browser does.
+  await loadSocialSnapshots().catch(() => false);
   try {
     try {
       if (!(await hitLimit(`quest-ip:${clientIp(req, context)}`, QUEST_CALLS_PER_HOUR, "hour")).ok) {

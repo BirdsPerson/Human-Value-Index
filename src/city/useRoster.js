@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { FAMOUS_FIGURES, slugify } from "../figures.js";
+import { baseRoster, mergeCensus } from "./roster.js";
 import { readCaseId, readLastResult } from "../caseFile.jsx";
 
 // Everyone uploaded into the Substrate: the figures on file, every citizen and referral
 // the census returns, and this browser's own file. Loaded once per visit to #city.
 
-const base = () => FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name), kind: "figure" }));
+const base = baseRoster;
 
 function withSelf(list) {
   const caseId = readCaseId(), last = readLastResult();
@@ -51,16 +51,7 @@ export function useRoster() {
     let off = false;
     fetch("/api/pen").then(r => (r.ok ? r.json() : Promise.reject(r.status))).then(d => {
       if (off) return;
-      // A referral of someone already on file is the same person: skip it by name or slug.
-      const have = new Set(FAMOUS_FIGURES.flatMap(f => [f.name, slugify(f.name)]));
-      const out = [];
-      for (const s of d?.subjects || []) {
-        if (!s || !s.name || typeof s.score !== "number") continue;
-        const slug = s.slug || slugify(s.baseName || s.name);
-        if (have.has(s.name) || have.has(slug) || (s.baseName && have.has(s.baseName))) continue;
-        have.add(s.name); have.add(slug);
-        out.push({ ...s, slug, kind: s.kind === "citizen" ? "citizen" : "figure" });
-      }
+      const out = mergeCensus(d?.subjects);
       setExtra(out);
       setCensus("ok");
     }).catch(() => { if (!off) setCensus("down"); });

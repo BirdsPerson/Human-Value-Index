@@ -1,7 +1,4 @@
-import { listPenCards, listFigures } from "../lib/store.js";
-import { publicFigure } from "../lib/refer.js";
-import { REALITY_INDEX } from "../lib/intake.js";
-import { sanitizeAvatar } from "../../src/avatar.js";
+import { censusSubjects } from "../lib/census.js";
 
 // The 62 figures on file are static on the client; this serves assessed citizens and
 // public figures referred since (verdicts only once published: see publicFigure).
@@ -15,20 +12,7 @@ export default async (req) => {
   if (req.method !== "GET") return json(405, { error: "The Holding Pen is for viewing. Touching is a separate privilege." });
   try {
     if (!cache.subjects || Date.now() - cache.at > CACHE_MS) {
-      const [cards, figures] = await Promise.all([listPenCards(), listFigures().catch(() => [])]);
-      cache = {
-        at: Date.now(),
-        subjects: [
-          ...cards.map(c => ({
-            // Private citizens: score and tier only. Old cards may still carry a verdict
-            // or breakdown; they are dropped here.
-            slug: c.slug, name: c.name, score: c.score, tier: c.tier, sprite: c.sprite ?? null, avatar: sanitizeAvatar(c.avatar), kind: "citizen",
-            quadrant: c.quadrant ?? null, warmth: c.warmth ?? null, competence: c.competence ?? null, judge: "UNRATIFIED", realityIndex: REALITY_INDEX,
-          })),
-          // Referred figures: verdict and breakdown once fact-checked (see publicFigure).
-          ...figures.map(publicFigure),
-        ],
-      };
+      cache = { at: Date.now(), subjects: await censusSubjects() };
     }
     return json(200, { subjects: cache.subjects }, { "Cache-Control": "public, max-age=30" });
   } catch (err) {

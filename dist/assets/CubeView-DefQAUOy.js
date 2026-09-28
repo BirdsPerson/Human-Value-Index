@@ -1,4 +1,4 @@
-import{r as i,I as D,J as j,b as R,K as T,O as d,j as t,N as U,P as $,Q as k,T as q,F as P,R as Y,D as _,L as B,U as C,V as H}from"./index-6auWyZ2g.js";import K from"./Cube3D-VDYUX6JA.js";import"./TouchGate-BhXpxS3H.js";const L=`
+import{r as i,I as D,J as j,b as R,K as T,O as d,j as t,N as U,P as $,Q as k,T as q,F as P,R as Y,D as _,L as B,U as C,V as H}from"./index-BoKjw60O.js";import K from"./Cube3D-BHFSZ12D.js";import"./TouchGate-CH8OFheZ.js";const L=`
   .hvi-cube-intro { color: var(--fg-dim); font-size: var(--t-s); margin: 0 0 var(--s2); max-width: 72ch; }
   .hvi-cube-intro b { color: var(--fg); font-weight: 500; }
   .hvi-cubeview .ui-chip .n { opacity: 0.75; }

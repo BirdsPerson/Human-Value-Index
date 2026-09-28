@@ -16,6 +16,8 @@ import { buildingHref, parseCityRoute } from "./city3d.js";
 import { readCaseId } from "../caseFile.jsx";
 import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
+import SocialPanel from "./SocialPanel.jsx";
+import { useSocial } from "./socialClient.js";
 
 // #city: the Substrate (STREET, the default; the 2D MAP; or the STACK of floor planes). #city/<district>: one district from the inside.
 // #city/<district>/<building>[?floor=N]: one building in cross-section.
@@ -104,11 +106,17 @@ export default function City({ route }) {
 
   // The PA rotates every eight seconds: every other line is the Loop's own announcement
   // (the latest at this district's station inside one, anywhere on the map).
+  const social = useSocial();
+  const socialRef = useRef(null);
+  socialRef.current = social;
   useEffect(() => { const iv = setInterval(() => setK(x => x + 1), 8000); return () => clearInterval(iv); }, []);
   useEffect(() => {
     const clock = clockAt(Date.now()), st = { ...statsRef.current, clock }, mt = clock.mt, here = hereRef.current;
     const evs = loopEvents(mt - 8 / 60, mt + 1e-6).filter(e => !here || e.stationId === here);
-    setPa(paLine(st, k, evs.length ? evs[evs.length - 1].text : null));
+    // Every third line is gossip from the social ledger, when there is any.
+    const gossip = socialRef.current?.events || [];
+    if (!here && gossip.length && k % 3 === 2) setPa(gossip[Math.floor(k / 3) % Math.min(gossip.length, 12)].text);
+    else setPa(paLine(st, k, evs.length ? evs[evs.length - 1].text : null));
     // a new district re-reads its own station's line at once
   }, [k, roster, districtId]);
 
@@ -193,6 +201,7 @@ export default function City({ route }) {
               : <CityMap censusRef={censusRef} onDistrict={go} onOpen={open} />}
       </Frame>
       {!d && <MapKey />}
+      {!d && !b && <SocialPanel />}
       <div className="hvi-city-help">
         {b
           ? b.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "TAP A FLOOR TO FOCUS IT. HOVER A SUBJECT FOR ITS ASSIGNMENT; CLICK TO READ THE FILE. ON A PHONE: TAP TWICE."

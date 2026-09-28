@@ -71,3 +71,8 @@ export const trainsAt = (mt) => SIM.trainsAt(mt);
 export const timetable = (stationId, mt, n) => SIM.timetable(stationId, mt, n);
 export const loopEvents = (fromMt, toMt) => SIM.loopEvents(fromMt, toMt);
 export const occupancyAt = (subjects, mt) => SIM.occupancy(subjects, mt);
+
+// Relationships bias where friends spend their leisure. Every page that reads the city
+// through here (the map, the street, the quest log) loads the same published snapshots.
+import { ensureSocial } from "./socialClient.js";
+if (typeof window !== "undefined") ensureSocial();

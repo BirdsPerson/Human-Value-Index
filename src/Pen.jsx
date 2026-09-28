@@ -7,6 +7,7 @@ import {
   paintPlaceholder, paintAvatar, loadManifest, loadImage, loadRepoSprite, mulberry32,
 } from "./sprites.js";
 import FilePhoto from "./FilePhoto.jsx";
+import { Associates, ASSOC_CSS } from "./city/Associates.jsx";
 import {
   FLOORS, F, FH, ROOF_H, BUILDING_H, FOUNDATION, SHAFT_X, SHAFT_W, ROOM_X0, WALL_TOP, WALK_TOP, DOOR_W,
   floorTop, walkTop, walkBot, roomX1, doorX, floorAt, prefsFor, chooseFloor, stayFor, isLow,
@@ -194,7 +195,8 @@ const penStyles = `
 export function injectPenStyles() {
   let el = document.getElementById('hvi-pen-styles');
   if (!el) { el = document.createElement('style'); el.id = 'hvi-pen-styles'; document.head.appendChild(el); }
-  if (el.textContent !== penStyles) el.textContent = penStyles;
+  const css = penStyles + ASSOC_CSS;
+  if (el.textContent !== css) el.textContent = css;
 }
 
 // Subjects walking the building at once; the rest of a large roster stays in the registry.
@@ -242,6 +244,8 @@ export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return 
             </div>
           </div>
           {extra}
+          {/* Who this subject keeps company with (the social ledger): figures and citizens alike. */}
+          <Associates slug={subject.slug || slugify(subject.baseName || subject.name)} />
           <ScoreCard score={subject.score} tierLabel={subject.tier} verdict={subject.verdict} label="VALUE INDEX">
             <CubeLine subject={subject} />
             {subject.kind === "citizen" && !subject.verdict && (
