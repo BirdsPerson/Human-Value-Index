@@ -38,7 +38,7 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 4. **Directives & promotions.** Weakest-category Directives delivered by a fitting
    figure; tier promotion ceremonies; floors/districts unlocked by tier.
 
-5. [blocked: email login — 4 Namecheap DNS records never published] **Economy v1:**
+5. **Economy v1** (unblocked 2026-09-28: DNS moved to Netlify, Resend domain verified, email login live):
    CYCLES UBI daily, invest in 7 district industries (herding thins returns), job
    ladder wages, society-allocation readout. Wealth never raises score; conduct does.
 
