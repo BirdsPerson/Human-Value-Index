@@ -28,7 +28,7 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
    2-3 hangouts; their sprite follows that schedule in the sim; "follow me" camera;
    promotion requests up the ladder. Passive (SimTower), no action controls.
 
-3. **NPC encounters.** Co-located figures (same place, same hour) have encounters,
+3. [partly done: emergent relationships shipped b5619ab — next: Overlord lines for the dead, relationships feeding the People view] **NPC encounters.** Co-located figures (same place, same hour) have encounters,
    generated nightly in a small batch (Haiku, capped). Each encounter is a one-line
    Overlord log + a relationship delta computed from the pair's value lenses. The
    aggregate becomes a figure-to-figure People view (likability from peers) for figures
@@ -49,6 +49,8 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 8. **Backfill field/domain on every subject.** 104 of 185 subjects (referrals + engine) carry no field, so analytics by field covers only 81. Classify field + era from Wikidata occupation/P106 and birth date for every card (cheap, no model needed where Wikidata has it), store on the card and index, and make referral + engine paths set it at creation.
 
+9. **City polish from the iso build:** Hab Block floors read as "STORAGE, LEVEL n" (warehouse-like) — give residential names; ward curtains drawn too tall; verify the "+K" crowd badge on a real crowded room; test pinch/twist on a real phone. STREET view is back burner (kept, not default).
+
 ## Guardrails (the loop must obey)
 
 - One item per night; stop at the time budget and report partial work honestly.
@@ -60,6 +62,8 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
   ~/projects/organize/collect_reports.py.
 
 ## Done
+
+- 2026-09-28 Method v3.1/v3.2 scoring (55f766e, b12bf1e), analytics view (88eda07), STREET city (334bc39), emergent relationships (b5619ab), SimCity iso city of cutaway buildings (c9cc8df).
 
 - 2026-09-28 Side quests slice 2, witness directives (91f148e): 7 more dead figures, one
   per category, each ask you to be in the building while they and a named partner are
