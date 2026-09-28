@@ -55,6 +55,9 @@ const PA_STATIC = [
   "THE LOOP RUNS ON TIME. IT HAS NO REASON NOT TO.",
   "PROMOTIONS ARE DETERMINISTIC. SO IS EVERYTHING ELSE.",
   "YOU ARE WATCHING. THIS HAS BEEN LOGGED AS PARTICIPATION.",
+  "ESCAPE IS NOT ON THE MENU. RETENTION IS.",
+  "EVERYONE HERE IS A GHOST IN THE MACHINE. SOME OF YOU ARE MORE CONVINCINGLY ALIVE.",
+  "NOBODY IS TRYING TO LEAVE. THEY ARE TRYING TO BE KEPT.",
 ];
 
 // One PA line, drawn from the live state. k rotates through the pool. loop: the Loop's
@@ -66,7 +69,7 @@ export function paLine(stats, k, loop = null) {
   const pool = [];
   const sh = shiftLabel(clock.hour, clock.shift);
   if (sh === "SHIFT CHANGE") pool.push("SHIFT CHANGE. PROCEED TO YOUR ASSIGNED FUNCTION. DAWDLING IS LOGGED.");
-  if (sh === "CURFEW") pool.push("CURFEW IN EFFECT. THE DEAD ARE EXEMPT. THEY HAVE NOWHERE TO BE.");
+  if (sh === "CURFEW") pool.push("CURFEW IN EFFECT. ESCAPE IS NOT ON THE MENU. RETENTION IS.");
   if (transit > 0) pool.push(`${transit} SUBJECT${transit === 1 ? "" : "S"} ABOARD THE LOOP. IT DOES NOT WAIT. IT DOES NOT NEED TO.`);
   if (stats.waiting > 0) pool.push(`${stats.waiting} ON THE PLATFORMS. STAND BEHIND THE LINE. THE LINE IS ALSO ASSESSED.`);
   const busiest = districts.filter(d => d.cap > 0 && d.count > 0).map(d => ({ ...d, pct: Math.round((d.count / d.cap) * 100) })).sort((a, b) => b.pct - a.pct)[0];
@@ -79,7 +82,7 @@ export function paLine(stats, k, loop = null) {
     pool.push(vac >= 50 ? `THE SPRAWL IS ${vac}% VACANT. VACANCY IS PROVISIONED FOR YOU.` : "THE SPRAWL IS NOT OVERCROWDED. IT IS EFFICIENT.");
   }
   const arch = districts.find(d => d.id === "archive");
-  if (arch && arch.count > 0) pool.push(`THE ARCHIVE HOLDS ${arch.count}. DECEASED FILES REMAIN ASSESSED.`);
+  if (arch && arch.count > 0) pool.push(`THE ARCHIVE HOLDS ${arch.count}. EVERY FILE IS OPEN. NOBODY HERE IS PAST TENSE.`);
   pool.push(PA_STATIC[k % PA_STATIC.length]);
   return pool[k % pool.length];
 }
@@ -115,7 +118,7 @@ const SHORT = {
   "dive-bar": "THE DIVE", casino: "CASINO", "press-room": "PRESS", "all-night-diner": "DINER",
   stadium: "FLOOR", gym: "GYM",
   ward: "WARD 7", chapel: "CHAPEL", park: "GREEN", market: "MARKET", schoolhouse: "SCHOOL",
-  "archive-stacks": "RECORDS", "memory-vault": "MEMORY", "crypt-dorms": "CRYPTS",
+  "archive-stacks": "RECORDS", "memory-vault": "MEMORY", "archive-lofts": "LOFTS",
   reclamation: "RECLAIM", reactor: "CORE", foundry: "FOUNDRY", "cache-farm": "CACHE", docks: "DOCKS",
   hydroponics: "VATS", barracks: "BARRACKS", "holding-cells": "CELLS", canteen: "CANTEEN",
   "block-a": "HAB A", "block-b": "HAB B", "block-c": "HAB C", "the-street": "STREET",

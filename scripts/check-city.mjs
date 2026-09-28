@@ -10,7 +10,7 @@ import {
   DISTRICTS, PLACES, JOBS, JOB, assignJob, homeOf, schedule, whereAt, machineClock, occupancy,
   statusLine, SEED, toHours, BUS, V_WALK, V_BUS, SHIFT_HOURS, fieldsOf,
   LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, trainsAt, nextArrival, timetable, loopEvents, HEADWAY, DWELL, V_TRAIN, CAR_CAP,
-  BUILDINGS, BUILDING,
+  BUILDINGS, BUILDING, isOwl,
 } from "../src/city/sim.js";
 import { FLOORS as HQ_FLOORS } from "../src/building.js";
 import { shiftLabel } from "../src/city/cityKit.js";
@@ -122,7 +122,6 @@ for (const s of ALL) {
     if (tier === "SOYLENT GREEN") ok(j.rank === 0, `${s.slug} SOYLENT GREEN at the lowest grade`);
   }
   ok(PLACES[homeOf(s)]?.kind === "home", `${s.slug} has a home`);
-  if (s.died) ok(homeOf(s) === "crypt-dorms", `${s.slug} (deceased) lives in the Archive`);
 }
 const used = Object.keys(perJob).length;
 console.log(`  ${used}/${JOBS.length} jobs filled; busiest: ${Object.entries(perJob).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => `${k} ${v}`).join(", ")}`);
@@ -313,19 +312,23 @@ ok(bad.order === 0, `trip stages only go forward (${bad.order} reversals)`);
 ok(bad.floor === 0 && bad.bldg === 0, `whereAt floors are valid for the room, and nobody in transit is on a floor (${bad.floor}/${bad.bldg})`);
 ok(bad.floorHop === 0, `nobody changes floor in the middle of a stay (${bad.floorHop})`);
 
-// ---- the dead at night --------------------------------------------------------------------------
-section("the dead");
-const dead = ALL.filter(s => s.died);
-let haunted = 0;
-for (const s of dead) for (let day = 30; day < 37; day++) {
-  for (const h of [1.5, 2.5, 3.5, 4.5, 5.2]) {
-    const w = whereAt(s, (day - 1) * 24 + h);
-    ok(w.districtId === "archive" && w.activity === "home", `${s.slug} in the Archive at day ${day} ${h}h (got ${w.activity}@${w.placeId})`);
-  }
-  if (schedule(s, day).some(g => g.haunt)) haunted++;
+// ---- ghosts in the machine: the dead live like everyone else ------------------------------------
+section("the dead are ordinary uploads");
+{
+  const dead = ALL.filter(s => s.died && homeOf(s) !== "penthouses"), live = ALL.filter(s => !s.died && homeOf(s) !== "penthouses");
+  const share = (xs, f) => xs.length ? xs.filter(f).length / xs.length : 0;
+  const inLofts = s => homeOf(s) === "archive-lofts";
+  const dL = share(dead, inLofts), lL = share(live, inLofts);
+  console.log(`  ${dead.length} dead, ${live.length} living (non-top-tier): Archive Lofts share ${Math.round(dL * 100)}% vs ${Math.round(lL * 100)}%`);
+  ok(dead.length === 0 || dL < 0.6, `the dead are not concentrated in the Archive (${Math.round(dL * 100)}%)`);
+  ok(Math.abs(dL - lL) < 0.25, `the dead and living share homes alike (${Math.round(dL * 100)}% vs ${Math.round(lL * 100)}%)`);
+  const deadJobsArchive = share(dead, s => assignJob(s).district === "archive"), liveJobsArchive = share(live, s => assignJob(s).district === "archive");
+  ok(Math.abs(deadJobsArchive - liveJobsArchive) < 0.2, `the dead get jobs distributed like the living (archive jobs ${Math.round(deadJobsArchive * 100)}% vs ${Math.round(liveJobsArchive * 100)}%)`);
+  let owls = 0, hauntNights = 0;
+  for (const s of ALL) if (isOwl(s)) { owls++; for (let day = 30; day < 33; day++) if (schedule(s, day).some(g => g.haunt)) hauntNights++; }
+  console.log(`  ${owls} night wanderers (living and dead); ${hauntNights} haunt-nights over 3 days`);
+  ok(owls > 0 && hauntNights > 0, "night wandering exists as optional behaviour for anyone");
 }
-console.log(`  ${dead.length} deceased; ${haunted}/${dead.length * 7} nights spent haunting a tendency`);
-ok(haunted > dead.length * 3, "the dead go out haunting on most nights");
 
 // ---- capacity -----------------------------------------------------------------------------------
 section("capacity");

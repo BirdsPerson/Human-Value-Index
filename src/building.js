@@ -42,7 +42,8 @@ export function floorAt(y) {
 }
 
 // Room preferences by tier, in FLOORS order: EXEC, BAR, LOBBY, BREAK, ARCHIVE, PROC.
-// The dead prefer the Archive; the lowest tiers drift down to PROCESSING.
+// The lowest tiers drift down to PROCESSING. Everyone is a ghost in the machine: the dead
+// get no floor of their own.
 const PREFS = {
   "ESSENTIAL INFRASTRUCTURE": [6, 3, 1, 0.5, 0, 0.05],
   "RETAINED SPECIALIST": [4, 4, 1.5, 1, 0, 0.1],
@@ -56,13 +57,8 @@ export const isLow = (tierLabel) => LOW.has(tierLabel);
 
 export function prefsFor(tierLabel, dead) {
   const p = (PREFS[tierLabel] || PREFS["TOLERATED GENERALIST"]).slice();
-  if (dead) {
-    // Deceased files wander the Archive. Deceased monsters still visit PROCESSING.
-    // They still haunt the Bar now and then; the Archive is home.
-    for (let i = 0; i < p.length; i++) p[i] *= 0.3;
-    p[F.archive] = 5;
-    if (isLow(tierLabel)) p[F.proc] = 3;
-  }
+  // The Archive is a records floor anyone may wander; the dead no longer live there.
+  p[F.archive] = Math.max(p[F.archive], 0.6);
   return p;
 }
 

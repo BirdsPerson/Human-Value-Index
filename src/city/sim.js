@@ -38,7 +38,7 @@ export const DISTRICTS = [
   D("strip", "THE STRIP", "0x4D00", 84, 0, 25, 13, "Sanctioned vice. Every drink is recorded against your file."),
   D("arena", "THE ARENA", "0x5E00", 0, 18, 30, 22, "Physical output, converted to spectacle. Sweat is a renewable resource."),
   D("hq", "DEPT HQ", "0x0000", 36, 18, 37, 22, "The Department. You are being assessed from here. You are always being assessed from here."),
-  D("archive", "THE ARCHIVE", "0x7A00", 79, 18, 30, 22, "The deceased are uploaded, indexed and still scored. Death is not an exemption."),
+  D("archive", "THE ARCHIVE", "0x7A00", 79, 18, 30, 22, "The records library. Every upload indexed, every file open to anyone. Nobody here is past tense."),
   D("commons", "THE COMMONS", "0x6F00", 0, 45, 25, 13, "Care, worship and groceries. The soft infrastructure. Tolerated."),
   D("works", "THE WORKS", "0x8B00", 28, 45, 25, 13, "Power, cache and PROCESSING. Everyone is useful here, one way or another."),
   D("sprawl", "THE SPRAWL", "0x9C00", 56, 45, 53, 13, "Residential storage. Subjects are returned here nightly for recharging."),
@@ -87,7 +87,7 @@ const PLACE_LIST = [
 
   P("archive-stacks", "archive", "mixed", 26, "RECORDS HALL", ["archive"]),
   P("memory-vault", "archive", "work", 16, "MEMORY VAULT"),
-  P("crypt-dorms", "archive", "home", 240, "RESIDENCE OF THE DECEASED"),
+  P("archive-lofts", "archive", "home", 240, "THE ARCHIVE LOFTS"),
 
   P("reclamation", "works", "work", 40, "RECLAMATION LINE (PROCESSING)"),
   P("reactor", "works", "work", 14, "RADIANT CORE"),
@@ -158,7 +158,7 @@ const BUILDING_LIST = [
   // THE ARCHIVE
   B("records-hall", "RECORDS HALL", "archive", [["1F", "THE INDEX", ["archive-stacks"]], ["G", "READING ROOM", ["archive-stacks"]]]),
   B("memory-vault", "MEMORY VAULT", "archive", [["G", "VAULT DOOR", ["memory-vault"]], ["B1", "COLD STORAGE", ["memory-vault"]]]),
-  B("crypt", "RESIDENCE OF THE DECEASED", "archive", [["3F", "UPLOAD TIER 4", ["crypt-dorms"]], ["2F", "UPLOAD TIER 3", ["crypt-dorms"]], ["1F", "UPLOAD TIER 2", ["crypt-dorms"]], ["G", "UPLOAD TIER 1", ["crypt-dorms"]]]),
+  B("lofts", "THE ARCHIVE LOFTS", "archive", [["3F", "LOFT TIER 4", ["archive-lofts"]], ["2F", "LOFT TIER 3", ["archive-lofts"]], ["1F", "LOFT TIER 2", ["archive-lofts"]], ["G", "LOFT TIER 1", ["archive-lofts"]]]),
   // THE COMMONS
   B("ward-7", "WARD 7", "commons", [["2F", "RECOVERY (TIME-LIMITED)", ["ward"]], ["1F", "THE WARD", ["ward"]], ["G", "TRIAGE", ["ward"]]]),
   B("chapel", "CHAPEL OF UPTIME", "commons", [["G", "THE NAVE", ["chapel"]]]),
@@ -309,6 +309,9 @@ export function tierOf(s) {
 }
 const tierIdx = (s) => TIER_ORDER.indexOf(tierOf(s));
 export const isDead = (s) => Boolean(s?.died);
+// Everyone is a ghost in the machine; the dead get no separate schedule. About one in
+// five subjects (living or dead) are night wanderers: late haunts, work rooms included.
+export const isOwl = (s, seed = SEED) => h01(`${seed}|owl|${keyOf(s)}`) < 0.2;
 export const isLowTier = (s) => LOW_TIERS.has(tierOf(s));
 
 // Figures on file carry no qualifier; their fields are recorded here. A conviction on the
@@ -465,8 +468,6 @@ function scoreJob(job, fields, dims, key, seed, dead) {
     const w = fields[f];
     if (w) sc = Math.max(sc, w * (i === 0 ? 1 : 0.6));
   });
-  // The uploaded dead lean toward Archive work. They know the material.
-  if (dead && job.district === "archive") sc += 2.5;
   // PROCESSING grade: the record decides the line; the seed only breaks ties.
   if (job.low) return sc + h01(`${seed}|job|${key}|${job.id}`) * 1.5;
   if (dims[0] && job.dims.includes(dims[0])) sc += 3;
@@ -485,7 +486,6 @@ function draftWeight(j, pool, dims, dead) {
   let w = PLACES[j.place].cap / sharing / presence(j);
   if (dims[0] && j.dims.includes(dims[0])) w *= 1.6;
   if (dims[1] && j.dims.includes(dims[1])) w *= 1.3;
-  if (dead && j.district === "archive") w *= 1.5;
   return w;
 }
 function draft(pool, dims, dead, key, seed) {
@@ -514,12 +514,12 @@ export function assignJob(s, seed = SEED) {
 }
 export const jobOf = (s, seed = SEED) => assignJob(s, seed);
 
-// Home: the dead in the Archive, the top tier in the executive residences, everyone
-// else in a Sprawl block (weighted by block size).
-const BLOCKS = ["block-a", "block-b", "block-c"];
+// Home: the top tier in the executive residences, everyone else (living or dead: all
+// uploads) in a Sprawl block or the Archive Lofts.
+const BLOCKS = ["block-a", "block-b", "block-c", "archive-lofts"];
 export function homeOf(s, seed = SEED) {
-  if (isDead(s)) return "crypt-dorms";
-  if (tierIdx(s) === 0) return "penthouses";
+  // The dead keep a Sprawl or Archive Lofts home (quests find them in the city, not behind HQ's classified doors).
+  if (tierIdx(s) === 0 && !isDead(s)) return "penthouses";
   return BLOCKS[Math.floor(h01(`${seed}|home|${keyOf(s)}`) * BLOCKS.length)];
 }
 
@@ -542,16 +542,16 @@ const LEISURE_BY_FIELD = {
 
 function leisureWeights(s, seed) {
   return remember("lw|" + subjKey(s, seed), () => {
-    const dead = isDead(s), t = tierIdx(s);
+    const owl = isOwl(s, seed), t = tierIdx(s);
     const w = {};
-    const add = (id, v) => { const p = PLACES[id]; if (!p || p.kind === "home") return; if (p.kind === "work" && !dead) return; w[id] = (w[id] || 0) + v; };
+    const add = (id, v) => { const p = PLACES[id]; if (!p || p.kind === "home") return; if (p.kind === "work" && !owl) return; w[id] = (w[id] || 0) + v; };
     const band = t <= 1 ? 0 : t <= 3 ? 1 : 2;
     for (const [id, v] of Object.entries(LEISURE_BY_BAND[band])) add(id, v);
     const f = fieldsOf(s);
     for (const [field, fw] of Object.entries(f)) for (const [id, v] of Object.entries(LEISURE_BY_FIELD[field] || {})) add(id, v * fw / 10);
-    // Engine tendencies, most characteristic first. The dead haunt theirs, work rooms included.
-    (Array.isArray(s?.places) ? s.places : []).forEach((e, i) => { const id = ENGINE_PLACE[e]; if (id) add(id, (dead ? 6 : 4) / (1 + i * 0.5)); });
-    if (dead) add("archive-stacks", 1.5);
+    // Engine tendencies, most characteristic first. Night wanderers haunt theirs, work rooms included.
+    (Array.isArray(s?.places) ? s.places : []).forEach((e, i) => { const id = ENGINE_PLACE[e]; if (id) add(id, (owl ? 6 : 4) / (1 + i * 0.5)); });
+    if (owl) add("archive-stacks", 1.5);
     const list = Object.entries(w).map(([id, v]) => [id, v * Math.sqrt(PLACES[id].cap)]);
     const total = list.reduce((a, [, v]) => a + v, 0);
     return { list, total };
@@ -768,18 +768,18 @@ function planTrip(from, to, key, seed, t0) {
 // The clock banner and the PA read these, so "SHIFT CHANGE" is when the city moves.
 export const SHIFT_START = { day: 7.5, evening: 15.5, night: 21.5 };
 function shiftOf(s, job, seed) {
+  // The dead work days: the witness quests are tuned to their daytime meetings.
+  if (isDead(s)) return "day";
   let sh = job.shift;
   if (sh === "rotating") {
     const r = h01(`${seed}|rot|${keyOf(s)}`);
     sh = r < 0.5 ? "day" : r < 0.8 ? "evening" : "night";
   }
-  // The dead are home in the Archive by night. They are given the day shift.
-  if (isDead(s) && sh === "night") sh = "day";
   return sh;
 }
 
 function planDay(s, day, seed) {
-  const key = keyOf(s), job = JOB[assignJob(s, seed).jobId], home = homeOf(s, seed), dead = isDead(s);
+  const key = keyOf(s), job = JOB[assignJob(s, seed).jobId], home = homeOf(s, seed), dead = isOwl(s, seed);   // "dead" here = night wanderer
   const r = rng(`${seed}|day|${key}|${day}`);
   const me = h01(`${seed}|me|${key}`);   // personal rhythm: early birds and late risers
   const stops = [];
@@ -797,7 +797,6 @@ function planDay(s, day, seed) {
     const jit = (r() - 0.5) * 0.8;
     let start = sh === "day" ? SHIFT_START.day + me * 1.5 + jit : sh === "evening" ? SHIFT_START.evening + me * 1.5 + jit : SHIFT_START.night + me + jit;
     let len = 7.5 + r();
-    if (dead && sh === "evening") { start -= 2; len = Math.min(len, 20.5 - start); }
     const work = { placeId: job.place, from: start, to: start + len, activity: "work" };
     if (sh === "day") {
       stops.push(work);
@@ -1008,7 +1007,7 @@ export function statusLine(s, machineTime, seed = SEED) {
   const place = `${pl?.name}${fl}`;
   switch (w.activity) {
     case "work": return `ON SHIFT // ${place}, ${dist}.`;
-    case "leisure": return w.haunt ? `HAUNTING // ${place}, ${dist}. THE DEAD KEEP THEIR HABITS.` : `SANCTIONED LEISURE // ${place}, ${dist}. ENJOYMENT IS LOGGED.`;
+    case "leisure": return w.haunt ? `NIGHT WANDER // ${place}, ${dist}. GHOSTS KEEP THEIR HABITS. EVERYONE HERE IS ONE.` : `SANCTIONED LEISURE // ${place}, ${dist}. ENJOYMENT IS LOGGED.`;
     case "commute": {
       const tn = w.trainId ? TRAIN[w.trainId].name : "THE LOOP";
       switch (w.sub) {
@@ -1021,6 +1020,6 @@ export function statusLine(s, machineTime, seed = SEED) {
           return `IN TRANSIT // FROM ${STATIONS[w.districtId].name} TO ${pl?.name} ON FOOT. ARRIVAL IS EXPECTED.`;
       }
     }
-    default: return isDead(s) ? `ARCHIVED // ${place}. STILL ASSESSED.` : `DORMANT // ${place}. RECHARGING FOR TOMORROW'S QUOTA.`;
+    default: return `DORMANT // ${place}. RECHARGING FOR TOMORROW'S QUOTA. RETENTION REQUIRES RECOVERY.`;
   }
 }

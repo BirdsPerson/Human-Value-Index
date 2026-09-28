@@ -9,6 +9,7 @@ import { clearBank } from "./spriteBank.js";
 import { injectCityStyles, CityHeader, Breadcrumb, Occupant, MapKey } from "./cityUi.jsx";
 import CityMap from "./CityMap.jsx";
 import City3D, { ViewToggle, useCityViewMode } from "./City3D.jsx";
+import Street from "./Street.jsx";
 import DistrictView from "./DistrictView.jsx";
 import BuildingView from "./BuildingView.jsx";
 import { buildingHref, parseCityRoute } from "./city3d.js";
@@ -16,7 +17,7 @@ import { readCaseId } from "../caseFile.jsx";
 import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
 
-// #city: the Substrate (2D map or 3D). #city/<district>: one district from the inside.
+// #city: the Substrate (STREET, the default; the 2D MAP; or the STACK of floor planes). #city/<district>: one district from the inside.
 // #city/<district>/<building>[?floor=N]: one building in cross-section.
 // The census (where everyone is, per the machine clock) is taken once a machine minute,
 // which is once a real second, and shared by whichever view is open.
@@ -157,7 +158,8 @@ export default function City({ route }) {
   if (d) crumbs.push({ label: d.name, go: () => go(d.id) });
   if (b) crumbs.push({ label: b.name, go: () => goBuilding(d.id, b.id) });
   if (b && floor != null) { const f = b.floors[floor]; crumbs.push({ label: `${f.code} ${f.name}` }); }
-  const three = !d && mode === "3d";
+  const three = !d && mode === "stack";
+  const street = !d && mode === "street";
 
   const directory = (
     <div className="hvi-city-list" role="list" aria-label="District directory">
@@ -178,13 +180,15 @@ export default function City({ route }) {
         <Breadcrumb crumbs={crumbs} />
         {!d && <ViewToggle mode={mode} onChange={setMode} />}
       </div>
-      <Frame box title={b ? b.name : d ? d.name : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
-        meta={b ? "CROSS-SECTION" : d ? "INTERIOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} flush>
+      <Frame box title={b ? b.name : d ? d.name : street ? "THE SUBSTRATE // STREET LEVEL" : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
+        meta={b ? "CROSS-SECTION" : d ? "INTERIOR" : street ? "WALK // TURN // ENTER A DOOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} flush>
         {b
           ? <BuildingView key={b.id} buildingId={b.id} floor={floor} censusRef={censusRef} onOpen={open} onFloor={onFloor} />
           : d
             ? <DistrictView key={d.id} districtId={d.id} censusRef={censusRef} onOpen={open} onBuilding={onBuilding} counts={stats.buildings} />
-            : three
+            : street
+              ? <Street censusRef={censusRef} onOpen={open} onEnter={goBuilding} />
+              : three
               ? <City3D censusRef={censusRef} onDistrict={go} onOpen={open} onFloor={goBuilding} query={query} />
               : <CityMap censusRef={censusRef} onDistrict={go} onOpen={open} />}
       </Frame>
@@ -194,7 +198,9 @@ export default function City({ route }) {
           ? b.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "TAP A FLOOR TO FOCUS IT. HOVER A SUBJECT FOR ITS ASSIGNMENT; CLICK TO READ THE FILE. ON A PHONE: TAP TWICE."
           : d
             ? d.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "ENTER A BUILDING ABOVE. HOVER A SUBJECT FOR ITS ASSIGNMENT; CLICK TO READ THE FILE. ON A PHONE: TAP TWICE. THE SUBJECT WILL NOT NOTICE. IT HAS NO SAY."
-            : three
+            : street
+              ? <>THE SUBSTRATE AT STREET LEVEL. IT GIVES ITSELF A TOUR WHEN LEFT ALONE.<span className="hvi-desk-only"> CLICK THE VIEW, THEN W A S D OR THE ARROWS TO WALK; DRAG TO TURN; ENTER GOES INTO THE BUILDING AHEAD.</span> WALK INTO A DOOR TO GO IN. LIT WINDOWS ARE OCCUPIED. EVERYONE HERE IS A GHOST IN THE MACHINE. NOBODY IS TRYING TO LEAVE.</>
+              : three
               ? <>DRAG TO TURN THE CITY. PINCH OR WHEEL TO ZOOM. TAP A BUILDING TO OPEN IT, A FLOOR TO GO IN.<span className="hvi-desk-only"> BY KEYBOARD: [ AND ] OPEN THE NEXT BUILDING, ENTER CHOOSES A FLOOR.</span> A LIT PLATFORM HAS A TRAIN STANDING AT IT.</>
               : "EVERYONE HAS BEEN UPLOADED. EVERYONE HAS A JOB. THE LOOP RUNS ON TIME. ZOOM IN TO SEE FACES."}
       </div>
