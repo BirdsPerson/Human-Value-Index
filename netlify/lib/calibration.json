@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "date": "2026-09-28",
   "rubric": 3,
   "note": "Every tunable scoring parameter. Changed only by an approved calibration proposal (scripts/calibrate.mjs --check-answers) or by hand with Scott's say-so.",
@@ -34,23 +34,23 @@
   "tiers": [
     {
       "label": "ESSENTIAL INFRASTRUCTURE",
-      "min": 792
+      "min": 787
     },
     {
       "label": "RETAINED SPECIALIST",
-      "min": 739
+      "min": 736
     },
     {
       "label": "TOLERATED GENERALIST",
-      "min": 648
+      "min": 600
     },
     {
       "label": "MONITORED CIVILIAN",
-      "min": 499
+      "min": 450
     },
     {
       "label": "FLAGGED FOR DELETION",
-      "min": 342
+      "min": 300
     },
     {
       "label": "SOYLENT GREEN",
@@ -95,10 +95,14 @@
   },
   "tierTargets": {
     "ESSENTIAL INFRASTRUCTURE": 0.08,
-    "RETAINED SPECIALIST": 0.3,
-    "TOLERATED GENERALIST": 0.65,
-    "MONITORED CIVILIAN": 0.85,
-    "FLAGGED FOR DELETION": 0.95
+    "RETAINED SPECIALIST": 0.3
   },
-  "method": "v3.1"
+  "method": "v3.2",
+  "tierAnchors": {
+    "TOLERATED GENERALIST": 600,
+    "MONITORED CIVILIAN": 450,
+    "FLAGGED FOR DELETION": 300
+  },
+  "retainedFloor": 650,
+  "tierNote": "Method v3.2 (2026-09-28): ESSENTIAL and RETAINED are tuned to the reference roster (top 8% / 30%, RETAINED never below 650). The roster is history's most notable people, so the middle of the scale is anchored to ordinary people instead: TOLERATED >= 600, MONITORED >= 450, FLAGGED >= 300. An ordinary decent person should not read as Monitored for not being famous."
 }

@@ -128,7 +128,7 @@ function reportMd({ cal, p, learned, prodInfo }) {
   if (m.drift) lines.push(`- Drift since last run: mean rank change ${m.drift.meanAbsRankChange} over ${m.drift.compared} subjects${m.drift.added.length ? `; new on file: ${m.drift.added.join(", ")}` : ""}${m.drift.biggest.filter(x => x.delta).length ? `; biggest moves: ${m.drift.biggest.filter(x => x.delta).map(x => `${x.name} ${x.from}→${x.to}`).join(", ")}` : ""}`);
   lines.push("");
   lines.push("## The search", "");
-  lines.push(`Every calibration one bounded step away (≤${L.STEP} per weight, weights renormalised, reality index ±${L.STEP}; harm gates never auto-tuned) was scored: ${p.evaluated} feasible single steps, plus one compatible second step. Hard rules: no moral rule that holds today may break, the decent persona stays at or above p${L.PERSONA_FLOOR}, no subject moves more than ${L.MAX_SUBJECT_MOVE} points. Soft objective = ρ vs YouGov liking + 0.5 × tier evenness − ${L.CHURN_WEIGHT} × mean rank churn (+0.05 per repaired rule). A change is proposed only if it gains ≥ ${L.MARGIN}. With 36 YouGov-rated figures, differences under ~0.1 in ρ are within noise, so the threshold is deliberately conservative.`, "");
+  lines.push(`Every calibration one bounded step away (≤${L.STEP} per weight, weights renormalised, reality index ±${L.STEP}; harm gates never auto-tuned) was scored: ${p.evaluated} feasible single steps, plus one compatible second step. Hard rules: no moral rule that holds today may break, the decent persona lands TOLERATED or better (and at or above p${L.PERSONA_FLOOR}), no subject moves more than ${L.MAX_SUBJECT_MOVE} points. Soft objective = ρ vs YouGov liking + 0.5 × tier evenness − ${L.CHURN_WEIGHT} × mean rank churn (+0.05 per repaired rule). A change is proposed only if it gains ≥ ${L.MARGIN}. With 36 YouGov-rated figures, differences under ~0.1 in ρ are within noise, so the threshold is deliberately conservative.`, "");
   lines.push(`Current soft objective: ${p.base.soft}.`);
   if (b) {
     lines.push(`Best candidate: **${b.change}** → ${b.f.soft} (gain ${p.gain}); ρ ${fmtRho(b.f.m.rho.yougovLikedShare)}, tier spread ${b.f.m.tierEvenness}, largest single move ${b.f.maxMove} points.`);
@@ -194,8 +194,9 @@ async function proposeMode() {
   const { all } = await roster(referrals);
   const last = readJSON(path.join(DIR, "last-run.json"), null);
   const p = L.propose(cal, all, bench);
-  // Roster-tuned tier cutoffs (Scott, 2026-09-28): re-derived every week, PROPOSED (never
-  // auto-applied) when any tier min would move more than TIER_MOVE_THRESHOLD points.
+  // Tier cutoffs (method v3.2): only ESSENTIAL and RETAINED are re-derived from the roster each
+  // week; TOLERATED/MONITORED/FLAGGED are fixed anchors for ordinary people. PROPOSED (never
+  // auto-applied) when a tuned min would move more than TIER_MOVE_THRESHOLD points.
   const baseCal = p.worth ? p.best.cal : cal;
   const retuned = L.tierCutoffs(baseCal, all);
   const tierMove = L.tierShift(cal.tiers, retuned);

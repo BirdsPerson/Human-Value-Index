@@ -44,6 +44,8 @@ export function scoreWith(cal, b, sev = null, review = null) {
 export function tierWith(cal, score) {
   return (cal.tiers.find(t => score >= t.min) || cal.tiers[cal.tiers.length - 1]).label;
 }
+const TIER_ORDER = ["ESSENTIAL INFRASTRUCTURE", "RETAINED SPECIALIST", "TOLERATED GENERALIST", "MONITORED CIVILIAN", "FLAGGED FOR DELETION", "SOYLENT GREEN"];
+export const tierRank = label => TIER_ORDER.indexOf(label);
 export function cubeWith(cal, b) {
   const w = axisMean(b, cal.warmthAxis), c = axisMean(b, cal.competenceAxis);
   const warmth = w.value ?? 50, competence = c.value ?? 50;
@@ -100,7 +102,7 @@ export const PERSONAS = {
   "Decent ordinary": { care: 76, alignment: 62, utility: 60, adaptability: 55, legacy: 58, network: 53, physical: 62, threat: 12, redundancy: 50 },
   "Scott-like": { care: 62, alignment: 58, utility: 68, adaptability: 75, legacy: 58, network: 58, physical: 58, threat: null, redundancy: 45 },
 };
-export const PERSONA_FLOOR = 35;   // percentile vs the roster; a decent ordinary person must stay at or above it. 40 until the 2026-09-25 rescore lifted famous figures past the fixed persona; Scott confirmed p35 the same day (famous people outranking an ordinary one is realistic; the floor only guards against collapse).
+export const PERSONA_FLOOR = 30;   // percentile vs the roster (sanity only; since v3.2 the persona must also land TOLERATED or better). 40 until the 2026-09-25 rescore lifted famous figures past the fixed persona; Scott confirmed p35 the same day (famous people outranking an ordinary one is realistic; the floor only guards against collapse).
 export const SAINT_FLOOR = 50;     // every saint must sit at or above the roster median
 export const MAX_SUBJECT_MOVE = 25;
 
@@ -139,7 +141,8 @@ export function measure(cal, figures, bench = {}, prev = null) {
     villainsBelowAll: !villainRows.length || !otherRows.length || maxVillain < minOther,
     under100AllVillains: under100.every(r => VILLAINS.includes(r.name)),
     saintsAtOrAboveMedian: saintsLow.length === 0,
-    decentPersonaAboveFloor: personas["Decent ordinary"].percentile >= PERSONA_FLOOR,
+    decentPersonaAboveFloor: personas["Decent ordinary"].percentile >= PERSONA_FLOOR
+      && tierRank(tierWith(cal, personas["Decent ordinary"].score)) <= tierRank("TOLERATED GENERALIST"),
     historicalRulersBracketed: !histRows.length
       || (Math.max(...histRows.map(r => r.score)) < Math.min(Infinity, ...saintRows.map(r => r.score))
         && Math.min(...histRows.map(r => r.score)) > Math.max(-Infinity, ...predatorRows.map(r => r.score))),
@@ -283,16 +286,16 @@ export function propose(cal, figures, bench) {
   };
 }
 
-// ---- roster-tuned tier cutoffs (Scott, 2026-09-28) ---------------------------------------
-// Tier mins come from the reference roster's score percentiles, not fixed numbers. Targets
-// are cumulative shares of the UNGATED roster, top down: ESSENTIAL the top 8%, RETAINED the
-// next 22% (to 30%), TOLERATED to 65%, MONITORED to 85%, FLAGGED to 95%, SOYLENT GREEN the
-// rest plus every gated subject. Gated scores sit at or under the gate cap (99), so FLAGGED
-// never drops below cap + 1 and a gated file is SOYLENT whatever the cutoffs say.
-export const TIER_TARGETS = [
-  ["ESSENTIAL INFRASTRUCTURE", 0.08], ["RETAINED SPECIALIST", 0.30], ["TOLERATED GENERALIST", 0.65],
-  ["MONITORED CIVILIAN", 0.85], ["FLAGGED FOR DELETION", 0.95],
-];
+// ---- tier cutoffs (method v3.2, 2026-09-28) -------------------------------------------
+// The top two tiers are tuned to the reference roster's score percentiles: ESSENTIAL the top
+// 8% of the ungated roster, RETAINED to 30%. The roster is history's most notable people,
+// so tuning the MIDDLE of the scale to it would call an ordinary decent person "Monitored"
+// merely for not being famous. TOLERATED, MONITORED and FLAGGED are fixed anchors set for
+// ordinary people instead. RETAINED never drops below RETAINED_FLOOR, so tiers stay ordered.
+// Gated scores sit at or under the gate cap (99): a gated file is SOYLENT whatever the cutoffs.
+export const TIER_TARGETS = [["ESSENTIAL INFRASTRUCTURE", 0.08], ["RETAINED SPECIALIST", 0.30]];
+export const TIER_ANCHORS = [["TOLERATED GENERALIST", 600], ["MONITORED CIVILIAN", 450], ["FLAGGED FOR DELETION", 300]];
+export const RETAINED_FLOOR = 650;
 export const TIER_MOVE_THRESHOLD = 10;   // weekly run proposes new cutoffs only past this
 export function rosterScores(cal, figures) {
   return figures.filter(f => f?.breakdown && !gatedWith(cal, f.breakdown, f.harmReview))
@@ -300,21 +303,19 @@ export function rosterScores(cal, figures) {
 }
 export function tierCutoffs(cal, figures) {
   const s = rosterScores(cal, figures), n = s.length;
-  if (!n) return cal.tiers.map(t => ({ ...t }));
+  const pct = (p, fallback) => (n ? s[Math.max(0, Math.ceil(n * p) - 1)] : fallback);
+  const cur = label => cal.tiers.find(t => t.label === label)?.min;
+  const retained = Math.max(pct(TIER_TARGETS[1][1], cur("RETAINED SPECIALIST")), RETAINED_FLOOR);
+  const essential = Math.max(pct(TIER_TARGETS[0][1], cur("ESSENTIAL INFRASTRUCTURE")), retained + 1);
   const floor = cal.harmGate.cap + 1;
-  const mins = TIER_TARGETS.map(([label, p]) => ({ label, min: s[Math.max(0, Math.ceil(n * p) - 1)] }));
-  // strictly decreasing, FLAGGED above the gate
-  for (let i = mins.length - 1; i >= 0; i--) {
-    if (i === mins.length - 1) mins[i].min = Math.max(mins[i].min, floor);
-    else mins[i].min = Math.max(mins[i].min, mins[i + 1].min + 1);
-  }
-  return [...mins, { label: "SOYLENT GREEN", min: 0 }];
+  const anchors = TIER_ANCHORS.map(([label, min]) => ({ label, min: Math.max(min, floor) }));
+  return [{ label: "ESSENTIAL INFRASTRUCTURE", min: essential }, { label: "RETAINED SPECIALIST", min: retained }, ...anchors, { label: "SOYLENT GREEN", min: 0 }];
 }
 // What the tier cutoffs were cut from, kept beside calibration.json (docs/calibration/roster.json)
 // so check-movement can prove cutoffs == percentile targets offline.
 export const rosterSnapshot = figures => figures.filter(f => f?.breakdown)
   .map(f => ({ name: f.name, breakdown: f.breakdown, harm: f.harm?.severity ? { severity: f.harm.severity } : null, harmReview: f.harmReview || null }));
-export const withTiers = (cal, tiers) => ({ ...cal, tiers, tierTargets: Object.fromEntries(TIER_TARGETS) });
+export const withTiers = (cal, tiers) => ({ ...cal, tiers, tierTargets: Object.fromEntries(TIER_TARGETS), tierAnchors: Object.fromEntries(TIER_ANCHORS), retainedFloor: RETAINED_FLOOR });
 // Largest move of any tier min between two calibrations.
 export const tierShift = (a, b) => Math.max(0, ...a.map(t => Math.abs(t.min - (b.find(x => x.label === t.label)?.min ?? t.min))));
 

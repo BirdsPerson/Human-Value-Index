@@ -66,3 +66,22 @@ Every subject has a score-change log. Every entry names its cause (`src/movement
 - The full list is in `docs/calibration/method-v3.1-applied.json`.
 
 Known cost: the ordinary decent persona falls from 646 to 638. That is p34 of the figures, and it drops from TOLERATED to MONITORED, because its strength is care, not legacy. `check-pen`'s persona floor moved from p35 to p33.
+
+
+## v3.2 — lower tiers anchored to ordinary people (2026-09-28)
+
+v3.1 cut every tier from the roster's percentiles. The roster is history's most notable
+people, so the middle of that distribution sits well above an ordinary life: the decent
+ordinary persona (638) read as MONITORED CIVILIAN, below JFK, for not being famous. Claude
+judged that wrong for a game about ordinary people improving themselves (Scott: "it's up to
+you"), and v3.2 splits the scale:
+
+- **Tuned to the roster (weekly proposal):** ESSENTIAL = top 8% of the ungated roster,
+  RETAINED = to 30%, RETAINED never below 650.
+- **Fixed anchors for ordinary people:** TOLERATED >= 600, MONITORED >= 450, FLAGGED >= 300.
+  Below 300, and every gated file, is SOYLENT GREEN.
+
+Scores did not change; only classifications did. Every subject whose tier moved got a
+`method` entry (v3.2) in its score log. Cutoffs at application: ESSENTIAL 787, RETAINED 736,
+TOLERATED 600, MONITORED 450, FLAGGED 300. The decent persona lands TOLERATED (638); the
+guard check is now "TOLERATED or better" plus a p30 collapse floor.

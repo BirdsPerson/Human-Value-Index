@@ -72,5 +72,10 @@ const essential = ungated.filter(s => L.tierWith(cal, s) === "ESSENTIAL INFRASTR
 const share = essential / ungated.length;
 assert.ok(share >= 0.03 && share <= 0.12, `ESSENTIAL is ${(share * 100).toFixed(1)}% of the roster (want 3-12%)`);
 for (let i = 1; i < cal.tiers.length; i++) assert.ok(cal.tiers[i].min < cal.tiers[i - 1].min, "cutoffs strictly decrease");
+// v3.2: the lower tiers are fixed anchors for ordinary people; only the top two follow the roster
+assert.deepEqual(cal.tierAnchors, Object.fromEntries(L.TIER_ANCHORS), "anchors recorded in calibration.json");
+for (const [label, min] of L.TIER_ANCHORS) assert.equal(cal.tiers.find(t => t.label === label).min, min, `${label} anchored at ${min}`);
+assert.ok(cal.tiers.find(t => t.label === "RETAINED SPECIALIST").min >= L.RETAINED_FLOOR, "RETAINED never below its floor");
+assert.equal(L.tierWith(cal, L.scoreWith(cal, L.PERSONAS["Decent ordinary"])), "TOLERATED GENERALIST", "decent ordinary persona lands TOLERATED");
 
 console.log(`check-movement: ok (${FAMOUS_FIGURES.length} figure logs; ESSENTIAL ${essential}/${ungated.length} = ${(share * 100).toFixed(1)}%)`);

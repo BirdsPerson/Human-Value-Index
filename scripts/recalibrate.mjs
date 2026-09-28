@@ -42,7 +42,7 @@ next = L.withTiers(next, L.tierCutoffs(next, roster));
 next.version = prev.version + 1;
 next.date = at.slice(0, 10);
 next.method = spec.method;
-const log = { at, cause: "method", note: spec.note, method: spec.method, fromMethod: prev.method || `v${prev.rubric}`, always: true };
+const log = { at, cause: "method", note: spec.note, method: spec.method, fromMethod: prev.method || `v${prev.rubric}`, always: spec.always ?? true };
 
 // report
 const before = new Map(roster.map(f => [f.name, L.scoreWith(prev, f.breakdown, f.harm?.severity, f.harmReview)]));
