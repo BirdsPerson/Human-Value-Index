@@ -3,12 +3,17 @@
 // sideways-scrolling filter strip. Every verdict used to print inline: 62 paragraphs,
 // about 15 phone screens. Now it is one screen of names and the file you asked for.
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { lazy, Suspense, useDeferredValue, useMemo, useState } from "react";
 import { TIERS, getTier, displayName } from "./figures.js";
 import FilePhoto from "./FilePhoto.jsx";
 import { Rule, padL } from "./term.jsx";
 import { Button, ButtonRow, Chip, Chips, ChipStrip, ListRow, TextField } from "./ui/index.js";
 import "./figureIndex.css";
+
+// ANALYTICS loads only when asked for (charts are their own chunk).
+const Analytics = lazy(() => import("./analytics/Analytics.jsx"));
+const VIEW_KEY = "hvi-fi-view";
+const readView = () => { try { return localStorage.getItem(VIEW_KEY) === "analytics" ? "analytics" : "rankings"; } catch { return "rankings"; } };
 
 // FIND matches any part of the name or its qualifier, ignoring case and accents.
 const fold = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -52,6 +57,8 @@ function Empty({ q }) {
 // #leaderboard: the whole index, grouped by tier, highest first. `result` is the
 // visitor's own file, ranked in among them.
 export default function FigureIndex({ figures, result, onPrimary }) {
+  const [view, setViewState] = useState(readView);
+  const setView = (v) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* private mode */ } };
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("ALL");
   const dq = useDeferredValue(q);
@@ -68,7 +75,16 @@ export default function FigureIndex({ figures, result, onPrimary }) {
   return (
     <div className="hvi-fi">
       <h1 className="hvi-fi-h">PUBLIC FIGURE INDEX</h1>
-      <div className="hvi-fi-meta">KNOWN SUBJECTS DATABASE // {figures.length} ON FILE // RANKED BY VALUE. TAP A NAME TO READ ITS FILE.</div>
+      <div className="hvi-fi-meta">KNOWN SUBJECTS DATABASE // {figures.length} ON FILE // {view === "analytics" ? "THE NUMBERS, AGGREGATED. THE DEPARTMENT FINDS THEM RESTFUL." : "RANKED BY VALUE. TAP A NAME TO READ ITS FILE."}</div>
+      <ChipStrip label="Index view" className="hvi-fi-views">
+        <Chip pressed={view === "rankings"} onClick={() => setView("rankings")}>RANKINGS</Chip>
+        <Chip pressed={view === "analytics"} onClick={() => setView("analytics")}>ANALYTICS</Chip>
+      </ChipStrip>
+      {view === "analytics" ? (
+        <Suspense fallback={<div className="hvi-fi-count" role="status">[ .. ] TABULATING █</div>}>
+          <Analytics figures={figures} />
+        </Suspense>
+      ) : <>
       <TextField label="FIND" type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="a name on record"
         enterKeyHint="search" spellCheck={false} autoCapitalize="off" aria-controls="hvi-fi-list" />
       <TierStrip figures={figures} match={match} filter={filter} onFilter={setFilter} label="Filter by tier" />
@@ -116,6 +132,7 @@ export default function FigureIndex({ figures, result, onPrimary }) {
           );
         })}
       </div>
+      </>}
       <ButtonRow stackOnMobile>
         <Button variant="primary" onClick={onPrimary}>{result ? "Back to my results" : "Submit to evaluation"}</Button>
       </ButtonRow>

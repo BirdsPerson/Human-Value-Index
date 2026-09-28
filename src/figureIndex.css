@@ -24,3 +24,4 @@
 }
 /* a tap leaves :hover behind on touch screens: no sticky underline */
 @media (hover: none) { .hvi-fi-row:hover .name { text-decoration: none; } }
+.hvi-fi-views { margin-bottom: var(--s3); }
