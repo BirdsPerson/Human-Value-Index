@@ -31,7 +31,7 @@ registerHooks({
 console.error = console.warn = () => {};
 globalThis.fetch = async () => { throw new Error("quests must not call the network"); };
 
-const { QUESTS, QUEST, questFigure, locate, contactAt } = await import("../src/quests.js");
+const { QUESTS, QUEST, questFigure, questPartner, questsFor, locate, meetingAt, nextMeeting, contactAt } = await import("../src/quests.js");
 const { applyQuest, questState, COMPLETIONS_PER_DAY, MIN_ELAPSED_MS } = await import("../netlify/lib/quests.js");
 const { getTier } = await import("../src/figures.js");
 const quest = (await import("../netlify/functions/quest.js")).default;
@@ -39,22 +39,30 @@ const { BUILDING } = await import("../src/city/simApi.js");
 
 // ---- catalog ----------------------------------------------------------------------
 const RUBRIC = ["care", "alignment", "utility", "adaptability", "legacy", "network", "physical"];
-const dims = new Set();
+const dims = new Set(), kindDims = new Set(), givers = new Set();
 for (const q of QUESTS) {
   const f = questFigure(q);
+  assert.ok(["find", "witness"].includes(q.kind), `${q.id}: known kind`);
   assert.ok(f, `${q.id}: figure ${q.figure} on file`);
-  assert.ok(f.died, `${q.id}: living figures never speak, so never offer quests`);
-  assert.ok(f.score >= 400 && !/SOYLENT/.test(getTier(f.score).label), `${q.id}: no gated or low-tier figure hands out vouches`);
+  for (const [who, x] of [["giver", f], ["partner", q.kind === "witness" ? questPartner(q) : f]]) {
+    assert.ok(x, `${q.id}: ${who} ${q.with} on file`);
+    assert.ok(x.died, `${q.id}: ${who} is dead (living figures never speak, never take part)`);
+    assert.ok(x.score >= 400 && !/SOYLENT/.test(getTier(x.score).label), `${q.id}: ${who} is not gated or low-tier`);
+  }
+  if (q.kind === "witness") assert.notEqual(q.with, q.figure, `${q.id}: a meeting takes two`);
   assert.ok(RUBRIC.includes(q.dim), `${q.id}: vouches in a scored, positive category (${q.dim})`);
-  assert.ok(!dims.has(q.dim), `${q.id}: one quest per category, so a category holds at most one vouch`);
-  dims.add(q.dim);
+  assert.ok(!kindDims.has(q.kind + q.dim), `${q.id}: one quest per kind per category`);
+  assert.ok(!givers.has(q.figure), `${q.id}: a figure gives one directive`);
+  kindDims.add(q.kind + q.dim); givers.add(q.figure); dims.add(q.dim);
   assert.ok(q.line.length > 20 && q.line.length < 200, `${q.id}: a line, not an essay`);
+  assert.ok(questsFor(q.figure).includes(q), `${q.id}: the giver's file carries it`);
+  if (q.with) assert.ok(questsFor(q.with).includes(q), `${q.id}: the partner's file carries it`);
 }
 // Every giver can actually be found: in a public building for a real share of a machine day
 // (24 real minutes), and the contact test agrees with locate.
 const T0 = Date.UTC(2026, 9, 1, 12, 0, 0);
 const sightings = {};
-for (const q of QUESTS) {
+for (const q of QUESTS.filter(q => q.kind === "find")) {
   let found = 0;
   for (let s = 0; s < 1440; s++) {
     const l = locate(q, T0 + s * 1000);
@@ -65,6 +73,33 @@ for (const q of QUESTS) {
     }
   }
   assert.ok(found / 1440 >= 0.2, `${q.id}: findable ${Math.round(found / 14.4)}% of the day (want >= 20%)`);
+}
+// Every witness pair actually meets: both on a floor of one public building, neither at
+// home, for a real share of the week, on most days, in stretches long enough to walk
+// there; the countdown always sees the next one; the contact test agrees with meetingAt.
+// Sampled every 5 s over 14 machine days (5.6 real hours).
+const DAYS = 14, meetings = {};
+for (const q of QUESTS.filter(q => q.kind === "witness")) {
+  let met = 0, run = 0, longest = 0, gap = 0, maxGap = 0;
+  const days = new Set();
+  for (let s = 0; s < 1440 * DAYS; s += 5) {
+    const t = T0 + s * 1000, m = meetingAt(q, t);
+    if (m) {
+      met++; run++; longest = Math.max(longest, run); gap = 0; days.add(Math.floor(s / 1440));
+      assert.ok(BUILDING[m.buildingId] && m.districtId !== "hq", `${q.id}: never "met" inside HQ`);
+      assert.equal(locate(q, t).home, false, `${q.id}: a meeting is not bedtime`);
+      if (!meetings[q.id] && s > 1440) meetings[q.id] = { t, b: m.buildingId };
+    } else { run = 0; gap++; maxGap = Math.max(maxGap, gap); }
+  }
+  assert.ok(met / (288 * DAYS) >= 0.15, `${q.id}: convened ${Math.round(met / 2.88 / DAYS)}% of the time (want >= 15%)`);
+  assert.ok(days.size >= DAYS * 0.6, `${q.id}: meets on ${days.size} of ${DAYS} days (want >= 60%)`);
+  assert.ok(longest * 5 >= 120, `${q.id}: longest meeting ${longest * 5} s (want >= 2 real min)`);
+  assert.ok(maxGap * 5 < 5400, `${q.id}: longest wait ${Math.round(maxGap / 12)} min, beyond the countdown's 90`);
+  const { t, b } = meetings[q.id];
+  assert.equal(nextMeeting(q, t), 0, `${q.id}: countdown reads 0 while convened`);
+  const n = nextMeeting(q, t - 600 * 1000);
+  assert.ok(n != null && n <= 600, `${q.id}: countdown finds the meeting ahead`);
+  assert.ok(contactAt(q, b, t), `${q.id}: contact test sees the meeting`);
 }
 
 // ---- rules ------------------------------------------------------------------------
@@ -105,6 +140,26 @@ const spent = { ...rec, quests: { active: { id: QUESTS[1].id, at: new Date(at - 
 assert.equal(applyQuest(spent, { action: "complete", questId: QUESTS[1].id, buildingId: "any" }, at).status, 429, "daily cap");
 // the rules never touch the score
 assert.deepEqual(rec.history, scored.history, "a vouch does not move the number (yet)");
+// one vouch per category: rec holds q's vouch, so its category's witness directive is closed
+const sameDim = QUESTS.find(x => x.kind === "witness" && x.dim === q.dim);
+assert.ok(sameDim, "every category has a witness directive too (so closing one is testable)");
+assert.equal(applyQuest(rec, { action: "accept", questId: sameDim.id }, at).status, 409, "category closed after its vouch");
+assert.deepEqual(questState(rec, at).closed, [q.dim]);
+const heldBefore = { ...rec, quests: { ...rec.quests, active: { id: sameDim.id, at: new Date(at - 120000).toISOString() } } };
+assert.equal(applyQuest(heldBefore, { action: "complete", questId: sameDim.id, buildingId: "x" }, at).status, 409, "closed category cannot be discharged either");
+// witness: the meeting's building, while convened, and nowhere else
+const wq = QUESTS.find(x => x.kind === "witness" && x.dim !== q.dim), wm = meetings[wq.id];
+const wrec = applyQuest(scored, { action: "accept", questId: wq.id }, wm.t - 120000).record;
+const notThere = Object.keys(BUILDING).find(b => b !== wm.b && b !== "hq");
+const wrong = applyQuest(wrec, { action: "complete", questId: wq.id, buildingId: notThere }, wm.t);
+assert.equal(wrong.status, 409, "witness: wrong building refused");
+assert.match(wrong.error, /meeting/);
+let apart = null;
+for (let s = 0; s < 1440 && apart == null; s += 5) if (!contactAt(wq, wm.b, T0 + s * 1000)) apart = T0 + s * 1000;
+assert.equal(applyQuest({ ...wrec, quests: { ...wrec.quests, active: { id: wq.id, at: new Date(apart - 120000).toISOString() } } },
+  { action: "complete", questId: wq.id, buildingId: wm.b }, apart).status, 409, "witness: right building, no meeting, refused");
+r = applyQuest(wrec, { action: "complete", questId: wq.id, buildingId: wm.b }, wm.t);
+assert.ok(r.vouch && r.vouch.kind === "witness" && r.vouch.figure === wq.figure && r.vouch.dim === wq.dim, "witness vouch from the giver");
 
 // ---- /api/quest end to end ----------------------------------------------------------
 const cases = () => globalThis.__blobs.get("hvi-cases");
@@ -142,4 +197,4 @@ for (let i = 0; i < 70; i++) last = await call("GET", null, "?caseId=HVI-TESTAAA
 assert.equal(last.status, 429, "per-IP hourly meter");
 Date.now = realNow;
 
-console.log(`check-quests: ok (${QUESTS.length} quests, ${dims.size} categories, rules + /api/quest)`);
+console.log(`check-quests: ok (${QUESTS.length} quests: ${Object.keys(sightings).length} find, ${Object.keys(meetings).length} witness; ${dims.size} categories, rules + /api/quest)`);

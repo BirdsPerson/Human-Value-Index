@@ -4,6 +4,29 @@
       "status": "no-change",
       "change": "competence: 0.02 weight from utility to legacy; competence: 0.02 weight from adaptability to redundancy",
       "gain": 0.006
+    },
+    "2026-09-28": {
+      "status": "no-change",
+      "change": "competence: 0.02 weight from network to legacy; warmth: 0.02 weight from threat to care",
+      "gain": 0.0089
+    }
+  },
+  "drift": {
+    "2026-09-28": {
+      "status": "ok",
+      "mad": 6,
+      "worst": {
+        "name": "Ada Lovelace",
+        "diff": 11
+      },
+      "sample": [
+        "Aaron Hernandez",
+        "Abraham Lincoln",
+        "Ada Lovelace",
+        "Adolf Hitler",
+        "Alan Turing"
+      ],
+      "calls": 15
     }
   }
 }

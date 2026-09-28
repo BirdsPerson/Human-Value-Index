@@ -1,0 +1,8 @@
+{
+  "date": "2026-09-28",
+  "decision": "no change",
+  "reason": "Best bounded step (competence: 0.02 weight from network to legacy; warmth: 0.02 weight from threat to care) improves the soft objective by only 0.0089, under the 0.02 threshold. Not worth moving anyone.",
+  "gain": 0.0089,
+  "change": "competence: 0.02 weight from network to legacy; warmth: 0.02 weight from threat to care",
+  "calibration": null
+}
