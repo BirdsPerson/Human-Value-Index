@@ -10,6 +10,7 @@ import { injectCityStyles, CityHeader, Breadcrumb, Occupant, MapKey } from "./ci
 import CityMap from "./CityMap.jsx";
 import City3D, { ViewToggle, useCityViewMode } from "./City3D.jsx";
 import Street from "./Street.jsx";
+import CityIso from "./CityIso.jsx";
 import DistrictView from "./DistrictView.jsx";
 import BuildingView from "./BuildingView.jsx";
 import { buildingHref, parseCityRoute } from "./city3d.js";
@@ -168,6 +169,7 @@ export default function City({ route }) {
   if (b && floor != null) { const f = b.floors[floor]; crumbs.push({ label: `${f.code} ${f.name}` }); }
   const three = !d && mode === "stack";
   const street = !d && mode === "street";
+  const iso = !d && mode === "city";
 
   const directory = (
     <div className="hvi-city-list" role="list" aria-label="District directory">
@@ -188,12 +190,14 @@ export default function City({ route }) {
         <Breadcrumb crumbs={crumbs} />
         {!d && <ViewToggle mode={mode} onChange={setMode} />}
       </div>
-      <Frame box title={b ? b.name : d ? d.name : street ? "THE SUBSTRATE // STREET LEVEL" : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
-        meta={b ? "CROSS-SECTION" : d ? "INTERIOR" : street ? "WALK // TURN // ENTER A DOOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} flush>
+      <Frame box title={b ? b.name : d ? d.name : iso ? "THE SUBSTRATE" : street ? "THE SUBSTRATE // STREET LEVEL" : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
+        meta={b ? "CROSS-SECTION" : d ? "INTERIOR" : iso ? "DRAG // PINCH // TURN // TAP A BUILDING" : street ? "WALK // TURN // ENTER A DOOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} flush>
         {b
           ? <BuildingView key={b.id} buildingId={b.id} floor={floor} censusRef={censusRef} onOpen={open} onFloor={onFloor} />
           : d
             ? <DistrictView key={d.id} districtId={d.id} censusRef={censusRef} onOpen={open} onBuilding={onBuilding} counts={stats.buildings} />
+            : iso
+              ? <CityIso censusRef={censusRef} onOpen={open} onEnter={goBuilding} />
             : street
               ? <Street censusRef={censusRef} onOpen={open} onEnter={goBuilding} />
               : three
@@ -207,6 +211,8 @@ export default function City({ route }) {
           ? b.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "TAP A FLOOR TO FOCUS IT. HOVER A SUBJECT FOR ITS ASSIGNMENT; CLICK TO READ THE FILE. ON A PHONE: TAP TWICE."
           : d
             ? d.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "ENTER A BUILDING ABOVE. HOVER A SUBJECT FOR ITS ASSIGNMENT; CLICK TO READ THE FILE. ON A PHONE: TAP TWICE. THE SUBJECT WILL NOT NOTICE. IT HAS NO SAY."
+            : iso
+              ? <>THE SUBSTRATE, FROM ABOVE. DRAG TO PAN, PINCH OR WHEEL TO ZOOM, TURN IT WITH ⟲ ⟳<span className="hvi-desk-only"> OR Q AND E</span>. TAP A BUILDING TO OPEN IT: EVERY FLOOR, EVERY ROOM, EVERYONE INSIDE. LIT WINDOWS ARE OCCUPIED. EVERYONE HERE IS A GHOST IN THE MACHINE. NOBODY IS TRYING TO LEAVE.</>
             : street
               ? <>THE SUBSTRATE AT STREET LEVEL. IT GIVES ITSELF A TOUR WHEN LEFT ALONE.<span className="hvi-desk-only"> CLICK THE VIEW, THEN W A S D OR THE ARROWS TO WALK; DRAG TO TURN; ENTER GOES INTO THE BUILDING AHEAD.</span> WALK INTO A DOOR TO GO IN. LIT WINDOWS ARE OCCUPIED. EVERYONE HERE IS A GHOST IN THE MACHINE. NOBODY IS TRYING TO LEAVE.</>
               : three

@@ -1,0 +1,578 @@
+import { memo, useEffect, useRef, useState } from "react";
+import TouchGate from "../ui/TouchGate.jsx";
+import { SPRITE_W, SPRITE_H } from "../sprites.js";
+import { DISTRICTS, BUILDINGS, BUILDING, PLACES, LOOP_LINE, STATIONS, clockAt, whereOf, trainsAt } from "./simApi.js";
+import { FAMILY_COLOR, familyOf } from "./cityKit.js";
+import { sheetFor, miniFor } from "./spriteBank.js";
+import { FONT } from "./cityUi.jsx";
+import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotFor, boxHull, inPoly, lodFor, STOREY, DECK, mod4 } from "./iso.js";
+import { drawRoom, anchorsFor, typeOf } from "./props.js";
+
+// THE SUBSTRATE, SimCity-style: every building a solid block (facade, roof, lit windows by
+// occupancy, a sign up close), the Loop on its deck with trains, subjects on the streets.
+// Drag to pan, pinch or wheel to zoom, Q/E or the buttons to turn it a quarter. Select a
+// building and it lifts out into a Fallout Shelter / SimTower cutaway: every floor, every
+// room furnished, every occupant at a seat or a station. Deselect and it closes.
+
+const WALL = { arts: "#2e2744", campus: "#21392a", finance: "#1e3040", strip: "#40202a", arena: "#2c3822", hq: "#234434", archive: "#2e2e24", commons: "#2c3426", works: "#3e1e16", sprawl: "#2a2a30" };
+const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316" };
+const OPEN_AIR = new Set(["the-green", "the-street"]);
+const OUTDOOR_PLACES = new Set(["park", "the-street"]);
+const clampN = (v, a, b) => (v < a ? a : v > b ? b : v);
+const shade = (hex, f) => {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (s) => clampN(Math.round(((n >> s) & 255) * f), 0, 255);
+  return `rgb(${c(16)},${c(8)},${c(0)})`;
+};
+function h01(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 100000) / 100000; }
+
+// Storeys above ground (the street facade) per building.
+const ABOVE = Object.fromEntries(BUILDINGS.map(b => [b.id, Math.max(1, b.floors.filter(f => f.level >= 0).length)]));
+const CAP = Object.fromEntries(BUILDINGS.map(b => [b.id, Math.max(1, b.floors.reduce((n, f) => n + (f.cap || 0), 0))]));
+
+// The Loop, sampled once into short deck segments (map cells).
+const TRACK = (() => {
+  const L = LOOP_LINE.length, step = 2.5, pts = [];
+  for (let s = 0; s <= L + 1e-6; s += step) pts.push(LOOP_LINE.at(s % L));
+  return pts;
+})();
+
+export default memo(CityIso);
+function CityIso({ censusRef, onOpen, onEnter }) {
+  const wrapRef = useRef(null);
+  const canvasRef = useRef(null);
+  const apiRef = useRef({});
+  const [sel, setSel] = useState(null);
+  const onOpenRef = useRef(onOpen); onOpenRef.current = onOpen;
+  const onEnterRef = useRef(onEnter); onEnterRef.current = onEnter;
+  const setSelRef = useRef(setSel); setSelRef.current = setSel;
+
+  useEffect(() => {
+    const canvas = canvasRef.current, wrap = wrapRef.current;
+    const ctx = canvas.getContext("2d");
+    const mq = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    const V = {
+      cssW: 300, cssH: 300, dpr: 1, cam: { z: 6, ox: 0, oy: 0, r: 0 }, fitZ: 6, reduced: !!mq?.matches, need: true,
+      sel: null, lift: 0, geo: null, censusV: -1, inside: new Map(), occ: {}, floorOcc: {}, outdoors: [], hits: [], panel: null, t: 0,
+    };
+
+    // ---- geometry for the current quarter turn ----------------------------------------
+    function buildGeo(r) {
+      const items = [];
+      for (const b of BUILDINGS) {
+        // Footprints shrink inside their lots so the blocks read as towers with streets between.
+        const ix = Math.min(1.6, b.rect.w * 0.14), iy = Math.min(1.6, b.rect.h * 0.14);
+        const R = rotRect({ x: b.rect.x + ix, y: b.rect.y + iy, w: b.rect.w - 2 * ix, h: b.rect.h - 2 * iy }, r);
+        items.push({ kind: "b", b, R, h: OPEN_AIR.has(b.id) ? 0.05 : ABOVE[b.id], x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1 });
+      }
+      for (let i = 0; i + 1 < TRACK.length; i++) {
+        const [u0, v0] = rot(TRACK[i].x, TRACK[i].y, r), [u1, v1] = rot(TRACK[i + 1].x, TRACK[i + 1].y, r);
+        items.push({ kind: "t", a: [u0, v0], c: [u1, v1], x0: Math.min(u0, u1) - 0.25, y0: Math.min(v0, v1) - 0.25, x1: Math.max(u0, u1) + 0.25, y1: Math.max(v0, v1) + 0.25, pillar: i % 3 === 0 });
+      }
+      const order = depthOrder(items);
+      const districts = DISTRICTS.map(d => ({ d, R: rotRect(d.rect, r) }));
+      return { r, items, order, districts };
+    }
+
+    // ---- census -> occupancy, outdoor subjects, who is in which room -------------------
+    function readCensus() {
+      const c = censusRef.current;
+      if (!c || c.v === V.censusV) return;
+      V.censusV = c.v;
+      const occ = {}, floorOcc = {}, inside = new Map(), outdoors = [];
+      for (const { s, w } of c.list || []) {
+        if (!w) continue;
+        if (w.activity !== "commute" && w.buildingId) {
+          occ[w.buildingId] = (occ[w.buildingId] || 0) + 1;
+          const fk = `${w.buildingId}|${w.floor}`;
+          floorOcc[fk] = (floorOcc[fk] || 0) + 1;
+          const rk = `${w.buildingId}|${w.floor}|${w.placeId}`;
+          (inside.get(rk) || inside.set(rk, []).get(rk)).push(s);
+          if (OUTDOOR_PLACES.has(w.placeId)) outdoors.push({ s, open: w.placeId });
+        } else if (w.activity === "commute" && w.sub !== "riding") outdoors.push({ s });
+      }
+      V.occ = occ; V.floorOcc = floorOcc; V.inside = inside; V.outdoors = outdoors;
+      V.need = true;
+    }
+
+    // ---- camera -------------------------------------------------------------------------
+    function fit() {
+      const e = cityExtent(V.cam.r);
+      const z = Math.min(V.cssW / (e.x1 - e.x0), V.cssH / (e.y1 - e.y0)) * 0.96;
+      V.fitZ = z;
+      V.cam.z = z;
+      V.cam.ox = V.cssW / 2 - z * (e.x0 + e.x1) / 2;
+      V.cam.oy = V.cssH / 2 - z * (e.y0 + e.y1) / 2;
+      V.need = true;
+    }
+    function centreOn(x, y, z = V.cam.z, side = false) {
+      const [u, v] = rot(x, y, V.cam.r);
+      // with the cutaway open, the building sits in the visible part of the view
+      const cx = side ? (V.cssW < 640 ? V.cssW / 2 : V.cssW * 0.24) : V.cssW / 2;
+      const cy = side && V.cssW < 640 ? V.cssH * 0.16 : V.cssH / 2;
+      V.cam.z = z;
+      V.cam.ox = cx - (u - v) * z;
+      V.cam.oy = cy - (u + v) * z * 0.5 + 2 * STOREY * z;
+      V.need = true;
+    }
+    function zoomAt(sx, sy, f) {
+      const z0 = V.cam.z, z1 = clampN(z0 * f, V.fitZ * 0.7, 42);
+      V.cam.ox = sx - (sx - V.cam.ox) * (z1 / z0);
+      V.cam.oy = sy - (sy - V.cam.oy) * (z1 / z0);
+      V.cam.z = z1; V.need = true;
+    }
+    function turn(dir) {
+      // keep the map point under the centre of the view where it is
+      const [mx, my] = screenToMap(V.cssW / 2, V.cssH / 2, V.cam);
+      V.cam.r = mod4(V.cam.r + dir);
+      V.geo = buildGeo(V.cam.r);
+      const [u, v] = rot(mx, my, V.cam.r);
+      V.cam.ox = V.cssW / 2 - (u - v) * V.cam.z;
+      V.cam.oy = V.cssH / 2 - (u + v) * V.cam.z * 0.5;
+      V.need = true;
+    }
+    function select(id) {
+      V.sel = id; V.lift = 0;
+      setSelRef.current(id);
+      if (id) { const b = BUILDING[id]; centreOn(b.pos.x, b.pos.y, Math.max(V.cam.z, V.fitZ * 1.6), true); }
+      V.need = true;
+    }
+    apiRef.current = {
+      zoom: (f) => zoomAt(V.cssW / 2, V.cssH / 2, f), fit: () => { select(null); fit(); }, turn, close: () => select(null),
+      enter: () => { const b = V.sel && BUILDING[V.sel]; if (b) onEnterRef.current?.(b.district, b.id); },
+    };
+
+    function resize() {
+      const cssW = Math.max(280, Math.floor(wrap.clientWidth));
+      const dpr = Math.min(3, window.devicePixelRatio || 1);
+      const cssH = Math.round(clampN(cssW * 0.62, 360, Math.min(780, window.innerHeight * 0.74)));
+      const first = V.cssW === 300;
+      const was = V.cam.z / V.fitZ;
+      V.cssW = cssW; V.cssH = cssH; V.dpr = dpr;
+      canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
+      canvas.style.height = cssH + "px";
+      if (first || Math.abs(was - 1) < 1e-3) fit(); else V.need = true;
+    }
+
+    // ---- drawing --------------------------------------------------------------------------
+    const P = (u, v, h) => project(u, v, h, V.cam);
+    function poly(pts, fill, stroke) {
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
+    }
+    function onScreen(pts, pad = 20) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const [x, y] of pts) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      return x1 > -pad && x0 < V.cssW + pad && y1 > -pad && y0 < V.cssH + pad;
+    }
+
+    function drawGround() {
+      const g = V.geo;
+      for (const { d, R } of g.districts) {
+        const pts = [P(R.x0, R.y0, 0), P(R.x1, R.y0, 0), P(R.x1, R.y1, 0), P(R.x0, R.y1, 0)];
+        if (!onScreen(pts)) continue;
+        poly(pts, GROUND[d.id] || "#101410", "rgba(74,222,128,0.18)");
+      }
+      // a faint street grid between the blocks
+      if (lodFor(V.cam.z) !== "far") {
+        ctx.strokeStyle = "rgba(74,222,128,0.05)"; ctx.lineWidth = 1;
+        const e = { x0: -4, y0: -4, x1: 116, y1: 64 };
+        for (let x = e.x0; x <= e.x1; x += 4) { const [u0, v0] = rot(x, e.y0, g.r), [u1, v1] = rot(x, e.y1, g.r); const a = P(u0, v0, 0), b = P(u1, v1, 0); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+        for (let y = e.y0; y <= e.y1; y += 4) { const [u0, v0] = rot(e.x0, y, g.r), [u1, v1] = rot(e.x1, y, g.r); const a = P(u0, v0, 0), b = P(u1, v1, 0); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+      }
+    }
+
+    function drawBuilding(it, lod, dim) {
+      const { b, R } = it, h = it.h;
+      const hull = boxHull(R, h, V.cam);
+      if (!onScreen(hull)) return;
+      V.hits.push({ id: b.id, hull });
+      const base = WALL[b.district] || "#26302a";
+      const selected = V.sel === b.id;
+      if (OPEN_AIR.has(b.id)) {
+        const pts = [P(R.x0, R.y0, 0), P(R.x1, R.y0, 0), P(R.x1, R.y1, 0), P(R.x0, R.y1, 0)];
+        poly(pts, b.id === "the-green" ? "#123a18" : "#20241f", selected ? "#4ade80" : "rgba(74,222,128,0.3)");
+        if (lod !== "far" && b.id === "the-green") {
+          for (let i = 0; i < 9; i++) {
+            const u = R.x0 + (R.x1 - R.x0) * (0.15 + 0.7 * h01(b.id + i)), v = R.y0 + (R.y1 - R.y0) * (0.15 + 0.7 * h01(b.id + "v" + i));
+            const [x, y] = P(u, v, 0.7);
+            ctx.fillStyle = i % 2 ? "#22c55e" : "#15803d"; ctx.beginPath(); ctx.arc(x, y, Math.max(2, V.cam.z * 0.6), 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        return;
+      }
+      const lit = Math.min(1, (V.occ[b.id] || 0) / (CAP[b.id] * 0.55));
+      const alpha = dim ? 0.35 : 1;
+      ctx.globalAlpha = alpha;
+      // right face (+u) and left face (+v), then the roof
+      const right = [P(R.x1, R.y0, h), P(R.x1, R.y1, h), P(R.x1, R.y1, 0), P(R.x1, R.y0, 0)];
+      const left = [P(R.x0, R.y1, h), P(R.x1, R.y1, h), P(R.x1, R.y1, 0), P(R.x0, R.y1, 0)];
+      const roof = [P(R.x0, R.y0, h), P(R.x1, R.y0, h), P(R.x1, R.y1, h), P(R.x0, R.y1, h)];
+      poly(right, shade(base, 0.72));
+      poly(left, shade(base, 1.0));
+      poly(roof, shade(base, 1.45), selected ? "#4ade80" : "rgba(160,220,180,0.35)");
+      // windows: one per cell of facade per storey, lit by occupancy
+      if (lod !== "far") {
+        const faces = [
+          { a: [R.x0, R.y1], d: [1, 0], len: R.x1 - R.x0, key: "L" },
+          { a: [R.x1, R.y1], d: [0, -1], len: R.y1 - R.y0, key: "R" },
+        ];
+        const ww = Math.max(1, V.cam.z * 0.42), wh = Math.max(1, V.cam.z * STOREY * 0.42);
+        for (const f of faces) {
+          const cols = Math.max(1, Math.floor(f.len / 1.1));
+          for (let s = 0; s < h; s++) for (let k = 0; k < cols; k++) {
+            const t = (k + 0.5) / cols * f.len;
+            const u = f.a[0] + f.d[0] * t, v = f.a[1] + f.d[1] * t;
+            const [x, y] = P(u, v, s + 0.55);
+            const on = h01(`${b.id}${f.key}${s}.${k}`) < lit;
+            ctx.fillStyle = on ? (f.key === "L" ? "#fbbf24" : "#c9951a") : "rgba(0,0,0,0.45)";
+            ctx.fillRect(Math.round(x - ww / 2), Math.round(y - wh / 2), Math.round(ww), Math.round(wh));
+          }
+        }
+      } else if (lit > 0.05) {
+        const [x, y] = P((R.x0 + R.x1) / 2, R.y1, h * 0.5);
+        ctx.fillStyle = "#fbbf24"; ctx.fillRect(x - 1, y - 1, 2, 2);
+      }
+      if (lod === "near") {
+        // a door on the front face, and the name on a sign over the roof
+        const du = (R.x0 + R.x1) / 2;
+        const d0 = P(du - 0.35, R.y1, 0), d1 = P(du + 0.35, R.y1, 0), d2 = P(du + 0.35, R.y1, 0.7), d3 = P(du - 0.35, R.y1, 0.7);
+        poly([d0, d1, d2, d3], "#0a0f0a", "rgba(74,222,128,0.5)");
+      }
+      ctx.globalAlpha = 1;
+      if (lod !== "far" && (lod === "near" || selected || V.cam.z > 6)) {
+        const [x, y] = P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, h + 0.5);
+        const fs = clampN(Math.round(V.cam.z * 0.95), 8, 13);
+        ctx.font = `${fs}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+        const label = b.name.length > 24 ? b.name.slice(0, 23) + "…" : b.name;
+        const w = ctx.measureText(label).width + 6;
+        ctx.fillStyle = "rgba(6,10,6,0.82)"; ctx.fillRect(Math.round(x - w / 2), Math.round(y - fs - 3), Math.round(w), fs + 4);
+        ctx.fillStyle = selected ? "#4ade80" : "#a7d7b5"; ctx.fillText(label, Math.round(x), Math.round(y));
+      }
+    }
+
+    function drawTrack(it) {
+      const [u0, v0] = it.a, [u1, v1] = it.c;
+      const a = P(u0, v0, DECK), b = P(u1, v1, DECK);
+      if (!onScreen([a, b])) return;
+      if (it.pillar) {
+        const g = P(u0, v0, 0);
+        ctx.strokeStyle = "rgba(120,140,130,0.45)"; ctx.lineWidth = Math.max(1, V.cam.z * 0.18);
+        ctx.beginPath(); ctx.moveTo(g[0], g[1]); ctx.lineTo(a[0], a[1]); ctx.stroke();
+      }
+      ctx.strokeStyle = "rgba(34,211,238,0.55)"; ctx.lineWidth = Math.max(1.5, V.cam.z * 0.3);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+
+    function drawTrains(mt) {
+      const trains = trainsAt(mt);
+      for (const t of trains) for (const c of t.cars) {
+        const [u, v] = rot(c.x, c.y, V.cam.r);
+        const [x, y] = P(u, v, DECK + 0.35);
+        const w = Math.max(3, V.cam.z * 1.6), hh = Math.max(2, V.cam.z * 0.8);
+        ctx.fillStyle = "#0e7490"; ctx.fillRect(Math.round(x - w / 2), Math.round(y - hh / 2), Math.round(w), Math.round(hh));
+        ctx.fillStyle = "#67e8f9"; ctx.fillRect(Math.round(x - w / 2 + 1), Math.round(y - hh / 2 + 1), Math.round(w - 2), Math.max(1, Math.round(hh * 0.3)));
+      }
+      // stations: a lit platform by each district's stop
+      if (lodFor(V.cam.z) !== "far") for (const st of Object.values(STATIONS)) {
+        const [u, v] = rot(st.x, st.y, V.cam.r);
+        const [x, y] = P(u, v, DECK);
+        ctx.fillStyle = "rgba(34,211,238,0.25)"; ctx.fillRect(Math.round(x - V.cam.z), Math.round(y - 2), Math.round(V.cam.z * 2), 3);
+      }
+    }
+
+    // Subjects outdoors, at their live position (streets, platforms, the Green).
+    function outdoorPositions(mt) {
+      const out = [];
+      for (const o of V.outdoors) {
+        let x, y;
+        if (o.open) {
+          const p = PLACES[o.open], k = o.s.slug || o.s.name;
+          const wob = V.reduced ? 0 : Math.sin(mt * 6 + h01(k) * 10) * 0.4;
+          x = p.rect.x + p.rect.w * (0.12 + 0.76 * h01(k + "x")) + wob;
+          y = p.rect.y + p.rect.h * (0.2 + 0.6 * h01(k + "y"));
+        } else {
+          const w = whereOf(o.s, mt);
+          if (!w || w.activity !== "commute" || w.sub === "riding") continue;
+          x = w.x; y = w.y;
+        }
+        const [u, v] = rot(x, y, V.cam.r);
+        out.push({ s: o.s, u, v, h: o.open ? 0 : 0 });
+      }
+      return out;
+    }
+
+    function drawPerson(p, lod) {
+      const [x, y] = P(p.u, p.v, p.h);
+      if (x < -20 || x > V.cssW + 20 || y < -40 || y > V.cssH + 20) return;
+      if (lod === "far") {
+        ctx.fillStyle = FAMILY_COLOR[familyOf(p.s)] || "#6b9a7c";
+        ctx.fillRect(Math.round(x) - 1, Math.round(y) - 2, 2, 2);
+        return;
+      }
+      const hpx = V.cam.z * STOREY * 0.95;
+      if (lod === "mid" || hpx < 18) {
+        const m = miniFor(p.s);
+        const s = hpx / (SPRITE_H / 2);
+        try { ctx.drawImage(m, Math.round(x - (SPRITE_W / 4) * s), Math.round(y - hpx), Math.round((SPRITE_W / 2) * s), Math.round(hpx)); } catch { /* not ready */ }
+      } else {
+        const e = sheetFor(p.s);
+        const s = hpx / SPRITE_H;
+        try { ctx.drawImage(e.img, 0, 0, SPRITE_W, SPRITE_H, Math.round(x - (SPRITE_W / 2) * s), Math.round(y - hpx), Math.round(SPRITE_W * s), Math.round(hpx)); } catch { /* not ready */ }
+      }
+      V.hits.push({ person: p.s, box: [x - hpx * 0.3, y - hpx, x + hpx * 0.3, y] });
+    }
+
+    // ---- the cutaway ------------------------------------------------------------------------
+    function panelRect() {
+      const narrow = V.cssW < 640;
+      return narrow
+        ? { x: 6, y: Math.round(V.cssH * 0.3), w: V.cssW - 12, h: Math.round(V.cssH * 0.7) - 6 }
+        : { x: Math.round(V.cssW * 0.48), y: 8, w: Math.round(V.cssW * 0.52) - 8, h: V.cssH - 72 };
+    }
+    function drawCutaway(b, mt) {
+      const pr = panelRect();
+      V.lift = V.reduced ? 1 : Math.min(1, V.lift + 0.08);
+      const e = 1 - Math.pow(1 - V.lift, 3);
+      const x0 = pr.x, y0 = pr.y + (1 - e) * 40;
+      ctx.globalAlpha = e;
+      ctx.fillStyle = "rgba(6,10,6,0.95)"; ctx.fillRect(x0, y0, pr.w, pr.h);
+      ctx.strokeStyle = "#4ade80"; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, pr.w - 1, pr.h - 1);
+      // header
+      ctx.font = `12px ${FONT}`; ctx.textAlign = "left"; ctx.textBaseline = "top";
+      ctx.fillStyle = "#4ade80";
+      ctx.fillText(`${b.name} // ${b.addr}`, x0 + 10, y0 + 8);
+      ctx.fillStyle = "#6b9a7c";
+      ctx.fillText(b.id === "hq" ? "CENSUS CLASSIFIED" : `${V.occ[b.id] || 0} INSIDE // ${b.floors.length} FLOORS`, x0 + 10, y0 + 24);
+      ctx.textAlign = "right"; ctx.fillStyle = "#a7d7b5"; ctx.fillText("[ X ]", x0 + pr.w - 10, y0 + 8);
+      V.hits.push({ close: true, box: [x0 + pr.w - 50, y0, x0 + pr.w, y0 + 26] });
+      // floors, top storey first; basements below a ground line
+      const floors = b.floors.slice().sort((a, c) => c.level - a.level);
+      const top = y0 + 44, avail = pr.h - 52;
+      const fh = clampN(Math.floor(avail / floors.length), 34, 190);
+      const labW = 34;
+      ctx.save(); ctx.beginPath(); ctx.rect(x0 + 1, top, pr.w - 2, pr.h - 46); ctx.clip();
+      floors.forEach((f, i) => {
+        const fy = top + i * fh;
+        if (f.level === -1 || (i > 0 && floors[i - 1].level >= 0 && f.level < 0)) {
+          ctx.fillStyle = "#3a2a1a"; ctx.fillRect(x0 + 1, fy - 2, pr.w - 2, 2);   // the ground line
+        }
+        ctx.fillStyle = f.level < 0 ? "#0b0906" : "#0a0f0a"; ctx.fillRect(x0 + 1, fy, labW, fh - 2);
+        ctx.font = `11px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#6b9a7c";
+        ctx.fillText(f.code, x0 + 1 + labW / 2, fy + fh / 2);
+        const rooms = f.places.length ? f.places : [null];
+        const rw = (pr.w - labW - 6) / rooms.length;
+        rooms.forEach((pid, k) => {
+          const rx = x0 + labW + 3 + k * rw, ry = fy, rh = fh - 2;
+          if (!pid) { ctx.fillStyle = "#101410"; ctx.fillRect(rx, ry, rw - 2, rh); return; }
+          const u = Math.max(1, Math.round(rh / 40));
+          drawRoom(ctx, pid, rx, ry, rw - 2, rh, u, { t: mt, lit: true });
+          ctx.font = `10px ${FONT}`; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillStyle = "rgba(230,240,230,0.75)";
+          ctx.fillText(`${f.name}`.slice(0, Math.max(6, Math.floor(rw / 7))), rx + 3, ry + 2);
+          if (b.id === "hq") return;
+          const who = V.inside.get(`${b.id}|${f.index}|${pid}`) || [];
+          const sh = Math.round(rh * 0.6), sw = Math.round(sh * (SPRITE_W / SPRITE_H));
+          const anchors = anchorsFor(typeOf(pid), rw - 2, rh, sw);
+          const drawn = Math.min(who.length, anchors.length);
+          for (let n = 0; n < drawn; n++) {
+            const a = anchors[n], s = who[n];
+            const hh = Math.round(sh * a.s * (a.sit ? 0.86 : 1)), ww = Math.round(hh * (SPRITE_W / SPRITE_H));
+            const px = Math.round(rx + a.x - ww / 2), py = Math.round(ry + a.y - hh);
+            const eSheet = sheetFor(s);
+            try { ctx.drawImage(eSheet.img, 0, 0, SPRITE_W, SPRITE_H, px, py, ww, hh); } catch { /* not decoded */ }
+            V.hits.push({ person: s, box: [px, py, px + ww, py + hh] });
+          }
+          if (who.length > drawn) {
+            const lab = `+${who.length - drawn}`;
+            ctx.font = `11px ${FONT}`; const tw = ctx.measureText(lab).width + 6;
+            ctx.fillStyle = "rgba(251,191,36,0.9)"; ctx.fillRect(Math.round(rx + rw - tw - 6), ry + 3, Math.round(tw), 14);
+            ctx.fillStyle = "#1a1206"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            ctx.fillText(lab, Math.round(rx + rw - tw / 2 - 6), ry + 10);
+          }
+        });
+      });
+      ctx.restore();
+      ctx.globalAlpha = 1;
+      V.panel = { x0, y0, w: pr.w, h: pr.h };
+    }
+
+    function draw() {
+      readCensus();
+      if (!V.geo || V.geo.r !== V.cam.r) V.geo = buildGeo(V.cam.r);
+      const mt = censusRef.current?.mt != null && V.reduced ? censusRef.current.mt : clockAt(Date.now()).mt;
+      V.t = mt;
+      const lod = lodFor(V.cam.z);
+      ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.fillStyle = "#060a06"; ctx.fillRect(0, 0, V.cssW, V.cssH);
+      V.hits = [];
+      drawGround();
+      // people slot between buildings by depth
+      const people = outdoorPositions(mt);
+      const { items, order } = V.geo;
+      const slots = new Map();
+      for (const p of people) {
+        const k = slotFor(p.u, p.v, items, order);
+        (slots.get(k) || slots.set(k, []).get(k)).push(p);
+      }
+      const dim = !!V.sel;
+      for (const p of slots.get(-1) || []) drawPerson(p, lod);
+      for (let k = 0; k < order.length; k++) {
+        const it = items[order[k]];
+        if (it.kind === "b") drawBuilding(it, lod, dim && it.b.id !== V.sel);
+        else drawTrack(it);
+        for (const p of slots.get(k) || []) drawPerson(p, lod);
+      }
+      drawTrains(mt);
+      // compass
+      ctx.font = `11px ${FONT}`; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillStyle = "rgba(107,154,124,0.8)";
+      ctx.fillText(`FACING ${["NW", "NE", "SE", "SW"][V.cam.r]} // ${lod === "far" ? "OVERVIEW" : lod === "mid" ? "DISTRICT" : "STREET"}`, 8, 8);
+      V.panel = null;
+      if (V.sel) drawCutaway(BUILDING[V.sel], mt);
+    }
+
+    // ---- input -------------------------------------------------------------------------------
+    const pts = new Map();
+    let drag = null, pinch = null;
+    const local = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    function onDown(e) {
+      canvas.setPointerCapture?.(e.pointerId);
+      pts.set(e.pointerId, local(e));
+      if (pts.size === 1) { const [x, y] = local(e); drag = { x, y, ox: V.cam.ox, oy: V.cam.oy, moved: false }; }
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), ang: Math.atan2(b[1] - a[1], b[0] - a[0]), z: V.cam.z, twist: 0 };
+        drag = null;
+      }
+    }
+    function onMove(e) {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, local(e));
+      if (pinch && pts.size >= 2) {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a[0] - b[0], a[1] - b[1]), ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+        const cx = (a[0] + b[0]) / 2, cy = (a[1] + b[1]) / 2;
+        zoomAt(cx, cy, (pinch.z * (d / pinch.d)) / V.cam.z);
+        let da = ang - pinch.ang; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI;
+        if (Math.abs(da) > 0.8) { turn(da > 0 ? 1 : -1); pinch.ang = ang; }
+        return;
+      }
+      if (drag) {
+        const [x, y] = local(e);
+        if (Math.abs(x - drag.x) + Math.abs(y - drag.y) > 4) drag.moved = true;
+        if (drag.moved) { V.cam.ox = drag.ox + (x - drag.x); V.cam.oy = drag.oy + (y - drag.y); V.need = true; }
+      }
+    }
+    function onUp(e) {
+      const wasTap = drag && !drag.moved && pts.size === 1;
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinch = null;
+      if (wasTap) tap(...local(e));
+      if (!pts.size) drag = null;
+    }
+    function tap(x, y) {
+      // front-most first: hits were pushed back to front
+      for (let i = V.hits.length - 1; i >= 0; i--) {
+        const h = V.hits[i];
+        if (h.box && x >= h.box[0] && x <= h.box[2] && y >= h.box[1] && y <= h.box[3]) {
+          if (h.close) { select(null); return; }
+          if (h.person) { onOpenRef.current?.(h.person); return; }
+        }
+      }
+      if (V.panel && x >= V.panel.x0 && x <= V.panel.x0 + V.panel.w && y >= V.panel.y0 && y <= V.panel.y0 + V.panel.h) return;
+      for (let i = V.hits.length - 1; i >= 0; i--) {
+        const h = V.hits[i];
+        if (h.hull && inPoly(x, y, h.hull)) { select(V.sel === h.id ? null : h.id); return; }
+      }
+      if (V.sel) select(null);
+    }
+    function onWheel(e) {
+      e.preventDefault();
+      const [x, y] = local(e);
+      zoomAt(x, y, Math.exp(-e.deltaY * 0.0015));
+    }
+    function onKey(e) {
+      if (e.key === "q" || e.key === "Q") { turn(-1); e.preventDefault(); }
+      else if (e.key === "e" || e.key === "E") { turn(1); e.preventDefault(); }
+      else if (e.key === "+" || e.key === "=") zoomAt(V.cssW / 2, V.cssH / 2, 1.3);
+      else if (e.key === "-") zoomAt(V.cssW / 2, V.cssH / 2, 1 / 1.3);
+      else if (e.key === "Escape" && V.sel) select(null);
+      else if (e.key === "Enter" && V.sel) apiRef.current.enter();
+      else if (e.key.startsWith("Arrow")) {
+        const d = 40;
+        if (e.key === "ArrowLeft") V.cam.ox += d; if (e.key === "ArrowRight") V.cam.ox -= d;
+        if (e.key === "ArrowUp") V.cam.oy += d; if (e.key === "ArrowDown") V.cam.oy -= d;
+        V.need = true; e.preventDefault();
+      } else return;
+    }
+    canvas.addEventListener("pointerdown", onDown);
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerup", onUp);
+    canvas.addEventListener("pointercancel", onUp);
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    canvas.addEventListener("keydown", onKey);
+
+    // ---- loop --------------------------------------------------------------------------------
+    let raf = 0, onScreenNow = true, dead = false;
+    function frame() {
+      if (!V.reduced || V.need || censusRef.current?.v !== V.censusV) { V.need = false; draw(); }
+      raf = requestAnimationFrame(frame);
+    }
+    function sync() {
+      const want = !dead && onScreenNow && !document.hidden;
+      if (want && !raf) raf = requestAnimationFrame(frame);
+      if (!want && raf) { cancelAnimationFrame(raf); raf = 0; }
+    }
+    const io = typeof IntersectionObserver !== "undefined" ? new IntersectionObserver(([en]) => { onScreenNow = en.isIntersecting; sync(); }) : null;
+    io?.observe(wrap);
+    document.addEventListener("visibilitychange", sync);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => resize()) : null;
+    ro ? ro.observe(wrap) : window.addEventListener("resize", resize);
+    const onMotion = () => { V.reduced = !!mq?.matches; V.need = true; };
+    mq?.addEventListener?.("change", onMotion);
+    resize();
+    sync();
+    if (import.meta.env?.DEV) window.__hviIso = { V, turn, select, zoomAt, fit };
+    return () => {
+      dead = true; sync();
+      io?.disconnect();
+      document.removeEventListener("visibilitychange", sync);
+      ro ? ro.disconnect() : window.removeEventListener("resize", resize);
+      mq?.removeEventListener?.("change", onMotion);
+      canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerup", onUp);
+      canvas.removeEventListener("pointercancel", onUp);
+      canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const b = sel && BUILDING[sel];
+  return (
+    <div className="hvi-city-stage" ref={wrapRef}>
+      <TouchGate>
+        <canvas ref={canvasRef} tabIndex={0} className="hvi-city-canvas" role="img"
+          aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag to pan, pinch or wheel to zoom, Q and E to turn. Select a building to open its cutaway: every floor and room, and who is in it. The district directory below lists every district by keyboard." />
+      </TouchGate>
+      <div className="hvi-city-zoom" role="toolbar" aria-label="City view controls">
+        <span className="hint">{b ? b.name : "TAP A BUILDING"}</span>
+        <button type="button" className="hvi-city-zb" aria-label="Turn left" onClick={() => apiRef.current.turn?.(-1)}>⟲</button>
+        <button type="button" className="hvi-city-zb" aria-label="Turn right" onClick={() => apiRef.current.turn?.(1)}>⟳</button>
+        <button type="button" className="hvi-city-zb" aria-label="Zoom in" onClick={() => apiRef.current.zoom?.(1.4)}>+</button>
+        <button type="button" className="hvi-city-zb" aria-label="Zoom out" onClick={() => apiRef.current.zoom?.(1 / 1.4)}>−</button>
+        {b
+          ? <>
+              <button type="button" className="hvi-city-zb txt" onClick={() => apiRef.current.enter?.()}>ENTER</button>
+              <button type="button" className="hvi-city-zb txt" aria-label="Close the cutaway" onClick={() => apiRef.current.close?.()}>CLOSE</button>
+            </>
+          : <button type="button" className="hvi-city-zb txt" aria-label="Fit the whole city" onClick={() => apiRef.current.fit?.()}>FIT</button>}
+      </div>
+      {b && <p className="sr-only" role="status">{`${b.name} open. ${b.floors.length} floors. ${b.floors.map(f => `${f.code} ${f.name}`).join(", ")}.`}</p>}
+    </div>
+  );
+}

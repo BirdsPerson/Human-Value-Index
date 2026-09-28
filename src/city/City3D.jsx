@@ -40,11 +40,11 @@ const KEY_ORDER = BUILDINGS.slice().sort((a, b) => (D_ORDER[a.districtId] - D_OR
 
 // ---- the [2D MAP] / [3D] toggle, for City.jsx -----------------------------------------
 // Remembered per viewer (a convenience, so it lives in localStorage and survives without it).
-const MODE_KEY = "hvi-city-view-v2";
-export function useCityViewMode(initial = "street") {
-  // v2: STREET became the default (2026-09-28); the old 2d/3d choice maps onto MAP/STACK.
+const MODE_KEY = "hvi-city-view-v3";
+export function useCityViewMode(initial = "city") {
+  // v3: the SimCity-style CITY view is the default (2026-09-28); STREET stays, de-emphasised.
   const [mode, setMode] = useState(() => {
-    try { const m = window.localStorage.getItem(MODE_KEY); return m === "map" || m === "stack" || m === "street" ? m : initial; } catch { return initial; }
+    try { const m = window.localStorage.getItem(MODE_KEY); return m === "city" || m === "map" || m === "stack" || m === "street" ? m : initial; } catch { return initial; }
   });
   const set = useCallback((m) => { setMode(m); try { window.localStorage.setItem(MODE_KEY, m); } catch { /* private mode */ } }, []);
   return [mode, set];
@@ -52,6 +52,7 @@ export function useCityViewMode(initial = "street") {
 export function ViewToggle({ mode, onChange }) {
   return (
     <Chips role="group" aria-label="City view">
+      <Chip pressed={mode === "city"} onClick={() => onChange("city")}>CITY</Chip>
       <Chip pressed={mode === "map"} onClick={() => onChange("map")}>MAP</Chip>
       <Chip pressed={mode === "stack"} onClick={() => onChange("stack")}>STACK</Chip>
       <Chip pressed={mode === "street"} onClick={() => onChange("street")}>STREET</Chip>
