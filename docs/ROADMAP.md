@@ -10,7 +10,7 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 ## Backlog (priority order)
 
 1. [in progress: slices 1 and 2 shipped, see Done] **Side quests → vouches.**
-   Remaining slices: (b) vouch → score effect [needs Scott: see MORNING_REPORT];
+   Remaining slices: (b) [next] vouch → score effect: DECIDED by Scott 2026-09-28: +2 to that category per vouch (max +14 across 7); show it on the file and in the breakdown;
    (c2) bring someone (needs a second player or a referral; witness shipped as c1);
    (d) real-world Directives
    reported back via appeal; (e) text-chat quests on Haiku (capped); (f) offers from
