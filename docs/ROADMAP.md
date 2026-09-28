@@ -9,9 +9,10 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Backlog (priority order)
 
-1. [in progress: slice 1 shipped 2026-09-27, see Done] **Side quests → vouches.**
+1. [in progress: slices 1 and 2 shipped, see Done] **Side quests → vouches.**
    Remaining slices: (b) vouch → score effect [needs Scott: see MORNING_REPORT];
-   (c) more kinds: bring someone, witness a city event; (d) real-world Directives
+   (c2) bring someone (needs a second player or a referral; witness shipped as c1);
+   (d) real-world Directives
    reported back via appeal; (e) text-chat quests on Haiku (capped); (f) offers from
    roster-engine dead figures, not just the 7 hand-written ones.
    Original brief: Figures (dead only; living figures never speak)
@@ -58,6 +59,14 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Done
 
+- 2026-09-28 Side quests slice 2, witness directives (91f148e): 7 more dead figures, one
+  per category, each ask you to be in the building while they and a named partner are
+  both on its floors (Gandhi+Mandela, Mandela+Tubman, Tesla+Curie, Einstein+Newton,
+  Socrates+Marcus Aurelius, Franklin+Holiday, Pelé+Ruth). The held directive shows both
+  locations and a countdown to the next meeting; REPORT MEETING on either file inside
+  that building; /api/quest re-checks the meeting against the sim. Still one vouch per
+  category: a category's other directive closes once it has one. check-quests covers
+  meeting rates over 14 machine days, the countdown, and the new rules.
 - 2026-09-27 Side quests slice 1 (3bd6439): 7 dead figures (one per category) offer a
   "find me" directive; accept on MY FILE > DIRECTIVES, find the figure in the city,
   open its file inside the same building, REPORT CONTACT; /api/quest re-checks contact
