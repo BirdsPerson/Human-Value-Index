@@ -157,5 +157,20 @@ BUILDING;   // (imported for parity with check-quests' view of the city)
   assert.equal(JSON.stringify(store.state), before, "a failed census leaves the ledger untouched");
 }
 
+// ties from the record: seeded once when both are on file, never over existing history
+{
+  const st = SOC.emptyState(100);
+  st.names = { "samuel-beckett": "Samuel Beckett", "andre-the-giant": "André the Giant" };
+  SOC.seedTies(st, new Set(["samuel-beckett"]));
+  assert.equal(Object.keys(st.pairs).length, 0, "no tie until both are on file");
+  SOC.seedTies(st, new Set(["samuel-beckett", "andre-the-giant"]));
+  const pk = SOC.pairKey("samuel-beckett", "andre-the-giant");
+  assert.equal(st.pairs[pk][0], 45); assert.equal(st.events.length, 1);
+  assert.match(st.events[0].text, /CRICKET/);
+  st.pairs[pk][0] = -20;   // the sim moved them; a later tick must not reset it
+  SOC.seedTies(st, new Set(["samuel-beckett", "andre-the-giant"]));
+  assert.equal(st.pairs[pk][0], -20); assert.equal(st.events.length, 1);
+}
+
 console.log(`social ok: ${Object.keys(state.pairs).length} pairs, ${pub.counts.friends} friendships, ${pub.counts.rivals} rivalries; ` +
   `friend co-location ${withBias} vs ${without} without feedback; quest window covered ${covered}/14 days; ${ms} ms`);

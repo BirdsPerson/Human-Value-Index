@@ -122,6 +122,29 @@ function line(kind, a, b, placeId, r) {
 }
 export const TEMPLATE_LINES = LINES;   // checks read these
 
+// ---- ties from the record ---------------------------------------------------------------
+// People who knew each other before the Substrate start from where the record leaves them,
+// then the sim takes over (Scott 2026-09-29). Hand-curated for ties Wikidata doesn't hold;
+// the community pass adds Wikidata relations (spouse, sibling, bandmates) on the same path.
+// [slugA, slugB, starting affinity, the record, in the Overlord's words]
+export const KNOWN_TIES = [
+  ["samuel-beckett", "andre-the-giant", 45, "A TRUCK, A SCHOOL RUN, A BOY TOO LARGE FOR THE BUS, AND CRICKET"],
+];
+// Seeds a tie once, when both files are present and the pair has no history; idempotent,
+// so any chunking of the tick gives the same city.
+export function seedTies(state, live, ties = KNOWN_TIES) {
+  for (const [a, b, aff, why] of ties) {
+    if (!live.has(a) || !live.has(b)) continue;
+    const pk = pairKey(a, b);
+    if (state.pairs[pk]) continue;
+    state.pairs[pk] = [aff, 0, state.hour, null, 0];
+    const [ka, kb] = a < b ? [a, b] : [b, a];
+    pushEvent(state, { h: state.hour, kind: "record", a: ka, b: kb, placeId: null,
+      text: `${(state.names[a] || a).toUpperCase()} AND ${(state.names[b] || b).toUpperCase()}: KNOWN TO EACH OTHER BEFORE INTAKE. ${why}. THE DEPARTMENT HAS RESTORED THE LINK.` });
+  }
+  return state;
+}
+
 // ---- the tick --------------------------------------------------------------------------
 // Advance `state` to `toHour` (exclusive) with `subjects` (the census). Mutates and
 // returns state. Applies published snapshots to the sim as it goes.
@@ -131,6 +154,7 @@ export function advance(state, subjects, toHour, opts = {}) {
   forget(state, new Set(people.map(SIM.keyOf)));   // withdrawn/removed files leave the ledger
   SIM.setRoster(people);   // capacity-aware placement, same roster the browsers register
   for (const s of people) state.names[SIM.keyOf(s)] = displayName(s);
+  seedTies(state, new Set(people.map(SIM.keyOf)));
   // Make every snapshot the state already knows about visible to the sim.
   SIM.setSocialSnapshots(state.snapshots);
   const maxHours = opts.maxHours ?? Infinity;
