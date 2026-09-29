@@ -173,3 +173,43 @@ Review pass (2026-09-26):
 
 Measured (headless Chromium, 1280x900, 400 subjects, busy hour): 3D frame gap 16.7 ms
 average, p95 17.8 ms; frame script time 0.6-0.8 ms. Screens: docs/screens/city-v2/.
+
+## Rooms as workplaces (Fallout Shelter pass, 2026-09-29)
+
+Scott: "add detail to the environments, bar stools for people to sit at, activity to show
+people are actually doing work instead of loitering; use Fallout Shelter for reference."
+Fallout Shelter's recipe: a side-on room whose furniture says what it is for, one station
+per dweller, each dweller AT a station doing a small looping task, capacity following width.
+
+- `props.js` holds a PLAN per room type (41 types): rows of furniture modules, each with at
+  most one ANCHOR `{kind: seat|station|stand|bed|counter, act, role: staff|patron|rest|any,
+  face, walk}`. Deep rooms get a back row (0.8 scale, up the wall) and a front row; row-long
+  pieces (the bar's counter, the conveyor, the stage, the bleachers) span the room. With a
+  capacity, the plan holds exactly that many places, spread across the width, so a full room
+  looks full and a quiet one shows its empty stools.
+- `assignAnchors` seats people: workers on shift (`activity: work`) take the staff stations,
+  visitors the seats (never behind the counter), residents the bunks (bunks first at night).
+  Anyone already seated keeps their place when someone new arrives. More people than places
+  is a `+K` badge. More workers than stations (the sim drafts general labour) puts the extra
+  staff to work at the other furniture (`actAt`: a waiter at a café table, a warden by the
+  cots): no worker on shift ever runs a leisure loop.
+- `poses.js` draws each person from their own sprite: sit (torso lowered onto the seat, shins
+  below), lie (on the bunk, blanket, a Z), walk (paces its module), stand, plus the act's
+  motion and a tiny tool (a glass lifted, a bottle tipped, keys, a brush, a tray, a valve rod,
+  a barbell). Deterministic phase per person; `t = 0` under reduced motion gives still poses.
+- Ambient life, per type, subtle: the neon that nearly gives up, steam off grills and vats,
+  the exchange ticker scrolling, racks blinking, the reactor's pulse, the ward monitor, lamps
+  that go off in the habs at night (a reading lamp or two stays on).
+- Both renderers use it: the iso cutaway (`CityIso.jsx`, sprites 16-64px by floor height) and
+  the room canvas (`RoomStage.jsx`, district tiles and building floors). In RoomStage, arrivals
+  walk from the door to their anchor and leavers walk back out; the platform is unchanged.
+- District tiles show a whole place in one box, so busy places badge the rest; the building
+  view, one row per floor, has a place for each of the floor's share of capacity.
+- `scripts/check-cityview.mjs` checks anchor typing (kinds, roles, acts with poses, walkers
+  inside their module, spans), capacity (building view: places == the floor's cap), the
+  assignment rules, and a production-shaped roster through `whereAt` at four hours: every
+  worker placed is working, residents asleep at night.
+
+Measured (headless Chromium, 422 subjects): hab block at 21:00, 1440: frame gap 16.7 ms avg,
+p95 17.8; iso cutaway on a hab block: 16.7 / 18.0; works district at 390: 16.7 / 18.1; no
+long tasks. Screens: docs/screens/rooms-detail/.

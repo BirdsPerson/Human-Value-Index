@@ -1,8 +1,10 @@
 // City view (isometric overview + building cutaway) checks. Pure node, no DOM.
 //   node scripts/check-cityview.mjs
-import { PLACES } from "../src/city/sim.js";
+import { PLACES, BUILDINGS, JOBS, whereAt } from "../src/city/sim.js";
+import { FAMOUS_FIGURES, slugify, TIERS } from "../src/figures.js";
+import { poseOf } from "../src/city/poses.js";
 import { rot, unrot, project, unproject, screenToMap, depthOrder, slotFor, lodFor, LOD_MID, LOD_NEAR, mod4 } from "../src/city/iso.js";
-import { ROOM_TYPE, DRAWN_TYPES, anchorsFor, typeOf } from "../src/city/props.js";
+import { ROOM_TYPE, DRAWN_TYPES, PLANNED_TYPES, PROP, anchorsFor, roomPlan, typeOf, assignAnchors, roleOf, actAt, isNight, LEISURE_ACTS } from "../src/city/props.js";
 
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log(`  FAIL ${m}`); } return c; };
@@ -74,6 +76,124 @@ for (const id of Object.keys(PLACES)) {
 }
 for (const t of new Set(Object.values(ROOM_TYPE))) ok(drawn.has(t), `room type ${t} has a drawer`);
 ok(new Set(Object.values(ROOM_TYPE)).size >= 20, "at least 20 distinct room types");
+
+
+// 6. Anchor typing: every anchor says what it is, who it is for and what they do there;
+//    furniture named by a plan exists; walkers keep inside their own module.
+const KINDS = new Set(["seat", "station", "stand", "bed", "counter"]), ROLES = new Set(["staff", "patron", "rest", "any"]);
+for (const t of new Set(Object.values(ROOM_TYPE))) ok(PLANNED_TYPES.includes(t), `room type ${t} has a plan`);
+for (const type of PLANNED_TYPES) for (const [w, h, sw] of [[300, 120, 32], [916, 120, 32], [470, 188, 43], [320, 80, 34], [60, 30, 32]]) {
+  const plan = roomPlan(type, w, h, sw);
+  ok(plan.anchors.length >= 1, `${type} ${w}x${h} plan has an anchor`);
+  for (const row of plan.rows) {
+    if (row.span) ok(!!PROP[row.span.prop] && row.span.x0 >= 0 && row.span.x1 <= w, `${type}: row span ${row.span.prop} drawn and inside`);
+    let last = -Infinity;
+    for (const it of row.items) {
+      ok(it.x0 >= last - 1e-6, `${type} ${w}x${h} modules in order`); last = it.x1;
+      ok(it.x0 >= -1e-6 && it.x1 <= w + 1e-6, `${type} ${w}x${h} module inside the room`);
+      if (it.prop) ok(!!PROP[it.prop], `${type}: prop ${it.prop} is drawn`);
+      const a = it.a;
+      if (!a) continue;
+      ok(KINDS.has(a.kind), `${type} anchor kind ${a.kind}`);
+      ok(ROLES.has(a.role), `${type} anchor role ${a.role}`);
+      ok(typeof a.act === "string" && a.act.length > 0, `${type} anchor has an act`);
+      ok(["sit", "stand", "walk", "lie"].includes(poseOf(a, actAt(a, 3))) && ["sit", "stand", "walk", "lie"].includes(poseOf(a, actAt(a, 12))), `${type} ${a.act} has a pose`);
+      const half = sw * a.s / 2, lo = a.walk ? a.walk[0] : a.x, hi = a.walk ? a.walk[1] : a.x;
+      // the whole footprint (every point of a walk) stays inside the module: nobody overlaps
+      if (it.x1 - it.x0 >= sw * a.s - 1e-6) ok(lo - half >= it.x0 - 1e-6 && hi + half <= it.x1 + 1e-6, `${type} ${w}x${h} ${a.act} stays in its module`);
+    }
+  }
+}
+// Every job's room has stations for its staff; every home has beds; bars keep a bartender.
+for (const j of JOBS) ok(roomPlan(typeOf(j.place), 916, 120, 32).anchors.some(a => a.role === "staff" || a.role === "any"), `job ${j.id}: ${j.place} has staff stations`);
+for (const id of Object.keys(PLACES)) if (PLACES[id].kind === "home") ok(roomPlan(typeOf(id), 916, 120, 32).anchors.some(a => a.kind === "bed"), `home ${id} has bunks`);
+ok(roomPlan("bar", 300, 50, 32).anchors.some(a => a.role === "staff" && a.act === "pour"), "a shallow bar keeps its bartender");
+
+// 7. Capacity: in the building view (one row per floor, 1440 wide) every room has exactly one
+//    place for each of its floor's share of capacity: a full room looks full. (District tiles show a whole place in one box and
+//    badge the rest: +K.) HQ is not shown.
+for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (const pid of f.places) {
+  const per = Math.round(PLACES[pid].cap / PLACES[pid].floors.length);
+  const w = (980 - 46) / f.places.length - 18;
+  const n = roomPlan(typeOf(pid), w, 120, 32, per).anchors.length;
+  ok(n === per, `${b.id} ${f.code} ${pid}: ${n} places for the floor's ${per}`);
+}
+
+// 8. Assignment, in the abstract: one person per anchor, staff first to stations, visitors
+//    never behind the counter, overflow only when nothing suitable is free, and a newcomer
+//    moves nobody already seated.
+{
+  const plan = roomPlan("bar", 460, 150, 32);
+  const staffN = plan.anchors.filter(a => a.role === "staff").length;
+  const ppl = [...Array(3)].map((_, i) => ({ key: `s${i}`, role: "staff" })).concat([...Array(40)].map((_, i) => ({ key: `p${i}`, role: "patron" })));
+  const { at, overflow } = assignAnchors(plan.anchors, ppl);
+  ok(new Set(at.values()).size === at.size, "no two people share an anchor");
+  ok(at.size + overflow.length === ppl.length, "everyone is placed or overflow");
+  for (const [k, i] of at) if (k.startsWith("p")) ok(plan.anchors[i].role !== "staff", `patron ${k} not behind the counter`);
+  for (const [k, i] of at) if (k.startsWith("s")) ok(plan.anchors[i].role === "staff", `bartender ${k} at a staff station`);
+  const patronSeats = plan.anchors.filter(a => a.role !== "staff").length;
+  ok(overflow.length === 40 - patronSeats, `overflow is exactly the patrons without a seat (${overflow.length})`);
+  ok(staffN >= 3, "the bar has room for its shift");
+  const few = ppl.filter(p => p.key < "p5" || p.key.startsWith("s"));
+  const a1 = assignAnchors(plan.anchors, few).at;
+  const a2 = assignAnchors(plan.anchors, few.concat([{ key: "p00new", role: "patron" }]), a1).at;
+  for (const [k, i] of a1) ok(a2.get(k) === i, `newcomer moves nobody (${k})`);
+  const hab = roomPlan("hab", 916, 120, 32);
+  const beds = hab.anchors.filter(a => a.kind === "bed").length;
+  const res = [...Array(beds)].map((_, i) => ({ key: `r${i}`, role: "rest" }));
+  const night = assignAnchors(hab.anchors, res, null, 2).at;
+  ok([...night.values()].every(i => hab.anchors[i].kind === "bed"), "at night residents are in their bunks");
+  const day = assignAnchors(hab.anchors, res, night, 14).at;
+  ok([...day.values()].length === beds, "by day the same residents are all placed");
+  ok(actAt(hab.anchors.find(a => a.kind === "bed"), 2) === "sleep" && actAt(hab.anchors.find(a => a.kind === "bed"), 14) === "rest", "bunks sleep at night, are sat on by day");
+  ok(isNight(23) && isNight(3) && !isNight(12), "night is 22:00-07:00");
+}
+
+// 9. Activity assignment against the live sim: a production-shaped roster through whereAt at
+//    four hours; per room, on the building view's plan: workers on shift at stations (as far
+//    as the room has stations), visitors in seats, residents in bunks at night.
+{
+  const pop = FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name) }))
+    .concat([...Array(160)].map((_, i) => ({ slug: `citizen-${i}`, name: `Citizen ${i}`, tier: TIERS[(i * 7) % TIERS.length].label, score: 500, warmth: (i * 37) % 100, competence: (i * 53) % 100, kind: "citizen" })));
+  let placed = 0, staffAtStation = 0, staffTotal = 0, restNight = 0, restInBed = 0, seatedVisitors = 0, visitors = 0;
+  for (const hour of [3, 10, 15, 21]) {
+    const mt = 24 * 3 + hour + 0.25;
+    const rooms = new Map();
+    for (const s of pop) {
+      const w = whereAt(s, mt);
+      if (w.activity === "commute" || !w.buildingId || w.buildingId === "hq") continue;
+      const k = `${w.buildingId}|${w.floor}|${w.placeId}`;
+      (rooms.get(k) || rooms.set(k, []).get(k)).push({ key: s.slug, role: roleOf(w) });
+    }
+    for (const [k, people] of rooms) {
+      const [bid, fl, pid] = k.split("|");
+      const nPlaces = BUILDINGS.find(b => b.id === bid).floors[+fl].places.length;
+      const plan = roomPlan(typeOf(pid), (980 - 46) / nPlaces - 18, 120, 32, Math.round(PLACES[pid].cap / PLACES[pid].floors.length));
+      const { at, overflow } = assignAnchors(plan.anchors, people, null, hour);
+      ok(new Set(at.values()).size === at.size, `${k} @${hour}: one per anchor`);
+      placed += at.size;
+      // a work anchor: the staff's own, or an open one that is a station or a stand (an easel, a
+      // typewriter, the pitch), not a seat or a bunk
+      const work = (a) => a.role === "staff" || (a.role === "any" && a.kind !== "seat" && a.kind !== "bed");
+      const stations = plan.anchors.filter(work).length;
+      const staff = people.filter(p => p.role === "staff");
+      staffTotal += staff.length;
+      const onSt = staff.filter(p => at.has(p.key) && work(plan.anchors[at.get(p.key)])).length;
+      ok(onSt === Math.min(staff.length, stations), `${k} @${hour}: workers take the stations (${onSt}/${staff.length}, ${stations} stations)`);
+      // and every placed worker is working: no worker on shift runs a leisure loop
+      const working = staff.filter(p => at.has(p.key) && !LEISURE_ACTS.has(actAt(plan.anchors[at.get(p.key)], hour, "staff", plan.type))).length;
+      ok(working === staff.filter(p => at.has(p.key)).length, `${k} @${hour}: every worker on shift is working`);
+      staffAtStation += working;
+      for (const p of people) if (p.role === "patron" && at.has(p.key)) { visitors++; const a = plan.anchors[at.get(p.key)]; ok(a.role !== "staff", `${k}: visitor not at a staff station`); if (a.kind === "seat" || a.kind === "bed") seatedVisitors++; }
+      if (isNight(hour)) for (const p of people) if (p.role === "rest") { restNight++; if (at.has(p.key) && plan.anchors[at.get(p.key)].kind === "bed") restInBed++; }
+      ok(overflow.length <= Math.max(0, people.length - plan.anchors.filter(a => a.role !== "staff").length), `${k} @${hour}: overflow only when full`);
+    }
+  }
+  ok(placed > 100, `the sim puts people in rooms (${placed})`);
+  ok(staffAtStation / staffTotal > 0.95, `workers on shift working (placed and on a job loop): ${staffAtStation}/${staffTotal}`);
+  ok(restNight === 0 || restInBed / restNight > 0.95, `residents asleep at night: ${restInBed}/${restNight}`);
+  console.log(`  activity: ${staffAtStation}/${staffTotal} workers working, ${seatedVisitors}/${visitors} visitors seated, ${restInBed}/${restNight} residents in bunks at night`);
+}
 
 console.log(fails ? `check-cityview: ${fails} FAILED` : "check-cityview: ok");
 process.exit(fails ? 1 : 0);

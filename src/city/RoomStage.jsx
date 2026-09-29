@@ -3,6 +3,8 @@ import { SPRITE_W, SPRITE_H, gaitFor, stepEntity, mulberry32 } from "../sprites.
 import { getTier } from "../figures.js";
 import { activityLine, jobLine, clockAt, trainsAt, timetable, TRAIN } from "./simApi.js";
 import { sheetFor } from "./spriteBank.js";
+import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt } from "./props.js";
+import { drawPose, phaseOf } from "./poses.js";
 import { FONT, SubjectTip } from "./cityUi.jsx";
 
 // Rooms as terminal boxes on one canvas, with the subjects the census puts in each one
@@ -15,6 +17,10 @@ import { FONT, SubjectTip } from "./cityUi.jsx";
 //   assign  (w, s) -> {cell, mode} | null. mode: here | arrive (through the door) |
 //           leave (out by the door) | alight (off a train, onto the platform)
 // One rAF loop, paused offscreen; rooms scrolled out of the window are not drawn.
+// Rooms are furnished (props.js): everyone present has an anchor, a stool, a desk, a bunk,
+// and does its job there (poses.js); arrivals walk from the door to theirs, leavers back
+// out. A room with more people than anchors shows the rest as a +K badge. The platform is
+// a platform: people wait on it and walk to the car.
 
 export const ROOM_H = 150;          // CSS px per room
 const FLOOR_TOP = 86;               // feet stand between these two, room-relative
@@ -56,9 +62,10 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
     const bg = document.createElement("canvas");
     const mq = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
     const rnd = mulberry32((Date.now() ^ 0xc17) >>> 0);
-    const V = { cssW: 300, h: ROOM_H, dpr: 1, k: 1, rects: [], gutter: [], reduced: !!mq?.matches, seenV: -1, ents: new Map(), want: new Map(), counts: {}, tip: null, hover: null, cw: 7, top: 0, need: true, sig: "", focus: focusId, scrolled: false };
+    const V = { cssW: 300, h: ROOM_H, dpr: 1, k: 1, rects: [], gutter: [], geo: [], seats: [], over: [], reduced: !!mq?.matches, seenV: -1, ents: new Map(), want: new Map(), counts: {}, tip: null, hover: null, cw: 7, top: 0, need: true, sig: "", focus: focusId, scrolled: false };
     const idx = Object.fromEntries(cells.map((c, i) => [c.id, i]));
     const plat = cells.map(c => c.kind === "platform");
+    const placeOf = cells.map(c => c.placeId || c.id);
     const floorBot = (i) => V.rects[i].h - FLOOR_PAD;
     const worldFor = (i) => ({ w: V.rects[i].w, floorTop: FLOOR_TOP, floorBottom: floorBot(i), doorX: DOOR_X, doorW: 10 });
 
@@ -74,9 +81,28 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
       bg.width = canvas.width; bg.height = canvas.height;
       for (const e of V.ents.values()) { const w = V.rects[idx[e.room]].w; e.x = Math.min(e.x, w - 14); e.tx = Math.min(e.tx, w - 14); }
       paintRooms();
+      layoutRooms();
       measure();
       if (V.focus && !V.scrolled) scrollToFocus();
     }
+    // The furnished inside of each room box (inside the drawn frame), its plan and sprite size.
+    function layoutRooms() {
+      const hh = SPRITE_H * V.k / V.dpr, sw = hh * (SPRITE_W / SPRITE_H), ch = 13;
+      V.hh = hh;
+      V.geo = cells.map((c, i) => {
+        if (plat[i]) return null;
+        const { w: rw, h: rh } = V.rects[i];
+        const cols = Math.floor((rw - 4) / V.cw), rows = Math.floor((rh - 6) / ch);
+        const ix = 2 + V.cw, iy = 16, iw = 2 + (cols - 1) * V.cw - ix, ih = 2 + (rows - 1) * ch + 4 - iy;
+        return { ix, iy, iw, ih, plan: roomPlan(typeOf(placeOf[i]), iw, ih, sw, c.cap || null), u: Math.max(1, Math.round(ih / 50)) };
+      });
+      V.seats = cells.map(() => null);
+      V.seenV = -1;   // re-seat everyone on the new plans
+      for (const e of V.ents.values()) if (!plat[idx[e.room]] && !e.leaving) { e.anchor = null; e.state = "idle"; e.fresh = true; }
+    }
+    // where an anchor stands, room-relative
+    const anchorXY = (i, a) => [V.geo[i].ix + a.x, V.geo[i].iy + a.y];
+    const doorXY = (i) => [V.geo[i].ix + 5, V.geo[i].iy + V.geo[i].ih - 2];
     function measure() { V.top = canvas.getBoundingClientRect().top; V.dirty = false; V.need = true; }
     // Scrolling only marks the position stale; the next frame reads it once (one layout
     // read per frame, not one per scroll event).
@@ -114,6 +140,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         const rows = Math.floor((rh - 6) / ch);
         for (let r = 1; r < rows - 1; r++) { b.fillText(focused ? "║" : "│", x0 + 2, y0 + 2 + r * ch); b.fillText(focused ? "║" : "│", x0 + 2 + (cols - 1) * cw, y0 + 2 + r * ch); }
         b.fillText("└" + "─".repeat(cols - 2) + "┘", x0 + 2, y0 + 2 + (rows - 1) * ch);
+        if (kind !== "platform") return;   // a room's inside is furnished and drawn live
         // back wall: decor by kind (the platform's is the track), a floor line, the floor
         const wall = WALL[kind] || WALL.mixed;
         b.fillStyle = kind === "platform" ? "#164e5a" : "#1f4a2c";
@@ -143,6 +170,8 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
     // Out by the door, or (from a platform, when the census has them aboard) into the car.
     const exit = (e, board) => {
       e.leaving = true; e.gone = false; e.state = "exit"; e.board = !!board;
+      const i = idx[e.room];
+      if (!plat[i]) { const [dx, dy] = doorXY(i); e.tx = dx; e.ty = dy; if (e.anchor != null) { const a = V.geo[i].plan.anchors[e.anchor]; if (a) { const [ax, ay] = anchorXY(i, a); e.x = ax; e.y = ay; } } e.anchor = null; return; }
       if (board) { e.tx = e.x; e.ty = FLOOR_TOP - 6; } else { e.tx = DOOR_X; e.ty = FLOOR_TOP + 6; }
     };
     function sync() {
@@ -154,7 +183,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
       const fn = cb.current.assign;
       for (const { s, w } of C.list) {
         const m = fn(w, s);
-        if (m && idx[m.cell] !== undefined) want.set(s.name, { s, r: m.cell, mode: m.mode });
+        if (m && idx[m.cell] !== undefined) want.set(s.name, { s, w, r: m.cell, mode: m.mode });
         else if (w.sub === "riding") aboard.add(s.name);
       }
       V.want = want;
@@ -191,12 +220,46 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         ent.tx = inside ? ent.x : fromCar ? ent.x + (rnd() - 0.5) * 40 : 40 + rnd() * Math.max(20, rw - 70);
         ent.ty = fromCar ? FLOOR_TOP + 8 + rnd() * (floorBot(i) - FLOOR_TOP - 12) : ent.y;
         ent.tx = Math.max(16, Math.min(rw - 16, ent.tx));
+        if (!plat[i]) { ent.x = fromDoor ? doorXY(i)[0] : ent.x; ent.y = doorXY(i)[1]; ent.state = fromDoor ? "walk" : "idle"; ent.anchor = null; ent.fresh = !fromDoor; }
         if (mode === "leave") exit(ent, false);
         V.ents.set(name, ent);
       }
+      seat(want);
       const sig = cells.map(c => (lists[c.id] || []).map(s => s.name).join("\u0001")).join("\u0002");
       if (sig !== V.sig) { V.sig = sig; cb.current.onPresent?.(lists); }
       if (V.tip) { const e = V.ents.get(V.tip); if (e && !e.gone) showTip(e); }
+    }
+
+    // Everyone staying in a furnished room gets an anchor: those already seated keep theirs,
+    // newcomers take a free one of their role (props.assignAnchors); the rest are overflow.
+    const hourNow = () => { const mt = censusRef.current.mt ?? clockAt(Date.now()).mt; return ((mt % 24) + 24) % 24; };
+    function seat(want) {
+      const groups = cells.map(() => []);
+      for (const [name, { w, r, mode }] of want) {
+        const i = idx[r];
+        if (plat[i] || mode === "leave") continue;
+        const e = V.ents.get(name);
+        if (e && (e.room !== r || e.leaving)) continue;
+        groups[i].push({ key: name, role: roleOf(w) });
+      }
+      groups.forEach((people, i) => {
+        if (plat[i] || !V.geo[i]) return;
+        const { at, overflow } = assignAnchors(V.geo[i].plan.anchors, people, V.seats[i], hourNow());
+        V.seats[i] = at; V.over[i] = overflow.length;
+        for (const { key, role } of people) {
+          const e = V.ents.get(key);
+          if (!e) continue;
+          e.role = role;
+          const k = at.has(key) ? at.get(key) : null;
+          if (k === e.anchor) continue;
+          e.anchor = k;
+          if (k == null) { e.state = "idle"; continue; }
+          const [ax, ay] = anchorXY(i, V.geo[i].plan.anchors[k]);
+          // already inside when we first looked (or motion reduced): at the anchor at once
+          if (e.fresh || V.reduced) { e.x = ax; e.y = ay; e.state = "at"; e.fresh = false; }
+          else { e.tx = ax; e.ty = ay; e.state = "walk"; }
+        }
+      });
     }
 
     // ---- step and draw -----------------------------------------------------------------
@@ -225,6 +288,15 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
           if (Math.abs(dy) <= step) { e.y = e.ty; e.state = "idle"; e.timer = 0.5 + rnd(); } else e.y += Math.sign(dy) * step;
           continue;
         }
+        if (!plat[idx[e.room]]) {
+          if (e.state !== "walk") continue;
+          const dx = e.tx - e.x, dy = e.ty - e.y, dist = Math.hypot(dx, dy), step = Math.max(e.gait.speed, 30) * dt;
+          e.animT += dt;
+          if (Math.abs(dx) > 0.5) e.dir = dx < 0 ? -1 : 1;
+          if (dist <= step || V.reduced) { e.x = e.tx; e.y = e.ty; e.state = e.anchor != null ? "at" : "idle"; V.need = true; }
+          else { e.x += (dx / dist) * step; e.y += (dy / dist) * step; }
+          continue;
+        }
         if (!V.reduced) stepEntity(e, dt, worldFor(idx[e.room]), rnd);
       }
     }
@@ -240,6 +312,12 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
       ctx.font = `${11 * dpr}px ${FONT}`;
       ctx.textBaseline = "top";
       const mtNow = V.reduced ? (censusRef.current.mt ?? clockAt(Date.now()).mt) : clockAt(Date.now()).mt;
+      const vis = V.vis || (V.vis = []);
+      vis.length = 0;
+      drawRooms(top, bot, mtNow, vis);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.font = `${11 * dpr}px ${FONT}`;
+      ctx.textBaseline = "top";
       cells.forEach((c, i) => {
         const { x: x0, y: ry, w: rw, h: rh } = V.rects[i];
         if (ry + rh < top || ry > bot) return;
@@ -251,18 +329,25 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         ctx.fillStyle = cap && n > cap ? "#f87171" : "#4d8a62";
         ctx.fillText(label, lx, ly);
         if (c.kind === "platform" && stationId) drawPlatform(x0, ry, rw, mtNow);
+        // the overflow: more present than the room has places for
+        const over = V.over[i] || 0;
+        if (over && !plat[i]) {
+          const b = ` +${over} `, bw = ctx.measureText(b).width;
+          ctx.fillStyle = "#fbbf24"; ctx.fillRect(lx - bw - 4 * dpr, ly, bw, 13 * dpr);
+          ctx.fillStyle = "#1a1206"; ctx.fillText(b, lx - bw - 4 * dpr, ly);
+        }
       });
-      const vis = V.vis || (V.vis = []);
-      vis.length = 0;
+      const n0 = vis.length;
       for (const e of V.ents.values()) {
-        if (e.gone) continue;
+        if (e.gone || !plat[idx[e.room]]) continue;
         const r = V.rects[idx[e.room]];
         e.sx = r.x + e.x; e.sy = r.y + e.y;
         if (e.sy < top - 4 || e.sy - SPRITE_H > bot) continue;
         vis.push(e);
       }
-      vis.sort((a, b) => a.sy - b.sy);
-      for (const e of vis) {
+      const plats = vis.slice(n0).sort((a, b) => a.sy - b.sy);
+      vis.length = n0; vis.push(...plats);
+      for (const e of plats) {
         const sh = sheetFor(e.s);
         let fi = 0, bob = 0;
         if (!V.reduced && (e.state === "walk" || e.state === "exit")) {
@@ -290,11 +375,70 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         if (e && vis.includes(e)) {
           const [tw, th] = tipSize.current;
           const tx = Math.max(2, Math.min(V.cssW - tw - 2, e.sx - tw / 2));
-          const ty = Math.max(2, e.sy - SPRITE_H * (k / dpr) - th - 4);
+          const ty = Math.max(2, (e.box && !plat[idx[e.room]] ? e.box[1] : e.sy - SPRITE_H * (k / dpr)) - th - 4);
           tipEl.style.transform = `translate(${Math.round(tx)}px, ${Math.round(ty)}px)`;
           tipEl.style.visibility = "visible";
         } else tipEl.style.visibility = "hidden";
       }
+    }
+
+    // The furnished rooms in view: the room, its people at their anchors (between each row's
+    // furniture), arrivals and leavers walking the floor, then the door. CSS px throughout.
+    function drawRooms(top, bot, mt, vis) {
+      const { dpr } = V, hh = V.hh || SPRITE_H;
+      const t = V.reduced ? 0 : performance.now() / 1000, hour = ((mt % 24) + 24) % 24;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      const at = cells.map(() => null), walking = cells.map(() => null);
+      for (const e of V.ents.values()) {
+        const i = idx[e.room];
+        if (e.gone || plat[i]) continue;
+        if (e.state === "at" && e.anchor != null) (at[i] || (at[i] = new Map())).set(e.anchor, e);
+        else if (e.state === "walk" || e.state === "exit") (walking[i] || (walking[i] = [])).push(e);
+        else e.sx = -1e4;   // overflow: counted, not drawn
+      }
+      cells.forEach((c, i) => {
+        const G = V.geo[i];
+        if (!G) return;
+        const r = V.rects[i];
+        if (r.y + r.h < top || r.y > bot) return;
+        const X = r.x + G.ix, Y = r.y + G.iy, here = at[i];
+        drawRoom(ctx, placeOf[i], X, Y, G.iw, G.ih, G.u, {
+          t, hour, plan: G.plan,
+          people: here ? (row) => {
+            for (const it of row.items) {
+              const e = it.a && here.get(it.a.i);
+              if (!e) continue;
+              const bx = drawPose(ctx, sheetFor(e.s), it.a, actAt(it.a, hour, e.role, G.plan.type), X + it.a.x, Y + it.a.y, hh * it.a.s, t, phaseOf(e.s.name));
+              e.box = bx; e.sx = (bx[0] + bx[2]) / 2; e.sy = bx[3];
+              vis.push(e);
+            }
+          } : null,
+        });
+        // the door, set into the left wall
+        const dh = Math.min(36, G.ih * 0.4), dy = Y + G.ih - dh - 1;
+        ctx.fillStyle = "#060a06"; ctx.fillRect(r.x + 2, dy, V.cw + 4, dh);
+        ctx.fillStyle = "#4ade80"; ctx.fillRect(r.x + 2, dy, 2, dh);
+        ctx.fillStyle = "#1f4a2c"; ctx.fillRect(r.x + 2, dy, V.cw + 4, 1);
+        for (const e of walking[i] || []) {
+          const sh = sheetFor(e.s);
+          let fi = 0, bob = 0;
+          if (!V.reduced) { const st = Math.floor(e.animT * e.gait.fps); fi = sh.frames > 1 ? st % sh.frames : 0; bob = e.gait.bob && st % 2 ? -1 : 0; }
+          const ww = hh * (SPRITE_W / SPRITE_H), x = r.x + e.x, y = r.y + e.y;
+          try {
+            if (e.dir > 0) { ctx.save(); ctx.translate(Math.round(x + ww / 2), 0); ctx.scale(-1, 1); ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, 0, Math.round(y - hh + bob), Math.round(ww), Math.round(hh)); ctx.restore(); }
+            else ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, Math.round(x - ww / 2), Math.round(y - hh + bob), Math.round(ww), Math.round(hh));
+          } catch { /* not decoded */ }
+          e.box = [x - ww / 2, y - hh, x + ww / 2, y]; e.sx = x; e.sy = y;
+          vis.push(e);
+        }
+        // you, marked
+        for (const e of vis) if (e.s.you && e.room === c.id) {
+          ctx.fillStyle = "#4ade80";
+          const ax = Math.round(e.sx), ay = Math.round(e.box[1]) - 7;
+          ctx.fillRect(ax - 3, ay, 7, 1); ctx.fillRect(ax - 2, ay + 1, 5, 1); ctx.fillRect(ax - 1, ay + 2, 3, 1); ctx.fillRect(ax, ay + 3, 1, 1);
+        }
+      });
     }
 
     // The platform, live: the board (next two trains) and, while one stands here, its cars
@@ -343,6 +487,14 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
       const vis = V.vis || [];
       for (let i = vis.length - 1; i >= 0; i--) {
         const e = vis[i];
+        if (e.box && !plat[idx[e.room]]) {
+          const [x0, y0, x1, y1] = e.box, cx = (x0 + x1) / 2;
+          if (Math.abs(mx - cx) > Math.max(hw, (x1 - x0) * 0.35) || my < y0 - pad || my > y1 + pad) continue;
+          if (!touch) return e;
+          const dd = Math.abs(mx - cx) + Math.abs(my - (y0 + y1) / 2) * 0.5;
+          if (dd < bd) { bd = dd; best = e; }
+          continue;
+        }
         if (Math.abs(mx - e.sx) > hw || my < e.sy - hh - pad || my > e.sy + pad) continue;
         if (!touch) return e;
         const dd = Math.abs(mx - e.sx) + Math.abs(my - (e.sy - hh / 2)) * 0.5;

@@ -6,7 +6,8 @@ import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FONT } from "./cityUi.jsx";
 import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotFor, boxHull, inPoly, lodFor, STOREY, DECK, mod4 } from "./iso.js";
-import { drawRoom, anchorsFor, typeOf } from "./props.js";
+import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt } from "./props.js";
+import { drawPose, phaseOf } from "./poses.js";
 
 // THE SUBSTRATE, SimCity-style: every building a solid block (facade, roof, lit windows by
 // occupancy, a sign up close), the Loop on its deck with trains, subjects on the streets.
@@ -53,7 +54,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
     const mq = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
     const V = {
       cssW: 300, cssH: 300, dpr: 1, cam: { z: 6, ox: 0, oy: 0, r: 0 }, fitZ: 6, reduced: !!mq?.matches, need: true,
-      sel: null, lift: 0, geo: null, censusV: -1, inside: new Map(), occ: {}, floorOcc: {}, outdoors: [], hits: [], panel: null, t: 0,
+      sel: null, lift: 0, geo: null, labels: [], censusV: -1, inside: new Map(), plans: new Map(), seats: new Map(), anim: 0, occ: {}, floorOcc: {}, outdoors: [], hits: [], panel: null, t: 0,
     };
 
     // ---- geometry for the current quarter turn ----------------------------------------
@@ -87,7 +88,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
           const fk = `${w.buildingId}|${w.floor}`;
           floorOcc[fk] = (floorOcc[fk] || 0) + 1;
           const rk = `${w.buildingId}|${w.floor}|${w.placeId}`;
-          (inside.get(rk) || inside.set(rk, []).get(rk)).push(s);
+          (inside.get(rk) || inside.set(rk, []).get(rk)).push({ s, w });
           if (OUTDOOR_PLACES.has(w.placeId)) outdoors.push({ s, open: w.placeId });
         } else if (w.activity === "commute" && w.sub !== "riding") outdoors.push({ s });
       }
@@ -249,8 +250,26 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         ctx.font = `${fs}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
         const label = b.name.length > 24 ? b.name.slice(0, 23) + "…" : b.name;
         const w = ctx.measureText(label).width + 6;
-        ctx.fillStyle = "rgba(6,10,6,0.82)"; ctx.fillRect(Math.round(x - w / 2), Math.round(y - fs - 3), Math.round(w), fs + 4);
-        ctx.fillStyle = selected ? "#4ade80" : "#a7d7b5"; ctx.fillText(label, Math.round(x), Math.round(y));
+        // placed after the whole city is drawn (drawLabels), so a nearer roof never cuts a
+        // sign in half and two signs never print over each other
+        V.labels.push({ label, x: Math.round(x), y: Math.round(y), w: Math.round(w), fs, selected });
+      }
+    }
+
+    // Building signs, nearest first (and the selected one before all): a sign that would
+    // overlap one already placed is left out; the compass line keeps its corner.
+    function drawLabels() {
+      const L = V.labels, placed = [[0, 0, 260, 22]];
+      const order = L.map((_, i) => i).reverse().sort((a, b) => (L[b].selected ? 1 : 0) - (L[a].selected ? 1 : 0));
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      for (const i of order) {
+        const { label, x, y, w, fs, selected } = L[i];
+        const box = [x - w / 2 - 2, y - fs - 3, x + w / 2 + 2, y + 1];
+        if (!selected && placed.some(q => box[0] < q[2] && box[2] > q[0] && box[1] < q[3] && box[3] > q[1])) continue;
+        placed.push(box);
+        ctx.font = `${fs}px ${FONT}`;
+        ctx.fillStyle = "rgba(6,10,6,0.82)"; ctx.fillRect(x - Math.round(w / 2), y - fs - 3, w, fs + 4);
+        ctx.fillStyle = selected ? "#4ade80" : "#a7d7b5"; ctx.fillText(label, x, y);
       }
     }
 
@@ -369,24 +388,37 @@ function CityIso({ censusRef, onOpen, onEnter }) {
           const rx = x0 + labW + 3 + k * rw, ry = fy, rh = fh - 2;
           if (!pid) { ctx.fillStyle = "#101410"; ctx.fillRect(rx, ry, rw - 2, rh); return; }
           const u = Math.max(1, Math.round(rh / 40));
-          drawRoom(ctx, pid, rx, ry, rw - 2, rh, u, { t: mt, lit: true });
-          ctx.font = `10px ${FONT}`; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillStyle = "rgba(230,240,230,0.75)";
-          ctx.fillText(`${f.name}`.slice(0, Math.max(6, Math.floor(rw / 7))), rx + 3, ry + 2);
-          if (b.id === "hq") return;
-          const who = V.inside.get(`${b.id}|${f.index}|${pid}`) || [];
-          const sh = Math.round(rh * 0.6), sw = Math.round(sh * (SPRITE_W / SPRITE_H));
-          const anchors = anchorsFor(typeOf(pid), rw - 2, rh, sw);
-          const drawn = Math.min(who.length, anchors.length);
-          for (let n = 0; n < drawn; n++) {
-            const a = anchors[n], s = who[n];
-            const hh = Math.round(sh * a.s * (a.sit ? 0.86 : 1)), ww = Math.round(hh * (SPRITE_W / SPRITE_H));
-            const px = Math.round(rx + a.x - ww / 2), py = Math.round(ry + a.y - hh);
-            const eSheet = sheetFor(s);
-            try { ctx.drawImage(eSheet.img, 0, 0, SPRITE_W, SPRITE_H, px, py, ww, hh); } catch { /* not decoded */ }
-            V.hits.push({ person: s, box: [px, py, px + ww, py + hh] });
-          }
-          if (who.length > drawn) {
-            const lab = `+${who.length - drawn}`;
+          // people sized so a room holds a workforce, not two giants: Fallout Shelter scale
+          const sh = clampN(Math.round(rh * 0.42), 16, 64), sw = sh * (SPRITE_W / SPRITE_H);
+          const pk = `${pid}|${Math.round(rw)}|${rh}|${sh}`;
+          let plan = V.plans.get(pk);
+          if (!plan) { plan = roomPlan(typeOf(pid), rw - 2, rh, sw, Math.round(PLACES[pid].cap / PLACES[pid].floors.length)); V.plans.set(pk, plan); }
+          const rk = `${b.id}|${f.index}|${pid}`;
+          const who = b.id === "hq" ? [] : V.inside.get(rk) || [];
+          const people = who.map(({ s, w }) => ({ key: s.slug || s.name, role: roleOf(w), s }));
+          const prev = V.seats.get(rk);
+          const hour = ((mt % 24) + 24) % 24;
+          const { at, overflow } = assignAnchors(plan.anchors, people, prev && prev.plan === plan ? prev.at : null, hour);
+          V.seats.set(rk, { plan, at });
+          const byAnchor = new Array(plan.anchors.length);
+          for (const p of people) { const i = at.get(p.key); if (i != null) byAnchor[i] = p; }
+          drawRoom(ctx, pid, rx, ry, rw - 2, rh, u, {
+            t: V.anim, hour, plan, lit: true,
+            people: (row) => {
+              for (const it of row.items) {
+                const a = it.a, p = a && byAnchor[a.i];
+                if (!p) continue;
+                const box = drawPose(ctx, sheetFor(p.s), a, actAt(a, hour, p.role, plan.type), rx + a.x, ry + a.y, sh * a.s, V.anim, phaseOf(p.key));
+                V.hits.push({ person: p.s, box });
+              }
+            },
+          });
+          ctx.font = `10px ${FONT}`; ctx.textAlign = "left"; ctx.textBaseline = "top";
+          const nm = `${f.name}`.slice(0, Math.max(6, Math.floor(rw / 7)));
+          ctx.fillStyle = "rgba(6,10,6,0.6)"; ctx.fillRect(rx + 1, ry + 1, ctx.measureText(nm).width + 4, 12);
+          ctx.fillStyle = "rgba(230,240,230,0.8)"; ctx.fillText(nm, rx + 3, ry + 2);
+          if (overflow.length) {
+            const lab = `+${overflow.length}`;
             ctx.font = `11px ${FONT}`; const tw = ctx.measureText(lab).width + 6;
             ctx.fillStyle = "rgba(251,191,36,0.9)"; ctx.fillRect(Math.round(rx + rw - tw - 6), ry + 3, Math.round(tw), 14);
             ctx.fillStyle = "#1a1206"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -404,6 +436,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       if (!V.geo || V.geo.r !== V.cam.r) V.geo = buildGeo(V.cam.r);
       const mt = censusRef.current?.mt != null && V.reduced ? censusRef.current.mt : clockAt(Date.now()).mt;
       V.t = mt;
+      V.anim = V.reduced ? 0 : performance.now() / 1000;
       const lod = lodFor(V.cam.z);
       ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
       ctx.imageSmoothingEnabled = false;
@@ -419,6 +452,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         (slots.get(k) || slots.set(k, []).get(k)).push(p);
       }
       const dim = !!V.sel;
+      V.labels.length = 0;
       for (const p of slots.get(-1) || []) drawPerson(p, lod);
       for (let k = 0; k < order.length; k++) {
         const it = items[order[k]];
@@ -427,6 +461,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         for (const p of slots.get(k) || []) drawPerson(p, lod);
       }
       drawTrains(mt);
+      drawLabels();
       // compass
       ctx.font = `11px ${FONT}`; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillStyle = "rgba(107,154,124,0.8)";
       ctx.fillText(`FACING ${["NW", "NE", "SE", "SW"][V.cam.r]} // ${lod === "far" ? "OVERVIEW" : lod === "mid" ? "DISTRICT" : "STREET"}`, 8, 8);
