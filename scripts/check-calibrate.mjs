@@ -37,7 +37,7 @@ if (p.best) {
 const stub = [
   { name: "Ordinary A", breakdown: { care: 60, alignment: 60, utility: 20, adaptability: 20, legacy: 20, network: 20, physical: 20, threat: 20, redundancy: 80 } },
   { name: "Ordinary B", breakdown: { care: 70, alignment: 70, utility: 60, adaptability: 60, legacy: 60, network: 60, physical: 60, threat: 10, redundancy: 40 } },
-  { name: "Putin", breakdown: { care: 30, alignment: 10, utility: 90, adaptability: 90, legacy: 90, network: 90, physical: 70, threat: 80, redundancy: 5 } },
+  { name: "Vladimir Putin", breakdown: { care: 30, alignment: 10, utility: 90, adaptability: 90, legacy: 90, network: 90, physical: 70, threat: 80, redundancy: 5 } },
 ];
 const baseM = L.measure(CAL, stub, {});
 assert.equal(baseM.invariants.villainsBelowAll, false, "stub: the villain already outranks A under the real calibration");

@@ -140,7 +140,7 @@ assert.equal(publicFigure({ ...card, harmReview: null }).harmReview, null);
     { name: "Barack Obama", score: 660, harmReview: UNGATE },
     { name: "Private Killer", score: 30, harmReviewPending: false },
   ];
-  const figs = [{ name: "Putin", score: 5, harm: { band: "mass_atrocity" } }, { name: "Mao Zedong", score: 0, harm: { band: "mass_atrocity" } }];
+  const figs = [{ name: "Vladimir Putin", score: 5, harm: { band: "mass_atrocity" } }, { name: "Mao Zedong", score: 0, harm: { band: "mass_atrocity" } }];
   const sec = sectionText(cards, figs);
   assert.match(sec, /^## Harm reviews\n/);
   assert.match(sec, /Some President: gated at 40, band killing/);

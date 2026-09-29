@@ -18,7 +18,7 @@ const ROOT = new URL("..", import.meta.url).pathname;
 const REPORT = `${ROOT}MORNING_REPORT.md`;
 const HEADING = "## Harm reviews";
 // Context only (no change to them): the roster's gated heads of state and their bands.
-export const CONTEXT_HEADS = ["Putin", "Kim Jong-un", "Mao Zedong", "Genghis Khan"];
+export const CONTEXT_HEADS = ["Vladimir Putin", "Kim Jong-un", "Mao Zedong", "Genghis Khan"];
 
 export function sectionText(cards, figures = FAMOUS_FIGURES) {
   const pending = (cards || []).filter(c => c && c.harmReviewPending && !c.removed && !c.harmReview);

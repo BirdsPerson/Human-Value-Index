@@ -38,7 +38,8 @@ const roster = [...FAMOUS_FIGURES, ...cards.filter(c => !FAMOUS_FIGURES.some(f =
 
 let next = { ...prev };
 for (const k of ["realityIndex", "competenceAxis", "warmthAxis"]) if (spec[k] != null) next[k] = spec[k];
-next = L.withTiers(next, L.tierCutoffs(next, roster));
+if (spec.severity) next.severity = { ...prev.severity, ...spec.severity };
+if (!spec.keepTiers) next = L.withTiers(next, L.tierCutoffs(next, roster)); // keepTiers: a severity-only change leaves the ungated cutoffs alone
 next.version = prev.version + 1;
 next.date = at.slice(0, 10);
 next.method = spec.method;
@@ -58,7 +59,8 @@ console.log(`gaps: Tubman–Einstein ${g("Harriet Tubman", "Albert Einstein")}, 
 const movers = [...after].map(r => ({ ...r, d: r.to - r.from })).sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 10);
 console.log("biggest movers:", movers.map(r => `${r.name} ${r.d > 0 ? "+" : ""}${r.d}`).join(", "));
 const tierChanges = after.filter(r => L.tierWith(prev, r.from) !== r.tier);
-console.log(`tier changes: ${tierChanges.length}`);
+console.log(`tier changes: ${tierChanges.length}`, tierChanges.map(r => r.name).join(", "));
+console.log("gated:", sorted.filter(r => r.to < 300).reverse().map(r => `${r.name} ${r.from}→${r.to}`).join(" | "));
 
 if (DRY) { console.log("[dry-run] nothing written"); process.exit(0); }
 
@@ -66,7 +68,7 @@ const src = fs.readFileSync(P("src/figures.js"), "utf8");
 const r = L.rescoreFiguresSource(src, next, FAMOUS_FIGURES, log);
 fs.writeFileSync(P("src/figures.js"), r.src);
 fs.writeFileSync(P("netlify/lib/calibration.json"), JSON.stringify(next, null, 2) + "\n");
-fs.writeFileSync(P("docs/calibration/roster.json"), JSON.stringify(L.rosterSnapshot(roster)) + "\n");
+if (!spec.keepTiers) fs.writeFileSync(P("docs/calibration/roster.json"), JSON.stringify(L.rosterSnapshot(roster)) + "\n");
 console.log(`figures.js: ${r.changed} lines rewritten`);
 const cardRows = await applyToCards(prev, next, log);
 console.log(`production cards: ${cardRows.length} updated`);

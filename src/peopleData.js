@@ -154,7 +154,7 @@ export const PEOPLE = {
   "asOf": "2026-09-24",
   "url": "https://yougov.com/en-us/topics/public_figure/Madonna"
  },
- "JFK": {
+ "John F. Kennedy": {
   "likability": 69,
   "source": "YouGov US ratings",
   "fame": 98,
@@ -172,7 +172,7 @@ export const PEOPLE = {
   "asOf": "2026-09-24",
   "url": "https://yougov.com/en-us/topics/public_figure/Prince"
  },
- "Putin": {
+ "Vladimir Putin": {
   "likability": 26,
   "source": "YouGov US ratings",
   "fame": 95,
@@ -307,7 +307,7 @@ export const PEOPLE = {
   "asOf": "2026-09-24",
   "url": "https://yougov.com/en-us/topics/public_figure/Marcus_Aurelius"
  },
- "Nikola Jokic": {
+ "Nikola Jokić": {
   "likability": 61,
   "source": "YouGov US ratings",
   "fame": 44,

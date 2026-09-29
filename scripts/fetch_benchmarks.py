@@ -29,13 +29,13 @@ BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.
 
 # Figure name in src/figures.js -> English Wikipedia title (only where they differ).
 TITLE_OVERRIDES = {
-    "JFK": "John F. Kennedy",
-    "Putin": "Vladimir Putin",
+    "John F. Kennedy": "John F. Kennedy",
+    "Vladimir Putin": "Vladimir Putin",
     "Prince": "Prince (musician)",
     "Queen Elizabeth II": "Elizabeth II",
     "Princess Diana": "Diana, Princess of Wales",
     "Kim Jong-un": "Kim Jong Un",
-    "Nikola Jokic": "Nikola Jokić",
+    "Nikola Jokić": "Nikola Jokić",
     "Joe Jackson": "Joe Jackson (manager)",
     "Mansa Musa": "Mansa Musa",
     "Cleopatra": "Cleopatra",
@@ -43,14 +43,14 @@ TITLE_OVERRIDES = {
 }
 # YouGov US entity slugs where the plain name doesn't resolve.
 YOUGOV_OVERRIDES = {
-    "JFK": "John_F_Kennedy",
+    "John F. Kennedy": "John_F_Kennedy",
     "Martin Luther King Jr.": "Martin_Luther_King_Jr",
-    "Putin": "Vladimir_Putin",
+    "Vladimir Putin": "Vladimir_Putin",
     "Queen Elizabeth II": "Queen_Elizabeth_II",
     "Princess Diana": "Princess_Diana",
     "Prince": "Prince",
     "Kim Jong-un": "Kim_Jong_Un",
-    "Nikola Jokic": "Nikola_Jokic",
+    "Nikola Jokić": "Nikola_Jokic",
     "Pelé": "Pele",
 }
 # Hart, "The 100" (1992 ed.): only the top 10 is public (Wikipedia omits the rest

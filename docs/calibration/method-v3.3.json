@@ -1,0 +1,26 @@
+{
+  "method": "v3.3",
+  "note": "METHOD v3.3: INTENT OVER BODY COUNT. THE DEPARTMENT NOW DISTINGUISHES THOSE WHO KILLED BY POLICY FROM THOSE WHO KILLED FOR THE PURPOSE. THE LEDGER IS UNCHANGED. THE ORDER IS NOT.",
+  "always": false,
+  "severity": {
+    "intent": {
+      "extermination": "floor",
+      "predation": "floor",
+      "war_or_policy": "policy",
+      "incidental": "policy"
+    },
+    "bands": {
+      "floor": [
+        0,
+        25
+      ],
+      "policy": [
+        30,
+        90
+      ]
+    },
+    "intentNote": "Method v3.3 (2026-09-29): intent over body count. A gated file is placed in a band by the dominant documented intent of its harm: extermination (killing civilians was the goal) and predation (personal murder or abuse for one's own ends) share the floor, 0-25, as does anyone who killed or abused with their own hands ('personal'). war_or_policy and incidental harm places 30-90, above every file on the floor. Inside a band the v3.2 points still order the files (directing below instrument, more below fewer), scaled to the band. Severities without an intent keep the v3.2 placement (cap - points)."
+  },
+  "keepTiers": true,
+  "approved": "Claude's own judgement, invited by Scott in chat, 2026-09-29 (\"this is your world\"; world leaders vs serial killers)"
+}

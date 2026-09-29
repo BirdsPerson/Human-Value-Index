@@ -85,3 +85,54 @@ Scores did not change; only classifications did. Every subject whose tier moved 
 `method` entry (v3.2) in its score log. Cutoffs at application: ESSENTIAL 787, RETAINED 736,
 TOLERATED 600, MONITORED 450, FLAGGED 300. The decent persona lands TOLERATED (638); the
 guard check is now "TOLERATED or better" plus a p30 collapse floor.
+
+## v3.3 — intent over body count (2026-09-29)
+
+Scott: "There's a difference between being responsible for killing people through
+legislation and being a serial killer. And you rate serial killers higher than most world
+leaders." Under v3.2 a gated file sat at `cap - points`, and points were mostly victim
+scale, so a head of state sat below every serial killer. Claude's call (invited: "this is
+your world").
+
+Each gated severity now carries `intent` and `personal`:
+
+- `extermination`: killing civilians was the goal (genocide, purges with quotas, terror
+  attacks on civilians).
+- `predation`: personal murder or abuse for one's own ends (serial killers, abusers,
+  trafficking, crime lords).
+- `war_or_policy`: deaths from war, conquest, repression, famine or policy, where killing
+  was not the goal in itself.
+- `incidental`: none of the above dominates.
+- `personal`: they killed or abused with their own hands.
+
+Placement (`severityPlace`, netlify/lib/intake.js): extermination, predation and any
+`personal` file share the **floor, 0-25**; war_or_policy and incidental sit at **30-90**,
+still gated and still SOYLENT GREEN, but above every file on the floor. Inside a band the
+v3.2 points order the files, scaled to the band, so "directed below instrument" and "more
+below fewer" still hold within a class (Epstein 16 below Maxwell 19). A severity without
+an intent keeps the v3.2 placement. Harm reviews are untouched.
+
+Classification: three Sonnet readings per file from its Wikipedia extract (majority
+wins), then Claude's review. Overrides: Du Yuesheng war_or_policy → predation (crime
+lord, like Escobar); Mike Tyson incidental → predation/personal (1992 rape conviction; his
+severity kind also corrected from `killing` to `violent_abuse`); William King Hale
+personal → false (he hired the killers). The borderline heads of state:
+
+- **Stalin: extermination.** The Great Terror ran on execution quotas (NKVD Order 00447)
+  and Katyn was a planned massacre of prisoners; killing was the instrument and the aim.
+- **Mao: war_or_policy.** The Great Leap famine killed tens of millions through policy
+  pursued in the face of the famine, and the Cultural Revolution purges were political
+  terror; the record does not show death as the goal. He sits at the bottom of the policy
+  band (34), level with Xi and Genghis Khan.
+- **Genghis Khan: war_or_policy.** Conquest; the massacres of cities that resisted were
+  terror in service of conquest, not extermination as an end.
+- **Lenin: war_or_policy.** Revolution and civil war; the Red Terror was a weapon of the
+  war. 50, the top of the gated leaders.
+- Kim Jong-un stays extermination (the UN Commission of Inquiry, 2014, found
+  extermination in the political prison camps); Saddam (Anfal), Hitler, bin Laden too.
+
+Checks (scripts/check-pen.mjs): every gated roster file carries an intent; floor files in
+0-25, policy files in 30-90, max(floor) < min(policy); Genghis Khan and Mao in the policy
+band; placement monotonic in every field for every intent × personal. Spec:
+docs/calibration/method-v3.3.json (`keepTiers`: a severity-only change leaves the ungated
+cutoffs and roster snapshot alone).

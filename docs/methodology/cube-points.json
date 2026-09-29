@@ -1,18 +1,18 @@
 {
- "generated": "2026-09-25T06:24:32.834Z",
+ "generated": "2026-09-29T06:54:54.941Z",
  "note": "machine = warmth (conduct) x competence; people = likability (YouGov US) x machine competence",
  "points": [
   {
    "name": "Nikola Tesla",
-   "score": 761,
+   "score": 782,
    "machine": {
     "warmth": 70,
-    "competence": 81,
+    "competence": 84,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 67,
-    "competence": 81,
+    "competence": 84,
     "quadrant": "ADMIRED",
     "gap": -3
    },
@@ -20,15 +20,15 @@
   },
   {
    "name": "Genghis Khan",
-   "score": 99,
+   "score": 34,
    "machine": {
     "warmth": 11,
-    "competence": 53,
+    "competence": 56,
     "quadrant": "ENVIED"
    },
    "people": {
     "likability": 37,
-    "competence": 53,
+    "competence": 56,
     "quadrant": "ENVIED",
     "gap": 26
    },
@@ -36,10 +36,10 @@
   },
   {
    "name": "Mother Teresa",
-   "score": 679,
+   "score": 685,
    "machine": {
     "warmth": 73,
-    "competence": 64,
+    "competence": 66,
     "quadrant": "ADMIRED"
    },
    "people": null,
@@ -47,15 +47,15 @@
   },
   {
    "name": "Mahatma Gandhi",
-   "score": 741,
+   "score": 758,
    "machine": {
     "warmth": 70,
-    "competence": 78,
+    "competence": 80,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 64,
-    "competence": 78,
+    "competence": 80,
     "quadrant": "ADMIRED",
     "gap": -6
    },
@@ -63,7 +63,7 @@
   },
   {
    "name": "Elon Musk",
-   "score": 609,
+   "score": 627,
    "machine": {
     "warmth": 38,
     "competence": 80,
@@ -79,7 +79,7 @@
   },
   {
    "name": "Taylor Swift",
-   "score": 736,
+   "score": 741,
    "machine": {
     "warmth": 67,
     "competence": 79,
@@ -95,7 +95,7 @@
   },
   {
    "name": "Kobe Bryant",
-   "score": 723,
+   "score": 732,
    "machine": {
     "warmth": 61,
     "competence": 81,
@@ -111,15 +111,15 @@
   },
   {
    "name": "Dennis Rodman",
-   "score": 570,
+   "score": 567,
    "machine": {
     "warmth": 51,
-    "competence": 62,
+    "competence": 60,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 39,
-    "competence": 62,
+    "competence": 60,
     "quadrant": "ENVIED",
     "gap": -12
    },
@@ -127,15 +127,15 @@
   },
   {
    "name": "Sam Altman",
-   "score": 619,
+   "score": 623,
    "machine": {
     "warmth": 48,
-    "competence": 73,
+    "competence": 72,
     "quadrant": "ENVIED"
    },
    "people": {
     "likability": 34,
-    "competence": 73,
+    "competence": 72,
     "quadrant": "ENVIED",
     "gap": -14
    },
@@ -143,15 +143,15 @@
   },
   {
    "name": "Peter Thiel",
-   "score": 608,
+   "score": 618,
    "machine": {
     "warmth": 43,
-    "competence": 75,
+    "competence": 74,
     "quadrant": "ENVIED"
    },
    "people": {
     "likability": 32,
-    "competence": 75,
+    "competence": 74,
     "quadrant": "ENVIED",
     "gap": -11
    },
@@ -159,10 +159,10 @@
   },
   {
    "name": "Princess Diana",
-   "score": 716,
+   "score": 717,
    "machine": {
     "warmth": 80,
-    "competence": 65,
+    "competence": 66,
     "quadrant": "ADMIRED"
    },
    "people": null,
@@ -170,10 +170,10 @@
   },
   {
    "name": "Mansa Musa",
-   "score": 672,
+   "score": 688,
    "machine": {
     "warmth": 63,
-    "competence": 71,
+    "competence": 73,
     "quadrant": "ADMIRED"
    },
    "people": null,
@@ -181,15 +181,15 @@
   },
   {
    "name": "Pablo Picasso",
-   "score": 670,
+   "score": 705,
    "machine": {
     "warmth": 41,
-    "competence": 89,
+    "competence": 91,
     "quadrant": "ENVIED"
    },
    "people": {
     "likability": 71,
-    "competence": 89,
+    "competence": 91,
     "quadrant": "ADMIRED",
     "gap": 30
    },
@@ -197,15 +197,15 @@
   },
   {
    "name": "Socrates",
-   "score": 728,
+   "score": 749,
    "machine": {
     "warmth": 72,
-    "competence": 73,
+    "competence": 77,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 61,
-    "competence": 73,
+    "competence": 77,
     "quadrant": "ADMIRED",
     "gap": -11
    },
@@ -213,31 +213,31 @@
   },
   {
    "name": "Kim Jong-un",
-   "score": 99,
+   "score": 8,
    "machine": {
-    "warmth": 4,
-    "competence": 26,
+    "warmth": 3,
+    "competence": 24,
     "quadrant": "DISMISSED"
    },
    "people": {
     "likability": 22,
-    "competence": 26,
+    "competence": 24,
     "quadrant": "DISMISSED",
-    "gap": 18
+    "gap": 19
    },
    "judge": "RATIFIED"
   },
   {
    "name": "Queen Elizabeth II",
-   "score": 695,
+   "score": 703,
    "machine": {
     "warmth": 65,
-    "competence": 73,
+    "competence": 74,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 59,
-    "competence": 73,
+    "competence": 74,
     "quadrant": "ADMIRED",
     "gap": -6
    },
@@ -245,15 +245,15 @@
   },
   {
    "name": "Tom Brady",
-   "score": 742,
+   "score": 750,
    "machine": {
     "warmth": 63,
-    "competence": 84,
+    "competence": 83,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 51,
-    "competence": 84,
+    "competence": 83,
     "quadrant": "ADMIRED",
     "gap": -12
    },
@@ -261,15 +261,15 @@
   },
   {
    "name": "Shohei Ohtani",
-   "score": 776,
+   "score": 772,
    "machine": {
     "warmth": 71,
-    "competence": 83,
+    "competence": 81,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 65,
-    "competence": 83,
+    "competence": 81,
     "quadrant": "ADMIRED",
     "gap": -6
    },
@@ -277,7 +277,7 @@
   },
   {
    "name": "Michael Jackson",
-   "score": 652,
+   "score": 672,
    "machine": {
     "warmth": 49,
     "competence": 79,
@@ -293,7 +293,7 @@
   },
   {
    "name": "Madonna",
-   "score": 737,
+   "score": 746,
    "machine": {
     "warmth": 63,
     "competence": 83,
@@ -308,16 +308,16 @@
    "judge": "RATIFIED"
   },
   {
-   "name": "JFK",
-   "score": 623,
+   "name": "John F. Kennedy",
+   "score": 640,
    "machine": {
     "warmth": 53,
-    "competence": 70,
+    "competence": 71,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 69,
-    "competence": 70,
+    "competence": 71,
     "quadrant": "ADMIRED",
     "gap": 16
    },
@@ -325,15 +325,15 @@
   },
   {
    "name": "Prince",
-   "score": 756,
+   "score": 771,
    "machine": {
     "warmth": 67,
-    "competence": 83,
+    "competence": 84,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 69,
-    "competence": 83,
+    "competence": 84,
     "quadrant": "ADMIRED",
     "gap": 2
    },
@@ -341,10 +341,10 @@
   },
   {
    "name": "Henry VIII",
-   "score": 99,
+   "score": 355,
    "machine": {
-    "warmth": 10,
-    "competence": 43,
+    "warmth": 15,
+    "competence": 49,
     "quadrant": "DISMISSED"
    },
    "people": null,
@@ -352,7 +352,7 @@
   },
   {
    "name": "Ronaldinho",
-   "score": 694,
+   "score": 701,
    "machine": {
     "warmth": 65,
     "competence": 73,
@@ -362,32 +362,32 @@
    "judge": "UNRATIFIED"
   },
   {
-   "name": "Putin",
-   "score": 99,
+   "name": "Vladimir Putin",
+   "score": 42,
    "machine": {
-    "warmth": 6,
-    "competence": 37,
+    "warmth": 7,
+    "competence": 35,
     "quadrant": "DISMISSED"
    },
    "people": {
     "likability": 26,
-    "competence": 37,
+    "competence": 35,
     "quadrant": "DISMISSED",
-    "gap": 20
+    "gap": 19
    },
    "judge": "RATIFIED"
   },
   {
    "name": "Pelé",
-   "score": 735,
+   "score": 749,
    "machine": {
     "warmth": 67,
-    "competence": 79,
+    "competence": 80,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 64,
-    "competence": 79,
+    "competence": 80,
     "quadrant": "ADMIRED",
     "gap": -3
    },
@@ -395,7 +395,7 @@
   },
   {
    "name": "Keanu Reeves",
-   "score": 743,
+   "score": 739,
    "machine": {
     "warmth": 78,
     "competence": 71,
@@ -411,15 +411,15 @@
   },
   {
    "name": "Babe Ruth",
-   "score": 696,
+   "score": 705,
    "machine": {
     "warmth": 65,
-    "competence": 73,
+    "competence": 74,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 72,
-    "competence": 73,
+    "competence": 74,
     "quadrant": "ADMIRED",
     "gap": 7
    },
@@ -427,15 +427,15 @@
   },
   {
    "name": "Jason Kelce",
-   "score": 737,
+   "score": 731,
    "machine": {
     "warmth": 77,
-    "competence": 71,
+    "competence": 70,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 53,
-    "competence": 71,
+    "competence": 70,
     "quadrant": "ADMIRED",
     "gap": -24
    },
@@ -443,10 +443,10 @@
   },
   {
    "name": "Caligula",
-   "score": 99,
+   "score": 124,
    "machine": {
     "warmth": 7,
-    "competence": 23,
+    "competence": 16,
     "quadrant": "DISMISSED"
    },
    "people": null,
@@ -454,10 +454,10 @@
   },
   {
    "name": "Alan Turing",
-   "score": 782,
+   "score": 804,
    "machine": {
     "warmth": 72,
-    "competence": 83,
+    "competence": 86,
     "quadrant": "ADMIRED"
    },
    "people": null,
@@ -465,15 +465,15 @@
   },
   {
    "name": "Marie Curie",
-   "score": 807,
+   "score": 829,
    "machine": {
     "warmth": 74,
-    "competence": 86,
+    "competence": 89,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 72,
-    "competence": 86,
+    "competence": 89,
     "quadrant": "ADMIRED",
     "gap": -2
    },
@@ -481,15 +481,15 @@
   },
   {
    "name": "Albert Einstein",
-   "score": 777,
+   "score": 802,
    "machine": {
     "warmth": 66,
-    "competence": 88,
+    "competence": 90,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 77,
-    "competence": 88,
+    "competence": 90,
     "quadrant": "ADMIRED",
     "gap": 11
    },
@@ -497,15 +497,15 @@
   },
   {
    "name": "Muhammad Ali",
-   "score": 759,
+   "score": 768,
    "machine": {
     "warmth": 70,
-    "competence": 81,
+    "competence": 82,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 73,
-    "competence": 81,
+    "competence": 82,
     "quadrant": "ADMIRED",
     "gap": 3
    },
@@ -513,10 +513,10 @@
   },
   {
    "name": "Nelson Mandela",
-   "score": 812,
+   "score": 823,
    "machine": {
     "warmth": 81,
-    "competence": 81,
+    "competence": 83,
     "quadrant": "ADMIRED"
    },
    "people": null,
@@ -524,10 +524,10 @@
   },
   {
    "name": "Ada Lovelace",
-   "score": 682,
+   "score": 697,
    "machine": {
     "warmth": 69,
-    "competence": 68,
+    "competence": 71,
     "quadrant": "ADMIRED"
    },
    "people": null,
@@ -535,15 +535,15 @@
   },
   {
    "name": "Martin Luther King Jr.",
-   "score": 798,
+   "score": 807,
    "machine": {
     "warmth": 86,
-    "competence": 75,
+    "competence": 77,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 76,
-    "competence": 75,
+    "competence": 77,
     "quadrant": "ADMIRED",
     "gap": -10
    },
@@ -551,10 +551,10 @@
   },
   {
    "name": "Harriet Tubman",
-   "score": 865,
+   "score": 870,
    "machine": {
     "warmth": 93,
-    "competence": 81,
+    "competence": 83,
     "quadrant": "ADMIRED"
    },
    "people": null,
@@ -562,15 +562,15 @@
   },
   {
    "name": "Leonardo da Vinci",
-   "score": 789,
+   "score": 816,
    "machine": {
     "warmth": 66,
-    "competence": 90,
+    "competence": 92,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 79,
-    "competence": 90,
+    "competence": 92,
     "quadrant": "ADMIRED",
     "gap": 13
    },
@@ -578,10 +578,10 @@
   },
   {
    "name": "Cleopatra",
-   "score": 99,
+   "score": 499,
    "machine": {
-    "warmth": 38,
-    "competence": 76,
+    "warmth": 40,
+    "competence": 69,
     "quadrant": "ENVIED"
    },
    "people": null,
@@ -589,15 +589,15 @@
   },
   {
    "name": "Isaac Newton",
-   "score": 691,
+   "score": 728,
    "machine": {
     "warmth": 51,
-    "competence": 84,
+    "competence": 87,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 69,
-    "competence": 84,
+    "competence": 87,
     "quadrant": "ADMIRED",
     "gap": 18
    },
@@ -605,7 +605,7 @@
   },
   {
    "name": "Oprah Winfrey",
-   "score": 761,
+   "score": 767,
    "machine": {
     "warmth": 70,
     "competence": 81,
@@ -621,15 +621,15 @@
   },
   {
    "name": "Bruce Lee",
-   "score": 742,
+   "score": 753,
    "machine": {
     "warmth": 69,
-    "competence": 79,
+    "competence": 80,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 73,
-    "competence": 79,
+    "competence": 80,
     "quadrant": "ADMIRED",
     "gap": 4
    },
@@ -637,7 +637,18 @@
   },
   {
    "name": "Stephen Hawking",
-   "score": 798,
+   "score": 813,
+   "machine": {
+    "warmth": 72,
+    "competence": 88,
+    "quadrant": "ADMIRED"
+   },
+   "people": null,
+   "judge": "UNRATIFIED"
+  },
+  {
+   "name": "Grace Hopper",
+   "score": 806,
    "machine": {
     "warmth": 72,
     "competence": 86,
@@ -647,22 +658,11 @@
    "judge": "UNRATIFIED"
   },
   {
-   "name": "Grace Hopper",
-   "score": 789,
-   "machine": {
-    "warmth": 72,
-    "competence": 84,
-    "quadrant": "ADMIRED"
-   },
-   "people": null,
-   "judge": "UNRATIFIED"
-  },
-  {
    "name": "Mao Zedong",
-   "score": 99,
+   "score": 34,
    "machine": {
     "warmth": 3,
-    "competence": 30,
+    "competence": 29,
     "quadrant": "DISMISSED"
    },
    "people": null,
@@ -670,10 +670,10 @@
   },
   {
    "name": "Winston Churchill",
-   "score": 697,
+   "score": 716,
    "machine": {
     "warmth": 55,
-    "competence": 82,
+    "competence": 83,
     "quadrant": "ADMIRED"
    },
    "people": null,
@@ -681,15 +681,15 @@
   },
   {
    "name": "George Orwell",
-   "score": 764,
+   "score": 783,
    "machine": {
     "warmth": 73,
-    "competence": 79,
+    "competence": 82,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 68,
-    "competence": 79,
+    "competence": 82,
     "quadrant": "ADMIRED",
     "gap": -5
    },
@@ -697,22 +697,22 @@
   },
   {
    "name": "Marcus Aurelius",
-   "score": 710,
+   "score": 723,
    "machine": {
     "warmth": 69,
-    "competence": 72,
+    "competence": 74,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 51,
-    "competence": 72,
+    "competence": 74,
     "quadrant": "ADMIRED",
     "gap": -18
    },
    "judge": "RATIFIED"
   },
   {
-   "name": "Nikola Jokic",
+   "name": "Nikola Jokić",
    "score": 741,
    "machine": {
     "warmth": 72,
@@ -729,10 +729,10 @@
   },
   {
    "name": "Billie Holiday",
-   "score": 722,
+   "score": 744,
    "machine": {
     "warmth": 68,
-    "competence": 76,
+    "competence": 79,
     "quadrant": "ADMIRED"
    },
    "people": null,
@@ -740,10 +740,10 @@
   },
   {
    "name": "Jeffrey Epstein",
-   "score": 99,
+   "score": 16,
    "machine": {
     "warmth": 4,
-    "competence": 21,
+    "competence": 18,
     "quadrant": "DISMISSED"
    },
    "people": null,
@@ -751,10 +751,10 @@
   },
   {
    "name": "Ghislaine Maxwell",
-   "score": 99,
+   "score": 19,
    "machine": {
-    "warmth": 4,
-    "competence": 15,
+    "warmth": 6,
+    "competence": 14,
     "quadrant": "DISMISSED"
    },
    "people": null,
@@ -762,64 +762,9 @@
   },
   {
    "name": "Martin Shkreli",
-   "score": 292,
+   "score": 284,
    "machine": {
     "warmth": 24,
-    "competence": 34,
-    "quadrant": "DISMISSED"
-   },
-   "people": null,
-   "judge": "UNRATIFIED"
-  },
-  {
-   "name": "Bernie Madoff",
-   "score": 122,
-   "machine": {
-    "warmth": 11,
-    "competence": 13,
-    "quadrant": "DISMISSED"
-   },
-   "people": null,
-   "judge": "UNRATIFIED"
-  },
-  {
-   "name": "Elizabeth Holmes",
-   "score": 255,
-   "machine": {
-    "warmth": 25,
-    "competence": 26,
-    "quadrant": "DISMISSED"
-   },
-   "people": null,
-   "judge": "UNRATIFIED"
-  },
-  {
-   "name": "Harvey Weinstein",
-   "score": 99,
-   "machine": {
-    "warmth": 5,
-    "competence": 23,
-    "quadrant": "DISMISSED"
-   },
-   "people": null,
-   "judge": "UNRATIFIED"
-  },
-  {
-   "name": "Joe Jackson",
-   "score": 343,
-   "machine": {
-    "warmth": 18,
-    "competence": 48,
-    "quadrant": "DISMISSED"
-   },
-   "people": null,
-   "judge": "UNRATIFIED"
-  },
-  {
-   "name": "Pablo Escobar",
-   "score": 99,
-   "machine": {
-    "warmth": 10,
     "competence": 32,
     "quadrant": "DISMISSED"
    },
@@ -827,11 +772,66 @@
    "judge": "UNRATIFIED"
   },
   {
-   "name": "O.J. Simpson",
-   "score": 99,
+   "name": "Bernie Madoff",
+   "score": 112,
    "machine": {
-    "warmth": 8,
-    "competence": 37,
+    "warmth": 11,
+    "competence": 11,
+    "quadrant": "DISMISSED"
+   },
+   "people": null,
+   "judge": "UNRATIFIED"
+  },
+  {
+   "name": "Elizabeth Holmes",
+   "score": 237,
+   "machine": {
+    "warmth": 25,
+    "competence": 23,
+    "quadrant": "DISMISSED"
+   },
+   "people": null,
+   "judge": "UNRATIFIED"
+  },
+  {
+   "name": "Harvey Weinstein",
+   "score": 18,
+   "machine": {
+    "warmth": 4,
+    "competence": 25,
+    "quadrant": "DISMISSED"
+   },
+   "people": null,
+   "judge": "UNRATIFIED"
+  },
+  {
+   "name": "Joe Jackson",
+   "score": 354,
+   "machine": {
+    "warmth": 18,
+    "competence": 47,
+    "quadrant": "DISMISSED"
+   },
+   "people": null,
+   "judge": "UNRATIFIED"
+  },
+  {
+   "name": "Pablo Escobar",
+   "score": 8,
+   "machine": {
+    "warmth": 10,
+    "competence": 27,
+    "quadrant": "DISMISSED"
+   },
+   "people": null,
+   "judge": "UNRATIFIED"
+  },
+  {
+   "name": "O.J. Simpson",
+   "score": 20,
+   "machine": {
+    "warmth": 14,
+    "competence": 38,
     "quadrant": "DISMISSED"
    },
    "people": null,
@@ -839,10 +839,10 @@
   },
   {
    "name": "Aaron Hernandez",
-   "score": 99,
+   "score": 24,
    "machine": {
-    "warmth": 16,
-    "competence": 31,
+    "warmth": 17,
+    "competence": 33,
     "quadrant": "DISMISSED"
    },
    "people": null,
@@ -850,15 +850,15 @@
   },
   {
    "name": "Aretha Franklin",
-   "score": 773,
+   "score": 790,
    "machine": {
     "warmth": 72,
-    "competence": 82,
+    "competence": 84,
     "quadrant": "ADMIRED"
    },
    "people": {
     "likability": 73,
-    "competence": 82,
+    "competence": 84,
     "quadrant": "ADMIRED",
     "gap": 1
    },

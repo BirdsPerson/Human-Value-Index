@@ -18,7 +18,7 @@ assert.equal(titleSlug("Nikola Jokić"), "nikola-jokic");
 assert.equal(titleSlug("Dolly Parton"), "dolly-parton");
 // Every figure on file is found under its own name, and under the Wikipedia titles that differ.
 for (const f of FAMOUS_FIGURES) assert.equal(onFileFigure(slugify(f.name))?.name, f.name, f.name);
-for (const [title, name] of [["John F. Kennedy", "JFK"], ["Vladimir Putin", "Putin"], ["Elizabeth II", "Queen Elizabeth II"],
+for (const [title, name] of [["John F. Kennedy", "John F. Kennedy"], ["Vladimir Putin", "Vladimir Putin"], ["Elizabeth II", "Queen Elizabeth II"],
   ["Diana, Princess of Wales", "Princess Diana"], ["O. J. Simpson", "O.J. Simpson"], ["Keanu Reeves", "Keanu Reeves"], ["Kim Jong Un", "Kim Jong-un"]]) {
   assert.equal(onFileFigure(titleSlug(title))?.name, name, title);
 }

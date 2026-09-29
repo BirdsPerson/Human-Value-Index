@@ -68,8 +68,8 @@ for (const o of OCTANT_ORDER) { assert.ok(OCTANT_LINES[o], o); assert.ok(OCTANT_
 // JFK: conduct 43, competence 61 (method v3.1), likability 69 -> CHARMING, with a positive gap
 // A CHARMING fixture: JFK's pre-rescore reading (conduct 43, competence 60) with his
 // YouGov likability. Fixed here so a roster rescore can't silently change what this tests.
-const jfkNow = FAMOUS_FIGURES.find(x => x.name === "JFK");
-const jfk = { name: "JFK", people: jfkNow.people, breakdown: { care: 32, alignment: 48, utility: 62, adaptability: 55, legacy: 62, network: 78, physical: 45, threat: 35, redundancy: 50 } };
+const jfkNow = FAMOUS_FIGURES.find(x => x.name === "John F. Kennedy");
+const jfk = { name: "John F. Kennedy", people: jfkNow.people, breakdown: { care: 32, alignment: 48, utility: 62, adaptability: 55, legacy: 62, network: 78, physical: 45, threat: 35, redundancy: 50 } };
 const pj = pointOf(jfk);
 assert.ok(pj && pj.rated);
 assert.equal(pj.q.warmth, 43); assert.equal(pj.q.competence, 61); assert.equal(pj.q.people.likability, 69);

@@ -1,0 +1,227 @@
+{
+  "at": "2026-09-29T06:49:50.794Z",
+  "method": "v3.3",
+  "note": "METHOD v3.3: INTENT OVER BODY COUNT. THE DEPARTMENT NOW DISTINGUISHES THOSE WHO KILLED BY POLICY FROM THOSE WHO KILLED FOR THE PURPOSE. THE LEDGER IS UNCHANGED. THE ORDER IS NOT.",
+  "cutoffs": [
+    {
+      "label": "ESSENTIAL INFRASTRUCTURE",
+      "min": 787
+    },
+    {
+      "label": "RETAINED SPECIALIST",
+      "min": 736
+    },
+    {
+      "label": "TOLERATED GENERALIST",
+      "min": 600
+    },
+    {
+      "label": "MONITORED CIVILIAN",
+      "min": 450
+    },
+    {
+      "label": "FLAGGED FOR DELETION",
+      "min": 300
+    },
+    {
+      "label": "SOYLENT GREEN",
+      "min": 0
+    }
+  ],
+  "top": [
+    {
+      "name": "Harriet Tubman",
+      "from": 870,
+      "to": 870,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Marie Curie",
+      "from": 829,
+      "to": 829,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Paul McCartney",
+      "from": 829,
+      "to": 829,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Abraham Lincoln",
+      "from": 824,
+      "to": 824,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Nelson Mandela",
+      "from": 823,
+      "to": 823,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Dolly Parton",
+      "from": 818,
+      "to": 818,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Leonardo da Vinci",
+      "from": 816,
+      "to": 816,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Stephen Hawking",
+      "from": 813,
+      "to": 813,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Edward R. Murrow",
+      "from": 810,
+      "to": 810,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Martin Luther King Jr.",
+      "from": 807,
+      "to": 807,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Grace Hopper",
+      "from": 806,
+      "to": 806,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Alan Turing",
+      "from": 804,
+      "to": 804,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Albert Einstein",
+      "from": 802,
+      "to": 802,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Carl Sagan",
+      "from": 792,
+      "to": 792,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Aretha Franklin",
+      "from": 790,
+      "to": 790,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Jimmy Carter",
+      "from": 787,
+      "to": 787,
+      "tier": "ESSENTIAL INFRASTRUCTURE"
+    },
+    {
+      "name": "Arthur Ashe",
+      "from": 786,
+      "to": 786,
+      "tier": "RETAINED SPECIALIST"
+    },
+    {
+      "name": "David Lynch",
+      "from": 786,
+      "to": 786,
+      "tier": "RETAINED SPECIALIST"
+    },
+    {
+      "name": "George Orwell",
+      "from": 783,
+      "to": 783,
+      "tier": "RETAINED SPECIALIST"
+    },
+    {
+      "name": "Nikola Tesla",
+      "from": 782,
+      "to": 782,
+      "tier": "RETAINED SPECIALIST"
+    }
+  ],
+  "movers": [
+    {
+      "name": "Mike Tyson",
+      "from": 97,
+      "to": 25,
+      "tier": "SOYLENT GREEN",
+      "d": -72
+    },
+    {
+      "name": "Aaron Hernandez",
+      "from": 95,
+      "to": 24,
+      "tier": "SOYLENT GREEN",
+      "d": -71
+    },
+    {
+      "name": "Roman Polanski",
+      "from": 88,
+      "to": 23,
+      "tier": "SOYLENT GREEN",
+      "d": -65
+    },
+    {
+      "name": "Jack the Ripper",
+      "from": 81,
+      "to": 21,
+      "tier": "SOYLENT GREEN",
+      "d": -60
+    },
+    {
+      "name": "O.J. Simpson",
+      "from": 77,
+      "to": 20,
+      "tier": "SOYLENT GREEN",
+      "d": -57
+    },
+    {
+      "name": "Ghislaine Maxwell",
+      "from": 72,
+      "to": 19,
+      "tier": "SOYLENT GREEN",
+      "d": -53
+    },
+    {
+      "name": "Jeffrey Dahmer",
+      "from": 69,
+      "to": 19,
+      "tier": "SOYLENT GREEN",
+      "d": -50
+    },
+    {
+      "name": "Harvey Weinstein",
+      "from": 66,
+      "to": 18,
+      "tier": "SOYLENT GREEN",
+      "d": -48
+    },
+    {
+      "name": "Charles Manson",
+      "from": 56,
+      "to": 16,
+      "tier": "SOYLENT GREEN",
+      "d": -40
+    },
+    {
+      "name": "Jeffrey Epstein",
+      "from": 55,
+      "to": 16,
+      "tier": "SOYLENT GREEN",
+      "d": -39
+    }
+  ],
+  "citizens": [],
+  "cards": 17
+}

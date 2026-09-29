@@ -25,7 +25,7 @@ for (const f of FAMOUS_FIGURES) {
 }
 // Rubric 3 regression (docs/methodology/RECOMMENDATION.md step 6): the moral floor holds.
 {
-  const VILLAINS = new Set(["Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez", "Genghis Khan", "Kim Jong-un", "Putin", "Mao Zedong"]);
+  const VILLAINS = new Set(["Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez", "Genghis Khan", "Kim Jong-un", "Vladimir Putin", "Mao Zedong"]);
   // Pre-modern dynastic killers are judged by scale and era (Scott, 2026-09-25): below every
   // saint, above every modern predator, not held below everyone.
   const HISTORICAL = new Set(["Cleopatra", "Henry VIII", "Caligula"]);
@@ -116,7 +116,7 @@ assert.equal(pts[0][1], 45);  // min at bottom
   assert.match(gapLine(-GAP_THRESHOLD), /The record exceeds the affection/);
   assert.match(gapLine(19), /roughly agree/);
   // seeded figures: JFK carries YouGov likability and comes out contested (charm over conduct)
-  const JFK = FAMOUS_FIGURES.find(f => f.name === "JFK");
+  const JFK = FAMOUS_FIGURES.find(f => f.name === "John F. Kennedy");
   assert.equal(JFK.people.source, "YouGov US ratings");
   // the seeded People view produces real gaps both ways (which figures sit where moves with
   // each rescore; the 2026-09-25 rescore lifted JFK's conduct 43 -> 53, gap 26 -> 16)
@@ -130,7 +130,7 @@ assert.equal(pts[0][1], 45);  // min at bottom
   const fs = await import("node:fs");
   const pts = JSON.parse(fs.readFileSync(new URL("../docs/methodology/cube-points.json", import.meta.url))).points;
   assert.equal(pts.length, FAMOUS_FIGURES.length);
-  assert.equal(pts.find(p => p.name === "JFK").people.likability, JFK.people.likability);
+  assert.equal(pts.find(p => p.name === "John F. Kennedy").people.likability, JFK.people.likability);
 }
 
 
@@ -172,7 +172,28 @@ console.log("check-pen: ok");
   const maxGated = Math.max(...gated.map(f => f.score)), minFree = Math.min(...free.map(f => f.score));
   assert.ok(maxGated < minFree, `every gated file sits below every ungated one (${maxGated} vs ${minFree})`);
   assert.ok(new Set(gated.map(f => f.score)).size > 3, "the bottom is graded, not one flat number");
-  for (const n of ["Genghis Khan", "Mao Zedong"]) assert.ok(by(n).score <= 10, `${n} near the bottom (${by(n).score})`);
+  // v3.3 intent over body count (2026-09-29): extermination, predation and own-hands harm share
+  // the floor; war and policy sit above all of it, still gated.
+  const cal = (await import("../netlify/lib/calibration.json", { with: { type: "json" } })).default;
+  const [fLo, fHi] = cal.severity.bands.floor, [pLo, pHi] = cal.severity.bands.policy;
+  const onFloor = f => f.harm.severity.personal === true || cal.severity.intent[f.harm.severity.intent] === "floor";
+  for (const f of gated) assert.ok(f.harm?.severity?.intent, `${f.name}: gated file carries an intent`);
+  const floor = gated.filter(onFloor), policy = gated.filter(f => !onFloor(f));
+  for (const f of floor) assert.ok(f.score >= fLo && f.score <= fHi, `${f.name} on the floor (${f.score})`);
+  for (const f of policy) assert.ok(f.score >= pLo && f.score <= pHi, `${f.name} in the policy band (${f.score})`);
+  assert.ok(Math.max(...floor.map(f => f.score)) < Math.min(...policy.map(f => f.score)), "every predator/exterminator sits below every war-or-policy file");
+  for (const n of ["Genghis Khan", "Mao Zedong"]) assert.ok(policy.includes(by(n)), `${n}: war_or_policy`);
+  // monotonic inside a class: one more step on any field never raises the placement
+  const { severityScore } = await import("../netlify/lib/intake.js");
+  const F = ["kind", "scale", "role", "duration", "accountability"];
+  for (const intent of Object.keys(cal.severity.intent)) for (const personal of [false, true]) {
+    const base = { kind: "violent_abuse", scale: "one", role: "instrument", duration: "single", accountability: "convicted_served", intent, personal };
+    for (const f of F) {
+      const steps = Object.entries(cal.severity[f]).sort((a, b) => a[1] - b[1]).map(e => e[0]);
+      const sc = steps.map(v => severityScore({ ...base, [f]: v }));
+      for (let i = 1; i < sc.length; i++) assert.ok(sc[i] <= sc[i - 1], `${intent}/${personal}: ${f} ${steps[i]} not above ${steps[i - 1]}`);
+    }
+  }
   const ep = by("Jeffrey Epstein"), gm = by("Ghislaine Maxwell");
   const rank = ["instrument", "enabled", "direct", "directed"];
   const moreCulpable = rank.indexOf(ep.harm.severity.role) > rank.indexOf(gm.harm.severity.role) ? ep : gm;

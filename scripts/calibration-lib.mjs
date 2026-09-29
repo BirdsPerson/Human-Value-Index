@@ -6,6 +6,7 @@
 // It never applies anything: Scott approves or rejects on the desk.
 import { axisMean } from "../src/cube.js";
 import { appendFigureHistory } from "../src/movement.js";
+import { severityPlace } from "../netlify/lib/intake.js";
 
 // ---- scoring with an explicit calibration (mirrors netlify/lib/intake.js computeScore and
 // src/cube.js cube(); check-calibrate asserts they agree on every figure) -------------
@@ -16,14 +17,8 @@ export function harmGatedWith(cal, b) {
 }
 // Graded bottom: a gated file sits at cap - severity points (mirrors intake.js severityScore).
 export function severityScoreWith(cal, sev) {
-  const S = cal.severity;
-  if (!S || !sev || typeof sev !== "object") return null;
-  let pts = 0;
-  for (const f of ["kind", "scale", "role", "duration", "accountability"]) {
-    if (typeof sev[f] !== "string" || !(sev[f] in S[f])) return null;
-    pts += S[f][sev[f]];
-  }
-  return Math.max(0, Math.round(cal.harmGate.cap - pts));
+  if (!cal.severity || !sev || typeof sev !== "object") return null;
+  return severityPlace(cal.severity, cal.harmGate.cap, sev);
 }
 // A case-by-case harm review on the subject (intake.js validHarmReview) wins over the gate.
 export const gatedWith = (cal, b, review = null) => review?.decision === "gate" || (review?.decision !== "ungate" && review?.decision !== "serious" && harmGatedWith(cal, b));
@@ -91,7 +86,7 @@ export function evenness(counts, k) {
 }
 
 // ---- moral reference groups (fixed in docs/methodology/evaluate.mjs, before any tuning) ---
-export const VILLAINS = ["Genghis Khan", "Kim Jong-un", "Putin", "Mao Zedong", "Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez"];
+export const VILLAINS = ["Genghis Khan", "Kim Jong-un", "Vladimir Putin", "Mao Zedong", "Jeffrey Epstein", "Ghislaine Maxwell", "Martin Shkreli", "Bernie Madoff", "Elizabeth Holmes", "Harvey Weinstein", "Joe Jackson", "Pablo Escobar", "O.J. Simpson", "Aaron Hernandez"];
 // Pre-modern rulers whose documented harm is individual or dynastic killing within the
 // norms of their court (Scott, 2026-09-25): serious, but judged by scale and era. They sit
 // below every saint and above every modern predator; they are not held below everyone.

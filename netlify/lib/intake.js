@@ -93,6 +93,7 @@ export const seriousHarm = b => isNum(b?.threat) && isNum(HARM_GATE.seriousThrea
 // those who controlled harm rank below their instruments, all else equal.
 export const SEVERITY = CAL.severity;
 export const SEVERITY_FIELDS = ["kind", "scale", "role", "duration", "accountability"];
+export const INTENTS = Object.keys(SEVERITY.intent || {});
 export function validSeverity(sev) {
   if (!sev || typeof sev !== "object") return null;
   const out = {};
@@ -100,13 +101,32 @@ export function validSeverity(sev) {
     if (typeof sev[f] !== "string" || !(sev[f] in SEVERITY[f])) return null;
     out[f] = sev[f];
   }
+  // v3.3: intent + personal order the gated band; optional so older severities still place.
+  if (typeof sev.intent === "string" && INTENTS.includes(sev.intent)) {
+    out.intent = sev.intent;
+    out.personal = sev.personal === true;
+  }
   return out;
+}
+// Pure placement with an explicit severity table (scripts/calibration-lib.mjs uses it too).
+export function severityPlace(S, cap, sev) {
+  if (!S || !sev) return null;
+  let pts = 0, max = 0;
+  for (const f of SEVERITY_FIELDS) {
+    if (typeof sev[f] !== "string" || !(sev[f] in S[f])) return null;
+    pts += S[f][sev[f]];
+    max += Math.max(...Object.values(S[f]));
+  }
+  const cls = sev.intent && S.intent?.[sev.intent];
+  if (!cls || !S.bands) return Math.max(0, Math.round(cap - pts));      // v3.2 placement
+  const band = sev.personal === true ? "floor" : cls;                   // own hands: the floor
+  const [lo, hi] = S.bands[band];
+  return Math.round(hi - (pts / max) * (hi - lo));
 }
 export function severityScore(sev, cal = { severity: SEVERITY, cap: HARM_GATE.cap }) {
   const v = validSeverity(sev);
   if (!v) return null;
-  const pts = SEVERITY_FIELDS.reduce((t, f) => t + cal.severity[f][v[f]], 0);
-  return Math.max(0, Math.round(cal.cap - pts));
+  return severityPlace(cal.severity, cal.cap, v);
 }
 // Median of several readings' severities, field by field, by rank; null unless most are valid.
 export function medianSeverity(list) {
@@ -117,6 +137,14 @@ export function medianSeverity(list) {
     const order = Object.keys(SEVERITY[f]);
     const ranks = valid.map(s => order.indexOf(s[f])).sort((a, b) => a - b);
     out[f] = order[ranks[(ranks.length - 1) >> 1]];
+  }
+  // intent: the most common reading (ties: the more culpable, i.e. earlier in INTENTS order
+  // extermination > predation > war_or_policy > incidental); personal: majority.
+  const ints = valid.map(s => s.intent).filter(Boolean);
+  if (ints.length * 2 > valid.length) {
+    const n = {}; for (const i of ints) n[i] = (n[i] || 0) + 1;
+    out.intent = INTENTS.filter(i => n[i]).sort((a, b) => n[b] - n[a] || INTENTS.indexOf(a) - INTENTS.indexOf(b))[0];
+    out.personal = valid.filter(s => s.personal === true).length * 2 > valid.length;
   }
   return out;
 }

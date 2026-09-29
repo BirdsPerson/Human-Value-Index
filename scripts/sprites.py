@@ -121,7 +121,9 @@ PROMPT = SPEC.SINGLE_PROMPT  # takes {look}; {name} is accepted and ignored
 
 def slug(name):
     # Same rule as the SPEC / Pen.jsx: lowercase, spaces -> '-', drop anything not [a-z0-9-].
-    return re.sub(r"[^a-z0-9-]", "", name.lower().replace(" ", "-"))
+    # Full-name renames keep their filed slugs (src/figures.js KEPT_SLUGS).
+    s = re.sub(r"[^a-z0-9-]", "", name.lower().replace(" ", "-"))
+    return {"john-f-kennedy": "jfk", "vladimir-putin": "putin"}.get(s, s)
 
 
 # ---------- generation ----------

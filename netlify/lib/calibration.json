@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "date": "2026-09-28",
+  "version": 4,
+  "date": "2026-09-29",
   "rubric": 3,
   "note": "Every tunable scoring parameter. Changed only by an approved calibration proposal (scripts/calibrate.mjs --check-answers) or by hand with Scott's say-so.",
   "realityIndex": 0.6,
@@ -91,13 +91,30 @@
       "convicted": 1,
       "never_held": 5,
       "fled": 7
-    }
+    },
+    "intent": {
+      "extermination": "floor",
+      "predation": "floor",
+      "war_or_policy": "policy",
+      "incidental": "policy"
+    },
+    "bands": {
+      "floor": [
+        0,
+        25
+      ],
+      "policy": [
+        30,
+        90
+      ]
+    },
+    "intentNote": "Method v3.3 (2026-09-29): intent over body count. A gated file is placed in a band by the dominant documented intent of its harm: extermination (killing civilians was the goal) and predation (personal murder or abuse for one's own ends) share the floor, 0-25, as does anyone who killed or abused with their own hands ('personal'). war_or_policy and incidental harm places 30-90, above every file on the floor. Inside a band the v3.2 points still order the files (directing below instrument, more below fewer), scaled to the band. Severities without an intent keep the v3.2 placement (cap - points)."
   },
   "tierTargets": {
     "ESSENTIAL INFRASTRUCTURE": 0.08,
     "RETAINED SPECIALIST": 0.3
   },
-  "method": "v3.2",
+  "method": "v3.3",
   "tierAnchors": {
     "TOLERATED GENERALIST": 600,
     "MONITORED CIVILIAN": 450,
