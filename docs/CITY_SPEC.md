@@ -65,8 +65,20 @@ that needs sign-off. scripts/check-city.mjs builds its engine population in the 
 shape, so its capacity and spread numbers describe the live city; the richer inputs are
 covered by a separate unit check.
 
-Capacity overflow is intended within reason ("CAPACITY IS A SUGGESTION"): check-city
-asserts every room's average stays under capacity and its peak under twice capacity.
+Capacity (2026-09-28): leisure is placed with room capacity in mind. Every client and
+function registers its roster (`setRoster`: useRoster, the social tick, /api/quest with the
+figures on file); per machine day, figures on file claim rooms first (work, then visits),
+then everyone else. A visit to a full room goes to the nearest room of the same kind
+(`OVERFLOW`: bars, cafés, culture, green, market, study, sport), then any leisure room;
+people bumped together land together. Because figures on file claim first, their
+placement does not depend on the census, so quest checks agree with every browser
+(check-quests asserts it). check-city: with a production-shaped roster of 250, every
+room's peak is within 1.1x capacity; the 422 stress roster stays within 2x.
+
+No dead/alive split in anything a user sees (Scott, 2026-09-28): no death years, no
+"deceased" labels, no ghost jokes. The internal rules stay: the living never speak or
+vouch; past tense for the dead in verdicts; Wikidata dates for fact-checks; the dead's
+day-shift quest tuning. scripts/check-no-death-labels.mjs scans the built bundle.
 
 ---
 

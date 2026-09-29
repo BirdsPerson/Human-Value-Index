@@ -123,11 +123,10 @@ export function groupAverages(subjects, keyFn, minN = 3) {
 
 export function coverage(subjects) {
   const n = subjects.length;
-  const deceased = subjects.filter(s => s.died).length;
-  const living = subjects.filter(s => !s.died && s.born).length;
-  const unknownLife = n - deceased - living;
+  const by = (src) => subjects.filter(s => s.source === src).length;
+  const record = by("record"), referral = by("referral"), engine = by("engine");
   const rated = subjects.filter(s => s.people && typeof s.people.likability === "number").length;
-  return { n, deceased, living, unknownLife, rated, unrated: n - rated };
+  return { n, record, referral, engine, otherSource: n - record - referral - engine, rated, unrated: n - rated };
 }
 
 export function topBottom(subjects, k = 10) {

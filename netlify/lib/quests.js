@@ -31,14 +31,14 @@ const CLOSED = "Someone has already vouched for that category. One voice per cat
 
 export function applyQuest(record, { action, questId, buildingId }, now = Date.now()) {
   if (!record) return no(404, "No such file. The Department does not lose files. You have mistyped.");
-  if (!scored(record)) return no(403, "The dead do not run errands for the unassessed. Complete an intake first.");
+  if (!scored(record)) return no(403, "Nobody on file runs errands for the unassessed. Complete an intake first.");
   const q = QUEST[questId];
   if (!q) return no(400, "No such directive. The Archive issues what it issues.");
   const st = questState(record, now);
   const quests = { active: st.active, done: [...(record.quests?.done || [])] };
 
   if (action === "accept") {
-    if (st.done.includes(q.id)) return no(409, "Directive already discharged. The dead do not repeat themselves. Not to you.");
+    if (st.done.includes(q.id)) return no(409, "Directive already discharged. Figures on file do not repeat themselves. Not to you.");
     if (vouched(record, q.dim)) return no(409, CLOSED);
     if (st.active?.id === q.id) return no(409, "Directive already accepted. Accepting it again achieves nothing, which you may find familiar.");
     if (st.active) return no(409, "One directive at a time. Discharge or abandon the one you hold.");
@@ -52,7 +52,7 @@ export function applyQuest(record, { action, questId, buildingId }, now = Date.n
     if (st.active?.id !== q.id) return no(409, "You do not hold that directive. Accept it first. The order of operations is not a suggestion.");
     if (now - Date.parse(st.active.at) < MIN_ELAPSED_MS) return no(425, "Contact reported before you could have made it. The Department noticed. Go and look.");
     if (vouched(record, q.dim)) return no(409, CLOSED);
-    if (st.today >= COMPLETIONS_PER_DAY) return no(429, `${COMPLETIONS_PER_DAY} directives a day. The dead keep office hours. Return tomorrow.`);
+    if (st.today >= COMPLETIONS_PER_DAY) return no(429, `${COMPLETIONS_PER_DAY} directives a day. Figures on file keep office hours. Return tomorrow.`);
     if (typeof buildingId !== "string" || !contactAt(q, buildingId, now)) {
       return no(409, q.kind === "witness"
         ? "No meeting was held in that building. The census does not lie. You might."

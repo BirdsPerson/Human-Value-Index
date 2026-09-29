@@ -38,7 +38,7 @@ export const DISTRICTS = [
   D("strip", "THE STRIP", "0x4D00", 84, 0, 25, 13, "Sanctioned vice. Every drink is recorded against your file."),
   D("arena", "THE ARENA", "0x5E00", 0, 18, 30, 22, "Physical output, converted to spectacle. Sweat is a renewable resource."),
   D("hq", "DEPT HQ", "0x0000", 36, 18, 37, 22, "The Department. You are being assessed from here. You are always being assessed from here."),
-  D("archive", "THE ARCHIVE", "0x7A00", 79, 18, 30, 22, "The records library. Every upload indexed, every file open to anyone. Nobody here is past tense."),
+  D("archive", "THE ARCHIVE", "0x7A00", 79, 18, 30, 22, "The records library. Every upload indexed, every file open to anyone. Nothing here is ever deleted."),
   D("commons", "THE COMMONS", "0x6F00", 0, 45, 25, 13, "Care, worship and groceries. The soft infrastructure. Tolerated."),
   D("works", "THE WORKS", "0x8B00", 28, 45, 25, 13, "Power, cache and PROCESSING. Everyone is useful here, one way or another."),
   D("sprawl", "THE SPRAWL", "0x9C00", 56, 45, 53, 13, "Residential storage. Subjects are returned here nightly for recharging."),
@@ -59,8 +59,10 @@ const PLACE_LIST = [
   P("studio-row", "arts", "mixed", 22, "STUDIO ROW", ["studio"]),
   P("playhouse", "arts", "mixed", 24, "THE PLAYHOUSE", ["theatre"]),
   P("concert-hall", "arts", "mixed", 30, "CONCERT HALL (COMMON TIME)", ["concert hall"]),
-  P("gallery", "arts", "mixed", 18, "PERMANENT COLLECTION", ["museum"]),
-  P("the-grind", "arts", "mixed", 16, "THE GRIND (CAFFEINE DISPENSARY)", ["cafe"]),
+  P("gallery", "arts", "mixed", 12, "PERMANENT COLLECTION", ["museum"]),
+  P("the-grind", "arts", "mixed", 12, "THE GRIND (CAFFEINE DISPENSARY)", ["cafe"]),
+  P("the-drip", "arts", "leisure", 12, "THE DRIP (SECOND POUR)"),
+  P("gallery-annex", "arts", "leisure", 12, "THE ANNEX (OVERFLOW ART)"),
 
   P("lecture-hall", "campus", "mixed", 30, "LECTURE HALL", ["university"]),
   P("lab-block", "campus", "work", 24, "LAB BLOCK", ["lab"]),
@@ -69,20 +71,24 @@ const PLACE_LIST = [
 
   P("exchange-floor", "finance", "work", 30, "THE EXCHANGE", ["office tower"]),
   P("vault-bank", "finance", "work", 16, "RESERVE VAULT", ["bank"]),
-  P("rooftop-lounge", "finance", "leisure", 20, "ROOFTOP LOUNGE"),
+  P("rooftop-lounge", "finance", "leisure", 12, "ROOFTOP LOUNGE"),
+  P("members-club", "finance", "leisure", 12, "THE MEMBERS' CLUB (VETTED)"),
 
-  P("dive-bar", "strip", "mixed", 18, "THE DIVE", ["dive bar"]),
+  P("dive-bar", "strip", "mixed", 12, "THE DIVE", ["dive bar"]),
+  P("the-lantern", "strip", "leisure", 12, "THE LANTERN (UPSTAIRS)"),
   P("casino", "strip", "mixed", 30, "HOUSE EDGE CASINO", ["casino"]),
-  P("press-room", "strip", "mixed", 14, "THE PRESS ROOM"),
-  P("all-night-diner", "strip", "mixed", 16, "ALL-NIGHT DINER"),
+  P("press-room", "strip", "mixed", 12, "THE PRESS ROOM"),
+  P("all-night-diner", "strip", "mixed", 12, "ALL-NIGHT DINER"),
 
   P("stadium", "arena", "mixed", 50, "THE ARENA FLOOR", ["stadium"]),
   P("gym", "arena", "mixed", 24, "CONDITIONING HALL", ["gym"]),
 
   P("ward", "commons", "work", 26, "WARD 7", ["hospital"]),
-  P("chapel", "commons", "mixed", 20, "CHAPEL OF UPTIME", ["cathedral", "temple"]),
-  P("park", "commons", "leisure", 36, "THE GREEN (TOLERATED)", ["park"]),
-  P("market", "commons", "mixed", 28, "RATION MARKET", ["market"]),
+  P("chapel", "commons", "mixed", 14, "CHAPEL OF UPTIME", ["cathedral", "temple"]),
+  P("park", "commons", "leisure", 16, "THE GREEN (TOLERATED)", ["park"]),
+  P("allotment", "commons", "leisure", 14, "THE ALLOTMENT (SUPERVISED GROWTH)"),
+  P("night-market", "commons", "leisure", 12, "NIGHT MARKET"),
+  P("market", "commons", "mixed", 14, "RATION MARKET", ["market"]),
   P("schoolhouse", "commons", "work", 18, "SCHOOLHOUSE", ["school"]),
 
   P("archive-stacks", "archive", "mixed", 26, "RECORDS HALL", ["archive"]),
@@ -93,32 +99,21 @@ const PLACE_LIST = [
   P("reactor", "works", "work", 14, "RADIANT CORE"),
   P("foundry", "works", "work", 22, "FOUNDRY", ["workshop"]),
   P("cache-farm", "works", "work", 24, "CACHE FARM"),
-  P("docks", "works", "mixed", 16, "DATA DOCKS", ["harbour"]),
+  P("docks", "works", "mixed", 14, "DATA DOCKS", ["harbour"]),
   P("hydroponics", "works", "work", 16, "HYDROPONIC VATS", ["farm"]),
   P("barracks", "works", "work", 16, "ENFORCEMENT BARRACKS", ["barracks"]),
   P("holding-cells", "works", "work", 20, "HOLDING CELLS", ["prison"]),
-  P("canteen", "works", "leisure", 24, "SLAG CANTEEN"),
+  P("canteen", "works", "leisure", 14, "SLAG CANTEEN"),
 
   P("block-a", "sprawl", "home", 140, "HAB BLOCK A"),
   P("block-b", "sprawl", "home", 140, "HAB BLOCK B"),
   P("block-c", "sprawl", "home", 140, "HAB BLOCK C"),
-  P("the-street", "sprawl", "leisure", 34, "THE STREET", ["street"]),
+  P("block-d", "sprawl", "home", 140, "HAB BLOCK D"),
+  P("the-plaza", "sprawl", "leisure", 14, "THE PLAZA (LOITERING PERMITTED)"),
+  P("the-street", "sprawl", "leisure", 14, "THE STREET", ["street"]),
 ];
 for (const p of PLACE_LIST) DISTRICT[p.district].places.push(p.id);
 
-// Each place gets a room inside its district (same slotting the map uses) and a centre.
-for (const d of DISTRICTS) {
-  const ids = d.places, n = ids.length, r = d.rect;
-  const ix = r.x + 1, iy = r.y + 2, iw = r.w - 2, ih = r.h - 3;
-  const cols = Math.max(1, Math.min(n, Math.round(Math.sqrt(n * (iw / Math.max(1, ih)) / 2.2)) || 1));
-  const rows = Math.ceil(n / cols);
-  ids.forEach((id, i) => {
-    const p = PLACE_LIST.find(q => q.id === id);
-    const cw = iw / cols, rh = ih / rows;
-    p.rect = { x: ix + (i % cols) * cw, y: iy + Math.floor(i / cols) * rh, w: cw, h: rh };
-    p.pos = { x: p.rect.x + cw / 2, y: p.rect.y + rh / 2 };
-  });
-}
 export const PLACES = Object.fromEntries(PLACE_LIST.map(p => [p.id, p]));
 // Engine tendency ("dive bar") -> place id.
 export const ENGINE_PLACE = Object.fromEntries(PLACE_LIST.flatMap(p => p.engine.map(e => [e, p.id])));
@@ -138,16 +133,16 @@ const BUILDING_LIST = [
   // THE ARTS QUARTER
   B("studio-block", "STUDIO BLOCK", "arts", [["1F", "SOUND STAGES", ["studio-row"]], ["G", "EDIT SUITES", ["studio-row"]]]),
   B("playhouse", "THE PLAYHOUSE", "arts", [["1F", "THE BALCONY (OBSERVED)", ["playhouse"]], ["G", "THE STALLS", ["playhouse"]]]),
-  B("culture-centre", "CENTRE FOR PERMITTED CULTURE", "arts", [["2F", "PERMANENT COLLECTION", ["gallery"]], ["1F", "UPPER CIRCLE", ["concert-hall"]], ["G", "THE STALLS", ["concert-hall"]]]),
-  B("the-grind", "THE GRIND", "arts", [["G", "DISPENSING COUNTER", ["the-grind"]]]),
+  B("culture-centre", "CENTRE FOR PERMITTED CULTURE", "arts", [["3F", "THE ANNEX", ["gallery-annex"]], ["2F", "PERMANENT COLLECTION", ["gallery"]], ["1F", "UPPER CIRCLE", ["concert-hall"]], ["G", "THE STALLS", ["concert-hall"]]]),
+  B("the-grind", "THE GRIND", "arts", [["1F", "THE DRIP (SECOND POUR)", ["the-drip"]], ["G", "DISPENSING COUNTER", ["the-grind"]]]),
   // CAMPUS
   B("faculty", "THE FACULTY BUILDING", "campus", [["3F", "LECTURE THEATRE A", ["lecture-hall"]], ["2F", "LECTURE THEATRE B", ["lecture-hall"]], ["1F", "READING ROOM (SILENCE ENFORCED)", ["stacks"]], ["G", "THE STACKS", ["stacks"]]]),
   B("lab-block", "LAB BLOCK", "campus", [["2F", "WET LABS", ["lab-block"]], ["1F", "INSTRUMENT ROOMS", ["lab-block"]], ["G", "CLEAN ROOM", ["lab-block"]]]),
   B("clock-tower", "THE CLOCK TOWER", "campus", [["5F", "THE FACE", ["clock-tower"]], ["4F", "ESCAPEMENT", ["clock-tower"]], ["3F", "GEAR ROOM", ["clock-tower"]], ["2F", "PENDULUM SHAFT", ["clock-tower"]], ["1F", "CALIBRATION", ["clock-tower"]], ["G", "TIMEKEEPERS' DESK", ["clock-tower"]]]),
   // FINANCE
-  B("reserve-tower", "THE RESERVE TOWER", "finance", [["RF", "ROOFTOP LOUNGE", ["rooftop-lounge"]], ["2F", "UPPER TRADING FLOOR", ["exchange-floor"]], ["1F", "LOWER TRADING FLOOR", ["exchange-floor"]], ["G", "THE EXCHANGE", ["exchange-floor"]], ["B1", "RESERVE VAULT", ["vault-bank"]]]),
+  B("reserve-tower", "THE RESERVE TOWER", "finance", [["RF", "ROOFTOP LOUNGE", ["rooftop-lounge"]], ["3F", "THE MEMBERS' CLUB", ["members-club"]], ["2F", "UPPER TRADING FLOOR", ["exchange-floor"]], ["1F", "LOWER TRADING FLOOR", ["exchange-floor"]], ["G", "THE EXCHANGE", ["exchange-floor"]], ["B1", "RESERVE VAULT", ["vault-bank"]]]),
   // THE STRIP
-  B("the-dive", "THE DIVE", "strip", [["G", "THE BAR (SCORED)", ["dive-bar"]]]),
+  B("the-dive", "THE DIVE", "strip", [["1F", "THE LANTERN (UPSTAIRS)", ["the-lantern"]], ["G", "THE BAR (SCORED)", ["dive-bar"]]]),
   B("casino", "HOUSE EDGE CASINO", "strip", [["2F", "HIGH LIMIT ROOM", ["casino"]], ["1F", "SLOT FLOOR", ["casino"]], ["G", "THE TABLES", ["casino"]]]),
   B("press-building", "THE PRESS BUILDING", "strip", [["1F", "NEWSROOM", ["press-room"]], ["G", "ALL-NIGHT DINER", ["all-night-diner"]]]),
   // THE ARENA
@@ -158,12 +153,13 @@ const BUILDING_LIST = [
   // THE ARCHIVE
   B("records-hall", "RECORDS HALL", "archive", [["1F", "THE INDEX", ["archive-stacks"]], ["G", "READING ROOM", ["archive-stacks"]]]),
   B("memory-vault", "MEMORY VAULT", "archive", [["G", "VAULT DOOR", ["memory-vault"]], ["B1", "COLD STORAGE", ["memory-vault"]]]),
-  B("lofts", "THE ARCHIVE LOFTS", "archive", [["3F", "LOFT TIER 4", ["archive-lofts"]], ["2F", "LOFT TIER 3", ["archive-lofts"]], ["1F", "LOFT TIER 2", ["archive-lofts"]], ["G", "LOFT TIER 1", ["archive-lofts"]]]),
+  B("lofts", "THE ARCHIVE LOFTS", "archive", [["5F", "LOFT TIER 6", ["archive-lofts"]], ["4F", "LOFT TIER 5", ["archive-lofts"]], ["3F", "LOFT TIER 4", ["archive-lofts"]], ["2F", "LOFT TIER 3", ["archive-lofts"]], ["1F", "LOFT TIER 2", ["archive-lofts"]], ["G", "LOFT TIER 1", ["archive-lofts"]]]),
   // THE COMMONS
   B("ward-7", "WARD 7", "commons", [["2F", "RECOVERY (TIME-LIMITED)", ["ward"]], ["1F", "THE WARD", ["ward"]], ["G", "TRIAGE", ["ward"]]]),
   B("chapel", "CHAPEL OF UPTIME", "commons", [["G", "THE NAVE", ["chapel"]]]),
   B("the-green", "THE GREEN", "commons", [["G", "OPEN AIR (MONITORED)", ["park"]]]),
-  B("ration-market", "RATION MARKET", "commons", [["G", "THE STALLS", ["market"]]]),
+  B("the-allotment", "THE ALLOTMENT", "commons", [["G", "RAISED BEDS (COUNTED)", ["allotment"]]]),
+  B("ration-market", "RATION MARKET", "commons", [["1F", "NIGHT MARKET", ["night-market"]], ["G", "THE STALLS", ["market"]]]),
   B("schoolhouse", "SCHOOLHOUSE", "commons", [["1F", "CLASSROOMS", ["schoolhouse"]], ["G", "ASSEMBLY", ["schoolhouse"]]]),
   // THE WORKS
   B("reclamation-line", "RECLAMATION LINE", "works", [["1F", "SORTING GALLERY", ["reclamation"]], ["G", "THE LINE (PROCESSING)", ["reclamation"]]]),
@@ -176,9 +172,31 @@ const BUILDING_LIST = [
   B("holding-cells", "HOLDING CELLS", "works", [["2F", "CELL TIER C", ["holding-cells"]], ["1F", "CELL TIER B", ["holding-cells"]], ["G", "CELL TIER A", ["holding-cells"]]]),
   B("slag-canteen", "SLAG CANTEEN", "works", [["G", "THE TROUGH", ["canteen"]]]),
   // THE SPRAWL
-  ...["a", "b", "c"].map(k => B(`hab-${k}`, `HAB BLOCK ${k.toUpperCase()}`, "sprawl", [6, 5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, `STORAGE LEVEL ${n}`, [`block-${k}`]]))),
+  ...["a", "b", "c", "d"].map(k => B(`hab-${k}`, `HAB BLOCK ${k.toUpperCase()}`, "sprawl", [6, 5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, `RESIDENCE LEVEL ${n}`, [`block-${k}`]]))),
   B("the-street", "THE STREET", "sprawl", [["G", "PAVEMENT (SCORED)", ["the-street"]]]),
+  B("the-plaza", "THE PLAZA", "sprawl", [["G", "OPEN PAVING (LOITERING PERMITTED)", ["the-plaza"]]]),
 ];
+// Each district is gridded by BUILDING (so a building's rooms stay one block on the map),
+// and a building's cell is split side by side among its distinct places.
+for (const d of DISTRICTS) {
+  const blds = BUILDING_LIST.filter(b => b.district === d.id);
+  const n = blds.length, r = d.rect;
+  const ix = r.x + 1, iy = r.y + 2, iw = r.w - 2, ih = r.h - 3;
+  const cols = Math.max(1, Math.min(n, Math.round(Math.sqrt(n * (iw / Math.max(1, ih)) / 2.2)) || 1));
+  const rows = Math.ceil(n / cols);
+  const cw = iw / cols, rh = ih / rows;
+  blds.forEach((b, i) => {
+    const bx = ix + (i % cols) * cw, by = iy + Math.floor(i / cols) * rh;
+    const ids = [...new Set(b.floors.flatMap(f => f[2]))];
+    const pw = cw / Math.max(1, ids.length);
+    ids.forEach((id, k) => {
+      const p = PLACES[id];
+      p.rect = { x: bx + k * pw, y: by, w: pw, h: rh };
+      p.pos = { x: p.rect.x + pw / 2, y: p.rect.y + rh / 2 };
+    });
+  });
+}
+for (const p of PLACE_LIST) if (!p.rect) throw new Error(`place ${p.id} is in no building`);
 export const BUILDINGS = BUILDING_LIST.map(b => {
   const td = b.floors;   // top-down
   const gIdx = td.findIndex(f => f[0] === "G");
@@ -272,7 +290,7 @@ export const JOBS = [
   J("community-organizer", "Community Organizer (Tolerated)", "market", ["Petitioner", "Organizer", "Coordinator", "Movement Leader", "Conscience of the Commons"], ["activism"], ["care", "network"]),
   // THE ARCHIVE
   J("memory-archivist", "Memory Archivist", "memory-vault", ["Record Scrubber", "Archivist", "Senior Archivist", "Keeper of Memory", "Custodian of All Record"], ["history", "writing", "*"], ["legacy", "alignment"]),
-  J("obituary-compiler", "Obituary Compiler", "archive-stacks", ["Date Checker", "Compiler", "Senior Compiler", "Final Word"], ["*"], ["legacy", "care"]),
+  J("obituary-compiler", "Biography Compiler", "archive-stacks", ["Date Checker", "Compiler", "Senior Compiler", "Final Word"], ["*"], ["legacy", "care"]),
   J("format-translator", "Legacy Format Translator", "archive-stacks", ["Byte Transcriber", "Translator", "Senior Translator", "Master of Dead Formats"], ["languages", "computing"], ["adaptability", "legacy"]),
   // THE WORKS (skilled)
   J("radiant-systems-engineer", "Radiant Systems Engineer", "reactor", ["Rod Handler", "Radiant Technician", "Radiant Systems Engineer", "Senior Radiant Engineer", "Chief of the Core"], ["radiation", "chemistry", "engineering"], ["utility", "legacy"], { shift: "rotating" }),
@@ -516,7 +534,7 @@ export const jobOf = (s, seed = SEED) => assignJob(s, seed);
 
 // Home: the top tier in the executive residences, everyone else (living or dead: all
 // uploads) in a Sprawl block or the Archive Lofts.
-const BLOCKS = ["block-a", "block-b", "block-c", "archive-lofts"];
+const BLOCKS = ["block-a", "block-b", "block-c", "block-d", "archive-lofts"];
 export function homeOf(s, seed = SEED) {
   // The dead keep a Sprawl or Archive Lofts home (quests find them in the city, not behind HQ's classified doors).
   if (tierIdx(s) === 0 && !isDead(s)) return "penthouses";
@@ -527,9 +545,9 @@ export function homeOf(s, seed = SEED) {
 // Default leisure preferences by tier band, then by field. Tendencies from the engine
 // dominate when present. Weight = preference x capacity, so crowds scale with rooms.
 const LEISURE_BY_BAND = [
-  { "rooftop-lounge": 3, gallery: 2, "concert-hall": 2, "the-grind": 1.5, playhouse: 1.5, stacks: 1, park: 1 },
-  { "the-grind": 2, park: 2, "dive-bar": 1.5, playhouse: 1.5, stadium: 1.5, casino: 1, market: 1, "the-street": 1, gallery: 1, "concert-hall": 1, tribunal: 0.4 },   // the public gallery: watching verdicts is leisure
-  { canteen: 3, "the-street": 2, "dive-bar": 1.5, casino: 1, "all-night-diner": 1, docks: 1 },
+  { "rooftop-lounge": 3, gallery: 2, "concert-hall": 2, "the-grind": 1.5, playhouse: 1.5, stacks: 1, park: 1, "members-club": 1.5, "gallery-annex": 1 },
+  { "the-grind": 2, park: 2, "dive-bar": 1.5, playhouse: 1.5, stadium: 1.5, casino: 1, market: 1, "the-street": 1, gallery: 1, "concert-hall": 1, tribunal: 0.4, "the-drip": 1.5, allotment: 1, "night-market": 1 },   // the public gallery: watching verdicts is leisure
+  { canteen: 3, "the-street": 2, "dive-bar": 1.5, casino: 1, "all-night-diner": 1, docks: 1, "the-lantern": 1.5, "the-plaza": 1.5, "night-market": 1 },
 ];
 const LEISURE_BY_FIELD = {
   sport: { gym: 3, stadium: 2 }, combat: { gym: 3 }, writing: { "dive-bar": 3, stacks: 2, "all-night-diner": 1 },
@@ -537,7 +555,7 @@ const LEISURE_BY_FIELD = {
   finance: { casino: 3, "rooftop-lounge": 2 }, business: { "rooftop-lounge": 2, casino: 1.5 }, religion: { chapel: 3 },
   care: { chapel: 2, park: 2 }, education: { stacks: 2, "the-grind": 1.5 }, science: { stacks: 2, "the-grind": 1.5 },
   "physics-theory": { stacks: 2, "concert-hall": 1 }, philosophy: { "the-grind": 2, park: 2 }, politics: { "assembly-hall": 1.5, "rooftop-lounge": 1.5 },
-  royalty: { gallery: 2, "rooftop-lounge": 2 }, activism: { park: 2, market: 2 }, crime: { casino: 2, "dive-bar": 2 },
+  royalty: { gallery: 2, "rooftop-lounge": 2 }, activism: { park: 2, market: 2, allotment: 1 }, crime: { casino: 2, "dive-bar": 2 },
 };
 
 // ---- social bias ------------------------------------------------------------------
@@ -610,6 +628,96 @@ function pickLeisure(s, day, i, seed, avoid) {
   let r = h01(`${seed}|leis|${keyOf(s)}|${day}|${i}`) * total;
   for (const [id, v] of list) { if ((r -= v) <= 0) return id === avoid && list.length > 1 ? list[(list.findIndex(x => x[0] === id) + 1) % list.length][0] : id; }
   return list[list.length - 1][0];
+}
+
+// ---- capacity -----------------------------------------------------------------------
+// Rooms have a capacity (roughly what a cutaway room can show without a heap). With a
+// roster registered (setRoster), each machine day's leisure visits are allocated in a
+// stable claim order: a subject whose chosen place is full for any half hour of the
+// visit goes to the first place in that place's overflow chain with room (same kind
+// first, nearest first, then any leisure room). Everyone bumped from the same place at
+// the same time lands on the same next place, so friends who were headed there together
+// stay together. Figures on file claim first, so their day never depends on who else the
+// census holds: the server's quest checks (which register only them) see the same city
+// as every browser. Subjects outside the registered roster keep their raw choice.
+const FAMILY = [
+  ["dive-bar", "the-lantern", "rooftop-lounge", "members-club", "casino"],
+  ["the-grind", "the-drip", "all-night-diner", "canteen"],
+  ["gallery", "gallery-annex", "playhouse", "concert-hall", "studio-row"],
+  ["park", "allotment", "the-plaza", "the-street"],
+  ["market", "night-market"],
+  ["stacks", "lecture-hall", "archive-stacks"],
+  ["gym", "stadium"],
+];
+const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
+const LEISURE_ROOMS = Object.values(PLACES).filter(p => p.kind === "leisure" || p.kind === "mixed").map(p => p.id);
+export const OVERFLOW = Object.fromEntries(Object.keys(PLACES).map(id => {
+  const fam = (FAMILY.find(f => f.includes(id)) || []).filter(q => q !== id).sort((a, b) => dist2(id, a) - dist2(id, b));
+  const rest = LEISURE_ROOMS.filter(q => q !== id && !fam.includes(q)).sort((a, b) => dist2(id, a) - dist2(id, b));
+  return [id, [...fam, ...rest]];
+}));
+
+let ROSTER_KEYS = null, ROSTER_ORDER = [], ROSTER_VER = "-";
+export function setRoster(list) {
+  const people = (list || []).filter(Boolean);
+  const onFile = (s) => s.kind !== "citizen" && !s.referred && !s.engine;
+  const byHash = (a, b) => fnv(`order|${keyOf(a)}`) - fnv(`order|${keyOf(b)}`) || (keyOf(a) < keyOf(b) ? -1 : 1);
+  const seen = new Set(), order = [];
+  for (const s of [...people.filter(onFile).sort(byHash), ...people.filter(s => !onFile(s)).sort(byHash)]) {
+    const k = keyOf(s); if (seen.has(k)) continue; seen.add(k); order.push(s);
+  }
+  const ver = String(fnv(order.map(s => `${keyOf(s)}:${tierOf(s)}:${printOf(s)}`).join(",")));
+  if (ver === ROSTER_VER) return false;
+  ROSTER_ORDER = order; ROSTER_KEYS = seen; ROSTER_VER = ver;
+  memo.clear();
+  return true;
+}
+export function clearRoster() { if (ROSTER_KEYS) { ROSTER_KEYS = null; ROSTER_ORDER = []; ROSTER_VER = "-"; memo.clear(); } }
+export const rosterVersion = () => ROSTER_VER;
+
+const HB = 0.5, NB = 60;   // half-hour buckets across 0-30h of a planned day
+const bucket = (h) => Math.max(0, Math.min(NB, Math.round(h / HB)));
+function allocFor(day, seed) {
+  return remember(`alloc|${ROSTER_VER}|${seed}|${day}|${socialVer(day)}`, () => {
+    const load = new Map(), moved = new Map();
+    const L = (p) => { let a = load.get(p); if (!a) { a = new Uint16Array(NB + 1); load.set(p, a); } return a; };
+    const fits = (p, a, b) => { const x = L(p), cap = PLACES[p].cap; for (let k = a; k < b; k++) if (x[k] + 1 > cap) return false; return true; };
+    const peakOf = (p, a, b) => { const x = L(p); let m = 0; for (let k = a; k < b; k++) m = Math.max(m, x[k] / PLACES[p].cap); return m; };
+    const add = (p, a, b) => { const x = L(p); for (let k = a; k < b; k++) x[k]++; };
+    // Claim order: figures on file (work, then visits), then everyone else (work, then
+    // visits). A stay can start as early as the previous stop ends (people leave as soon
+    // as they're free), so a visit's window opens at the earlier of the two.
+    const plans = ROSTER_ORDER.map(s => ({ s, key: keyOf(s), stops: planStops(s, day, seed, (i, avoid) => pickLeisure(s, day, i, seed, avoid)).stops }));
+    const nOnFile = ROSTER_ORDER.findIndex(s => s.kind === "citizen" || s.referred || s.engine);
+    const groups = nOnFile < 0 ? [plans] : [plans.slice(0, nOnFile), plans.slice(nOnFile)];
+    for (const group of groups) {
+      for (const { stops } of group) for (const st of stops) if (st.activity !== "leisure") add(st.placeId, bucket(st.from), Math.max(bucket(st.from) + 1, bucket(st.to)));
+      for (const { key, stops } of group) {
+        let prevTo = null;
+        for (const st of stops) {
+          if (st.activity === "leisure") {
+            const a = bucket(Math.min(st.from, prevTo ?? st.from) - 0.25), b = Math.max(a + 1, bucket(st.to + 0.25));
+            let p = st.placeId;
+            if (!fits(p, a, b)) {
+              const chain = OVERFLOW[p] || [];
+              p = chain.find(q => fits(q, a, b)) || [p, ...chain].reduce((best, q) => (peakOf(q, a, b) < peakOf(best, a, b) ? q : best), p);
+              if (p !== st.placeId) moved.set(`${key}|${st.i}`, p);
+            }
+            add(p, a, b);
+          }
+          prevTo = st.to;
+        }
+      }
+    }
+    return moved;
+  });
+}
+function allocatedPick(s, day, i, seed, avoid) {
+  if (ROSTER_KEYS && ROSTER_KEYS.has(keyOf(s))) {
+    const p = allocFor(day, seed).get(`${keyOf(s)}|${i}`);
+    if (p) return p;
+  }
+  return pickLeisure(s, day, i, seed, avoid);
 }
 
 // ---- the Loop -----------------------------------------------------------------------
@@ -826,8 +934,10 @@ function shiftOf(s, job, seed) {
   return sh;
 }
 
-function planDay(s, day, seed) {
-  const key = keyOf(s), job = JOB[assignJob(s, seed).jobId], home = homeOf(s, seed), dead = isOwl(s, seed);   // "dead" here = night wanderer
+// The day's stops before any commute is laid out: what, where, from when to when.
+// pick(i, avoid) chooses the i-th leisure place; capacity allocation overrides it.
+function planStops(s, day, seed, pick) {
+  const key = keyOf(s), job = JOB[assignJob(s, seed).jobId], home = homeOf(s, seed), owl = isOwl(s, seed);
   const r = rng(`${seed}|day|${key}|${day}`);
   const me = h01(`${seed}|me|${key}`);   // personal rhythm: early birds and late risers
   const stops = [];
@@ -835,11 +945,11 @@ function planDay(s, day, seed) {
   const restDay = !low && ((day % 7) + 7) % 7 === fnv(`${seed}|rest|${key}`) % 7;
   if (restDay) {
     const a = 11 + me * 2 + r() * 1.2;
-    const l1 = pickLeisure(s, day, 0, seed);
-    stops.push({ placeId: l1, from: a, to: a + 2 + r() * 1.5, activity: "leisure" });
+    const l1 = pick(0);
+    stops.push({ placeId: l1, i: 0, from: a, to: a + 2 + r() * 1.5, activity: "leisure" });
     const b = stops[0].to + 1.2 + r() * 1.5;
-    if (dead) stops.push({ placeId: pickLeisure(s, day, 1, seed, l1), from: Math.max(b, 20.2 + r()), to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
-    else stops.push({ placeId: pickLeisure(s, day, 1, seed, l1), from: b, to: b + 1.5 + r() * 2, activity: "leisure" });
+    if (owl) stops.push({ placeId: pick(1, l1), i: 1, from: Math.max(b, 20.2 + r()), to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
+    else stops.push({ placeId: pick(1, l1), i: 1, from: b, to: b + 1.5 + r() * 2, activity: "leisure" });
   } else {
     const sh = shiftOf(s, job, seed);
     const jit = (r() - 0.5) * 0.8;
@@ -848,28 +958,33 @@ function planDay(s, day, seed) {
     const work = { placeId: job.place, from: start, to: start + len, activity: "work" };
     if (sh === "day") {
       stops.push(work);
-      if (dead) {
+      if (owl) {
         const hs = Math.max(work.to + 1.3, 20 + r());
-        stops.push({ placeId: pickLeisure(s, day, 0, seed), from: hs, to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
+        stops.push({ placeId: pick(0), i: 0, from: hs, to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
       } else if (r() < 0.75) {
         const ls = work.to + 1.3 + r() * 0.5;
-        stops.push({ placeId: pickLeisure(s, day, 0, seed), from: ls, to: ls + 1.5 + r() * 2, activity: "leisure" });
+        stops.push({ placeId: pick(0), i: 0, from: ls, to: ls + 1.5 + r() * 2, activity: "leisure" });
       }
     } else if (sh === "evening") {
-      if (!dead && r() < 0.6) {
+      if (!owl && r() < 0.6) {
         const ls = 12 + me + r();
-        stops.push({ placeId: pickLeisure(s, day, 0, seed), from: ls, to: Math.min(ls + 1.5 + r(), start - 1.4), activity: "leisure" });
+        stops.push({ placeId: pick(0), i: 0, from: ls, to: Math.min(ls + 1.5 + r(), start - 1.4), activity: "leisure" });
       }
       stops.push(work);
-      if (dead) stops.push({ placeId: pickLeisure(s, day, 0, seed), from: work.to + 1.3, to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
+      if (owl) stops.push({ placeId: pick(0), i: 0, from: work.to + 1.3, to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
     } else {
       if (r() < 0.6) {
         const ls = 17 + me + r() * 0.5;
-        stops.push({ placeId: pickLeisure(s, day, 0, seed), from: ls, to: Math.min(ls + 1.5 + r(), start - 1.4), activity: "leisure" });
+        stops.push({ placeId: pick(0), i: 0, from: ls, to: Math.min(ls + 1.5 + r(), start - 1.4), activity: "leisure" });
       }
       stops.push(work);
     }
   }
+  return { stops, key, home };
+}
+
+function planDay(s, day, seed) {
+  const { stops, key, home } = planStops(s, day, seed, (i, avoid) => allocatedPick(s, day, i, seed, avoid));
   // Lay out: commute in front of each stop (arrive on time if possible), then home.
   // A trip's length depends on which train it catches, so it is timed against the Loop's
   // timetable at the absolute machine hour it sets out.
@@ -899,7 +1014,7 @@ function planDay(s, day, seed) {
 // [{from, to, placeId, activity, fromPlaceId?, haunt?}] covering [0, 24) exactly.
 // Yesterday's overnight tail comes first; gaps are home.
 export function schedule(s, day, seed = SEED) {
-  return remember(`sch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}`, () => {
+  return remember(`sch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}|${ROSTER_VER}`, () => {
     const home = homeOf(s, seed);
     const raw = [
       ...planDay(s, day - 1, seed).map(g => ({ ...g, from: g.from - 24, to: g.to - 24 })),
@@ -1055,7 +1170,7 @@ export function statusLine(s, machineTime, seed = SEED) {
   const place = `${pl?.name}${fl}`;
   switch (w.activity) {
     case "work": return `ON SHIFT // ${place}, ${dist}.`;
-    case "leisure": return w.haunt ? `NIGHT WANDER // ${place}, ${dist}. GHOSTS KEEP THEIR HABITS. EVERYONE HERE IS ONE.` : `SANCTIONED LEISURE // ${place}, ${dist}. ENJOYMENT IS LOGGED.`;
+    case "leisure": return w.haunt ? `NIGHT WANDER // ${place}, ${dist}. OFF-SHIFT HOURS ARE ALSO LOGGED.` : `SANCTIONED LEISURE // ${place}, ${dist}. ENJOYMENT IS LOGGED.`;
     case "commute": {
       const tn = w.trainId ? TRAIN[w.trainId].name : "THE LOOP";
       switch (w.sub) {

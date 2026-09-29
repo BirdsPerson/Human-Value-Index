@@ -15,7 +15,9 @@ export const ROOM_TYPE = {
   "archive-stacks": "library", "memory-vault": "vault", "archive-lofts": "lofts",
   "reclamation": "line", "reactor": "reactor", "foundry": "foundry", "cache-farm": "racks", "docks": "docks",
   "hydroponics": "vats", "barracks": "barracks", "holding-cells": "cells", "canteen": "canteen",
-  "block-a": "hab", "block-b": "hab", "block-c": "hab", "the-street": "street",
+  "block-a": "hab", "block-b": "hab", "block-c": "hab", "block-d": "hab", "the-street": "street",
+  "the-drip": "cafe", "gallery-annex": "gallery", "members-club": "lounge", "the-lantern": "bar",
+  "allotment": "park", "night-market": "market", "the-plaza": "street",
 };
 export const typeOf = (placeId) => ROOM_TYPE[placeId] || "office";
 

@@ -10,7 +10,7 @@ import {
   DISTRICTS, PLACES, JOBS, JOB, assignJob, homeOf, schedule, whereAt, machineClock, occupancy,
   statusLine, SEED, toHours, BUS, V_WALK, V_BUS, SHIFT_HOURS, fieldsOf,
   LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, trainsAt, nextArrival, timetable, loopEvents, HEADWAY, DWELL, V_TRAIN, CAR_CAP,
-  BUILDINGS, BUILDING, isOwl,
+  BUILDINGS, BUILDING, isOwl, setRoster, clearRoster,
 } from "../src/city/sim.js";
 import { FLOORS as HQ_FLOORS } from "../src/building.js";
 import { shiftLabel } from "../src/city/cityKit.js";
@@ -332,24 +332,38 @@ section("the dead are ordinary uploads");
 
 // ---- capacity -----------------------------------------------------------------------------------
 section("capacity");
-const sum = {}, peak = {};
-let samples = 0;
-for (let day = 40; day < 47; day++) for (let m = 0; m < 24 * 60; m += 15) {
-  const o = occupancy(ALL, (day - 1) * 24 + m / 60);
-  samples++;
-  for (const [id, n] of Object.entries(o.places)) { sum[id] = (sum[id] || 0) + n; peak[id] = Math.max(peak[id] || 0, n); }
+// Every client and function registers its roster (setRoster), and leisure is then placed
+// with capacity in mind: a full room sends the overflow to the same kind of place, then
+// any leisure room, and people bumped together land together.
+function weekPeaks(pop) {
+  const sum = {}, peak = {};
+  let samples = 0;
+  for (let day = 40; day < 47; day++) for (let m = 0; m < 24 * 60; m += 15) {
+    const o = occupancy(pop, (day - 1) * 24 + m / 60);
+    samples++;
+    for (const [id, n] of Object.entries(o.places)) { sum[id] = (sum[id] || 0) + n; peak[id] = Math.max(peak[id] || 0, n); }
+  }
+  return Object.keys(PLACES).map(id => ({ id, cap: PLACES[id].cap, avg: (sum[id] || 0) / samples, peak: peak[id] || 0 }));
 }
-const rows = Object.keys(PLACES).map(id => ({ id, cap: PLACES[id].cap, avg: (sum[id] || 0) / samples, peak: peak[id] || 0 }));
-// Overflow is intended, within reason: the PA says so ("CAPACITY IS A SUGGESTION") and
-// the directory shows it in red. A room at more than twice its capacity is a bug.
-const PEAK_K = 2;
-for (const r of rows.sort((a, b) => b.avg / b.cap - a.avg / a.cap)) {
-  const flag = r.avg > r.cap ? "  <- OVER" : r.peak > r.cap * 1.5 ? "  (peak high)" : "";
-  if (r.avg > r.cap * 0.5 || flag) console.log(`  ${r.id.padEnd(16)} cap ${String(r.cap).padStart(3)}  avg ${r.avg.toFixed(1).padStart(5)}  peak ${String(r.peak).padStart(3)}${flag}`);
+// Production shape: the live pen sends ~210 (figures on file, engine, referrals, citizens).
+// 250 leaves headroom. Every room's peak stays within 1.1x its capacity.
+const PROD = [...figures, ...engine.slice(0, 150), ...citizens.slice(0, 38)];
+ok(PROD.length === 250, "production-shaped roster is 250");
+setRoster(PROD);
+const rows = weekPeaks(PROD);
+const PEAK_K = 1.1;
+for (const r of rows.sort((a, b) => b.peak / b.cap - a.peak / a.cap)) {
+  const flag = r.peak > r.cap ? "  <- OVER" : "";
+  if (r.peak > r.cap * 0.75 || flag) console.log(`  ${r.id.padEnd(16)} cap ${String(r.cap).padStart(3)}  avg ${r.avg.toFixed(1).padStart(5)}  peak ${String(r.peak).padStart(3)}${flag}`);
   ok(r.avg <= r.cap, `${r.id} average occupancy within capacity`);
-  ok(r.peak <= r.cap * PEAK_K, `${r.id} peak ${r.peak} within ${PEAK_K}x capacity ${r.cap}`);
+  ok(r.peak <= r.cap * PEAK_K, `${r.id} peak ${r.peak} within ${PEAK_K}x capacity ${r.cap} (250 roster)`);
 }
-const unused = rows.filter(r => r.peak === 0).map(r => r.id);
+// Stress: the full 422 still stays under twice capacity (the PA: "CAPACITY IS A SUGGESTION").
+setRoster(ALL);
+const stress = weekPeaks(ALL);
+// Overflow rooms (the annex, the night market) fill when the city is busy, so "used" counts either week.
+const unused = stress.filter(r => r.peak === 0 && !rows.find(x => x.id === r.id).peak).map(r => r.id);
+for (const r of stress) ok(r.peak <= r.cap * 2, `${r.id} peak ${r.peak} within 2x capacity ${r.cap} (422 roster)`);
 {
   // Trains: loads per car, sampled through the week (rush hours included).
   const carPeak = {}, trainPeak = {};
@@ -369,7 +383,7 @@ const unused = rows.filter(r => r.peak === 0).map(r => r.id);
   const peakCar = Math.max(0, ...Object.values(carPeak));
   console.log(`  the Loop: busiest car ${peakCar} (seats ${CAR_CAP}); busiest train ${Math.max(0, ...Object.values(trainPeak))}; ${TRAINS.map(t => `${t.id} ${trainPeak[t.id] || 0}/${t.cap}`).join(", ")}`);
   ok(runs === 0, "occupancy: every rider is on exactly one train");
-  ok(peakCar <= CAR_CAP * PEAK_K, `no car carries more than ${PEAK_K}x its seats (${peakCar})`);
+  ok(peakCar <= CAR_CAP * 2, `no car carries more than 2x its seats (${peakCar})`);
   ok(TRAINS.every(t => (trainPeak[t.id] || 0) <= t.cap * 1.5), "no train runs at more than 150% of its seats");
   ok(Object.values(trainPeak).some(n => n > 0), "the trains carry somebody");
   ok(flooredBad === 0, "occupancy by building and floor adds up to occupancy by room");

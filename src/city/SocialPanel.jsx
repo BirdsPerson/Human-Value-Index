@@ -94,7 +94,7 @@ export default function SocialPanel() {
         </ul>
       </Frame>
       <Frame title="THE LEDGER OF ASSOCIATION" meta={`${d.counts?.friends ?? 0} FRIENDSHIPS // ${d.counts?.rivals ?? 0} RIVALRIES`}>
-        <p className="hvi-web-note">NOBODY ARRANGED ANY OF THIS. SUBJECTS WHO SHARE A ROOM EITHER CLICK OR THEY DO NOT. FRIENDS DRIFT TO EACH OTHER'S HAUNTS. RIVALS LEAVE FIRST.</p>
+        <p className="hvi-web-note">NOBODY ARRANGED ANY OF THIS. SUBJECTS WHO SHARE A ROOM EITHER CLICK OR THEY DO NOT. FRIENDS DRIFT TO EACH OTHER'S USUAL ROOMS. RIVALS LEAVE FIRST.</p>
         <ChipStrip label="Show">
           {[["all", "ALL TIES"], ["friends", "FRIENDS"], ["rivals", "RIVALS"]].map(([k, l]) => (
             <Chip key={k} pressed={filter === k} onClick={() => { setFilter(k); setFocus(null); }}>{l}</Chip>

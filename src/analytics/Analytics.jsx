@@ -302,26 +302,26 @@ function GroupChart({ subjects, title, keyFn, caption, noun }) {
 function Coverage({ subjects }) {
   const box = useRef(null); const tip = useTip(box);
   const c = coverage(subjects);
-  const life = [
-    { label: "LIVING", count: c.living, color: Q_COLOR.ADMIRED },
-    { label: "DECEASED", count: c.deceased, color: Q_COLOR["TRUSTED RESERVE"] },
-    { label: "UNRECORDED", count: c.unknownLife, color: Q_COLOR.UNPLACED },
+  const source = [
+    { label: "ON FILE FROM THE START", count: c.record, color: Q_COLOR.ADMIRED },
+    { label: "REFERRED BY THE PUBLIC", count: c.referral, color: Q_COLOR["TRUSTED RESERVE"] },
+    { label: "DRAWN BY THE DEPARTMENT", count: c.engine, color: Q_COLOR.UNPLACED },
   ];
   const people = [
     { label: "RATED BY THE PEOPLE", count: c.rated, color: Q_COLOR["TRUSTED RESERVE"] },
     { label: "NOT YET ASKED", count: c.unrated, color: Q_COLOR.UNPLACED },
   ];
   return (
-    <Section title="COVERAGE" meta={`N ${c.n}`} caption="THE DEAD OUTNUMBER THE LIVING HERE, AS EVERYWHERE. THE PEOPLE HAVE BEEN CONSULTED ON FEW OF THEM.">
+    <Section title="COVERAGE" meta={`N ${c.n}`} caption="MOST FILES WERE OPENED BY SOMEONE ELSE. THE PEOPLE HAVE BEEN CONSULTED ON FEW OF THEM.">
       <div ref={box} className="hvi-an-chart">
-        <div className="hvi-an-sub">LIVING / DECEASED</div>
-        <Stacked parts={life} tip={tip} label="Living and deceased" />
+        <div className="hvi-an-sub">HOW THEY ARRIVED</div>
+        <Stacked parts={source} tip={tip} label="How subjects arrived on file" />
         <div className="hvi-an-sub">PEOPLE JUDGE COVERAGE</div>
         <Stacked parts={people} tip={tip} label="People judge coverage" />
         {tip.node}
       </div>
       <Table caption="Coverage" head={["MEASURE", "N", "SHARE"]}
-        rows={[...life, ...people].map(p => [p.label, p.count, pct(c.n ? p.count / c.n : 0)])} />
+        rows={[...source, ...people].map(p => [p.label, p.count, pct(c.n ? p.count / c.n : 0)])} />
     </Section>
   );
 }

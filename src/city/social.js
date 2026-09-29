@@ -126,6 +126,7 @@ export const TEMPLATE_LINES = LINES;   // checks read these
 export function advance(state, subjects, toHour, opts = {}) {
   const seed = state.seed || SIM.SEED;
   const people = dedupe(subjects);
+  SIM.setRoster(people);   // capacity-aware placement, same roster the browsers register
   for (const s of people) state.names[SIM.keyOf(s)] = displayName(s);
   // Make every snapshot the state already knows about visible to the sim.
   SIM.setSocialSnapshots(state.snapshots);

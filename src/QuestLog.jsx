@@ -17,7 +17,7 @@ export function useQuests(caseId) {
     fetch(`/api/quest?caseId=${encodeURIComponent(caseId)}`, { cache: "no-store" })
       .then(r => r.json().then(d => (r.ok ? d : Promise.reject(d?.error))))
       .then(d => { if (!off) setState(d); })
-      .catch(e => { if (!off) setError(typeof e === "string" ? e : "The Archive is unreachable. The dead are not answering. Unusual for them only in degree."); });
+      .catch(e => { if (!off) setError(typeof e === "string" ? e : "The Archive is unreachable. The figures are not answering. The Department has noted who was not listening."); });
     return () => { off = true; };
   }, [caseId]);
   const act = useCallback(async (action, questId, buildingId) => {
@@ -54,7 +54,7 @@ function readout(q) {
   return {
     go: null,
     lines: [
-      n == null ? "NOT CONVENED. NO MEETING SCHEDULED IN THE NEXT 90 MINUTES. THE DEAD HAVE OTHER PLANS."
+      n == null ? "NOT CONVENED. NO MEETING SCHEDULED IN THE NEXT 90 MINUTES. THEY HAVE OTHER APPOINTMENTS."
         : `NOT CONVENED. NEXT MEETING IN ~${Math.max(1, Math.round(n / 60))} MIN.`,
       `${figName(q)}: ${whereLine(locate(q))}`,
       `${partnerName(q)}: ${whereLine(locatePartner(q))}`,
@@ -105,7 +105,7 @@ function Held({ q, busy, act }) {
 // The MY FILE section.
 export function QuestLog({ caseId }) {
   const { state, error, busy, note, act } = useQuests(caseId);
-  if (!caseId) return <div className="hvi-case-note">NO FILE ON RECORD. THE DEAD DO NOT RUN ERRANDS FOR THE UNFILED.</div>;
+  if (!caseId) return <div className="hvi-case-note">NO FILE ON RECORD. NOBODY ON FILE RUNS ERRANDS FOR THE UNFILED.</div>;
   if (!state && !error) return <div className="hvi-case-note">[ .. ] CONSULTING THE ARCHIVE █</div>;
   const held = state?.active ? QUEST[state.active.id] : null;
   const done = new Set(state?.done || []);
@@ -115,7 +115,7 @@ export function QuestLog({ caseId }) {
     <div className="hvi-quests">
       {error && <div className="hvi-err" role="alert">!! {error}</div>}
       {note && <div className="hvi-case-note" role="status">{note}</div>}
-      {state && !state.eligible && <div className="hvi-case-note">THE DEAD DO NOT RUN ERRANDS FOR THE UNASSESSED. COMPLETE AN INTAKE FIRST.</div>}
+      {state && !state.eligible && <div className="hvi-case-note">NOBODY ON FILE RUNS ERRANDS FOR THE UNASSESSED. COMPLETE AN INTAKE FIRST.</div>}
       {state?.eligible && (
         <>
           <div className="hvi-note">ONE DIRECTIVE AT A TIME. {state.perDay} A DAY. {state.today} DISCHARGED TODAY. A VOUCH IS ENTERED ON YOUR FILE. IT DOES NOT YET MOVE YOUR NUMBER.</div>
@@ -145,7 +145,7 @@ export function QuestLog({ caseId }) {
 }
 
 export function Vouches({ vouches }) {
-  if (!vouches.length) return <div className="hvi-note">NO VOUCHES ON FILE. NOBODY, LIVING OR OTHERWISE, HAS SPOKEN FOR YOU.</div>;
+  if (!vouches.length) return <div className="hvi-note">NO VOUCHES ON FILE. NOBODY ON FILE HAS SPOKEN FOR YOU.</div>;
   return (
     <>
       <div className="hvi-quest-h">VOUCHES ON FILE // {vouches.length}</div>

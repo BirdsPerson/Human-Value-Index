@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { baseRoster, mergeCensus } from "./roster.js";
+import { setRoster } from "./sim.js";
 import { readCaseId, readLastResult } from "../caseFile.jsx";
 
 // Everyone uploaded into the Substrate: the figures on file, every citizen and referral
@@ -57,6 +58,10 @@ export function useRoster() {
     }).catch(() => { if (!off) setCensus("down"); });
     return () => { off = true; };
   }, []);
-  const roster = useMemo(() => stress(withSelf([...base(), ...extra])), [extra, selfV]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const roster = useMemo(() => {
+    const list = stress(withSelf([...base(), ...extra]));
+    setRoster(list);   // leisure is placed with room capacity in mind, across this whole roster
+    return list;
+  }, [extra, selfV]);   // eslint-disable-line react-hooks/exhaustive-deps
   return { roster, census };
 }

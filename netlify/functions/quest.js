@@ -9,6 +9,12 @@ import { applyQuest, questState } from "../lib/quests.js";
 import { loadSocialSnapshots } from "../lib/social-store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
+import { setRoster } from "../../src/city/sim.js";
+import { baseRoster } from "../../src/city/roster.js";
+
+// Figures on file are placed first by the capacity allocator, so registering just them
+// puts every quest figure where the browsers (which register the whole census) see it.
+setRoster(baseRoster());
 
 export const QUEST_CALLS_PER_HOUR = 60;
 
@@ -54,7 +60,7 @@ export default async (req, context) => {
     return json(200, { ...questState(saved, now), vouch }, noStore);
   } catch (err) {
     console.error("quest failed", err?.name);
-    return json(500, { error: "The Archive is unavailable. The dead can wait. They are good at it." });
+    return json(500, { error: "The Archive is unavailable. Your directives will wait. Patience is also assessed." });
   }
 };
 

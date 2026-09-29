@@ -197,4 +197,18 @@ for (let i = 0; i < 70; i++) last = await call("GET", null, "?caseId=HVI-TESTAAA
 assert.equal(last.status, 429, "per-IP hourly meter");
 Date.now = realNow;
 
+// Capacity allocation: figures on file claim rooms first, so the quest function (which
+// registers only them) sees every figure where a browser with the whole census does.
+{
+  const SIMX = await import("../src/city/sim.js");
+  const { baseRoster } = await import("../src/city/roster.js");
+  const base = baseRoster();
+  const census = Array.from({ length: 180 }, (_, i) => ({ slug: `ref-${i}`, name: `Ref ${i}`, tier: "TOLERATED GENERALIST", score: 500, warmth: (i * 37) % 100, competence: (i * 61) % 100, kind: i % 9 ? "figure" : "citizen", referred: i % 9 ? true : undefined }));
+  const where = () => base.map(s => { const out = []; for (let h = 30 * 24; h < 33 * 24; h += 0.25) out.push(SIMX.whereAt(s, h).placeId); return out.join(","); }).join("\n");
+  SIMX.setRoster(base); const a = where();
+  SIMX.setRoster([...census, ...base]); const b = where();
+  assert.equal(a, b, "figures on file are placed the same with or without the census");
+  SIMX.clearRoster();
+}
+
 console.log(`check-quests: ok (${QUESTS.length} quests: ${Object.keys(sightings).length} find, ${Object.keys(meetings).length} witness; ${dims.size} categories, rules + /api/quest)`);

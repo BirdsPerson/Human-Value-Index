@@ -51,7 +51,7 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 8. **Backfill field/domain on every subject.** 104 of 185 subjects (referrals + engine) carry no field, so analytics by field covers only 81. Classify field + era from Wikidata occupation/P106 and birth date for every card (cheap, no model needed where Wikidata has it), store on the card and index, and make referral + engine paths set it at creation.
 
-9. **City polish from the iso build:** Hab Block floors read as "STORAGE, LEVEL n" (warehouse-like) — give residential names; ward curtains drawn too tall; verify the "+K" crowd badge on a real crowded room; test pinch/twist on a real phone. STREET view is back burner (kept, not default).
+9. **City polish from the iso build:** ward curtains drawn too tall; verify the "+K" crowd badge on a real crowded room; test pinch/twist on a real phone. STREET view is back burner (kept, not default).
 
 10. **Shared animation rig recoloured per person** (Scott 2026-09-28: faces hidden, identity by colours). Extract each subject's palette (hair, skin, top, bottom, shoes, accent) from their existing sprite; draw a small shared rig once (4-direction walk, sit, desk work, cheers, dance) in the design-system style; recolour per subject client-side (zero image generation). Real face only in front idle + file photo. Use in CITY iso, STREET, pen, building cutaways.
 
@@ -70,6 +70,10 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
   ~/projects/organize/collect_reports.py.
 
 ## Done
+
+- 2026-09-28 De-crowding + no dead/alive split: capacity-aware leisure placement with
+  same-kind overflow, 8 new rooms, Hab Block D, Hab floors renamed RESIDENCE LEVEL n;
+  every death label/year/ghost line removed from the UI; bundle check for death markers.
 
 - 2026-09-28 Method v3.1/v3.2 scoring (55f766e, b12bf1e), analytics view (88eda07), STREET city (334bc39), emergent relationships (b5619ab), SimCity iso city of cutaway buildings (c9cc8df).
 

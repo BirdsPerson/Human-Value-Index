@@ -52,7 +52,7 @@ const ROOM_MUTTERS = {
   bar: ["Put it on my file.", "Another round of assessment.", "What are you in for?", "I'm only here for the dread.", "Is the ice also assessed?", "Last call was in 1983.", "What's your number? Mine's classified."],
   lobby: ["Is this the line for intake?", "I just got here.", "Where do I sign?", "Now serving: nobody.", "Is it Tuesday?"],
   break: ["The vending machine took my file.", "Is the coffee also assessed?", "Productive. Productive.", "I'm on a break from appearing busy.", "Who labelled the milk 'SUBJECT 12'?"],
-  archive: ["Still assessed. Even now.", "I filed a complaint in 1953.", "Has anyone seen my file?", "Death was supposed to be the exit.", "They reassessed me posthumously."],
+  archive: ["Still assessed. Even now.", "I filed a complaint in 1953.", "Has anyone seen my file?", "Retirement was supposed to be the exit.", "They reassessed me retroactively."],
   proc: null,   // LOW_MUTTERS
 };
 
@@ -259,7 +259,7 @@ export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return 
               // Referred living subjects: the verdict waits for review before publication.
               <>
                 <Rule label="OVERLORD VERDICT" />
-                <Typed className="hvi-verdict-text" text="Verdict under review. The subject is living, and the Department checks its facts before it files them. The number stands." cps={40} />
+                <Typed className="hvi-verdict-text" text="Verdict under review. The Department checks its facts before it files them. The number stands." cps={40} />
               </>
             )}
           </ScoreCard>
@@ -296,10 +296,11 @@ export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return 
 // FILE A REFERRAL > _   Type a public figure's name, Enter. /api/refer checks Wikipedia,
 // scores them on the same rubric, and they drop in with a placeholder until the Mac job
 // draws their likeness.
-// "JACK JOHNSON — American boxer (1878–1946) [ON FILE: 668]"
+// "JACK JOHNSON — American boxer (b. 1878) [ON FILE: 668]". Birth year only: it tells
+// namesakes apart without sorting anyone by whether they are still breathing.
 export function candidateLine(c) {
   const d = String(c.description || "");
-  const years = c.born || c.died ? `${c.born || "?"}–${c.died || ""}` : "";
+  const years = c.born ? `b. ${c.born}` : "";
   const withYears = years && !/\d{3,4}/.test(d) ? `${d}${d ? " " : ""}(${years})` : d;
   return `${String(c.title).toUpperCase()}${withYears ? ` — ${withYears}` : ""}${c.excluded ? " [SEALED BY POLICY]" : c.onFile ? ` [ON FILE: ${c.onFile.score}]` : ""}`;
 }
@@ -307,7 +308,7 @@ export function candidateLine(c) {
 // The pick list's second line: the description and years, without the title.
 function candidateSub(c) {
   const d = String(c.description || "");
-  const years = c.born || c.died ? `${c.born || "?"}–${c.died || ""}` : "";
+  const years = c.born ? `b. ${c.born}` : "";
   return (years && !/\d{3,4}/.test(d) ? `${d}${d ? " " : ""}(${years})` : d) || "NO DESCRIPTION ON RECORD";
 }
 
@@ -492,7 +493,7 @@ const DECOR = {
     const cab = ["╔═╦═╦═╗", "║▭║▭║▭║", "╚═╩═╩═╝"];
     for (let x = x0 + (t.compact ? 2 : 20) * t.cw; x < x1 - 8 * t.cw; x += 9 * t.cw) t.block(cab, x, bot - 3 * t.ch, "#1f4a2c");
     // phones carry this line in the frame title instead; heads would cover it here
-    if (!t.compact) t.text("EVERY FILE OPEN. ALL OF YOU ARE GHOSTS.", x1 - 41 * t.cw, top + 0.2 * t.ch, "#3d6b50");
+    if (!t.compact) t.text("EVERY FILE OPEN. INCLUDING YOURS.", x1 - 41 * t.cw, top + 0.2 * t.ch, "#3d6b50");
   },
   proc(t, x0, x1, top, bot, w, S) {
     // pipes, the rule, the door

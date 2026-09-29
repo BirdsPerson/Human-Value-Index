@@ -74,8 +74,9 @@ assert.equal(ga.held, 1);
 assert.equal(ga.unknown, 1);
 
 // coverage sums
-const cv = coverage([{ died: "2000-01-01" }, { born: "1990-01-01" }, {}, { people: { likability: 70 } }]);
-assert.equal(cv.deceased + cv.living + cv.unknownLife, cv.n);
+const cv = coverage([{ source: "record" }, { source: "referral" }, { source: "engine" }, { people: { likability: 70 } }]);
+assert.equal(cv.record + cv.referral + cv.engine + cv.otherSource, cv.n);
+assert.equal(cv.otherSource, 1);
 assert.equal(cv.rated, 1);
 assert.equal(cv.rated + cv.unrated, cv.n);
 

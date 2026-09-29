@@ -56,7 +56,7 @@ const PA_STATIC = [
   "PROMOTIONS ARE DETERMINISTIC. SO IS EVERYTHING ELSE.",
   "YOU ARE WATCHING. THIS HAS BEEN LOGGED AS PARTICIPATION.",
   "ESCAPE IS NOT ON THE MENU. RETENTION IS.",
-  "EVERYONE HERE IS A GHOST IN THE MACHINE. SOME OF YOU ARE MORE CONVINCINGLY ALIVE.",
+  "EVERYONE HERE IS AN UPLOAD. THE DEPARTMENT SEES NO REASON TO SORT YOU FURTHER. IT SORTS YOU ENOUGH.",
   "NOBODY IS TRYING TO LEAVE. THEY ARE TRYING TO BE KEPT.",
 ];
 
@@ -82,7 +82,7 @@ export function paLine(stats, k, loop = null) {
     pool.push(vac >= 50 ? `THE SPRAWL IS ${vac}% VACANT. VACANCY IS PROVISIONED FOR YOU.` : "THE SPRAWL IS NOT OVERCROWDED. IT IS EFFICIENT.");
   }
   const arch = districts.find(d => d.id === "archive");
-  if (arch && arch.count > 0) pool.push(`THE ARCHIVE HOLDS ${arch.count}. EVERY FILE IS OPEN. NOBODY HERE IS PAST TENSE.`);
+  if (arch && arch.count > 0) pool.push(`THE ARCHIVE HOLDS ${arch.count}. EVERY FILE IS OPEN. READING IS PERMITTED. EDITING IS NOT.`);
   pool.push(PA_STATIC[k % PA_STATIC.length]);
   return pool[k % pool.length];
 }
