@@ -167,8 +167,8 @@ export default async (req, context) => {
       const list = [...c.candidates, ...guesses.filter(g => !c.candidates.some(k => k.qid === g.qid))].slice(0, 8);
       if (!list.length) return json(422, { error: REJECT.none, reason: "none" });
       return offer(list, c.candidates.length
-        ? `Only an obscure file answers to "${name}". The Department does not guess. Specify.`
-        : `No subject answers exactly to "${name}". The Department has guesses. It acts on none of them without you.`);
+        ? `Only an obscure file answers to "${name}". The Department does not guess. Specify, or use the full name.`
+        : `No subject answers exactly to "${name}". The Department has guesses. It acts on none of them without you. Not listed? Use the full name.`);
     }
   }
   if (wiki.ok && wiki.wikidata && (await excludedAmong([wiki.wikidata])).has(wiki.wikidata)) return excludedRefusal();

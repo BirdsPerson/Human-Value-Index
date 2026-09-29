@@ -222,15 +222,25 @@ export const safeToAssume = candidates =>
 
 // Wikipedia's search hits that are humans, in search order, for "did you mean": nicknames
 // ("The Iceman" -> Richard Kuklinski), misspellings, partial names. Never acted on alone.
-export async function searchHumans(name, fetchImpl = fetch, limit = 6) {
+export async function searchHumans(name, fetchImpl = fetch, limit = 8) {
   try {
     const search = await getJson(fetchImpl, `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(name)}&srlimit=10&format=json&origin=*`);
     const titles = (search?.query?.search || []).map(h => h.title);
-    if (!titles.length) return [];
-    const meta = await getJson(fetchImpl, `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(titles.join("|"))}&prop=pageprops|description&redirects=1&format=json&origin=*`);
+    // Nicknames: "<name> (nickname)" and the name's disambiguation page list the people who
+    // answer to it ("The Iceman" -> Kuklinski, Räikkönen, Borg...). Ranked after the search
+    // hits, most notable first.
+    const extra = [];
+    const pages = await getJson(fetchImpl, `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(`${name}|${name} (nickname)|${name} (disambiguation)`)}&prop=pageprops|links&pllimit=500&plnamespace=0&redirects=1&format=json&origin=*`).catch(() => null);
+    for (const pg of Object.values(pages?.query?.pages || {})) {
+      if (pg.missing !== undefined) continue;
+      if (/\(nickname\)$/.test(pg.title || "") || (pg.pageprops && "disambiguation" in pg.pageprops)) for (const l of pg.links || []) extra.push(l.title);
+    }
+    if (!titles.length && !extra.length) return [];
+    const all = [...new Set([...titles, ...extra])].slice(0, 50);   // the API's title cap
+    const meta = await getJson(fetchImpl, `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(all.join("|"))}&prop=pageprops|description&redirects=1&format=json&origin=*`);
     const byTitle = new Map(Object.values(meta?.query?.pages || {}).filter(pg => pg?.title).map(pg => [pg.title, pg]));
     const rows = [];
-    for (const t of titles) {
+    for (const t of all) {
       const pg = byTitle.get(t);
       const qid = pg?.pageprops?.wikibase_item;
       if (!qid || !/^Q\d+$/.test(qid) || pg.pageprops.disambiguation !== undefined || rows.some(r => r.qid === qid)) continue;
@@ -238,7 +248,9 @@ export async function searchHumans(name, fetchImpl = fetch, limit = 6) {
     }
     if (!rows.length) return [];
     const facts = await humanFacts(rows.map(r => r.qid), fetchImpl);
-    return rows.filter(r => facts.has(r.qid)).map(r => ({ ...r, ...facts.get(r.qid) })).slice(0, limit);
+    const humans = rows.filter(r => facts.has(r.qid)).map(r => ({ ...r, ...facts.get(r.qid) }));
+    const fromSearch = new Set(titles);
+    return [...humans.filter(r => fromSearch.has(r.title)), ...humans.filter(r => !fromSearch.has(r.title)).sort((a, b) => b.sitelinks - a.sitelinks)].slice(0, limit);
   } catch (err) {
     console.error("search lookup failed", err?.message || err);
     return [];
