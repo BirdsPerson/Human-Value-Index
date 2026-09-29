@@ -180,7 +180,14 @@ console.log("check-refer ok");
 
 // --- namesakes (disambiguation)
 {
-  const { needsChoice, qualifierFrom, yearOf, matchesName, resolveCandidates, DOMINANCE } = await import("../netlify/lib/refer.js");
+  const { needsChoice, qualifierFrom, yearOf, matchesName, resolveCandidates, DOMINANCE, safeToAssume }  = await import("../netlify/lib/refer.js");
+  // acting on a name alone: unambiguous AND notable. A lone obscure match is confirmed.
+  assert.equal(safeToAssume([{ title: "The Iceman (performer)", sitelinks: 1 }]), false, "lone obscure match is asked, not assumed");
+  assert.equal(safeToAssume([{ title: "Che (rapper)", sitelinks: 5 }]), false);
+  assert.equal(safeToAssume([{ title: "Drake (musician)", sitelinks: 89 }]), true);
+  assert.equal(safeToAssume([{ title: "Michael Jackson", sitelinks: 322 }, { title: "Michael Jackson (writer)", sitelinks: 26 }]), true);
+  assert.equal(safeToAssume([{ title: "Adam Jones (musician)", sitelinks: 25 }, { title: "Adam Jones (baseball)", sitelinks: 13 }]), false);
+  assert.equal(safeToAssume([]), false, "no exact match is never assumed");
   const { displayName } = await import("../src/figures.js");
   assert.equal(needsChoice([]), false);
   assert.equal(needsChoice([{ sitelinks: 40 }]), false, "one person: proceed");

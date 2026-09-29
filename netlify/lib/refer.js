@@ -213,6 +213,38 @@ export async function resolveCandidates(name, fetchImpl = fetch) {
   }
 }
 
+// A lone namesake below this notability (Wikidata sitelinks) is confirmed, not assumed:
+// "The Iceman" is one obscure performer by title, and almost never who the referrer means.
+export const LONE_MIN_SITELINKS = 10;
+// Proceed without asking only when the name is unambiguous AND the match is notable.
+export const safeToAssume = candidates =>
+  Array.isArray(candidates) && candidates.length > 0 && !needsChoice(candidates) && candidates[0].sitelinks >= LONE_MIN_SITELINKS;
+
+// Wikipedia's search hits that are humans, in search order, for "did you mean": nicknames
+// ("The Iceman" -> Richard Kuklinski), misspellings, partial names. Never acted on alone.
+export async function searchHumans(name, fetchImpl = fetch, limit = 6) {
+  try {
+    const search = await getJson(fetchImpl, `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(name)}&srlimit=10&format=json&origin=*`);
+    const titles = (search?.query?.search || []).map(h => h.title);
+    if (!titles.length) return [];
+    const meta = await getJson(fetchImpl, `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(titles.join("|"))}&prop=pageprops|description&redirects=1&format=json&origin=*`);
+    const byTitle = new Map(Object.values(meta?.query?.pages || {}).filter(pg => pg?.title).map(pg => [pg.title, pg]));
+    const rows = [];
+    for (const t of titles) {
+      const pg = byTitle.get(t);
+      const qid = pg?.pageprops?.wikibase_item;
+      if (!qid || !/^Q\d+$/.test(qid) || pg.pageprops.disambiguation !== undefined || rows.some(r => r.qid === qid)) continue;
+      rows.push({ title: pg.title, description: String(pg.description || "").slice(0, 160), qid });
+    }
+    if (!rows.length) return [];
+    const facts = await humanFacts(rows.map(r => r.qid), fetchImpl);
+    return rows.filter(r => facts.has(r.qid)).map(r => ({ ...r, ...facts.get(r.qid) })).slice(0, limit);
+  } catch (err) {
+    console.error("search lookup failed", err?.message || err);
+    return [];
+  }
+}
+
 // One SPARQL query: which of these items are humans, their notability and life years.
 async function humanFacts(qids, fetchImpl) {
   const values = qids.filter(q => /^Q\d+$/.test(q)).map(q => `wd:${q}`).join(" ");

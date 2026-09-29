@@ -182,6 +182,13 @@ const penStyles = `
   .hvi-refer-out.err { color: var(--harm); }
   .hvi-refer-out.ok { color: var(--warn); }
   .hvi-refer-quota { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s1); }
+  .hvi-refer-queue { margin-top: var(--s1); font-size: var(--t-xs); color: var(--fg-dim); }
+  .hvi-refer-queue ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s1); }
+  .hvi-refer-queue li { display: inline-flex; align-items: center; border: 1px solid var(--line); padding-left: var(--s1); }
+  .hvi-refer-queue li button { min-width: 44px; min-height: 44px; background: none; border: 0; color: var(--fg-mute); font: inherit; cursor: pointer; }
+  .hvi-refer-queue li button:hover, .hvi-refer-queue li button:focus-visible { color: var(--harm); }
+  .hvi-refer-log { list-style: none; margin: var(--s1) 0 0; padding: 0; font-size: var(--t-xs); color: var(--fg-mute); }
+  .hvi-refer-log .err { color: var(--harm); } .hvi-refer-log .ok { color: var(--warn); }
   .hvi-refer-choices { margin: var(--s2) 0; }
   .hvi-refer-choices .ui-cmd .s { text-transform: uppercase; }
   .hvi-refer-choices .ui-cmd.sealed:not([aria-current="true"]) .l { color: var(--fg-mute); }
@@ -312,6 +319,8 @@ function candidateSub(c) {
   return (years && !/\d{3,4}/.test(d) ? `${d}${d ? " " : ""}(${years})` : d) || "NO DESCRIPTION ON RECORD";
 }
 
+const QUEUE_KEY = "hvi-refer-queue";
+
 function ReferralBar({ simRef }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -320,7 +329,19 @@ function ReferralBar({ simRef }) {
   const [needRestore, setNeedRestore] = useState(null);   // the name to retry once a file is restored
   const [choices, setChoices] = useState(null);           // { name, candidates } when namesakes answer
   const [pick, setPick] = useState(0);
+  // Names typed while the desk is busy wait here (kept across reloads) and are filed one at a
+  // time; a namesake list pauses the line until it is answered. The log keeps each outcome.
+  const [queue, setQueue] = useState(() => { try { const q = JSON.parse(localStorage.getItem(QUEUE_KEY)); return Array.isArray(q) ? q.filter(x => typeof x === "string").slice(0, 30) : []; } catch { return []; } });
+  const [log, setLog] = useState([]);
   const inputRef = useRef(null);
+  useEffect(() => { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(queue)); } catch { /* private mode */ } }, [queue]);
+  const report = (n, text, tone) => { setOut({ text, tone }); setLog(l => [{ n, text, tone }, ...l].slice(0, 8)); };
+  useEffect(() => {
+    if (busy || choices || needRestore || !queue.length) return;
+    const [next, ...rest] = queue;
+    setQueue(rest);
+    submit(null, next);
+  }, [busy, choices, needRestore, queue]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const id = readCaseId();
@@ -334,7 +355,14 @@ function ReferralBar({ simRef }) {
   async function submit(e, retryName, title) {
     e?.preventDefault();
     const n = (retryName ?? name).trim();
-    if (!n || busy) return;
+    if (!n) return;
+    // Busy, or a namesake list waiting on an answer: the name joins the line.
+    if (busy || (choices && !title)) {
+      if (busy && retryName) return;
+      setQueue(q => (q.includes(n) ? q : [...q, n].slice(0, 30)));
+      if (!retryName) setName("");
+      return;
+    }
     setNeedRestore(null);
     setChoices(null);
     setBusy(true);
@@ -350,7 +378,7 @@ function ReferralBar({ simRef }) {
       if (d.caseId) writeCaseId(d.caseId);
       if (typeof d.remaining === "number") setRemaining(d.remaining);
       if (!r.ok) {
-        setOut({ text: d.error || "The referral desk is closed. The Department does not say why.", tone: "err" });
+        report(n, d.error || "The referral desk is closed. The Department does not say why.", "err");
         // Not assessed usually means this browser lost the case number: offer the restore here.
         if (d.reason === "unassessed") setNeedRestore(n);
         return;
@@ -358,22 +386,23 @@ function ReferralBar({ simRef }) {
       if (d.status === "choose" && Array.isArray(d.candidates) && d.candidates.length) {
         setChoices({ name: d.name || n, candidates: d.candidates.slice(0, 8) });
         setPick(0);
-        setOut({ text: `MULTIPLE SUBJECTS ANSWER TO "${(d.name || n).toUpperCase()}". SPECIFY:`, tone: "" });
+        if (!retryName) setName("");   // the name lives on in the list; the field is free for the next
+        setOut({ text: String(d.message || `Multiple subjects answer to "${d.name || n}". Specify.`).toUpperCase(), tone: "" });
         requestAnimationFrame(() => document.getElementById("hvi-refer-pick-0")?.focus());
         return;
       }
       const subject = d.subject;
       if (d.status === "created") {
         simRef.current?.refer?.(subject);
-        setOut({ text: `NEW ARRIVAL PROCESSED: ${subject.name.toUpperCase()}. VALUE INDEX ${subject.score} [${subject.tier}]. LIKENESS PENDING.`, tone: "ok" });
-        setName("");
+        report(n, `NEW ARRIVAL PROCESSED: ${subject.name.toUpperCase()}. VALUE INDEX ${subject.score} [${subject.tier}]. LIKENESS PENDING.`, "ok");
+        if (!retryName) setName("");
       } else {
         simRef.current?.refer?.(subject);
-        setOut({ text: `${subject?.name ? subject.name.toUpperCase() + ": " : ""}${d.message || "Subject already on file."}`, tone: "" });
-        setName("");
+        report(n, `${subject?.name ? subject.name.toUpperCase() + ": " : ""}${d.message || "Subject already on file."}`, "");
+        if (!retryName) setName("");
       }
     } catch {
-      setOut({ text: "The referral desk did not answer in time. The Department is not in a hurry. Try again.", tone: "err" });
+      report(n, "The referral desk did not answer in time. The Department is not in a hurry. Try again.", "err");
     } finally {
       clearTimeout(timer);
       setBusy(false);
@@ -395,7 +424,7 @@ function ReferralBar({ simRef }) {
       setOut({ text: `${c.title.toUpperCase()}: SUBJECT ALREADY ON FILE. VALUE INDEX ${c.onFile.score}.${opened ? "" : " FIND THEM IN THE REGISTRY."}`, tone: "" });
       return;
     }
-    submit(null, who, c.title);
+    submit(null, c.name || who, c.title);
   }
 
   const onPickKey = (e) => {
@@ -412,11 +441,11 @@ function ReferralBar({ simRef }) {
     <div className="hvi-refer">
       <form className="hvi-refer-form" onSubmit={submit}>
         <TextField id="hvi-refer-input" ref={inputRef} label="FILE A REFERRAL" value={name} maxLength={80}
-          spellCheck="false" autoCapitalize="words" enterKeyHint="send" disabled={busy}
+          spellCheck="false" autoCapitalize="words" enterKeyHint="send"
           placeholder="a public figure"
           aria-describedby="hvi-refer-out hvi-refer-quota"
           onChange={e => setName(e.target.value)} />
-        <Button type="submit" variant="primary" disabled={busy || !name.trim()}>File</Button>
+        <Button type="submit" variant="primary" disabled={!name.trim()}>{busy || choices ? "Queue" : "File"}</Button>
       </form>
       <div id="hvi-refer-out" className={`hvi-refer-out${out?.tone ? " " + out.tone : ""}${out ? "" : " empty"}`} role="status" aria-live="polite">
         {out ? <Typed key={out.text} as="span" text={out.text} cps={50} cursorAfter={busy} /> : null}
@@ -436,6 +465,19 @@ function ReferralBar({ simRef }) {
             ))}
           </CommandList>
         </div>
+      )}
+      {queue.length > 0 && (
+        <div className="hvi-refer-queue" aria-live="polite">
+          <div>IN LINE ({queue.length}){choices ? " · WAITING ON YOUR ANSWER ABOVE" : ""}:</div>
+          <ol>{queue.map(q => (
+            <li key={q}>{q.toUpperCase()}<button type="button" aria-label={`Remove ${q} from the line`} onClick={() => setQueue(l => l.filter(x => x !== q))}>×</button></li>
+          ))}</ol>
+        </div>
+      )}
+      {log.length > 1 && (
+        <ol className="hvi-refer-log" aria-label="Recent referrals">
+          {log.slice(1).map((r, i) => <li key={i} className={r.tone}>› {r.text}</li>)}
+        </ol>
       )}
       {needRestore && (
         <div className="hvi-refer-restore">

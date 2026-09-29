@@ -5,7 +5,7 @@ import { callClaude, ScoreError } from "../lib/score.js";
 import { factCheck } from "../lib/factCheck.js";
 import { isCaseId, normalizeAssessment, computeScore, getTier, cube, harmGated, needsHarmReview } from "../lib/intake.js";
 import { slugify } from "../../src/figures.js";
-import { nameError, cleanName, resolveWikipedia, resolveTitle, resolveCandidates, needsChoice, qualifierFrom, matchesName, onFileByQid, fetchArticleText, onFileFigure, placeReferral, publicFigure, isHeadOfStateOrGov, originsOf, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
+import { nameError, cleanName, resolveTitle, resolveCandidates, needsChoice, safeToAssume, searchHumans, qualifierFrom, matchesName, onFileByQid, fetchArticleText, onFileFigure, placeReferral, publicFigure, isHeadOfStateOrGov, originsOf, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
 import { displayName } from "../../src/figures.js";
 import { getCase, hitLimit, refundLimit, peekLimit, getFigure, createFigure, listFigures } from "../lib/store.js";
 import { EXCLUDED_LINE, excludedAmong } from "../lib/excluded.js";
@@ -130,25 +130,45 @@ export default async (req, context) => {
       if (c.ok && needsChoice(c.candidates)) qualifier = qualifierFrom(wiki.title, wiki.description);
     }
   } else {
-    const c = await resolveCandidates(name);
-    if (c.ok && needsChoice(c.candidates)) {
+    // The Department acts on a name alone only when it is unambiguous and the match is
+    // notable. Everything else is a list the referrer picks from: namesakes, a lone
+    // obscure match ("The Iceman" the performer), or search guesses for a nickname.
+    const offer = async (list, message) => {
       // Nothing is charged beyond the lookup: the referrer picks, then POSTs the title.
       let byQid = new Map();
       try { byQid = new Map((await listFigures()).filter(f => f.wikidata).map(f => [f.wikidata, f])); } catch { /* unmarked */ }
-      const sealed = await excludedAmong(c.candidates.map(k => k.qid));
-      if (c.candidates.every(k => sealed.has(k.qid))) return excludedRefusal();
-      const candidates = c.candidates.map(k => {
+      const sealed = await excludedAmong(list.map(k => k.qid));
+      if (list.every(k => sealed.has(k.qid))) return excludedRefusal();
+      const candidates = list.map(k => {
         const fig = onFileByQid(k.qid);
         const ref = byQid.get(k.qid);
         const onFile = fig ? { score: fig.score, slug: slugify(fig.name) } : ref ? { score: ref.score, slug: ref.slug } : null;
-        return { title: k.title, description: k.description, born: k.born, died: k.died, qid: k.qid, onFile, excluded: sealed.has(k.qid) };
+        // The name to file under: the title without its qualifier, so a guess ("Richard
+        // Kuklinski" for "The Iceman") passes the title check on the follow-up POST.
+        return { title: k.title, name: k.title.replace(/\s*\([^)]*\)\s*$/, ""), description: k.description, born: k.born, died: k.died, qid: k.qid, onFile, excluded: sealed.has(k.qid) };
       });
-      return json(200, { status: "choose", reason: "choose", name, message: `Multiple subjects answer to "${name}". Specify.`, candidates });
+      return json(200, { status: "choose", reason: "choose", name, message, candidates });
+    };
+    const c = await resolveCandidates(name);
+    if (!c.ok) {
+      const hit = await typedOnFile(); if (hit) return hit;
+      return json(503, { error: REJECT.lookup, reason: "lookup" });
     }
-    if (c.ok && c.candidates.length) wiki = await resolveTitle(c.candidates[0].title);
+    if (needsChoice(c.candidates)) return offer(c.candidates, `Multiple subjects answer to "${name}". Specify.`);
+    let guesses = [];
+    if (safeToAssume(c.candidates)) wiki = await resolveTitle(c.candidates[0].title);
     else {
-      if (!c.ok) { const hit = await typedOnFile(); if (hit) return hit; }
-      wiki = await resolveWikipedia(name);
+      guesses = await searchHumans(name);
+      // Typed with its qualifier ("Joe Jackson musician"): the exact title, not a guess.
+      const exact = !c.candidates.length && guesses.find(g => slugify(g.title) === slugify(name));
+      if (exact) wiki = await resolveTitle(exact.title);
+    }
+    if (!wiki) {
+      const list = [...c.candidates, ...guesses.filter(g => !c.candidates.some(k => k.qid === g.qid))].slice(0, 8);
+      if (!list.length) return json(422, { error: REJECT.none, reason: "none" });
+      return offer(list, c.candidates.length
+        ? `Only an obscure file answers to "${name}". The Department does not guess. Specify.`
+        : `No subject answers exactly to "${name}". The Department has guesses. It acts on none of them without you.`);
     }
   }
   if (wiki.ok && wiki.wikidata && (await excludedAmong([wiki.wikidata])).has(wiki.wikidata)) return excludedRefusal();

@@ -48,7 +48,7 @@ globalThis.fetch = async (url, init) => {
   if (/wikipedia\.org|wikidata\.org/.test(String(url))) {
     wikiCalls++;
     const hit = wikiRoutes.find(([re]) => re.test(String(url)));
-    return hit ? new Response(JSON.stringify(hit[1]), { status: 200 }) : new Response("null", { status: 404 });
+    return hit ? new Response(JSON.stringify(typeof hit[1] === "function" ? hit[1](String(url)) : hit[1]), { status: 200 }) : new Response("null", { status: 404 });
   }
   assert.match(String(url), /api\.anthropic\.com/);
   claudeCalls++;
@@ -253,6 +253,7 @@ for (let i = 0; i < 12 && !limited; i++) {
 assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
 
 // ---- /api/refer ----
+const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q1349079", "Prince (musician)": "Q7542", "Fred Rogers": "Q1332", "Bob Ross": "Q57302", "Terence McKenna": "Q380407" };
 {
   const human = qid => [new RegExp(`${qid}&property=P31`), { claims: { P31: [{ mainsnak: { datavalue: { value: { id: "Q5" } } } }] } }];
   wikiRoutes = [
@@ -274,9 +275,15 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
     [/srsearch=Bob%20Ross/, { query: { search: [{ title: "Bob Ross" }] } }],
     [/summary\/Bob_Ross/, { title: "Bob Ross", type: "standard", extract: "x", wikibase_item: "Q57302" }],
     human("Q57302"),
-    [/srsearch=Grace%20Hopper%20Owner/, { query: { search: [{ title: "Terence McKenna" }] } }],
+    [/srsearch=Terence%20McKenna/, { query: { search: [{ title: "Terence McKenna" }] } }],
     [/summary\/Terence_McKenna/, { title: "Terence McKenna", type: "standard", extract: "x", wikibase_item: "Q380407" }],
     human("Q380407"),
+    // Page props and notability for the people above, answered per request, so the
+    // namesake check (resolveCandidates) and the search guesses (searchHumans) see them.
+    [/prop=pageprops\|description/, url => ({ query: { pages: Object.fromEntries(new URL(url).searchParams.get("titles").split("|")
+      .filter(t => KNOWN_QID[t]).map((t, i) => [String(i + 1), { title: t, description: "d", pageprops: { wikibase_item: KNOWN_QID[t] } }])) } })],
+    [/query\.wikidata\.org\/sparql.*sitelinks/, url => ({ results: { bindings: [...new URL(url).searchParams.get("query").matchAll(/wd:(Q\d+)/g)]
+      .map(m => ({ item: { value: `http://www.wikidata.org/entity/${m[1]}` }, sl: { value: "50" } })) } })],
   ];
   const casesBefore = globalThis.__blobs.get("hvi-cases").size;
   // no case, or a case with no completed assessment: refused before anything is charged
@@ -324,8 +331,16 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
   assert.equal(r.body.subject.slug, "joe-jackson-musician");
   assert.equal(r.body.subject.name, "Joe Jackson (musician)");
 
-  // the same person as a figure on file (by Wikidata id) is on file, whatever the name typed
+  // a name nobody answers to exactly is never guessed: the search hits come back as a list,
+  // the one already on file marked, each with the name to file under
   r = await read(await post(refer, "/api/refer", { name: "Prince Rogers", caseId }, { ip: "192.0.2.52" }));
+  assert.equal(r.status, 200, JSON.stringify(r.body)); assert.equal(r.body.status, "choose");
+  assert.match(r.body.message, /acts on none of them without you/);
+  assert.equal(r.body.candidates[0].title, "Prince (musician)");
+  assert.equal(r.body.candidates[0].name, "Prince");
+  assert.ok(r.body.candidates[0].onFile, "the figure on file is marked");
+  // picking it (name + exact title) finds the file on record
+  r = await read(await post(refer, "/api/refer", { name: "Prince", title: "Prince (musician)", caseId }, { ip: "192.0.2.52" }));
   assert.equal(r.status, 200); assert.equal(r.body.status, "on-file"); assert.equal(r.body.subject.name, "Prince (musician)");   // shown with its qualifier
 
   const peekLimitFor = async id => [...(globalThis.__blobs.get("hvi-limits")?.entries() || [])]
@@ -341,12 +356,12 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
     wikiRoutes.unshift(
       [/srsearch=Jack%20Johnson&srlimit=10/, { query: { search: [{ title: "Jack Johnson" }, { title: "Jack Johnson (musician)" }, { title: "Jack Johnson (album)" }] } }],
       [/titles=Jack%20Johnson%7CJack%20Johnson%20\(disambiguation\)&prop=pageprops\|links/, { query: { pages: { "9": { title: "Jack Johnson (disambiguation)", pageprops: { disambiguation: "" }, links: [{ title: "Jack Johnson (ice hockey)" }, { title: "Jack Johnson (album)" }, { title: "Jackie Johnson" }] } } } }],
-      [/prop=pageprops\|description/, { query: { pages: {
+      [/titles=Jack%20Johnson[^&]*&prop=pageprops\|description/, { query: { pages: {
         "1": { title: "Jack Johnson", description: "American boxer (1878–1946)", pageprops: { wikibase_item: "Q316689" } },
         "2": { title: "Jack Johnson (musician)", description: "American singer-songwriter (born 1975)", pageprops: { wikibase_item: "Q297097" } },
         "3": { title: "Jack Johnson (ice hockey)", description: "American ice hockey player", pageprops: { wikibase_item: "Q1390184" } },
         "4": { title: "Jack Johnson (album)", description: "2005 album", pageprops: { wikibase_item: "Q999001" } } } } }],
-      [/query\.wikidata\.org\/sparql/, { results: { bindings: [
+      [/query\.wikidata\.org\/sparql.*Q316689/, { results: { bindings: [
         { item: { value: "http://www.wikidata.org/entity/Q316689" }, sl: { value: "40" }, born: { value: "1878-03-31T00:00:00Z" }, died: { value: "1946-06-10T00:00:00Z" } },
         { item: { value: "http://www.wikidata.org/entity/Q297097" }, sl: { value: "43" }, born: { value: "1975-05-18T00:00:00Z" } },
         { item: { value: "http://www.wikidata.org/entity/Q1390184" }, sl: { value: "18" }, born: { value: "1987-01-13T00:00:00Z" } }] } }],
@@ -396,7 +411,7 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
       human("Q302"),
       [/srsearch=Jesus&srlimit=10/, { query: { search: [{ title: "Jesus" }, { title: "Jesus (footballer)" }] } }],
       [/titles=Jesus%7CJesus%20\(disambiguation\)&prop=pageprops\|links/, { query: { pages: { "1": { title: "Jesus", pageprops: {} } } } }],
-      [/prop=pageprops\|description/, { query: { pages: {
+      [/titles=Jesus[^&]*&prop=pageprops\|description/, { query: { pages: {
         "1": { title: "Jesus", description: "Central figure of Christianity", pageprops: { wikibase_item: "Q302" } },
         "2": { title: "Jesus (footballer)", description: "Brazilian footballer (born 1990)", pageprops: { wikibase_item: "Q555555" } } } } }],
     );
@@ -466,12 +481,12 @@ assert.ok(limited, "rotating addresses inside a /64 must hit the same limit");
   // the owner case: no assessment on file, no monthly quota, still a normal scored referral
   const own = await read(await refer(new Request(HOST + "/api/refer?caseId=HVI-OWNERAAA"), {}));
   assert.equal(own.body.assessed, true); assert.equal(own.body.owner, true); assert.equal(own.body.remaining, null);
-  r = await read(await post(refer, "/api/refer", { name: "Grace Hopper Owner", caseId: "HVI-OWNERAAA" }, { ip: "192.0.2.60" }));
+  r = await read(await post(refer, "/api/refer", { name: "Terence McKenna", caseId: "HVI-OWNERAAA" }, { ip: "192.0.2.60" }));
   assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.equal(r.body.remaining, null, "the owner has no monthly counter");
   assert.ok(![...globalThis.__blobs.get("hvi-limits").keys()].some(k => k.includes("refer-case:HVI-OWNERAAA")), "no monthly charge for the owner");
   // a non-owner stranger with no case is still refused
-  r = await read(await post(refer, "/api/refer", { name: "Grace Hopper Owner" }, { ip: "192.0.2.61" }));
+  r = await read(await post(refer, "/api/refer", { name: "Terence McKenna" }, { ip: "192.0.2.61" }));
   assert.ok(r.status === 200 || r.status === 403, "now on file, or refused: never scored for a stranger");
 }
 
