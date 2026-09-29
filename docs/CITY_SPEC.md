@@ -355,3 +355,79 @@ Scott: "We need a soccer field, though, too, and a football field." The Arena wa
 Measured (headless Chromium, 250 subjects, the Sunday game): frame gap 16.7 ms avg, p95
 17.3-18.2 at 1440 and 390 (street zoom on the Bowl and the pitch, district, fit); draw() 1.2 ms
 on the Bowl up close, 1.7 ms district, 1.8 ms fit at 1440. Screens: docs/screens/fields/.
+
+## Architecture per building (the building design pass, 2026-09-29)
+
+Scott: "Are we going to start to have different buildings that look differently, like big
+low-income housing projects versus high-income high-rises for the wealthier residents?" Every
+building was the same lit box in its district's colour. Now each has a style, and the style
+is drawn procedurally (no image assets).
+
+- **Data.** `sim.js` `ARCH` gives every building an `arch` (district default in
+  `ARCH_BY_DISTRICT`); `BUILDINGS[].arch` carries it. Housing styles carry the tiers that live
+  there (`HOUSING_TIERS`): the top tier in `glass`, tiers 1-2 in `brownstone` and `lofts`,
+  tiers 3-5 in `projects`. `homeOf` follows it: ESSENTIAL INFRASTRUCTURE in the Meridian,
+  RETAINED and TOLERATED in Hab C, Hab D or the Archive Lofts, the rest in Hab A or Hab B,
+  living and dead alike.
+- **The Meridian.** The top tier's homes (`penthouses`) moved out of HQ into THE MERIDIAN, a
+  six-floor glass tower in Finance (cap 72; the `suite` plan now has a bed at every place).
+  HQ's executive floor keeps the Executive Suite. Finance is gridded into two lots: the
+  Reserve Tower (north) and the Meridian (south).
+- **Massing** (`archGeo.js`, pure): per style, the body's parts (boxes with a roof shape:
+  flat, gable, pyramid, barrel, sawtooth; cylinders; the cooling tower), yard props (trees,
+  the hoop, chain-link panels, planters, the doorman, the ambulance under its canopy, stalls,
+  the conveyor, containers under the gantry, the watchtower, cameras, bollards) and flat
+  ground (the court slab, the quad, the monolith's plaza, the ambulance bay). `rise` is how
+  tall it reads (a tower's floor is several storeys of glass; HQ's monolith is 11.5).
+  `isoItems(r)` gives the view's boxes: each body, and each yard prop as its own box, so a
+  walker between the tower and the fence is painted between them.
+- **Drawing** (`archDraw.js`): the styles. Projects: brick slab, eight storeys, balcony stacks
+  every third bay with see-through railings, laundry on the lines, AC units, broken and
+  boarded panes, graffiti, the court behind chain-link with two hoops, a water tank.
+  Brownstones: a row of five, brownstone (stoop with railings, bay window, cornice, lintels)
+  alternating with red-brick walk-ups (fire escape up the front), trees on the pavement,
+  chimneys. Lofts: arched windows, fire escapes, the water tower on its legs, a painted sign,
+  a courtyard. Glass: curtain wall with a sky gradient and a reflection by day, lit flats at
+  night, setbacks with planted terraces, the pool on the podium with loungers and umbrellas,
+  the canopy, THE MERIDIAN on it, the doorman, a fountain plaza. Office: ribbon windows lit
+  by who is at a desk (dark at night), the exchange's colonnade, the ticker scrolling the
+  Overlord's tape (HVI up, DISSENT down, HOPE SUSPENDED), the rooftop lounge. Monolith: black
+  slab, faint green seams, one eye band whose pupil sweeps the plaza, a searchlight at night,
+  cameras on poles, bollards, lit strips converging on it. Gothic: pointed windows,
+  buttresses, ivy, slate gables, turrets; the lab's fume stacks; the clock tower tells the
+  machine time on every face, with its belfry and spire over a quad. The Strip: the Dive's
+  neon (it flickers) and blade sign, the casino's gold pilasters, chasing neon, the marquee
+  with its bulbs and the rooftop HOUSE EDGE sign, the diner's chrome band, lit 24 hours, under
+  the newsroom. Arts: the gallery's banners and glass atrium, the playhouse's marquee and fly
+  tower, the Grind's striped awning and tables, the sound stages (sawtooth, roller door, ON AIR
+  in working hours). Commons: Ward 7 (white, window bands, red crosses lit at night, helipad,
+  the ambulance bay, lights flashing after dark), the chapel (steeple, rose window glowing),
+  the market (striped awnings, stalls, the NIGHT MARKET's lanterns), the schoolhouse (cupola,
+  flag, hopscotch). The Works: sawtooth sheds with roller doors and a dock, the conveyor to
+  its hopper, the reactor (dome, cooling tower, steam, a cold glow at night), the foundry
+  (glowing doors, banded stacks, smoke), the cache farm (vents, blinking LEDs, turning fans),
+  the docks (containers, the gantry and its trolley), hydroponics (greenhouse, magenta at
+  night, tanks), the barracks (slits, antenna, floodlight), the prison (barred slits, razor
+  wire, the watchtower's searchlight), the canteen (steamed windows, chimney).
+- **Light.** Windows light by occupancy (as before), so flats light up at night and offices go
+  dark; by day a window is glass. Neon and bulbs run after dusk and are ghosted by day. Walls
+  darken at night.
+- **LOD.** Far: silhouettes, roof shapes, one colour per type, and each type's signature
+  (the eye, the casino's stripes, the cross, the ticker, the projects' balcony stacks), a warm
+  wash where lit at night. Mid: windows, balconies, fire escapes, signs, smoke. Near: laundry,
+  AC units, railings, bulbs, the clock's hands, fans, the doorman, and whoever is walking in or
+  out drawn at the front door (sprites to scale, tappable).
+- **Painter's order.** Parts back to front inside a body (`partOrder`: stacked parts bottom
+  first), each part's walls, then what is on them, then its roof. Bodies and yard props sort
+  with the Loop's pieces in `depthOrder`; movers slot as before.
+- `check-cityview`: every building has a style with a massing and a drawer; every yard prop
+  kind has a drawer; bodies and props stay off the pavement (0.4 in from the lot edge), props
+  off the body and each other; no body, prop or piece of the Loop overlaps another at any
+  quarter turn; stacked parts paint bottom first; housing follows the tier of its residents
+  (every tier of each band lives there); every home is in a housing style.
+
+Measured (headless Chromium, 420 subjects, 08:20; draw() is one full frame of drawing): 1440
+fit draw 4.8 ms avg / 9.4 p95 (was 2.9 / 5.9), district 2.6 / 2.9 (1.2 / 1.8), street 1.2 / 1.6
+(0.5 / 0.6); 390 fit 1.2 / 1.7, district 1.1 / 1.7, street 1.6 / 2.1. Frame gap 16.7-17.4 ms
+p95 everywhere; five seconds at 1440 fit: 300 frames, none over 20 ms. Screens:
+docs/screens/buildings/ (compare-*.png: before and after side by side; after-*.png: the rest).

@@ -9,11 +9,14 @@ import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox,
 import { loopPieces, trainPoses, carCorners, carBox, stationGeo, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
-import { PARK_LOTS, PARK_PLACES, insetOf, fieldRole } from "./parkGeo.js";
+import { PARK_LOTS, PARK_PLACES, fieldRole } from "./parkGeo.js";
 import { drawParkLot } from "./parkDraw.js";
+import { isoItems } from "./archGeo.js";
+import { drawBody, drawYardProp, drawArchGround, doorAt } from "./archDraw.js";
 
-// THE SUBSTRATE, SimCity-style: every building a solid block (facade, roof, lit windows by
-// occupancy, a sign up close), the Loop on its deck with trains, subjects on the streets.
+// THE SUBSTRATE, SimCity-style: every building drawn in its own architecture (archGeo.js
+// massing, archDraw.js drawing: the projects, brownstones, the glass tower, the monolith...),
+// windows lit by occupancy, the Loop on its deck with trains, subjects on the streets.
 // Drag to pan, pinch or wheel to zoom, Q/E or the buttons to turn it a quarter. Select a
 // building and it lifts out into a Fallout Shelter / SimTower cutaway: every floor, every
 // room furnished, every occupant at a seat or a station, walking in and out through the
@@ -24,7 +27,6 @@ import { drawParkLot } from "./parkDraw.js";
 // Labels go on top of the finished scene, nearest first, never over each other. A tap asks
 // the same order front to back, so what you see on top is what you get.
 
-const WALL = { arts: "#2e2744", campus: "#21392a", finance: "#1e3040", strip: "#40202a", arena: "#2c3822", hq: "#234434", archive: "#2e2e24", commons: "#2c3426", works: "#3e1e16", sprawl: "#2a2a30" };
 const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316" };
 const LOT_FILL = { "the-green": "#123a18", "the-allotment": "#1a2e12", "the-street": "#20241f", "the-plaza": "#24261f" };
 const OUTDOOR_PLACES = new Set(["park", "the-street", "the-plaza", "allotment"]);
@@ -35,11 +37,12 @@ const shade = (hex, f) => {
   const c = (s) => clampN(Math.round(((n >> s) & 255) * f), 0, 255);
   return `rgb(${c(16)},${c(8)},${c(0)})`;
 };
+const BID = new Map();
+const bidOf = (id) => { let v = BID.get(id); if (v == null) { v = 0; let h = 2166136261; for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); } v = h >>> 0; BID.set(id, v); } return v; };
+const nightAt = (hour) => hour >= 19 || hour < 6.5;
 function h01(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 100000) / 100000; }
 const who = (s) => s.slug || s.name;
 
-// Storeys above ground (the street facade) per building.
-const ABOVE = Object.fromEntries(BUILDINGS.map(b => [b.id, Math.max(1, b.floors.filter(f => f.level >= 0).length)]));
 const CAP = Object.fromEntries(BUILDINGS.map(b => [b.id, Math.max(1, b.floors.reduce((n, f) => n + (f.cap || 0), 0))]));
 
 // The Loop's palette: poured concrete in the city's greens, steel cars, the line's cyan
@@ -81,16 +84,11 @@ function CityIso({ censusRef, onOpen, onEnter }) {
 
     // ---- geometry for the current quarter turn ----------------------------------------
     function buildGeo(r) {
-      const items = [];
-      for (const b of BUILDINGS) {
-        // Footprints shrink inside their lots so the blocks read as towers with streets between.
-        const [ix, iy] = insetOf(b);
-        const R = rotRect({ x: b.rect.x + ix, y: b.rect.y + iy, w: b.rect.w - 2 * ix, h: b.rect.h - 2 * iy }, r);
-        // an open lot is ground: whoever walks across it is drawn after it (iso.slotForBox's deck rule)
-        const open = OPEN_LOTS.has(b.id);
-        // the Bowl is a stadium open to the sky: its stands and scoreboard stand about a storey
-        items.push({ kind: "b", b, R, h: open ? 0.05 : PARK_LOTS[b.id] ? 1 : ABOVE[b.id], x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1, ...(open ? { deck: true, top: 0 } : {}) });
-      }
+      // Each building's body (its massing box: archGeo.js; a field or open ground is its lot
+      // less the inset) and every yard prop (a tree, the hoop, a fence panel) as boxes of their
+      // own, so a walker between the tower and the chain-link is painted between them. An open
+      // lot is ground: whoever walks across it is drawn after it (iso.slotForBox's deck rule).
+      const items = isoItems(r);
       // the viaduct: straight deck pieces, curved corners, a station at every district
       items.push(...loopPieces(r));
       const order = depthOrder(items);
@@ -105,7 +103,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       const c = censusRef.current;
       if (!c || c.v === V.censusV) return;
       V.censusV = c.v;
-      const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map(PARK_PLACES.map(id => [id, []]));
+      const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map(PARK_PLACES.map(id => [id, []])), doors = new Map();
       for (const { s, w } of c.list || []) {
         if (!w) continue;
         if (w.sub === "riding" && w.trainId) { const k = `${w.trainId}|${w.car}`; riders.set(k, (riders.get(k) || 0) + 1); }
@@ -116,10 +114,11 @@ function CityIso({ censusRef, onOpen, onEnter }) {
           (inside.get(rk) || inside.set(rk, []).get(rk)).push({ s, w, mode: r.mode });
           if (r.mode === "here" && OUTDOOR_PLACES.has(w.placeId)) outdoors.push({ s, open: w.placeId });
           if (r.mode === "here" && park.has(w.placeId)) park.get(w.placeId).push({ s, w });
+          if (r.mode !== "here") (doors.get(r.buildingId) || doors.set(r.buildingId, []).get(r.buildingId)).push(s);
         }
         if (w.activity === "commute" && w.sub !== "riding") outdoors.push({ s });
       }
-      V.occ = occ; V.inside = inside; V.outdoors = outdoors; V.riders = riders; V.park = park;
+      V.occ = occ; V.inside = inside; V.outdoors = outdoors; V.riders = riders; V.park = park; V.doors = doors;
       V.need = true;
     }
 
@@ -228,6 +227,13 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         if (!onScreen(pts)) continue;
         poly(pts, GROUND[d.id] || "#101410", "rgba(74,222,128,0.18)");
       }
+      // the buildings' flat ground: the court slab, the quad, the monolith's plaza
+      const hour = ((V.mt % 24) + 24) % 24, env = { lod: lodFor(V.cam.z), night: nightAt(hour) };
+      for (const it of g.items) if (it.kind === "b" && it.m && it.m.ground.length) {
+        const L = it.b.rect, R = rotRect(L, g.r);
+        if (!onScreen([P(R.x0, R.y0, 0), P(R.x1, R.y0, 0), P(R.x1, R.y1, 0), P(R.x0, R.y1, 0)])) continue;
+        drawArchGround(archG(), it.m, env);
+      }
       // a faint street grid between the blocks
       if (lodFor(V.cam.z) !== "far") {
         ctx.strokeStyle = "rgba(74,222,128,0.05)"; ctx.lineWidth = 1;
@@ -237,13 +243,24 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       }
     }
 
+    // The kit archDraw draws with: map cells in, turned and projected by the camera.
+    let AG = null;
+    const archG = () => { AG ||= { ctx, Q, poly, facing, z: 0, r: 0 }; AG.z = V.cam.z; AG.r = V.cam.r; return AG; };
+    function drawYard(it, lod) {
+      const [x, y] = Q(it.p.x, it.p.y, 0);
+      const pad = V.cam.z * 8;
+      if (x < -pad || x > V.cssW + pad || y < -pad || y > V.cssH + pad * 1.5) return;
+      if (lod === "far" && it.p.k !== "tree" && it.p.k !== "watchtower" && it.p.k !== "containers" && it.p.k !== "ambulance" && it.p.k !== "conveyor") return;
+      const hour = ((V.mt % 24) + 24) % 24;
+      drawYardProp(archG(), it.p, { lod, night: nightAt(hour), hour, t: V.reduced ? 0 : performance.now() / 1000 });
+    }
+
     // top: redrawn over the veil for the open cutaway (no hit, no queued label).
     function drawBuilding(it, lod, rank, top = false) {
       const { b, R } = it, h = it.h;
       const hull = boxHull(R, h, V.cam);
       if (!onScreen(hull)) return;
       if (!top) V.hits.push({ kind: "b", id: b.id, hull });
-      const base = WALL[b.district] || "#26302a";
       const selected = V.sel === b.id;
       const label = () => {
         if (lod === "far" && !selected) return;
@@ -277,42 +294,21 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         label();
         return;
       }
+      if (!it.m) { label(); return; }
       // HQ's census is classified: its windows keep office hours, not a head count.
       const lit = b.id === "hq" ? 0.45 : Math.min(1, (V.occ[b.id] || 0) / (CAP[b.id] * 0.55));
-      // right face (+u) and left face (+v), then the roof
-      const right = [P(R.x1, R.y0, h), P(R.x1, R.y1, h), P(R.x1, R.y1, 0), P(R.x1, R.y0, 0)];
-      const left = [P(R.x0, R.y1, h), P(R.x1, R.y1, h), P(R.x1, R.y1, 0), P(R.x0, R.y1, 0)];
-      const roof = [P(R.x0, R.y0, h), P(R.x1, R.y0, h), P(R.x1, R.y1, h), P(R.x0, R.y1, h)];
-      poly(right, shade(base, 0.72));
-      poly(left, shade(base, 1.0));
-      poly(roof, shade(base, 1.45), selected ? "#4ade80" : "rgba(160,220,180,0.35)");
-      // windows: one per cell of facade per storey, lit by occupancy
-      if (lod !== "far") {
-        const faces = [
-          { a: [R.x0, R.y1], d: [1, 0], len: R.x1 - R.x0, key: "L" },
-          { a: [R.x1, R.y1], d: [0, -1], len: R.y1 - R.y0, key: "R" },
-        ];
-        const ww = Math.max(1, V.cam.z * 0.42), wh = Math.max(1, V.cam.z * STOREY * 0.42);
-        for (const f of faces) {
-          const cols = Math.max(1, Math.floor(f.len / 1.1));
-          for (let s = 0; s < h; s++) for (let k = 0; k < cols; k++) {
-            const t = (k + 0.5) / cols * f.len;
-            const u = f.a[0] + f.d[0] * t, v = f.a[1] + f.d[1] * t;
-            const [x, y] = P(u, v, s + 0.55);
-            const on = h01(`${b.id}${f.key}${s}.${k}`) < lit;
-            ctx.fillStyle = on ? (f.key === "L" ? "#fbbf24" : "#c9951a") : "rgba(0,0,0,0.45)";
-            ctx.fillRect(Math.round(x - ww / 2), Math.round(y - wh / 2), Math.round(ww), Math.round(wh));
-          }
-        }
-      } else if (lit > 0.05) {
-        const [x, y] = P((R.x0 + R.x1) / 2, R.y1, h * 0.5);
-        ctx.fillStyle = "#fbbf24"; ctx.fillRect(x - 1, y - 1, 2, 2);
-      }
-      if (lod === "near") {
-        // a door on the front face
-        const du = (R.x0 + R.x1) / 2;
-        const d0 = P(du - 0.35, R.y1, 0), d1 = P(du + 0.35, R.y1, 0), d2 = P(du + 0.35, R.y1, 0.7), d3 = P(du - 0.35, R.y1, 0.7);
-        poly([d0, d1, d2, d3], "#0a0f0a", "rgba(74,222,128,0.5)");
+      const hour = ((V.mt % 24) + 24) % 24;
+      drawBody(archG(), b, it.m, { lod, night: nightAt(hour), hour, t: V.reduced ? 0 : performance.now() / 1000, lit, bid: bidOf(b.id), name: b.name, style: it.m.style });
+      if (selected) poly(hull, null, "#4ade80");
+      // up close: whoever is walking in or out, at the front door (when it faces us)
+      if (lod === "near" && !top) {
+        const folk = V.doors?.get(b.id);
+        const d = folk && folk.length && doorAt(archG(), it.m);
+        if (d) folk.slice(0, 3).forEach((s, i) => {
+          const k = (i - (Math.min(3, folk.length) - 1) / 2) * 0.45;
+          const [u, v] = rot(d.x + d.along[0] * k, d.y + d.along[1] * k, V.cam.r);
+          drawPerson({ s, u, v, h: 0 }, lod);
+        });
       }
       label();
     }
@@ -812,6 +808,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       for (let k = 0; k < order.length; k++) {
         const it = items[order[k]];
         if (it.kind === "b") drawBuilding(it, lod, k);
+        else if (it.kind === "y") drawYard(it, lod);
         else if (it.kind === "t") drawDeckPiece(it, lod);
         else if (it.kind === "k") drawCorner(it, lod);
         else drawStation(it, lod, k);

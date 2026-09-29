@@ -68,8 +68,10 @@ const PLANS = {
     front: { unit: [M(A("seat", "talk", "patron", 1), "sofa", 1.1), P("sideTable", 0.5), M(A("seat", "drink", "patron", -1), "sofa", 1.1), P(null, 0.3)] },
   },
   suite: {
-    back: { unit: [M(A("stand", "talk", "rest"), null, 1.25), P("plant", 0.55)] },
-    front: { unit: [M(A("bed", "sleep", "rest"), "bedFancy", 1.7), M(A("seat", "read", "rest", -1), "armchair", 1.15), P("lampTable", 0.5)] },
+    // the Meridian's residences (2026-09-29): a bed for everyone on the floor, the plants and
+    // the lamp for the look
+    back: { unit: [M(A("bed", "sleep", "rest"), "bedFancy", 1.7), P("plant", 0.55)] },
+    front: { unit: [M(A("bed", "sleep", "rest", -1), "bedFancy", 1.7), P("lampTable", 0.5)] },
   },
   cafe: {
     back: { head: [M(A("counter", "pour", "staff"), "espresso", 1.4)], unit: [M(A("counter", "serve", "staff"), "counter", 1.2), M(A("seat", "drink", "patron"), "barStool", 1.15), M(A("seat", "drink", "patron"), "barStool", 1.15)] },

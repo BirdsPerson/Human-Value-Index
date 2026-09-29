@@ -84,7 +84,8 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       reactor/foundry/construction; injured recover at WARD 7 (exists, has staff, no patients
       yet). Sprawl: new edge sectors built by the winning developer; SUBWAY extension is itself
       a project; THE UNDERCROFT beneath the city is where unrest organizes.
-   b6. **BUILDING DESIGN PASS** (Scott 2026-09-29; next after the soccer/football fields):
+   b6. [shipped 2026-09-29, see CITY_SPEC "Architecture per building"; left: the decay /
+      gentrify half, which waits for the economy] **BUILDING DESIGN PASS** (Scott 2026-09-29; next after the soccer/football fields):
       distinct architecture per building type instead of one generic block. Housing reads
       by tier: low tiers in big brick PROJECTS (repeating balconies, laundry lines, chain-
       link, broken lights), middle in BROWNSTONE rows/walk-ups with stoops, top tier in GLASS

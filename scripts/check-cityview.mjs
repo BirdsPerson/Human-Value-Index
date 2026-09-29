@@ -286,18 +286,15 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   // Painter's order against the buildings, all four quarter turns.
   const { rotRect, depthOrder } = await import("../src/city/iso.js");
   for (let r = 0; r < 4; r++) {
-    const items = [];
-    const { insetOf } = await import("../src/city/parkGeo.js");
-    for (const b of SIM.BUILDINGS) {   // CityIso.buildGeo's footprints
-      const [ix, iy] = insetOf(b);
-      items.push({ kind: "b", id: b.id, ...rotRect({ x: b.rect.x + ix, y: b.rect.y + iy, w: b.rect.w - 2 * ix, h: b.rect.h - 2 * iy }, r) });
-    }
+    // CityIso.buildGeo's footprints: each body and each yard prop (archGeo.isoItems)
+    const { isoItems } = await import("../src/city/archGeo.js");
+    const items = isoItems(r).map(it => ({ kind: it.kind, id: it.id, x0: it.x0, y0: it.y0, x1: it.x1, y1: it.y1 }));
     const loop = G.loopPieces(r);
     items.push(...loop);
     const inside = (a, b) => a.x0 < b.x1 - 1e-9 && b.x0 < a.x1 - 1e-9 && a.y0 < b.y1 - 1e-9 && b.y0 < a.y1 - 1e-9;
     let clash = "";
     for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
-      if (items[i].kind === "b" && items[j].kind === "b") continue;
+      if ((items[i].kind === "b" || items[i].kind === "y") && (items[j].kind === "b" || items[j].kind === "y")) continue;   // the architecture section checks these
       if (inside(items[i], items[j]) && !clash) clash = `${items[i].kind}${items[i].id || ""} x ${items[j].kind}${items[j].id || ""}`;
     }
     ok(!clash, `r=${r}: viaduct, corners and stations overlap no building or each other (${clash || "none"})`);
@@ -462,6 +459,70 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   const fixture = [...Array(7)].map((_, d) => SIM.gameAt("ball-field", wk + d * 24 + 18.5)).filter(Boolean).length;
   ok(fixture >= 2, `the Diamond has an evening fixture on ${fixture} days a week`);
   console.log(`  recreation ground: ${PG.PARK_PLACES.map(id => `${id} ${PG.PARK_ANCHORS[id].length} anchors`).join(", ")}; ${games} fixture samples, ${evs.length} PA calls a week`);
+}
+
+// Architecture (the building design pass, 2026-09-29: "different buildings that look
+// differently, like big low-income housing projects versus high-income high-rises"). Every
+// building has a style with a massing and a drawer; housing follows the tier of the people
+// who live there; bodies and yard props stay in their lots, off the pavement, off each other
+// and off the Loop at every quarter turn; stacked parts paint bottom first.
+{
+  const SIM = await import("../src/city/sim.js");
+  const A = await import("../src/city/archGeo.js");
+  const { DRAWN_STYLES, DRAWN_PROPS } = await import("../src/city/archDraw.js");
+  const { rot, rotRect } = await import("../src/city/iso.js");
+  const G = await import("../src/city/loopGeo.js");
+  for (const b of SIM.BUILDINGS) {
+    ok(b.arch && A.STYLES[b.arch], `${b.id}: has a style (${b.arch})`);
+    if (A.GROUND_STYLES.has(b.arch)) { ok(SIM.OPEN_LOTS.has(b.id) || b.id === "the-bowl", `${b.id}: a ground style is open ground`); continue; }
+    const m = A.massingOf(b);
+    ok(m && m.parts.length > 0, `${b.id}: ${b.arch} has a massing`);
+    ok(DRAWN_STYLES.has(b.arch), `${b.id}: ${b.arch} has a drawer`);
+    if (!m) continue;
+    const L = b.rect, K = A.KERB - 1e-9;
+    const inLot = (o) => o.x0 >= L.x + K && o.y0 >= L.y + K && o.x1 <= L.x + L.w - K && o.y1 <= L.y + L.h - K;
+    ok(inLot(m.box), `${b.id}: the body (and its stoops, canopies, awnings) stays off the pavement`);
+    for (const g of m.ground) ok(g.x0 >= L.x - 1e-9 && g.y0 >= L.y - 1e-9 && g.x1 <= L.x + L.w + 1e-9 && g.y1 <= L.y + L.h + 1e-9, `${b.id}: ground ${g.k} inside the lot`);
+    const over = (a, c) => a.x0 < c.x1 - 1e-9 && c.x0 < a.x1 - 1e-9 && a.y0 < c.y1 - 1e-9 && c.y0 < a.y1 - 1e-9;
+    for (const p of m.yard) {
+      ok(DRAWN_PROPS.has(p.k), `${b.id}: yard prop ${p.k} has a drawer`);
+      ok(inLot(p), `${b.id}: ${p.k}${p.i} stays off the pavement`);
+      ok(!over(p, m.box), `${b.id}: ${p.k}${p.i} stands clear of the body`);
+      for (const q of m.yard) if (q.i > p.i) ok(!over(p, q), `${b.id}: ${p.k}${p.i} and ${q.k}${q.i} do not overlap`);
+    }
+    // a part stacked on another paints after it, at every turn
+    for (let r = 0; r < 4; r++) {
+      const ord = A.partOrder(m.parts, rot, r), pos = new Map(ord.map((i, k) => [i, k]));
+      m.parts.forEach((p, i) => m.parts.forEach((q, j) => { if (i !== j && over(p, q) && p.h1 <= q.h0 + 1e-9) ok(pos.get(i) < pos.get(j), `${b.id} r=${r}: part ${i} under part ${j} paints first`); }));
+    }
+  }
+  // no two boxes in the iso view overlap: bodies, props and the viaduct, all four turns
+  for (let r = 0; r < 4; r++) {
+    const items = [...A.isoItems(r), ...G.loopPieces(r)];
+    let clash = "";
+    const over = (a, c) => a.x0 < c.x1 - 1e-9 && c.x0 < a.x1 - 1e-9 && a.y0 < c.y1 - 1e-9 && c.y0 < a.y1 - 1e-9;
+    for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+      if (items[i].kind !== "b" && items[i].kind !== "y" && items[j].kind !== "b" && items[j].kind !== "y") continue;   // track vs track: checked above
+      if (over(items[i], items[j]) && !clash) clash = `${items[i].id || items[i].kind} x ${items[j].id || items[j].kind}`;
+    }
+    ok(!clash, `r=${r}: no building, yard prop or piece of the Loop overlaps another (${clash || "none"})`);
+  }
+  // housing follows tier: everyone's home is in a housing style whose band holds their tier
+  const pop = [...FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name) })),
+    ...Array.from({ length: 600 }, (_, i) => ({ slug: `h-${i}`, name: `H ${i}`, tier: TIERS[i % TIERS.length].label, died: i % 3 === 0 ? "1900-01-01" : null }))];
+  let bad = "";
+  const seen = {};
+  for (const s of pop) {
+    const home = SIM.homeOf(s), b = SIM.BUILDING[SIM.PLACES[home].building], t = SIM.TIER_ORDER.indexOf(SIM.tierOf(s));
+    const band = SIM.HOUSING_TIERS[b.arch];
+    if (!band || !band.includes(t)) bad ||= `${s.slug} (${SIM.tierOf(s)}) lives in ${b.id} (${b.arch})`;
+    (seen[b.arch] ||= new Set()).add(t);
+  }
+  ok(!bad, `housing follows the tier of its residents (${bad || "all " + pop.length}): ${Object.entries(seen).map(([k, v]) => `${k} ${[...v].sort().join("")}`).join(", ")}`);
+  for (const [style, band] of Object.entries(SIM.HOUSING_TIERS)) ok(band.every(t => seen[style]?.has(t)), `${style}: every tier of its band lives there`);
+  for (const p of Object.values(SIM.PLACES)) if (p.kind === "home") ok(SIM.HOUSING_TIERS[SIM.BUILDING[p.building].arch], `home ${p.id} is in a housing style`);
+  ok(SIM.BUILDING.hq.arch === "monolith" && SIM.BUILDING["the-meridian"].arch === "glass" && SIM.BUILDING["hab-a"].arch === "projects", "HQ is the monolith, the top tier's glass tower, the projects");
+  console.log(`  architecture: ${new Set(SIM.BUILDINGS.map(b => b.arch)).size} styles over ${SIM.BUILDINGS.length} buildings, ${SIM.BUILDINGS.reduce((n, b) => n + (A.massingOf(b)?.yard.length || 0), 0)} yard props`);
 }
 
 console.log(fails ? `check-cityview: ${fails} FAILED` : "check-cityview: ok");

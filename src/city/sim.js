@@ -57,7 +57,8 @@ const PLACE_LIST = [
   P("ops-floor", "hq", "work", 32, "OPERATIONS FLOOR"),
   P("assembly-hall", "hq", "mixed", 24, "ASSEMBLY OF THE GOVERNED", ["city hall", "parliament"]),
   P("tribunal", "hq", "mixed", 14, "TRIBUNAL 9", ["courthouse"]),
-  P("penthouses", "hq", "home", 40, "EXECUTIVE RESIDENCES"),
+  // The top tier's homes moved out of HQ into their own glass tower in Finance (2026-09-29).
+  P("penthouses", "finance", "home", 72, "EXECUTIVE RESIDENCES"),
 
   P("studio-row", "arts", "mixed", 22, "STUDIO ROW", ["studio"]),
   P("playhouse", "arts", "mixed", 24, "THE PLAYHOUSE", ["theatre"]),
@@ -138,7 +139,7 @@ export const ENGINE_PLACE = Object.fromEntries(PLACE_LIST.flatMap(p => p.engine.
 // floors (a hab block, the clock tower); each subject keeps one of them, by seed.
 // DEPT HQ is the six-floor building of src/building.js, with the same floor ids.
 const HQ_LEVEL = { PH: 2, "1F": 1, G: 0, B1: -1, B2: -2, B3: -3 };
-const HQ_ROOMS = { exec: ["exec-suite", "penthouses"], bar: [], lobby: ["assembly-hall"], break: ["ops-floor"], archive: [], proc: ["tribunal"] };
+const HQ_ROOMS = { exec: ["exec-suite"], bar: [], lobby: ["assembly-hall"], break: ["ops-floor"], archive: [], proc: ["tribunal"] };
 // [code, floor name, [places]], top floor first. A code with no G counts down to level 0.
 // lot (optional): the building's ground, in map cells. A district whose buildings all carry
 // one is laid out by hand (the Arena, round its recreation ground); the rest are gridded.
@@ -155,6 +156,7 @@ const BUILDING_LIST = [
   B("clock-tower", "THE CLOCK TOWER", "campus", [["5F", "THE FACE", ["clock-tower"]], ["4F", "ESCAPEMENT", ["clock-tower"]], ["3F", "GEAR ROOM", ["clock-tower"]], ["2F", "PENDULUM SHAFT", ["clock-tower"]], ["1F", "CALIBRATION", ["clock-tower"]], ["G", "TIMEKEEPERS' DESK", ["clock-tower"]]]),
   // FINANCE
   B("reserve-tower", "THE RESERVE TOWER", "finance", [["RF", "ROOFTOP LOUNGE", ["rooftop-lounge"]], ["3F", "THE MEMBERS' CLUB", ["members-club"]], ["2F", "UPPER TRADING FLOOR", ["exchange-floor"]], ["1F", "LOWER TRADING FLOOR", ["exchange-floor"]], ["G", "THE EXCHANGE", ["exchange-floor"]], ["B1", "RESERVE VAULT", ["vault-bank"]]]),
+  B("the-meridian", "THE MERIDIAN", "finance", [["PH", "PENTHOUSE TERRACE (POOL, SUPERVISED)", ["penthouses"]], ...[4, 3, 2, 1].map(n => [`${n}F`, `RESIDENCE LEVEL ${n}`, ["penthouses"]]), ["G", "LOBBY (DOORMAN ON DUTY)", ["penthouses"]]]),
   // THE STRIP
   B("the-dive", "THE DIVE", "strip", [["1F", "THE LANTERN (UPSTAIRS)", ["the-lantern"]], ["G", "THE BAR (SCORED)", ["dive-bar"]]]),
   B("casino", "HOUSE EDGE CASINO", "strip", [["2F", "HIGH LIMIT ROOM", ["casino"]], ["1F", "SLOT FLOOR", ["casino"]], ["G", "THE TABLES", ["casino"]]]),
@@ -229,6 +231,27 @@ for (const d of DISTRICTS) {
   });
 }
 for (const p of PLACE_LIST) if (!p.rect) throw new Error(`place ${p.id} is in no building`);
+// Architecture (the building design pass, 2026-09-29: "different buildings that look
+// differently, like big low-income housing projects versus high-income high-rises"). Every
+// building has a style; the iso view (archGeo.js massing, archDraw.js drawing) builds its
+// exterior from it. Housing styles carry the tier band that lives there, and homeOf follows
+// it: the top tier in the glass tower, the middle tiers in the brownstones and the lofts,
+// the lower three in the projects. A district's default covers anything not listed.
+export const ARCH_BY_DISTRICT = { arts: "gallery", campus: "gothic", finance: "office", strip: "neon", arena: "hall", hq: "monolith", archive: "classical", commons: "civic", works: "shed", sprawl: "projects" };
+export const ARCH = {
+  "studio-block": "studio", playhouse: "theatre", "culture-centre": "gallery", "the-grind": "cafe",
+  faculty: "gothic", "lab-block": "gothic", "clock-tower": "clocktower",
+  "reserve-tower": "office", "the-meridian": "glass",
+  "the-dive": "neon", casino: "casino", "press-building": "diner",
+  "the-bowl": "stadium", "conditioning-hall": "hall", "the-diamond": "field", "the-courts": "field", "rec-ground": "field",
+  hq: "monolith",
+  "records-hall": "classical", "memory-vault": "vault", lofts: "lofts",
+  "ward-7": "hospital", chapel: "chapel", "the-green": "lot", "the-allotment": "lot", "ration-market": "market", schoolhouse: "school",
+  "reclamation-line": "shed", "radiant-core": "reactor", foundry: "stacks", "cache-farm": "datahall", "data-docks": "docks", hydroponics: "tanks", barracks: "bunker", "holding-cells": "prison", "slag-canteen": "canteen",
+  "hab-a": "projects", "hab-b": "projects", "hab-c": "brownstone", "hab-d": "brownstone", "the-street": "lot", "the-plaza": "lot", "the-pitch": "field",
+};
+// Housing: which tiers (TIER_ORDER index, 0 = ESSENTIAL INFRASTRUCTURE) live in each style.
+export const HOUSING_TIERS = { glass: [0], brownstone: [1, 2], lofts: [1, 2], projects: [3, 4, 5] };
 export const BUILDINGS = BUILDING_LIST.map(b => {
   const td = b.floors;   // top-down
   const gIdx = td.findIndex(f => f[0] === "G");
@@ -240,7 +263,7 @@ export const BUILDINGS = BUILDING_LIST.map(b => {
   const rs = places.map(id => PLACES[id].rect);
   const x0 = Math.min(...rs.map(r => r.x)), y0 = Math.min(...rs.map(r => r.y));
   const x1 = Math.max(...rs.map(r => r.x + r.w)), y1 = Math.max(...rs.map(r => r.y + r.h));
-  return { id: b.id, name: b.name, district: b.district, districtId: b.district, places, floors, rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, pos: { x: (x0 + x1) / 2, y: (y0 + y1) / 2 } };
+  return { id: b.id, name: b.name, district: b.district, districtId: b.district, arch: ARCH[b.id] || ARCH_BY_DISTRICT[b.district], places, floors, rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, pos: { x: (x0 + x1) / 2, y: (y0 + y1) / 2 } };
 });
 export const BUILDING = Object.fromEntries(BUILDINGS.map(b => [b.id, b]));
 for (const d of DISTRICTS) d.buildings = [];
@@ -577,13 +600,15 @@ export function assignJob(s, seed = SEED) {
 }
 export const jobOf = (s, seed = SEED) => assignJob(s, seed);
 
-// Home: the top tier in the executive residences, everyone else (living or dead: all
-// uploads) in a Sprawl block or the Archive Lofts.
-const BLOCKS = ["block-a", "block-b", "block-c", "block-d", "archive-lofts"];
+// Home by tier (the building design pass): the top tier in the Meridian's glass tower, the
+// middle tiers in the brownstones (Hab C, D) and the Archive Lofts, the lower three in the
+// projects (Hab A, B). Living or dead alike: all uploads. Which block within the band is by
+// seed. HOUSING_TIERS says the same thing per style; check-cityview holds them together.
+const HOMES_BY_BAND = [["penthouses"], ["block-c", "block-d", "archive-lofts"], ["block-a", "block-b"]];
 export function homeOf(s, seed = SEED) {
-  // The dead keep a Sprawl or Archive Lofts home (quests find them in the city, not behind HQ's classified doors).
-  if (tierIdx(s) === 0 && !isDead(s)) return "penthouses";
-  return BLOCKS[Math.floor(h01(`${seed}|home|${keyOf(s)}`) * BLOCKS.length)];
+  const t = Math.max(0, tierIdx(s));
+  const band = HOMES_BY_BAND[t === 0 ? 0 : t <= 2 ? 1 : 2];
+  return band[Math.floor(h01(`${seed}|home|${keyOf(s)}`) * band.length)];
 }
 
 // ---- leisure ----------------------------------------------------------------------
