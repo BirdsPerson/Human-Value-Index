@@ -285,3 +285,73 @@ column; the lots take the rest.
 
 Measured (headless Chromium, 250 subjects, league night): frame gap 16.6 ms avg, p95 17.5 at
 1440 street zoom on the Diamond; draw() 1.6 ms. Screens: docs/screens/rec-ground/.
+
+## The Bowl's gridiron and the estate pitch (2026-09-29)
+
+Scott: "We need a soccer field, though, too, and a football field." The Arena was full, so:
+
+- **Football inside the Bowl.** The Bowl was a stadium with no sport and a plain block for a
+  body; it is now drawn open to the sky: concrete stands on all four sides (three tiers
+  stepping up and away, in segments so the painter's order holds along them), a 120-yard
+  field with end zones in each side's colour (THE ENFORCERS gold, THE ASSETS purple), a line
+  every ten yards, goalposts on the end lines, a bench on each sideline, the chain crew, a
+  kicker at his net, the cheer squad, corner light masts and a scoreboard over the north stand.
+  It stays a solid building for walking (nobody cuts across a stadium) and keeps its two
+  floors; its place (`stadium`, cap 50) and jobs are unchanged, plus a Gridiron Official
+  (`draft: 8`), and the Turf Technician is now capped (`draft: 10`) so the Bowl is not staffed
+  like a factory.
+- **Soccer on the estate pitch.** The Sprawl's grid had two empty cells; the Sprawl now runs 7
+  rows further south (`h: 20`) and is laid out by hand: the hab blocks exactly where the grid
+  had them, the Street and the Plaza as two long strips under A and B, THE ESTATE PITCH under C
+  and D (`pitch`, cap 28, an open lot). A bottom-row district's station sits over its centre
+  column, so the Sprawl's stop, the ring and the timetable did not move. Full markings
+  (halfway line, centre circle, boxes, spots and D's, corner arcs), goals with nets, corner
+  flags, two dugouts, a rail and a standing crowd, a three-tier terrace behind the east goal,
+  the scoreboard behind the west, floodlights. Seven a side: SPRAWL UNITED (red) and
+  RECLAMATION ATHLETIC (blue), keepers in their own colours; a referee and two assistants.
+  Jobs: Club Footballer (soccer players train there by day), Match Referee (`draft: 8`), Pitch
+  Groundskeeper (`draft: 6`).
+- Who goes: two new fields, `soccer` (footballer, not "american football") and `gridiron`
+  (american football, quarterback...), send soccer players to the pitch (5) and American
+  football players to the Bowl (5); sport and coaching like both; the middle and low bands
+  like the pitch (it is on their estate). Overflow family: gym, stadium, diamond, courts,
+  pitch. `parkGeo.fieldRole`: a footballer or athlete on shift at their ground plays (a
+  visitor's role, first), sporting visitors are placed before the rest (`pri`, honoured by
+  `assignAnchors`), so the field fills with the people who would be on it. The Bowl's fill
+  order is sixteen players, the long sides' front rows, the rest of the teams, then the crowd.
+- Fixtures (sim `GAMES`, weekday as the sim counts it): THE SUNDAY GAME at the Bowl, day 7,
+  16:30-20:00 (four quarters, twenty drives hashed from the day, a half-time break, down and
+  distance on the board); THURSDAY PRACTICE, day 4, 18:00-20:30 (no score, "EFFORT: GRADED");
+  SATURDAY MATCHDAY at the pitch, day 6, 17:30-19:30 (ninety minutes, a goal possible in each
+  five-minute slot, half time); THE MIDWEEK FIXTURE, day 3, 19:00-21:00. Fixtures sit where
+  visits start (after the day shift), or the stands stay empty. `gameAt` now gives every game a
+  `label` ("Q3 14-10", "63' 1-0", "HALF 7-17", "PRACTICE") for the lot labels, and
+  `gameEvents` calls every touchdown, field goal and goal as well as kickoff and final. The PA
+  reads a ground's calls on the map and in its own district (`City.jsx GAME_DISTRICTS`).
+- Iso view (`parkGeo.js` BOWL/PITCH and anchors, `parkDraw.js` bowl/pitchLot): far = the
+  stands, the green, the end zones, the pitch; mid = lines, posts, goals, benches, dugouts, the
+  crowd as small sprites, a colour disc under each player for their side, the broadcast lines
+  (scrimmage blue, first down yellow) while a game is on; near = yard numbers, hash marks,
+  pylons, the midfield seal, nets, waving corner flags, scoreboards with the live score, the
+  ball snapped, thrown and caught on one play clock (`poses.PLAY_S`), the soccer ball passed
+  about with the odd shot, everyone posed. The mast on the corner nearest the viewer is left
+  out, and a scoreboard seen from behind goes see-through (the Diamond's too).
+- Poses (`poses.js`): snap and stance (the crouch; they come up and block at the snap), throw,
+  receive, carry, wrap (arms out, never a hit), kick (off a tee), signal (arms up: it counts),
+  chain (the rod and marker); footwork (the ball at the feet), kickball, header, keeper (gloves,
+  and a full-length dive now and then), mark, chase, flag (OFFSIDE, logged).
+- Side-on rooms: `gridiron` (the line of scrimmage in facing pairs up the field, the
+  quarterback and the snap; the official, the chain, the kicker and the bench in front) and
+  `soccer` (a keeper in the goalmouth, the game up the pitch, hab blocks over the far touchline;
+  the referee, the corner flag, the dugout and the rail in front).
+- `check-cityview`: the new lots (in their districts, overlapping nothing, clear of the viaduct
+  at all four turns), anchors (typed, posed, on their own ground, apart), 22 and 14 players
+  inside the lines in two even sides, the first few make a drill, the referee takes the
+  referee's post, the sporting are placed first, the footballer's job and role, soccer vs
+  gridiron reading; fixtures (quarters, downs, minutes, labels, no score coming off the board,
+  practice keeps none), and the PA calls exactly the changes on the board.
+- Dev: `#city?at=18:10&wd=7` jumps to that hour on the next machine day with that weekday.
+
+Measured (headless Chromium, 250 subjects, the Sunday game): frame gap 16.7 ms avg, p95
+17.3-18.2 at 1440 and 390 (street zoom on the Bowl and the pitch, district, fit); draw() 1.2 ms
+on the Bowl up close, 1.7 ms district, 1.8 ms fit at 1440. Screens: docs/screens/fields/.

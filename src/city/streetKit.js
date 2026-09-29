@@ -21,7 +21,7 @@ export const TURN_SPEED = 1.9;     // radians per second
 export const RIDE_SPEED = 22;      // cells per second aboard the Loop
 
 // Places whose occupants stand in the open, visible from the street.
-export const OUTDOOR = new Set(["park", "the-street", "the-plaza", "allotment", "market", "docks", "ball-field", "courts", "rec-park"]);
+export const OUTDOOR = new Set(["park", "the-street", "the-plaza", "allotment", "market", "docks", "ball-field", "courts", "rec-park", "pitch"]);
 
 // ---- the world ------------------------------------------------------------------
 export const BOUNDS = (() => {

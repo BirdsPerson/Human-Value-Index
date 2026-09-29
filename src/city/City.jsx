@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { pad, padL } from "../term.jsx";
 import { Frame, Button, ButtonRow, Disclosure, ListRow } from "../ui/index.js";
 import { SubjectCard, injectPenStyles } from "../Pen.jsx";
-import { DISTRICTS, DISTRICT, BUILDING, TRAIN, STATIONS, districtCap, clockAt, whereOf, atDistrict, isOnLoop, setClockOffset, offsetFor, jobLine, loopEvents, roomIn, gameAt, gameEvents } from "./simApi.js";
+import { DISTRICTS, DISTRICT, BUILDING, TRAIN, STATIONS, PLACES, GAMES, GAME_VENUE, districtCap, clockAt, whereOf, atDistrict, isOnLoop, setClockOffset, offsetFor, jobLine, loopEvents, roomIn, gameAt, gameEvents } from "./simApi.js";
 import { clockLine, paLine } from "./cityKit.js";
 import { useRoster } from "./useRoster.js";
 import { clearBank } from "./spriteBank.js";
@@ -19,6 +19,13 @@ import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
 import SocialPanel from "./SocialPanel.jsx";
 import { useSocial, ensureSocial } from "./socialClient.js";
+// The districts with a ground (the Arena, the Sprawl's estate pitch), and the PA's sign-off
+// under each kind of score.
+const GAME_DISTRICTS = new Set(Object.keys(GAMES).map(id => PLACES[id].district));
+const SCORE_TAG = {
+  ball: "ATTENDANCE COUNTS TOWARDS YOUR FILE.", hoops: "THE SCORE IS UNOFFICIAL. YOURS IS NOT.",
+  gridiron: "EVERY YARD IS MEASURED. SO IS THE CROWD.", soccer: "OFFSIDE IS A STATE OF MIND. THE DEPARTMENT HAS A STATE OF RECORD.",
+};
 
 // #city: the Substrate (STREET, the default; the 2D MAP; or the STACK of floor planes). #city/<district>: one district from the inside.
 // #city/<district>/<building>[?floor=N]: one building in cross-section.
@@ -41,15 +48,17 @@ export default function City({ route }) {
     const s = q.toString();
     return s ? "?" + s : "";
   }, [parsed.query]);
-  // Dev only: #city?at=10:00 jumps the machine clock to that hour, to inspect a shift.
+  // Dev only: #city?at=10:00 jumps the machine clock to that hour, to inspect a shift;
+  // &wd=6 to that hour on the next machine day with that weekday (a fixture's day).
   const at = useMemo(() => {
     const m = import.meta.env?.DEV && /[?&]at=(\d{1,2}):?(\d{2})?/.exec(query);
-    return m ? `${+m[1] % 24}:${+(m[2] || 0)}` : "";
+    const w = import.meta.env?.DEV && /[?&]wd=([1-7])/.exec(query);
+    return m ? `${+m[1] % 24}:${+(m[2] || 0)}:${w ? +w[1] : 0}` : "";
   }, [query]);
   const [offsetV, setOffsetV] = useState(0);
   useEffect(() => {
-    const [hh, mm] = at ? at.split(":").map(Number) : [];
-    setClockOffset(at ? offsetFor(hh, mm) : 0);
+    const [hh, mm, wd] = at ? at.split(":").map(Number) : [];
+    setClockOffset(at ? offsetFor(hh, mm, Date.now(), wd || null) : 0);
     setOffsetV(v => v + 1);
     return () => setClockOffset(0);
   }, [at]);
@@ -90,9 +99,9 @@ export default function City({ route }) {
         const ev = loopEvents(prev.mt, c.mt).filter(e => e.stationId === here).pop();
         if (ev) setPa(ev.text);
       }
-      // The recreation ground's first pitch and final whistle, on the map and in the Arena.
-      if ((!here || here === "arena") && prev.mt != null && c.mt > prev.mt && c.mt - prev.mt < 0.5) {
-        const gev = gameEvents(prev.mt, c.mt).pop();
+      // Every ground's kickoff, scores and final whistle, on the map and in its own district.
+      if ((!here || GAME_DISTRICTS.has(here)) && prev.mt != null && c.mt > prev.mt && c.mt - prev.mt < 0.5) {
+        const gev = gameEvents(prev.mt, c.mt).filter(e => !here || PLACES[e.placeId]?.district === here).pop();
         if (gev) setPa(gev.text);
       }
       // Only what the page shows goes into React state: the counts and riders, and only when
@@ -130,9 +139,9 @@ export default function City({ route }) {
     const evs = loopEvents(mt - 8 / 60, mt + 1e-6).filter(e => !here || e.stationId === here);
     // Every third line is gossip from the social ledger, when there is any.
     const gossip = socialRef.current?.events || [];
-    // While a fixture is on, every fourth line is the score (on the map and in the Arena).
-    const games = (!here || here === "arena") ? ["ball-field", "courts"].map(id => gameAt(id, mt)).filter(Boolean) : [];
-    if (games.length && k % 4 === 1) { const g = games[Math.floor(k / 4) % games.length]; setPa(`${g.kind === "ball" ? "THE DIAMOND" : "THE COURTS"}, ${g.name}: ${g.status}. ${g.kind === "ball" ? "ATTENDANCE COUNTS TOWARDS YOUR FILE." : "THE SCORE IS UNOFFICIAL. YOURS IS NOT."}`); }
+    // While a fixture is on, every fourth line is the score (on the map and in its district).
+    const games = Object.keys(GAMES).filter(id => !here || PLACES[id].district === here).map(id => gameAt(id, mt)).filter(Boolean);
+    if (games.length && k % 4 === 1) { const g = games[Math.floor(k / 4) % games.length]; setPa(`${GAME_VENUE[g.placeId]}, ${g.name}: ${g.status}. ${SCORE_TAG[g.kind]}`); }
     else if (!here && gossip.length && k % 3 === 2) setPa(gossip[Math.floor(k / 3) % Math.min(gossip.length, 12)].text);
     else setPa(paLine(st, k, evs.length ? evs[evs.length - 1].text : null));
     // a new district re-reads its own station's line at once

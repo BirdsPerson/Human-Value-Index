@@ -23,14 +23,21 @@ const SHIN = 38;   // sprite rows from here down are the lower legs
 const SEAT = FH - SHIN;   // a seat is this many sprite rows off the floor
 
 // catch and umpire: the crouch behind the plate is the sitting cut with no seat under it
-const SIT = new Set(["drink", "eat", "talk", "read", "write", "listen", "pray", "watch", "gamble", "type", "trade", "count", "piano", "judge", "rest", "sit", "catch", "umpire", "feed"]);
+// snap and stance: the center over the ball and a lineman's three-point stance, the same cut
+const SIT = new Set(["drink", "eat", "talk", "read", "write", "listen", "pray", "watch", "gamble", "type", "trade", "count", "piano", "judge", "rest", "sit", "catch", "umpire", "feed", "snap", "stance"]);
 // The pitch and the swing share one clock (and the jump shot its own), so a battery and its
 // batter stay in time: callers pass the same phase to all three. Seconds per cycle.
 export const PITCH_S = 4.2, SHOT_S = 5;
+// The gridiron runs one play at a time on its own clock: set (0-0.56), the snap, the drop
+// and the throw (0.72), the catch (0.86), the whistle. Every player on it shares the phase.
+export const PLAY_S = 6, SNAP_F = 0.56, THROW_F = 0.72, CATCH_F = 0.86;
+const KICK_S = 5, KEEP_S = 6.5;
+const PLAY_ACTS = new Set(["snap", "stance", "throw", "receive", "wrap", "carry"]);
 // a worker at somebody else's seat stands at it (sitting acts on a seat anchor only)
 const WALK = new Set(["shelve", "tend", "sprint", "stroll", "patrol", "patch", "sweep"]);
 export const poseOf = (a, act) => (act === "sleep" ? "lie" : a.walk && WALK.has(act) ? "walk" : SIT.has(act) && (act === a.act || a.kind === "seat" || a.kind === "bed") ? "sit" : "stand");
 
+const SKIN = "#c8a27a";
 function R(c, col, x, y, w, h) { c.fillStyle = col; c.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h))); }
 export function phaseOf(key) { let h = 2166136261; for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 1000) / 1000; }
 const frac = (v) => ((v % 1) + 1) % 1;
@@ -53,7 +60,9 @@ function blit(c, img, fi, sy, sh, x, y, w, h, flip) {
 const PITCH_ACTS = new Set(["pitch", "bat", "catch", "umpire", "ready"]);
 export function drawPose(c, sheet, a, act, x, y, hh0, t, ph, k = 1) {
   const img = sheet.img, frames = sheet.frames || 1;
-  if (PITCH_ACTS.has(act)) ph = 0;   // one pitch at a time: the battery, the batter and the field move together
+  if (PITCH_ACTS.has(act) || PLAY_ACTS.has(act)) ph = 0;   // one pitch (one play) at a time: everyone on it moves together
+  // at the snap the linemen come up out of their stance and block, until the whistle
+  if ((act === "stance" || act === "snap") && t > 0) { const g = frac(t / PLAY_S); if (g > SNAP_F + 0.02 && g < 0.93) act = "block"; }
   const bp = hh0 / FH, hh = hh0 * k;          // bp: one sprite pixel at the furniture's scale
   const f = hh / FH, ww = FW * f, px = f;   // one sprite pixel of this person
   let pose = poseOf(a, act);
@@ -108,6 +117,18 @@ export function drawPose(c, sheet, a, act, x, y, hh0, t, ph, k = 1) {
       if (act === "talk" && t > 0 && every(t, 6, 0.3, ph)) dots(c, X + (flip ? 5 : -12) * px, seatY - HIP * px - 6 * px, px);
       return [X - ww / 2, seatY - HIP * px, X + ww / 2, y];
     }
+    // the keeper's dive: the whole sprite laid out sideways, gloves first, then back up
+    if (act === "keeper" && t > 0) {
+      const g = frac(t / KEEP_S + ph);
+      if (g > 0.8 && g < 0.93) {
+        const side = flip ? 1 : -1, dir = frac(ph * 7.3) < 0.5 ? side : -side;
+        c.save(); c.translate(Math.round(x + dir * hh * 0.35), Math.round(y - hh * 0.32)); c.rotate(dir * 1.2);
+        c.drawImage(img, 0, 0, FW, FH, Math.round(-ww / 2), Math.round(-hh / 2), Math.round(ww), Math.round(hh));
+        c.restore();
+        R(c, "#a3e635", x + dir * hh * 0.78 - 2 * px, y - hh * 0.62, 4 * px, 3 * px);
+        return [x + Math.min(0, dir) * hh, y - hh * 0.8, x + Math.max(0, dir) * hh, y];
+      }
+    }
     // standing
     if (t > 0 && pose !== "walk") {
       switch (act) {
@@ -123,6 +144,24 @@ export function drawPose(c, sheet, a, act, x, y, hh0, t, ph, k = 1) {
         case "dribble": case "hustle": dx += Math.round(Math.sin((t * 0.9 + ph) * Math.PI * 2)) * px; break;
         case "defend": dx += Math.round(Math.sin((t * 1.3 + ph) * Math.PI * 2) * 1.4) * px; break;
         case "whistle": if (every(t, 6, 0.3, ph)) flip = !flip; break;
+        // the gridiron (one clock) and the pitch (each their own)
+        case "block": dx += (flip ? 1 : -1) * px; break;
+        case "wrap": { const g = frac(t / PLAY_S); dy = px; if (g > SNAP_F + 0.02 && g < 0.9) dx += (flip ? 1 : -1) * 2 * px; break; }
+        case "throw": { const g = frac(t / PLAY_S); if (g > SNAP_F && g < THROW_F) dx -= (flip ? 1 : -1) * 2 * px; else if (g >= THROW_F && g < THROW_F + 0.06) dx += (flip ? 1 : -1) * px; break; }
+        case "receive": {
+          const g = frac(t / PLAY_S), side = flip ? 1 : -1;
+          if (g > SNAP_F && g < CATCH_F) { fi = frames > 1 ? Math.floor(t * 8) % 2 : 0; dy = fi ? -px : 0; dx += side * Math.round(((g - SNAP_F) / (CATCH_F - SNAP_F)) * 4) * px; }
+          else if (g >= CATCH_F && g < 0.96) { dx += side * 4 * px; dy = -2 * px; }
+          break;
+        }
+        case "carry": { const g = frac(t / PLAY_S); dy = g < SNAP_F ? px : 0; if (g > SNAP_F && g < 0.9) dx += (flip ? 1 : -1) * px; break; }
+        case "kick": { const g = frac(t / KICK_S + ph), side = flip ? 1 : -1; if (g > 0.55 && g < 0.66) dx += side * 2 * px; else if (g >= 0.66 && g < 0.74) { dx += side * 3 * px; dy = -px; } break; }
+        case "footwork": dx += Math.round(Math.sin((t * 1.4 + ph) * Math.PI * 2) * 1.5) * px; fi = frames > 1 ? Math.floor(t * 5 + ph * 8) % 2 : 0; break;
+        case "kickball": { const g = frac(t / 3 + ph); if (g > 0.66 && g < 0.76) dx += (flip ? 1 : -1) * 2 * px; break; }
+        case "header": { const g = frac(t / 4 + ph); if (g > 0.6 && g < 0.82) dy = -Math.round(Math.sin(((g - 0.6) / 0.22) * Math.PI) * 5) * px; break; }
+        case "keeper": dy = px; dx += Math.round(Math.sin((t * 0.7 + ph) * Math.PI * 2)) * px; break;
+        case "mark": dy = px; dx += Math.round(Math.sin((t * 1.1 + ph) * Math.PI * 2) * 1.4) * px; break;
+        case "chase": fi = frames > 1 ? Math.floor(t * 8 + ph * 8) % 2 : 0; dy = fi ? -px : 0; dx += Math.round(Math.sin((t * 0.45 + ph) * Math.PI * 2) * 2) * px; break;
         case "amble": fi = frames > 1 ? Math.floor(t * 4 + ph * 8) % 2 : 0; dy = fi ? -px : 0; break;
         case "lift": dy = every(t, 2, 0.5, ph) ? 2 * px : 0; break;
         case "run": fi = frames > 1 ? Math.floor(t * 8 + ph * 8) % 2 : 0; dy = fi ? -px : 0; break;
@@ -278,6 +317,67 @@ function tool(c, act, x, top, p, flip, t, ph, seated) {
       break;
     case "tend": case "patch":
       R(c, act === "tend" ? "#e5e5e5" : "#22d3ee", hx - p, hy - 4 * p, 3 * p, 4 * p);
+      break;
+    // the gridiron: the ball is brown with a white lace, the officials in black and white
+    case "snap":
+      if (t <= 0 || frac(t / PLAY_S) < SNAP_F) { R(c, "#7c3f1a", x + side * 5 * p, top + 48 * p, 5 * p, 3 * p); R(c, "#f5f5f5", x + side * 5 * p + 2 * p, top + 48 * p, p, 3 * p); }
+      R(c, SKIN, x + side * 6 * p, top + 30 * p, 2 * p, 18 * p);   // the hand on the ball
+      break;
+    case "stance":
+      R(c, SKIN, x + side * 7 * p, top + 26 * p, 2 * p, 24 * p); R(c, SKIN, x + side * 6 * p, top + 48 * p, 3 * p, 2 * p);   // one hand down
+      break;
+    case "block":
+      R(c, SKIN, x + side * 9 * p, top + 17 * p, 3 * p, 3 * p); R(c, SKIN, x + side * 9 * p, top + 23 * p, 3 * p, 3 * p);
+      break;
+    case "wrap":
+      R(c, SKIN, x + side * 9 * p, top + 15 * p, 4 * p, 2 * p); R(c, SKIN, x + side * 9 * p, top + 22 * p, 4 * p, 2 * p);   // arms out, ready to wrap (and let go)
+      break;
+    case "throw": {
+      const g = t > 0 ? frac(t / PLAY_S) : 0.65;
+      if (g > SNAP_F && g < THROW_F) R(c, "#7c3f1a", x - side * 5 * p, top + 9 * p, 5 * p, 3 * p);             // cocked by the ear
+      else if (g >= THROW_F && g < THROW_F + 0.05) R(c, "#7c3f1a", x + side * 7 * p, top + p, 5 * p, 3 * p);   // released
+      break;
+    }
+    case "receive": {
+      const g = t > 0 ? frac(t / PLAY_S) : 0;
+      if (g >= CATCH_F && g < 0.96) { R(c, SKIN, x - 4 * p, top - 3 * p, 2 * p, 5 * p); R(c, SKIN, x + 3 * p, top - 3 * p, 2 * p, 5 * p); R(c, "#7c3f1a", x - 3 * p, top - 5 * p, 6 * p, 3 * p); }
+      break;
+    }
+    case "kick": {
+      const g = t > 0 ? frac(t / KICK_S + ph) : 0.3, foot = top + (FH - 4) * p;
+      if (g < 0.68) { R(c, "#f97316", x + side * 8 * p, foot + 2 * p, 3 * p, 2 * p); R(c, "#7c3f1a", x + side * 8 * p, foot - 3 * p, 3 * p, 5 * p); }   // on the tee
+      else if (g < 0.95) { const k = (g - 0.68) / 0.27; R(c, "#7c3f1a", x + side * (8 + k * 34) * p, foot - 3 * p - Math.sin(k * Math.PI * 0.8) * 40 * p, 4 * p, 3 * p); }
+      break;
+    }
+    case "signal":
+      if (t > 0 && every(t, 8, 0.18, ph)) { R(c, "#111827", x - 7 * p, top - 7 * p, 2 * p, 13 * p); R(c, "#111827", x + 5 * p, top - 7 * p, 2 * p, 13 * p); }   // arms up: it counts
+      else R(c, "#facc15", hx, top + 30 * p, 3 * p, 2 * p);   // the flag, in the pocket
+      break;
+    case "chain":
+      R(c, "#e5e7eb", x + side * 7 * p, top - 8 * p, p, (FH + 8) * p); R(c, "#f97316", x + side * 6 * p, top - 12 * p, 4 * p, 4 * p);
+      break;
+    // the pitch: a white ball with a black patch
+    case "footwork": {
+      const bx = x + side * 4 * p + (t > 0 ? Math.round(Math.sin((t * 2.8 + ph) * Math.PI) * 3) : 0) * p, by = top + (FH - 4) * p;
+      R(c, "#f5f5f5", bx, by, 4 * p, 4 * p); R(c, "#111", bx + p, by + p, p, p);
+      break;
+    }
+    case "kickball": {
+      const g = t > 0 ? frac(t / 3 + ph) : 0.3, k = g < 0.72 ? 0 : (g - 0.72) / 0.28, by = top + (FH - 4) * p;
+      R(c, "#f5f5f5", x + side * (5 + k * 26) * p, by - Math.sin(k * Math.PI) * 6 * p, 4 * p, 4 * p);
+      break;
+    }
+    case "header": {
+      const g = t > 0 ? frac(t / 4 + ph) : 0;
+      if (g > 0.55 && g < 0.9) { const k = (g - 0.55) / 0.35; R(c, "#f5f5f5", x - 2 * p + (k > 0.5 ? side * (k - 0.5) * 20 * p : 0), top - 5 * p - (k < 0.5 ? (0.5 - k) * 24 * p : 0), 4 * p, 4 * p); }
+      break;
+    }
+    case "keeper":
+      R(c, "#a3e635", x - 9 * p, top + 19 * p, 3 * p, 3 * p); R(c, "#a3e635", x + 7 * p, top + 19 * p, 3 * p, 3 * p);   // gloves
+      break;
+    case "flag":
+      if (t > 0 && every(t, 7, 0.3, ph)) { R(c, "#111827", x + side * 6 * p, top - 3 * p, p, 14 * p); R(c, "#facc15", x + side * 7 * p, top - 3 * p, 5 * p, 4 * p); }   // OFFSIDE (logged)
+      else { R(c, "#111827", x + side * 6 * p, top + 24 * p, p, 12 * p); R(c, "#facc15", x + side * 7 * p, top + 32 * p, 4 * p, 3 * p); }
       break;
     case "shelve":
       if (t > 0 && every(t, 3, 0.3, ph)) R(c, "#1e3a5f", hx - p, top + 6 * p, 2 * p, 5 * p);

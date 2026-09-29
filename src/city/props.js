@@ -20,7 +20,7 @@ export const ROOM_TYPE = {
   "lecture-hall": "lecture", "lab-block": "lab", "stacks": "library", "clock-tower": "clock",
   "exchange-floor": "exchange", "vault-bank": "vault", "rooftop-lounge": "lounge",
   "dive-bar": "bar", "casino": "casino", "press-room": "press", "all-night-diner": "diner",
-  "stadium": "stadium", "gym": "gym",
+  "stadium": "gridiron", "gym": "gym",
   "ward": "ward", "chapel": "chapel", "park": "park", "market": "market", "schoolhouse": "school",
   "archive-stacks": "library", "memory-vault": "vault", "archive-lofts": "lofts",
   "reclamation": "line", "reactor": "reactor", "foundry": "foundry", "cache-farm": "racks", "docks": "docks",
@@ -28,7 +28,7 @@ export const ROOM_TYPE = {
   "block-a": "hab", "block-b": "hab", "block-c": "hab", "block-d": "hab", "the-street": "street",
   "the-drip": "cafe", "gallery-annex": "gallery", "members-club": "lounge", "the-lantern": "bar",
   "allotment": "allotment", "night-market": "market", "the-plaza": "street",
-  "ball-field": "ballfield", "courts": "courts", "rec-park": "picnic",
+  "ball-field": "ballfield", "courts": "courts", "rec-park": "picnic", "pitch": "soccer",
 };
 export const typeOf = (placeId) => ROOM_TYPE[placeId] || "office";
 
@@ -39,12 +39,12 @@ const LOOK = {
   gallery: ["#2a2824", "#46423a"], cafe: ["#2a1e14", "#4a3322"], lecture: ["#1c2218", "#35402a"], lab: ["#122428", "#1f3a40"],
   library: ["#221a12", "#3a2c1c"], clock: ["#1e1a14", "#3a3022"], exchange: ["#141e24", "#22323c"], vault: ["#1a1c1e", "#2c3034"],
   lounge: ["#1e1422", "#342440"], bar: ["#221410", "#3c2218"], casino: ["#1a1410", "#3a1e1e"], press: ["#1e1e1a", "#34342c"],
-  diner: ["#241a14", "#3e2c20"], stadium: ["#12200f", "#1f3a18"], gym: ["#1e1a16", "#3a3026"], ward: ["#1a2224", "#2c3a3e"],
+  diner: ["#241a14", "#3e2c20"], gridiron: ["#10202a", "#2b7a2e"], gym: ["#1e1a16", "#3a3026"], ward: ["#1a2224", "#2c3a3e"],
   chapel: ["#1c1822", "#302838"], park: ["#0f1f0f", "#1f3a1c"], allotment: ["#141a0e", "#3a2a18"], market: ["#241c10", "#3e3018"], school: ["#1e2016", "#363a26"],
   lofts: ["#1c1a18", "#302c28"], line: ["#200f0f", "#381c1c"], reactor: ["#0f2014", "#1a3a24"], foundry: ["#26140c", "#442414"],
   racks: ["#0e1618", "#1a2a2e"], docks: ["#0f1a22", "#1a2e3a"], vats: ["#0f2014", "#1c3a22"], barracks: ["#1a1c16", "#2e3226"],
   cells: ["#181818", "#2a2a2a"], canteen: ["#221a12", "#3a2c1e"], hab: ["#18181a", "#2c2c30"], street: ["#101410", "#222822"],
-  ballfield: ["#10202a", "#2f6b2a"], courts: ["#141c24", "#3a4250"], picnic: ["#10202a", "#2a5a24"],
+  ballfield: ["#10202a", "#2f6b2a"], courts: ["#141c24", "#3a4250"], picnic: ["#10202a", "#2a5a24"], soccer: ["#10202a", "#2e7a30"],
 };
 
 // ---- plans ----------------------------------------------------------------------------
@@ -157,9 +157,19 @@ const PLANS = {
     back: { unit: [M(A("counter", "deal", "staff"), "felt", 1.5)] },
     front: { head: [M(A("stand", "sing", "staff"), "mic", 1.3)], unit: [M(A("seat", "gamble", "patron", 1), "slotMachine", 1.7, SIDE)] },
   },
-  stadium: {
-    back: { span: "bleacher", unit: [M(A("stand", "cheer", "patron"), null, 1.05)] },
-    front: { unit: [M(A("stand", "sprint", "staff", 0, true), "pitch", 2.2), M(A("stand", "stretch", "staff"), "pitch", 1.3)] },
+  // the Bowl's floor, side on: the line of scrimmage up the field (the quarterback, the
+  // snap, linemen facing each other in pairs), the officials, the kicker and the bench in front
+  gridiron: {
+    back: { max: 11, span: "gridline", head: [M(A("stand", "throw", "patron", 1), null, 1.35), M(A("stand", "snap", "patron", 1), "ballSpot", 1.15)], unit: [M(A("stand", "stance", "patron", 1), null, 1.05), M(A("stand", "stance", "patron", -1), null, 1.05), M(A("stand", "wrap", "patron", -1), null, 1.2), M(A("stand", "receive", "patron", 1), null, 1.3)] },
+    front: { head: [M(A("station", "signal", "staff"), null, 1.2), M(A("station", "chain", "staff", 1), null, 1.15), M(A("stand", "kick", "patron", 1), "kickTee", 1.6, SIDE)], unit: [M(A("seat", "watch", "any"), "bleacherSeat", 1.08)] },
+    solo: { head: [M(A("stand", "throw", "patron", 1), null, 1.35), M(A("stand", "snap", "patron", 1), "ballSpot", 1.15), M(A("station", "signal", "staff"), null, 1.2)], unit: [M(A("stand", "stance", "patron", 1), null, 1.05), M(A("stand", "stance", "patron", -1), null, 1.05), M(A("seat", "watch", "any"), "bleacherSeat", 1.08)] },
+  },
+  // the estate pitch, side on: a keeper in the goalmouth, the game up the pitch; the
+  // referee, the assistant's flag at the corner, the dugout and the rail in front
+  soccer: {
+    back: { max: 10, span: "touchline", head: [M(A("stand", "keeper", "patron", 1), "goalMouth", 1.8, 0.62)], unit: [M(A("stand", "footwork", "patron", 1), null, 1.3), M(A("stand", "mark", "patron", -1), null, 1.25), M(A("stand", "header", "patron", 1), null, 1.3), M(A("stand", "chase", "patron", -1), null, 1.3)] },
+    front: { head: [M(A("station", "whistle", "staff"), null, 1.2), M(A("station", "flag", "staff", 1), "cornerFlag", 1.3, SIDE)], unit: [M(A("seat", "watch", "any"), "courtBench", 1.1), M(A("stand", "cheer", "patron"), "railing", 1.05)] },
+    solo: { head: [M(A("stand", "keeper", "patron", 1), "goalMouth", 1.8, 0.62), M(A("station", "whistle", "staff"), null, 1.2)], unit: [M(A("stand", "footwork", "patron", 1), null, 1.3), M(A("stand", "mark", "patron", -1), null, 1.25), M(A("seat", "watch", "any"), "courtBench", 1.1)] },
   },
   gym: {
     back: { unit: [M(A("station", "punch", "any", 1), "bag", 1.6, SIDE)] },
@@ -360,13 +370,14 @@ function hkey(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { 
 // -> {at: Map key -> index, overflow: [keys]}
 // At night (hour given and in the night) residents want a bunk before anything else.
 // ordered: fill the anchors in their listed order (the battery before the outfield, the
-// players before the stands) instead of from each person's own starting place.
+// players before the stands) instead of from each person's own starting place. A person's
+// pri (lower first, default 0) orders the newcomers: the footballers take the field first.
 export function assignAnchors(anchors, people, prev = null, hour = null, ordered = false) {
   const n = anchors.length, taken = new Array(n).fill(null), at = new Map(), overflow = [];
   const night = hour != null && isNight(hour);
   const beds = night && anchors.some(a => a.kind === "bed");
   const fits = (a, role) => (PREFS[role] || PREFS.patron).includes(a.role) && !(beds && role === "rest" && a.kind !== "bed");
-  const sorted = people.slice().sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  const sorted = people.slice().sort((a, b) => ((a.pri || 0) - (b.pri || 0)) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   const waiting = [];
   for (const p of sorted) {
     const i = prev?.get(p.key);
@@ -393,15 +404,16 @@ export function assignAnchors(anchors, people, prev = null, hour = null, ordered
 // general labour where it likes) puts the rest to work at the tables: a waiter at a café
 // table, a vendor among the crates, a warden by the cots.
 export const LEISURE_ACTS = new Set(["drink", "eat", "talk", "read", "write", "listen", "pray", "watch", "gamble", "rest", "sleep", "sit", "wait", "shop", "stroll", "loiter", "cheer", "view",
-  "pitch", "bat", "ready", "catch", "shoot", "dribble", "defend", "feed"]);
+  "pitch", "bat", "ready", "catch", "shoot", "dribble", "defend", "feed",
+  "snap", "stance", "throw", "receive", "wrap", "carry", "kick", "footwork", "kickball", "header", "keeper", "mark", "chase"]);
 // Rooms whose people take their places in order (a game needs its battery first).
-export const ORDERED_TYPES = new Set(["ballfield", "courts", "picnic"]);
+export const ORDERED_TYPES = new Set(["ballfield", "courts", "picnic", "gridiron", "soccer"]);
 const STAFF_ACT = {
   bar: "serve", cafe: "serve", diner: "serve", canteen: "serve", lounge: "serve", suite: "serve", market: "sell", casino: "deal",
   theatre: "perform", concert: "perform", lecture: "lecture", school: "lecture", library: "shelve", park: "rake", allotment: "dig",
-  stadium: "sprint", cells: "guard", chapel: "preach", gallery: "guide", assembly: "confer", tribunal: "confer", street: "sweep",
+  cells: "guard", chapel: "preach", gallery: "guide", assembly: "confer", tribunal: "confer", street: "sweep",
   hab: "tend", lofts: "tend", barracks: "drill", press: "type", vault: "count",
-  ballfield: "rake", courts: "whistle", picnic: "rake",
+  ballfield: "rake", courts: "whistle", picnic: "rake", gridiron: "rake", soccer: "rake",
 };
 export function actAt(a, hour, role = null, type = null) {
   let act = a.kind === "bed" && a.act === "sleep" ? (isNight(hour) ? "sleep" : "rest") : a.act;
@@ -467,7 +479,7 @@ export function drawRoom(c, placeId, x, y, w, h, u = 2, o = {}) {
   R(c, o.lit === false ? "rgba(255,255,255,0.03)" : "rgba(255,220,150,0.05)", x, y, w, 2 * u);
   c.restore();
 }
-const OPEN_AIR = new Set(["ballfield", "courts", "picnic"]);
+const OPEN_AIR = new Set(["ballfield", "courts", "picnic", "gridiron", "soccer"]);
 const COLD = new Set(["lab", "office", "exchange", "vault", "reactor", "racks", "vats", "ward", "cells", "line", "docks", "clock"]);
 const NOOP = () => {};
 
@@ -577,11 +589,30 @@ const DRAW = {
     R(c, "#1a1a1a", x + w * 0.52, y + 6 * u, w * 0.18, 2 * u);
     repeat(3, i => R(c, "#6b6b6b", x + w * 0.52, y + 10 * u + i * 2 * u, w * 0.16, u));
   },
-  stadium(c, x, y, w, h, u) {
-    R(c, "#1f5f2a", x, y + h * 0.62, w, h * 0.38);   // the pitch
-    R(c, "#e5e5e5", x + w / 2, y + h * 0.62, u, h * 0.38);
-    R(c, "#2a3a2a", x, y + 3 * u, w, h * 0.3);   // the far stands, full
-    across(x, w, 3 * u, (sx, i) => R(c, ["#f87171", "#60a5fa", "#fbbf24", "#e5e5e5", "#4ade80"][i % 5], sx, y + 5 * u + (i % 4) * 3 * u, u, u));
+  // the Bowl: sky over the rim, the far stands full, the field striped every five yards
+  // with a line every ten, an end zone at each side in its team's colour
+  gridiron(c, x, y, w, h, u, o) {
+    const dusk = (o.hour ?? 12) >= 18.5 || (o.hour ?? 12) < 6.5;
+    R(c, dusk ? "#070d18" : "#1c3346", x, y, w, h * 0.2);
+    R(c, "#2a3038", x, y + h * 0.16, w, h * 0.3);                                // the far stands
+    across(x, w, 3 * u, (sx, i) => R(c, ["#f87171", "#60a5fa", "#fbbf24", "#e5e5e5", "#4ade80", "#c084fc"][i % 6], sx, y + h * 0.19 + (i % 5) * 3 * u, u, u));
+    R(c, "#4b5563", x, y + h * 0.46, w, u);                                     // the wall round the field
+    R(c, "#2b7a2e", x, y + h * 0.48, w, h * 0.52);
+    const ez = Math.max(8 * u, w * 0.08);
+    R(c, "#7f1d1d", x, y + h * 0.48, ez, h * 0.52); R(c, "#4c1d95", x + w - ez, y + h * 0.48, ez, h * 0.52);   // the end zones
+    const n = Math.max(2, Math.round((w - 2 * ez) / (10 * u)));
+    for (let k = 0; k <= n; k++) R(c, k % 2 ? "rgba(241,245,240,0.55)" : "#f1f5f0", x + ez + (k * (w - 2 * ez)) / n, y + h * 0.48, u, h * 0.52);   // yard lines
+    for (let k = 0; k < n; k++) if (k % 2) R(c, "rgba(0,0,0,0.08)", x + ez + (k * (w - 2 * ez)) / n, y + h * 0.48, (w - 2 * ez) / n, h * 0.52);
+  },
+  // the estate pitch: grey hab blocks over the far touchline, the fence, striped grass
+  soccer(c, x, y, w, h, u, o) {
+    const dusk = (o.hour ?? 12) >= 18.5 || (o.hour ?? 12) < 6.5;
+    R(c, dusk ? "#070d18" : "#1c3346", x, y, w, h * 0.5);
+    across(x, w, 34 * u, (bx, i) => { R(c, "#23262c", bx - 12 * u, y + h * (0.12 + (i % 2) * 0.06), 24 * u, h * 0.4); repeat(5, k => R(c, dusk && (i + k) % 3 ? "#fbbf24" : "#15171b", bx - 9 * u + (k % 3) * 7 * u, y + h * (0.16 + (i % 2) * 0.06) + Math.floor(k / 3) * 5 * u, 3 * u, 2 * u)); });
+    R(c, "#374151", x, y + h * 0.44, w, u); across(x, w, 10 * u, fx => R(c, "#374151", fx, y + h * 0.44, u, h * 0.06));   // the perimeter fence
+    R(c, "#2e7a30", x, y + h * 0.5, w, h * 0.5);
+    across(x, w, 18 * u, (sx, i) => { if (i % 2) R(c, "#338a35", sx - 9 * u, y + h * 0.5, 18 * u, h * 0.5); });   // mowing stripes
+    R(c, "#f1f5f0", x + w / 2, y + h * 0.5, u, h * 0.5);                         // the halfway line
   },
   gym(c, x, y, w, h, u) {
     R(c, "#9ab0b8", x + 3 * u, y + 4 * u, w * 0.4, 2 * u);   // mirror
@@ -753,7 +784,13 @@ const LIVE = {
   casino(c, x, y, w, h, u, { t }) { across(x, w, 6 * u, (bx, i) => R(c, (i + Math.floor(t * 4)) % 4 ? "#7a5a14" : "#fbbf24", bx + u, y + u, u, u)); },
   chapel(c, x, y, w, h, u, { t }) { R(c, "#4ade80", x + w * 0.49, y + h * 0.44, w * 0.02, 2 * u + (blink(t, 0.3) ? u : 0)); },   // the uptime lamp
   docks(c, x, y, w, h, u, { t }) { across(x, w, 7 * u, (wx, i) => R(c, "#22d3ee", wx + ((t * 3 * u + i * 2 * u) % (4 * u)), y + h * 0.3 + (i % 2) * 4 * u, 3 * u, u)); },
-  stadium(c, x, y, w, h, u, { t }) { across(x, w, 5 * u, (sx, i) => { if (blink(t, 0.9, i * 0.29)) R(c, "#e5e5e5", sx, y + 4 * u + (i % 4) * 3 * u, u, u); }); },
+  gridiron(c, x, y, w, h, u, { t, hour }) {
+    across(x, w, 5 * u, (sx, i) => { if (blink(t, 0.9, i * 0.29)) R(c, "#e5e5e5", sx, y + h * 0.19 + (i % 4) * 3 * u, u, u); });   // flashbulbs, phones, compliance
+    if (hour >= 18 || hour < 6.5) for (const lx of [x + 3 * u, x + w - 3 * u]) { R(c, "#fff7d6", lx - 3 * u, y + 2 * u, 6 * u, 2 * u); c.fillStyle = "rgba(255,247,214,0.05)"; c.beginPath(); c.moveTo(lx - 3 * u, y + 4 * u); c.lineTo(lx + 3 * u, y + 4 * u); c.lineTo(x + w / 2 + (lx - x - w / 2) * 0.3, y + h); c.lineTo(x + w / 2 + (lx - x - w / 2) * 0.7, y + h); c.closePath(); c.fill(); }
+  },
+  soccer(c, x, y, w, h, u, { hour }) {
+    if (hour >= 18.5 || hour < 6.5) for (const lx of [x + 3 * u, x + w - 3 * u]) { R(c, "#4b5563", lx, y + 4 * u, u, h * 0.4); R(c, "#fff7d6", lx - 3 * u, y + 2 * u, 7 * u, 2 * u); R(c, "rgba(255,247,214,0.05)", lx - 10 * u, y + 4 * u, 20 * u, h); }
+  },
   studio(c, x, y, w, h, u, { t }) { R(c, blink(t, 0.25) ? "#f87171" : "#5a1414", x + w * 0.1, y + 5 * u, w * 0.1, 2 * u); },
   ballfield(c, x, y, w, h, u, { t, hour }) {
     const on = hour >= 18.5 || hour < 6.5;
@@ -906,8 +943,6 @@ export const PROP = {
     back(c, X, Y, W, p, t, a) { const x = personX(X, W, a); R(c, "#9a7a4a", x - 4 * p, Y - 10 * p, 8 * p, 2 * p); R(c, "#6a5030", x - p, Y - 8 * p, 2 * p, 8 * p); },
     front(c, X, Y, W, p, t, a) { const [x0, x1] = rightOf(X, W, a, p); const mw = Math.min(12 * p, x1 - x0); R(c, "#7a1a1a", x0, Y - 30 * p, mw, 30 * p); R(c, "#0b0b0b", x0 + p, Y - 26 * p, mw - 2 * p, 6 * p); const sp = Math.floor(t * 8 + (a?.i || 0) * 3); repeat(3, k => R(c, ["#fbbf24", "#4ade80", "#f87171", "#60a5fa"][(sp + k * 2) % 4], x0 + 2 * p + k * 3 * p, Y - 25 * p, 2 * p, 4 * p)); R(c, "#fbbf24", x0 + mw - 2 * p, Y - 34 * p, p, 6 * p); },
   },
-  bleacher: { back(c, X, Y, W, p) { R(c, "#3a4a3a", X, Y - 2 * p, W + 1, 2 * p); R(c, "#2a3a2a", X, Y - 12 * p, W + 1, 2 * p); } },
-  pitch: { back(c, X, Y, W, p) { R(c, "#e5e5e5", X, Y - p, W, p / 2); } },
   barbell: { back(c, X, Y, W, p, t, a) { const x = personX(X, W, a); R(c, "#111", x - 10 * p, Y - 2 * p, 20 * p, 2 * p); R(c, STEEL_D, x - 11 * p, Y - 22 * p, 2 * p, 20 * p); R(c, STEEL_D, x + 9 * p, Y - 22 * p, 2 * p, 20 * p); } },
   treadmill: { back(c, X, Y, W, p, t, a) { const x = personX(X, W, a); R(c, STEEL_D, x + 6 * p, Y - 22 * p, 2 * p, 18 * p); R(c, "#111", x + 4 * p, Y - 22 * p, 6 * p, 2 * p); }, front(c, X, Y, W, p, t, a) { const x = personX(X, W, a); R(c, "#374151", x - 9 * p, Y - 4 * p, 18 * p, 4 * p); const o = (t * 12) % 4; for (let k = 0; k < 4; k++) R(c, "#111", x - 8 * p + ((k * 4 + o) % 16) * p, Y - 4 * p, p, p); } },
   bag: { back(c, X, Y, W, p, t, a) { const [x0] = rightOf(X, W, a, p); const sw = osc(t, 0.9, (a?.i || 0) * 0.3) * p; R(c, "#1a1a1a", x0 + 4 * p, Y - 44 * p, p, 8 * p); R(c, "#7f1d1d", x0 + sw, Y - 36 * p, 8 * p, 18 * p); R(c, "#5a1414", x0 + sw, Y - 20 * p, 8 * p, 2 * p); } },
@@ -989,6 +1024,31 @@ export const PROP = {
       R(c, "#4ade80", x + 4 * p, Y - 19 * p, 2 * p, 3 * p);                                                                 // a regulation beverage
     },
   },
+  // the gridiron and the estate pitch
+  gridline: { back(c, X, Y, W, p) { R(c, "#f1f5f0", X, Y - p, W, p); for (let k = 1; k < 8; k++) R(c, "rgba(241,245,240,0.5)", X + (W * k) / 8, Y - 3 * p, p, 3 * p); } },
+  ballSpot: { front(c, X, Y, W, p, t, a) { const x = personX(X, W, a), f = t > 0 ? ((t / 6) % 1 + 1) % 1 : 0.2; if (f < 0.56) { R(c, "#7c3f1a", x + (a?.face || 1) * 5 * p, Y - 3 * p, 5 * p, 3 * p); R(c, "#f5f5f5", x + (a?.face || 1) * 5 * p + 2 * p, Y - 3 * p, p, 3 * p); } } },
+  kickTee: {
+    back(c, X, Y, W, p, t, a) {
+      const [x0, x1] = rightOf(X, W, a, p);
+      R(c, "#111827", x1 - 3 * p, Y - 40 * p, 2 * p, 40 * p); R(c, "rgba(229,231,235,0.35)", x1 - 16 * p, Y - 38 * p, 14 * p, 36 * p);   // the kicking net
+      void x0;
+    },
+    front(c, X, Y, W, p, t, a) { const x = personX(X, W, a); R(c, "#f97316", x + 7 * p, Y - 2 * p, 3 * p, 2 * p); },
+  },
+  touchline: { back(c, X, Y, W, p) { R(c, "#f1f5f0", X, Y - p, W, p); } },
+  goalMouth: {
+    back(c, X, Y, W, p, t, a) {
+      const x = personX(X, W, a), gw = Math.min(W, 34 * p), gx = x - gw / 2, gh = 52 * p;
+      R(c, "rgba(229,231,235,0.18)", gx, Y - gh, gw, gh);   // the net, behind
+      c.strokeStyle = "rgba(229,231,235,0.35)"; c.lineWidth = 1; c.beginPath();
+      for (let k = 1; k < 8; k++) { c.moveTo(Math.round(gx + (gw * k) / 8) + 0.5, Y - gh); c.lineTo(Math.round(gx + (gw * k) / 8) + 0.5, Y); }
+      for (let k = 1; k < 6; k++) { c.moveTo(gx, Math.round(Y - (gh * k) / 6) + 0.5); c.lineTo(gx + gw, Math.round(Y - (gh * k) / 6) + 0.5); }
+      c.stroke();
+    },
+    front(c, X, Y, W, p, t, a) { const x = personX(X, W, a), gw = Math.min(W, 34 * p), gx = x - gw / 2, gh = 52 * p; R(c, "#f5f5f5", gx, Y - gh, 2 * p, gh); R(c, "#f5f5f5", gx + gw - 2 * p, Y - gh, 2 * p, gh); R(c, "#f5f5f5", gx, Y - gh, gw, 2 * p); },
+  },
+  cornerFlag: { back(c, X, Y, W, p, t, a) { const [x0] = rightOf(X, W, a, p); R(c, "#e5e7eb", x0 + 4 * p, Y - 30 * p, p, 30 * p); const wv = t > 0 ? Math.round(Math.sin(t * 5) * p) : 0; R(c, "#ef4444", x0 + 5 * p, Y - 30 * p + wv, 6 * p, 4 * p); } },
+  railing: { front(c, X, Y, W, p) { R(c, "#9ca3af", X, Y - 12 * p, W + 1, 2 * p); for (let k = 0; k < 2; k++) R(c, "#6b7280", X + k * W / 2 + W / 4, Y - 12 * p, p, 12 * p); } },
   lamppost: { back(c, X, Y, W, p) { const x = X + W / 2; R(c, "#374151", x - p, Y - 50 * p, 2 * p, 50 * p); R(c, "#fbbf24", x - 3 * p, Y - 52 * p, 6 * p, 3 * p); } },
   streetBench: { back(c, X, Y, W, p, t, a) { PROP.parkBench.back(c, X, Y, W, p, t, a); } },
 };

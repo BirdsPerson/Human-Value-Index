@@ -10,14 +10,36 @@
 // Anchors are listed in the order people fill them (ordered assignment): the battery and
 // the batter before the outfield, the players before the stands.
 
-import { PLACES } from "./sim.js";
+import { PLACES, assignJob, fieldsOf } from "./sim.js";
+import { roleOf } from "./props.js";
 
-export const PARK_PLACES = ["ball-field", "courts", "rec-park"];
-export const PARK_LOTS = { "the-diamond": "ball-field", "the-courts": "courts", "rec-ground": "rec-park" };
+// The Bowl (a gridiron inside a stadium) and the estate pitch joined the recreation ground
+// on 2026-09-29: "we need a soccer field, though, too, and a football field."
+export const PARK_PLACES = ["ball-field", "courts", "rec-park", "stadium", "pitch"];
+export const PARK_LOTS = { "the-diamond": "ball-field", "the-courts": "courts", "rec-ground": "rec-park", "the-bowl": "stadium", "the-pitch": "pitch" };
+
+// Who plays. A footballer or an athlete on shift at their own ground plays (they fill the
+// field as a visitor would, not the officials' posts); sporting visitors are placed before
+// the rest, so the field fills with the people who would be on it. -> {role, pri}
+const PLAYER_JOBS = new Set(["competitive-athlete", "club-footballer"]);
+const SPORTY = ["sport", "soccer", "gridiron", "coaching"];
+const SPORT_MEMO = new WeakMap();
+const sporty = (s) => {
+  if (!s || typeof s !== "object") return false;
+  let v = SPORT_MEMO.get(s);
+  if (v === undefined) { const f = fieldsOf(s); v = SPORTY.some(k => f[k]); SPORT_MEMO.set(s, v); }
+  return v;
+};
+export function fieldRole(s, w) {
+  const role = roleOf(w);
+  if (role === "staff") return PLAYER_JOBS.has(assignJob(s).jobId) ? { role: "patron", pri: -2 } : { role, pri: 0 };
+  return { role, pri: sporty(s) ? -1 : 0 };
+}
 const rect = (id) => PLACES[id].rect;
 // How far a building's drawn footprint sits in from its lot (CityIso.buildGeo): blocks
 // stand back from the street; the recreation ground runs almost to the kerb.
 export const insetOf = (b) => (PARK_LOTS[b.id] ? [0.15, 0.15] : [Math.min(1.6, b.rect.w * 0.14), Math.min(1.6, b.rect.h * 0.14)]);
+// team: 0 | 1 on a player (the colour under their feet); gk: a keeper's own colour.
 const A = (id, x, y, kind, act, role, look = null, extra = {}) => ({ id, x, y, h: 0, kind, act, role, look, ring: null, ...extra });
 
 // ---- the Diamond ----------------------------------------------------------------------
@@ -155,7 +177,140 @@ function recAnchors() {
   return out;
 }
 
-export const PARK_ANCHORS = { "ball-field": diamondAnchors(), courts: courtAnchors(), "rec-park": recAnchors() };
+// ---- the Bowl: a gridiron inside a stadium ------------------------------------------------
+// Stands on all four sides (three tiers stepping up and away from the field), the field
+// between them: 120 yards end line to end line along x, 53 1/3 across, end zones in each
+// team's colour, a line every ten yards, goalposts on the end lines, a bench on each
+// sideline, the chain crew on the north one. The offense (THE ENFORCERS) goes east from
+// its own 35; the defense (THE ASSETS) waits across the line of scrimmage.
+const S = rect("stadium");
+export const BOWL = (() => {
+  const x0 = S.x + 0.2, x1 = S.x + S.w - 0.2, y0 = S.y + 0.2, y1 = S.y + S.h - 0.2, D = 1.35, tier = 0.45;
+  const cx = S.x + S.w / 2, cy = S.y + S.h / 2, len = 8.4, ten = len / 12, wid = len * 53.333 / 120;
+  const field = { x0: cx - len / 2, x1: cx + len / 2, y0: cy - wid / 2, y1: cy + wid / 2 };
+  const goal = [field.x0 + ten, field.x1 - ten];
+  const stand = (side, a0, a1, b0, b1, axis) => ({ side, a0, a1, b0, b1, axis, tiers: 3, tier, tops: [0.1, 0.26, 0.42] });
+  return {
+    lot: S, cx, cy, ten, field, goal, los: goal[0] + 3.5 * ten,
+    floor: { x0: x0 + D, x1: x1 - D, y0: y0 + D, y1: y1 - D },
+    // axis "y": the stand runs along x and steps up away from the field in y (north: -y)
+    stands: [stand("north", x0, x1, y0 + D, y0, "y"), stand("south", x0, x1, y1 - D, y1, "y"), stand("west", y0 + D, y1 - D, x0 + D, x0, "x"), stand("east", y0 + D, y1 - D, x1 - D, x1, "x")],
+    posts: [[field.x0, cy], [field.x1, cy]], postW: 0.24, bar: 0.5, upright: 1.35,
+    benches: [{ y: y0 + D + 0.3, x0: cx - 2, x1: cx + 2 }, { y: y1 - D - 0.3, x0: cx - 2, x1: cx + 2 }],
+    lights: [[S.x + 0.1, S.y + 0.1], [S.x + S.w - 0.1, S.y + 0.1], [S.x + 0.1, S.y + S.h - 0.1], [S.x + S.w - 0.1, S.y + S.h - 0.1]],
+    board: { x0: cx - 1.5, x1: cx + 1.5, y: S.y + 0.25 },
+    net: { x: field.x1 - 0.15, y: y0 + D + 0.85 },
+  };
+})();
+
+function bowlAnchors() {
+  const B = BOWL, L = B.los, cy = B.cy, out = [];
+  const east = (x, y) => [x + 1, y], west = (x, y) => [x - 1, y];
+  const off = (id, x, y, act) => A(id, x, y, "stand", act, "patron", east(x, y), { team: 0 });
+  const def = (id, x, y, act) => A(id, x, y, "stand", act, "patron", west(x, y), { team: 1 });
+  // the order people fill them: a passing drill first (quarterback, center, receiver), then the lines
+  // (spread along the field as far as the play allows: at street zoom a player is most of a cell wide)
+  const players = [
+    off("qb", L - 0.95, cy, "throw"), off("c", L - 0.2, cy, "snap"), off("wr1", L - 0.2, cy - 1.5, "receive"),
+    def("dl2", L + 0.45, cy - 0.24, "stance"), def("lb2", L + 1.45, cy, "wrap"), def("cb1", L + 0.6, cy - 1.5, "wrap"),
+    off("rb", L - 1.75, cy, "carry"), off("lg", L - 0.2, cy - 0.45, "stance"), off("rg", L - 0.2, cy + 0.45, "stance"),
+    def("dl3", L + 0.45, cy + 0.24, "stance"), off("lt", L - 0.2, cy - 0.9, "stance"), off("rt", L - 0.2, cy + 0.9, "stance"),
+    def("dl1", L + 0.45, cy - 0.72, "stance"), def("dl4", L + 0.45, cy + 0.72, "stance"), off("te", L - 0.2, cy + 1.35, "stance"),
+    def("lb1", L + 1.45, cy - 0.75, "wrap"), def("lb3", L + 1.45, cy + 0.75, "wrap"), off("slot", L - 0.8, cy - 1.05, "receive"),
+    off("wr2", L - 0.8, cy + 1.6, "receive"), def("cb2", L + 0.6, cy + 1.6, "wrap"), def("s1", L + 2.6, cy - 0.65, "wrap"), def("s2", L + 2.6, cy + 0.65, "wrap"),
+  ];
+  out.push(...players.slice(0, 16));
+  // the officials and the chain crew; the groundskeeper; the kicker at his net; the cheer squad
+  out.push(
+    A("ref", L - 2.3, cy + 0.6, "station", "signal", "staff", east(L, cy)), A("ump", L + 2.0, cy - 0.35, "station", "signal", "staff", west(L, cy)),
+    A("linesman", L, B.field.y1 + 0.4, "station", "signal", "staff", [L, cy]), A("backjudge", L + 3.4, cy, "station", "signal", "staff", west(L, cy)),
+    A("chainA", L - 0.45, B.field.y0 - 0.5, "station", "chain", "staff", [L, cy]), A("box", L, B.field.y0 - 0.17, "station", "chain", "staff", [L, cy]),
+    A("chainB", L + 0.45, B.field.y0 - 0.5, "station", "chain", "staff", [L, cy]),
+    A("grounds", B.floor.x0 + 0.45, B.floor.y0 + 0.55, "stand", "rake", "staff", null),
+    A("kicker", B.net.x - 0.75, B.net.y, "stand", "kick", "patron", [B.net.x, B.net.y], { team: 0 }),
+  );
+  for (const [k, x] of [[0, B.floor.x0 + 0.55], [1, B.floor.x0 + 1.15], [2, B.floor.x1 - 1.15], [3, B.floor.x1 - 0.55]]) out.push(A(`cheer${k}`, x, B.field.y1 + 0.9, "stand", "cheer", "patron", [x, cy]));
+  // the benches: six a side
+  B.benches.forEach((b, i) => { for (let k = 0; k < 6; k++) { const x = b.x0 + 0.3 + k * 0.68; out.push(A(`bench${i}${k}`, x, b.y, "seat", "watch", "any", [x, cy], { team: i ? 0 : 1 })); } });
+  // the stands, front rows first, all four sides filling together. A game day is a crowd as
+  // well as a game: sixteen take the field, then the long sides' front rows, then the rest of
+  // the teams (the sporting are placed first, parkGeo.fieldRole, so they are the ones playing)
+  const seats = [];
+  for (let t = 0; t < 3; t++) for (const st of B.stands) {
+    const along = st.a1 - st.a0, n = st.axis === "y" ? 11 : 4, step = along / n;
+    const depth = st.b0 + (st.b1 - st.b0) * ((t + 0.5) / 3);
+    for (let k = 0; k < n; k++) {
+      const a = st.a0 + step * (k + 0.5), cheer = (t + k) % 5 === 2;
+      const [x, y] = st.axis === "y" ? [a, depth] : [depth, a];
+      seats.push(A(`st${st.side[0]}${t}${k}`, x, y, cheer ? "stand" : "seat", cheer ? "cheer" : "watch", "patron", [B.cx, B.cy], { h: st.tops[t] }));
+    }
+  }
+  const front = seats.filter(a => /^st[ns]0/.test(a.id));
+  const kicker = out.findIndex(a => a.id === "kicker");
+  out.splice(kicker, 0, ...front, ...players.slice(16));
+  out.push(...seats.filter(a => !front.includes(a)));
+  return out;
+}
+
+// ---- the estate pitch ----------------------------------------------------------------------
+// Full-size markings on a municipal pitch, its length along x: halfway line and centre
+// circle, penalty and goal areas, spots and arcs, goals with nets, corner flags. Dugouts on
+// the north touchline, a rail and a standing crowd on the south one, a small terrace behind
+// the east goal, the scoreboard behind the west. Seven a side: SPRAWL UNITED (west goal,
+// attacking east) and RECLAMATION ATHLETIC.
+const T = rect("pitch");
+export const PITCH = (() => {
+  const cx = T.x + T.w / 2, cy = T.y + T.h / 2, len = 14.6, wid = 9.4;
+  const p = { x0: cx - len / 2, x1: cx + len / 2, y0: cy - wid / 2, y1: cy + wid / 2 };
+  const m = len / 105;   // cells per metre along the pitch
+  return {
+    lot: T, cx, cy, p, m,
+    box: { d: 2.4, hw: 2.9 }, six: { d: 1.0, hw: 1.8 }, spot: 11 * m, circleR: 9.15 * m,
+    goalHW: 1.2, goalH: 1.0, netD: 0.55,
+    flags: [[p.x0, p.y0], [p.x1, p.y0], [p.x0, p.y1], [p.x1, p.y1]],
+    dugouts: [{ x0: cx - 3.5, x1: cx - 1.0, y0: T.y + 0.15, y1: p.y0 - 0.45 }, { x0: cx + 1.0, x1: cx + 3.5, y0: T.y + 0.15, y1: p.y0 - 0.45 }],
+    rail: { y: p.y1 + 0.35, x0: p.x0, x1: p.x1 },
+    terrace: { x0: p.x1 + 1.5, x1: p.x1 + 1.5 + 3 * 1.0, y0: cy - 3.3, y1: cy + 3.3, tiers: 3, tops: [0.1, 0.27, 0.44] },
+    board: { x: p.x0 - 2.9, y0: cy - 1.3, y1: cy + 1.3 },
+    lights: [[T.x + 0.2, T.y + 0.2], [T.x + T.w - 0.2, T.y + 0.2], [T.x + 0.2, T.y + T.h - 0.2], [T.x + T.w - 0.2, T.y + T.h - 0.2]],
+  };
+})();
+
+function pitchAnchors() {
+  const P = PITCH, cx = P.cx, cy = P.cy, out = [];
+  const eastGoal = [P.p.x1, cy], westGoal = [P.p.x0, cy];
+  const a = (id, x, y, act, look) => A(id, x, y, "stand", act, "patron", look, { team: 0 });
+  const b = (id, x, y, act, look) => A(id, x, y, "stand", act, "patron", look, { team: 1 });
+  // the order people fill them: two on the ball, a forward and a defender, the keepers, then the rest
+  out.push(
+    a("a-m2", cx - 0.6, cy + 0.4, "footwork", eastGoal), b("b-m2", cx + 1.1, cy + 2.0, "mark", westGoal),
+    a("a-f1", cx + 2.9, cy - 0.9, "header", eastGoal), b("b-d1", cx + 4.1, cy - 1.6, "header", westGoal),
+    A("a-gk", P.p.x0 + 0.55, cy, "stand", "keeper", "patron", eastGoal, { team: 0, gk: true }), A("b-gk", P.p.x1 - 0.55, cy, "stand", "keeper", "patron", westGoal, { team: 1, gk: true }),
+    a("a-m1", cx - 1.3, cy - 3.2, "chase", eastGoal), b("b-m1", cx + 1.5, cy - 2.4, "chase", westGoal),
+    a("a-d1", cx - 4.1, cy - 2.2, "mark", eastGoal), b("b-f1", cx - 3.1, cy - 0.4, "chase", westGoal),
+    a("a-d2", cx - 4.1, cy + 2.2, "mark", eastGoal), b("b-d2", cx + 3.9, cy + 1.9, "mark", westGoal),
+    a("a-m3", cx - 1.7, cy + 3.4, "kickball", eastGoal), b("b-m3", cx + 2.1, cy + 3.8, "chase", westGoal),
+  );
+  // the referee, the assistants on opposite touchlines and halves, the groundskeeper
+  out.push(
+    A("ref", cx + 0.4, cy - 1.2, "station", "whistle", "staff", [cx - 0.6, cy + 0.4]),
+    A("ar1", cx + 3.8, P.p.y0 - 0.2, "station", "flag", "staff", [cx + 3.8, cy]), A("ar2", cx - 3.8, P.p.y1 + 0.2, "station", "flag", "staff", [cx - 3.8, cy]),
+    A("grounds", P.lot.x + 1.3, P.lot.y + 0.9, "stand", "rake", "staff", null),
+  );
+  // the dugouts, then the crowd on the rail and the terrace, filling together
+  P.dugouts.forEach((d, i) => { for (let k = 0; k < 3; k++) { const x = d.x0 + 0.55 + k * 0.7; out.push(A(`dug${i}${k}`, x, (d.y0 + d.y1) / 2 + 0.1, "seat", "watch", "any", [x, cy], { team: i })); } });
+  const rail = [], terr = [];
+  for (let k = 0; k < 18; k++) { const x = P.rail.x0 + 0.45 + k * ((P.rail.x1 - P.rail.x0 - 0.9) / 17); rail.push(A(`rail${k}`, x, P.rail.y + 0.4, "stand", k % 3 === 1 ? "cheer" : "view", "patron", [x, cy])); }
+  const tr = P.terrace, n = 7, step = (tr.y1 - tr.y0) / n;
+  for (let t = 0; t < tr.tiers; t++) for (let k = 0; k < n; k++) {
+    const x = tr.x0 + (t + 0.5) * ((tr.x1 - tr.x0) / tr.tiers), y = tr.y0 + (k + 0.5) * step, cheer = (t + k) % 4 === 1;
+    terr.push(A(`ter${t}${k}`, x, y, cheer ? "stand" : "seat", cheer ? "cheer" : "watch", "patron", [cx, cy], { h: tr.tops[t] }));
+  }
+  for (let i = 0; i < Math.max(rail.length, terr.length); i++) { if (rail[i]) out.push(rail[i]); if (terr[i]) out.push(terr[i]); }
+  return out;
+}
+
+export const PARK_ANCHORS = { "ball-field": diamondAnchors(), courts: courtAnchors(), "rec-park": recAnchors(), stadium: bowlAnchors(), pitch: pitchAnchors() };
 
 // A stroller's spot on their loop at time t (seconds): one lap in ~40 s, from their own
 // start round the ring, the pace a touch different per person. -> {x, y, dx, dy}

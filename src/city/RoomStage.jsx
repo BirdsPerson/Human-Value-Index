@@ -4,6 +4,7 @@ import { getTier } from "../figures.js";
 import { activityLine, jobLine, clockAt, trainsAt, timetable, TRAIN } from "./simApi.js";
 import { sheetFor } from "./spriteBank.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
+import { fieldRole } from "./parkGeo.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
 import { FONT, SubjectTip } from "./cityUi.jsx";
 
@@ -248,12 +249,14 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
     const hourNow = () => { const mt = censusRef.current.mt ?? clockAt(Date.now()).mt; return ((mt % 24) + 24) % 24; };
     function seat(want) {
       const groups = cells.map(() => []);
-      for (const [name, { w, r, mode }] of want) {
+      for (const [name, { s, w, r, mode }] of want) {
         const i = idx[r];
         if (plat[i] || mode === "leave") continue;
         const e = V.ents.get(name);
         if (e && (e.room !== r || e.leaving)) continue;
-        groups[i].push({ key: name, role: roleOf(w) });
+        // on a field the footballers play and the sporting take the field first
+        const fr = V.geo[i] && ORDERED_TYPES.has(V.geo[i].plan.type) ? fieldRole(s, w) : null;
+        groups[i].push(fr ? { key: name, role: fr.role, pri: fr.pri } : { key: name, role: roleOf(w) });
       }
       groups.forEach((people, i) => {
         if (plat[i] || !V.geo[i]) return;

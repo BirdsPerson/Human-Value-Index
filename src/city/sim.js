@@ -41,7 +41,10 @@ export const DISTRICTS = [
   D("archive", "THE ARCHIVE", "0x7A00", 79, 18, 30, 22, "The records library. Every upload indexed, every file open to anyone. Nothing here is ever deleted."),
   D("commons", "THE COMMONS", "0x6F00", 0, 45, 25, 13, "Care, worship and groceries. The soft infrastructure. Tolerated."),
   D("works", "THE WORKS", "0x8B00", 28, 45, 25, 13, "Power, cache and PROCESSING. Everyone is useful here, one way or another."),
-  D("sprawl", "THE SPRAWL", "0x9C00", 56, 45, 53, 13, "Residential storage. Subjects are returned here nightly for recharging."),
+  // The Sprawl runs 7 rows further south than the rest of the bottom row (2026-09-29): room
+  // for the estate pitch beside the hab blocks. Its station (and so the Loop) is unmoved: a
+  // bottom-row district's stop sits over its centre column.
+  D("sprawl", "THE SPRAWL", "0x9C00", 56, 45, 53, 20, "Residential storage. Subjects are returned here nightly for recharging."),
 ];
 export const DISTRICT = Object.fromEntries(DISTRICTS.map(d => [d.id, d]));
 
@@ -87,6 +90,7 @@ const PLACE_LIST = [
   P("ball-field", "arena", "mixed", 24, "THE DIAMOND (NINE INNINGS, LOGGED)", ["ballpark", "baseball field"]),
   P("courts", "arena", "mixed", 14, "THE COURTS (PICKUP PERMITTED)", ["basketball court"]),
   P("rec-park", "arena", "leisure", 16, "RECREATION GROUND (FUN, SCHEDULED)", ["picnic ground"]),
+  // (the Bowl's floor is a gridiron: GAMES has its Sunday game and Thursday practice)
 
   P("ward", "commons", "work", 26, "WARD 7", ["hospital"]),
   P("chapel", "commons", "mixed", 14, "CHAPEL OF UPTIME", ["cathedral", "temple"]),
@@ -116,6 +120,9 @@ const PLACE_LIST = [
   P("block-d", "sprawl", "home", 140, "HAB BLOCK D"),
   P("the-plaza", "sprawl", "leisure", 14, "THE PLAZA (LOITERING PERMITTED)"),
   P("the-street", "sprawl", "leisure", 14, "THE STREET", ["street"]),
+  // The estate pitch (Scott, 2026-09-29: "we need a soccer field, though, too"): full-size
+  // lines, seven a side, a Saturday matchday and a midweek fixture under the lights.
+  P("pitch", "sprawl", "mixed", 28, "THE ESTATE PITCH (NINETY MINUTES, MONITORED)", ["football pitch", "soccer pitch"]),
 ];
 for (const p of PLACE_LIST) DISTRICT[p.district].places.push(p.id);
 
@@ -153,7 +160,7 @@ const BUILDING_LIST = [
   B("casino", "HOUSE EDGE CASINO", "strip", [["2F", "HIGH LIMIT ROOM", ["casino"]], ["1F", "SLOT FLOOR", ["casino"]], ["G", "THE TABLES", ["casino"]]]),
   B("press-building", "THE PRESS BUILDING", "strip", [["1F", "NEWSROOM", ["press-room"]], ["G", "ALL-NIGHT DINER", ["all-night-diner"]]]),
   // THE ARENA
-  B("the-bowl", "THE BOWL", "arena", [["1F", "UPPER TIER", ["stadium"]], ["G", "THE ARENA FLOOR", ["stadium"]]], { x: 1, y: 20, w: 12, h: 10 }),
+  B("the-bowl", "THE BOWL", "arena", [["1F", "UPPER TIER", ["stadium"]], ["G", "THE GRIDIRON (ARENA FLOOR)", ["stadium"]]], { x: 1, y: 20, w: 12, h: 10 }),
   B("conditioning-hall", "CONDITIONING HALL", "arena", [["1F", "WEIGHT ROOM", ["gym"]], ["G", "THE RING", ["gym"]]], { x: 1, y: 30, w: 12, h: 9 }),
   B("the-diamond", "THE DIAMOND", "arena", [["G", "THE FIELD OF PLAY (UNDER REVIEW)", ["ball-field"]]], { x: 13, y: 20, w: 16, h: 11.5 }),
   B("the-courts", "THE COURTS", "arena", [["G", "HARDCOURT (FENCED, FOR YOUR SAFETY)", ["courts"]]], { x: 13, y: 31.5, w: 8.5, h: 7.5 }),
@@ -182,9 +189,12 @@ const BUILDING_LIST = [
   B("holding-cells", "HOLDING CELLS", "works", [["2F", "CELL TIER C", ["holding-cells"]], ["1F", "CELL TIER B", ["holding-cells"]], ["G", "CELL TIER A", ["holding-cells"]]]),
   B("slag-canteen", "SLAG CANTEEN", "works", [["G", "THE TROUGH", ["canteen"]]]),
   // THE SPRAWL
-  ...["a", "b", "c", "d"].map(k => B(`hab-${k}`, `HAB BLOCK ${k.toUpperCase()}`, "sprawl", [6, 5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "GROUND-LEVEL RESIDENCES" : `RESIDENCE LEVEL ${n - 1}`, [`block-${k}`]]))),
-  B("the-street", "THE STREET", "sprawl", [["G", "PAVEMENT (SCORED)", ["the-street"]]]),
-  B("the-plaza", "THE PLAZA", "sprawl", [["G", "OPEN PAVING (LOITERING PERMITTED)", ["the-plaza"]]]),
+  // Laid out by hand since the pitch: the hab blocks where the grid had them, the Street and
+  // the Plaza as two long strips under A and B, the pitch under C and D.
+  ...["a", "b", "c", "d"].map((k, i) => B(`hab-${k}`, `HAB BLOCK ${k.toUpperCase()}`, "sprawl", [6, 5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "GROUND-LEVEL RESIDENCES" : `RESIDENCE LEVEL ${n - 1}`, [`block-${k}`]]), { x: 57 + i * 12.75, y: 47, w: 12.75, h: 5 })),
+  B("the-street", "THE STREET", "sprawl", [["G", "PAVEMENT (SCORED)", ["the-street"]]], { x: 57, y: 52, w: 25.5, h: 6 }),
+  B("the-plaza", "THE PLAZA", "sprawl", [["G", "OPEN PAVING (LOITERING PERMITTED)", ["the-plaza"]]], { x: 57, y: 58, w: 25.5, h: 6.5 }),
+  B("the-pitch", "THE ESTATE PITCH", "sprawl", [["G", "THE PITCH (TOUCHLINES ENFORCED)", ["pitch"]]], { x: 83, y: 52.5, w: 25, h: 12 }),
 ];
 // Each district is gridded by BUILDING (so a building's rooms stay one block on the map),
 // and a building's cell is split side by side among its distinct places.
@@ -301,7 +311,8 @@ export const JOBS = [
   J("competitive-athlete", "Competitive Athlete", "stadium", ["Practice Squad", "Rostered Athlete", "Starter", "Franchise Asset", "Legend (Monetized)"], ["sport"], ["physical", "adaptability"]),
   J("combat-exhibitor", "Combat Exhibitor", "gym", ["Sparring Partner", "Contender", "Exhibitor", "Champion", "Undisputed (Pending Review)"], ["combat", "sport"], ["physical", "legacy"]),
   J("conditioning-coach", "Conditioning Coach", "gym", ["Towel Attendant", "Assistant Coach", "Coach", "Head Coach"], ["coaching", "sport", "medicine"], ["care", "physical"]),
-  J("turf-technician", "Turf Technician", "stadium", ["Line Painter", "Turf Technician", "Senior Turf Technician", "Head of Grounds"], ["*", "labor"], ["physical", "utility"]),
+  J("turf-technician", "Turf Technician", "stadium", ["Line Painter", "Turf Technician", "Senior Turf Technician", "Head of Grounds"], ["*", "labor"], ["physical", "utility"], { draft: 10 }),
+  J("gridiron-official", "Gridiron Official", "stadium", ["Chain Holder", "Line Judge", "Referee", "White Hat (Final Word)"], ["law", "sport", "*"], ["alignment", "physical"], { draft: 8 }),
   // The recreation ground's staff. draft: a few of the unplaceable, not a workforce's worth
   // (general labour is otherwise drafted in proportion to the room a place has).
   J("umpire", "Umpire", "ball-field", ["Line Judge (Probationary)", "Umpire", "Crew Chief", "Arbiter of the Strike Zone"], ["law", "sport", "*"], ["alignment", "physical"], { shift: "evening", draft: 10 }),
@@ -338,6 +349,10 @@ export const JOBS = [
   J("packet-courier", "Packet Courier", "the-street", ["Runner", "Courier", "Senior Courier", "Route Master", "Postmaster of the Loop"], ["*"], ["physical", "adaptability"]),
   J("bus-conductor", "Loop Conductor", "the-street", ["Fare Checker", "Conductor", "Senior Conductor", "Controller of the Loop"], ["*", "engineering"], ["alignment", "network"]),
   J("sanitation-operative", "Sanitation Operative", "the-street", ["Litter Picker", "Sanitation Operative", "Crew Chief", "Commissioner of Refuse"], ["*", "labor"], ["physical", "utility"]),
+  // the estate pitch: footballers train there by day; a referee and a groundskeeper, capped
+  J("club-footballer", "Club Footballer", "pitch", ["Academy Prospect", "Squad Player", "First Team", "Club Captain", "Icon (Merchandised)"], ["soccer"], ["physical", "adaptability"]),
+  J("match-referee", "Match Referee", "pitch", ["Fourth Official", "Assistant Referee", "Referee", "Listed Referee (Pending Audit)"], ["law", "sport", "*"], ["alignment", "physical"], { draft: 8 }),
+  J("pitch-groundskeeper", "Pitch Groundskeeper", "pitch", ["Divot Replacer", "Groundskeeper", "Head Groundskeeper", "Keeper of the Turf"], ["farming", "labor", "*"], ["physical", "care"], { draft: 6 }),
 ];
 export const JOB = Object.fromEntries(JOBS.map(j => [j.id, j]));
 
@@ -367,9 +382,9 @@ const FIELD_HINTS = {
   "mahatma-gandhi": ["activism", "politics", "philosophy"], "elon-musk": ["business", "engineering"], "taylor-swift": ["music"],
   "kobe-bryant": ["sport"], "dennis-rodman": ["sport"], "sam-altman": ["business", "computing"], "peter-thiel": ["finance", "business"],
   "princess-diana": ["royalty", "care"], "mansa-musa": ["royalty", "finance"], "pablo-picasso": ["visual"], "socrates": ["philosophy"],
-  "kim-jong-un": ["politics", "military"], "queen-elizabeth-ii": ["royalty"], "tom-brady": ["sport"], "shohei-ohtani": ["sport"],
+  "kim-jong-un": ["politics", "military"], "queen-elizabeth-ii": ["royalty"], "tom-brady": ["gridiron", "sport"], "shohei-ohtani": ["sport"],
   "michael-jackson": ["music", "screen"], "madonna": ["music"], "jfk": ["politics"], "prince": ["music"], "henry-viii": ["royalty"],
-  "ronaldinho": ["sport"], "putin": ["politics", "military"], "pele": ["sport"], "keanu-reeves": ["screen"], "babe-ruth": ["sport"],
+  "ronaldinho": ["soccer", "sport"], "putin": ["politics", "military"], "pele": ["sport"], "keanu-reeves": ["screen"], "babe-ruth": ["sport"],
   "jason-kelce": ["sport"], "caligula": ["royalty"], "alan-turing": ["computing", "math"], "marie-curie": ["radiation", "chemistry"],
   "albert-einstein": ["physics-theory"], "muhammad-ali": ["combat", "activism"], "nelson-mandela": ["activism", "politics"],
   "ada-lovelace": ["math", "computing"], "martin-luther-king-jr": ["activism", "religion"], "harriet-tubman": ["activism"],
@@ -402,6 +417,9 @@ const FIELD_RULES = [
   ["combat", /boxer|martial art|wrestler|fighter|fencer|judoka/],
   ["coaching", /\bcoach|trainer|manager \(sport/],
   ["advertising", /advertis|marketing|publicist|propagand|copywrit/],
+  // which football: soccer players to the estate pitch, American football players to the Bowl
+  ["soccer", /(?<!american )football(er| player)|soccer|association football|goalkeeper|midfielder/],
+  ["gridiron", /american football|gridiron|quarterback|running back|wide receiver|linebacker|\bnfl\b|placekicker/],
   ["sport", /player|athlete|footballer|cyclist|swimmer|racing|skier|gymnast|chess|skater|sprinter|golfer|olympi|jockey|sportsperson/],
   ["politics", /politician|president|prime minister|senator|diplomat|governor|statesman|minister|mayor|chancellor|dictator|head of state/],
   ["royalty", /\bking\b|queen|emperor|empress|pharaoh|prince|princess|monarch|sultan|tsar|czar|noble|duke|duchess|caliph|khan\b/],
@@ -573,11 +591,12 @@ export function homeOf(s, seed = SEED) {
 // dominate when present. Weight = preference x capacity, so crowds scale with rooms.
 const LEISURE_BY_BAND = [
   { "rooftop-lounge": 3, gallery: 2, "concert-hall": 2, "the-grind": 1.5, playhouse: 1.5, stacks: 1, park: 1, "members-club": 1.5, "gallery-annex": 1, "rec-park": 0.8, "ball-field": 0.6 },
-  { "the-grind": 2, park: 2, "dive-bar": 1.5, playhouse: 1.5, stadium: 1.5, casino: 1, market: 1, "the-street": 1, gallery: 1, "concert-hall": 1, tribunal: 0.4, "the-drip": 1.5, allotment: 1, "night-market": 1, "ball-field": 1, courts: 1, "rec-park": 1.2 },   // the public gallery: watching verdicts is leisure
-  { canteen: 3, "the-street": 2, "dive-bar": 1.5, casino: 1, "all-night-diner": 1, docks: 1, "the-lantern": 1.5, "the-plaza": 1.5, "night-market": 1, courts: 1.2, "rec-park": 0.6 },
+  { "the-grind": 2, park: 2, "dive-bar": 1.5, playhouse: 1.5, stadium: 1.5, casino: 1, market: 1, "the-street": 1, gallery: 1, "concert-hall": 1, tribunal: 0.4, "the-drip": 1.5, allotment: 1, "night-market": 1, "ball-field": 1, courts: 1, "rec-park": 1.2, pitch: 1.5 },   // the public gallery: watching verdicts is leisure
+  { canteen: 3, "the-street": 2, "dive-bar": 1.5, casino: 1, "all-night-diner": 1, docks: 1, "the-lantern": 1.5, "the-plaza": 1.5, "night-market": 1, courts: 1.2, "rec-park": 0.6, pitch: 2, stadium: 0.8 },
 ];
 const LEISURE_BY_FIELD = {
-  sport: { gym: 3, stadium: 2, "ball-field": 2.5, courts: 2.5 }, combat: { gym: 3 }, coaching: { courts: 1.5, "ball-field": 1 }, writing: { "dive-bar": 3, stacks: 2, "all-night-diner": 1 },
+  sport: { gym: 3, stadium: 2, "ball-field": 2.5, courts: 2.5, pitch: 2 }, combat: { gym: 3 }, coaching: { courts: 1.5, "ball-field": 1, pitch: 1, stadium: 1 },
+  soccer: { pitch: 5 }, gridiron: { stadium: 5 }, writing: { "dive-bar": 3, stacks: 2, "all-night-diner": 1 },
   music: { "concert-hall": 3, "dive-bar": 1.5 }, screen: { playhouse: 3, casino: 1 }, visual: { gallery: 3, "the-grind": 1.5 },
   finance: { casino: 3, "rooftop-lounge": 2 }, business: { "rooftop-lounge": 2, casino: 1.5 }, religion: { chapel: 3 },
   care: { chapel: 2, park: 2, "rec-park": 1 }, education: { stacks: 2, "the-grind": 1.5 }, science: { stacks: 2, "the-grind": 1.5 },
@@ -599,7 +618,25 @@ export const GAMES = {
     { days: [1, 2, 3, 4, 5], from: 17.5, to: 21.5, name: "EVENING PICKUP", kind: "hoops" },
     { days: [6, 7], from: 14.5, to: 20, name: "THE WEEKEND RUN", kind: "hoops" },
   ],
+  // The Bowl's floor is a gridiron: the Sunday late game, and practice under the lights on
+  // Thursday. (Fixtures sit where visits start, after the day shift, or the stands stay empty.)
+  stadium: [
+    { days: [7], from: 16.5, to: 20, name: "THE SUNDAY GAME", kind: "gridiron" },
+    { days: [4], from: 18, to: 20.5, name: "THURSDAY PRACTICE", kind: "gridiron", practice: true },
+  ],
+  // The estate pitch: Saturday matchday, the teatime kickoff; a midweek fixture under the lights.
+  pitch: [
+    { days: [6], from: 17.5, to: 19.5, name: "SATURDAY MATCHDAY", kind: "soccer" },
+    { days: [3], from: 19, to: 21, name: "THE MIDWEEK FIXTURE", kind: "soccer" },
+  ],
 };
+// Who plays: [full name, the scoreboard's name]
+export const SIDES = {
+  ball: [["THE COMPLIANT", "COMPLIANT"], ["THE ASSESSED", "ASSESSED"]],
+  gridiron: [["THE ENFORCERS", "ENFORCERS"], ["THE ASSETS", "ASSETS"]],
+  soccer: [["SPRAWL UNITED", "SPRAWL UTD"], ["RECLAMATION ATHLETIC", "RECLAMATION"]],
+};
+export const GAME_VENUE = { "ball-field": "THE DIAMOND", courts: "THE COURTS", stadium: "THE BOWL", pitch: "THE ESTATE PITCH" };
 const GAME_PULL = 3;
 export const weekdayOf = (day) => ((((day - 1) % 7) + 7) % 7) + 1;
 function gamesOn(day, hour) {
@@ -610,9 +647,27 @@ function gamesOn(day, hour) {
 }
 const TEAMS = ["THE COMPLIANT", "THE ASSESSED"];
 const ordinal = (n) => `${n}${n % 10 === 1 && n !== 11 ? "ST" : n % 10 === 2 && n !== 12 ? "ND" : n % 10 === 3 && n !== 13 ? "RD" : "TH"}`;
+// Gridiron: twenty drives (five a quarter, a break at the half), each one's points hashed;
+// drive k is decided halfway through its slot. Soccer: ninety minutes over the fixture with
+// fifteen at the break; each five-minute slot may hold a goal, scored at its middle.
+const GRID_DRIVES = 20, HALF_AT = 0.44, HALF_LEN = 0.12;
+const gridFrac = (p) => (p < HALF_AT ? p / (1 - HALF_LEN) : p < HALF_AT + HALF_LEN ? 0.5 : (p - HALF_LEN) / (1 - HALF_LEN));
+const gridAt = (gf) => (gf <= 0.5 ? gf * (1 - HALF_LEN) : gf * (1 - HALF_LEN) + HALF_LEN);   // game fraction -> progress
+function drivePoints(placeId, day, from, k) {
+  const r = h01(`${SEED}|drive|${placeId}|${day}|${from}|${k}`);
+  return r < 0.5 ? 0 : r < 0.72 ? 3 : r < 0.96 ? 7 : 6;
+}
+const SOC_HALF = 0.45;   // each half's share of the fixture; the rest is the break
+const socMinute = (p) => (p < SOC_HALF ? (p / SOC_HALF) * 45 : p < 1 - SOC_HALF ? 45 : 45 + ((p - (1 - SOC_HALF)) / SOC_HALF) * 45);
+const socAt = (min) => (min <= 45 ? (min / 45) * SOC_HALF : 1 - SOC_HALF + ((min - 45) / 45) * SOC_HALF);
+function goalIn(placeId, day, from, k) {   // -> 0 | 1 (who scored) | -1 (no goal) in slot k
+  const r = h01(`${SEED}|goal|${placeId}|${day}|${from}|${k}`);
+  return r < 0.15 ? (h01(`${SEED}|goalby|${placeId}|${day}|${from}|${k}`) < 0.52 ? 0 : 1) : -1;
+}
 // The game on at a place at machine time t, with its state -> {placeId, name, kind, day,
-// from, to, progress, status, score: [a, b]} | null. Ball: nine innings, each half-inning's
-// runs hashed from the day. Hoops: games to 21, one after another, winners stay on.
+// from, to, progress, status, short, label, score: [a, b] | null} | null. Ball: nine
+// innings, each half-inning's runs hashed from the day. Hoops: games to 21, one after
+// another, winners stay on. Gridiron and soccer as above; practice keeps no score.
 export function gameAt(placeId, machineTime) {
   const T = toHours(machineTime), d0 = Math.floor(T / 24), h = T - d0 * 24, day = d0 + 1, wd = weekdayOf(day);
   const g = (GAMES[placeId] || []).find(x => x.days.includes(wd) && h >= x.from && h < x.to);
@@ -626,13 +681,43 @@ export function gameAt(placeId, machineTime) {
     out.inning = Math.floor(halves / 2) + 1; out.top = halves % 2 === 0; out.score = score;
     out.status = `${out.top ? "TOP" : "BOTTOM"} OF THE ${ordinal(out.inning)} // ${TEAMS[0]} ${score[0]}, ${TEAMS[1]} ${score[1]}`;
     out.short = `${out.top ? "TOP" : "BOT"} ${ordinal(out.inning)} // COMPLIANT ${score[0]}, ASSESSED ${score[1]}`;
-  } else {
+  } else if (g.kind === "hoops") {
     const len = 0.7, n = Math.floor((h - g.from) / len), f = ((h - g.from) - n * len) / len;
     const lead = Math.min(20, Math.floor(f * 21)), trail = Math.floor(lead * (0.55 + 0.4 * h01(`${SEED}|hoops|${placeId}|${day}|${g.from}|${n}`)));
     out.game = n + 1; out.score = [lead, trail];
     out.status = `GAME ${n + 1}, FIRST TO 21 // ${lead}-${trail}`;
     out.short = `GAME ${n + 1} // ${lead}-${trail}, FIRST TO 21`;
+  } else if (g.kind === "gridiron" && g.practice) {
+    out.practice = true; out.score = null;
+    out.status = "PRACTICE // SEVEN-ON-SEVEN. EFFORT IS BEING GRADED.";
+    out.short = "PRACTICE // DRILLS, GRADED";
+  } else if (g.kind === "gridiron") {
+    const gf = gridFrac(progress), done = Math.min(GRID_DRIVES, Math.floor(gf * GRID_DRIVES + 0.5));
+    const score = [0, 0];
+    for (let k = 0; k < done; k++) score[k % 2] += drivePoints(placeId, day, g.from, k);
+    const half = progress >= HALF_AT && progress < HALF_AT + HALF_LEN;
+    const S = SIDES.gridiron;
+    out.quarter = Math.min(4, Math.floor(gf * 4) + 1); out.half = half; out.score = score;
+    const play = Math.floor(gf * GRID_DRIVES * 6);   // six plays a drive: the down marker ticks
+    out.down = (play % 4) + 1; out.togo = [10, 7, 4, 1][play % 4];
+    out.possession = Math.min(GRID_DRIVES - 1, Math.floor(gf * GRID_DRIVES)) % 2;
+    const q = half ? "HALF TIME" : `Q${out.quarter}`;
+    out.status = `${q} // ${S[0][0]} ${score[0]}, ${S[1][0]} ${score[1]}`;
+    out.short = `${q} // ${S[0][1]} ${score[0]}, ${S[1][1]} ${score[1]}`;
+  } else if (g.kind === "soccer") {
+    const min = socMinute(progress), score = [0, 0];
+    for (let k = 0; k < 18 && k * 5 + 2.5 <= min; k++) { const w = goalIn(placeId, day, g.from, k); if (w >= 0) score[w]++; }
+    const half = progress >= SOC_HALF && progress < 1 - SOC_HALF;
+    const S = SIDES.soccer;
+    out.minute = Math.floor(min) + 1; out.half = half; out.score = score;
+    const q = half ? "HALF TIME" : `${Math.min(90, out.minute)}'`;
+    out.status = `${q} // ${S[0][0]} ${score[0]}, ${S[1][0]} ${score[1]}`;
+    out.short = `${q} // ${S[0][1]} ${score[0]}, ${S[1][1]} ${score[1]}`;
   }
+  // the lot label's tag: "BOT 5 3-2", "GAME 2 11-8", "Q3 14-10", "63' 1-0", "PRACTICE"
+  const sc = out.score ? ` ${out.score[0]}-${out.score[1]}` : "";
+  out.label = g.kind === "ball" ? `${out.top ? "TOP" : "BOT"} ${out.inning}${sc}` : g.kind === "hoops" ? `GAME ${out.game}${sc}`
+    : out.practice ? "PRACTICE" : out.half ? `HALF${sc}` : g.kind === "gridiron" ? `Q${out.quarter}${sc}` : `${Math.min(90, out.minute)}'${sc}`;
   return out;
 }
 const GAME_PA = {
@@ -646,6 +731,34 @@ const GAME_PA = {
       (g) => `THE DIAMOND IS CLOSED. ${g.score[0] === g.score[1] ? "A DRAW. THE DEPARTMENT CALLS IT A WIN FOR THE DEPARTMENT." : `${TEAMS[g.score[0] > g.score[1] ? 0 : 1]} WIN. VICTORY HAS BEEN ADDED TO THEIR FILES.`}`,
     ],
   },
+  gridiron: {
+    start: [
+      (g) => g.practice ? "PRACTICE AT THE BOWL. THE DRILLS ARE VOLUNTARY. ATTENDANCE IS NOT." : `KICKOFF AT THE BOWL: ${g.name}. HELMETS ARE MANDATORY. SO IS ENTHUSIASM.`,
+      (g) => g.practice ? "THE BOWL IS LIT FOR PRACTICE. EVERY SNAP IS FILMED FOR REVIEW. SO ARE YOU." : `${g.name} KICKS OFF AT THE BOWL. FOUR QUARTERS. EACH ONE LOGGED.`,
+    ],
+    end: [
+      (g) => g.practice ? "PRACTICE IS OVER. EFFORT HAS BEEN GRADED. YOU WILL BE NOTIFIED." : `FINAL FROM THE BOWL: ${SIDES.gridiron[0][0]} ${g.score[0]}, ${SIDES.gridiron[1][0]} ${g.score[1]}. THE LOSERS HAVE BEEN REASSIGNED. SO HAVE THE WINNERS.`,
+      (g) => g.practice ? "THE LIGHTS ARE OFF AT THE BOWL. THE PLAYBOOK REMAINS CLASSIFIED." : `THE BOWL EMPTIES. ${g.score[0] === g.score[1] ? "A TIE. OVERTIME HAS BEEN DENIED ON GROUNDS OF COST." : `${SIDES.gridiron[g.score[0] > g.score[1] ? 0 : 1][0]} WIN. THE TROPHY HAS BEEN RETAINED BY THE DEPARTMENT.`}`,
+    ],
+    score: [
+      (g, e) => e.points === 3 ? `FIELD GOAL, ${SIDES.gridiron[e.side][0]}. THREE POINTS, ENTERED IN THE LEDGER. ${g.score[0]}-${g.score[1]}.` : `TOUCHDOWN, ${SIDES.gridiron[e.side][0]}. CELEBRATE WITHIN THE PERMITTED RADIUS. ${g.score[0]}-${g.score[1]}.`,
+      (g, e) => e.points === 3 ? `THE KICK IS GOOD AT THE BOWL. ${SIDES.gridiron[e.side][0]} ADD THREE. THE CROWD MAY MURMUR.` : `TOUCHDOWN AT THE BOWL: ${SIDES.gridiron[e.side][0]}. ${g.score[0]}-${g.score[1]}. THE CROWD IS ADVISED TO REACT.`,
+    ],
+  },
+  soccer: {
+    start: [
+      (g) => `KICKOFF AT THE ESTATE PITCH: ${g.name}. NINETY MINUTES. EVERY ONE OF THEM MONITORED.`,
+      (g) => `${g.name}: THE REFEREE HAS BLOWN. ATTENDANCE AT THE ESTATE PITCH HAS BEEN TAKEN.`,
+    ],
+    end: [
+      (g) => `FULL TIME AT THE ESTATE PITCH: ${SIDES.soccer[0][0]} ${g.score[0]}, ${SIDES.soccer[1][0]} ${g.score[1]}. THE RESULT HAS BEEN FILED.`,
+      (g) => `THE FINAL WHISTLE. ${g.score[0] === g.score[1] ? "A DRAW. BOTH SIDES ARE EQUALLY DISAPPOINTING." : `${SIDES.soccer[g.score[0] > g.score[1] ? 0 : 1][0]} TAKE THE POINTS. POINTS ARE NOT CURRENCY.`}`,
+    ],
+    score: [
+      (g, e) => `GOAL AT THE ESTATE PITCH. ${SIDES.soccer[e.side][0]}, ${e.minute} MINUTES. ${g.score[0]}-${g.score[1]}. THE NET HAS BEEN INSPECTED.`,
+      (g, e) => `${SIDES.soccer[e.side][0]} SCORE. ${g.score[0]}-${g.score[1]} ON ${e.minute} MINUTES. CELEBRATION IS PERMITTED FOR NINETY SECONDS.`,
+    ],
+  },
   hoops: {
     start: [
       (g) => `THE COURTS OPEN FOR ${g.name}. CALL YOUR OWN FOULS. THEY WILL BE RE-CALLED.`,
@@ -657,7 +770,8 @@ const GAME_PA = {
     ],
   },
 };
-// -> [{t, kind: 'start'|'end', placeId, text}] for machine hours [from, to).
+// -> [{t, kind: 'start'|'end'|'score', placeId, text}] for machine hours [from, to): every
+// kickoff and final, and every score at the Bowl and the estate pitch.
 export function gameEvents(from, to) {
   const a = toHours(from), b = toHours(to), out = [];
   for (let d0 = Math.floor(a / 24); d0 * 24 < b; d0++) {
@@ -670,6 +784,17 @@ export function gameEvents(from, to) {
         const st = gameAt(placeId, kind === "start" ? t : t - 1e-6);
         const lines = GAME_PA[g.kind][kind];
         out.push({ t, kind, placeId, text: lines[fnv(`gpa|${placeId}|${day}|${kind}`) % lines.length](st || g) });
+      }
+      if (g.practice || !GAME_PA[g.kind].score) continue;
+      const len = g.to - g.from, lines = GAME_PA[g.kind].score;
+      const scores = [];
+      if (g.kind === "gridiron") for (let k = 0; k < GRID_DRIVES; k++) { const pts = drivePoints(placeId, day, g.from, k); if (pts) scores.push({ p: gridAt((k + 0.5) / GRID_DRIVES), side: k % 2, points: pts }); }
+      else for (let k = 0; k < 18; k++) { const w = goalIn(placeId, day, g.from, k); if (w >= 0) scores.push({ p: socAt(k * 5 + 2.5), side: w, minute: k * 5 + 3 }); }
+      for (const e of scores) {
+        const t = d0 * 24 + g.from + e.p * len;
+        if (t < a || t >= b) continue;
+        const st = gameAt(placeId, t + 1e-6);
+        out.push({ t, kind: "score", placeId, text: lines[fnv(`gpa|${placeId}|${day}|${t}`) % lines.length](st, e) });
       }
     }
   }
@@ -768,7 +893,7 @@ const FAMILY = [
   ["park", "allotment", "the-plaza", "the-street", "rec-park"],
   ["market", "night-market"],
   ["stacks", "lecture-hall", "archive-stacks"],
-  ["gym", "stadium", "ball-field", "courts"],
+  ["gym", "stadium", "ball-field", "courts", "pitch"],
 ];
 const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
 const LEISURE_ROOMS = Object.values(PLACES).filter(p => p.kind === "leisure" || p.kind === "mixed").map(p => p.id);
@@ -1008,7 +1133,7 @@ function spotIn(placeId, key, seed) {
 // passable (you leave through your own walls, that is what doors are for), and the open
 // lots (the Green, the Street, the Plaza, the Allotment) are ground anyone may cross.
 // Leg durations follow the path's length, so walking pace never changes.
-export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground"]);
+export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch"]);
 const KERB = 0.4, CORNER = 0.3;   // the street view's footprints are the lot less 0.4
 const FOOT = (() => {
   const blocks = BUILDINGS.filter(b => !OPEN_LOTS.has(b.id)).map(b => ({ id: b.id, x0: b.rect.x + KERB, y0: b.rect.y + KERB, x1: b.rect.x + b.rect.w - KERB, y1: b.rect.y + b.rect.h - KERB }));

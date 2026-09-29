@@ -12,14 +12,19 @@
 // Painter's order inside a lot: the ground first, then every standing thing (a fence
 // panel, a hoop, a tree, a person) back to front by u + v. Stands, dugouts, benches and
 // tables carry their own sitters, so a sitter is drawn on their seat, never under it.
+//
+// The Bowl (a gridiron in a stadium) and the estate pitch follow the same rules: far = the
+// stands, the green, the end zones; mid = the lines, posts, goals, benches, the crowd as
+// small sprites, a colour under each player for their side; near = numbers, pylons, nets,
+// flags, the scoreboard, the ball in play, everyone posed.
 
 import { rot, STOREY } from "./iso.js";
 import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
-import { drawPose, phaseOf, PITCH_S, SHOT_S } from "./poses.js";
-import { assignAnchors, roleOf, actAt, typeOf } from "./props.js";
-import { DIAMOND, COURTS, REC, PARK_ANCHORS, PARK_LOTS, ringAt } from "./parkGeo.js";
+import { drawPose, phaseOf, PITCH_S, SHOT_S, PLAY_S, SNAP_F, THROW_F, CATCH_F } from "./poses.js";
+import { assignAnchors, actAt, typeOf } from "./props.js";
+import { DIAMOND, COURTS, REC, BOWL, PITCH, PARK_ANCHORS, PARK_LOTS, ringAt, fieldRole } from "./parkGeo.js";
 import { gameAt } from "./simApi.js";
 
 const who = (s) => s.slug || s.name;
@@ -32,6 +37,11 @@ const GRASS = "#1f5a22", GRASS_HI = "#2a7a2c", GRASS_STRIPE = "#308a32", DIRT = 
 const COURT = "#2c4a6e", PAINT = "#a4501a", ASPHALT = "#2a2f36", PATH = "#8a7a5a", STONE = "#7b848f", WATER = "#2a5f8a";
 const MESH = "rgba(176,188,198,0.2)", RAIL = "#9aa6b2";
 const lightsOn = (hour) => hour >= 18.25 || hour < 6.5;
+// the sides' colours: the gridiron's ENFORCERS and ASSETS, the pitch's SPRAWL UNITED and
+// RECLAMATION ATHLETIC (and their keepers)
+const KIT = { stadium: ["#eab308", "#8b5cf6"], pitch: ["#dc2626", "#2563eb"] };
+const KEEPER_KIT = ["#22c55e", "#f59e0b"];
+const ENDZONE = ["#8a6a0a", "#4c1d95"], TURF = "#2b7a2e", TURF_HI = "#318a35", SURROUND = "#1d5e22", CONCRETE = "#2e333b";
 
 // G: {ctx, Q(x, y, h) -> [sx, sy], poly, prism, wall, z, r, t, hits, w, h}
 // people: [{s, w}] on this lot now. prev: last frame's seats (kept while they stay).
@@ -50,13 +60,13 @@ export function drawParkLot(G, lotId, lod, mt, people, prev) {
 
   // who stands where (the order the anchors are listed: the battery first, then the field)
   const anchors = PARK_ANCHORS[pid];
-  const list = people.map(o => ({ key: who(o.s), role: roleOf(o.w), s: o.s }));
+  const list = people.map(o => { const r = fieldRole(o.s, o.w); return { key: who(o.s), role: r.role, pri: r.pri, s: o.s }; });
   const { at } = assignAnchors(anchors, list, prev, hour, true);
   const present = new Map();
   for (const p of list) { const i = at.get(p.key); if (i != null) present.set(anchors[i].id, { p, a: anchors[i] }); }
   K.present = present;
 
-  if (pid === "ball-field") diamond(K); else if (pid === "courts") courts(K); else recGround(K);
+  if (pid === "ball-field") diamond(K); else if (pid === "courts") courts(K); else if (pid === "stadium") bowl(K); else if (pid === "pitch") pitchLot(K); else recGround(K);
 
   // people: carried by their seat's prop, or standing on their own
   for (const [id, { p, a }] of present) {
@@ -85,6 +95,12 @@ function personDraw(K, pid, a, p) {
     const [sx, sy] = G.Q(x, y, a.h);
     if (sx < -40 || sx > G.w + 40 || sy < -60 || sy > G.h + 40) return;
     if (lod === "far") { G.ctx.fillStyle = FAMILY_COLOR[familyOf(p.s)] || "#6b9a7c"; G.ctx.fillRect(Math.round(sx) - 1, Math.round(sy) - 2, 2, 2); return; }
+    // a player's side, as a colour on the ground under them
+    if (a.team != null && a.kind === "stand" && KIT[pid]) {
+      const col = a.gk ? KEEPER_KIT[a.team] : KIT[pid][a.team], r = Math.max(2, G.z * 0.2);
+      const [gx, gy] = G.Q(x, y, 0.02);
+      G.ctx.fillStyle = col; G.ctx.globalAlpha = 0.75; G.ctx.beginPath(); G.ctx.ellipse(gx, gy, r, r * 0.5, 0, 0, Math.PI * 2); G.ctx.fill(); G.ctx.globalAlpha = 1;
+    }
     const hh0 = G.z * STOREY * 0.95, k = statureOf(p.s), hpx = hh0 * k;
     if (lod === "mid" || hpx < 18) {
       const m = miniFor(p.s), sc = hpx / (SPRITE_H / 2);
@@ -216,10 +232,9 @@ function diamond(K) {
   const bd = D.board;
   put((bd.x0 + bd.x1) / 2, bd.y, () => {
     for (const x of [bd.x0 + 0.3, bd.x1 - 0.3]) vline(x, bd.y, 0, 1.0, "#4b5563", Math.max(1, G.z * 0.08));
-    G.prism(rectPts(bd.x0, bd.y - 0.08, bd.x1, bd.y + 0.08), 1.0, 2.1, "#0f1a14", 1.2);
-    if (lod !== "near") return;
     const f = G.facing ? G.facing([bd.x0, bd.y + 0.08], [bd.x1, bd.y + 0.08], [(bd.x0 + bd.x1) / 2, bd.y]) : 1;
-    if (!f) return;
+    G.prism(rectPts(bd.x0, bd.y - 0.08, bd.x1, bd.y + 0.08), 1.0, 2.1, "#0f1a14", 1.2, f ? 1 : 0.3);   // its back goes see-through
+    if (lod !== "near" || !f) return;
     const A = G.Q(bd.x0 + 0.15, bd.y + 0.09, 1.95), B = G.Q(bd.x1 - 0.15, bd.y + 0.09, 1.95);
     const c = G.ctx, fs = Math.max(7, Math.round(G.z * 0.34));
     c.save(); c.font = `${fs}px "Fira Mono", monospace`; c.textBaseline = "top"; c.textAlign = "left";
@@ -400,4 +415,297 @@ function recGround(K) {
     if (dark && lod === "near") { const g = G.ctx.createRadialGradient(sx, sy, 0, sx, sy, G.z * 1.6); g.addColorStop(0, "rgba(253,230,138,0.3)"); g.addColorStop(1, "rgba(253,230,138,0)"); G.ctx.fillStyle = g; G.ctx.beginPath(); G.ctx.arc(sx, sy, G.z * 1.6, 0, Math.PI * 2); G.ctx.fill(); }
   });
   void px;
+}
+
+
+// ---- the Bowl ---------------------------------------------------------------------------------
+// The stands in segments (so the painter's order holds along their length), each carrying the
+// people sat on it. Built once from the anchors: which segment of which tier each seat is on.
+const SEG = (() => {
+  const B = BOWL, out = [];
+  const byId = new Map(PARK_ANCHORS.stadium.map(a => [a.id, a]));
+  for (const st of B.stands) {
+    const n = st.axis === "y" ? 8 : 4, len = (st.a1 - st.a0) / n;
+    for (let t = 0; t < st.tiers; t++) for (let k = 0; k < n; k++) {
+      const a0 = st.a0 + k * len, a1 = a0 + len, b0 = st.b0 + (st.b1 - st.b0) * (t / st.tiers), b1 = st.b0 + (st.b1 - st.b0) * ((t + 1) / st.tiers);
+      const foot = st.axis === "y" ? rectPts(a0, Math.min(b0, b1), a1, Math.max(b0, b1)) : rectPts(Math.min(b0, b1), a0, Math.max(b0, b1), a1);
+      const ids = [...byId.values()].filter(a => a.id.startsWith(`st${st.side[0]}${t}`) && (st.axis === "y" ? a.x : a.y) >= a0 && (st.axis === "y" ? a.x : a.y) < a1).map(a => a.id);
+      const c = foot.reduce((m, p) => [m[0] + p[0] / 4, m[1] + p[1] / 4], [0, 0]);
+      // the seat edge (the tier's front, towards the field) for the painted seat line
+      const edge = st.axis === "y" ? [[a0, b0], [a1, b0]] : [[b0, a0], [b0, a1]];
+      out.push({ foot, top: st.tops[t], ids, c, edge, t });
+    }
+  }
+  return out;
+})();
+
+function bowl(K) {
+  const { G, lod, hour, game, ground, gline, gpath, vline, px, present, put } = K;
+  const B = BOWL, L = B.lot, F = B.field, [g0, g1] = B.goal, T = B.ten;
+  ground(rectPts(L.x + 0.1, L.y + 0.1, L.x + L.w - 0.1, L.y + L.h - 0.1), CONCRETE);
+  ground(rectPts(B.floor.x0, B.floor.y0, B.floor.x1, B.floor.y1), SURROUND, 0.011);
+  ground(rectPts(F.x0, F.y0, F.x1, F.y1), TURF, 0.012);
+  if (lod !== "far") for (let k = 0; k < 20; k += 2) ground(rectPts(g0 + k * T / 2, F.y0, g0 + (k + 1) * T / 2, F.y1), TURF_HI, 0.0125);   // mown in five-yard bands
+  ground(rectPts(F.x0, F.y0, g0, F.y1), ENDZONE[0], 0.013);
+  ground(rectPts(g1, F.y0, F.x1, F.y1), ENDZONE[1], 0.013);
+  const lw = Math.max(1, G.z * 0.04);
+  if (lod !== "far") {
+    for (let k = 0; k <= 10; k++) gline([g0 + k * T, F.y0], [g0 + k * T, F.y1], CHALK, k === 0 || k === 10 || k === 5 ? lw * 1.5 : lw, 0.02);   // every ten yards
+    gpath(rectPts(F.x0, F.y0, F.x1, F.y1), CHALK, lw * 1.5, true, 0.02);
+    if (game && !game.practice && !game.half) {   // the broadcast lines: scrimmage in blue, the first down in yellow
+      const los = B.los, fd = Math.min(g1, los + (game.togo || 10) * T / 10);
+      gline([los, F.y0], [los, F.y1], "rgba(59,130,246,0.85)", lw * 1.6, 0.021);
+      gline([fd, F.y0], [fd, F.y1], "rgba(250,204,21,0.9)", lw * 1.6, 0.021);
+    }
+    if (lod === "near") {
+      for (let k = 0; k < 10; k++) { const x = g0 + (k + 0.5) * T; gline([x, F.y0], [x, F.y0 + 0.12], "rgba(241,245,240,0.7)", 1, 0.02); gline([x, F.y1 - 0.12], [x, F.y1], "rgba(241,245,240,0.7)", 1, 0.02); }
+      for (let k = 0; k < 50; k++) { const x = g0 + k * T / 5; for (const hy of [B.cy - 0.33, B.cy + 0.33]) gline([x, hy - 0.04], [x, hy + 0.04], "rgba(241,245,240,0.8)", 1, 0.02); }   // hash marks
+      for (const [ex0, ex1] of [[F.x0, g0], [g1, F.x1]]) for (let k = 1; k < 6; k++) { const y = F.y0 + (F.y1 - F.y0) * k / 6; gline([ex0 + 0.08, y - 0.2], [ex1 - 0.08, y + 0.2], "rgba(255,255,255,0.18)", lw, 0.014); }   // end zone hatching
+      gpath(circ(B.cx, B.cy, 0.42, 20), "rgba(241,245,240,0.9)", lw, true, 0.02);   // the Department's seal at midfield
+      gpath(circ(B.cx, B.cy, 0.22, 3), "rgba(241,245,240,0.9)", lw, true, 0.02);
+      // the numbers, both sidelines
+      const c = G.ctx, fs = Math.max(7, Math.round(G.z * 0.3));
+      c.save(); c.font = `${fs}px "Fira Mono", monospace`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "rgba(241,245,240,0.9)";
+      for (let k = 1; k < 10; k++) for (const y of [F.y0 + 0.42, F.y1 - 0.42]) { const [nx, ny] = G.Q(g0 + k * T, y, 0.02); c.fillText(String(10 * Math.min(k, 10 - k)), Math.round(nx), Math.round(ny)); }
+      c.restore();
+    }
+  }
+  // the stands: concrete tiers stepping up away from the field, a seat line on each, fans on them
+  for (const sg of SEG) {
+    sg.ids.forEach(id => K.carried.set(id, []));
+    put(sg.c[0], sg.c[1], () => {
+      G.prism(sg.foot, 0, sg.top, sg.t % 2 ? "#6b7280" : "#7a838f", 1.25);
+      if (lod !== "far") gline(sg.edge[0], sg.edge[1], sg.t === 1 ? "#1e3a8a" : "#b91c1c", Math.max(1, G.z * 0.08), sg.top + 0.002);
+      for (const id of sg.ids) for (const f of K.carried.get(id)) f();
+    });
+  }
+  if (lod === "far") return;
+  // goalposts: a padded post behind the end line, the crossbar, two uprights (goal-post yellow)
+  for (const [px0, py] of B.posts) {
+    const back = px0 < B.cx ? -0.22 : 0.22, bx = px0 + back * 0.4, hw = B.postW, col = "#facc15";
+    put(bx, py, () => {
+      vline(px0 + back, py, 0, B.bar, col, Math.max(1, G.z * 0.1));
+      gline([px0 + back, py], [bx, py], col, Math.max(1, G.z * 0.08), B.bar);
+      gline([bx, py - hw], [bx, py + hw], col, Math.max(1, G.z * 0.08), B.bar);
+      vline(bx, py - hw, B.bar, B.upright, col, Math.max(1, G.z * 0.06)); vline(bx, py + hw, B.bar, B.upright, col, Math.max(1, G.z * 0.06));
+    }, back > 0 ? 0.3 : -0.3);
+  }
+  // pylons at the corners of each end zone
+  if (lod === "near") for (const x of [F.x0, g0, g1, F.x1]) for (const y of [F.y0, F.y1]) put(x, y, () => { const [sx, sy] = G.Q(x, y, 0.1), w = Math.max(2, G.z * 0.1); G.ctx.fillStyle = "#f97316"; G.ctx.fillRect(Math.round(sx - w / 2), Math.round(sy - w), Math.round(w), Math.round(w * 1.4)); });
+  // the benches, a team on each sideline
+  B.benches.forEach((b, i) => {
+    const ids = [0, 1, 2, 3, 4, 5].map(k => `bench${i}${k}`);
+    ids.forEach(id => K.carried.set(id, []));
+    const segs = 2, len = (b.x1 - b.x0) / segs;
+    for (let s2 = 0; s2 < segs; s2++) {
+      const x0 = b.x0 + s2 * len, x1 = x0 + len, mine = ids.slice(s2 * 3, s2 * 3 + 3);
+      put((x0 + x1) / 2, b.y, () => {
+        G.prism(rectPts(x0, b.y - 0.14, x1, b.y + 0.14), 0, 0.2, i ? "#7c2d12" : "#374151", 1.3);
+        for (const id of mine) for (const f of K.carried.get(id)) f();
+      });
+    }
+  });
+  // the chain: ten yards of it between the rods
+  if (present.has("chainA") && present.has("chainB")) gline([B.los - 0.45, F.y0 - 0.5], [B.los + 0.45, F.y0 - 0.5], "#f97316", Math.max(1, G.z * 0.03), 0.05);
+  // the kicking net
+  const nt = B.net;
+  mesh(K, [nt.x, nt.y - 0.4], [nt.x, nt.y + 0.4], 1.2, [nt.x - 1, nt.y]);
+  // light towers at the corners, lit for anything on after dark
+  const lit = !!game && lightsOn(hour);
+  for (const p of backMasts(G, B.lights)) put(p[0], p[1], () => tower(K, p, lit, 3.4));
+  // the scoreboard over the north stand
+  const bd = B.board;
+  put((bd.x0 + bd.x1) / 2, bd.y, () => {
+    for (const x of [bd.x0 + 0.4, bd.x1 - 0.4]) vline(x, bd.y, 0, 1.1, "#4b5563", Math.max(1, G.z * 0.08));
+    // seen from behind it is a slab across the field: the back goes see-through
+    const seen = !G.facing || G.facing([bd.x0, bd.y + 0.09], [bd.x1, bd.y + 0.09], [(bd.x0 + bd.x1) / 2, bd.y]);
+    G.prism(rectPts(bd.x0, bd.y - 0.08, bd.x1, bd.y + 0.08), 1.1, 2.15, "#0b1210", 1.2, seen ? 1 : 0.3);
+    if (lod !== "near") return;
+    const S = SIDES_SHORT.gridiron;
+    board(K, [bd.x0, bd.y + 0.09], [bd.x1, bd.y + 0.09], [(bd.x0 + bd.x1) / 2, bd.y], 2.0,
+      game?.practice ? [["PRACTICE", ""], ["UNDER REVIEW", ""]] : game ? [[S[0], game.score[0]], [S[1], game.score[1]]] : [["ENFORCERS", "-"], ["ASSETS", "-"]],
+      game?.practice ? "EFFORT: GRADED" : game ? (game.half ? "HALF TIME" : `Q${game.quarter} ${ordinalS(game.down)} & ${game.togo}`) : "NO FIXTURE");
+  });
+  // the ball: snapped, carried back, thrown, caught
+  if (lod === "near" && K.t > 0 && present.has("c") && present.has("qb")) {
+    const f = frac(K.t / PLAY_S), cyc = Math.floor(K.t / PLAY_S), C = present.get("c").a, QB = present.get("qb").a;
+    const targets = ["wr1", "slot", "wr2", "te", "rb"].filter(id => present.has(id));
+    const to = targets.length ? present.get(targets[Math.floor(h01(`play${cyc}`) * targets.length)]).a : null;
+    const qbAt = [QB.x - (f > SNAP_F ? 0.25 : 0), QB.y];
+    if (f < SNAP_F) ball(K, C.x + 0.2, C.y, 0.04, "#7c3f1a");
+    else if (f < SNAP_F + 0.04) { const k = (f - SNAP_F) / 0.04, p = lerp([C.x, C.y], qbAt, k); ball(K, p[0], p[1], 0.2 + 0.4 * k, "#7c3f1a"); }
+    else if (f < THROW_F || !to) ball(K, qbAt[0], qbAt[1], 0.7, "#7c3f1a");
+    else if (f < CATCH_F) { const k = (f - THROW_F) / (CATCH_F - THROW_F), dest = [to.x + 0.35, to.y], p = lerp(qbAt, dest, k); ball(K, p[0], p[1], 0.75 + Math.sin(k * Math.PI) * 1.5, "#7c3f1a"); }
+    else if (f < 0.96) ball(K, to.x + 0.35, to.y, 0.95, "#7c3f1a");
+  }
+}
+
+// ---- the estate pitch ------------------------------------------------------------------------------
+const TSEG = (() => {
+  const P = PITCH, tr = P.terrace, n = 5, len = (tr.y1 - tr.y0) / n, dx = (tr.x1 - tr.x0) / tr.tiers, out = [];
+  for (let t = 0; t < tr.tiers; t++) for (let k = 0; k < n; k++) {
+    const x0 = tr.x0 + t * dx, x1 = x0 + dx, y0 = tr.y0 + k * len, y1 = y0 + len;
+    const ids = PARK_ANCHORS.pitch.filter(a => a.id.startsWith(`ter${t}`) && a.y >= y0 && a.y < y1).map(a => a.id);
+    out.push({ foot: rectPts(x0, y0, x1, y1), top: tr.tops[t], ids, c: [(x0 + x1) / 2, (y0 + y1) / 2], edge: [[x0, y0], [x0, y1]], t });
+  }
+  return out;
+})();
+
+function pitchLot(K) {
+  const { G, lod, hour, game, ground, gline, gpath, vline, present, put } = K;
+  const P = PITCH, L = P.lot, p = P.p, cx = P.cx, cy = P.cy;
+  ground(rectPts(L.x + 0.1, L.y + 0.1, L.x + L.w - 0.1, L.y + L.h - 0.1), "#1c3a1f");
+  ground(rectPts(p.x0 - 0.5, p.y0 - 0.5, p.x1 + 0.5, p.y1 + 0.5), "#276a2a", 0.011);
+  ground(rectPts(p.x0, p.y0, p.x1, p.y1), "#2e7a30", 0.012);
+  const lw = Math.max(1, G.z * 0.04);
+  if (lod === "far") { gline([cx, p.y0], [cx, p.y1], "rgba(241,245,240,0.6)", 1, 0.02); }
+  else {
+    const n = 12, sw = (p.x1 - p.x0) / n;
+    for (let k = 0; k < n; k += 2) ground(rectPts(p.x0 + k * sw, p.y0, p.x0 + (k + 1) * sw, p.y1), "#348a36", 0.0125);   // mown stripes
+    gpath(rectPts(p.x0, p.y0, p.x1, p.y1), CHALK, lw, true, 0.02);
+    gline([cx, p.y0], [cx, p.y1], CHALK, lw, 0.02);
+    gpath(circ(cx, cy, P.circleR, 32), CHALK, lw, true, 0.02);
+    ground(circ(cx, cy, 0.07, 8), CHALK, 0.021);
+    for (const end of [-1, 1]) {
+      const gx = end < 0 ? p.x0 : p.x1, dir = -end;   // dir: into the pitch
+      gpath([[gx, cy - P.box.hw], [gx + dir * P.box.d, cy - P.box.hw], [gx + dir * P.box.d, cy + P.box.hw], [gx, cy + P.box.hw]], CHALK, lw, false, 0.02);
+      gpath([[gx, cy - P.six.hw], [gx + dir * P.six.d, cy - P.six.hw], [gx + dir * P.six.d, cy + P.six.hw], [gx, cy + P.six.hw]], CHALK, lw, false, 0.02);
+      const spot = [gx + dir * P.spot, cy];
+      ground(circ(spot[0], spot[1], 0.06, 8), CHALK, 0.021);
+      // the D: the part of the spot's circle outside the box
+      const r = P.circleR, lim = Math.acos(Math.min(1, (P.box.d - P.spot) / r));
+      gpath(Array.from({ length: 13 }, (_, k) => { const a = -lim + (2 * lim * k) / 12; return [spot[0] + dir * r * Math.cos(a), spot[1] + r * Math.sin(a)]; }), CHALK, lw, false, 0.02);
+    }
+    if (lod === "near") for (const [fx, fy] of P.flags) {   // corner arcs
+      const sx = fx < cx ? 1 : -1, sy = fy < cy ? 1 : -1;
+      gpath(Array.from({ length: 5 }, (_, k) => { const a = (k / 4) * Math.PI / 2; return [fx + sx * 0.16 * Math.cos(a), fy + sy * 0.16 * Math.sin(a)]; }), CHALK, 1, false, 0.02);
+    }
+  }
+  // the terrace behind the east goal: three tiers, a crowd on them
+  for (const sg of TSEG) {
+    sg.ids.forEach(id => K.carried.set(id, []));
+    put(sg.c[0], sg.c[1], () => {
+      G.prism(sg.foot, 0, sg.top, sg.t % 2 ? "#6b7280" : "#7a838f", 1.25);
+      if (lod !== "far") gline(sg.edge[0], sg.edge[1], "#b91c1c", Math.max(1, G.z * 0.08), sg.top + 0.002);
+      for (const id of sg.ids) for (const f of K.carried.get(id)) f();
+    });
+  }
+  if (lod === "far") return;
+  // the goals: posts and bar, the net stretched back to its stanchions
+  for (const end of [-1, 1]) {
+    const gx = end < 0 ? p.x0 : p.x1, bx = gx + end * P.netD, hw = P.goalHW, H = P.goalH;
+    put(gx + end * P.netD * 0.5, cy, () => {
+      const c = G.ctx;
+      const q = (pts, fill) => G.poly(pts.map(([x, y, h]) => G.Q(x, y, h)), fill);
+      const net = "rgba(236,240,244,0.16)";
+      q([[bx, cy - hw, 0], [bx, cy + hw, 0], [bx, cy + hw, H * 0.75], [bx, cy - hw, H * 0.75]], net);   // back
+      q([[gx, cy - hw, H], [bx, cy - hw, H * 0.75], [bx, cy + hw, H * 0.75], [gx, cy + hw, H]], net);   // roof
+      q([[gx, cy - hw, 0], [bx, cy - hw, 0], [bx, cy - hw, H * 0.75], [gx, cy - hw, H]], net);        // sides
+      q([[gx, cy + hw, 0], [bx, cy + hw, 0], [bx, cy + hw, H * 0.75], [gx, cy + hw, H]], net);
+      if (lod === "near") {
+        c.strokeStyle = "rgba(236,240,244,0.28)"; c.lineWidth = 1; c.beginPath();
+        for (let k = 1; k < 8; k++) { const y = cy - hw + (2 * hw * k) / 8, A = G.Q(bx, y, 0), Bq = G.Q(bx, y, H * 0.75), Cq = G.Q(gx, y, H); c.moveTo(A[0], A[1]); c.lineTo(Bq[0], Bq[1]); c.lineTo(Cq[0], Cq[1]); }
+        for (let k = 1; k < 4; k++) { const h = (H * 0.75 * k) / 4, A = G.Q(bx, cy - hw, h), Bq = G.Q(bx, cy + hw, h); c.moveTo(A[0], A[1]); c.lineTo(Bq[0], Bq[1]); }
+        c.stroke();
+      }
+      const w = Math.max(1, G.z * 0.08);
+      vline(gx, cy - hw, 0, H, "#f5f5f5", w); vline(gx, cy + hw, 0, H, "#f5f5f5", w);
+      gline([gx, cy - hw], [gx, cy + hw], "#f5f5f5", w, H);
+      vline(bx, cy - hw, 0, H * 0.75, "#9ca3af", 1); vline(bx, cy + hw, 0, H * 0.75, "#9ca3af", 1);
+    }, end < 0 ? -0.2 : 0.2);
+  }
+  // corner flags
+  for (const [fx, fy] of P.flags) put(fx, fy, () => {
+    vline(fx, fy, 0, 0.62, "#e5e7eb", Math.max(1, G.z * 0.05));
+    const [ax, ay] = G.Q(fx, fy, 0.62), s2 = Math.max(3, G.z * 0.22), wv = K.t > 0 && lod === "near" ? Math.sin(K.t * 4 + fx) * s2 * 0.25 : 0;
+    G.ctx.fillStyle = "#ef4444"; G.ctx.beginPath(); G.ctx.moveTo(ax, ay); G.ctx.lineTo(ax + s2, ay + s2 * 0.3 + wv); G.ctx.lineTo(ax, ay + s2 * 0.6); G.ctx.closePath(); G.ctx.fill();
+  });
+  // the dugouts on the north touchline: a bench under a perspex roof, the subs on it
+  P.dugouts.forEach((d, i) => {
+    const ids = [0, 1, 2].map(k => `dug${i}${k}`);
+    ids.forEach(id => K.carried.set(id, []));
+    put((d.x0 + d.x1) / 2, (d.y0 + d.y1) / 2, () => {
+      G.prism(rectPts(d.x0, d.y0, d.x1, d.y0 + 0.12), 0, 0.55, "#3b4148", 1.2);   // back wall
+      const by = (d.y0 + d.y1) / 2 + 0.1;
+      G.prism(rectPts(d.x0 + 0.1, by - 0.12, d.x1 - 0.1, by + 0.12), 0, 0.2, "#4b5563", 1.3);
+      for (const id of ids) for (const f of K.carried.get(id)) f();
+      G.prism(rectPts(d.x0 - 0.05, d.y0, d.x1 + 0.05, d.y0 + 0.45), 0.55, 0.6, i ? "#1d4ed8" : "#b91c1c", 1.1, 0.85);   // the roof over the back of the bench, in the side's colour
+    });
+  });
+  // the rail along the south touchline
+  const rl = P.rail, nr = 10, rlen = (rl.x1 - rl.x0) / nr;
+  for (let k = 0; k < nr; k++) {
+    const x0 = rl.x0 + k * rlen, x1 = x0 + rlen;
+    put((x0 + x1) / 2, rl.y, () => {
+      gline([x0, rl.y], [x1, rl.y], "#9ca3af", Math.max(1, G.z * 0.06), 0.3);
+      vline(x0, rl.y, 0, 0.3, "#6b7280", Math.max(1, G.z * 0.05));
+      if (lod === "near") gline([x0, rl.y], [x1, rl.y], "rgba(30,64,175,0.8)", Math.max(1, G.z * 0.12), 0.18);   // the ad board, blank as required
+    });
+  }
+  // floodlights for the evening fixture
+  const lit = !!game && lightsOn(hour);
+  for (const q of backMasts(G, P.lights)) put(q[0], q[1], () => tower(K, q, lit, 3.2));
+  // the scoreboard behind the west goal, facing the pitch
+  const bd = P.board;
+  put(bd.x, (bd.y0 + bd.y1) / 2, () => {
+    for (const y of [bd.y0 + 0.35, bd.y1 - 0.35]) vline(bd.x, y, 0, 0.9, "#4b5563", Math.max(1, G.z * 0.08));
+    const seen = !G.facing || G.facing([bd.x + 0.09, bd.y1], [bd.x + 0.09, bd.y0], [bd.x, (bd.y0 + bd.y1) / 2]);
+    G.prism(rectPts(bd.x - 0.08, bd.y0, bd.x + 0.08, bd.y1), 0.9, 1.9, "#0b1210", 1.2, seen ? 1 : 0.3);
+    if (lod !== "near") return;
+    const S = SIDES_SHORT.soccer;
+    board(K, [bd.x + 0.09, bd.y1], [bd.x + 0.09, bd.y0], [bd.x, (bd.y0 + bd.y1) / 2], 1.75,
+      game ? [[S[0], game.score[0]], [S[1], game.score[1]]] : [["HOME", "-"], ["AWAY", "-"]],
+      game ? (game.half ? "HALF TIME" : `${Math.min(90, game.minute)}'`) : "NO FIXTURE");
+  });
+  // the ball: passed about, now and then a shot
+  if (lod === "near" && K.t > 0) {
+    const outfield = ["a-m2", "a-f1", "b-m2", "b-d1", "a-m1", "b-m1", "a-d1", "b-f1", "a-d2", "b-d2", "a-m3", "b-m3"].filter(id => present.has(id));
+    if (outfield.length >= 2) {
+      const PASS = 2.6, cyc = Math.floor(K.t / PASS), f = frac(K.t / PASS);
+      const holder = (n) => outfield[Math.floor(h01(`pass${n}`) * outfield.length)];
+      let from = holder(cyc), to = holder(cyc + 1);
+      if (to === from) to = outfield[(outfield.indexOf(from) + 1) % outfield.length];
+      const A0 = present.get(from).a, A1 = present.get(to).a;
+      const at = (a) => [a.x + (a.team ? -0.22 : 0.22), a.y + 0.05];
+      const shot = h01(`shot${cyc}`) < 0.14;
+      if (f < 0.5) { const [bx, by] = at(A0); ball(K, bx, by, 0.05, "#f8fafc"); }
+      else if (shot) {
+        const goal = A0.team ? [p.x0 + 0.1, cy + (h01(`sh${cyc}`) - 0.5) * 1.6] : [p.x1 - 0.1, cy + (h01(`sh${cyc}`) - 0.5) * 1.6], k = (f - 0.5) / 0.5, q = lerp(at(A0), goal, k);
+        ball(K, q[0], q[1], 0.08 + Math.sin(k * Math.PI) * 0.5, "#f8fafc");
+      } else { const k = (f - 0.5) / 0.5, q = lerp(at(A0), at(A1), k), lofted = h01(`lob${cyc}`) < 0.3; ball(K, q[0], q[1], 0.05 + Math.sin(k * Math.PI) * (lofted ? 0.9 : 0.08), "#f8fafc"); }
+    }
+  }
+}
+
+// ---- shared pieces --------------------------------------------------------------------------------
+const SIDES_SHORT = { gridiron: ["ENFORCERS", "ASSETS"], soccer: ["SPRAWL UTD", "RECLAMATION"] };
+const ordinalS = (n) => `${n}${n === 1 ? "ST" : n === 2 ? "ND" : n === 3 ? "RD" : "TH"}`;
+// The corner nearest the viewer keeps no mast: it would stand across the whole field.
+const backMasts = (G, pts) => { const d = pts.map(p => { const [u, v] = rot(p[0], p[1], G.r); return u + v; }), m = Math.max(...d); return pts.filter((_, i) => d[i] < m - 1e-6); };
+// A floodlight mast: the pole, the bank of lamps, a glow when lit.
+function tower(K, p, lit, h) {
+  const { G, lod } = K;
+  K.vline(p[0], p[1], 0, h, "#6b7280", Math.max(1, G.z * 0.1));
+  const [x, y] = G.Q(p[0], p[1], h + 0.1), w = G.z * 0.9, hgt = G.z * 0.45;
+  G.ctx.fillStyle = "#374151"; G.ctx.fillRect(x - w / 2, y - hgt / 2, w, hgt);
+  G.ctx.fillStyle = lit ? "#fff7d6" : "#1f2937"; G.ctx.fillRect(x - w / 2 + 1, y - hgt / 2 + 1, w - 2, hgt - 2);
+  if (lit && lod === "near") {
+    const r = G.z * 2.2, g = G.ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, "rgba(255,247,214,0.35)"); g.addColorStop(1, "rgba(255,247,214,0)");
+    G.ctx.fillStyle = g; G.ctx.beginPath(); G.ctx.arc(x, y, r, 0, Math.PI * 2); G.ctx.fill();
+  }
+}
+// Scoreboard text on a board face from a to b (map points), when it faces the viewer.
+function board(K, a, b, inside, h, rows, foot) {
+  const { G } = K;
+  const f = G.facing ? G.facing(a, b, inside) : 1;
+  if (!f) return;
+  const A = G.Q(a[0], a[1], h), B = G.Q(b[0], b[1], h);
+  const c = G.ctx, fs = Math.max(7, Math.round(G.z * 0.3));
+  c.save(); c.font = `${fs}px "Fira Mono", monospace`; c.textBaseline = "top"; c.textAlign = "left";
+  const ang = Math.atan2(B[1] - A[1], B[0] - A[0]), wpx = Math.hypot(B[0] - A[0], B[1] - A[1]);
+  c.translate(A[0], A[1]); c.rotate(ang);
+  rows.forEach(([n, v], i) => { c.fillStyle = i ? "#f87171" : "#fbbf24"; c.fillText(n, fs * 0.4, i * fs * 1.15); c.fillText(String(v), wpx - fs * 1.4, i * fs * 1.15); });
+  c.fillStyle = "#4ade80"; c.fillText(foot, fs * 0.4, 2.3 * fs * 1.15);
+  c.restore();
 }

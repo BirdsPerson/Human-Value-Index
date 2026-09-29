@@ -3,7 +3,7 @@
 
 import * as SIM from "./sim.js";
 
-export const { DISTRICTS, PLACES, JOBS, BUS, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, BUILDINGS, BUILDING, HEADWAY, OPEN_LOTS } = SIM;
+export const { DISTRICTS, PLACES, JOBS, BUS, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, BUILDINGS, BUILDING, HEADWAY, OPEN_LOTS, GAMES, GAME_VENUE } = SIM;
 export const DISTRICT = Object.fromEntries(DISTRICTS.map(d => [d.id, d]));
 // Where a rider physically is (whereAt's atDistrictId). v1 called it "bus".
 export const ON_LOOP = "loop";
@@ -23,10 +23,12 @@ export const districtCap = (districtId) => placesOf(districtId).reduce((n, p) =>
 let offsetMs = 0;
 export function setClockOffset(ms) { offsetMs = ms || 0; }
 // Real ms that move today's machine clock to hh:mm (the next occurrence, not the past).
-export function offsetFor(hh, mm = 0, realMs = Date.now()) {
+// wd (1-7, optional): on the next machine day with that weekday (the fixtures keep a week).
+export function offsetFor(hh, mm = 0, realMs = Date.now(), wd = null) {
   const mt = SIM.machineClock(realMs).mt;
   let want = Math.floor(mt / 24) * 24 + hh + mm / 60;
   if (want < mt) want += 24;
+  if (wd) while (SIM.weekdayOf(Math.floor(want / 24) + 1) !== wd) want += 24;
   return ((want - mt) * 3600000) / SIM.DEFAULT_SCALE;
 }
 
@@ -70,7 +72,7 @@ export const activityLine = (subject, mt) => SIM.statusLine(subject, mt);
 export const trainsAt = (mt) => SIM.trainsAt(mt);
 export const timetable = (stationId, mt, n) => SIM.timetable(stationId, mt, n);
 export const loopEvents = (fromMt, toMt) => SIM.loopEvents(fromMt, toMt);
-// The recreation ground's fixtures: the game on at a place now, and the PA's start/end lines.
+// The grounds' fixtures: the game on at a place now, and the PA's kickoff, score and final lines.
 export const gameAt = (placeId, mt) => SIM.gameAt(placeId, mt);
 export const gameEvents = (fromMt, toMt) => SIM.gameEvents(fromMt, toMt);
 export const occupancyAt = (subjects, mt) => SIM.occupancy(subjects, mt);

@@ -341,15 +341,18 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
 // park"): three open lots in the Arena with a place for everyone on them. Every anchor is
 // typed, on its own ground, clear of the others and of every building and the Loop; there
 // are at least as many as the place holds; the staff have their posts; the fixtures keep
-// score sensibly and the PA announces each one's start and finish.
+// score sensibly and the PA announces each one's start and finish. Since "we need a soccer
+// field, though, too, and a football field": the Bowl's gridiron (the stadium, a building
+// open to the sky) and the estate pitch (an open lot in the Sprawl) are checked the same way.
 {
   const SIM = await import("../src/city/sim.js");
   const PG = await import("../src/city/parkGeo.js");
   const G = await import("../src/city/loopGeo.js");
   const lots = Object.keys(PG.PARK_LOTS);
+  const HOME = { "the-diamond": "arena", "the-courts": "arena", "rec-ground": "arena", "the-bowl": "arena", "the-pitch": "sprawl" };
   for (const id of lots) {
     const b = SIM.BUILDING[id];
-    ok(b && SIM.OPEN_LOTS.has(id) && b.district === "arena", `${id}: an open lot in the Arena`);
+    ok(b && (SIM.OPEN_LOTS.has(id) || id === "the-bowl") && b.district === HOME[id], `${id}: ${id === "the-bowl" ? "the stadium" : "an open lot"} in ${HOME[id]}`);
     for (const o of SIM.BUILDINGS) if (o.id !== id) {
       const r = b.rect, q = o.rect;
       ok(!(r.x < q.x + q.w - 1e-9 && q.x < r.x + r.w - 1e-9 && r.y < q.y + q.h - 1e-9 && q.y < r.y + r.h - 1e-9), `${id} does not overlap ${o.id}`);
@@ -364,7 +367,7 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   const solid = SIM.BUILDINGS.filter(b => !SIM.OPEN_LOTS.has(b.id));
   const ISO_ACTS = { shoot: "jump", dribble: "hustle", stroll: "amble" };
   for (const pid of PG.PARK_PLACES) {
-    const P = SIM.PLACES[pid], R = P.rect, as = PG.PARK_ANCHORS[pid];
+    const P = SIM.PLACES[pid], R = P.rect, as = PG.PARK_ANCHORS[pid], own = P.building;
     ok(as.length >= P.cap, `${pid}: ${as.length} places on the ground for a capacity of ${P.cap}`);
     ok(new Set(as.map(a => a.id)).size === as.length, `${pid}: anchor ids unique`);
     ok(as.some(a => a.role === "staff"), `${pid}: a post for the staff`);
@@ -375,7 +378,7 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
       const pts = a.ring ? [0, 1, 2, 3].map(k => [a.ring.cx + a.ring.r * Math.cos(k * Math.PI / 2), a.ring.cy + a.ring.r * Math.sin(k * Math.PI / 2)]) : [[a.x, a.y]];
       for (const [x, y] of pts) {
         ok(x > R.x + 0.1 && x < R.x + R.w - 0.1 && y > R.y + 0.1 && y < R.y + R.h - 0.1, `${pid} ${a.id}: on its own ground (${x.toFixed(2)}, ${y.toFixed(2)})`);
-        ok(!solid.some(o => x > o.rect.x && x < o.rect.x + o.rect.w && y > o.rect.y && y < o.rect.y + o.rect.h), `${pid} ${a.id}: not inside a building`);
+        ok(!solid.some(o => o.id !== own && x > o.rect.x && x < o.rect.x + o.rect.w && y > o.rect.y && y < o.rect.y + o.rect.h), `${pid} ${a.id}: not inside another building`);
       }
     }
     // nobody stands on anybody: fixed anchors at the same height keep a body's width apart
@@ -394,6 +397,35 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
       const ump = assignAnchors(as, [{ key: "u", role: "staff" }], null, 18, true).at.get("u");
       ok(as[ump].id === "umpire", "the umpire takes the plate");
     }
+    // the gridiron and the pitch: every player on the field in a side's colour, facing the play;
+    // a few people make a drill, not a crowd in the stands
+    if (pid === "stadium" || pid === "pitch") {
+      const F = pid === "stadium" ? PG.BOWL.field : PG.PITCH.p;
+      const players = as.filter(a => a.team != null && a.kind === "stand" && !["kicker"].includes(a.id));
+      ok(players.length === (pid === "stadium" ? 22 : 14), `${pid}: ${players.length} players on the field (${pid === "stadium" ? "eleven" : "seven"} a side)`);
+      ok(players.every(a => a.x > F.x0 && a.x < F.x1 && a.y > F.y0 && a.y < F.y1 && a.look), `${pid}: every player inside the lines, facing somewhere`);
+      ok([0, 1].every(t => players.filter(a => a.team === t).length === players.length / 2), `${pid}: two even sides`);
+      const few = [0, 1, 2].map(i => ({ key: `p${i}`, role: "patron" }));
+      const got = [...assignAnchors(as, few.slice(0, pid === "stadium" ? 3 : 2), null, 15, true).at.values()].map(i => as[i].id).sort().join();
+      ok(got === (pid === "stadium" ? "c,qb,wr1" : "a-m2,b-m2"), `${pid}: the first few make a drill (${got})`);
+      const ref = assignAnchors(as, [{ key: "r", role: "staff" }], null, 15, true).at.get("r");
+      ok(as[ref].id === "ref", `${pid}: the referee takes the referee's post`);
+      // a sporting visitor takes the field before a spectator who got there first by key
+      const two = assignAnchors(as, [{ key: "a", role: "patron" }, { key: "z", role: "patron", pri: -1 }], null, 15, true).at;
+      ok(two.get("z") === 0, `${pid}: the sporting are placed first`);
+      ok(as.filter(a => a.role === "staff").length >= 3, `${pid}: officials' posts (${as.filter(a => a.role === "staff").map(a => a.id).join(", ")})`);
+    }
+  }
+  // who plays: a footballer on shift at the pitch plays; a referee on shift keeps their post
+  {
+    const pele = { slug: "pele-test", name: "Test Footballer", qualifier: "brazilian footballer", tier: "RETAINED SPECIALIST", warmth: 60, competence: 70 };
+    const job = SIM.assignJob(pele);
+    ok(job.jobId === "club-footballer", `a footballer is drafted to the estate pitch (${job.jobId})`);
+    const fr = PG.fieldRole(pele, { activity: "work", placeId: "pitch" });
+    ok(fr.role === "patron" && fr.pri === -2, "a footballer on shift plays, first");
+    ok(SIM.fieldsOf({ qualifier: "american football player" }).gridiron && !SIM.fieldsOf({ qualifier: "american football player" }).soccer, "American football reads as gridiron, not soccer");
+    ok(SIM.fieldsOf({ qualifier: "english footballer" }).soccer, "a footballer reads as soccer");
+    ok(PG.fieldRole({ slug: "x", name: "X", qualifier: "judge" }, { activity: "leisure" }).pri === 0, "a non-sporting visitor waits their turn");
   }
   // the fixtures
   const wk = 24 * 7 * 30;
@@ -404,13 +436,29 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
     games++;
     if (g.kind === "ball" && !(g.inning >= 1 && g.inning <= 9 && g.score.every(n => n >= 0 && n < 40))) bad = `${pid} ${h}`;
     if (g.kind === "hoops" && !(g.score[0] <= 20 && g.score[1] <= g.score[0])) bad = `${pid} ${h}`;
+    if (g.kind === "gridiron" && !g.practice && !(g.quarter >= 1 && g.quarter <= 4 && g.score.every(n => n >= 0 && n <= 70) && g.down >= 1 && g.down <= 4)) bad = `${pid} ${h}`;
+    if (g.kind === "gridiron" && g.practice && g.score !== null) bad = `${pid} practice keeps score at ${h}`;
+    if (g.kind === "soccer" && !(g.minute >= 1 && g.minute <= 91 && g.score.every(n => n >= 0 && n <= 10))) bad = `${pid} ${h}`;
+    if (!(typeof g.label === "string" && g.label.length <= 14 && g.label === g.label.toUpperCase())) bad = `${pid} label ${g.label}`;
     const later = SIM.gameAt(pid, wk + h + 0.04);
-    if (later && later.kind === "ball" && later.day === g.day && (later.score[0] < g.score[0] || later.score[1] < g.score[1])) bad = `${pid} runs came off the board at ${h}`;
+    if (later && later.score && g.score && later.kind !== "hoops" && later.day === g.day && later.from === g.from && (later.score[0] < g.score[0] || later.score[1] < g.score[1])) bad = `${pid} a score came off the board at ${h}`;
   }
   ok(games > 100 && !bad, `fixtures keep score (${bad || games + " samples"})`);
-  const evs = SIM.gameEvents(wk, wk + 24 * 7);
+  const evs = SIM.gameEvents(wk, wk + 24 * 7), ends = evs.filter(e => e.kind !== "score");
   const want = Object.values(SIM.GAMES).reduce((n, list) => n + list.reduce((m, g) => m + g.days.length * 2, 0), 0);
-  ok(evs.length === want && evs.every(e => /[A-Z]/.test(e.text) && e.text === e.text.toUpperCase()), `the PA calls every first pitch and final whistle (${evs.length} of ${want})`);
+  ok(ends.length === want && evs.every(e => /[A-Z]/.test(e.text) && e.text === e.text.toUpperCase()), `the PA calls every first pitch, kickoff and final whistle (${ends.length} of ${want})`);
+  // every score the PA calls is a change on the board, and every change on the board is called
+  let calls = "";
+  for (const pid of ["stadium", "pitch"]) {
+    const mine = evs.filter(e => e.kind === "score" && e.placeId === pid);
+    let changes = 0;
+    for (let h = 0; h < 24 * 7; h += 0.01) { const a = SIM.gameAt(pid, wk + h), b = SIM.gameAt(pid, wk + h + 0.01); if (a?.score && b?.score && a.from === b.from && a.day === b.day && a.score.join() !== b.score.join()) changes++; }
+    for (const e of mine) { const a = SIM.gameAt(pid, e.t - 1e-4), b = SIM.gameAt(pid, e.t + 1e-4); if (!(a && b && a.score.join() !== b.score.join())) calls = `${pid} called a score at ${(e.t - wk).toFixed(2)} that did not change the board`; }
+    if (!calls && mine.length !== changes) calls = `${pid}: ${mine.length} calls for ${changes} changes`;
+  }
+  ok(!calls, `the PA calls every touchdown, field goal and goal (${calls || "ok"})`);
+  const weekend = ["stadium", "pitch"].map(pid => [...Array(7)].filter((_, d) => [6, 7].includes(d + 1) && SIM.gameAt(pid, wk + d * 24 + 18)).length);
+  ok(weekend.every(n => n >= 1), `the Bowl and the pitch each have a weekend fixture on at 18:00 (${weekend.join(", ")} days)`);
   const fixture = [...Array(7)].map((_, d) => SIM.gameAt("ball-field", wk + d * 24 + 18.5)).filter(Boolean).length;
   ok(fixture >= 2, `the Diamond has an evening fixture on ${fixture} days a week`);
   console.log(`  recreation ground: ${PG.PARK_PLACES.map(id => `${id} ${PG.PARK_ANCHORS[id].length} anchors`).join(", ")}; ${games} fixture samples, ${evs.length} PA calls a week`);

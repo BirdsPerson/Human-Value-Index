@@ -9,7 +9,7 @@ import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox,
 import { loopPieces, trainPoses, carCorners, carBox, stationGeo, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
-import { PARK_LOTS, PARK_PLACES, insetOf } from "./parkGeo.js";
+import { PARK_LOTS, PARK_PLACES, insetOf, fieldRole } from "./parkGeo.js";
 import { drawParkLot } from "./parkDraw.js";
 
 // THE SUBSTRATE, SimCity-style: every building a solid block (facade, roof, lit windows by
@@ -88,7 +88,8 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         const R = rotRect({ x: b.rect.x + ix, y: b.rect.y + iy, w: b.rect.w - 2 * ix, h: b.rect.h - 2 * iy }, r);
         // an open lot is ground: whoever walks across it is drawn after it (iso.slotForBox's deck rule)
         const open = OPEN_LOTS.has(b.id);
-        items.push({ kind: "b", b, R, h: open ? 0.05 : ABOVE[b.id], x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1, ...(open ? { deck: true, top: 0 } : {}) });
+        // the Bowl is a stadium open to the sky: its stands and scoreboard stand about a storey
+        items.push({ kind: "b", b, R, h: open ? 0.05 : PARK_LOTS[b.id] ? 1 : ABOVE[b.id], x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1, ...(open ? { deck: true, top: 0 } : {}) });
       }
       // the viaduct: straight deck pieces, curved corners, a station at every district
       items.push(...loopPieces(r));
@@ -248,9 +249,9 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         if (lod === "far" && !selected) return;
         // a playing field keeps its label off the play: over its back corner
         const [x, y] = PARK_LOTS[b.id] ? P(R.x0 + 0.6, R.y0 + 0.6, 0.4) : P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, h + 0.5);
-        // the recreation ground's labels carry the fixture: "THE DIAMOND // BOT 5TH 3-2"
+        // the grounds' labels carry the fixture: "THE DIAMOND // BOT 5 3-2", "THE BOWL // Q3 14-10"
         const g = PARK_LOTS[b.id] && gameAt(PARK_LOTS[b.id], V.mt);
-        const text = g ? `${b.name} // ${g.kind === "ball" ? `${g.top ? "TOP" : "BOT"} ${g.inning} ${g.score[0]}-${g.score[1]}` : `GAME ${g.game} ${g.score[0]}-${g.score[1]}`}` : b.name;
+        const text = g ? `${b.name} // ${g.label}` : b.name;
         const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
         if (top) drawLabel(L, 1); else V.labels.push(L);
       };
@@ -693,7 +694,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       const nF = b.floors.length;
       const game = PARK_LOTS[b.id] && gameAt(PARK_LOTS[b.id], mt);
       const sub = b.id === "hq" ? "CENSUS CLASSIFIED"
-        : PARK_LOTS[b.id] ? `${V.occ[b.id] || 0} ON THE GROUND // ${game ? game.short : PARK_LOTS[b.id] === "rec-park" ? "LEISURE IN PROGRESS. IT IS BEING ENJOYED." : "NO FIXTURE. PRACTICE IS PERMITTED."}`
+        : PARK_LOTS[b.id] ? `${V.occ[b.id] || 0} ${b.id === "the-bowl" ? "IN THE BOWL" : "ON THE GROUND"} // ${game ? game.short : PARK_LOTS[b.id] === "rec-park" ? "LEISURE IN PROGRESS. IT IS BEING ENJOYED." : "NO FIXTURE. PRACTICE IS PERMITTED."}`
         : `${V.occ[b.id] || 0} INSIDE // ${nF} FLOOR${nF === 1 ? "" : "S"}`;
       ctx.fillText(fitText(sub, pr.w - 20 - closeW), x0 + 10, y0 + 24);
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `13px ${FONT}`;
@@ -752,7 +753,9 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       const rk = `${b.id}|${f.index}|${pid}`;
       // HQ's census is classified; everyone else walking in counts, walking out does not sit
       const list = hq ? [] : (V.inside.get(rk) || []).filter(o => o.mode !== "leave");
-      const people = list.map(o => ({ key: who(o.s), role: roleOf(o.w), s: o.s }));
+      // on a field the footballers play and the sporting take the field first (parkGeo.fieldRole)
+      const field = ORDERED_TYPES.has(plan.type);
+      const people = list.map(o => { const r = field ? fieldRole(o.s, o.w) : { role: roleOf(o.w), pri: 0 }; return { key: who(o.s), role: r.role, pri: r.pri, s: o.s }; });
       const prev = V.seats.get(rk);
       const { at, overflow } = assignAnchors(plan.anchors, people, prev && prev.plan === plan ? prev.at : null, hour, ORDERED_TYPES.has(plan.type));
       V.seats.set(rk, { plan, at });
