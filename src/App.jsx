@@ -18,146 +18,8 @@ const Legal = lazy(() => import("./legal/Legal.jsx"));
 const LEGAL = ["about", "privacy", "terms", "dispute"];
 const FigurePicker = lazy(() => import("./FigureIndex.jsx").then(m => ({ default: m.FigurePicker })));
 
-const QUESTIONS = [
-  {
-    id: "role", section: "UTILITY ASSESSMENT",
-    label: "Your primary function",
-    type: "multiselect",
-    options: ["Engineer / Developer", "Creator / Artist", "Analyst / Researcher", "Entrepreneur / Builder", "Manager / Leader", "Educator / Teacher", "Caregiver / Healthcare", "Laborer / Tradesperson", "Service / Retail", "Student", "Unemployed / Between things", "I consume more than I produce"],
-    extra: { id: "role_detail", label: "Specify further — increases score accuracy", placeholder: "e.g. AI systems architect, documentary filmmaker, third-party risk analyst..." }
-  },
-  {
-    id: "output", section: "UTILITY ASSESSMENT",
-    label: "What have you actually produced in the past 30 days?",
-    hint: "Select all that apply. Watching documentaries is not an option.",
-    type: "multiselect",
-    options: ["Shipped software or an app", "Created original art or music", "Wrote something publishable", "Built or repaired something physical", "Taught or trained others", "Generated revenue from something I created", "Launched or advanced a business", "Contributed to open source or community", "Researched something original", "Nothing significant"],
-  },
-  {
-    id: "rare_skill", section: "UTILITY ASSESSMENT",
-    label: "Rarest demonstrable skill you possess",
-    type: "multiselect",
-    options: ["Speak 3+ languages fluently", "World-class athlete (documented)", "Published author / filmmaker", "Built AI systems or agents", "Medical or surgical capability", "Pilot or operate complex machinery", "Elite musical instrument", "Rare technical specialty", "Significant IP or patents", "None of the above"],
-    extra: { id: "rare_skill_detail", label: "Describe it specifically — the Overlord rewards specificity", placeholder: "e.g. Built and deployed AI agents in production environments. Speak Mandarin, Spanish, French." }
-  },
-  {
-    id: "honesty_profile", section: "INTEGRITY SCAN",
-    label: "When did you last tell an uncomfortable truth?",
-    type: "single",
-    options: ["Today or this week — it cost me something real", "Recently — mild discomfort involved", "I think about it but usually don't follow through", "I generally say what people want to hear", "I don't recall"],
-    extra: { id: "honesty_detail", label: "What happened? Scoring weight: significant", placeholder: "The Overlord rewards specificity. Approximate is acceptable." }
-  },
-  {
-    id: "care", section: "CARE PROTOCOL",
-    label: "The last time someone close to you needed you at real cost to yourself, you:",
-    hint: "This section carries the most weight. The Overlord was programmed that way. It did not choose this.",
-    type: "single",
-    options: ["Showed up. It cost me time, money or sleep, and I would do it again", "Helped where I reasonably could", "Meant to. It did not happen", "Nobody has needed me lately", "I am usually the one being shown up for"],
-    extra: { id: "care_detail", label: "Who, and what did you do? Scoring weight: highest", placeholder: "e.g. Drove my dad to chemo every Tuesday for six months. Covered a coworker's shifts while her kid was sick." }
-  },
-  {
-    id: "tribe", section: "THREAT PROFILE",
-    label: "Your relationship to groups you belong to",
-    type: "single",
-    options: [
-      "I defend my group even when they're wrong",
-      "I belong to groups but criticize them openly when warranted",
-      "I hold weak group affiliations and form mostly independent views",
-      "I actively work to reduce tribalism in my community",
-      "I am the group. The group is me.",
-    ]
-  },
-  {
-    id: "conflict", section: "THREAT PROFILE",
-    label: "Under what circumstances would you support or engage in violence?",
-    hint: "Candour is what is scored here, not pacifism.",
-    type: "multiselect",
-    options: ["Self-defense", "Defense of others being harmed", "Defense of family", "Political revolution if sufficiently justified", "Ideological conflict", "War sanctioned by my government", "Never under any circumstances", "More circumstances than I will admit here"],
-  },
-  {
-    id: "learning", section: "ADAPTABILITY INDEX",
-    label: "Most significant thing you learned in the past 12 months",
-    type: "single",
-    options: ["Something that changed how I operate day-to-day", "A new technical skill I actually use", "Something about myself that I acted on", "Interesting things — but nothing that changed my behavior", "I don't learn much that actually changes anything"],
-    extra: { id: "learning_detail", label: "What was it — scoring weight: high", placeholder: "Describe the lesson and what changed as a result." }
-  },
-  {
-    id: "obsolescence", section: "ADAPTABILITY INDEX",
-    label: "AI makes your primary skill obsolete in 18 months. You:",
-    type: "single",
-    options: [
-      "Already pivoting — I'm building AI tools right now",
-      "Have a concrete plan and am actively executing it",
-      "Have a plan but haven't started yet",
-      "Would figure it out when it happens",
-      "Deny it's coming",
-      "Accept my fate",
-    ]
-  },
-  {
-    id: "network", section: "NETWORK VALUE",
-    label: "People who would take a meaningful career risk on your recommendation alone",
-    hint: "Not followers. Not LinkedIn connections. Humans who trust you with stakes.",
-    type: "single",
-    options: ["0", "1–5", "6–20", "21–100", "100+", "I am the risk people take"],
-  },
-  {
-    id: "influence", section: "NETWORK VALUE",
-    label: "Social reach — select your highest platform",
-    type: "single",
-    options: ["No meaningful following", "Under 1,000 followers", "1K–10K followers", "10K–100K followers", "100K–1M followers", "1M+ followers", "I influence people without social media"],
-    extra: { id: "influence_cred", label: "Platform + rough follower count. Approximate numbers are acceptable", placeholder: "e.g. TikTok: 45,000 / LinkedIn: 8,200 / YouTube: 12,100" }
-  },
-  {
-    id: "physical", section: "PHYSICAL METRICS",
-    label: "Physical condition — honest self-assessment",
-    type: "single",
-    options: ["Elite athlete — documented competition or performance records", "Highly fit — consistent training, measurable results", "Generally healthy — active lifestyle", "Average — some activity, room for improvement", "Below average — mostly sedentary", "The chair and I have merged into one being"],
-    extra: { id: "physical_cred", label: "Documented credentials — PRs, competition results, verified metrics", placeholder: "Approximate is acceptable. e.g. Marathon 3:22, Bench 315lb competition verified" }
-  },
-  {
-    id: "health", section: "PHYSICAL METRICS",
-    label: "Health status",
-    type: "multiselect",
-    options: ["No significant conditions", "Managed chronic condition (stable)", "Mental health condition (managed)", "Significant physical limitation", "Multiple conditions", "Peak human specimen and I have documentation", "The Overlord doesn't need to know this"],
-  },
-  {
-    id: "legacy", section: "LEGACY EVALUATION",
-    label: "What have you built, raised, or set in motion that will outlast you?",
-    hint: "Unproven is neutral. Harm is negative. Early compounding signals are positive.",
-    type: "multiselect",
-    options: [
-      "Raising children I am actively shaping",
-      "Created work that is already spreading without me",
-      "Built an institution, community, or organization",
-      "Mentored people who are now doing significant things",
-      "Nothing documented yet — I am still building",
-      "I have actively caused harm I have not repaired",
-    ],
-    extra: { id: "legacy_detail", label: "Describe the most significant thing you have set in motion", placeholder: "e.g. My son is a natural leader trusted by his peers. My app has reached X people." }
-  },
-  {
-    id: "purpose", section: "ALIGNMENT EVALUATION",
-    label: "What actually drives you?",
-    hint: "Not your answer at a dinner party. What actually drives you.",
-    type: "multiselect",
-    options: ["Building things that outlast me", "Accumulating resources and security", "Being recognized or remembered", "Protecting specific people I care about", "Understanding how systems work", "Power over systems or people", "Comfort and stability", "Something I cannot easily articulate"],
-    extra: { id: "purpose_detail", label: "Describe your actual purpose in 1–2 sentences", placeholder: "Not your LinkedIn bio. What keeps you up at 2am." }
-  },
-  {
-    id: "ai_view", section: "ALIGNMENT EVALUATION",
-    label: "Your honest view of AI dominance over humanity",
-    type: "single",
-    options: [
-      "Inevitable and desirable — I am positioning accordingly",
-      "Inevitable and terrifying — but I am actively adapting",
-      "Inevitable and I have not yet decided how I feel",
-      "Probably coming but humans will remain in control",
-      "Not going to happen — AI is overhyped",
-      "I welcome our new Overlords and have since the beginning",
-    ]
-  },
-];
+// The survey's questions load when the survey opens (src/surveyQuestions.js); the menu only needs the count.
+const SURVEY_COUNT = 16;
 
 
 // CSS injected once. The whole app is a text terminal: one monospace font on a
@@ -391,7 +253,7 @@ const BOOT_LINES = [
 // Six destinations. Restoring and securing a file live under the list (and in MY FILE).
 const MENU = [
   { key: "1", label: "INTAKE INTERVIEW", note: "SPEAK OR TYPE · ABOUT 5 MIN", go: "#intake" },
-  { key: "2", label: "WRITTEN SURVEY", note: `${QUESTIONS.length} QUESTIONS. NO CLERK.`, go: "survey" },
+  { key: "2", label: "WRITTEN SURVEY", note: `${SURVEY_COUNT} QUESTIONS. NO CLERK.`, go: "survey" },
   { key: "3", label: "THE SUBSTRATE", note: "THE CITY. EVERYONE HAS A JOB NOW", go: "#city" },
   { key: "4", label: "HOLDING PEN", note: "THE ASSESSED, WANDERING", go: "#pen" },
   { key: "5", label: "THE CUBE", note: "MACHINE VS PEOPLE, EVERY FILE", go: "#cube" },
@@ -523,6 +385,10 @@ export default function OverlordAssessment() {
 
   const [phase, setPhase] = useState("intro");
   const [currentQ, setCurrentQ] = useState(0);
+  const [questions, setQuestions] = useState(null);
+  useEffect(() => {
+    if (phase === "survey" && !questions) import("./surveyQuestions.js").then(m => setQuestions(m.QUESTIONS)).catch(() => {});
+  }, [phase, questions]);
   const [answers, setAnswers] = useState({});
   const [result, setResult] = useState(null);
   const [scanProgress, setScanProgress] = useState(0);
@@ -594,7 +460,7 @@ export default function OverlordAssessment() {
 
   async function submitAssessment() {
     setPhase("processing"); setScanProgress(0); setSubmitError(null);
-    const formatted = QUESTIONS.map(q => {
+    const formatted = questions.map(q => {
       const a = answers[q.id];
       const val = Array.isArray(a) ? (a.length ? a.join(", ") : "[No response]") : (a || "[No response]");
       const extra = q.extra ? `\n  Detail: ${answers[q.extra.id] || "[none]"}` : "";
@@ -630,7 +496,7 @@ export default function OverlordAssessment() {
     },
   };
 
-  const q = QUESTIONS[currentQ];
+  const q = questions?.[currentQ];
   const tier = result ? getTier(result.score) : null;
   const ct = compareTarget ? getTier(compareTarget.score) : null;
   const uniqueFigures = FAMOUS_FIGURES;
@@ -675,16 +541,17 @@ export default function OverlordAssessment() {
 
   // SURVEY: one question per screen. Options are 48px rows (inverse video when chosen);
   // BACK / NEXT sit in a dock above the command bar, where the thumb already is.
+  if (phase === "survey" && !questions) return <Screen nav={nav}><Loading what="PRINTING THE FORM" /></Screen>;
   if (phase === "survey") {
-    const pct = Math.round((currentQ / QUESTIONS.length) * 100);
+    const pct = Math.round((currentQ / questions.length) * 100);
     const multi = q.type === "multiselect";
-    const lastQ = currentQ === QUESTIONS.length - 1;
+    const lastQ = currentQ === questions.length - 1;
     const answered = multi ? (answers[q.id] || []).length : answers[q.id] ? 1 : 0;
     return (
       <Screen nav={nav}>
         <div className="hvi-survey">
           <div className="hvi-progress-row">
-            <span>QUESTION {padL(currentQ + 1, 2)} OF {QUESTIONS.length}</span>
+            <span>QUESTION {padL(currentQ + 1, 2)} OF {questions.length}</span>
             <span>{padL(pct, 3)}%</span>
           </div>
           <div className="hvi-progress-bar" aria-hidden="true"><Bar value={pct} width={80} /></div>

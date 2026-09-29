@@ -10,7 +10,8 @@ import terms from "../../docs/legal/terms.md?raw";
 import dispute from "../../docs/legal/dispute.md?raw";
 import { Frame, Button, ButtonRow, TextField } from "../ui/index.js";
 import { readCaseId } from "../caseFile.jsx";
-import "./legal.css";
+// ?inline: the styles ride inside this lazy chunk, so the logon bundle carries no preload entry for them.
+import legalCss from "./legal.css?inline";
 
 const PAGES = { "#about": about, "#privacy": privacy, "#terms": terms, "#dispute": dispute };
 
@@ -108,7 +109,7 @@ export function DisputeForm({ file: initialFile = "" }) {
   if (done) return (
     <Frame box title="REQUEST FILED" meta={done.id || ""} className="lg-done">
       <p className="lg-voice">{done.message}</p>
-      <p><strong>A human reviews every request.</strong> You will get a reply at the address you gave. Your reference: <strong>{done.id}</strong>.</p>
+      <p><strong>A human reviews every request.</strong> You will get a reply within 7 days at the address you gave. Your reference: <strong>{done.id}</strong>.</p>
       <ButtonRow><Button variant="secondary" href="#">Return to the terminal</Button></ButtonRow>
     </Frame>
   );
@@ -187,6 +188,7 @@ export default function Legal({ route = "" }) {
   const file = new URLSearchParams(query).get("file") || "";
   return (
     <article className="lg-doc">
+      <style>{legalCss}</style>
       {renderDoc(md, { form: <DisputeForm file={file} />, purge: <PurgePanel /> })}
     </article>
   );

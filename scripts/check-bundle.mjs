@@ -6,6 +6,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 
 const BUDGET_KB = 90;
+
+// The survey's questions are lazy (src/surveyQuestions.js); the logon menu states their
+// count from a constant in App.jsx, so the two must agree.
+const { QUESTIONS } = await import("../src/surveyQuestions.js");
+const count = Number(readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8").match(/const SURVEY_COUNT = (\d+);/)?.[1]);
+if (count !== QUESTIONS.length) { console.error(`FAIL SURVEY_COUNT in App.jsx is ${count}; src/surveyQuestions.js has ${QUESTIONS.length}`); process.exit(1); }
 const dist = new URL("../dist/", import.meta.url).pathname;
 if (!existsSync(dist + "index.html")) {
   console.log("check-bundle: no dist/index.html. Run `npm run build` first. SKIPPED, not passed.");

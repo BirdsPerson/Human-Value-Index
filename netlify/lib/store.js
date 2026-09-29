@@ -72,7 +72,7 @@ export async function listPenCards(max = PEN_MAX) {
 // Daily counter. Increments and reports whether the caller is still under max.
 // Conditional writes (etag) so two concurrent requests can't both read 4 and write 5.
 // window "day" (YYYY-MM-DD) or "minute" (YYYY-MM-DDTHH:MM) buckets the key.
-// ponytail: old keys are never deleted; a few bytes each, prune if it ever matters.
+// Old keys are pruned daily by netlify/lib/prune.js (7 days after their window closes).
 export async function hitLimit(key, max, window = "day", amount = 1) {
   const store = limits();
   const k = `${bucket(window)}:${key}`;

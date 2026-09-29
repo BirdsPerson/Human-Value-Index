@@ -2,7 +2,7 @@
 
 > The Department keeps files. This is the list of what is in them, who else holds a copy, and how to have yours shredded.
 
-Last updated: 2026-09-29. Operator: [[TODO SCOTT: operator name and a postal or email contact.]]
+Last updated: 2026-09-29. Operator: [Iridescent](https://iridescent-studio.netlify.app), the games and media studio that publishes the Human Value Index. Contact: the [request form](#dispute).
 
 ## The short version
 
@@ -31,7 +31,7 @@ Last updated: 2026-09-29. Operator: [[TODO SCOTT: operator name and a postal or 
 
 **Disputes and correction requests.** If you file a request, the Department stores what you enter (your name, your relationship to the subject, the file, what is wrong and your email address) and emails a copy to the operator's own inbox so a human can review it.
 
-**Your IP address.** Used only to rate-limit requests (to stop abuse and runaway costs). It is stored as a one-way, salted hash inside hourly and daily counters. The hosting provider also sees IP addresses in its request logs.
+**Your IP address.** Used only to rate-limit requests (to stop abuse and runaway costs). It is stored as a one-way, salted hash inside hourly, daily and monthly counters, which are deleted 7 days after the period they count. The hosting provider also sees IP addresses in its request logs.
 
 ## Cookies and browser storage
 
@@ -56,19 +56,21 @@ Each provider handles data under its own terms. Anthropic does not train its mod
 
 ## How long it is kept
 
-- **Case files:** until you purge them. [[TODO SCOTT: decide whether abandoned files expire, e.g. after 24 months without a visit.]]
+A sweep runs once a day and deletes whatever has passed these limits.
+
+- **Case files:** **24 months after your last visit**, then deleted: the file, its public card and its link to your email. A visit is you sitting for an interview, filing an appeal or taking a directive in the city. Changes the Department makes to a file (a method update, a review) do not count as visits. You can purge sooner at any time (below).
+- **Email address:** until the last file it holds is purged or expires.
 - **ElevenLabs voice recordings:** 30 days.
-- **Email address:** until you purge the last file it holds.
-- **Sign-in links:** single use, expire after 15 minutes.
-- **Sessions:** 30 days, or until you log out.
-- **Dispute requests:** [[TODO SCOTT: suggested 2 years, then deleted.]]
-- **Rate-limit counters:** hashed; [[TODO SCOTT: suggested pruning after 7 days.]]
+- **Sign-in links:** single use, expire after 15 minutes, and are deleted within a day after that.
+- **Sessions:** 30 days, or until you log out. Expired sessions are deleted within a day.
+- **Dispute requests:** **2 years** after they are filed, then deleted. [[TODO SCOTT: the copy emailed to your inbox is outside the site; delete it on the same 2-year schedule, or change this line.]]
+- **Rate-limit counters:** hashed, and deleted **7 days** after the hour, day or month they count.
 
 ## Purge your file
 
 Use **PURGE MY FILE** below. It deletes the case file on this browser (transcripts, scores, verdicts, photo, history), removes its public card, and detaches it from your email. If that was the last file on your email address, the address and your sign-in are deleted too.
 
-If the file is secured to an email address, you must be signed in with that address to purge it. If it is not, holding the case number is enough, the same as for viewing it. Copies already held by a provider (ElevenLabs' 30-day recordings, provider logs) expire on their own schedule.
+If the file is secured to an email address, you must be signed in with that address to purge it. If it is not, holding the case number is enough, the same as for viewing it. Copies already held by a provider (ElevenLabs' 30-day recordings, provider logs) expire on their own schedule. A file you never purge is deleted anyway 24 months after your last visit.
 
 <!-- purge -->
 
@@ -84,4 +86,4 @@ You can see your file (MY FILE), correct it (appeal, or [dispute](#dispute)), an
 
 ## Contact
 
-Use the [request form](#dispute) and choose "privacy request." [[TODO SCOTT: a public contact address, e.g. privacy@humanvalueindex.com, forwarding to you.]]
+Use the [request form](#dispute) and choose "privacy request." A person at Iridescent reads every request and replies within 7 days. [[TODO SCOTT: optional later: a public address such as privacy@humanvalueindex.com forwarding to you. Until then the form is the only channel.]]

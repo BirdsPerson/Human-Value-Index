@@ -25,10 +25,10 @@ A model reads the evidence (your interview, or a public figure's record) and sco
 
 ## Corrections
 
-A human reviews every correction or takedown request. [File a dispute](#dispute).
+A human reviews every correction or takedown request and replies within 7 days. [File a dispute](#dispute).
 
 ## Who made this
 
-The Human Value Index is made by [[TODO SCOTT: operator name. Suggested: "Iridescent" (media) or your own name. Until you decide, the site says "the Department".]] It is an independent project. It is not affiliated with, endorsed by or connected to any person assessed on it.
+The Human Value Index is made by [Iridescent](https://iridescent-studio.netlify.app), an independent games and media studio. It is an independent project. It is not affiliated with, endorsed by or connected to any person assessed on it.
 
 See also: [Privacy](#privacy) · [Terms](#terms)

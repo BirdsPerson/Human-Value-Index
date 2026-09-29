@@ -8,8 +8,8 @@ Use this form to ask for a correction, a takedown, or a privacy action. **A huma
 - **Takedown:** you are the subject of a file (or represent them) and want it reviewed for removal.
 - **Privacy request:** you want your own data found, copied or deleted and cannot do it yourself.
 
-Your request and the email address you give are stored and sent to the operator. They are used only to handle this request. See the [Privacy notice](#privacy).
+Your request and the email address you give are stored for 2 years and sent to the operator, Iridescent. They are used only to handle this request. See the [Privacy notice](#privacy).
 
 <!-- form -->
 
-**What happens next.** A person reads it, checks the record, and replies to the email you gave. [[TODO SCOTT: commit to a response time, e.g. "within 7 days".]] While a takedown request from a subject is under review, the file may be sealed.
+**What happens next.** A person at Iridescent reads it, checks the record, and replies to the email you gave **within 7 days**. While a takedown request from a subject is under review, the file may be sealed.
