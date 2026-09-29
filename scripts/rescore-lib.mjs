@@ -88,12 +88,15 @@ export async function rescoreOne({ name, died = null, wikiTitle = name, harmRevi
     }
   }
   return {
-    name, breakdown, verdict, flags: closest.flags, commendations: closest.commendations,
+    // verdictRaw: the unchecked reading, for audit only; never published.
+    name, breakdown, verdict, verdictRaw: closest.verdict, flags: closest.flags, commendations: closest.commendations,
     // Auditable harm classification: the closest reading's, plus every run's band.
     harm: closest.harm ? { ...closest.harm, severity, runs: readings.map(r => r.harm?.band ?? null) } : null,
     harmReview: harmReview ?? null,
     score: computeScore(breakdown, severity, harmReview), spread: dispersion(breakdowns), runScores: readings.map(r => computeScore(r.breakdown, r.harm?.severity, harmReview)),
-    factCheck: fc ? { checked: fc.checked, removed: fc.removed, at: new Date().toISOString() } : null,
+    // passed: false means the check returned no clean verdict and `verdict` is unchecked;
+    // callers that publish must withhold it.
+    factCheck: fc ? { checked: fc.checked, removed: fc.removed, passed: Boolean(fc.verdict), mostlyFailed: Boolean(fc.mostlyFailed), at: new Date().toISOString() } : null,
   };
 }
 
