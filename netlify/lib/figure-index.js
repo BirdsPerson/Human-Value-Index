@@ -15,8 +15,9 @@ export const SHARDS = 64;
 export const INDEX_STORE = "hvi-figure-index";
 export const FLAG = "index-v2";
 export const LEGACY = "index";
-// Transition: writers also keep the legacy blob current, so a rollback loses nothing.
-export const WRITE_LEGACY = true;
+// Migrated 2026-09-29: writers write the shards only. The legacy blob is frozen as the
+// backup (--rollback rebuilds it from the shards).
+export const WRITE_LEGACY = false;
 
 // FNV-1a over the slug's UTF-16 code units: stable across Node versions and machines.
 export function shardOf(slug) {
@@ -91,8 +92,15 @@ async function cas(store, key, edit, { tries, create }) {
 export async function writeEntries(io, changes, { tries = 8, legacy = WRITE_LEGACY } = {}) {
   if (!changes.length) return;
   if (legacy) await cas(io.figures, LEGACY, base => applyEntries(base, changes), { tries, create: true });
+  let create = !(await isMigrated(io.index));
+  if (create && !legacy) {
+    // Shards only, and no flag: a store with a legacy blob must be migrated first (its
+    // readers would not see this write); a store with neither is born sharded.
+    if (await io.figures.get(LEGACY, { type: "json" })) throw new Error("figure index not migrated: run node scripts/index-shards.mjs");
+    await initShards(io);
+    create = false;
+  }
   // After the migration every shard exists; a missing one is an error, not a fresh bucket.
-  const create = !(await isMigrated(io.index));
   const byShard = new Map();
   for (const ch of changes) {
     const k = shardKeyOf(ch.slug);
@@ -103,6 +111,12 @@ export async function writeEntries(io, changes, { tries = 8, legacy = WRITE_LEGA
 }
 
 // ---- migration (scripts/index-shards.mjs) -------------------------------------------------
+// A fresh store (no legacy blob): every shard empty, then the flag.
+export async function initShards(io) {
+  await Promise.all(SHARD_KEYS.map(k => io.index.setJSON(k, { cards: [] }, { onlyIfNew: true })));
+  await io.index.setJSON(FLAG, { at: new Date().toISOString(), entries: 0, shards: SHARDS, fresh: true }, { onlyIfNew: true });
+}
+
 async function legacyCards(io) {
   const cur = await io.figures.get(LEGACY, { type: "json" });
   if (!cur || !Array.isArray(cur.cards)) throw new Error("no legacy index blob (hvi-figures/index)");

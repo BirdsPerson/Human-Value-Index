@@ -67,7 +67,7 @@ assert.equal(new Set(FI.SHARD_KEYS).size, 64);
   assert.ok(Math.min(...sizes) > 60 && Math.max(...sizes) < 150, `shards stay even: ${Math.min(...sizes)}..${Math.max(...sizes)}`);
 }
 
-// ---- before the flag: readers use the legacy blob, writers keep both ------------------------
+// ---- before the flag: readers use the legacy blob; shards-only writers refuse ---------------
 reset();
 {
   const legacy = [card(2), card(1)].map(store.figureIndexEntry);
@@ -75,8 +75,12 @@ reset();
   // A stray shard written before the migration is not read.
   await getStore({ name: FI.INDEX_STORE }).setJSON(FI.shardKeyOf("ghost"), { cards: [{ slug: "ghost", name: "Ghost", score: 1 }] });
   assert.deepEqual((await store.listFigures()).map(c => c.slug), ["subject-2", "subject-1"], "legacy fallback before the flag");
-  assert.equal(await store.createFigure(card(3)), true);
-  assert.deepEqual(raw("hvi-figures", "index").cards.map(c => c.slug), ["subject-3", "subject-2", "subject-1"], "transition: the legacy blob is still written");
+  await assert.rejects(FI.writeEntries(io(), [{ slug: "subject-3", entry: store.figureIndexEntry(card(3)) }]), /not migrated/, "a shards-only write to an unmigrated store would be invisible: refused");
+  assert.equal(await store.createFigure(card(3)), true, "the card is saved; its index write is refused and logged");
+  assert.equal(raw("hvi-figures", "index").cards.length, 2);
+  // The transition writers (legacy blob, then shard) the migration was run under.
+  await FI.writeEntries(io(), [{ slug: "subject-3", entry: store.figureIndexEntry(card(3)) }], { legacy: true });
+  assert.deepEqual(raw("hvi-figures", "index").cards.map(c => c.slug), ["subject-3", "subject-2", "subject-1"], "transition: the legacy blob is written");
   assert.equal(raw(FI.INDEX_STORE, FI.shardKeyOf("subject-3")).cards.find(c => c.slug === "subject-3").name, "Subject 3", "transition: the shard is written too");
   assert.equal(await store.createFigure(card(3)), false, "a taken slug is refused");
 }
@@ -157,7 +161,7 @@ reset();
   assert.equal(all.length, 6005, "nothing evicted past the old 5,000 cap");
   assert.equal(all[0].slug, "subject-6004", "newest first");
   assert.ok(all.some(c => c.slug === "subject-0"), "the oldest figure is still on file");
-  assert.equal(raw("hvi-figures", "index").cards.length, 6005, "transition: the legacy blob is not capped either");
+  assert.equal(raw("hvi-figures", "index").cards.length, 6000, "after the migration the legacy blob is frozen (the backup)");
   assert.equal((await censusSubjects({ strict: true })).length, 6005);
 }
 
@@ -167,7 +171,7 @@ reset();
   await getStore({ name: "hvi-figures" }).setJSON("index", { cards: Array.from({ length: 300 }, (_, i) => store.figureIndexEntry(card(i))) });
   // 40 writers at once all contend for the one legacy blob (the reason for the shards):
   // generous retries here, so the check is about the migration, not that contention.
-  const writes = Array.from({ length: 40 }, (_, j) => FI.writeEntries(io(), [{ slug: `subject-${1000 + j}`, entry: store.figureIndexEntry(card(1000 + j)) }], { tries: 200 }));
+  const writes = Array.from({ length: 40 }, (_, j) => FI.writeEntries(io(), [{ slug: `subject-${1000 + j}`, entry: store.figureIndexEntry(card(1000 + j)) }], { tries: 200, legacy: true }));
   const [r] = await Promise.all([FI.migrate(io()).catch(e => ({ error: e.message })), ...writes]);
   // A writer between the build and the compare leaves it unflagged; a re-run settles it.
   const final = r.ok ? r : await FI.migrate(io());
@@ -185,6 +189,17 @@ reset();
   assert.equal(raw(FI.INDEX_STORE, FI.FLAG), null);
   assert.equal(raw("hvi-figures", "index").cards.length, 339);
   assert.equal((await store.listFigures()).length, 339, "readers fall back to the rebuilt legacy blob");
+}
+
+// ---- a fresh store is born sharded ------------------------------------------------------------
+reset();
+{
+  assert.deepEqual(await store.listFigures(), [], "nothing on file, nothing read");
+  assert.equal(await store.createFigure(card(1)), true);
+  assert.ok(raw(FI.INDEX_STORE, FI.FLAG)?.fresh, "the first write creates every shard, then the flag");
+  assert.equal(FI.SHARD_KEYS.every(k => Array.isArray(raw(FI.INDEX_STORE, k)?.cards)), true);
+  assert.equal(raw("hvi-figures", "index"), null, "no legacy blob is made");
+  assert.deepEqual((await store.listFigures()).map(c => c.slug), ["subject-1"]);
 }
 
 // ---- Mac writers: syncIndex derives from the card; repair re-indexes ----------------------

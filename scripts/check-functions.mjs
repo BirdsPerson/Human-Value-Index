@@ -323,7 +323,8 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
   assert.deepEqual(dolly.factCheck.removed, ["unsupported: invented"]);
   assert.equal(dolly.living, false);
   assert.equal(dolly.noDangle, false);
-  assert.equal(globalThis.__blobs.get("hvi-figures").get("index").data.cards[0].died, "2026-08-25");
+  const { shardKeyOf, INDEX_STORE, writeEntries } = await import("../netlify/lib/figure-index.js");
+  assert.equal(globalThis.__blobs.get(INDEX_STORE).get(shardKeyOf("dolly-parton")).data.cards.find(c => c.slug === "dolly-parton").died, "2026-08-25", "indexed in her shard");
 
   // "Index" is a name; it must not read the index blob back as a figure
   r = await read(await post(refer, "/api/refer", { name: "Index", caseId }, { ip: "192.0.2.51" }));
@@ -356,8 +357,8 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
     const figs = globalThis.__blobs.get("hvi-figures");
     const boxer = { slug: "jack-johnson", name: "Jack Johnson", wikidata: "Q316689", score: 668, tier: "TOLERATED GENERALIST", verdictStatus: "published", breakdown: {}, verdict: "v" };
     figs.set("jack-johnson", { data: boxer, etag: "b1" });
-    const idx = figs.get("index")?.data || { cards: [] };
-    figs.set("index", { data: { cards: [boxer, ...idx.cards] }, etag: "i-jj" });
+    const { getStore } = await import("@netlify/blobs");
+    await writeEntries({ figures: getStore({ name: "hvi-figures" }), index: getStore({ name: INDEX_STORE }) }, [{ slug: boxer.slug, entry: boxer }]);
     wikiRoutes.unshift(
       [/srsearch=Jack%20Johnson&srlimit=10/, { query: { search: [{ title: "Jack Johnson" }, { title: "Jack Johnson (musician)" }, { title: "Jack Johnson (album)" }] } }],
       [/titles=Jack%20Johnson%7CJack%20Johnson%20\(disambiguation\)&prop=pageprops\|links/, { query: { pages: { "9": { title: "Jack Johnson (disambiguation)", pageprops: { disambiguation: "" }, links: [{ title: "Jack Johnson (ice hockey)" }, { title: "Jack Johnson (album)" }, { title: "Jackie Johnson" }] } } } }],
@@ -513,18 +514,15 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
   r = await read(await post(refer, "/api/refer", { name: "Terence McKenna" }, { ip: "192.0.2.61" }));
   assert.ok(r.status === 200 || r.status === 403, "now on file, or refused: never scored for a stranger");
 
-  // The sharded index (netlify/lib/figure-index.js): referrals so far were written to the
-  // legacy blob and their shard; after the migration the same census comes from the shards.
+  // The sharded index (netlify/lib/figure-index.js): the store was born sharded (no legacy
+  // blob), every referral indexed in its shard, and the census reads them back.
   const FI = await import("../netlify/lib/figure-index.js");
-  const { getStore } = await import("@netlify/blobs");
-  const fio = { figures: getStore({ name: "hvi-figures" }), index: getStore({ name: FI.INDEX_STORE }) };
   const shardOf = slug => globalThis.__blobs.get(FI.INDEX_STORE).get(FI.shardKeyOf(slug))?.data.cards || [];
   assert.ok(shardOf("terence-mckenna").some(c => c.slug === "terence-mckenna"), "a referral is indexed in its shard");
+  assert.equal(globalThis.__blobs.get("hvi-figures").has("index"), false, "no legacy blob is written");
   const { censusSubjects } = await import("../netlify/lib/census.js");
-  const before = (await censusSubjects({ strict: true })).map(s => s.slug).sort();
-  const m = await FI.migrate(fio);
-  assert.equal(m.ok, true, JSON.stringify(m));
-  assert.deepEqual((await censusSubjects({ strict: true })).map(s => s.slug).sort(), before, "the census is the same set from the shards");
+  const census = (await censusSubjects({ strict: true })).map(s => s.slug);
+  assert.ok(census.includes("jack-johnson-musician") && census.includes("terence-mckenna"), "the census reads the shards");
   const penShards = await read(await (await import("../netlify/functions/pen.js?shards")).default(new Request(HOST + "/api/pen")));
   assert.ok(penShards.body.subjects.some(s => s.slug === "jack-johnson-musician"), "/api/pen reads the shards");
   r = await read(await post(refer, "/api/refer", { name: "Jack Johnson", caseId }, { ip: "192.0.2.62" }));
