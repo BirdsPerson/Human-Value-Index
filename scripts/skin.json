@@ -76,6 +76,13 @@
   "image": true,
   "note": "Black-and-white photo limits precise skin tone assessment; estimate based on tonal contrast and historical context of French Creole heritage from R\u00e9union."
  },
+ "amerigo-vespucci": {
+  "band": "olive",
+  "basis": "knowledge",
+  "confidence": "low",
+  "image": true,
+  "note": "Engraving provides no color information; based on typical Mediterranean Italian complexion of the era, though individual variation is uncertain."
+ },
  "anatoly-onoprienko": {
   "band": "fair",
   "basis": "photo",
@@ -117,6 +124,13 @@
   "image": true,
   "note": "Light skin tone with visible pink undertones, consistent with well-known appearance"
  },
+ "arnold-schwarzenegger": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light complexion consistent with Austrian heritage, visible in photo with even fair skin tone"
+ },
  "arthur-ashe": {
   "band": "brown",
   "basis": "photo",
@@ -131,12 +145,26 @@
   "image": true,
   "note": "Light complexion consistent with known appearance"
  },
+ "ashton-kutcher": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light complexion visible in photo, consistent with known appearance"
+ },
  "babe-ruth": {
   "band": "fair",
   "basis": "photo",
   "confidence": "medium",
   "image": true,
   "note": "Sepia-toned historical photo limits precision, but consistent with known fair skin tone of Babe Ruth, a white American of German descent."
+ },
+ "bad-bunny": {
+  "band": "medium",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with well-documented appearance"
  },
  "bam-margera": {
   "band": "fair",
@@ -165,6 +193,13 @@
   "confidence": "high",
   "image": true,
   "note": "Light skin tone visible in official portrait photo, consistent with known appearance"
+ },
+ "benny-the-butcher": {
+  "band": "dark brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Visible skin tone in image is deep dark brown, consistent with known appearance."
  },
  "bernie-madoff": {
   "band": "fair",
@@ -208,6 +243,13 @@
   "image": true,
   "note": "Black-and-white photo shows medium-brown skin tone consistent with known photos of Billie Holiday"
  },
+ "billy-joel": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible under stage lighting, consistent with known appearance"
+ },
  "bob-burnquist": {
   "band": "medium",
   "basis": "photo",
@@ -221,6 +263,13 @@
   "confidence": "high",
   "image": true,
   "note": "Elderly man with fair skin tone visible in photo, consistent with known appearance."
+ },
+ "bob-geldof": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with Irish ancestry"
  },
  "bob-ross": {
   "band": "fair",
@@ -257,6 +306,13 @@
   "image": true,
   "note": "Light skin tone typical of British/European heritage, visible in photo with pinkish undertones"
  },
+ "brad-pitt": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light complexion consistent with well-documented appearance"
+ },
  "bruce-lee": {
   "band": "medium",
   "basis": "photo",
@@ -277,6 +333,13 @@
   "confidence": "low",
   "image": true,
   "note": "Marble bust shows no original skin color; classification based on typical Mediterranean/Roman complexion, not direct evidence."
+ },
+ "carl-bernstein": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone with pink undertones visible in facial complexion"
  },
  "carl-sagan": {
   "band": "fair",
@@ -313,6 +376,13 @@
   "image": true,
   "note": "Light skin tone visible in photo, consistent with known appearance."
  },
+ "che": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Lighting is dim/greenish, affecting color accuracy, but visible skin tone appears medium-brown."
+ },
  "che-guevara": {
   "band": "fair",
   "basis": "photo",
@@ -341,12 +411,54 @@
   "image": true,
   "note": "Consistent with well-documented appearance"
  },
+ "christopher-columbus": {
+  "band": "fair",
+  "basis": "painting",
+  "confidence": "low",
+  "image": true,
+  "note": "Posthumous painted portrait, not from life; actual skin tone uncertain but consistent with Southern European ancestry."
+ },
+ "chuck-jones": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone with visible pinkish undertones typical of elderly fair-skinned individual"
+ },
+ "chuck-norris": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light-skinned Caucasian man with a reddish beard, consistent with known appearance."
+ },
  "cleopatra": {
   "band": "medium",
   "basis": "statue",
   "confidence": "low",
   "image": true,
   "note": "Marble bust has no original pigmentation preserved; skin tone inferred from Ptolemaic Greek-Macedonian ancestry and Eastern Mediterranean origin, but statues cannot reliably convey actual skin color."
+ },
+ "clint-eastwood": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Elderly light-skinned man with visible flush and age spots typical of fair complexion"
+ },
+ "conway-the-machine": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Visible skin tone in photo shows medium-brown complexion consistent with known appearance."
+ },
+ "cornel-west": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Visible skin tone in photo consistent with well-known appearance"
  },
  "cristiano-ronaldo": {
   "band": "medium",
@@ -368,6 +480,13 @@
   "confidence": "high",
   "image": true,
   "note": "Consistent with well-documented appearance and photo evidence under stage lighting."
+ },
+ "dave-matthews": {
+  "band": "medium",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Visible skin tone in stage lighting appears medium, consistent with known appearance"
  },
  "david-byrne": {
   "band": "fair",
@@ -481,6 +600,13 @@
   "image": true,
   "note": "Portrait shows fair skin with warm orange-tan tone from tanning, but underlying natural tone is fair."
  },
+ "drake": {
+  "band": "light brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with well-documented skin tone in photos"
+ },
  "du-yuesheng": {
   "band": "medium",
   "basis": "photo",
@@ -544,6 +670,13 @@
   "image": true,
   "note": "Black-and-white photo limits certainty, but historical knowledge of Zapata's mestizo/indigenous Nahua heritage supports a medium skin tone."
  },
+ "eminem": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible on face in photo, consistent with known appearance"
+ },
  "eric-idle": {
   "band": "fair",
   "basis": "photo",
@@ -564,6 +697,13 @@
   "confidence": "low",
   "image": false,
   "note": "No image available; Frank Weiss was a Canadian racing driver, presumed of European descent, but specific skin tone cannot be confirmed without a photo."
+ },
+ "frederick-douglass": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Historic black-and-white photograph limits precise tone assessment, but based on known descriptions and photographic evidence, brown is a reasonable estimate."
  },
  "fredrik-bajer": {
   "band": "fair",
@@ -754,6 +894,13 @@
   "image": true,
   "note": "Black and white photo limits certainty, but consistent with typical Vietnamese medium skin tone."
  },
+ "hunter-s-thompson": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Black-and-white photo limits precision, but consistent with known fair complexion of Hunter S. Thompson."
+ },
  "ingmar-bergman": {
   "band": "fair",
   "basis": "photo",
@@ -781,6 +928,13 @@
   "confidence": "high",
   "image": true,
   "note": "Consistent with visible skin tone and well-documented East African heritage."
+ },
+ "j-balvin": {
+  "band": "medium",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Warm medium skin tone visible in photo, consistent with known appearance"
  },
  "j-edgar-hoover": {
   "band": "fair",
@@ -887,6 +1041,20 @@
   "image": true,
   "note": "Visible skin tone in photo appears light/fair, consistent with known appearance."
  },
+ "javier-bardem": {
+  "band": "olive",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Spanish actor with warm olive complexion visible in photo"
+ },
+ "jay-leno": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light complexion typical of his Italian-American/Scottish heritage, visible in well-lit photo."
+ },
  "jay-z": {
   "band": "brown",
   "basis": "photo",
@@ -971,6 +1139,20 @@
   "image": true,
   "note": "Official portrait shows light complexion typical of Carter"
  },
+ "jimmy-fallon": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light complexion consistent with well-known appearance"
+ },
+ "jimmy-kimmel": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light complexion consistent with well-known appearance"
+ },
  "joan-of-arc": {
   "band": "fair",
   "basis": "knowledge",
@@ -1020,6 +1202,13 @@
   "image": true,
   "note": "Image shows a star chart engraving of a mythological figure (Hercules), not an actual portrait of Johann Bayer. Skin tone estimate based on typical European ancestry of a 16th-17th century German lawyer."
  },
+ "john-cena": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone consistent with known appearance"
+ },
  "john-cleese": {
   "band": "fair",
   "basis": "photo",
@@ -1034,12 +1223,33 @@
   "image": false,
   "note": "Rockefeller was a white American of Scots-Irish/English descent; no image available, so relying on typical fair complexion for this ancestry, though exact tone can't be confirmed without a photo."
  },
+ "john-lennon": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone consistent with English ethnicity, as seen in the photograph."
+ },
+ "john-oliver": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in portrait, consistent with known appearance"
+ },
  "john-stagliano": {
   "band": "fair",
   "basis": "knowledge",
   "confidence": "low",
   "image": false,
   "note": "American man of Italian descent; no image available, estimate based on typical fair-to-medium complexion common in this background, lowered confidence due to lack of visual confirmation"
+ },
+ "jon-stewart": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with his known appearance"
  },
  "jonathan-franzen": {
   "band": "fair",
@@ -1061,6 +1271,13 @@
   "confidence": "medium",
   "image": true,
   "note": "Visible skin tone in photo appears medium-toned, consistent with Bolivian heritage"
+ },
+ "julius-erving": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with well-known appearance of Julius Erving in photographs"
  },
  "kaahumanu": {
   "band": "brown",
@@ -1153,6 +1370,13 @@
   "image": true,
   "note": "Light skin tone visible in photo, consistent with known appearance"
  },
+ "larry-fink": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with known ethnicity"
+ },
  "larry-silverstein": {
   "band": "fair",
   "basis": "photo",
@@ -1244,6 +1468,13 @@
   "image": true,
   "note": "Black and white photo limits precise skin tone assessment, but based on typical East Asian skin tone and photo tonality, medium is a reasonable estimate."
  },
+ "marco-polo": {
+  "band": "fair",
+  "basis": "knowledge",
+  "confidence": "low",
+  "image": true,
+  "note": "Image is a stylized woodcut illustration with no color/skin tone detail; based on historical knowledge, Marco Polo was a Venetian of likely fair/medium Mediterranean complexion, but no direct visual evidence exists to confirm precise skin tone."
+ },
  "marcus-aurelius": {
   "band": "medium",
   "basis": "statue",
@@ -1321,6 +1552,13 @@
   "image": true,
   "note": "Light complexion visible in photo, consistent with known ethnicity"
  },
+ "melania-trump": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone with warm undertones visible in photo"
+ },
  "melinda-french-gates": {
   "band": "fair",
   "basis": "photo",
@@ -1391,6 +1629,13 @@
   "image": true,
   "note": "Consistent with well-documented complexion, visible facial tattoo contrast in photo"
  },
+ "millie-bobby-brown": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light, fair complexion visible in photo, consistent with known appearance"
+ },
  "mohamed-elbaradei": {
   "band": "olive",
   "basis": "photo",
@@ -1440,6 +1685,13 @@
   "image": true,
   "note": "South Asian skin tone consistent with known ethnicity and visible in photo"
  },
+ "nas": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Visible skin tone in photo consistent with well-known appearance"
+ },
  "neil-degrasse-tyson": {
   "band": "brown",
   "basis": "photo",
@@ -1467,6 +1719,13 @@
   "confidence": "medium",
   "image": true,
   "note": "Black-and-white photo limits certainty, but consistent with Tesla's known fair Central European complexion."
+ },
+ "noam-chomsky": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Elderly man with light complexion visible in photo, consistent with known appearance"
  },
  "oj-simpson": {
   "band": "brown",
@@ -1517,6 +1776,13 @@
   "image": true,
   "note": "Black and white photo limits precise skin tone assessment, but based on known Spanish/Mediterranean heritage and visible tonal contrast in the image, olive is a reasonable estimate."
  },
+ "padre-pio": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Elderly Italian friar, light complexion visible in photo consistent with Southern European fair/medium-fair skin tone."
+ },
  "pam-grier": {
   "band": "brown",
   "basis": "photo",
@@ -1565,6 +1831,13 @@
   "confidence": "high",
   "image": true,
   "note": "Consistent with well-documented appearance in photos of Pel\u00e9, wearing Brazil national team kit."
+ },
+ "pete-hegseth": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light, fair complexion visible in official portrait photo"
  },
  "pete-rose": {
   "band": "fair",
@@ -1809,6 +2082,13 @@
   "image": true,
   "note": "East Asian skin tone consistent with well-documented appearance"
  },
+ "slash": {
+  "band": "medium",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Guitarist with light brown/tan skin tone visible on face and arms in performance photo"
+ },
  "slobodan-milosevic": {
   "band": "fair",
   "basis": "photo",
@@ -1844,6 +2124,13 @@
   "image": false,
   "note": "Stanley Kubrick was a white American (Jewish heritage) man of fair complexion, based on well-known photographs; no image was available for direct verification."
  },
+ "stephen-colbert": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone typical of this person, consistent with photo lighting and known appearance."
+ },
  "stephen-hawking": {
   "band": "fair",
   "basis": "photo",
@@ -1851,12 +2138,40 @@
   "image": true,
   "note": "Black and white photo, but consistent with well-documented fair English complexion"
  },
+ "stephen-king": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Elderly man with light skin tone visible in photo, consistent with known appearance"
+ },
+ "stephen-miller": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light, pale skin tone visible in photo, consistent with known appearance."
+ },
  "steve-aoki": {
   "band": "medium",
   "basis": "photo",
   "confidence": "medium",
   "image": true,
   "note": "Lighting is purple-tinted, affecting color accuracy, but skin appears medium-toned consistent with known appearance."
+ },
+ "steve-bannon": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone with visible flushing, consistent with photo evidence"
+ },
+ "steve-jobs": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with known ethnicity."
  },
  "steve-martin": {
   "band": "fair",
@@ -1893,6 +2208,13 @@
   "image": true,
   "note": "Vintage sepia-toned photo of a French woman; limited color information, but consistent with fair European skin tone based on historical knowledge."
  },
+ "sylvester-stallone": {
+  "band": "medium",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Tan complexion visible in photo, consistent with known appearance"
+ },
  "talib-kweli": {
   "band": "brown",
   "basis": "photo",
@@ -1907,12 +2229,26 @@
   "image": true,
   "note": "Light, fair complexion visible in photo, consistent with known appearance."
  },
+ "ted-bundy": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Black and white photo of a light-skinned Caucasian man; consistent with historical knowledge of his appearance."
+ },
  "ted-danson": {
   "band": "fair",
   "basis": "photo",
   "confidence": "high",
   "image": true,
   "note": "Light complexion visible in photo, consistent with known appearance"
+ },
+ "ted-koppel": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Elderly man with light skin tone, visible in facial complexion under stage lighting."
  },
  "terence-mckenna": {
   "band": "fair",
@@ -2068,12 +2404,26 @@
   "image": true,
   "note": "Walter Payton, Chicago Bears running back, visible skin tone in image consistent with well-known brown complexion"
  },
+ "warren-buffett": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Elderly man with light skin tone visible in photo"
+ },
  "wayne-gretzky": {
   "band": "fair",
   "basis": "photo",
   "confidence": "high",
   "image": true,
   "note": "Light complexion consistent with photo and known ethnicity (Canadian, European descent)"
+ },
+ "westside-gunn": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Visible skin tone in photo is medium-brown, consistent with known appearance."
  },
  "wilhelm-griesinger": {
   "band": "fair",
@@ -2144,5 +2494,12 @@
   "confidence": "medium",
   "image": true,
   "note": "Stage lighting affects color accuracy, but visible skin tone appears medium under the bright spotlight."
+ },
+ "zendaya": {
+  "band": "light brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with well-documented skin tone in photos and public knowledge"
  }
 }
