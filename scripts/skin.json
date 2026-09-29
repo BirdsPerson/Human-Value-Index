@@ -69,6 +69,13 @@
   "image": false,
   "note": "No image available; Albert Tom\u00e0s is not a widely documented public figure to me, so this is a generic estimate based on typical Spanish skin tone rather than specific evidence. Low confidence."
  },
+ "alexander-the-great": {
+  "band": "fair",
+  "basis": "painting",
+  "confidence": "low",
+  "image": true,
+  "note": "Ancient mosaic (Battle of Issus), depicting Alexander the Great as a Macedonian Greek with light skin tone; mosaic medium limits precision on actual skin tone."
+ },
  "ambroise-vollard": {
   "band": "medium",
   "basis": "photo",
@@ -614,6 +621,13 @@
   "image": true,
   "note": "Black-and-white archival photo limits precise skin tone assessment; medium tone inferred from general knowledge of the subject's ethnicity and typical photo tonality."
  },
+ "dwayne-johnson": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with well-known skin tone of Dwayne Johnson, of Black and Samoan descent"
+ },
  "earl-sweatshirt": {
   "band": "brown",
   "basis": "photo",
@@ -971,6 +985,13 @@
   "image": true,
   "note": "Black-and-white photo limits certainty, but tonal values suggest fair skin, consistent with historical knowledge of Oppenheimer."
  },
+ "jack-black": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Stage lighting adds color cast, but consistent with his known fair skin tone."
+ },
  "jack-broughton": {
   "band": "fair",
   "basis": "painting",
@@ -991,6 +1012,13 @@
   "confidence": "low",
   "image": true,
   "note": "Identity unknown; image is a 19th-century illustration, not a photo. Based on general population of Victorian London, likely fair-skinned, but individual identity/skin tone cannot be confirmed."
+ },
+ "jack-white": {
+  "band": "very fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Pale, fair complexion visible on face and arms, consistent with known appearance."
  },
  "jalen-brunson": {
   "band": "brown",
@@ -1180,6 +1208,13 @@
   "confidence": "low",
   "image": false,
   "note": "No image available; Joe Maloy is a former NFL player, but I lack confident detailed knowledge of his specific skin tone. This estimate is low-confidence and should be verified with a photo before use."
+ },
+ "joe-namath": {
+  "band": "medium",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Black-and-white photo limits precision, but Namath is known to have a medium, olive-toned complexion typical of his Hungarian descent."
  },
  "joel-embiid": {
   "band": "dark brown",
