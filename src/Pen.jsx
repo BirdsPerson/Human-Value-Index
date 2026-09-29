@@ -130,6 +130,11 @@ const penStyles = `
   .hvi-pen-caption.hot { color: var(--warn); }
   .hvi-pen-help { color: var(--fg-mute); font-size: var(--t-xs); margin: calc(var(--s5) * -1 + var(--s2)) 0 var(--s5); }
   .hvi-pen-help p { margin: 0 0 var(--s1); }
+  .hvi-pen-howto { display: flex; flex-wrap: wrap; align-items: center; column-gap: 1ch; }
+  .hvi-pen-howto .ui-btn { color: var(--fg-dim); font-size: inherit; gap: 0; padding-left: 0; }
+  .hvi-pen-howto .ui-btn:focus-visible { color: var(--accent-ink); padding-left: 1ch; }
+  @media (hover: hover) { .hvi-pen-howto .ui-btn:hover { color: var(--accent-ink); } }
+  .hvi-pen-help #hvi-pen-help-body { margin-top: var(--s1); }
   .hvi-pen-floors { margin: 0 0 var(--s1); }
   .hvi-pen-floors .ui-chipstrip { justify-content: space-between; }
   .hvi-pen-registry { margin-bottom: var(--s5); }
@@ -146,9 +151,10 @@ const penStyles = `
   .hvi-card-overlay { text-transform: uppercase; position: fixed; inset: 0; background: rgba(3,6,3,0.92); z-index: 150; display: flex; align-items: flex-start; justify-content: center;
     overflow-y: auto; overscroll-behavior: contain; padding: calc(var(--s5) + var(--safe-t)) var(--s4) var(--s5); }
   .hvi-card-panel { width: 100%; max-width: 72ch; background: var(--bg); position: relative; }
-  .hvi-card-panel > .tb { margin-bottom: 0; }
-  .hvi-card-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin: calc(var(--s2) * -1) 0 var(--s2); }
-  .hvi-card-kind { color: var(--fg-mute); font-size: var(--t-xs); min-width: 0; }
+  .hvi-card-body { padding: var(--s3) var(--s5) 0; }
+  .hvi-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); margin: 0 0 var(--s2); }
+  .hvi-card-kind { color: var(--fg-mute); font-size: var(--t-xs); min-width: 0; line-height: var(--lh); }
+  .hvi-card-kind .where { display: block; color: var(--fg-dim); letter-spacing: 0.06em; }
   .hvi-card-name { color: var(--fg); font-weight: 700; font-size: var(--t-l); line-height: var(--lh-tight); letter-spacing: 0.04em; overflow-wrap: break-word; margin: var(--s2) 0 var(--s1); }
   .hvi-card-panel .hvi-score { margin-top: var(--s4); }
   .hvi-card-assign { color: var(--accent); font-size: var(--t-xs); margin-top: var(--s2); }
@@ -159,6 +165,7 @@ const penStyles = `
   @media (max-width: 560px) {
     .hvi-card-overlay { padding: calc(var(--s2) + var(--safe-t)) calc(var(--s2) + var(--safe-r)) 0 calc(var(--s2) + var(--safe-l)); background: var(--bg); }
     .hvi-card-panel { min-height: 100%; }
+    .hvi-card-body { padding: var(--s1) var(--s1) 0; }
   }
 
   /* FILE A REFERRAL */
@@ -240,9 +247,11 @@ export function SubjectCard({ subject: listed, onClose, where = "PEN B", back = 
   return createPortal(
     <div className="hvi-card-overlay" onClick={onClose}>
       <div className="hvi-card-panel" role="dialog" aria-modal="true" aria-labelledby="hvi-card-name" onClick={e => e.stopPropagation()}>
-        <Frame box title="SUBJECT FILE" meta={where}>
+        {/* No outer frame: the name and the score head the card, and the verdict sits one
+            frame deep inside VALUE INDEX. Frames never nest past two (design-system.md). */}
+        <div className="hvi-card-body">
           <div className="hvi-card-top">
-            <span className="hvi-card-kind">{kind}</span>
+            <span className="hvi-card-kind"><span className="where">SUBJECT FILE // {where}</span>{kind}</span>
             <Button ref={closeRef} variant="back" onClick={onClose} aria-label="Release subject: close the file">Release</Button>
           </div>
           {/* The payoff first: name, then the number with the photo beside it. The social
@@ -296,7 +305,7 @@ export function SubjectCard({ subject: listed, onClose, where = "PEN B", back = 
               <Button variant="primary" block onClick={onClose}>{back}</Button>
             </ButtonRow>
           </div>
-        </Frame>
+        </div>
       </div>
     </div>,
     document.body,
@@ -324,6 +333,8 @@ function candidateSub(c) {
 }
 
 const QUEUE_KEY = "hvi-refer-queue";
+const HELP_KEY = "hvi-pen-help-seen";
+const readHelpSeen = () => { try { return localStorage.getItem(HELP_KEY) === "1"; } catch { return false; } };
 
 function ReferralBar({ simRef }) {
   const [name, setName] = useState("");
@@ -585,6 +596,10 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
   const [rooms, setRooms] = useState({});
   const [occ, setOcc] = useState("");
   const [find, setFind] = useState("");
+  // The help reads in full on this device's first visit, then folds to one line.
+  const [helpSeen] = useState(readHelpSeen);
+  const [helpOpen, setHelpOpen] = useState(false);
+  useEffect(() => { if (!embedded) { try { localStorage.setItem(HELP_KEY, "1"); } catch { /* shown again next time */ } } }, [embedded]);
 
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
@@ -1373,11 +1388,24 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
         </div>
         <div role="status" className="sr-only">{srStatus}</div>
       </Frame>
-      {!embedded && <div className="hvi-pen-help">
-        <p>{narrow ? "HOLD A SUBJECT TO LIFT IT. THEY DISLIKE THIS. LET GO TO READ THE FILE." : "DRAG A SUBJECT TO INSPECT IT. THEY DISLIKE THIS. DROP IT TO READ THE FILE."}</p>
-        <p>{narrow ? "SWIPE SIDEWAYS FOR ANOTHER FLOOR. CARRY A SUBJECT TO THE EDGE TO TAKE IT WITH YOU." : "CARRY A SUBJECT TO ANOTHER FLOOR IF YOU MUST. THE ELEVATOR IS FOR THEM, NOT YOU."}</p>
-        <p>DROPPING SUBJECTS ON PROCESSING IS NOT A SHORTCUT. THE PAPERWORK STILL HAS TO CLEAR.</p>
-      </div>}
+      {!embedded && (
+        <div className="hvi-pen-help">
+          {helpSeen && (
+            <p className="hvi-pen-howto">
+              {!helpOpen && <span>{narrow ? "HOLD A SUBJECT TO LIFT IT." : "DRAG A SUBJECT TO LIFT IT."} THEY DISLIKE THIS.</span>}
+              <button type="button" className="ui-btn" aria-expanded={helpOpen} aria-controls="hvi-pen-help-body"
+                onClick={() => setHelpOpen(o => !o)}>[ HOW THIS WORKS ]<span aria-hidden="true" style={{ whiteSpace: "pre" }}>{helpOpen ? " ▾" : " ▸"}</span></button>
+            </p>
+          )}
+          {(!helpSeen || helpOpen) && (
+            <div id="hvi-pen-help-body">
+              <p>{narrow ? "HOLD A SUBJECT TO LIFT IT. THEY DISLIKE THIS. LET GO TO READ THE FILE." : "DRAG A SUBJECT TO INSPECT IT. THEY DISLIKE THIS. DROP IT TO READ THE FILE."}</p>
+              <p>{narrow ? "SWIPE SIDEWAYS FOR ANOTHER FLOOR. CARRY A SUBJECT TO THE EDGE TO TAKE IT WITH YOU." : "CARRY A SUBJECT TO ANOTHER FLOOR IF YOU MUST. THE ELEVATOR IS FOR THEM, NOT YOU."}</p>
+              <p>DROPPING SUBJECTS ON PROCESSING IS NOT A SHORTCUT. THE PAPERWORK STILL HAS TO CLEAR.</p>
+            </div>
+          )}
+        </div>
+      )}
       <Disclosure className="hvi-pen-registry" title="SUBJECT REGISTRY" meta={`${roster.length} ON FILE`}>
         <TextField label="FIND" value={find} onChange={e => setFind(e.target.value)} placeholder="a name in the building"
           spellCheck="false" enterKeyHint="search" />

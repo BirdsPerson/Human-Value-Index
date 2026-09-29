@@ -71,3 +71,8 @@
 .hvi-an-hrow .track::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: var(--hit-min); transform: translateY(-50%); }
 .hvi-an-stack .seg { position: relative; }
 .hvi-an-stack .seg::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: var(--hit-min); transform: translateY(-50%); }
+
+/* FULL TABULATION: everything after the first four charts, collapsed by default. */
+.hvi-an-full > .ui-disc-body { padding: var(--s3) 0 var(--s4); }
+.hvi-an-full > .ui-disc-body > .hvi-an-cap { padding: 0 var(--s1); }
+.hvi-an-rest { display: flex; flex-direction: column; gap: var(--s5); }

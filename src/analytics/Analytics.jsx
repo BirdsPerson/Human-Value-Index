@@ -374,7 +374,15 @@ function Extremes({ subjects }) {
 }
 
 // ---------------------------------------------------------------------------
+// FULL TABULATION's open state, per viewer. Storage can throw (private mode, blocked
+// site data); the page then opens collapsed and simply forgets.
+const FULL_KEY = "hvi-an-full";
+const FULL_COUNT = 7;   // the charts inside the disclosure below
+const readFull = () => { try { return localStorage.getItem(FULL_KEY) === "1"; } catch { return false; } };
+
 export default function Analytics({ figures }) {
+  const [full, setFull] = useState(readFull);
+  const toggleFull = (o) => { setFull(o); try { localStorage.setItem(FULL_KEY, o ? "1" : "0"); } catch { /* not remembered */ } };
   const [pen, setPen] = useState(null);
   useEffect(() => {
     let off = false;
@@ -393,20 +401,27 @@ export default function Analytics({ figures }) {
         {subjects.length} SUBJECTS // {bySource.record} ON RECORD · {bySource.referral} REFERRED · {bySource.engine} DRAFTED
         {pen === null ? " // [ .. ] PULLING REFERRALS █" : ""}
       </div>
+      {/* The four a visitor wants first. The rest is one disclosure: twelve charts ran to
+          about fourteen phone screens (docs/design-audit/AUDIT-2026-09-29.md). */}
       <TierChart subjects={subjects} />
       <Histogram subjects={subjects} />
       <QuadrantShare subjects={subjects} />
-      <Profile subjects={subjects} />
-      <Scatter subjects={subjects} />
-      <GroupChart subjects={subjects} title="VALUE BY FIELD" keyFn={domainOf} noun="FIELD"
-        caption="MEAN SCORE PER FIELD OF ENDEAVOUR. THE LINE IS THE MEAN OF EVERYONE." />
-      <GroupChart subjects={subjects} title="VALUE BY ERA" keyFn={eraOf} noun="ERA"
-        caption="MEAN SCORE BY BIRTH ERA. ANTIQUITY IS JUDGED ON WHAT SURVIVED OF IT." />
-      <Representation subjects={subjects} />
-      <GroupChart subjects={subjects} title="VALUE BY REGION" keyFn={regionOf} noun="REGION"
-        caption="MEAN SCORE BY BIRTH REGION. SMALL SAMPLES ARE NOISE, AND THE DEPARTMENT KNOWS IT." />
-      <Coverage subjects={subjects} />
       <Extremes subjects={subjects} />
+      <Disclosure className="hvi-an-full" title="FULL TABULATION" meta={`${FULL_COUNT} CHARTS. FOR AUDITORS.`} open={full} onToggle={toggleFull}>
+        <p className="hvi-an-cap">THE REST OF THE ARITHMETIC. THE DEPARTMENT READ ALL OF IT, SO YOU DO NOT HAVE TO.</p>
+        <div className="hvi-an-rest">
+          <Profile subjects={subjects} />
+          <Scatter subjects={subjects} />
+          <GroupChart subjects={subjects} title="VALUE BY FIELD" keyFn={domainOf} noun="FIELD"
+            caption="MEAN SCORE PER FIELD OF ENDEAVOUR. THE LINE IS THE MEAN OF EVERYONE." />
+          <GroupChart subjects={subjects} title="VALUE BY ERA" keyFn={eraOf} noun="ERA"
+            caption="MEAN SCORE BY BIRTH ERA. ANTIQUITY IS JUDGED ON WHAT SURVIVED OF IT." />
+          <Representation subjects={subjects} />
+          <GroupChart subjects={subjects} title="VALUE BY REGION" keyFn={regionOf} noun="REGION"
+            caption="MEAN SCORE BY BIRTH REGION. SMALL SAMPLES ARE NOISE, AND THE DEPARTMENT KNOWS IT." />
+          <Coverage subjects={subjects} />
+        </div>
+      </Disclosure>
     </div>
   );
 }
