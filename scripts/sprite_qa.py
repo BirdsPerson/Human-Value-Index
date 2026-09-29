@@ -287,15 +287,23 @@ def vision_check(sheet, look, key=None, skin=None):
         fails.append("not a full body with a head")
     if j.get("outfit_matches") is False:
         fails.append("outfit does not match the look")
-    if j.get("face_colour_natural") is False:
+    if j.get("face_colour_natural") is False and not masked(look):
         fails.append("unnatural face colour (grey/green/blue)")
     drawn = j.get("drawn_skin")
-    if skin in SPEC.SKIN_BANDS and drawn in SPEC.SKIN_BANDS:
+    if skin in SPEC.SKIN_BANDS and drawn in SPEC.SKIN_BANDS and not masked(look):
         d = abs(SPEC.SKIN_ORDER[drawn] - SPEC.SKIN_ORDER[skin])
         if d > SKIN_TOLERANCE:
             fails.append(f"skin tone mismatch: drawn {drawn}, subject is {skin}")
     notes = [str(x) for x in (j.get("reasons") or [])][:3]
     return (not fails), (fails + notes if fails else [f"drawn skin: {drawn}"] + notes)
+
+
+# A subject whose look puts a mask/helmet/visor over the face (MF DOOM, a luchador, a racing
+# helmet) has no visible face skin: skin-band checks don't apply, everything else still does.
+import re as _re
+MASK_RE = _re.compile(r"\b(mask|masked|helmet|visor|balaclava|luchador)\b", _re.I)
+def masked(look):
+    return bool(MASK_RE.search(look or ""))
 
 
 # ---------- the gate ----------
@@ -317,9 +325,10 @@ def gate(sheet, look, keyed=None, validate_sheet=None, vision=True, key=None, sk
         return False, [r]
     if not skin or skin not in SPEC.SKIN_L:
         return False, ["no recorded skin tone for this subject: run scripts/skin_backfill.py first"]
-    flag = skin_band_check(_frame(sheet), skin)
-    if flag:
-        return False, [flag]
+    if not masked(look):
+        flag = skin_band_check(_frame(sheet), skin)
+        if flag:
+            return False, [flag]
     if not vision:
         return True, []
     ok, reasons = vision_consensus(sheet, look, key, skin)

@@ -124,6 +124,10 @@ def main():
     check("nothing was uploaded", not any("blobs:set" in a for a in uploads))
     check("the failed raw is dropped for a clean retry", not (tmp / "test-person.png").exists())
 
+    # a masked subject (MF DOOM): no face-skin checks, every other layer still applies
+    check("a mask in the look exempts face-skin checks", Q.masked("silver metal gladiator mask covering the face"))
+    check("an ordinary look is not masked", not Q.masked("grey suit, short dark hair"))
+
     print("ALL SPRITE QA CHECKS PASS" if not fails else f"{fails} FAILED")
     sys.exit(1 if fails else 0)
 

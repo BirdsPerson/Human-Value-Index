@@ -115,7 +115,19 @@ def repair_index(idx):
             continue
         update_index(card)
         log(f"reindexed {key} (missing from the index)")
-    return (get_json("hvi-figures", "index") or {"cards": []}) if missing else idx
+    # Stale entries: an index entry still "pending"/"failed" whose card is already "ready" (or
+    # differs) was overwritten by a racing write. Only non-ready entries are checked, so this
+    # costs a few reads, not one per figure.
+    stale = 0
+    for entry in [c for c in idx.get("cards", []) if c.get("spriteStatus") != "ready"]:
+        card = get_json("hvi-figures", entry["slug"])
+        if not card or card.get("removed"):
+            continue
+        if card.get("spriteStatus") != entry.get("spriteStatus") or card.get("sprite") != entry.get("sprite"):
+            update_index(card)
+            stale += 1
+            log(f"resynced {entry['slug']} (index said {entry.get('spriteStatus')}, card says {card.get('spriteStatus')})")
+    return (get_json("hvi-figures", "index") or {"cards": []}) if (missing or stale) else idx
 
 
 def remember_look(slug, look):
