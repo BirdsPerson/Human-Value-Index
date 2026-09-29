@@ -172,5 +172,159 @@ BUILDING;   // (imported for parity with check-quests' view of the city)
   assert.equal(st.pairs[pk][0], -20); assert.equal(st.events.length, 1);
 }
 
+// ---- chunking stays exact past the pair cap ----------------------------------------------------
+// The cap is enforced at day boundaries, so where a call ends (the tick's wall-clock budget)
+// never changes the city, even once pruning bites (production sits at the cap).
+{
+  const cap = { maxPairs: 150 };
+  SIM.clearSocialSnapshots();
+  const a = SOC.advance(SOC.emptyState(START), roster, START + 24 * 6, cap);
+  SIM.clearSocialSnapshots();
+  const b = SOC.emptyState(START);
+  for (let h = START; h < START + 24 * 6; h += 5) SOC.advance(b, roster, Math.min(h + 5, START + 24 * 6), cap);
+  assert.equal(Object.keys(a.pairs).length, 150, "the cap bit (the run ends on a day boundary)");
+  assert.equal(JSON.stringify(a), JSON.stringify(b), "same state in one run or in 5-hour chunks with the pair cap biting");
+}
+
+// ---- publishAll == publishSubject for everyone (one grouping pass, not N scans) -----------------
+{
+  const keys = [...roster.map(s => s.slug), "nobody-here"];
+  const all = SOC.publishAll(state, keys);
+  let n = 0;
+  for (const k of keys) {
+    const one = SOC.publishSubject(state, k);
+    if (!one.relations.length && !one.events.length) { assert.ok(!(k in all), `${k}: nothing to publish, left out`); continue; }
+    n++;
+    assert.deepEqual(all[k], { relations: one.relations, events: one.events }, `${k}: publishAll matches publishSubject`);
+  }
+  assert.ok(n > 10, `publishAll covered ${n} subjects`);
+}
+
+// ---- the tick: checkpoints, resume, lease, conditional writes ---------------------------------
+{
+  const { tick, CHUNK_HOURS, TickConflict } = await import("../netlify/lib/social-tick.js");
+  const { tickIo, tickSecret, tickAuthorized, TICK_HEADER } = await import("../netlify/lib/social-store.js");
+  // An in-memory Blobs store with etags and conditional writes (the parts tickIo uses).
+  function fakeStore() {
+    const m = new Map(); let n = 0; const log = [];
+    return {
+      m, log,
+      async getWithMetadata(k) { return m.has(k) ? { data: JSON.parse(m.get(k).v), etag: m.get(k).etag, metadata: {} } : null; },
+      async getMetadata(k) { return m.has(k) ? { etag: m.get(k).etag, metadata: {} } : null; },
+      async setJSON(k, v, o = {}) {
+        if (o.onlyIfNew && m.has(k)) return { modified: false };
+        if (o.onlyIfMatch && (!m.has(k) || m.get(k).etag !== o.onlyIfMatch)) return { modified: false };
+        const etag = `"e${++n}"`; m.set(k, { v: JSON.stringify(v), etag }); log.push(k); return { modified: true, etag };
+      },
+      read(k) { return m.has(k) ? JSON.parse(m.get(k).v) : null; },
+    };
+  }
+  const census = async () => roster.filter(s => s.kind === "citizen");
+  const nowMs = T0 + 3 * 60 * 60 * 1000;
+  const nowHour = Math.floor(SIM.machineClock(nowMs).mt);
+  const seedState = structuredClone(state);
+  seedState.hour = nowHour - 61;   // an hour and a bit behind: ~11 chunks
+  const strip = (st) => { const { tick: _t, ...rest } = st; return JSON.stringify(rest); };
+  const fresh = () => { const f = fakeStore(); f.m.set("state", { v: JSON.stringify(seedState), etag: '"e0"' }); return f; };
+
+  // One uninterrupted run.
+  SIM.clearSocialSnapshots();
+  const f1 = fresh();
+  const r1 = await tick(nowMs, tickIo(() => f1, census));
+  assert.equal(r1.hour, nowHour, "the run reaches the current machine hour");
+  assert.ok(r1.chunks >= 10 && r1.chunks <= 12, `~${CHUNK_HOURS}h chunks (${r1.chunks})`);
+  assert.equal(f1.log.filter(k => k === "state").length, r1.chunks, "one checkpoint per chunk");
+  const s1 = f1.read("state");
+  assert.deepEqual(s1.rosters.at(-1).slice(0, 2), [nowHour - 61, nowHour], "the roster version is recorded for the processed range");
+  assert.equal(s1.rosters.at(-1)[2], SIM.rosterVersion());
+  assert.ok(s1.tick?.run && s1.tick.chunk === r1.chunks, "the state carries the checkpoint (run, chunk)");
+  assert.equal(f1.read("lease").until, 0, "the lease is released");
+  assert.ok(f1.read("public").at && Object.keys(f1.read("public").bySubject).length, "public written");
+
+  // Budget of 0: one chunk per invocation, the run resumes from each checkpoint. Same city.
+  SIM.clearSocialSnapshots();
+  const f2 = fresh();
+  let runs = 0;
+  for (;;) { const r = await tick(nowMs, tickIo(() => f2, census), { budgetMs: 0 }); runs++; if (r.hour >= nowHour) break; assert.equal(r.chunks, 1); }
+  assert.equal(runs, r1.chunks, "resumed once per chunk");
+  assert.equal(strip(f2.read("state")), strip(s1), "checkpoint + resume gives the identical state");
+  assert.equal(JSON.stringify({ ...f2.read("public"), at: 0 }), JSON.stringify({ ...f1.read("public"), at: 0 }), "and the identical public ledger");
+
+  // Killed mid-run (the 4th checkpoint never lands): three chunks kept, the next run finishes it.
+  SIM.clearSocialSnapshots();
+  const f3 = fresh();
+  const io3 = tickIo(() => f3, census);
+  let saves = 0; const save = io3.save;
+  io3.save = async (st, e) => { if (++saves === 4) throw new Error("killed"); return save(st, e); };
+  await assert.rejects(tick(nowMs, io3), /killed/);
+  assert.equal(f3.read("state").hour, (Math.floor((nowHour - 61) / CHUNK_HOURS) + 3) * CHUNK_HOURS, "a killed run loses at most the chunk in flight");
+  assert.equal(f3.read("public"), null, "a killed run publishes nothing");
+  assert.equal(f3.read("lease").until, 0, "and still releases its lease");
+  await tick(nowMs, tickIo(() => f3, census));
+  assert.equal(strip(f3.read("state")), strip(s1), "resuming after a kill gives the identical state");
+
+  // Another worker holds the lease: nothing is read or written.
+  const f4 = fresh();
+  f4.m.set("lease", { v: JSON.stringify({ run: "other", until: Date.now() + 60_000 }), etag: '"L"' });
+  const r4 = await tick(nowMs, tickIo(() => f4, census));
+  assert.ok(r4.skipped, "a held lease skips the run");
+  assert.equal(f4.read("state").hour, seedState.hour, "state untouched under someone else's lease");
+  assert.equal(f4.read("public"), null);
+  // An expired lease is taken over.
+  f4.m.set("lease", { v: JSON.stringify({ run: "other", until: Date.now() - 1 }), etag: '"L2"' });
+  assert.equal((await tick(nowMs, tickIo(() => f4, census))).hour, nowHour, "an expired lease is taken over");
+
+  // CAS: a stale worker (its lease lapsed, or the Mac's social-seed) wrote the state after this
+  // run read it. The next checkpoint is refused, the run stops, and the other write stands.
+  const f5 = fresh();
+  const io5 = tickIo(() => f5, census);
+  const load = io5.load;
+  io5.load = async () => { const r = await load(); await f5.setJSON("state", { ...seedState, hour: seedState.hour + 500, marker: "newer" }); return r; };
+  await assert.rejects(tick(nowMs, io5), (e) => e instanceof TickConflict, "a moved ledger is a conflict");
+  assert.equal(f5.read("state").marker, "newer", "the newer ledger is never rolled back");
+  assert.equal(f5.read("public"), null, "and nothing is published from the stale run");
+  // No state yet: the first write is create-only (two first runs can't both seed the city).
+  const f6 = fakeStore();
+  const io6 = tickIo(() => f6, census);
+  io6.load = async () => { await f6.setJSON("state", { ...seedState, marker: "first" }); return { state: null, etag: null }; };
+  await assert.rejects(tick(nowMs, io6), TickConflict);
+  assert.equal(f6.read("state").marker, "first");
+
+  // The chain: the hourly trigger calls the background worker with the shared secret; the
+  // worker refuses anyone without it and otherwise runs the tick.
+  assert.equal(tickSecret({}), null, "no secret configured -> none");
+  const derived = tickSecret({ ANTHROPIC_API_KEY: "k" });
+  assert.match(derived, /^[0-9a-f]{64}$/); assert.ok(!derived.includes("k") || derived !== "k", "derived, not the key itself");
+  assert.equal(tickSecret({ HVI_TICK_SECRET: "s", ANTHROPIC_API_KEY: "k" }), "s", "HVI_TICK_SECRET wins");
+  const env0 = { ...process.env };
+  process.env.ANTHROPIC_API_KEY = "test-key"; delete process.env.HVI_TICK_SECRET;
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { calls.push({ url: String(url), init }); return new Response(null, { status: 202 }); };
+  const quiet = [console.log, console.warn]; console.log = console.warn = () => {};
+  try {
+    const trigger = (await import("../netlify/functions/social-tick.js")).default;
+    await trigger(new Request("https://x/.netlify/functions/social-tick", { method: "POST", body: "{}" }), { site: { url: "https://hvi.test" } });
+    assert.equal(calls.length, 1); assert.equal(calls[0].url, "https://hvi.test/.netlify/functions/social-tick-background");
+    const hdr = calls[0].init.headers[TICK_HEADER];
+    assert.equal(hdr, tickSecret(), "the trigger sends the shared secret");
+    const worker = (await import("../netlify/functions/social-tick-background.js")).default;
+    const f7 = fakeStore();   // the worker runs at the real clock: start 10 machine hours behind it
+    f7.m.set("state", { v: JSON.stringify({ ...seedState, hour: Math.floor(SIM.machineClock(Date.now()).mt) - 10 }), etag: '"w0"' });
+    await worker(new Request("https://hvi.test/.netlify/functions/social-tick-background", { method: "POST" }), {}, tickIo(() => f7, census));
+    assert.equal(f7.read("public"), null, "no secret header: the worker does nothing");
+    await worker(new Request("https://hvi.test/.netlify/functions/social-tick-background", { method: "POST", headers: { [TICK_HEADER]: "0".repeat(64) } }), {}, tickIo(() => f7, census));
+    assert.equal(f7.read("public"), null, "wrong secret: nothing");
+    assert.ok(!tickAuthorized(new Request("https://x", { headers: { [TICK_HEADER]: "short" } })));
+    SIM.clearSocialSnapshots();
+    await worker(new Request("https://hvi.test/.netlify/functions/social-tick-background", { method: "POST", headers: { [TICK_HEADER]: hdr } }), {}, tickIo(() => f7, census));
+    assert.ok(f7.read("public")?.at, "trigger -> worker -> public ledger written");
+    assert.ok(f7.read("state").hour >= Math.floor(SIM.machineClock(Date.now()).mt) - 1 && f7.read("state").tick?.run, "and the state checkpointed");
+  } finally {
+    globalThis.fetch = realFetch; [console.log, console.warn] = quiet;
+    for (const k of ["ANTHROPIC_API_KEY", "HVI_TICK_SECRET"]) { if (k in env0) process.env[k] = env0[k]; else delete process.env[k]; }
+  }
+}
+
 console.log(`social ok: ${Object.keys(state.pairs).length} pairs, ${pub.counts.friends} friendships, ${pub.counts.rivals} rivalries; ` +
   `friend co-location ${withBias} vs ${without} without feedback; quest window covered ${covered}/14 days; ${ms} ms`);

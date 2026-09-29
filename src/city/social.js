@@ -1,5 +1,5 @@
 // Emergent relationships in the Substrate. Pure, no DOM, no LLM: runs in the
-// scheduled Netlify function (netlify/functions/social-tick.js), in scripts/ and in
+// social tick's background function (netlify/lib/social-tick.js), in scripts/ and in
 // node checks.
 //
 // Nothing is scripted. Subjects who are in the same place in the same machine hour may
@@ -166,13 +166,17 @@ export function advance(state, subjects, toHour, opts = {}) {
     if (state.hour % 24 === 0) {   // end of machine day dayOfHour(h)
       const day = dayOfHour(h);
       decayDay(state);
+      // The pair cap is enforced at the day boundary, never at the end of a call: a call
+      // ends wherever the tick's wall-clock budget runs out, and pruning there would make
+      // the city depend on how the work was chunked. Between boundaries the ledger can
+      // hold one machine day of new pairs over the cap.
+      prunePairs(state, opts.maxPairs ?? MAX_PAIRS);
       const snapDay = day + LAG;
       state.snapshots[snapDay] = snapshotFor(state, people, snapDay, seed);
       pruneSnapshots(state, snapDay, opts.keepSnapshots ?? KEEP_SNAPSHOTS);
       SIM.setSocialSnapshots({ [snapDay]: state.snapshots[snapDay] });
     }
   }
-  prunePairs(state);
   return state;
 }
 
@@ -289,11 +293,11 @@ function decayDay(state) {
   }
 }
 
-function prunePairs(state) {
+function prunePairs(state, max = MAX_PAIRS) {
   const keys = Object.keys(state.pairs);
-  if (keys.length <= MAX_PAIRS) return;
+  if (keys.length <= max) return;
   keys.sort((x, y) => Math.abs(state.pairs[y][0]) - Math.abs(state.pairs[x][0]) || state.pairs[y][2] - state.pairs[x][2] || (x < y ? -1 : 1));
-  for (const k of keys.slice(MAX_PAIRS)) delete state.pairs[k];
+  for (const k of keys.slice(max)) delete state.pairs[k];
 }
 
 function pruneSnapshots(state, newest, keep) {
@@ -362,4 +366,36 @@ export function publish(state, nowHour) {
 // Relationships for one subject, for the card.
 export function publishSubject(state, key) {
   return { key, relations: relationsOf(state, key, 10), events: state.events.filter(e => e.a === key || e.b === key).slice(-10).reverse() };
+}
+
+// publishSubject for every key at once, in one pass over the pairs and one over the events
+// (calling publishSubject per subject scans every pair per subject: O(N x pairs), about half
+// the tick at scale). Same output, entry for entry: pairs are visited in the same order and
+// the sort is stable. Subjects with nothing to show are left out.
+export function publishAll(state, keys, { relations = 10, events = 10 } = {}) {
+  const want = new Set(keys);
+  const rel = new Map(), ev = new Map();
+  const push = (m, k, v) => { const l = m.get(k); if (l) l.push(v); else m.set(k, [v]); };
+  for (const [pk, rec] of Object.entries(state.pairs)) {
+    const level = levelOf(rec[0]);
+    if (level === "neutral") continue;
+    const [x, y] = pk.split("|");
+    const lastPlace = rec[3] ? PLACE(rec[3]) : null;
+    if (want.has(x)) push(rel, x, { key: y, name: state.names[y] || y, affinity: rec[0], level, meetings: rec[1], lastPlace });
+    if (want.has(y) && y !== x) push(rel, y, { key: x, name: state.names[x] || x, affinity: rec[0], level, meetings: rec[1], lastPlace });
+  }
+  for (const e of state.events) {
+    if (want.has(e.a)) push(ev, e.a, e);
+    if (want.has(e.b) && e.b !== e.a) push(ev, e.b, e);
+  }
+  const out = {};
+  for (const k of want) {
+    const r = rel.get(k), e = ev.get(k);
+    if (!r && !e) continue;
+    out[k] = {
+      relations: r ? r.sort((a, b) => Math.abs(b.affinity) - Math.abs(a.affinity)).slice(0, relations) : [],
+      events: e ? e.slice(-events).reverse() : [],
+    };
+  }
+  return out;
 }
