@@ -26,6 +26,18 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       verified logins, NOTED at 25, review at 40 bridged across 3 of 4 quadrants over 72h,
       max 3 reviews/day, no free text, votes never move a score). Figures work there.
    Standing (Scott): environments keep getting more realistic: things to do, items used.
+   d. **The city grows** (after c). Sectors develop over machine weeks: empty lots become
+      construction sites (crews at work, cranes, scaffolds), then buildings (a sports arena
+      first). Growth is driven by the census (more subjects -> more housing/jobs) and later
+      by where CYCLES are invested (item 5). Always people involved: builders, inspectors.
+   e. **Economy -> inequality -> unrest -> enforcement** (design with Scott before building;
+      Scott 2026-09-29 "things I want to be thinking about"). Chain: item 5 wages/CYCLES ->
+      housing quality by earnings (penthouse vs bunk) -> a dissatisfaction meter per
+      district (low tier, low wage, crowding) -> unrest events (strikes, sit-ins, a
+      "revolution" in a sector) -> enforcement. Open question for the story: who runs the
+      police? The Overlord's WARDENS, a human CIVIC WATCH, or both, clashing. Candidate
+      Season 2 spine after UNRATIFIED. Guardrails: crowds are anonymous subjects; named
+      living people never shown rioting or doing violence; cold satire, non-graphic.
 
 1. [in progress: slices 1 and 2 shipped, see Done] **Side quests → vouches.**
    Remaining slices: (b) [next] vouch → score effect: DECIDED by Scott 2026-09-28: +2 to that category per vouch (max +14 across 7); show it on the file and in the breakdown; each vouch appends a history entry with cause "vouch" (src/movement.js: YOUR CHANGES, not a visit, not capped);
