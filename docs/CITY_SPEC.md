@@ -283,6 +283,25 @@ column; the lots take the rest.
   capacity, a staff post), the ordered fill, and the fixtures (sane scores, runs never come off
   the board, 22 PA calls a week).
 
+- **A corner ballpark (2026-09-29).** Scott: "arranged in the corner so that you can have
+  seating behind the wall also. The first-base foul line should be against the basketball
+  court fence and the park." Home plate sits in the lot's south-west corner (3 cells in, 2.4
+  up); the first-base line runs east along the south edge (THE COURTS' fence, then the
+  RECREATION GROUND), the third-base line north up the west edge, centre field towards the
+  far (north-east) corner. The wall is an arc (8.75 cells, the left-field pole just inside the
+  north edge). Beyond it, three tiers of outfield bleachers curve round from the north edge to
+  just past the right-field pole; the scoreboard stands above and behind them facing the
+  plate (its back is steel, see-through only when it stands between the viewer and the
+  field). A three-tier grandstand wraps behind the plate along both lines and round the
+  corner, the backstop mesh along its front, the dugouts in front of it; light towers at the
+  four corners. Everything is drawn in segments (one tier, about a cell, one seat each) so the
+  painter's order holds at every turn. Capacity 24 -> 30; after the battery and the field, a
+  bench player, a fan behind the plate and a fan beyond the wall fill in turn. At far zoom the
+  stands show as footprints. `check-cityview` asserts home at a corner, the first-base line
+  along the Courts/park edge, the third-base line along the west edge, 20+ outfield seats all
+  beyond the wall, the scoreboard behind them, and a full house reaching both.
+  Screens: docs/screens/rec-ground/corner-*.png.
+
 Measured (headless Chromium, 250 subjects, league night): frame gap 16.6 ms avg, p95 17.5 at
 1440 street zoom on the Diamond; draw() 1.6 ms. Screens: docs/screens/rec-ground/.
 

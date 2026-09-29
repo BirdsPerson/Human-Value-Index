@@ -393,6 +393,24 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
       ok([...at.values()].map(i => as[i].id).sort().join() === "batter,catcher,pitcher", "three on the diamond: pitcher, catcher, batter");
       const ump = assignAnchors(as, [{ key: "u", role: "staff" }], null, 18, true).at.get("u");
       ok(as[ump].id === "umpire", "the umpire takes the plate");
+      // a corner ballpark ("the first-base foul line should be against the basketball court
+      // fence and the park"): home plate in a corner of the lot, the first-base line along the
+      // edge shared with the Courts and the Recreation Ground, the third-base line along the
+      // other edge, seats beyond the outfield wall, the scoreboard behind them
+      const D = PG.DIAMOND, [hx, hy] = D.home, corners = [[R.x, R.y], [R.x + R.w, R.y], [R.x, R.y + R.h], [R.x + R.w, R.y + R.h]];
+      const near = corners.map(c => Math.hypot(c[0] - hx, c[1] - hy)).sort((a, b) => a - b);
+      ok(near[0] < 4.2 && near[1] > 2 * near[0], `home plate sits at a lot corner (${near[0].toFixed(2)} cells from it)`);
+      const [, fb] = D.foul[0], [, tb] = D.foul[1], south = R.y + R.h;
+      const C = SIM.PLACES.courts.rect, G2 = SIM.PLACES["rec-park"].rect;
+      ok(Math.abs(fb[1] - hy) < 1e-6 && fb[0] > hx && south - hy < 2.6, `the first-base line runs east along the south edge, ${(south - hy).toFixed(2)} cells in`);
+      ok(C.y === south && G2.y === south && C.x <= hx && G2.x + G2.w >= fb[0], "that edge is the Courts' fence and the Recreation Ground");
+      ok(Math.abs(tb[0] - hx) < 1e-6 && tb[1] < hy && hx - R.x < 3.2 && tb[1] > R.y, "the third-base line runs north along the west edge, inside the lot");
+      const beyond = as.filter(a => a.id.startsWith("of") && Math.hypot(a.x - hx, a.y - hy) > D.fenceR + 0.3);
+      ok(beyond.length >= 20 && beyond.length === as.filter(a => a.id.startsWith("of")).length, `${beyond.length} seats in the outfield bleachers, all beyond the wall`);
+      ok(Math.hypot(D.board.c[0] - hx, D.board.c[1] - hy) > Math.max(...beyond.map(a => Math.hypot(a.x - hx, a.y - hy))), "the scoreboard stands behind the outfield bleachers");
+      ok(D.stands.every(s => s.foot.every(([x, y]) => x > R.x + 0.1 && x < R.x + R.w - 0.1 && y > R.y + 0.1 && y < R.y + R.h - 0.1)), "every stand inside the lot");
+      const fill = [...assignAnchors(as, [...Array(P.cap)].map((_, i) => ({ key: `f${i}`, role: "any" })), null, 18.5, true).at.values()].map(i => as[i].id);
+      ok(fill.some(id => id.startsWith("of")) && fill.some(id => id.startsWith("hs") || id.startsWith("hw")), `a full house has fans behind the plate and beyond the wall (${fill.filter(id => id.startsWith("of")).length} out there)`);
     }
     // the gridiron and the pitch: every player on the field in a side's colour, facing the play;
     // a few people make a drill, not a crowd in the stands

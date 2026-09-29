@@ -88,7 +88,7 @@ const PLACE_LIST = [
   P("gym", "arena", "mixed", 24, "CONDITIONING HALL", ["gym"]),
   // The recreation ground (Scott, 2026-09-29: "a baseball diamond and basketball courts, like
   // a park"): open-air lots beside the Bowl. Games run on a timetable (GAMES, below).
-  P("ball-field", "arena", "mixed", 24, "THE DIAMOND (NINE INNINGS, LOGGED)", ["ballpark", "baseball field"]),
+  P("ball-field", "arena", "mixed", 30, "THE DIAMOND (NINE INNINGS, LOGGED)", ["ballpark", "baseball field"]),
   P("courts", "arena", "mixed", 14, "THE COURTS (PICKUP PERMITTED)", ["basketball court"]),
   P("rec-park", "arena", "leisure", 16, "RECREATION GROUND (FUN, SCHEDULED)", ["picnic ground"]),
   // (the Bowl's floor is a gridiron: GAMES has its Sunday game and Thursday practice)

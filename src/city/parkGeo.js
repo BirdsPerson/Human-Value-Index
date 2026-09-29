@@ -43,65 +43,136 @@ export const insetOf = (b) => (PARK_LOTS[b.id] ? [0.15, 0.15] : [Math.min(1.6, b
 const A = (id, x, y, kind, act, role, look = null, extra = {}) => ({ id, x, y, h: 0, kind, act, role, look, ring: null, ...extra });
 
 // ---- the Diamond ----------------------------------------------------------------------
-// Home plate at the bottom of the lot, centre field straight up the map (-y), the foul
-// lines at 45 degrees either side. pt(r, a): r cells from home, a radians off centre field
-// (+ towards first base).
+// A corner ballpark (Scott, 2026-09-29: "arranged in the corner so that you can have seating
+// behind the wall also. The first-base foul line should be against the basketball court fence
+// and the park"). Home plate sits in the south-west corner of the lot; the first-base line
+// runs east along the south edge (the Courts' fence, then the Recreation Ground), the
+// third-base line north up the west edge, and the outfield fans out towards the far
+// (north-east) corner. The wall is an arc; the free corner beyond it holds the outfield
+// bleachers and, above them, the scoreboard. A grandstand wraps behind the plate along both
+// lines, the dugouts in front of it.
+// pt(r, a): r cells from home, a radians off centre field (+ towards first base).
+// off(dx, dy): an offset in the plate's own frame (dx towards the first-base side, dy back
+// towards the backstop), as the diamond was drawn when centre field was straight up the map.
 const F = rect("ball-field");
-const HOME = [F.x + F.w / 2, F.y + F.h - 1.5];
-const pt = (r, a) => [HOME[0] + r * Math.sin(a), HOME[1] - r * Math.cos(a)];
+const HOME = [F.x + 3.0, F.y + F.h - 2.4];
+const CF = Math.PI / 4;           // centre field's bearing, from north (-y) towards east
+const pt = (r, a) => [HOME[0] + r * Math.sin(a + CF), HOME[1] - r * Math.cos(a + CF)];
+const CS = Math.cos(CF), SN = Math.sin(CF);
+const off = (dx, dy, c = HOME) => [c[0] + dx * CS - dy * SN, c[1] + dx * SN + dy * CS];
 const BASE = 2.9;                 // home to first, cells
 const Q = Math.PI / 4;
-const FENCE_R = 9.2;              // home to the outfield wall
+const FENCE_R = HOME[1] - F.y - 0.35;   // home to the wall: the left-field pole just inside the lot's north edge
+const TIER = [0.12, 0.3, 0.48];   // bleacher tier tops, storeys
 export const DIAMOND = (() => {
   const first = pt(BASE, Q), second = pt(BASE * Math.SQRT2, 0), third = pt(BASE, -Q), mound = pt(BASE * 0.68, 0);
-  const arc = (r, a0, a1, n = 24, c = HOME) => Array.from({ length: n + 1 }, (_, k) => { const a = a0 + (a1 - a0) * k / n; return [c[0] + r * Math.sin(a), c[1] - r * Math.cos(a)]; });
+  const arc = (r, a0, a1, n = 24, c = HOME) => Array.from({ length: n + 1 }, (_, k) => { const a = a0 + (a1 - a0) * k / n + CF; return [c[0] + r * Math.sin(a), c[1] - r * Math.cos(a)]; });
+  const box = (c, x0, y0, x1, y1) => [off(x0, y0, c), off(x1, y0, c), off(x1, y1, c), off(x0, y1, c)];
   // infield dirt: out from home along both lines, round the grass edge (an arc about the mound)
   const dirtR = BASE * 1.08;
   const dirt = [HOME, pt(BASE * 1.18, Q), ...arc(dirtR, Q + 0.18, -Q - 0.18, 20, mound), pt(BASE * 1.18, -Q)];
   const grassIn = [first, second, third, HOME].map(p => [mound[0] + (p[0] - mound[0]) * 0.8, mound[1] + (p[1] - mound[1]) * 0.8]);
-  const bleacher = (side) => {   // side -1: the third-base stand (left), +1: first-base (right)
-    const x0 = side < 0 ? F.x + 0.3 : F.x + F.w - 2.7, x1 = x0 + 2.4;
-    return { side, x0, x1, y0: HOME[1] - 4, y1: HOME[1] + 0.2, tiers: 3 };
-  };
-  const dugout = (side) => { const cx = HOME[0] + side * 3.3; return { side, x0: cx - 1, x1: cx + 1, y0: HOME[1] + 0.62, y1: HOME[1] + 1.25 }; };
+  // mowing stripes: bands square to the line from home to centre field
+  const stripes = [], n = 9, step = FENCE_R / n;
+  for (let k = 0; k < n; k += 2) stripes.push(box(HOME, -FENCE_R * 1.5, -k * step, FENCE_R * 1.5, -(k + 1) * step));
+
+  // The grandstand behind the plate: three tiers stepping back from the field along both lines
+  // and round the corner. A segment is one tier over about a cell of the stand, drawn as its own
+  // prism (so the painter's order holds along it) carrying the one seat on it.
+  const W = HOME[0] - 1.0, S = HOME[1] + 1.0, D = 0.4;   // the stands' front edges: west (third base) and south (first base)
+  const stands = [];
+  const seg = (foot, t, seat) => stands.push({ foot, top: TIER[t], t, seat, c: foot.reduce((m, p) => [m[0] + p[0] / foot.length, m[1] + p[1] / foot.length], [0, 0]) });
+  const southEnd = F.x + 8.8, northEnd = F.y + 3.8;
+  const ns = Math.round((southEnd - W) / 1.0), nw = Math.round((S - northEnd) / 1.0);
+  for (let t = 0; t < 3; t++) {
+    for (let k = 0; k < ns; k++) {   // first-base side: along x, stepping south towards the Courts
+      const x0 = W + (southEnd - W) * k / ns, x1 = W + (southEnd - W) * (k + 1) / ns;
+      seg([[x0, S + t * D], [x1, S + t * D], [x1, S + (t + 1) * D], [x0, S + (t + 1) * D]], t, `hs${t}${k}`);
+    }
+    for (let k = 0; k < nw; k++) {   // third-base side: along y, stepping west
+      const y1 = S - (S - northEnd) * k / nw, y0 = S - (S - northEnd) * (k + 1) / nw;
+      seg([[W - (t + 1) * D, y0], [W - t * D, y0], [W - t * D, y1], [W - (t + 1) * D, y1]], t, `hw${t}${k}`);
+    }
+  }
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {   // the corner: a tier is as far back as its farther side
+    const x1 = W - i * D, y0 = S + j * D;
+    seg([[x1 - D, y0], [x1, y0], [x1, y0 + D], [x1 - D, y0 + D]], Math.max(i, j), null);
+  }
+  // The outfield bleachers: three tiers stepping up and away beyond the wall, each running
+  // from where it meets the lot's north edge round to just past the right-field pole.
+  const ob0 = FENCE_R + 0.35, OD = 0.8, aEnd = Q + 0.09;
+  for (let t = 0; t < 3; t++) {
+    const r0 = ob0 + t * OD, r1 = r0 + OD, rm = (r0 + r1) / 2;
+    const aStart = Math.acos((HOME[1] - F.y - 0.25) / r1) - CF;
+    const nseg = Math.max(1, Math.round((aEnd - aStart) * rm / 1.0));
+    for (let k = 0; k < nseg; k++) {
+      const a0 = aStart + (aEnd - aStart) * k / nseg, a1 = aStart + (aEnd - aStart) * (k + 1) / nseg;
+      seg([pt(r0, a0), pt(r1, a0), pt(r1, a1), pt(r0, a1)], t, `of${t}${k}`);
+    }
+  }
+  // dugouts in front of the grandstand: first base's along the line, third base's up its line.
+  // foot: [along0, along1] x [depth0 (field side), depth1 (back)]; n: towards the field.
+  const dugouts = [
+    { side: 1, axis: "x", a0: HOME[0] + 1.05, a1: HOME[0] + 2.85, d0: S - 0.62, d1: S - 0.05, n: [0, -1] },
+    { side: -1, axis: "y", a0: HOME[1] - 4.4, a1: HOME[1] - 2.6, d0: W + 0.62, d1: W + 0.05, n: [1, 0] },
+  ];
+  // the scoreboard, above and behind the outfield bleachers, square to centre field... nearly:
+  // it faces home from the lot's far corner
+  const toFar = Math.atan2(F.x + F.w - HOME[0], HOME[1] - F.y) - CF;
+  const bc = pt(ob0 + 3 * OD + 1.25, toFar), half = 1.45;
+  // n: the board's face, towards home; a -> b runs left to right as seen from the plate
+  const L = Math.hypot(HOME[0] - bc[0], HOME[1] - bc[1]), nrm = [(HOME[0] - bc[0]) / L, (HOME[1] - bc[1]) / L], left = [-nrm[1], nrm[0]];
+  const board = { c: bc, n: nrm, a: [bc[0] + left[0] * half, bc[1] + left[1] * half], b: [bc[0] - left[0] * half, bc[1] - left[1] * half] };
+  const backstop = [[W + 0.05, HOME[1] - 1.7], [W + 0.05, HOME[1] - 0.85], [W + 0.05, S - 0.05], [HOME[0] + 0.85, S - 0.05], [HOME[0] + 1.0, S - 0.05]];
   return {
-    lot: F, home: HOME, first, second, third, mound, base: BASE, fenceR: FENCE_R,
+    lot: F, home: HOME, first, second, third, mound, base: BASE, fenceR: FENCE_R, cf: CF, pt, off,
     fence: arc(FENCE_R, -Q, Q, 28), track: arc(FENCE_R - 0.5, -Q, Q, 28), outfield: [HOME, ...arc(FENCE_R, -Q, Q, 28)],
     dirt, grassIn, foul: [[HOME, pt(FENCE_R, Q)], [HOME, pt(FENCE_R, -Q)]], poles: [pt(FENCE_R, Q), pt(FENCE_R, -Q)],
-    backstop: arc(1.25, Math.PI - 1.15, Math.PI + 1.15, 10),
-    bleachers: [bleacher(-1), bleacher(1)], dugouts: [dugout(-1), dugout(1)],
-    lights: [[F.x + 0.45, F.y + 0.45], [F.x + F.w - 0.45, F.y + 0.45], [F.x + 0.45, F.y + F.h - 0.45], [F.x + F.w - 0.45, F.y + F.h - 0.45]],
-    board: { x0: F.x + 1.3, x1: F.x + 3.9, y: F.y + 0.9 },
-    // the mowing pattern: stripes across the outfield
-    stripes: 9,
+    backstop, stands, dugouts, stripes,
+    plate: [off(-0.13, -0.1), off(0.13, -0.1), off(0.13, 0.02), off(0, 0.13), off(-0.13, 0.02)],
+    boxes: [-1, 1].map(s => box(HOME, s * 0.22 - 0.14, -0.3, s * 0.22 + 0.14, 0.3)),
+    rubber: box(mound, -0.12, -0.03, 0.12, 0.03),
+    bases: [first, second, third].map(b => box(b, -0.12, -0.12, 0.12, 0.12)),
+    lights: [[F.x + 0.45, F.y + 0.45], [F.x + F.w - 0.45, F.y + 0.45], [F.x + 0.35, F.y + F.h - 0.35], [F.x + F.w - 0.45, F.y + F.h - 0.45]],
+    board,
     arc,
   };
 })();
 
 function diamondAnchors() {
-  const D = DIAMOND, H = D.home, M = D.mound;
+  const D = DIAMOND, H = D.home, M = D.mound, W = H[0] - 1.0, S = H[1] + 1.0;
   const out = [
     A("pitcher", M[0], M[1], "stand", "pitch", "patron", H),
-    A("catcher", H[0], H[1] + 0.5, "stand", "catch", "patron", M),
-    A("batter", H[0] + 0.55, H[1] + 0.05, "stand", "bat", "patron", M),
+    A("catcher", ...off(0, 0.5), "stand", "catch", "patron", M),
+    A("batter", ...off(0.55, 0.05), "stand", "bat", "patron", M),
     A("first", ...pt(BASE * 1.2, 0.62), "stand", "ready", "patron", H),
     A("short", ...pt(BASE * 1.5, -0.3), "stand", "ready", "patron", H),
     A("second", ...pt(BASE * 1.5, 0.3), "stand", "ready", "patron", H),
     A("third", ...pt(BASE * 1.2, -0.62), "stand", "ready", "patron", H),
-    A("centre", ...pt(7.6, 0), "stand", "ready", "patron", H),
-    A("left", ...pt(7.1, -0.5), "stand", "ready", "patron", H),
-    A("right", ...pt(7.1, 0.5), "stand", "ready", "patron", H),
-    A("on-deck", H[0] + 1.75, H[1] + 0.55, "stand", "bat", "patron", M),
-    A("umpire", H[0], H[1] + 0.95, "station", "umpire", "staff", M),
-    A("grounds", H[0] - 2.3, H[1] + 0.1, "stand", "rake", "staff", null),
+    A("centre", ...pt(FENCE_R - 1.5, 0), "stand", "ready", "patron", H),
+    A("left", ...pt(FENCE_R - 2.0, -0.5), "stand", "ready", "patron", H),
+    A("right", ...pt(FENCE_R - 2.0, 0.5), "stand", "ready", "patron", H),
+    A("on-deck", W + 0.5, H[1] - 1.3, "stand", "bat", "patron", M),
+    A("umpire", ...off(0, 0.95), "station", "umpire", "staff", M),
+    A("grounds", W + 0.45, D.lot.y + 3.2, "stand", "rake", "staff", null),
   ];
-  // the dugouts: three on each bench, then the stands (watching, the odd one on their feet)
-  for (const d of D.dugouts) for (let k = 0; k < 3; k++) out.push(A(`dug${d.side}${k}`, d.x0 + 0.4 + k * 0.6, d.y0 + 0.4, "seat", "watch", "any", [(d.x0 + d.x1) / 2, H[1] - 3]));
-  for (let t = 0; t < 3; t++) for (let k = 0; k < 3; k++) for (const b of D.bleachers) {   // both stands fill together, front row first
-    const x = b.side < 0 ? b.x1 - 0.45 - t * 0.75 : b.x0 + 0.45 + t * 0.75;
-    const cheer = (t + k) % 4 === 1;
-    out.push(A(`bl${b.side}${t}${k}`, x, b.y0 + 0.7 + k * 1.25, cheer ? "stand" : "seat", cheer ? "cheer" : "watch", "any", H, { h: 0.12 + t * 0.2 }));
+  // then the benches and the crowd, filling together: a player on each bench, a fan behind the
+  // plate, a fan beyond the wall; front rows first, nearest the plate (or dead centre) first
+  const dug = [];
+  for (const d of D.dugouts) for (let k = 0; k < 3; k++) {
+    const a = d.a0 + 0.4 + k * 0.5, dp = (d.d0 + d.d1) / 2 + (d.d1 - d.d0) * 0.05;
+    const [x, y] = d.axis === "x" ? [a, dp] : [dp, a];
+    dug.push(A(`dug${d.side}${k}`, x, y, "seat", "watch", "any", [x + d.n[0] * 3, y + d.n[1] * 3]));
   }
+  const seatOf = (s, k) => {
+    const cheer = k % 4 === 1;
+    return A(s.seat, s.c[0], s.c[1], cheer ? "stand" : "seat", cheer ? "cheer" : "watch", "any", s.seat.startsWith("of") ? pt(BASE, 0) : M, { h: s.top });
+  };
+  const byTier = (pre) => D.stands.filter(s => s.seat && s.seat.startsWith(pre));
+  const home = [...byTier("hs"), ...byTier("hw")].sort((p, q) => p.t - q.t || Math.hypot(p.c[0] - H[0], p.c[1] - H[1]) - Math.hypot(q.c[0] - H[0], q.c[1] - H[1])).map(seatOf);
+  const cf = pt(FENCE_R, 0);
+  const outer = byTier("of").sort((p, q) => p.t - q.t || Math.hypot(p.c[0] - cf[0], p.c[1] - cf[1]) - Math.hypot(q.c[0] - cf[0], q.c[1] - cf[1])).map(seatOf);
+  for (let i = 0; i < Math.max(dug.length, home.length, outer.length); i++) for (const l of [dug, home, outer]) if (l[i]) out.push(l[i]);
   return out;
 }
 
@@ -148,7 +219,7 @@ function courtAnchors() {
 const G = rect("rec-park");
 export const REC = (() => {
   const cx = G.x + G.w / 2, cy = G.y + G.h / 2;
-  // no trees along the top-left edge: that is behind home plate, and they would hide the battery
+  // no trees along the top-left edge: it is the Diamond's first-base grandstand, and they would hide it
   const trees = [[G.x + G.w - 0.55, G.y + 0.6], [G.x + G.w - 0.5, G.y + 2.0], [G.x + 0.5, G.y + G.h - 0.5], [G.x + G.w - 0.5, G.y + G.h - 0.5],
     [G.x + 0.45, cy + 1.0], [G.x + G.w - 1.9, G.y + 0.45], [G.x + 3.2, G.y + G.h - 0.45], [G.x + G.w - 0.45, cy + 1.05]];
   const tables = [[G.x + 1.75, G.y + G.h - 1.45], [G.x + G.w - 1.75, G.y + G.h - 1.45]];

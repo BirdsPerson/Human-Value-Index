@@ -154,11 +154,10 @@ function diamond(K) {
   ground(rectPts(L.x + 0.1, L.y + 0.1, L.x + L.w - 0.1, L.y + L.h - 0.1), GRASS);
   ground(D.outfield, GRASS_HI);
   if (lod !== "far") {
-    // mowing stripes across the fan, clipped to it
+    // mowing stripes across the fan, square to centre field, clipped to it
     const c = G.ctx;
     c.save(); c.beginPath(); D.outfield.forEach((p, i) => { const S = G.Q(p[0], p[1], 0.012); if (i) c.lineTo(S[0], S[1]); else c.moveTo(S[0], S[1]); }); c.closePath(); c.clip();
-    const n = D.stripes, y0 = H[1] - D.fenceR, step = D.fenceR / n;
-    for (let k = 0; k < n; k += 2) ground(rectPts(L.x, y0 + k * step, L.x + L.w, y0 + (k + 1) * step), GRASS_STRIPE, 0.012);
+    for (const b of D.stripes) ground(b, GRASS_STRIPE, 0.012);
     c.restore();
     ground([...D.fence, ...D.track.slice().reverse()], DIRT_D, 0.013);   // the warning track
   }
@@ -167,18 +166,18 @@ function diamond(K) {
   ground(circ(D.mound[0], D.mound[1], 0.42, 14), DIRT, 0.018);
   ground(circ(H[0], H[1], 0.62, 16), DIRT, 0.018);
   for (const b of [D.first, D.second, D.third]) ground(circ(b[0], b[1], 0.34, 10), DIRT, 0.017);
-  if (lod !== "far") {
-    for (const [a, b] of D.foul) gline(a, b, CHALK, Math.max(1, G.z * 0.05), 0.02);
-    // bases, the plate, the rubber, the batter's boxes
-    const sq = (p, r) => [[p[0], p[1] - r], [p[0] + r, p[1]], [p[0], p[1] + r], [p[0] - r, p[1]]];
-    for (const b of [D.first, D.second, D.third]) ground(sq(b, 0.16), CHALK, 0.022);
-    ground([[H[0] - 0.13, H[1] - 0.1], [H[0] + 0.13, H[1] - 0.1], [H[0] + 0.13, H[1] + 0.02], [H[0], H[1] + 0.13], [H[0] - 0.13, H[1] + 0.02]], CHALK, 0.022);
-    if (lod === "near") {
-      ground(rectPts(D.mound[0] - 0.12, D.mound[1] - 0.03, D.mound[0] + 0.12, D.mound[1] + 0.03), CHALK, 0.022);
-      for (const s of [-1, 1]) gpath(rectPts(H[0] + s * 0.22 - 0.14, H[1] - 0.3, H[0] + s * 0.22 + 0.14, H[1] + 0.3), "rgba(241,245,240,0.8)", 1, true, 0.021);
-    }
+  if (lod === "far") {   // the stands as their footprints
+    for (const s of D.stands) ground(s.foot, "#6b737c", 0.02);
+    return;
   }
-  if (lod === "far") return;
+  for (const [a, b] of D.foul) gline(a, b, CHALK, Math.max(1, G.z * 0.05), 0.02);
+  // bases, the plate, the rubber, the batter's boxes
+  for (const b of D.bases) ground(b, CHALK, 0.022);
+  ground(D.plate, CHALK, 0.022);
+  if (lod === "near") {
+    ground(D.rubber, CHALK, 0.022);
+    for (const b of D.boxes) gpath(b, "rgba(241,245,240,0.8)", 1, true, 0.021);
+  }
 
   // the outfield wall, a panel at a time; the foul poles
   for (let i = 0; i + 1 < D.fence.length; i++) {
@@ -190,30 +189,29 @@ function diamond(K) {
     });
   }
   for (const p of D.poles) put(p[0], p[1], () => vline(p[0], p[1], 0, 1.7, "#fbbf24", Math.max(1, G.z * 0.07)));
-  // the backstop: chain-link on posts behind the plate
+  // the backstop: chain-link on posts in front of the seats behind the plate
   for (let i = 0; i + 1 < D.backstop.length; i++) mesh(K, D.backstop[i], D.backstop[i + 1], 1.05, H);
 
   // dugouts: a sunk bench under a roof, the team on it
   for (const d of D.dugouts) {
     const ids = [0, 1, 2].map(k => `dug${d.side}${k}`);
     ids.forEach(id => K.carried.set(id, []));
-    put((d.x0 + d.x1) / 2, (d.y0 + d.y1) / 2, () => {
-      G.prism(rectPts(d.x0, d.y1 - 0.12, d.x1, d.y1), 0, 0.5, "#3b4148", 1.2);   // back wall
-      G.prism(rectPts(d.x0, d.y0 + 0.3, d.x1, d.y0 + 0.5), 0, 0.2, "#4b5563", 1.3);   // the bench
+    const R = (a0, a1, e0, e1) => { const p = (a, e) => (d.axis === "x" ? [a, d.d0 + (d.d1 - d.d0) * e] : [d.d0 + (d.d1 - d.d0) * e, a]); return [p(a0, e0), p(a1, e0), p(a1, e1), p(a0, e1)]; };
+    put(d.axis === "x" ? (d.a0 + d.a1) / 2 : (d.d0 + d.d1) / 2, d.axis === "x" ? (d.d0 + d.d1) / 2 : (d.a0 + d.a1) / 2, () => {
+      G.prism(R(d.a0, d.a1, 0.8, 1), 0, 0.5, "#3b4148", 1.2);          // back wall
+      G.prism(R(d.a0, d.a1, 0.45, 0.7), 0, 0.2, "#4b5563", 1.3);       // the bench
       for (const id of ids) for (const f of K.carried.get(id)) f();
-      G.prism(rectPts(d.x0 - 0.05, d.y0 + 0.45, d.x1 + 0.05, d.y1), 0.5, 0.56, "#1d4ed8", 1.1);   // the roof over the back of the bench, team blue
+      G.prism(R(d.a0 - 0.05, d.a1 + 0.05, 0.62, 1), 0.5, 0.56, "#1d4ed8", 1.1);   // the roof over the back of the bench, team blue
     });
   }
-  // the stands: aluminium tiers stepping up away from the field, fans on each
-  for (const b of D.bleachers) for (let t = b.tiers - 1; t >= 0; t--) {
-    const x0 = b.side < 0 ? b.x1 - 0.75 * (t + 1) : b.x0 + 0.75 * t, x1 = x0 + 0.75, top = 0.12 + t * 0.2;
-    const ids = [0, 1, 2].map(k => `bl${b.side}${t}${k}`);
-    ids.forEach(id => K.carried.set(id, []));
-    put((x0 + x1) / 2, (b.y0 + b.y1) / 2, () => {
-      G.prism(rectPts(x0, b.y0, x1, b.y1), 0, top, "#8a939c", 1.25);
-      if (lod === "near") { const s0 = b.side < 0 ? x1 - 0.02 : x0 + 0.02; K.gline([s0, b.y0], [s0, b.y1], "rgba(20,24,28,0.6)", 1, top + 0.001); }
-      for (const id of ids) for (const f of K.carried.get(id)) f();
-    });
+  // the stands: aluminium tiers stepping up away from the field, a fan on each seat
+  for (const s of D.stands) {
+    if (s.seat) K.carried.set(s.seat, []);
+    put(s.c[0], s.c[1], () => {
+      G.prism(s.foot, 0, s.top, s.seat && s.seat.startsWith("of") ? "#7f8a94" : "#8a939c", 1.25);
+      if (lod === "near") K.gpath([s.foot[0], s.foot[1]], "rgba(20,24,28,0.45)", 1, false, s.top + 0.001);
+      if (s.seat) for (const f of K.carried.get(s.seat)) f();
+    }, s.t * 0.01);
   }
   // light towers: lit for a fixture after dark
   const lit = !!game && lightsOn(hour);
@@ -228,20 +226,25 @@ function diamond(K) {
       G.ctx.fillStyle = g; G.ctx.beginPath(); G.ctx.arc(x, y, r, 0, Math.PI * 2); G.ctx.fill();
     }
   });
-  // the scoreboard, over the left-field corner
-  const bd = D.board;
-  put((bd.x0 + bd.x1) / 2, bd.y, () => {
-    for (const x of [bd.x0 + 0.3, bd.x1 - 0.3]) vline(x, bd.y, 0, 1.0, "#4b5563", Math.max(1, G.z * 0.08));
-    const f = G.facing ? G.facing([bd.x0, bd.y + 0.08], [bd.x1, bd.y + 0.08], [(bd.x0 + bd.x1) / 2, bd.y]) : 1;
-    G.prism(rectPts(bd.x0, bd.y - 0.08, bd.x1, bd.y + 0.08), 1.0, 2.1, "#0f1a14", 1.2, f ? 1 : 0.3);   // its back goes see-through
+  // the scoreboard, up behind the outfield bleachers, facing the plate
+  const bd = D.board, n = bd.n, T = 0.08;
+  const fa = [bd.a[0] + n[0] * T, bd.a[1] + n[1] * T], fb = [bd.b[0] + n[0] * T, bd.b[1] + n[1] * T];
+  put(bd.c[0], bd.c[1], () => {
+    for (const k of [0.2, 0.8]) { const p = lerp(bd.a, bd.b, k); vline(p[0], p[1], 0, 1.3, "#4b5563", Math.max(1, G.z * 0.08)); }
+    const f = G.facing ? G.facing(fa, fb, bd.c) : 1;
+    // seen from behind it is steel; see-through only when it stands between the viewer and the field
+    const [hu, hv] = rot(H[0], H[1], G.r), [bu, bv] = rot(bd.c[0], bd.c[1], G.r);
+    const hides = (bu + bv - hu - hv) / (Math.SQRT2 * Math.hypot(bd.c[0] - H[0], bd.c[1] - H[1])) > 0.6;
+    G.prism([[bd.a[0] - n[0] * T, bd.a[1] - n[1] * T], [bd.b[0] - n[0] * T, bd.b[1] - n[1] * T], fb, fa], 1.3, 2.4, f ? "#0f1a14" : "#39414a", 1.2, f || !hides ? 1 : 0.3);
     if (lod !== "near" || !f) return;
-    const A = G.Q(bd.x0 + 0.15, bd.y + 0.09, 1.95), B = G.Q(bd.x1 - 0.15, bd.y + 0.09, 1.95);
+    const i0 = lerp(fa, fb, 0.06), i1 = lerp(fa, fb, 0.94);
+    const A = G.Q(i0[0] + n[0] * 0.01, i0[1] + n[1] * 0.01, 2.25), B = G.Q(i1[0] + n[0] * 0.01, i1[1] + n[1] * 0.01, 2.25);
     const c = G.ctx, fs = Math.max(7, Math.round(G.z * 0.34));
     c.save(); c.font = `${fs}px "Fira Mono", monospace`; c.textBaseline = "top"; c.textAlign = "left";
     const ang = Math.atan2(B[1] - A[1], B[0] - A[0]);
     c.translate(A[0], A[1]); c.rotate(ang);
     const rows = game ? [["COMPLIANT", game.score[0]], ["ASSESSED", game.score[1]]] : [["HOME", "-"], ["AWAY", "-"]];
-    rows.forEach(([n, v], i) => { c.fillStyle = i ? "#f87171" : "#fbbf24"; c.fillText(n, 0, i * fs * 1.15); c.fillText(String(v), Math.hypot(B[0] - A[0], B[1] - A[1]) - fs, i * fs * 1.15); });
+    rows.forEach(([nm, v], i) => { c.fillStyle = i ? "#f87171" : "#fbbf24"; c.fillText(nm, 0, i * fs * 1.15); c.fillText(String(v), Math.hypot(B[0] - A[0], B[1] - A[1]) - fs, i * fs * 1.15); });
     c.fillStyle = "#4ade80"; c.fillText(game ? `${game.top ? "TOP" : "BOT"} ${game.inning}` : "NO FIXTURE", 0, 2.3 * fs * 1.15);
     c.restore();
   });
@@ -249,7 +252,7 @@ function diamond(K) {
   // the ball: pitched, and now and then put in play
   if (lod === "near" && K.t > 0 && present.has("pitcher") && present.has("catcher")) {
     const cyc = Math.floor(K.t / PITCH_S), f = frac(K.t / PITCH_S);
-    const plate = [H[0], H[1] + 0.35];
+    const plate = D.off(0, 0.35);
     if (f >= 0.72 && f < 0.87) { const k = (f - 0.72) / 0.15, p = lerp(D.mound, plate, k); ball(K, p[0], p[1], 0.62 - 0.12 * k, "#f8fafc"); }
     if (present.has("batter") && h01(`hit${cyc}`) < 0.4 && f >= 0.87) {
       const fielders = ["first", "second", "short", "third", "centre", "left", "right"].filter(id => present.has(id));
