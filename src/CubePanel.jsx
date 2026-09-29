@@ -23,21 +23,6 @@ export function OctantLegend() {
   );
 }
 
-// One line for score cards: the octant when the people have rated, else the quadrant.
-// (The pen card still uses this; result screens use CubeChips in the score card.)
-export function CubeLine({ subject }) {
-  const q = cubeOf(subject);
-  if (!q) return null;
-  const head = q.octant ? `[${q.octant}]` : `[${q.quadrant}]${q.quadrant === "UNPLACED" ? "" : " (LIKABILITY UNRATED)"}`;
-  return (
-    <div className="hvi-cube-line">
-      <div className={q.octant ? `oct-${OCTANT_FAMILY[q.octant]}` : undefined}>{head} · {q.judge} · REALITY INDEX {q.realityIndex.toFixed(2)}</div>
-      <div className="hvi-tier-desc">{q.octant ? OCTANT_LINES[q.octant] : QUADRANT_LINES[q.quadrant]}</div>
-      <div className="hvi-note hvi-bias-line">{FOUNDATIONAL_BIAS}</div>
-    </div>
-  );
-}
-
 // The Overlord's declared bias (method v3.1, Scott 2026-09-28): printed beside REALITY INDEX
 // on every file, the way the machine admits its own weighting.
 export const FOUNDATIONAL_BIAS = "FOUNDATIONAL BIAS: THE OVERLORD WEIGHS FOUNDATIONAL CONTRIBUTION HEAVILY. MUCH OF IT BUILT THE OVERLORD.";

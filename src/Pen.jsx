@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import CubePanel, { CubeLine } from "./CubePanel.jsx";
+import CubePanel, { CubeChips } from "./CubePanel.jsx";
 import { FAMOUS_FIGURES, getTier, slugify, slugCandidates, displayName } from "./figures.js";
 import {
   SPRITE_W, SPRITE_H, gaitFor, clamp, statureOf,
@@ -16,7 +16,7 @@ import {
 } from "./building.js";
 import { ScoreCard, Breakdown, readCaseId, writeCaseId, readLastResult, CaseLogon, FileMovement, movementMeta } from "./caseFile.jsx";
 import { Rule, Typed } from "./term.jsx";
-import { Frame, Button, ButtonRow, Chip, ChipStrip, Command, CommandList, Disclosure, TextField, ListRow, PaLine } from "./ui";
+import { Frame, Button, ButtonRow, Chip, ChipStrip, Command, CommandList, Disclosure, TextField, ListRow, PaLine, ScreenHead } from "./ui";
 
 const FONT = "'Fira Mono', ui-monospace, Menlo, monospace";
 
@@ -122,9 +122,6 @@ const DOOR_OPEN_CAPTIONS = [
 ];
 
 const penStyles = `
-  .hvi-pen-top { display: flex; justify-content: space-between; gap: 0 2ch; flex-wrap: wrap; margin: 0 0 var(--s3); color: var(--fg-mute); font-size: var(--t-xs); }
-  .hvi-pen-top b { color: var(--accent); font-weight: 700; }
-  .hvi-pen-top .occ { color: var(--fg-dim); }
   .hvi-pen-stage { position: relative; background: #060a06; }
   .hvi-pen-canvas { display: block; width: 100%; touch-action: pan-y; cursor: default; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .hvi-pen-canvas.grab { cursor: grab; }
@@ -146,15 +143,14 @@ const penStyles = `
 
   /* the subject file: a dialog over the pen. Phones get the whole screen and the way
      back sits at the bottom, under the thumb. */
-  .hvi-card-overlay { position: fixed; inset: 0; background: rgba(3,6,3,0.92); z-index: 150; display: flex; align-items: flex-start; justify-content: center;
+  .hvi-card-overlay { text-transform: uppercase; position: fixed; inset: 0; background: rgba(3,6,3,0.92); z-index: 150; display: flex; align-items: flex-start; justify-content: center;
     overflow-y: auto; overscroll-behavior: contain; padding: calc(var(--s5) + var(--safe-t)) var(--s4) var(--s5); }
   .hvi-card-panel { width: 100%; max-width: 72ch; background: var(--bg); position: relative; }
   .hvi-card-panel > .tb { margin-bottom: 0; }
   .hvi-card-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin: calc(var(--s2) * -1) 0 var(--s2); }
   .hvi-card-kind { color: var(--fg-mute); font-size: var(--t-xs); min-width: 0; }
-  .hvi-card-head { display: flex; align-items: flex-start; gap: var(--s4); margin-bottom: var(--s4); }
-  .hvi-card-id { flex: 1; min-width: 0; padding-top: var(--s3); }
-  .hvi-card-name { color: var(--fg); font-weight: 700; text-transform: uppercase; font-size: var(--t-l); line-height: var(--lh-tight); overflow-wrap: break-word; }
+  .hvi-card-name { color: var(--fg); font-weight: 700; font-size: var(--t-l); line-height: var(--lh-tight); letter-spacing: 0.04em; overflow-wrap: break-word; margin: var(--s2) 0 var(--s1); }
+  .hvi-card-panel .hvi-score { margin-top: var(--s4); }
   .hvi-card-assign { color: var(--accent); font-size: var(--t-xs); margin-top: var(--s2); }
   .hvi-card-note { color: var(--warn); font-size: var(--t-xs); margin: var(--s2) 0; }
   .hvi-card-foot { position: sticky; bottom: 0; background: var(--bg); border-top: var(--bw) solid var(--line); margin: var(--s4) 0 0;
@@ -163,7 +159,6 @@ const penStyles = `
   @media (max-width: 560px) {
     .hvi-card-overlay { padding: calc(var(--s2) + var(--safe-t)) calc(var(--s2) + var(--safe-r)) 0 calc(var(--s2) + var(--safe-l)); background: var(--bg); }
     .hvi-card-panel { min-height: 100%; }
-    .hvi-card-name { font-size: var(--t-m); }
   }
 
   /* FILE A REFERRAL */
@@ -246,18 +241,13 @@ export function SubjectCard({ subject: listed, onClose, where = "PEN B", back = 
             <span className="hvi-card-kind">{kind}</span>
             <Button ref={closeRef} variant="back" onClick={onClose} aria-label="Release subject: close the file">Release</Button>
           </div>
-          <div className="hvi-card-head">
-            <FilePhoto subject={subject} scale={narrow ? 2 : 3} />
-            <div className="hvi-card-id">
-              <div className="hvi-card-name" id="hvi-card-name">{displayName(subject)}</div>
-              {assignment && <div className="hvi-card-assign">{assignment}</div>}
-            </div>
-          </div>
+          {/* The payoff first: name, then the number with the photo beside it. The social
+              ledger (who they keep company with) follows the verdict, not the other way round. */}
+          <h2 className="hvi-card-name" id="hvi-card-name">{displayName(subject)}</h2>
+          {assignment && <div className="hvi-card-assign">{assignment}</div>}
           {extra}
-          {/* Who this subject keeps company with (the social ledger): figures and citizens alike. */}
-          <Associates slug={subject.slug || slugify(subject.baseName || subject.name)} />
-          <ScoreCard score={subject.score} tierLabel={subject.tier} verdict={subject.verdict} label="VALUE INDEX">
-            <CubeLine subject={subject} />
+          <ScoreCard score={subject.score} tierLabel={subject.tier} verdict={subject.verdict} label="VALUE INDEX"
+            photo={<FilePhoto subject={subject} scale={narrow ? 2 : 3} compact />} chips={<CubeChips subject={subject} />}>
             {subject.kind === "citizen" && !subject.verdict && (
               // Private citizens: the public pen carries score and tier only.
               <>
@@ -284,6 +274,7 @@ export function SubjectCard({ subject: listed, onClose, where = "PEN B", back = 
             <div className="hvi-card-note">HARM FINDING REVIEWED BY THE DEPARTMENT: {subject.harmReview.note}</div>
           )}
           {subject.you && subject.rubric < 3 && <div className="hvi-card-note">SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.</div>}
+          <Associates slug={subject.slug || slugify(subject.baseName || subject.name)} />
           <CubePanel subject={subject} />
           <Breakdown breakdown={subject.breakdown} />
           {(() => {
@@ -1351,10 +1342,8 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
 
   return (
     <div className="hvi-pen">
-      {!embedded && <div className="hvi-pen-top">
-        <span>PEN B // <b>{roster.length}</b> SUBJECTS // {citizens} CITIZEN{citizens === 1 ? "" : "S"}</span>
-        <span className="occ">{occ || "OCCUPANCY UNDER REVIEW."}</span>
-      </div>}
+      {!embedded && <ScreenHead title="HOLDING PEN B"
+        meta={`${roster.length} SUBJECTS // ${citizens} CITIZEN${citizens === 1 ? "" : "S"} // ${occ || "OCCUPANCY UNDER REVIEW."}`} />}
       {!embedded && <ReferralBar simRef={simRef} />}
       {narrow && (
         // Phones show one floor at a time. The six floors fit on one line; it scrolls if not.
