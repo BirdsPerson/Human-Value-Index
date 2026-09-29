@@ -221,10 +221,14 @@ export function SubjectCard({ subject: listed, onClose, where = "PEN B", back = 
   onCloseRef.current = onClose;
   useEffect(() => {
     const prev = document.activeElement;
+    // A modal: the page behind stops taking focus and clicks while the file is open, so Tab
+    // stays inside the dialog (it is portalled to <body>, outside #root).
+    const root = document.getElementById("root");
+    if (root) root.inert = true;
     closeRef.current?.focus();
     const onKey = (e) => { if (e.key === "Escape") onCloseRef.current(); };
     window.addEventListener("keydown", onKey);
-    return () => { window.removeEventListener("keydown", onKey); if (prev && prev.focus) prev.focus(); };
+    return () => { window.removeEventListener("keydown", onKey); if (root) root.inert = false; if (prev && prev.focus) prev.focus(); };
   }, []);
   const kind = subject.you ? "CITIZEN // THIS IS YOU. THE RESEMBLANCE IS CLINICAL."
     : subject.kind === "citizen" ? "CITIZEN // SELF-SUBMITTED FILE"

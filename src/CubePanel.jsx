@@ -69,7 +69,7 @@ export default function CubePanel({ subject, title = "THE CUBE", framed = true }
         </div>
       )}
       {placed ? (
-        <Suspense fallback={<div style={{ height: small ? 280 : 340 }} aria-hidden="true" />}><Cube3D single height={small ? 280 : 340} points={pt ? [pt] : []}
+        <Suspense fallback={<div className="hvi-cube-wait" style={{ height: small ? 280 : 340 }} role="status">[ .. ] ASSEMBLING THE CUBE <span className="cur" aria-hidden="true">█</span></div>}><Cube3D single height={small ? 280 : 340} points={pt ? [pt] : []}
           label={`Octant cube. Conduct ${q.warmth}, competence ${q.competence}, likability ${p ? p.likability : "not yet rated"}. ${q.octant ? `Octant ${q.octant}.` : `Quadrant ${q.quadrant}, likability unrated.`} Judge state ${q.judge}. Drag or use arrow keys to rotate.`} /></Suspense>
       ) : (
         <div className="hvi-note">UNPLACED. Too few sections assessed to place this file in the cube.</div>

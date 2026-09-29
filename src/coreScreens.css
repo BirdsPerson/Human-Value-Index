@@ -89,6 +89,7 @@
 .hvi-cube-axes dt { color: var(--fg-mute); }
 .hvi-cube-axes dd { margin: 0; color: var(--fg); font-weight: 700; }
 .hvi-judge-line { color: var(--fg-mute); font-size: var(--t-xs); }
+.hvi-cube-wait { display: flex; align-items: center; justify-content: center; color: var(--fg-mute); font-size: var(--t-xs); }
 
 /* ---------- logon menu ---------- */
 .hvi-logon .ui-cmd-list { margin: var(--s4) 0 var(--s2); }
