@@ -9,6 +9,24 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Backlog (priority order)
 
+0. [in progress 2026-09-29, Scott's order: scale -> community -> HQ]
+   a. **Scale.** One production sprite atlas (Mac job packs every ready referral sprite)
+      instead of ~300 /api/sprite requests; slim /api/pen (census fields only) with the
+      file's verdict/history/breakdown fetched on open.
+   b. **Community + incidents.** Real-life ties from Wikidata (spouse, sibling, bandmates
+      /member of, teammates, partners) raise affinity so real friends gravitate together;
+      friendship cliques become named groups (Overlord-named) with a home hangout and group
+      outings; odd cross-group pairs logged as gossip. Fallout Shelter incidents: a fire,
+      reactor overload, vat flood, power cut; deterministic from the machine clock; nearby
+      subjects with fitting jobs run to it and work it; logged on the PA and the Ledger.
+   c. **The Overlord tower (item 11) as the admin building:** Intake, Appeals desk, Review
+      Board, Records, Calibration Lab, Holding Cells (item 12), and THE PEOPLE'S PETITION
+      console = the People's Vote exactly as designed in docs/story/STORYLINE_TOURNAMENT.md
+      (Scott approved 2026-09-29 in chat: TOO HIGH / FAIR / TOO LOW on public figures only,
+      verified logins, NOTED at 25, review at 40 bridged across 3 of 4 quadrants over 72h,
+      max 3 reviews/day, no free text, votes never move a score). Figures work there.
+   Standing (Scott): environments keep getting more realistic: things to do, items used.
+
 1. [in progress: slices 1 and 2 shipped, see Done] **Side quests → vouches.**
    Remaining slices: (b) [next] vouch → score effect: DECIDED by Scott 2026-09-28: +2 to that category per vouch (max +14 across 7); show it on the file and in the breakdown; each vouch appends a history entry with cause "vouch" (src/movement.js: YOUR CHANGES, not a visit, not capped);
    (c2) bring someone (needs a second player or a referral; witness shipped as c1);
