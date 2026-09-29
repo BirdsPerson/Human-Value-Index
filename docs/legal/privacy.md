@@ -52,7 +52,7 @@ No analytics, advertising or tracking scripts are used. (The "Analytics" screen 
 | Google Fonts | Your IP address and browser details | Delivers the terminal typeface |
 | Wikipedia / Wikidata | Names of public figures being referred (no data about you) | The public record |
 
-Each provider handles data under its own terms. Anthropic does not train its models on data sent through its commercial API by default. [[TODO SCOTT: confirm each provider's current retention before launch; Anthropic's API and Netlify's log retention are set by them, not by the site.]]
+Each provider keeps the data it receives under its own published policy, and sets its own retention for it; the site does not control those schedules. Anthropic does not train its models on data sent through its commercial API by default. The one provider setting the site controls is ElevenLabs voice retention, set to 30 days. Their policies: [Anthropic](https://www.anthropic.com/legal/privacy), [ElevenLabs](https://elevenlabs.io/privacy-policy), [Resend](https://resend.com/legal/privacy-policy), [Netlify](https://www.netlify.com/privacy/), [Google Fonts](https://developers.google.com/fonts/faq/privacy).
 
 ## How long it is kept
 
@@ -63,7 +63,7 @@ A sweep runs once a day and deletes whatever has passed these limits.
 - **ElevenLabs voice recordings:** 30 days.
 - **Sign-in links:** single use, expire after 15 minutes, and are deleted within a day after that.
 - **Sessions:** 30 days, or until you log out. Expired sessions are deleted within a day.
-- **Dispute requests:** **2 years** after they are filed, then deleted. [[TODO SCOTT: the copy emailed to your inbox is outside the site; delete it on the same 2-year schedule, or change this line.]]
+- **Dispute requests:** **2 years** after they are filed, then deleted. The copy emailed to the operator's inbox is deleted on the same 2-year schedule.
 - **Rate-limit counters:** hashed, and deleted **7 days** after the hour, day or month they count.
 
 ## Purge your file
@@ -86,4 +86,4 @@ You can see your file (MY FILE), correct it (appeal, or [dispute](#dispute)), an
 
 ## Contact
 
-Use the [request form](#dispute) and choose "privacy request." A person at Iridescent reads every request and replies within 7 days. [[TODO SCOTT: optional later: a public address such as privacy@humanvalueindex.com forwarding to you. Until then the form is the only channel.]]
+Use the [request form](#dispute) and choose "privacy request." A person at Iridescent reads every request and replies within 7 days. The form is the only contact channel.

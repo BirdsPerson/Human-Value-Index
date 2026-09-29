@@ -2,7 +2,7 @@
 
 > By continuing, you accept that the Overlord has opinions. You are not required to share them.
 
-Last updated: 2026-09-29. The Human Value Index is published by [Iridescent](https://iridescent-studio.netlify.app) ("we"). [[TODO SCOTT: governing law and venue, e.g. the State of New Jersey, USA.]]
+Last updated: 2026-09-29. The Human Value Index is published by [Iridescent](https://iridescent-studio.netlify.app) ("we").
 
 ## 1. It is satire
 
@@ -47,3 +47,7 @@ If a file is wrong, or you are its subject and want it reviewed, [file a dispute
 ## 8. Changes
 
 These terms may change. The date at the top says when they last did.
+
+## 9. Governing law
+
+These terms are governed by the laws of the State of New Jersey, USA, without regard to its conflict-of-law rules. Any dispute arising from them or from the site is brought in the state or federal courts located in New Jersey.
