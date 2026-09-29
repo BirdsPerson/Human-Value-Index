@@ -362,6 +362,20 @@
   "image": true,
   "note": "Light skin tone visible in photo, consistent with her known appearance"
  },
+ "charles-darwin": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Black-and-white photo limits precision, but consistent with knowledge of Darwin as a fair-skinned Englishman."
+ },
+ "charles-dickens": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Sepia-toned 19th-century photograph of an English man; historical knowledge confirms fair European skin tone, though exact shade is hard to verify from monochrome image."
+ },
  "charles-iv-of-spain": {
   "band": "fair",
   "basis": "painting",
@@ -453,6 +467,13 @@
   "image": true,
   "note": "Elderly light-skinned man with visible flush and age spots typical of fair complexion"
  },
+ "confucius": {
+  "band": "light brown",
+  "basis": "knowledge",
+  "confidence": "medium",
+  "image": true,
+  "note": "Ink sketch shows no true skin color; based on historical East Asian (Chinese) ethnicity, typical skin tone is light brown/medium."
+ },
  "conway-the-machine": {
   "band": "brown",
   "basis": "photo",
@@ -508,6 +529,13 @@
   "confidence": "high",
   "image": true,
   "note": "Light complexion visible in photo, consistent with known appearance"
+ },
+ "david-duke": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Black-and-white photo limits precision, but consistent with a fair-skinned white man based on known appearance."
  },
  "david-frankfurter": {
   "band": "fair",
@@ -684,6 +712,13 @@
   "image": true,
   "note": "Black-and-white photo limits certainty, but historical knowledge of Zapata's mestizo/indigenous Nahua heritage supports a medium skin tone."
  },
+ "emily-dickinson": {
+  "band": "very fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Historical daguerreotype of a 19th-century New England woman of English descent, consistent with very fair complexion typical of the era and ancestry."
+ },
  "eminem": {
   "band": "fair",
   "basis": "photo",
@@ -753,6 +788,13 @@
   "confidence": "low",
   "image": true,
   "note": "Historical portrait painted centuries after death, stylized; skin tone shown as reddish-tan, consistent with medium East/Central Asian complexion, but not a reliable likeness of actual appearance."
+ },
+ "geoffrey-chaucer": {
+  "band": "fair",
+  "basis": "painting",
+  "confidence": "low",
+  "image": true,
+  "note": "Medieval manuscript portrait; pigments faded, limited evidence of true skin tone, based on typical depiction of English figure of the era."
  },
  "george-clooney": {
   "band": "medium",
@@ -852,6 +894,13 @@
   "image": true,
   "note": "Consistent with known skin tone of GZA, visible in photo lighting"
  },
+ "hank-williams": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Black-and-white photo of Hank Williams, a white American musician; skin tone appears light, consistent with fair complexion."
+ },
  "harriet-tubman": {
   "band": "brown",
   "basis": "photo",
@@ -907,6 +956,13 @@
   "confidence": "medium",
   "image": true,
   "note": "Black and white photo limits certainty, but consistent with typical Vietnamese medium skin tone."
+ },
+ "homer": {
+  "band": "olive",
+  "basis": "statue",
+  "confidence": "low",
+  "image": true,
+  "note": "Marble bust conveys no skin tone; classification based on typical ancient Greek/Mediterranean population, as Homer's actual appearance is unknown."
  },
  "hunter-s-thompson": {
   "band": "fair",
@@ -1048,6 +1104,13 @@
   "image": true,
   "note": "This is a 16th-century woodcut portrait, not a life portrait; no reliable evidence of actual skin tone exists. Based on his Central European (Czech) origin, 'fair' is a reasonable estimate, but confidence is low."
  },
+ "jane-austen": {
+  "band": "fair",
+  "basis": "painting",
+  "confidence": "low",
+  "image": true,
+  "note": "Sketch by Cassandra Austen, an amateur pencil/watercolor portrait with limited shading detail; skin tone inference is based on typical English complexion of the era and the pale rendering in the artwork."
+ },
  "jane-fonda": {
   "band": "fair",
   "basis": "photo",
@@ -1145,6 +1208,13 @@
   "confidence": "high",
   "image": true,
   "note": "Formal portrait showing light skin tone typical of Irish-American descent"
+ },
+ "jim-breuer": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with subject's known appearance"
  },
  "jim-carrey": {
   "band": "fair",
@@ -1650,6 +1720,13 @@
   "image": true,
   "note": "Elderly light-skinned man with gray hair, consistent with known fair complexion."
  },
+ "michael-phelps": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone consistent with known appearance"
+ },
  "mickey-mantle": {
   "band": "fair",
   "basis": "photo",
@@ -1950,6 +2027,13 @@
   "image": true,
   "note": "Visible skin tone in photo is consistent with a medium-brown complexion typical of the subject."
  },
+ "redman": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Stage lighting (green/dark) affects color accuracy, based on known appearance and visible skin tone in photo"
+ },
  "richard-gere": {
   "band": "fair",
   "basis": "photo",
@@ -2034,6 +2118,13 @@
   "image": true,
   "note": "Consistent with photo and known appearance"
  },
+ "rosa-parks": {
+  "band": "medium",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Black and white photo limits certainty, but tonal contrast and known descriptions suggest a medium brown skin tone."
+ },
  "rupaul": {
   "band": "brown",
   "basis": "photo",
@@ -2061,6 +2152,13 @@
   "confidence": "high",
   "image": true,
   "note": "Middle Eastern complexion consistent with well-documented appearance"
+ },
+ "salman-of-saudi-arabia": {
+  "band": "light brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with typical Saudi Arabian skin tones visible in photo"
  },
  "salvador-dali": {
   "band": "fair",
@@ -2221,6 +2319,13 @@
   "confidence": "high",
   "image": true,
   "note": "Light skin tone visible under stage lighting, consistent with known appearance"
+ },
+ "steven-spielberg": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with known appearance"
  },
  "suge-knight": {
   "band": "brown",
@@ -2383,6 +2488,13 @@
   "image": true,
   "note": "Consistent with well-documented skin tone in photographs"
  },
+ "ty-cobb": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Black-and-white photo of a young white American man in early 1900s baseball uniform; consistent with historical knowledge of Ty Cobb as fair-skinned."
+ },
  "tyler-the-creator": {
   "band": "brown",
   "basis": "photo",
@@ -2494,6 +2606,13 @@
   "confidence": "medium",
   "image": true,
   "note": "Black-and-white photo limits certainty, but tonal shading suggests a fair complexion typical of the subject's background."
+ },
+ "william-shakespeare": {
+  "band": "fair",
+  "basis": "painting",
+  "confidence": "medium",
+  "image": true,
+  "note": "Based on the Chandos portrait, a commonly cited depiction; skin appears pale/fair, consistent with historical depictions of Shakespeare."
  },
  "winston-churchill": {
   "band": "fair",
