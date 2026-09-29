@@ -26,6 +26,19 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       visiting play each other (deterministic results from the sim, rivalries and friendships
       feed social.js, results on the Ledger/PA). Player vs a figure at chess (chess.js rules +
       a small engine whose strength follows the figure's competence), result on the file.
+   b3. **Our lore, built into the world** (Scott 2026-09-29: "let's build all of our lore into
+      this world"). Buildings that show the real work, each with people doing jobs and an
+      audience, tap a screen to watch in an overlay:
+      - AUCTION HALL: bidders watching Electric Basement shop turntable product videos
+        (source: eb-command-center/edit renders; need their public URLs), paddles up, an
+        auctioneer figure.
+      - CINEMA: rows of seated subjects watching EBTV channels (live.electricbasement.tv and
+        the antenna lineup EBTV already carries; embed EB's own player, don't re-host third-
+        party streams). Haddonfield Film Society nights later.
+      - EB TV STUDIO: the QVC-style set with the AI hosts from the host bible
+        (eb-command-center/edit/qvc_hosts.md), cameras, crew, an ON AIR light.
+      - The Arcade (b2) is part of this pass. Later candidates: Brainforest (analytics firm
+        office), the Unfinished Business stream booth, a pizza place for the road doc.
    c. **The Overlord tower (item 11) as the admin building:** Intake, Appeals desk, Review
       Board, Records, Calibration Lab, Holding Cells (item 12), and THE PEOPLE'S PETITION
       console = the People's Vote exactly as designed in docs/story/STORYLINE_TOURNAMENT.md
