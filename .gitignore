@@ -8,3 +8,4 @@ MORNING_REPORT.md
 __pycache__/
 docs/calibration/.tmp-*
 DESK_ANSWERS.md
+dist/
