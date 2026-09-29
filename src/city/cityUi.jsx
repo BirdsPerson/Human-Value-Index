@@ -63,12 +63,14 @@ const css = `
   .hvi-city-zb { min-width: var(--hit-min); height: var(--hit-min); padding: 0 var(--s2); display: inline-flex; align-items: center; justify-content: center;
     background: var(--bg); color: var(--accent); border: var(--bw) solid var(--line-hi); border-radius: 0; font: inherit; font-size: var(--t-s); font-weight: 700; cursor: pointer; text-transform: uppercase; }
   .hvi-city-zb.txt { font-size: var(--t-xs); }
+  .hvi-city-zb svg { display: block; flex: none; }
   .hvi-city-zb:hover { border-color: var(--accent); }
   .hvi-city-zb:active { background: var(--accent); color: var(--accent-ink); }
   .hvi-city-zb:focus-visible { outline-offset: -3px; }
   @media (max-width: 720px) {
     .hvi-city-zoom { position: static; justify-content: flex-end; padding: var(--s2); border-top: var(--bw) solid var(--line); background: var(--bg); }
-    .hvi-city-zoom .hint { margin-right: auto; align-self: center; color: var(--fg-mute); font-size: var(--t-xs); }
+    /* one line, cut short: a long building name must not wrap and change the stage's height */
+    .hvi-city-zoom .hint { margin-right: auto; align-self: center; color: var(--fg-mute); font-size: var(--t-xs); flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   }
   @media (min-width: 721px) { .hvi-city-zoom .hint { display: none; } }
 

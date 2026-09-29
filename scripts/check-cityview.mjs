@@ -195,5 +195,40 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   console.log(`  activity: ${staffAtStation}/${staffTotal} workers working, ${seatedVisitors}/${visitors} visitors seated, ${restInBed}/${restNight} residents in bunks at night`);
 }
 
+// 10. Nobody walks through a building they are not going into or coming out of
+// (2026-09-29: 12.6% of walking samples were inside a third building). Footpaths go
+// round the blocks, through the streets.
+{
+  const SIM = await import("../src/city/sim.js");
+  const { baseRoster } = await import("../src/city/roster.js");
+  const roster = baseRoster();
+  SIM.setRoster(roster);
+  const solid = SIM.BUILDINGS.filter(b => !SIM.OPEN_LOTS.has(b.id)).map(b => ({ id: b.id, x0: b.rect.x + 0.4, y0: b.rect.y + 0.4, x1: b.rect.x + b.rect.w - 0.4, y1: b.rect.y + b.rect.h - 0.4 }));
+  const T0 = 24 * 40;
+  let n = 0, bad = 0, eg = "";
+  for (let m = 0; m < 24 * 60; m += 3) for (const sub of roster) {
+    const w = SIM.whereAt(sub, T0 + m / 60);
+    if (w.activity !== "commute" || w.sub !== "walking") continue;
+    n++;
+    const own = new Set([SIM.PLACES[w.placeId]?.building, SIM.PLACES[w.fromPlaceId]?.building]);
+    const hit = solid.find(o => !own.has(o.id) && w.x > o.x0 && w.x < o.x1 && w.y > o.y0 && w.y < o.y1);
+    if (hit) { bad++; if (!eg) eg = `${SIM.keyOf(sub)} ${w.fromPlaceId}->${w.placeId} inside ${hit.id}`; }
+  }
+  ok(n > 100 && bad === 0, `walkers stay out of third buildings (${bad} of ${n} samples${eg ? `, e.g. ${eg}` : ""})`);
+  const p = SIM.footpath({ x: 0, y: 4.5 }, { x: 26, y: 4.5 });
+  ok(p.length > 2, "a walk across Arts goes round the studio block, not through it");
+}
+
+// 11. The city page must not scroll itself (2026-09-29: ChipStrip called scrollIntoView on
+// every render and dragged #city down to the ledger once a second).
+{
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("../src/ui/components.jsx", import.meta.url), "utf8");
+  const chip = src.slice(src.indexOf("export function ChipStrip"), src.indexOf("// Meter:"));
+  ok(!/scrollIntoView/.test(chip.replace(/\/\/.*$/gm, "")), "ChipStrip scrolls only itself, never the page");
+  const iso = fs.readFileSync(new URL("../src/city/CityIso.jsx", import.meta.url), "utf8");
+  ok(!/drawTrains\(/.test(iso), "train cars are slotted by depth, not painted over the buildings afterwards");
+}
+
 console.log(fails ? `check-cityview: ${fails} FAILED` : "check-cityview: ok");
 process.exit(fails ? 1 : 0);

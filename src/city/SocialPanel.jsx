@@ -1,6 +1,6 @@
 // The Substrate's social ledger, city-wide: the gossip feed and a web of who keeps
 // company with whom. Nothing here is scripted; see src/city/social.js.
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Frame, ChipStrip, Chip } from "../ui";
 import { useSocial } from "./socialClient.js";
 
@@ -68,7 +68,9 @@ function injectSocialStyles() {
   if (el.textContent !== SOCIAL_CSS) el.textContent = SOCIAL_CSS;
 }
 
-export default function SocialPanel() {
+// Memoized: it takes no props, so the city's per-second census never re-renders it.
+export default memo(SocialPanel);
+function SocialPanel() {
   useEffect(() => { injectSocialStyles(); }, []);
   const d = useSocial();
   const [filter, setFilter] = useState("all");
@@ -93,10 +95,10 @@ export default function SocialPanel() {
           {!(d.events || []).length && <li>NOTHING WORTH REPEATING. YET.</li>}
         </ul>
       </Frame>
-      <Frame title="THE LEDGER OF ASSOCIATION" meta={`${d.counts?.friends ?? 0} FRIENDSHIPS // ${d.counts?.rivals ?? 0} RIVALRIES`}>
+      <Frame title="THE LEDGER OF ASSOCIATION" meta={`${(d.counts?.friends ?? 0) + (d.counts?.rivals ?? 0)} TIES`}>
         <p className="hvi-web-note">NOBODY ARRANGED ANY OF THIS. SUBJECTS WHO SHARE A ROOM EITHER CLICK OR THEY DO NOT. FRIENDS DRIFT TO EACH OTHER'S USUAL ROOMS. RIVALS LEAVE FIRST.</p>
         <ChipStrip label="Show">
-          {[["all", "ALL TIES"], ["friends", "FRIENDS"], ["rivals", "RIVALS"]].map(([k, l]) => (
+          {[["all", "ALL TIES"], ["friends", `FRIENDS ${d.counts?.friends ?? 0}`], ["rivals", `RIVALS ${d.counts?.rivals ?? 0}`]].map(([k, l]) => (
             <Chip key={k} pressed={filter === k} onClick={() => { setFilter(k); setFocus(null); }}>{l}</Chip>
           ))}
         </ChipStrip>

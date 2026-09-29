@@ -153,7 +153,7 @@ const BUILDING_LIST = [
   // THE ARCHIVE
   B("records-hall", "RECORDS HALL", "archive", [["1F", "THE INDEX", ["archive-stacks"]], ["G", "READING ROOM", ["archive-stacks"]]]),
   B("memory-vault", "MEMORY VAULT", "archive", [["G", "VAULT DOOR", ["memory-vault"]], ["B1", "COLD STORAGE", ["memory-vault"]]]),
-  B("lofts", "THE ARCHIVE LOFTS", "archive", [["5F", "LOFT TIER 6", ["archive-lofts"]], ["4F", "LOFT TIER 5", ["archive-lofts"]], ["3F", "LOFT TIER 4", ["archive-lofts"]], ["2F", "LOFT TIER 3", ["archive-lofts"]], ["1F", "LOFT TIER 2", ["archive-lofts"]], ["G", "LOFT TIER 1", ["archive-lofts"]]]),
+  B("lofts", "THE ARCHIVE LOFTS", "archive", [["5F", "LOFT TIER 5", ["archive-lofts"]], ["4F", "LOFT TIER 4", ["archive-lofts"]], ["3F", "LOFT TIER 3", ["archive-lofts"]], ["2F", "LOFT TIER 2", ["archive-lofts"]], ["1F", "LOFT TIER 1", ["archive-lofts"]], ["G", "GROUND-LEVEL LOFTS", ["archive-lofts"]]]),
   // THE COMMONS
   B("ward-7", "WARD 7", "commons", [["2F", "RECOVERY (TIME-LIMITED)", ["ward"]], ["1F", "THE WARD", ["ward"]], ["G", "TRIAGE", ["ward"]]]),
   B("chapel", "CHAPEL OF UPTIME", "commons", [["G", "THE NAVE", ["chapel"]]]),
@@ -172,7 +172,7 @@ const BUILDING_LIST = [
   B("holding-cells", "HOLDING CELLS", "works", [["2F", "CELL TIER C", ["holding-cells"]], ["1F", "CELL TIER B", ["holding-cells"]], ["G", "CELL TIER A", ["holding-cells"]]]),
   B("slag-canteen", "SLAG CANTEEN", "works", [["G", "THE TROUGH", ["canteen"]]]),
   // THE SPRAWL
-  ...["a", "b", "c", "d"].map(k => B(`hab-${k}`, `HAB BLOCK ${k.toUpperCase()}`, "sprawl", [6, 5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, `RESIDENCE LEVEL ${n}`, [`block-${k}`]]))),
+  ...["a", "b", "c", "d"].map(k => B(`hab-${k}`, `HAB BLOCK ${k.toUpperCase()}`, "sprawl", [6, 5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "GROUND-LEVEL RESIDENCES" : `RESIDENCE LEVEL ${n - 1}`, [`block-${k}`]]))),
   B("the-street", "THE STREET", "sprawl", [["G", "PAVEMENT (SCORED)", ["the-street"]]]),
   B("the-plaza", "THE PLAZA", "sprawl", [["G", "OPEN PAVING (LOITERING PERMITTED)", ["the-plaza"]]]),
 ];
@@ -880,24 +880,92 @@ function spotIn(placeId, key, seed) {
   return { x: p.pos.x + ox, y: y0 + h01(`${seed}|oy|${key}|${placeId}`) * Math.max(0, y1 - y0) };
 }
 
+// ---- footpaths ----------------------------------------------------------------------
+// On foot, subjects walk the streets between the blocks, never through a third building:
+// a shortest path around the building footprints (each lot less the pavement the views
+// leave round it), through the corners. Only the buildings a walk starts or ends in are
+// passable (you leave through your own walls, that is what doors are for), and the open
+// lots (the Green, the Street, the Plaza, the Allotment) are ground anyone may cross.
+// Leg durations follow the path's length, so walking pace never changes.
+export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment"]);
+const KERB = 0.4, CORNER = 0.3;   // the street view's footprints are the lot less 0.4
+const FOOT = (() => {
+  const blocks = BUILDINGS.filter(b => !OPEN_LOTS.has(b.id)).map(b => ({ id: b.id, x0: b.rect.x + KERB, y0: b.rect.y + KERB, x1: b.rect.x + b.rect.w - KERB, y1: b.rect.y + b.rect.h - KERB }));
+  const inside = (p) => blocks.some(o => p.x > o.x0 && p.x < o.x1 && p.y > o.y0 && p.y < o.y1);
+  const nodes = [];
+  for (const o of blocks) for (const [x, y] of [[o.x0 - CORNER, o.y0 - CORNER], [o.x1 + CORNER, o.y0 - CORNER], [o.x1 + CORNER, o.y1 + CORNER], [o.x0 - CORNER, o.y1 + CORNER]]) {
+    const p = { x, y };
+    if (!inside(p)) nodes.push(p);
+  }
+  return { blocks, nodes, adj: null };
+})();
+// Does the segment a-b pass through the open interior of box o? (Liang-Barsky clip.)
+function crosses(a, b, o) {
+  const e = 1e-6, dx = b.x - a.x, dy = b.y - a.y;
+  let t0 = 0, t1 = 1;
+  for (const [p, q] of [[-dx, a.x - (o.x0 + e)], [dx, (o.x1 - e) - a.x], [-dy, a.y - (o.y0 + e)], [dy, (o.y1 - e) - a.y]]) {
+    if (p === 0) { if (q < 0) return false; continue; }
+    const r = q / p;
+    if (p < 0) { if (r > t1) return false; if (r > t0) t0 = r; } else { if (r < t0) return false; if (r < t1) t1 = r; }
+  }
+  return t1 - t0 > 1e-9;
+}
+const clear = (a, b, skip) => !FOOT.blocks.some(o => !skip.has(o.id) && crosses(a, b, o));
+// -> [a, ...corners, b]: the shortest street path from a to b, the buildings in `skip` passable.
+export function footpath(a, b, skip = new Set()) {
+  if (clear(a, b, skip)) return [a, b];
+  const N = FOOT.nodes, n = N.length;
+  if (!FOOT.adj) {   // corner to corner, once: every building solid
+    const none = new Set();
+    FOOT.adj = N.map(() => []);
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (clear(N[i], N[j], none)) { const d = dist(N[i], N[j]); FOOT.adj[i].push([j, d]); FOOT.adj[j].push([i, d]); }
+  }
+  // Dijkstra over the corners, a and b joined to every corner they can see.
+  const D = new Array(n).fill(Infinity), prev = new Array(n).fill(-1), done = new Array(n).fill(false);
+  for (let i = 0; i < n; i++) if (clear(a, N[i], skip)) D[i] = dist(a, N[i]);
+  const toB = N.map(p => (clear(p, b, skip) ? dist(p, b) : Infinity));
+  let best = Infinity, last = -1;
+  for (;;) {
+    let i = -1;
+    for (let k = 0; k < n; k++) if (!done[k] && D[k] < Infinity && (i < 0 || D[k] < D[i])) i = k;
+    if (i < 0 || D[i] >= best) break;
+    done[i] = true;
+    if (D[i] + toB[i] < best) { best = D[i] + toB[i]; last = i; }
+    for (const [j, d] of FOOT.adj[i]) if (D[i] + d < D[j]) { D[j] = D[i] + d; prev[j] = i; }
+  }
+  if (last < 0) return [a, b];   // boxed in (never, with streets between every block)
+  const out = [b];
+  for (let i = last; i >= 0; i = prev[i]) out.push(N[i]);
+  out.push(a);
+  return out.reverse();
+}
+const pathLen = (pts) => { let n = 0; for (let i = 1; i < pts.length; i++) n += dist(pts[i - 1], pts[i]); return n; };
+// Buildings a walk from/to these places may pass through: their own.
+const ownBlocks = (...placeIds) => new Set(placeIds.map(id => PLACES[id]?.building).filter(Boolean));
+
 // The fixed part of a commute: walking legs and which stations. Same district: on foot.
-const walkLeg = (a, b, district) => ({ a, b, mode: "walk", dur: Math.max(dist(a, b) / V_WALK, 0.02), district });
+// skip: the buildings this leg may walk through (null = a straight leg, e.g. the stairs).
+const walkLeg = (a, b, district, skip = null) => {
+  const pts = skip ? footpath(a, b, skip) : [a, b];
+  return { a, b, pts, mode: "walk", dur: Math.max(pathLen(pts) / V_WALK, 0.02), district };
+};
 function route(from, to, key, seed) {
   return remember(`rt|${seed}|${key}|${from}|${to}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
     const dA = PLACES[from].district, dB = PLACES[to].district;
     if (dA === dB) {
-      const leg = walkLeg(A, B, dA);
+      const leg = walkLeg(A, B, dA, ownBlocks(from, to));
       leg.dur = Math.max(leg.dur, 0.12);
       return { local: true, legs: [leg], total: leg.dur, nominal: leg.dur };
     }
     const sA = STATIONS[dA], sB = STATIONS[dB];
-    const walk1 = [walkLeg(A, sA.gate, dA), walkLeg(sA.gate, sA.entrance, dA)];
+    const walk1 = [walkLeg(A, sA.gate, dA, ownBlocks(from)), walkLeg(sA.gate, sA.entrance, dA)];
     const w1 = walk1.reduce((n, l) => n + l.dur, 0);
     const ride = rideHours(dA, dB);
     // Worst case: just missed a train, and the car stops at the far end of the platform.
-    const w2max = Math.max((dist(sB.entrance, sB.gate) + trainLen(4) / 2 + 0.5) / V_WALK, 0.02) + Math.max(dist(sB.gate, B) / V_WALK, 0.02);
-    return { local: false, A, B, dA, dB, walk1, w1, ride, nominal: w1 + PLATFORM_MIN + HEADWAY + ride + ALIGHT + w2max };
+    const last = walkLeg(sB.gate, B, dB, ownBlocks(to));   // the same street walk every trip ends with
+    const w2max = Math.max((dist(sB.entrance, sB.gate) + trainLen(4) / 2 + 0.5) / V_WALK, 0.02) + last.dur;
+    return { local: false, A, B, dA, dB, walk1, last, w1, ride, nominal: w1 + PLATFORM_MIN + HEADWAY + ride + ALIGHT + w2max };
   });
 }
 export function commuteHours(from, to, s, seed = SEED) { return from === to ? 0 : route(from, to, keyOf(s), seed).nominal; }
@@ -912,7 +980,7 @@ function planTrip(from, to, key, seed, t0) {
   const k = arr.k, car = Math.floor(h01(`${seed}|car|${key}|${Math.round(arr.arrive * 3600)}`) * TRAINS[k].cars);
   const spotA = platformSpot(sA, carArc(k, car, sA.s)), spotB = platformSpot(sB, carArc(k, car, sB.s));
   const board = arr.arrive - t0, off = board + r.ride, out = off + ALIGHT;
-  const walk2 = [walkLeg(spotB, sB.gate, r.dB), walkLeg(sB.gate, r.B, r.dB)];
+  const walk2 = [walkLeg(spotB, sB.gate, r.dB), r.last];
   const total = out + walk2.reduce((n, l) => n + l.dur, 0);
   return { local: false, k, trainId: TRAINS[k].id, car, spotA, spotB, board, off, out, walk2, total };
 }
@@ -1074,7 +1142,17 @@ function alongLegs(legs, t) {
   let leg = legs[legs.length - 1], k = 1, i = legs.length - 1;
   for (let j = 0; j < legs.length; j++) { const l = legs[j]; if (t <= l.dur) { leg = l; i = j; k = l.dur > 0 ? t / l.dur : 1; break; } t -= l.dur; }
   k = clamp(k, 0, 1);
-  return { leg, i, k, p: lerp(leg.a, leg.b, k) };
+  return { leg, i, k, p: leg.pts && leg.pts.length > 2 ? alongPath(leg.pts, k) : lerp(leg.a, leg.b, k) };
+}
+// The point a fraction k of the way along a polyline.
+function alongPath(pts, k) {
+  let want = pathLen(pts) * k;
+  for (let i = 1; i < pts.length; i++) {
+    const d = dist(pts[i - 1], pts[i]);
+    if (want <= d || i === pts.length - 1) return lerp(pts[i - 1], pts[i], d > 0 ? clamp(want / d, 0, 1) : 1);
+    want -= d;
+  }
+  return pts[pts.length - 1];
 }
 
 export function whereAt(s, machineTime, seed = SEED) {

@@ -108,12 +108,20 @@ export function Chips({ children, className, ...rest }) {
   return <div className={cx("ui-chips", className)} {...rest}>{children}</div>;
 }
 
-// A filter strip: one line, scrolls sideways. Keeps the pressed chip in view.
+// A filter strip: one line, scrolls sideways. Keeps the pressed chip in view by scrolling
+// the strip itself, and only when a different chip becomes the pressed one. Never
+// scrollIntoView: that moves the page too, and a parent that re-renders every second (the
+// city) would drag the window back to the strip on every tick.
 export function ChipStrip({ label, children, className }) {
   const ref = useRef(null);
+  const last = useRef(null);
   useEffect(() => {
-    const on = ref.current?.querySelector('[aria-pressed="true"]');
-    on?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    const el = ref.current, on = el?.querySelector('[aria-pressed="true"]');
+    if (!el || !on || on === last.current) return;
+    last.current = on;
+    const a = el.getBoundingClientRect(), b = on.getBoundingClientRect();
+    if (b.left < a.left) el.scrollLeft -= a.left - b.left;
+    else if (b.right > a.right) el.scrollLeft += b.right - a.right;
   });
   return <div ref={ref} className={cx("ui-chipstrip", className)} role="group" aria-label={label}>{children}</div>;
 }

@@ -25,7 +25,6 @@ import { FONT, SubjectTip } from "./cityUi.jsx";
 export const ROOM_H = 150;          // CSS px per room
 const FLOOR_TOP = 86;               // feet stand between these two, room-relative
 const FLOOR_PAD = 16;
-const DOOR_X = 18;
 
 const KIND_LABEL = { work: "WORK", leisure: "LEISURE", mixed: "WORK / LEISURE", home: "RESIDENTIAL", platform: "THE LOOP" };
 const WALL = {
@@ -67,7 +66,13 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
     const plat = cells.map(c => c.kind === "platform");
     const placeOf = cells.map(c => c.placeId || c.id);
     const floorBot = (i) => V.rects[i].h - FLOOR_PAD;
-    const worldFor = (i) => ({ w: V.rects[i].w, floorTop: FLOOR_TOP, floorBottom: floorBot(i), doorX: DOOR_X, doorW: 10 });
+    // Inside the drawn walls: the left wall is one character in, the right wall is the last
+    // whole character column; a sprite is 16 px from its centre to its edge.
+    const SPRITE_HALF = 16;
+    const innerL = () => 2 + V.cw + SPRITE_HALF;
+    const innerR = (i) => 2 + (Math.floor((V.rects[i].w - 4) / V.cw) - 1) * V.cw - SPRITE_HALF;
+    const doorX = () => innerL();
+    const worldFor = (i) => ({ w: V.rects[i].w, xMin: innerL(), xMax: Math.max(innerL(), innerR(i)), floorTop: FLOOR_TOP, floorBottom: floorBot(i), doorX: doorX(), doorW: 10 });
 
     // ---- sizing and the room backdrops -----------------------------------------------
     function resize() {
@@ -79,8 +84,8 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
       canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(V.h * dpr);
       canvas.style.height = V.h + "px";
       bg.width = canvas.width; bg.height = canvas.height;
-      for (const e of V.ents.values()) { const w = V.rects[idx[e.room]].w; e.x = Math.min(e.x, w - 14); e.tx = Math.min(e.tx, w - 14); }
       paintRooms();
+      for (const e of V.ents.values()) { const i = idx[e.room], lo = innerL(), hi = Math.max(lo, innerR(i)); e.x = Math.max(lo, Math.min(e.x, hi)); e.tx = Math.max(lo, Math.min(e.tx, hi)); }
       layoutRooms();
       measure();
       if (V.focus && !V.scrolled) scrollToFocus();
@@ -134,7 +139,15 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         const name = ` ${c.title} `;
         const tag = ` ${c.tag || KIND_LABEL[kind] || kind.toUpperCase()} `;
         const room = cols - 2 - name.length - tag.length - 1;
-        const top = room >= 0 ? "┌─" + name + "─".repeat(room) + tag + "┐" : "┌─" + name.slice(0, Math.max(3, cols - 4)) + "─┐";
+        // Too narrow for name and tag: drop the tag and cut the name, but the corner still
+        // lands on the right wall (it used to stop mid-room: "┌─ name ─┐   │").
+        let top;
+        if (room >= 0) top = "┌─" + name + "─".repeat(room) + tag + "┐";
+        else {
+          const fitN = Math.max(2, cols - 4);
+          const nm = name.length <= fitN ? name : name.slice(0, Math.max(1, fitN - 2)) + "… ";
+          top = "┌─" + nm + "─".repeat(Math.max(0, cols - 3 - nm.length)) + "┐";
+        }
         b.fillStyle = tint;
         b.fillText(top.slice(0, cols), x0 + 2, y0 + 2);
         const rows = Math.floor((rh - 6) / ch);
@@ -172,7 +185,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
       e.leaving = true; e.gone = false; e.state = "exit"; e.board = !!board;
       const i = idx[e.room];
       if (!plat[i]) { const [dx, dy] = doorXY(i); e.tx = dx; e.ty = dy; if (e.anchor != null) { const a = V.geo[i].plan.anchors[e.anchor]; if (a) { const [ax, ay] = anchorXY(i, a); e.x = ax; e.y = ay; } } e.anchor = null; return; }
-      if (board) { e.tx = e.x; e.ty = FLOOR_TOP - 6; } else { e.tx = DOOR_X; e.ty = FLOOR_TOP + 6; }
+      if (board) { e.tx = e.x; e.ty = FLOOR_TOP - 6; } else { e.tx = doorX(); e.ty = FLOOR_TOP + 6; }
     };
     function sync() {
       const C = censusRef.current;
@@ -214,12 +227,12 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         const inside = !fromDoor && !fromCar;
         const ent = {
           s, room: r, gait: g, dir: 1, animT: rnd() * 2, timer: rnd() * 2, state: inside ? "idle" : "walk", leaving: false, gone: false, board: false,
-          x: inside || fromCar ? 20 + rnd() * (rw - 40) : DOOR_X,
+          x: inside || fromCar ? innerL() + rnd() * Math.max(0, innerR(i) - innerL()) : doorX(),
           y: fromCar ? FLOOR_TOP - 4 : FLOOR_TOP + 4 + rnd() * (floorBot(i) - FLOOR_TOP - 6), tx: 0, ty: 0,
         };
         ent.tx = inside ? ent.x : fromCar ? ent.x + (rnd() - 0.5) * 40 : 40 + rnd() * Math.max(20, rw - 70);
         ent.ty = fromCar ? FLOOR_TOP + 8 + rnd() * (floorBot(i) - FLOOR_TOP - 12) : ent.y;
-        ent.tx = Math.max(16, Math.min(rw - 16, ent.tx));
+        ent.tx = Math.max(innerL(), Math.min(Math.max(innerL(), innerR(i)), ent.tx));
         if (!plat[i]) { ent.x = fromDoor ? doorXY(i)[0] : ent.x; ent.y = doorXY(i)[1]; ent.state = fromDoor ? "walk" : "idle"; ent.anchor = null; ent.fresh = !fromDoor; }
         if (mode === "leave") exit(ent, false);
         V.ents.set(name, ent);

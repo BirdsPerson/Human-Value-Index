@@ -18,7 +18,7 @@ import { readCaseId } from "../caseFile.jsx";
 import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
 import SocialPanel from "./SocialPanel.jsx";
-import { useSocial } from "./socialClient.js";
+import { useSocial, ensureSocial } from "./socialClient.js";
 
 // #city: the Substrate (STREET, the default; the 2D MAP; or the STACK of floor planes). #city/<district>: one district from the inside.
 // #city/<district>/<building>[?floor=N]: one building in cross-section.
@@ -100,9 +100,18 @@ export default function City({ route }) {
       if (bsig !== old.bsig) next = { ...next, buildings: bcounts, bsig };
       if (next !== old) { statsRef.current = next; setStats(next); }
     }
-    take();
-    const iv = setInterval(() => { if (!document.hidden) take(); }, 1000);
-    return () => clearInterval(iv);
+    // The first census waits (briefly) for the social ledger: it moves where friends spend
+    // their leisure, so a census taken before it lands puts people in rooms they leave a
+    // second later. Cached after the first visit, so this is instant from then on.
+    let iv = 0, dead = false;
+    const start = () => {
+      if (dead || iv) return;
+      take();
+      iv = setInterval(() => { if (!document.hidden) take(); }, 1000);
+    };
+    ensureSocial().finally(start);
+    const late = setTimeout(start, 1500);
+    return () => { dead = true; clearTimeout(late); clearInterval(iv); };
   }, [roster, offsetV]);
 
   // The PA rotates every eight seconds: every other line is the Loop's own announcement
@@ -212,7 +221,7 @@ export default function City({ route }) {
           : d
             ? d.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "ENTER A BUILDING ABOVE. HOVER A SUBJECT FOR ITS ASSIGNMENT; CLICK TO READ THE FILE. ON A PHONE: TAP TWICE. THE SUBJECT WILL NOT NOTICE. IT HAS NO SAY."
             : iso
-              ? <>THE SUBSTRATE, FROM ABOVE. DRAG TO PAN, PINCH OR WHEEL TO ZOOM, TURN IT WITH ⟲ ⟳<span className="hvi-desk-only"> OR Q AND E</span>. TAP A BUILDING TO OPEN IT: EVERY FLOOR, EVERY ROOM, EVERYONE INSIDE. LIT WINDOWS ARE OCCUPIED. EVERYONE HERE IS ON FILE. NOBODY IS TRYING TO LEAVE.</>
+              ? <>THE SUBSTRATE, FROM ABOVE. DRAG TO PAN, PINCH TO ZOOM<span className="hvi-desk-only"> (OR CLICK IT, THEN WHEEL)</span>, TURN IT WITH THE TURN KEYS<span className="hvi-desk-only"> OR Q AND E</span>. TAP A BUILDING TO OPEN IT: EVERY FLOOR, EVERY ROOM, EVERYONE INSIDE. LIT WINDOWS ARE OCCUPIED. EVERYONE HERE IS ON FILE. NOBODY IS TRYING TO LEAVE.</>
             : street
               ? <>THE SUBSTRATE AT STREET LEVEL. IT GIVES ITSELF A TOUR WHEN LEFT ALONE.<span className="hvi-desk-only"> CLICK THE VIEW, THEN W A S D OR THE ARROWS TO WALK; DRAG TO TURN; ENTER GOES INTO THE BUILDING AHEAD.</span> WALK INTO A DOOR TO GO IN. LIT WINDOWS ARE OCCUPIED. EVERYONE HERE IS ON FILE. NOBODY IS TRYING TO LEAVE.</>
               : three

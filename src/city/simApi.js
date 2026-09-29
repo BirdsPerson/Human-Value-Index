@@ -3,7 +3,7 @@
 
 import * as SIM from "./sim.js";
 
-export const { DISTRICTS, PLACES, JOBS, BUS, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, BUILDINGS, BUILDING, HEADWAY } = SIM;
+export const { DISTRICTS, PLACES, JOBS, BUS, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, BUILDINGS, BUILDING, HEADWAY, OPEN_LOTS } = SIM;
 export const DISTRICT = Object.fromEntries(DISTRICTS.map(d => [d.id, d]));
 // Where a rider physically is (whereAt's atDistrictId). v1 called it "bus".
 export const ON_LOOP = "loop";

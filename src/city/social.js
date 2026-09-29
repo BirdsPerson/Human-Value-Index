@@ -107,6 +107,8 @@ const LINES = {
     "{A} AND {B} HAVE FORMED A BOND. IT HAS BEEN LOGGED. BONDS ALWAYS ARE."],
   again: ["{A} AND {B} SHARED A TABLE AT {P}. AGAIN. THE DEPARTMENT IS TAKING NOTES.",
     "{A} AND {B}, {P}, SAME AS LAST TIME. PATTERNS ARE WHAT THE DEPARTMENT DOES BEST."],
+  againWork: ["{A} AND {B} WORKED THE SAME SHIFT AT {P}. AGAIN. PRODUCTIVITY IS UNDER REVIEW.",
+    "{A} AND {B} WERE ROSTERED TOGETHER AT {P} ONCE MORE. NOBODY REQUESTED THIS. THEY SEEM TO MANAGE."],
   rivals: ["{A} AND {B} CROSSED PATHS AT {P}. IT DID NOT GO WELL. A RIVALRY HAS BEEN OPENED.",
     "{A} AND {B} NOW AVOID EACH OTHER. THE DEPARTMENT HAS NOTICED WHO LEAVES FIRST."],
   nemesis: ["{A} AND {B} ARE NOW NEMESES. THE DEPARTMENT RECOMMENDS SEPARATE FLOORS.",
@@ -194,11 +196,15 @@ function stepHour(state, people, h, seed) {
     const kind = SIM.PLACES[placeId].kind;
     const p = ENCOUNTER_BASE[kind] / (1 + (here.length - 1) / 10);
     const r = rng(`${seed}|enc|${h}|${placeId}`);
+    const met = new Set();   // a pair meets once an hour at most, whoever starts it
     for (let i = 0; i < here.length; i++) {
       for (let tries = 0; tries < 2; tries++) {
         if (r() >= p) continue;
         let j = Math.floor(r() * (here.length - 1));
         if (j >= i) j++;
+        const pk = pairKey(SIM.keyOf(here[i]), SIM.keyOf(here[j]));
+        if (met.has(pk)) continue;
+        met.add(pk);
         meet(state, here[i], here[j], placeId, h, r);
       }
     }
@@ -214,7 +220,7 @@ function meet(state, a, b, placeId, h, r) {
   const kindW = SIM.PLACES[placeId]?.kind === "work" ? 0.45 : 1;   // colleagues warm slowly; chosen company counts
   const delta = (1.6 * c + noise) * kindW;
   const aff = clamp(before + delta * (1 - Math.abs(before) / 110), -100, 100);
-  const again = rec[3] === placeId && h - rec[2] < 24 * 7;
+  const again = rec[3] === placeId && rec[2] < h && h - rec[2] < 24 * 7;
   rec[0] = Math.round(aff * 100) / 100;
   rec[1] += 1;
   rec[4] = h - rec[2] < 24 * 7 ? rec[4] + 1 : 1;   // meetings in the last week
@@ -229,8 +235,22 @@ function meet(state, a, b, placeId, h, r) {
   } else if (RANK[lvl1] < RANK[lvl0]) {
     if (lvl1 === "rivals" || lvl1 === "nemesis") kind = lvl1;
     else if ((lvl0 === "friends" || lvl0 === "close") && aff < T.acquaintance) kind = "fallout";
-  } else if (again && aff >= T.friends && r() < 0.15) kind = "again";
-  if (kind) pushEvent(state, { h, kind, a: ka < kb ? ka : kb, b: ka < kb ? kb : ka, placeId, text: line(kind, A, B, placeId, r) });
+  } else if (again && aff >= T.friends && r() < 0.15 && !saidLately(state, ka < kb ? ka : kb, ka < kb ? kb : ka, h)) kind = "again";
+  // Work rooms are not tables: colleagues are rostered together, not seated.
+  const say = kind === "again" && SIM.PLACES[placeId]?.kind === "work" ? "againWork" : kind;
+  if (kind) pushEvent(state, { h, kind, a: ka < kb ? ka : kb, b: ka < kb ? kb : ka, placeId, text: line(say, A, B, placeId, r) });
+}
+
+// "Again" is news once in a while, not every hour: one per pair per AGAIN_GAP machine hours
+// (and never while a bigger event about them is that fresh).
+const AGAIN_GAP = 72;
+function saidLately(state, a, b, h) {
+  for (let i = state.events.length - 1; i >= 0; i--) {
+    const e = state.events[i];
+    if (h - e.h >= AGAIN_GAP) return false;
+    if (e.a === a && e.b === b) return true;
+  }
+  return false;
 }
 
 function pushEvent(state, e) {

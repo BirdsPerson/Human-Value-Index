@@ -151,7 +151,7 @@ export function pickTarget(e, world, rnd) {
     e.ty = z.y0 + rnd() * (z.y1 - z.y0);
   } else {
     const spanX = (world.w - 28) * g.reach, spanY = (world.floorBottom - world.floorTop) * g.reach;
-    e.tx = clamp(e.x + (rnd() * 2 - 1) * spanX, 14, world.w - 14);
+    e.tx = clamp(e.x + (rnd() * 2 - 1) * spanX, world.xMin ?? 14, world.xMax ?? world.w - 14);
     e.ty = clamp(e.y + (rnd() * 2 - 1) * spanY, world.floorTop + 2, world.floorBottom);
   }
 }
@@ -178,7 +178,7 @@ export function stepEntity(e, dt, world, rnd) {
   e.x += (dx / dist) * step;
   e.y += (dy / dist) * step * 0.7;              // plazas are wider than they are deep
   if (Math.abs(dx) > 0.5) e.dir = dx < 0 ? -1 : 1;
-  e.x = clamp(e.x, 14, world.w - 14);
+  e.x = clamp(e.x, world.xMin ?? 14, world.xMax ?? world.w - 14);   // xMin/xMax: a room's inner walls
   e.y = clamp(e.y, world.floorTop + 2, world.floorBottom);
   e.animT += dt;
 }

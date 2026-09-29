@@ -82,6 +82,21 @@ const SPEECH = /\b(SAID|SAYS|SAYING|TOLD|TELLS|ASKED|REPLIED|CLAIMED|WHISPERED|S
 for (const [kind, lines] of Object.entries(SOC.TEMPLATE_LINES)) for (const l of lines) assert.ok(!SPEECH.test(l), `${kind}: "${l}" puts words in someone's mouth`);
 for (const e of state.events) assert.ok(!SPEECH.test(e.text), `event narrates speech: ${e.text}`);
 
+// ---- gossip does not repeat itself -----------------------------------------------------------
+// One pair meets once an hour at most, and "again" about the same pair is news once in
+// three machine days, not every hour it happens (the feed read as a loop: 2026-09-29).
+{
+  const seen = new Map(), kinds = {};
+  for (const e of state.events) {
+    kinds[e.kind] = (kinds[e.kind] || 0) + 1;
+    const k = `${e.a}|${e.b}`, prev = seen.get(k);
+    if (e.kind === "again" && prev != null) assert.ok(e.h - prev >= 72, `${k}: "again" ${e.h - prev} machine hours after their last event`);
+    assert.ok(prev == null || e.h > prev, `${k}: two events in machine hour ${e.h}`);
+    seen.set(k, e.h);
+  }
+  for (const e of state.events) if (e.kind === "again" && SIM.PLACES[e.placeId]?.kind === "work") assert.ok(!/SHARED A TABLE/.test(e.text), `work room narrated as a table: ${e.text}`);
+}
+
 // ---- the city's other promises still hold with friends pulling people around -------------
 // The quest window (T0 .. T0 + 14 machine days) now has published snapshots for most days.
 const covered = Array.from({ length: 14 }, (_, i) => Math.floor(H0 / 24) + 1 + i).filter(d => snaps[d]).length;
