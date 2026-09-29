@@ -42,4 +42,9 @@ assert.ok(wp["SOUTH ASIA"] > wp.OCEANIA && wp.OCEANIA > 0);
 assert.equal(publicFigure({ slug: "x", name: "X", score: 500, origin: "JPN" }).origin, "JPN");
 assert.equal(publicFigure({ slug: "x", name: "X", score: 500, origin: "<b>" }).origin, null);
 assert.equal(figureIndexEntry({ slug: "x", origin: "JPN" }).origin, "JPN");
+// stature for sprites to scale: passes through the API and the index, junk dropped
+assert.equal(publicFigure({ slug: "x", name: "X", score: 500, height: 224, sex: "m" }).height, 224);
+assert.equal(publicFigure({ slug: "x", name: "X", score: 500, height: "tall", sex: "x" }).sex, null);
+assert.equal(figureIndexEntry({ slug: "x", height: 170, sex: "f" }).sex, "f");
+assert.ok(FAMOUS_FIGURES.every(f => "sex" in f), "every figure on record carries stature fields");
 console.log("check-origin: ok");

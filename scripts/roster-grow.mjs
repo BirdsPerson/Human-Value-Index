@@ -30,7 +30,7 @@ import { PUBLIC_RECORD, REFERRAL_ADDENDUM, ENGINE_ADDENDUM, PLACES, directiveFor
 import { parseModelJson } from "../netlify/lib/score.js";
 import { normalizeAssessment, computeScore, getTier, cube, medianSeverity, harmGated, needsHarmReview } from "../netlify/lib/intake.js";
 import { FACT_CHECK_SYSTEM, SOURCE_MAX, summarizeFactCheck, factCheckUser } from "../netlify/lib/factCheck.js";
-import { fetchArticleText, placeReferral, resolveCandidates, needsChoice, qualifierFrom, isHeadOfStateOrGov, originsOf } from "../netlify/lib/refer.js";
+import { fetchArticleText, placeReferral, resolveCandidates, needsChoice, qualifierFrom, isHeadOfStateOrGov, originsOf, staturesOf } from "../netlify/lib/refer.js";
 import { medianBreakdown, distance, dispersion, RUNS } from "./rescore-lib.mjs";
 import { buildCohort } from "./roster/candidates.mjs";
 import { createBatch, getBatch, batchResults, resultText, resultUsage, estimateDollars, actualDollars, approxTokens } from "./roster/batch.mjs";
@@ -272,8 +272,9 @@ async function stageStore(run) {
       saveState(state);
     }
     if (s.origin === undefined) { s.origin = (await originsOf([c.wikidata])).get(c.wikidata) ?? null; saveState(state); }
+    if (s.stature === undefined) { s.stature = (await staturesOf([c.wikidata])).get(c.wikidata) || {}; saveState(state); }
     const card = {
-      slug: s.slug, name: base, qualifier: s.qualifier, wikiTitle: c.title, wikidata: c.wikidata, origin: s.origin,
+      slug: s.slug, name: base, qualifier: s.qualifier, wikiTitle: c.title, wikidata: c.wikidata, origin: s.origin, height: s.stature.height ?? null, sex: s.stature.sex ?? null,
       score, tier: getTier(score), ...cube(s.breakdown), breakdown: s.breakdown, confidence: null, verdict: s.verdict,
       verdictStatus: s.verdictStatus || "withheld", living: c.living, born: c.born, died: c.died,
       factCheck: s.factCheck || null, noDangle: Boolean(s.noDangle), flags: s.flags, commendations: s.commendations,

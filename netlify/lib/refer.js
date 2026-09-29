@@ -293,6 +293,33 @@ export async function originsOf(qids, fetchImpl = fetch) {
   return out;
 }
 
+// Stature per Wikidata id: { height (cm, P2048) or null, sex ("m"/"f"/null, P21) }. Sprites
+// are drawn to scale (src/sprites.js statureOf); an unknown height uses the typical adult
+// height for the sex. Implausible values (bad units, typos) are dropped. Failed lookup: empty Map.
+const LENGTH_CM = { Q174728: 1, Q11573: 100, Q3710: 30.48, Q218593: 2.54 };   // cm, m, ft, in
+export async function staturesOf(qids, fetchImpl = fetch) {
+  const ids = [...new Set(qids)].filter(q => /^Q\d+$/.test(q || ""));
+  const out = new Map();
+  for (let i = 0; i < ids.length; i += 100) {
+    const values = ids.slice(i, i + 100).map(q => `wd:${q}`).join(" ");
+    const sparql = `SELECT ?p ?h ?u ?s WHERE { VALUES ?p { ${values} } OPTIONAL { ?p p:P2048/psv:P2048 [ wikibase:quantityAmount ?h; wikibase:quantityUnit ?u ] } OPTIONAL { ?p wdt:P21 ?s } }`;
+    try {
+      const data = await getJson(fetchImpl, `https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(sparql)}`, 8000);
+      for (const r of data?.results?.bindings || []) {
+        const q = String(r.p?.value || "").split("/").pop();
+        const o = out.get(q) || { height: null, sex: null };
+        const unit = LENGTH_CM[String(r.u?.value || "").split("/").pop()];
+        const cm = unit ? Math.round(Number(r.h?.value) * unit) : null;
+        if (o.height == null && cm >= 120 && cm <= 250) o.height = cm;
+        const sx = String(r.s?.value || "").split("/").pop();
+        if (!o.sex) o.sex = sx === "Q6581097" || sx === "Q2449503" ? "m" : sx === "Q6581072" || sx === "Q1052281" ? "f" : null;
+        out.set(q, o);
+      }
+    } catch (err) { console.error("stature lookup failed", err?.message || err); }
+  }
+  return out;
+}
+
 // SPARQL dateTime ("1878-03-31T00:00:00Z", "-0470-01-01T...") -> "1878" / "-470". Blank nodes -> null.
 export const yearOf = v => { const m = /^(-?)0*(\d+)-/.exec(String(v || "")); return m ? `${m[1]}${m[2]}` : null; };
 
@@ -416,5 +443,6 @@ export const publicFigure = c => ({
   stratum: c.stratum ? { domain: c.stratum.domain ?? null, occupation: c.stratum.occupation ?? null } : null,
   description: typeof c.description === "string" ? c.description.slice(0, 120) : null,
   origin: normOrigin(c.origin),
+  height: Number.isFinite(c.height) ? c.height : null, sex: c.sex === "m" || c.sex === "f" ? c.sex : null,
   scoreHistory: Array.isArray(c.scoreHistory) ? c.scoreHistory.slice(-40) : null,
 });
