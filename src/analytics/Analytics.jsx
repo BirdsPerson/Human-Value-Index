@@ -171,7 +171,7 @@ function Histogram({ subjects }) {
             {[0, 500, 1000].map(v => <text key={v} x={x(v)} y={H - 6} textAnchor={v === 0 ? "start" : v === 1000 ? "end" : "middle"} className="ax">{v}</text>)}
             {b.map(k => k.count > 0 && (
               <g key={k.lo} {...markProps(tip, [`${k.lo}–${k.hi}`, `${k.count} SUBJECTS`, getTier(k.lo).label])}>
-                <rect x={x(k.lo) + 1} y={y(k.count)} width={Math.max(1, bw - 2)} height={pad.t + ih - y(k.count)} rx={Math.min(3, bw / 4)} fill={MARK} />
+                <rect x={x(k.lo) + 1} y={y(k.count)} width={Math.max(1, bw - 2)} height={pad.t + ih - y(k.count)} fill={MARK} />
                 <rect x={x(k.lo)} y={pad.t} width={bw} height={ih} fill="transparent" />
               </g>
             ))}
