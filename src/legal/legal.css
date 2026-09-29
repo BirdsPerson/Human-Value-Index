@@ -24,9 +24,6 @@
   .lg-table td { display: block; border: 0; padding: 2px 0; }
   .lg-table td::before { content: attr(data-h) ": "; color: var(--fg-mute); }
 }
-.lg-nav { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); margin-top: var(--s5); padding-top: var(--s3); border-top: var(--bw) solid var(--line); font-size: var(--t-xs); }
-.lg-nav a { color: var(--fg-dim); min-height: 32px; display: inline-flex; align-items: center; }
-.lg-nav a[aria-current] { color: var(--accent); }
 .lg-form { margin: var(--s3) 0 var(--s4); }
 .lg-choice { border: 0; margin: var(--s3) 0; padding: 0; display: grid; gap: var(--s1); }
 .lg-choice legend { color: var(--fg-mute); font-size: var(--t-xs); margin-bottom: var(--s1); padding: 0; }
@@ -38,3 +35,6 @@
 .lg-choice .s { color: var(--fg-mute); font-size: var(--t-xs); flex-basis: 100%; padding-left: calc(16px + 1ch); }
 .lg-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .lg-purge, .lg-done { margin: var(--s4) 0; }
+/* The shell is all caps; legal text is read closely, so body copy keeps its own case.
+   Headings, the Overlord's line and form labels stay in the terminal's caps. */
+.lg-doc p:not(.lg-voice), .lg-doc li, .lg-doc td, .lg-choice .s, .lg-doc .ui-input, .lg-doc .hvi-err, .lg-doc .hvi-case-note { text-transform: none; }

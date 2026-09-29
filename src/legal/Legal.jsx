@@ -99,7 +99,7 @@ export function DisputeForm({ file: initialFile = "" }) {
     setBusy(true); setErr(null);
     try {
       const { status, data } = await postJSON("/api/request", f);
-      if (status === 200) setDone(data);
+      if (status === 200) { setDone(data); window.scrollTo(0, 0); }
       else setErr(data?.error || "The request desk could not be reached. Please try again.");
     } catch { setErr("The request desk could not be reached. Check your connection and try again."); }
     finally { setBusy(false); }
@@ -108,7 +108,7 @@ export function DisputeForm({ file: initialFile = "" }) {
   if (done) return (
     <Frame box title="REQUEST FILED" meta={done.id || ""} className="lg-done">
       <p className="lg-voice">{done.message}</p>
-      <p><strong>A human reviews every request.</strong> You will get a reply at the address you gave. Keep the reference above if you write again.</p>
+      <p><strong>A human reviews every request.</strong> You will get a reply at the address you gave. Your reference: <strong>{done.id}</strong>.</p>
       <ButtonRow><Button variant="secondary" href="#">Return to the terminal</Button></ButtonRow>
     </Frame>
   );
@@ -188,12 +188,6 @@ export default function Legal({ route = "" }) {
   return (
     <article className="lg-doc">
       {renderDoc(md, { form: <DisputeForm file={file} />, purge: <PurgePanel /> })}
-      <nav className="lg-nav" aria-label="Legal">
-        <a href="#about" aria-current={path === "#about" ? "page" : undefined}>ABOUT</a>
-        <a href="#privacy" aria-current={path === "#privacy" ? "page" : undefined}>PRIVACY</a>
-        <a href="#terms" aria-current={path === "#terms" ? "page" : undefined}>TERMS</a>
-        <a href="#dispute" aria-current={path === "#dispute" ? "page" : undefined}>DISPUTE A FILE</a>
-      </nav>
     </article>
   );
 }
