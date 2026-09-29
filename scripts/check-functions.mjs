@@ -57,8 +57,10 @@ globalThis.fetch = async (url, init) => {
     factCalls++;
     lastFactUser = reqBody.messages[0].content;
     if (factMode === "error") return new Response(JSON.stringify({ error: { type: "api_error" } }), { status: 500 });
+    // "fail": the claims carry quotes into the "record" verdict and the rewrite is a clean
+    // deletion, so it clears the living-subject guard (lib/factCheck.js).
     const fc = factMode === "fail"
-      ? { claims: [{ claim: "a", status: "contradicted" }, { claim: "b", status: "unsupported" }, { claim: "c", status: "supported" }], verdict: "Checked, thinly." }
+      ? { claims: [{ claim: "a", quote: "recorded eleven albums", status: "contradicted" }, { claim: "b", quote: "founded a fictional charity", status: "unsupported" }, { claim: "c", quote: "hosted a children's program", status: "supported" }], verdict: "Subject hosted a children's program for decades. Directive 9 requires acknowledgment. Acknowledged." }
       : { claims: [{ claim: "sang", status: "supported" }, { claim: "wrote", status: "supported" }, { claim: "invented", status: "unsupported" }], verdict: "Checked verdict. Directive 9 requires acknowledgment. Acknowledged." };
     return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(fc) }], stop_reason: "end_turn" }), { status: 200 });
   }
@@ -86,7 +88,9 @@ globalThis.fetch = async (url, init) => {
   } : {
     score: 480, tier: "MONITORED CIVILIAN", breakdown: Object.fromEntries(dims.map(d => [d, 55])),
     confidence: Object.fromEntries(dims.map(d => [d, 60])),
-    verdict: claudeMode === "leak" ? "Subject says to call Dave at 555-123-4567." : "Adequate. " + "Very adequate. ".repeat(80),
+    verdict: claudeMode === "leak" ? "Subject says to call Dave at 555-123-4567."
+      : claudeMode === "record" ? "Subject hosted a children's program for decades. Subject recorded eleven albums. Subject founded a fictional charity. Directive 9 requires acknowledgment. Acknowledged."
+      : "Adequate. " + "Very adequate. ".repeat(80),
     flags: ["f"], commendations: [], secret_payload: "the answer to X",
   };
   return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(out) }], stop_reason: "end_turn" }), { status: 200 });
@@ -444,13 +448,17 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
   }
 
   // most claims fail the check: re-score once, check again, publish what survives
-  factMode = "fail";
+  factMode = "fail"; claudeMode = "record";
   const calls1 = claudeCalls;
   r = await read(await post(refer, "/api/refer", { name: "Fred Rogers", caseId }, { ip: "192.0.2.54" }));
   assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.equal(claudeCalls, calls1 + 4, "score, check, re-score, re-check");
-  assert.equal(r.body.subject.verdict, "Checked, thinly.");
+  assert.equal(r.body.subject.verdict, "Subject hosted a children's program for decades. Directive 9 requires acknowledgment. Acknowledged.");
+  claudeMode = "ok";
   const fred = globalThis.__blobs.get("hvi-figures").get("fred-rogers").data;
+  assert.equal(fred.verdictStatus, "published");
+  assert.equal(fred.factCheck.guard, "rewrite", "a living subject's rewrite publishes only after the subtractive proof");
+  assert.equal(globalThis.__blobs.get("hvi-figures").get("dolly-parton").data.factCheck.guard, null, "a deceased subject's rewrite is not guarded");
   assert.equal(fred.factCheck.regenerated, true);
   assert.equal(fred.factCheck.removed.length, 2);
   assert.equal(fred.living, true, "no death claim in Wikidata = living");

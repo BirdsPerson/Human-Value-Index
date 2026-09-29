@@ -172,7 +172,7 @@ async function stageFactcheck(run) {
       requests.push({
         custom_id: `${c.cid}_fc`,
         params: {
-          model: CHECK_MODEL, max_tokens: 1500,
+          model: CHECK_MODEL, max_tokens: 2000,
           system: [{ type: "text", text: FACT_CHECK_SYSTEM, cache_control: { type: "ephemeral", ttl: "1h" } }],
           messages: [{ role: "user", content: factCheckUser({ name: c.title, deceased: !c.living, source, verdict: run.scored[c.cid].verdict }) }],
         },
@@ -191,12 +191,12 @@ async function stageFactcheck(run) {
     const s = run.scored[c.cid];
     const text = resultText(results.get(`${c.cid}_fc`));
     let fc = null;
-    try { if (text) fc = summarizeFactCheck(parseModelJson(text), s.verdict); } catch { fc = null; }
+    try { if (text) fc = summarizeFactCheck(parseModelJson(text), s.verdict, { living: c.living !== false }); } catch { fc = null; }
     // ponytail: no regenerate-on-mostly-failed here (the live /api/refer does one); the
     // cleaned verdict publishes, and a check that failed outright withholds the verdict.
     s.verdictStatus = fc?.verdict ? "published" : "withheld";
     if (fc?.verdict) s.verdict = fc.verdict;
-    s.factCheck = fc ? { checked: fc.checked, removed: fc.removed, regenerated: false, at: new Date().toISOString() } : null;
+    s.factCheck = fc ? { checked: fc.checked, removed: fc.removed, guard: fc.guard ?? null, regenerated: false, at: new Date().toISOString() } : null;
   }
   run.stage = "sprites";
   return true;

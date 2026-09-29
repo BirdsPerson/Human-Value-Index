@@ -256,7 +256,7 @@ export default async (req, context) => {
       slug, name: stripped, qualifier, wikiTitle: wiki.title, wikidata: wiki.wikidata, origin, height: stature.height ?? null, sex: stature.sex ?? null,
       score, tier: getTier(score), ...cube(a.breakdown), breakdown: a.breakdown, confidence: null, verdict: a.verdict,
       verdictStatus, living: wiki.living, born: wiki.born, died: wiki.died,
-      factCheck: fc ? { checked: fc.checked, removed: fc.removed, regenerated: Boolean(fc.regenerated), at: new Date().toISOString() } : null,
+      factCheck: fc ? { checked: fc.checked, removed: fc.removed, guard: fc.guard ?? null, regenerated: Boolean(fc.regenerated), at: new Date().toISOString() } : null,
       noDangle: raw?.no_dangle === true,
       flags: a.flags, commendations: a.commendations, harm: a.harm, headOfState, harmReviewPending,
       sprite: null, spriteStatus: "pending", spriteAttempts: 0, look,

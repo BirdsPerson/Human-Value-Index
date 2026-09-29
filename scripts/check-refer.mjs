@@ -122,20 +122,22 @@ assert.equal(wikiDate(null), null);
 const dead = classifySummary({ title: "Dolly Parton", type: "standard", wikibase_item: "Q180453" }, ["Q5"], { born: "+1946-01-19T00:00:00Z", died: "+2026-08-25T00:00:00Z" });
 assert.equal(dead.living, false); assert.equal(dead.died, "2026-08-25"); assert.equal(dead.born, "1946-01-19");
 
-// --- fact-check summary
-let fc = summarizeFactCheck({ claims: [{ claim: "a", status: "supported" }], verdict: "Orig, enriched with a daughter's name." }, "Orig.");
+// --- fact-check summary (the deceased path: the model rewrite is trusted as before;
+// the living-subject guard is covered in check-verdict-rules.mjs)
+const DEAD = { living: false };
+let fc = summarizeFactCheck({ claims: [{ claim: "a", status: "supported" }], verdict: "Orig, enriched with a daughter's name." }, "Orig.", DEAD);
 assert.equal(fc.verdict, "Orig.", "all claims supported: the original stands, no enrichment");
-fc = summarizeFactCheck({ claims: [{ claim: "a", status: "supported" }, { claim: "b", status: "unsupported" }], verdict: "Clean." }, "Orig.");
+fc = summarizeFactCheck({ claims: [{ claim: "a", status: "supported" }, { claim: "b", status: "unsupported" }], verdict: "Clean." }, "Orig.", DEAD);
 assert.equal(fc.verdict, "Clean."); assert.equal(fc.checked, 2); assert.deepEqual(fc.removed, ["unsupported: b"]); assert.equal(fc.mostlyFailed, false, "half is not more than half");
-fc = summarizeFactCheck({ claims: [{ claim: "a", status: "contradicted" }, { claim: "b", status: "unsupported" }, { claim: "c", status: "supported" }], verdict: "Thin." }, "Orig.");
+fc = summarizeFactCheck({ claims: [{ claim: "a", status: "contradicted" }, { claim: "b", status: "unsupported" }, { claim: "c", status: "supported" }], verdict: "Thin." }, "Orig.", DEAD);
 assert.equal(fc.mostlyFailed, true);
-fc = summarizeFactCheck({ claims: [], verdict: "" }, "Pure framing. Acknowledged.");
+fc = summarizeFactCheck({ claims: [], verdict: "" }, "Pure framing. Acknowledged.", DEAD);
 assert.equal(fc.verdict, "Pure framing. Acknowledged.", "no factual claims: nothing to cut");
-fc = summarizeFactCheck({ claims: [{ claim: "a", status: "unsupported" }] }, "Orig.");
+fc = summarizeFactCheck({ claims: [{ claim: "a", status: "unsupported" }] }, "Orig.", DEAD);
 assert.equal(fc.verdict, null, "a failed claim and no cleaned verdict back: nothing publishes");
-fc = summarizeFactCheck({ claims: [{ claim: "a", status: "made-up-status" }, "junk"], verdict: "V" }, "Orig.");
+fc = summarizeFactCheck({ claims: [{ claim: "a", status: "made-up-status" }, "junk"], verdict: "V" }, "Orig.", DEAD);
 assert.equal(fc.checked, 0, "unknown statuses and junk entries are ignored");
-assert.ok(summarizeFactCheck({ claims: [], verdict: "x".repeat(900) }, "o").verdict.length <= 700);
+assert.ok(summarizeFactCheck({ claims: [], verdict: "x".repeat(900) }, "o", DEAD).verdict.length <= 700);
 
 console.log("check-refer ok");
 

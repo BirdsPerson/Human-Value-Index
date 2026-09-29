@@ -96,7 +96,7 @@ export async function rescoreOne({ name, died = null, wikiTitle = name, harmRevi
     score: computeScore(breakdown, severity, harmReview), spread: dispersion(breakdowns), runScores: readings.map(r => computeScore(r.breakdown, r.harm?.severity, harmReview)),
     // passed: false means the check returned no clean verdict and `verdict` is unchecked;
     // callers that publish must withhold it.
-    factCheck: fc ? { checked: fc.checked, removed: fc.removed, passed: Boolean(fc.verdict), mostlyFailed: Boolean(fc.mostlyFailed), at: new Date().toISOString() } : null,
+    factCheck: fc ? { checked: fc.checked, removed: fc.removed, guard: fc.guard ?? null, passed: Boolean(fc.verdict), mostlyFailed: Boolean(fc.mostlyFailed), at: new Date().toISOString() } : null,
   };
 }
 

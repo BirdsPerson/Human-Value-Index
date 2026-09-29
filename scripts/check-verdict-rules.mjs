@@ -49,11 +49,74 @@ for (const phrase of ["\"unattributed\": STATUS is living", "A legal event (char
 assert.match(src("netlify/lib/factCheck.js"), /system: FACT_CHECK_SYSTEM/, "factCheck() must send FACT_CHECK_SYSTEM");
 assert.match(src("scripts/roster-grow.mjs"), /text: FACT_CHECK_SYSTEM/, "roster engine must send FACT_CHECK_SYSTEM");
 
-// An "unattributed" claim counts as failed: the rewrite is used, never the original.
-const fc = summarizeFactCheck({ claims: [{ claim: "a", status: "supported" }, { claim: "b", status: "unattributed" }], verdict: "rewritten" }, "original");
+// An "unattributed" claim counts as failed: the rewrite is used, never the original
+// (deceased path: the model rewrite is trusted as before).
+const fc = summarizeFactCheck({ claims: [{ claim: "a", status: "supported" }, { claim: "b", status: "unattributed" }], verdict: "rewritten" }, "original", { living: false });
 assert.equal(fc.verdict, "rewritten");
 assert.deepEqual(fc.removed, ["unattributed: b"]);
-const noRewrite = summarizeFactCheck({ claims: [{ claim: "b", status: "unattributed" }] }, "original");
-assert.equal(noRewrite.verdict, null, "an unattributed allegation with no rewrite is withheld, not published");
+assert.equal(fc.guard, null, "the deceased path is not guarded");
+for (const living of [true, false]) {
+  const noRewrite = summarizeFactCheck({ claims: [{ claim: "b", status: "unattributed" }] }, "original", { living });
+  assert.equal(noRewrite.verdict, null, "an unattributed allegation with no rewrite is withheld, not published");
+}
+assert.match(FACT_CHECK_SYSTEM, /"quote": "exact words from the verdict"/, "the check must return each claim's quote so the guard can find it");
+
+// ---- the living-subject guard: the rewrite is subtractive by construction ----------------
+// Fixtures are invented; no real verdict text.
+const ORIG = "Subject chairs a regional logistics firm. Subject was convicted of wire fraud in 2019. Subject was not charged in the 2021 inquiry. Directive 4 requires acknowledgment.";
+const FAILED = [{ claim: "conviction", quote: "was convicted of wire fraud in 2019", status: "unattributed" }, { claim: "firm", quote: "chairs a regional logistics firm", status: "supported" }];
+const living = (verdict, claims = FAILED, original = ORIG) => summarizeFactCheck({ claims, verdict }, original, { living: true });
+const DELETED = "Subject chairs a regional logistics firm. Subject was not charged in the 2021 inquiry. Directive 4 requires acknowledgment.";
+
+// 1. a rewrite that adds a new sentence is rejected: the deletion-only text publishes
+let g = living("Subject chairs a regional logistics firm. Subject has two children, Ana and Luis. Subject was not charged in the 2021 inquiry. Directive 4 requires acknowledgment.");
+assert.equal(g.guard, "deletion"); assert.equal(g.verdict, DELETED);
+assert.doesNotMatch(g.verdict, /children|Ana|convicted/);
+// ... so is one that re-inserts or keeps the failed claim word for word
+g = living(ORIG); assert.equal(g.guard, "deletion"); assert.equal(g.verdict, DELETED);
+// ... or enriches a kept sentence, or reorders, or pads a failed one with source detail
+g = living("Subject chairs a regional logistics firm founded in 1987. Subject was not charged in the 2021 inquiry. Directive 4 requires acknowledgment.");
+assert.equal(g.guard, "deletion");
+g = living("Directive 4 requires acknowledgment. Subject chairs a regional logistics firm.");
+assert.equal(g.guard, "deletion");
+g = living("Subject chairs a regional logistics firm. Subject was accused by a former partner of wire fraud in 2019. Directive 4 requires acknowledgment.");
+assert.equal(g.guard, "deletion", "a hedge may not add a name or other detail");
+// ... or drops protective context from a sentence it softens
+g = summarizeFactCheck({ claims: [{ claim: "x", quote: "not charged in the 2021 inquiry", status: "unsupported" }], verdict: "Subject chairs a regional logistics firm. Subject was charged in the 2021 inquiry. Directive 4 requires acknowledgment." }, ORIG, { living: true });
+assert.equal(g.guard, "deletion"); assert.doesNotMatch(g.verdict, /inquiry/);
+
+// 2. deletion-only output passes as the model wrote it; so does a hedge on the failed sentence
+g = living(DELETED);
+assert.equal(g.guard, "rewrite"); assert.equal(g.verdict, DELETED);
+g = living("Subject chairs a regional logistics firm. Subject was allegedly convicted of wire fraud in 2019. Subject was not charged in the 2021 inquiry. Directive 4 requires acknowledgment.");
+assert.equal(g.guard, "rewrite"); assert.match(g.verdict, /allegedly/);
+// no rewrite at all: the failed sentence is cut and the rest stays verbatim
+g = living(undefined); assert.equal(g.guard, "deletion"); assert.equal(g.verdict, DELETED);
+// abbreviations don't split a sentence (the whole "U.S." sentence goes, not half of it)
+g = summarizeFactCheck({ claims: [{ claim: "x", quote: "sued in the U.S. District Court", status: "unsupported" }] },
+  "Subject was sued in the U.S. District Court by a supplier. Subject chairs a firm. Directive 4 requires acknowledgment.", { living: true });
+assert.equal(g.verdict, "Subject chairs a firm. Directive 4 requires acknowledgment.");
+
+// 3. too little survives, or a failed claim can't be found: withheld (score/tier still publish)
+g = living("Directive 4 requires acknowledgment.", FAILED, "Subject was convicted of wire fraud in 2019. Directive 4 requires acknowledgment.");
+assert.equal(g.verdict, null); assert.equal(g.guard, "withheld");
+g = living(DELETED, [{ claim: "conviction", status: "unattributed" }]);
+assert.equal(g.verdict, null, "a failed claim with no quote can't be proven gone: withheld");
+g = living(DELETED, [{ claim: "conviction", quote: "was jailed for fraud", status: "unattributed" }]);
+assert.equal(g.verdict, null, "a quote that isn't in the verdict: withheld");
+// a living subject with no claims listed keeps the original, never an unchecked rewrite
+assert.equal(summarizeFactCheck({ claims: [], verdict: "Enriched with a spouse's name." }, "Pure framing. Acknowledged.", { living: true }).verdict, "Pure framing. Acknowledged.");
+// the default is the guarded path: a caller that forgets the status is not trusted
+assert.equal(summarizeFactCheck({ claims: FAILED, verdict: ORIG + " Extra." }, ORIG).guard, "deletion");
+
+// 4. deceased subjects: unchanged, the model rewrite (corrections, "allegedly") publishes as before
+g = summarizeFactCheck({ claims: FAILED, verdict: "Subject chaired a regional logistics firm. Subject was indicted, not convicted, in 2019. Directive 4 requires acknowledgment." }, ORIG, { living: false });
+assert.equal(g.guard, null); assert.match(g.verdict, /indicted, not convicted/);
+
+// every unattended publisher routes the status into the guard
+assert.match(src("netlify/lib/factCheck.js"), /summarizeFactCheck\(raw, verdict, \{ living: !deceased \}\)/, "factCheck() must pass the living status");
+assert.match(src("scripts/roster-grow.mjs"), /summarizeFactCheck\([^)]*\), s\.verdict, \{ living: c\.living !== false \}\)/, "roster engine must pass the living status");
+assert.match(src("netlify/functions/refer.js"), /deceased: !wiki\.living/, "/api/refer must pass the living status");
+assert.match(src("scripts/rescore-lib.mjs"), /deceased: Boolean\(died\)/, "rescore must pass the living status");
 
 console.log("verdict rules: living-subject allegation rules reach every scorer and the fact-check");
