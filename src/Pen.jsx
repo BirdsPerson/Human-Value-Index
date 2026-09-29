@@ -474,9 +474,9 @@ function ReferralBar({ simRef }) {
           ))}</ol>
         </div>
       )}
-      {log.length > 1 && (
+      {log.some(r => r.text !== out?.text) && (
         <ol className="hvi-refer-log" aria-label="Recent referrals">
-          {log.slice(1).map((r, i) => <li key={i} className={r.tone}>› {r.text}</li>)}
+          {log.filter(r => r.text !== out?.text).map((r, i) => <li key={i} className={r.tone}>› {r.text}</li>)}
         </ol>
       )}
       {needRestore && (
