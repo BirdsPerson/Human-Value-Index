@@ -25,6 +25,19 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       championship, MVP; league rivalries feed social.js; the PA calls it. Later: more sports
       (the Bowl for football/soccer), a second division with promotion/relegation, and wagers
       in CYCLES once the economy exists.
+   b1b. **CITY SEARCH + FIND ME** (Scott 2026-09-29; next after the building design pass):
+      FIND box on the city screen, type-ahead over the census; picking someone flies the
+      camera to where they are now (whereAt), highlights and follows them; inside a building
+      the cutaway opens on their floor; status line "NAME — PLACE, FLOOR. ACTIVITY." FIND ME
+      jumps to the viewer's own subject.
+   b1c. **THE MALL** (Scott 2026-09-29: "people can open their own businesses if they want;
+      leave it up to them"). A mall of storefront units. Emergent: figures with business/
+      entrepreneur fields and the drive for it (competence, network, adaptability) decide on
+      their own to open a shop matching their record (a record store, a home-goods shop, a
+      gym, a gallery...), staffed by other subjects; foot traffic from the sim decides
+      whether it thrives or closes; vacancies get re-let. Players open one later with CYCLES
+      (needs the economy, item 5). The EB Shop gets a storefront (lore). Shops feed the
+      district mood and the civic machine (a developer can build a second mall).
    b2. **The Arcade** (Scott 2026-09-29; built with b; NOT named "Iridescent" yet, later).
       A building on the Strip: a cabinet floor and a game room. Cabinets = every live game in
       ../iridescent-site/works.json (division games; JETSAM! play-jetsam.netlify.app and
