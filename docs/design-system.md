@@ -13,7 +13,7 @@ Source of the decisions: `docs/design-audit/AUDIT.md` and its mockups.
 |---|---|
 | `src/ui/tokens.css` | Every colour, type size, space, border and chrome size. The only place values are defined. |
 | `src/ui/ui.css` | Component and shell styles. Uses tokens only. |
-| `src/ui/components.jsx` | Frame, Command, CommandList, Button, ButtonRow, Chip, Chips, ChipStrip, Meter, Disclosure, TextField, ListRow, PaLine |
+| `src/ui/components.jsx` | ScreenHead, Frame, Command, CommandList, Button, ButtonRow, Chip, Chips, ChipStrip, Meter, Disclosure, TextField, ListRow, PaLine |
 | `src/ui/Shell.jsx` | AppHeader, CommandBar, NAV, navKeyFor |
 | `src/ui/TouchGate.jsx` | TAP TO OPERATE for canvas views |
 | `src/ui/barAction.js` | useBarAction: a screen's context action in the command bar |
@@ -36,7 +36,7 @@ reads the tokens through legacy aliases (below).
 | `--bg` | `#0a0f0a` | page |
 | `--panel` / `--panel-hi` | `#0d140d` / `#132013` | command bar, focused field, tooltip / its hover |
 | `--line` / `--line-hi` | `#1f4a2c` / `#2f6a42` | CSS frames and dividers / active frame, bar edge |
-| `--fg` / `--fg-dim` / `--fg-mute` | `#c8f5d8` / `#86c9a0` / `#4b7c5e` | primary / secondary / tertiary text (mute is also disabled; still readable) |
+| `--fg` / `--fg-dim` / `--fg-mute` | `#c8f5d8` / `#86c9a0` / `#5a9170` | primary / secondary / tertiary text. Mute is also disabled. All three pass 4.5:1 on `--bg` (mute 5.3:1; it was `#4b7c5e`, 4.0:1, until 2026-09-29, and it carries most of the Overlord's notes) |
 | `--fg-ghost` | `#2d5040` | decoration only: dot leaders, the empty part of a bar. **Never for words.** |
 | `--accent` / `--accent-ink` | `#4ade80` / `#06210f` | actions, selected (inverse video) / text on accent |
 | `--warn` | `#fbbf24` | middle tiers, CHARMING/INDULGED, caution, the APPEAL slot |
@@ -93,6 +93,12 @@ import { Frame, Command, CommandList, Button, ButtonRow, Chip, Chips, ChipStrip,
 `tone` everywhere accepts a role name (`"accent" | "warn" | "harm" | "mute" | "dim"`) or
 any CSS colour (tier colours).
 
+### ScreenHead
+```jsx
+<ScreenHead title="THE CUBE" meta="MACHINE VS PEOPLE // 431 FILES // 38 PLACED" />
+```
+The one heading a destination screen opens on: `> TITLE` in accent at `--t-l`, one line of meta in `--fg-mute` under it. Used by the index, the cube and the pen. MY FILE opens on its score card instead (the payoff is the heading).
+
 ### Frame
 ```jsx
 <Frame title="CATEGORY BREAKDOWN" meta="7 OF 9 ASSESSED">…</Frame>          // 1px line frame, inset title
@@ -124,7 +130,7 @@ any list of destinations.
   <Button variant="primary" onClick={…}>Submit for evaluation</Button>
 </ButtonRow>
 ```
-An inline terminal command. `variant`: `primary` `[ LABEL ]` (one per screen),
+An inline terminal command. `variant`: `primary` `[ LABEL ]` (one per screen; the brackets carry their own space, no flex gap),
 `secondary` `>LABEL`, `back` `<LABEL`, `danger`. `block` = full-width 48px row. `href`
 renders `<a>`. 44px tall always. `ButtonRow`: `split` (first left, last right),
 `stackOnMobile` (full-width rows under 720px). Replaces `.hvi-btn-*` and `.hvi-link-btn`.

@@ -51,6 +51,12 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 400 var(--t-s)/
 /* The software keyboard is up: the bar would sit on top of the field. */
 .hvi-kb-open .ui-bar, .hvi-kb-open .ui-bar-pad { display: none; }
 
+/* ---------- ScreenHead ---------- */
+.ui-screen-head { margin: var(--s2) 0 var(--s4); }
+.ui-screen-head h1 { margin: 0; font-size: var(--t-l); line-height: var(--lh-tight); font-weight: 700; color: var(--accent); letter-spacing: 0.06em; }
+.ui-screen-head h1::before { content: "> "; color: var(--fg-mute); font-weight: 400; }
+.ui-screen-head .m { margin: var(--s1) 0 0; font-size: var(--t-xs); color: var(--fg-mute); max-width: 72ch; }
+
 /* ---------- Frame ---------- */
 .ui-frame { position: relative; border: var(--bw) solid var(--tone, var(--line)); padding: var(--s4) var(--s4) var(--s3);
   margin: var(--s5) 0 var(--s5); }
@@ -90,7 +96,8 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 400 var(--t-s)/
 .ui-btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 1ch; min-height: var(--hit-min);
   padding: 0 1ch; background: none; border: 0; border-radius: 0; color: var(--accent); font: inherit; text-transform: uppercase;
   text-decoration: none; text-align: left; cursor: pointer; letter-spacing: 0; }
-.ui-btn.primary { font-weight: 700; }
+/* [ LABEL ]: the brackets carry their own space, so no flex gap (it read "[  LABEL  ]"). */
+.ui-btn.primary { font-weight: 700; gap: 0; }
 .ui-btn.primary::before { content: "[ "; white-space: pre; }
 .ui-btn.primary::after { content: " ]"; white-space: pre; }
 .ui-btn.secondary { color: var(--fg-dim); }

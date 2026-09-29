@@ -13,7 +13,7 @@
   /* text */
   --fg: #c8f5d8;          /* primary */
   --fg-dim: #86c9a0;      /* secondary */
-  --fg-mute: #4b7c5e;     /* tertiary: meta, disabled (still readable, 3.9:1) */
+  --fg-mute: #5a9170;      /* tertiary: meta, notes, disabled. 5.3:1 on --bg, 4.6:1 on --panel-hi: AA for body text */
   --fg-ghost: #2d5040;    /* decoration only: dot leaders, empty bar track. Never for words. */
 
   /* semantic */

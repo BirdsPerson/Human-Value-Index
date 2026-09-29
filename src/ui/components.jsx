@@ -40,6 +40,20 @@ export function Frame({ title, meta, tone, box = false, double = false, flush = 
 }
 
 // ---------------------------------------------------------------------------
+// ScreenHead: the one heading a screen opens on. TITLE in accent, one line of the
+// Overlord's meta under it. Every destination screen uses it (index, cube, pen), so
+// they read as rooms of the same terminal instead of pages that start mid-sentence.
+export function ScreenHead({ title, meta, children, className }) {
+  return (
+    <header className={cx("ui-screen-head", className)}>
+      <h1>{title}</h1>
+      {meta && <p className="m">{meta}</p>}
+      {children}
+    </header>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Command: a full-width menu row.  N  LABEL  ›  with an optional subtitle line.
 // 48px tall on touch. `selected` is inverse video (one selection state app-wide);
 // hover and focus underline / outline, never a second highlight.

@@ -17,7 +17,7 @@ function tokens() {
   const v = (n, f) => (cs.getPropertyValue(n).trim() || f);
   return {
     green: v("--accent", "#4ade80"), greenDim: v("--accent-dim", "#22c55e"), amber: v("--warn", "#fbbf24"), red: v("--harm", "#f87171"),
-    text: v("--fg", "#c8f5d8"), muted: v("--fg-mute", "#4b7c5e"), ghost: v("--fg-ghost", "#2d5040"), bg: v("--bg", "#0a0f0a"),
+    text: v("--fg", "#c8f5d8"), muted: v("--fg-mute", "#5a9170"), ghost: v("--fg-ghost", "#2d5040"), bg: v("--bg", "#0a0f0a"),
     font: v("--mono", "ui-monospace, Menlo, monospace"),
   };
 }
