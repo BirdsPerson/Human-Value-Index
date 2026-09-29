@@ -9,7 +9,14 @@
 // hashed from the person, so everyone is at a different point in it. t = 0 (reduced
 // motion) gives each pose at rest.
 
-import { SPRITE_W as FW, SPRITE_H as FH } from "../sprites.js";
+import { SPRITE_W as FW, SPRITE_H as FH, statureOf } from "../sprites.js";
+
+// A person's stature in a room cutaway: to scale, but never through the ceiling. footY is the
+// anchor's feet measured from the room's top edge, hh the anchor's standing sprite height.
+export function fitStature(s, footY, hh) {
+  const k = statureOf(s);
+  return k <= 1 || !(hh > 0) ? k : Math.min(k, Math.max(1, (footY - 2) / hh));
+}
 
 const HIP = 27;    // sprite rows kept above the seat
 const SHIN = 38;   // sprite rows from here down are the lower legs
@@ -35,11 +42,14 @@ function blit(c, img, fi, sy, sh, x, y, w, h, flip) {
 }
 
 // Draw one person at an anchor. x, y: the anchor's feet in canvas px; hh: the drawn height
-// of a standing sprite; face: 1 turned right, -1/0 as drawn (the sprites face left).
+// of a standing sprite at the anchor's scale; k: the person's stature (sprites.statureOf),
+// which grows them from the feet while furniture (seat, bunk) stays the anchor's size;
+// face: 1 turned right, -1/0 as drawn (the sprites face left).
 // -> the box that was drawn, for hit-testing: [x0, y0, x1, y1] (and the walker's x).
-export function drawPose(c, sheet, a, act, x, y, hh, t, ph) {
+export function drawPose(c, sheet, a, act, x, y, hh0, t, ph, k = 1) {
   const img = sheet.img, frames = sheet.frames || 1;
-  const f = hh / FH, ww = FW * f, px = f;   // one sprite pixel
+  const bp = hh0 / FH, hh = hh0 * k;          // bp: one sprite pixel at the furniture's scale
+  const f = hh / FH, ww = FW * f, px = f;   // one sprite pixel of this person
   let pose = poseOf(a, act);
   let flip = a.face === 1;
   let dx = 0, dy = 0, fi = 0;
@@ -60,9 +70,9 @@ export function drawPose(c, sheet, a, act, x, y, hh, t, ph) {
     }
     if (pose === "lie") {
       // on the bunk: head to the left, the blanket over the legs, a Z now and then
-      const top = y - 9 * px;
+      const top = y - 9 * bp;
       c.save();
-      c.translate(Math.round(x + hh * 0.5), Math.round(top - 5 * px));
+      c.translate(Math.round(x + hh * 0.5), Math.round(top + 11 * bp - 16 * px));   // the body rests on the mattress however big
       c.rotate(-Math.PI / 2);
       c.drawImage(img, 0, 0, FW, FH, Math.round(-ww / 2), Math.round(-hh), Math.round(ww), Math.round(hh));
       c.restore();
@@ -84,9 +94,9 @@ export function drawPose(c, sheet, a, act, x, y, hh, t, ph) {
         else bob = every(t, 3.2, 0.5, ph) ? -px : 0;
         if (act === "trade" && every(t, 9, 0.12, ph)) bob = -3 * px;   // a hand up: SELL
       }
-      const seatY = y - SEAT * px;
+      const seatY = y - SEAT * bp;
       blit(c, img, 0, 0, HIP, X - ww / 2, seatY - HIP * px + bob, ww, HIP * px, flip);
-      blit(c, img, 0, SHIN, FH - SHIN, X - ww / 2, seatY, ww, (FH - SHIN) * px, flip);
+      blit(c, img, 0, SHIN, FH - SHIN, X - ww / 2, seatY, ww, SEAT * bp, flip);   // shins span the seat's own height
       tool(c, act, X, seatY - HIP * px + bob, px, flip, t, ph, true);
       if (act === "talk" && t > 0 && every(t, 6, 0.3, ph)) dots(c, X + (flip ? 5 : -12) * px, seatY - HIP * px - 6 * px, px);
       return [X - ww / 2, seatY - HIP * px, X + ww / 2, y];

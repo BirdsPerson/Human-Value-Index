@@ -10,7 +10,7 @@ import { Chip, Chips } from "../ui/index.js";
 import { DISTRICTS, DISTRICT, clockAt, whereOf, jobLine, activityLine } from "./simApi.js";
 import { familyOf, FAMILY_COLOR } from "./cityKit.js";
 import { sheetFor } from "./spriteBank.js";
-import { SPRITE_W, SPRITE_H } from "../sprites.js";
+import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
 import { locate, trains, carArc, STATIONS as ST3D } from "./city3d.js";
 import {
   FLOOR_H, LOOP_H, PERSON_H, EYE_H, RIDE_H, NEAR, FAR, WALK_SPEED, TURN_SPEED, RIDE_SPEED, TOUR_SPEED,
@@ -414,7 +414,7 @@ function Street({ censusRef, onOpen, onEnter }) {
         const z = heightOf(it.w);
         const base = toCam(c, it.w.x, it.w.y, z);
         if (!inFov(base)) return;
-        const p = project(base, v), q = project(toCam(c, it.w.x, it.w.y, z + PERSON_H), v);
+        const p = project(base, v), q = project(toCam(c, it.w.x, it.w.y, z + PERSON_H * statureOf(it.s)), v);   // to scale, from the feet
         if (!p || !q) return;
         const fog = fogAt(p.f);
         const hpx = p.y - q.y;

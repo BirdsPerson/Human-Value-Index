@@ -4,8 +4,31 @@ import { FAMOUS_FIGURES, getTier, slugify, slugCandidates } from "../src/figures
 import { computeScore, cube, getTier as tierLabel } from "../netlify/lib/intake.js";
 import {
   placeholderPixels, PX, SPRITE_W, SPRITE_H, hashStr, mulberry32,
-  gaitFor, stepEntity, doorZone, sparkPoints,
+  gaitFor, stepEntity, doorZone, sparkPoints, statureOf,
 } from "../src/sprites.js";
+
+// stature: sprites drawn to scale by real height (André the Giant taller than everyone, feet fixed)
+{
+  const andre = statureOf({ name: "André the Giant", height: 224, sex: "m" });
+  const median = statureOf({ height: 176, sex: "m" }), small = statureOf({ height: 152, sex: "f" });
+  assert.ok(andre > median && median > small, `stature order ${andre} > ${median} > ${small}`);
+  assert.ok(Math.abs(andre - 224 / 176) < 1e-9 && andre > 1.25 && andre <= 1.3, `André ${andre}`);
+  assert.ok(Math.abs(small - 152 / 176) < 1e-9, `152 cm ${small}`);
+  assert.equal(statureOf({ height: 280 }), 1.3, "clamped high");
+  assert.equal(statureOf({ height: 100 }), 0.85, "clamped low");
+  assert.equal(statureOf({ height: null, sex: "m" }), 1, "male fallback 176");
+  assert.ok(Math.abs(statureOf({ height: null, sex: "f" }) - 163 / 176) < 1e-9, "female fallback 163");
+  assert.equal(statureOf({ kind: "citizen", name: "Subject 7AUZ" }), 1, "citizens draw at 1.0");
+  assert.equal(statureOf({ you: true }), 1, "the player draws at 1.0");
+  assert.equal(statureOf(null), 1);
+  assert.equal(statureOf({ height: "abc" }), 1, "junk height falls back");
+  for (const f of FAMOUS_FIGURES) {
+    assert.ok(f.height === null || (Number.isFinite(f.height) && f.height >= 120 && f.height <= 250), `${f.name}: height`);
+    assert.ok(f.sex === null || f.sex === "m" || f.sex === "f", `${f.name}: sex`);
+    const k = statureOf(f);
+    assert.ok(k >= 0.85 && k <= 1.3, `${f.name}: stature ${k}`);
+  }
+}
 
 // figures: 62 unique names, slugs unique and well-formed
 assert.equal(FAMOUS_FIGURES.length, new Set(FAMOUS_FIGURES.map(f => f.name)).size);

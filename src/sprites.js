@@ -138,6 +138,17 @@ export function gaitFor(tierLabel, reducedMotion = false) {
 
 export function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
+// Sprites are drawn to scale by real height. A subject's `height` (cm, Wikidata) against a
+// 176 cm reference; no height falls back to the typical adult height for the sex, and no
+// sex either (citizens, players) draws at 1.0. Clamped so a giant still fits a room and a
+// small subject still reads. Every in-world figure multiplies its sprite by this, feet fixed.
+export const STATURE_REF = 176;
+export function statureOf(s) {
+  const h = Number(s?.height);
+  const cm = Number.isFinite(h) && h > 0 ? h : s?.sex === "f" ? 163 : STATURE_REF;
+  return clamp(cm / STATURE_REF, 0.85, 1.3);
+}
+
 // The PROCESSING zone: a strip of floor in front of the door.
 export function doorZone(world) {
   return { x0: Math.max(14, world.doorX - 50), x1: Math.min(world.w - 14, world.doorX + world.doorW + 24), y0: world.floorTop + 2, y1: Math.min(world.floorBottom, world.floorTop + 34) };

@@ -2,7 +2,7 @@
 //   node scripts/check-cityview.mjs
 import { PLACES, BUILDINGS, JOBS, whereAt } from "../src/city/sim.js";
 import { FAMOUS_FIGURES, slugify, TIERS } from "../src/figures.js";
-import { poseOf } from "../src/city/poses.js";
+import { poseOf, fitStature } from "../src/city/poses.js";
 import { rot, unrot, project, unproject, screenToMap, depthOrder, slotFor, lodFor, LOD_MID, LOD_NEAR, mod4 } from "../src/city/iso.js";
 import { ROOM_TYPE, DRAWN_TYPES, PLANNED_TYPES, PROP, anchorsFor, roomPlan, typeOf, assignAnchors, roleOf, actAt, isNight, LEISURE_ACTS } from "../src/city/props.js";
 
@@ -228,6 +228,21 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   ok(!/scrollIntoView/.test(chip.replace(/\/\/.*$/gm, "")), "ChipStrip scrolls only itself, never the page");
   const iso = fs.readFileSync(new URL("../src/city/CityIso.jsx", import.meta.url), "utf8");
   ok(!/drawTrains\(/.test(iso), "train cars are slotted by depth, not painted over the buildings afterwards");
+}
+
+// Stature: every in-world figure is drawn to scale (sprites.statureOf), never through a
+// room's ceiling; portraits and thumbnails stay uniform.
+{
+  const andre = { name: "André the Giant", height: 224, sex: "m" };
+  ok(near(fitStature(andre, 200, 40), 224 / 176), "fitStature: André full height where the room allows");
+  ok(fitStature(andre, 44, 40) < 224 / 176 && fitStature(andre, 44, 40) >= 1 && (44 - 2) / 40 >= fitStature(andre, 44, 40) - 1e-9, "fitStature: capped under the ceiling, never below 1");
+  ok(near(fitStature({ height: 152 }, 10, 40), 152 / 176), "fitStature: short people are never capped");
+  ok(fitStature({ kind: "citizen" }, 30, 40) === 1, "fitStature: citizens 1.0");
+  const { readFileSync } = await import("node:fs");
+  const src = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), "utf8");
+  for (const f of ["Pen.jsx", "city/CityIso.jsx", "city/RoomStage.jsx", "city/Street.jsx", "city/CityMap.jsx", "city/City3D.jsx"])
+    ok(/statureOf|fitStature/.test(src(f)), `${f} draws subjects to scale`);
+  ok(!/statureOf|fitStature/.test(src("FilePhoto.jsx")) && !/statureOf/.test(src("city/cityUi.jsx")), "portraits and thumbnails stay uniform");
 }
 
 console.log(fails ? `check-cityview: ${fails} FAILED` : "check-cityview: ok");

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import { FAMOUS_FIGURES, getTier, slugify, slugCandidates, displayName } from "./figures.js";
 import {
-  SPRITE_W, SPRITE_H, gaitFor, clamp,
+  SPRITE_W, SPRITE_H, gaitFor, clamp, statureOf,
   paintPlaceholder, paintAvatar, loadManifest, loadSprite, loadRepoSprite, mulberry32,
 } from "./sprites.js";
 import FilePhoto from "./FilePhoto.jsx";
@@ -673,7 +673,7 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
         s, tier, slug, img: s.avatar?.kind === "procedural" ? paintAvatar(s.avatar.spec, 2) : placeholderFor(slug, tier.color), frames: 2, real: false, gait, prefs, floor, dest: -1,
         x: 0, y: 0, tx: 0, ty: 0, dir: rnd() < 0.5 ? -1 : 1, state: "idle", timer: rnd() * 3, animT: rnd() * 2,
         stayT: opts.stay ?? rnd() * stayFor(rnd, sim.reduced),
-        vy: 0, landY: 0, ang: 0, va: 0, say: null, sayW: 0, sayUntil: 0, nameW: 0, you: !!opts.you,
+        k: statureOf(s), vy: 0, landY: 0, ang: 0, va: 0, say: null, sayW: 0, sayUntil: 0, nameW: 0, you: !!opts.you,
         grabLines: s.kind === "figure" && FIGURE_LINES[s.name] ? [FIGURE_LINES[s.name], ...(GRAB_LINES[tier.label] || [])] : (GRAB_LINES[tier.label] || GRAB_LINES["TOLERATED GENERALIST"]),
       };
       placeInRoom(e);
@@ -980,9 +980,9 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
       for (let i = sim.order.length - 1; i >= 0; i--) {
         const e = sim.order[i];
         if (e === sim.held || e.state === "fall") continue;
-        if (Math.abs(wx - e.x) > half || wy < e.y - 46 - pad || wy > e.y + pad) continue;
+        if (Math.abs(wx - e.x) > half * e.k || wy < e.y - 46 * e.k - pad || wy > e.y + pad) continue;
         if (!touch) return e;
-        const d = Math.abs(wx - e.x) + Math.abs(wy - (e.y - 22)) * 0.5;
+        const d = Math.abs(wx - e.x) + Math.abs(wy - (e.y - 22 * e.k)) * 0.5;
         if (d < bestD) { best = e; bestD = d; }
       }
       return best;
@@ -1124,7 +1124,7 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
         const e = sim.ents[i];
         if (e.say && sim.t > e.sayUntil) e.say = null;
         if (e.state === "held") {
-          e.x = clamp(p.x, 4, w - 4); e.y = clamp(p.y + SPRITE_H - 6, SPRITE_H - 2, BUILDING_H + 30);
+          e.x = clamp(p.x, 4, w - 4); e.y = clamp(p.y + Math.round(SPRITE_H * e.k) - Math.round(6 * e.k), SPRITE_H - 2, BUILDING_H + 30);
           // pendulum driven by pointer velocity
           e.va += (-e.ang * 60 - e.va * 5 + p.vx * 4) * dt;
           e.ang = clamp(e.ang + e.va * dt, -0.6, 0.6);
@@ -1239,7 +1239,7 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
       }
       for (let i = 0; i < o.length; i++) {
         const e = o[i];
-        if (e.y < viewTop || e.y - SPRITE_H > viewBot || hidden(e)) continue;
+        if (e.y < viewTop || e.y - SPRITE_H * e.k > viewBot || hidden(e)) continue;
         let fi = 0, bob = 0;
         if (e.state === "walk" || e.state === "toLift" || e.state === "exitLift") {
           const step = Math.floor(e.animT * e.gait.fps);
@@ -1249,26 +1249,28 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
           fi = e.frames > 1 ? Math.floor(e.animT * 11) % e.frames : 0;   // kicking
         }
         const sxSrc = fi * SPRITE_W;
+        // drawn to scale (statureOf): whole world pixels, feet on the same line as everyone's
+        const kh = Math.round(SPRITE_H * e.k), kw = Math.round(SPRITE_W * e.k), kx = Math.round(kw / 2);
         if (e.state === "held" || (e.state === "fall" && Math.abs(e.ang) > 0.01)) {
           // dangle: pivot at the scruff of the neck
-          const px = Math.round(e.x) * S, py = Math.round(e.y - SPRITE_H + 6) * S + oy;
+          const px = Math.round(e.x) * S, py = Math.round(e.y - kh + Math.round(6 * e.k)) * S + oy;
           const c = Math.cos(e.ang), s = Math.sin(e.ang), f = e.dir < 0 ? -1 : 1;
           const kick = e.state === "held" && !sim.reduced ? (Math.floor(e.animT * 11) % 2) : 0;
           ctx.setTransform(c * f, s * f, -s, c, px + kick * S, py);
-          ctx.drawImage(e.img, sxSrc, 0, SPRITE_W, SPRITE_H, -16 * S, -6 * S, SPRITE_W * S, SPRITE_H * S);
+          ctx.drawImage(e.img, sxSrc, 0, SPRITE_W, SPRITE_H, -kx * S, -Math.round(6 * e.k) * S, kw * S, kh * S);
           ctx.setTransform(1, 0, 0, 1, 0, 0);
         } else {
-          const dx = Math.round(e.x) - 16, dy = (Math.round(e.y) - SPRITE_H + bob) * S + oy;
+          const dx = Math.round(e.x) - kx, dy = (Math.round(e.y) - kh + bob) * S + oy;
           if (e.dir < 0) {
-            ctx.setTransform(-1, 0, 0, 1, (dx + SPRITE_W) * S, 0);
-            ctx.drawImage(e.img, sxSrc, 0, SPRITE_W, SPRITE_H, 0, dy, SPRITE_W * S, SPRITE_H * S);
+            ctx.setTransform(-1, 0, 0, 1, (dx + kw) * S, 0);
+            ctx.drawImage(e.img, sxSrc, 0, SPRITE_W, SPRITE_H, 0, dy, kw * S, kh * S);
             ctx.setTransform(1, 0, 0, 1, 0, 0);
           } else {
-            ctx.drawImage(e.img, sxSrc, 0, SPRITE_W, SPRITE_H, dx * S, dy, SPRITE_W * S, SPRITE_H * S);
+            ctx.drawImage(e.img, sxSrc, 0, SPRITE_W, SPRITE_H, dx * S, dy, kw * S, kh * S);
           }
         }
         if (e.you) {
-          const ay = Math.round(e.y - SPRITE_H - 7 + (sim.reduced ? 0 : Math.round(Math.sin(sim.t * 4)))) * S + oy;
+          const ay = Math.round(e.y - Math.round(SPRITE_H * e.k) - 7 + (sim.reduced ? 0 : Math.round(Math.sin(sim.t * 4)))) * S + oy;
           const ax = Math.round(e.x) * S;
           ctx.fillStyle = "#4ade80";
           ctx.fillRect(ax - 3 * S, ay, 7 * S, S); ctx.fillRect(ax - 2 * S, ay + S, 5 * S, S);
@@ -1292,8 +1294,8 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
       if (sim.bubbles) sim.bubbles.length = 0;
       for (let i = 0; i < o.length; i++) {
         const e = o[i];
-        if (e.y < viewTop || e.y - SPRITE_H > viewBot || hidden(e)) continue;
-        const head = (e.y - SPRITE_H - 2) * S + oy;
+        if (e.y < viewTop || e.y - SPRITE_H * e.k > viewBot || hidden(e)) continue;
+        const head = (e.y - Math.round(SPRITE_H * e.k) - 2) * S + oy;
         if (e.say) drawBubble(e.say, e.sayW, e.x * S, head - (e.you ? 6 * S : 0), e.state === "held");
         else if (e === sim.hover || e === sim.held) {
           const label = displayName(e.s).toUpperCase();

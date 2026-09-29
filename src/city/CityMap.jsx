@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import TouchGate from "../ui/TouchGate.jsx";
-import { SPRITE_W, SPRITE_H, hashStr } from "../sprites.js";
+import { SPRITE_W, SPRITE_H, hashStr, statureOf } from "../sprites.js";
 import { DISTRICTS, PLACES, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, placesOf, placeName, districtCap, activityLine, jobLine, clockAt, whereOf, trainsAt } from "./simApi.js";
 import { CELL_W, CELL_H, layoutDistricts, FAMILY_COLOR, familyOf, lodFor, roomLabel } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
@@ -380,11 +380,11 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       // subjects: cull to the viewport, sort the visible by depth
       const lod = lodFor(ch);
       V.lod = lod;
-      const [bw, bh] = lod === "dot" ? [4, 4] : spriteBox(lod);
+      const [bw, bh] = lod === "dot" ? [4, 4] : spriteBox(lod), bw0 = bw, bh0 = bh;
       const vis = V.vis; vis.length = 0;
       for (const e of V.ents.values()) {
         screenOf(e);
-        if (e.sx < -bw || e.sx > V.cssW + bw || e.sy < -4 || e.sy - bh > V.cssH + 4) continue;
+        if (e.sx < -bw || e.sx > V.cssW + bw || e.sy < -4 || e.sy - bh * 1.3 > V.cssH + 4) continue;
         vis.push(e);
       }
       vis.sort((a, b) => a.sy - b.sy);
@@ -410,6 +410,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
             if (e.s.you) youArrow(e.sx, e.sy - wr - 7);
             continue;
           }
+          const q = statureOf(e.s), bw = bw0 * q, bh = bh0 * q;   // to scale, feet on the mark
           const x = Math.round((e.sx - bw / 2) * dpr) / dpr, y = Math.round((e.sy - bh) * dpr) / dpr;
           // the family mark at the feet: the octant colour, hollow when unrated
           ctx.fillStyle = e.fam;
@@ -508,7 +509,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       let best = null, bd = Infinity;
       for (let i = V.vis.length - 1; i >= 0; i--) {
         const e = V.vis[i];
-        const dotE = asDot(e, lod), [bw, bh] = dotE ? dotBox : sprBox;
+        const dotE = asDot(e, lod), q = dotE ? 1 : statureOf(e.s), bw = (dotE ? dotBox : sprBox)[0] * q, bh = (dotE ? dotBox : sprBox)[1] * q;
         const top = dotE ? e.sy - bh / 2 : e.sy - bh;
         if (mx < e.sx - bw / 2 - pad || mx > e.sx + bw / 2 + pad || my < top - pad || my > (dotE ? e.sy + bh / 2 : e.sy) + pad) continue;
         if (!touch) return e;

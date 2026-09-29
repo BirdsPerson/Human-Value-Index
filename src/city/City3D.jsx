@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import TouchGate from "../ui/TouchGate.jsx";
 import { Button, Chip, Chips, ListRow } from "../ui/index.js";
-import { SPRITE_W, SPRITE_H } from "../sprites.js";
+import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
 import { clockAt, whereOf, jobLine, activityLine, roomIn, DISTRICT, DISTRICTS } from "./simApi.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
@@ -400,7 +400,7 @@ function City3D({ censusRef, onDistrict, onOpen, onFloor, query = "" }) {
       ctx.globalAlpha = alpha * (home && !open ? 0.8 : 1);
       if (sh >= 18 && (open || !home)) {
         const img = sh < 34 ? miniFor(e.s) : sheetFor(e.s).img;
-        const bh = sh, bw = bh * (SPRITE_W / SPRITE_H);
+        const bh = sh * statureOf(e.s), bw = bh * (SPRITE_W / SPRITE_H);   // to scale, feet on the floor
         const x = Math.round(S.x - bw / 2), y = Math.round(S.y - bh);
         ctx.imageSmoothingEnabled = false;
         try {

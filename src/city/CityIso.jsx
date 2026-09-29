@@ -1,13 +1,13 @@
 import { memo, useEffect, useRef, useState } from "react";
 import TouchGate from "../ui/TouchGate.jsx";
-import { SPRITE_W, SPRITE_H } from "../sprites.js";
+import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
 import { DISTRICTS, BUILDINGS, BUILDING, PLACES, LOOP_LINE, STATIONS, OPEN_LOTS, clockAt, whereOf, trainsAt, roomIn } from "./simApi.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FONT } from "./cityUi.jsx";
 import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotFor, boxHull, inPoly, lodFor, STOREY, DECK, mod4 } from "./iso.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt } from "./props.js";
-import { drawPose, phaseOf } from "./poses.js";
+import { drawPose, phaseOf, fitStature } from "./poses.js";
 
 // THE SUBSTRATE, SimCity-style: every building a solid block (facade, roof, lit windows by
 // occupancy, a sign up close), the Loop on its deck with trains, subjects on the streets.
@@ -355,7 +355,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         ctx.fillRect(Math.round(x) - 1, Math.round(y) - 2, 2, 2);
         return;
       }
-      const hpx = V.cam.z * STOREY * 0.95;
+      const hpx = V.cam.z * STOREY * 0.95 * statureOf(p.s);   // to scale, feet on the ground
       if (lod === "mid" || hpx < 18) {
         const m = miniFor(p.s);
         const s = hpx / (SPRITE_H / 2);
@@ -497,7 +497,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
           for (const it of row.items) {
             const a = it.a, p = a && byAnchor[a.i];
             if (!p) continue;
-            const box = drawPose(ctx, sheetFor(p.s), a, actAt(a, hour, p.role, plan.type), rx + a.x, ry + a.y, sh * a.s, now, phaseOf(p.key));
+            const box = drawPose(ctx, sheetFor(p.s), a, actAt(a, hour, p.role, plan.type), rx + a.x, ry + a.y, sh * a.s, now, phaseOf(p.key), fitStature(p.s, a.y, sh * a.s));
             if (live) V.hits.push({ kind: "p", panel: true, s: p.s, box });
           }
         },

@@ -1,10 +1,10 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { SPRITE_W, SPRITE_H, gaitFor, stepEntity, mulberry32 } from "../sprites.js";
+import { SPRITE_W, SPRITE_H, gaitFor, stepEntity, mulberry32, statureOf } from "../sprites.js";
 import { getTier } from "../figures.js";
 import { activityLine, jobLine, clockAt, trainsAt, timetable, TRAIN } from "./simApi.js";
 import { sheetFor } from "./spriteBank.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt } from "./props.js";
-import { drawPose, phaseOf } from "./poses.js";
+import { drawPose, phaseOf, fitStature } from "./poses.js";
 import { FONT, SubjectTip } from "./cityUi.jsx";
 
 // Rooms as terminal boxes on one canvas, with the subjects the census puts in each one
@@ -209,7 +209,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
       }
       for (const [name, { s, r, mode }] of want) {
         const e = V.ents.get(name);
-        if (e) e.s = s;
+        if (e) { e.s = s; e.q = statureOf(s); }
         if (e && e.room !== r) continue;   // still walking out of another room; enters next census
         if (e) {
           if (mode === "leave") { if (!e.leaving) exit(e, false); }
@@ -226,7 +226,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         const fromCar = !firstLook && !V.reduced && mode === "alight";
         const inside = !fromDoor && !fromCar;
         const ent = {
-          s, room: r, gait: g, dir: 1, animT: rnd() * 2, timer: rnd() * 2, state: inside ? "idle" : "walk", leaving: false, gone: false, board: false,
+          s, q: statureOf(s), room: r, gait: g, dir: 1, animT: rnd() * 2, timer: rnd() * 2, state: inside ? "idle" : "walk", leaving: false, gone: false, board: false,
           x: inside || fromCar ? innerL() + rnd() * Math.max(0, innerR(i) - innerL()) : doorX(),
           y: fromCar ? FLOOR_TOP - 4 : FLOOR_TOP + 4 + rnd() * (floorBot(i) - FLOOR_TOP - 6), tx: 0, ty: 0,
         };
@@ -355,7 +355,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         if (e.gone || !plat[idx[e.room]]) continue;
         const r = V.rects[idx[e.room]];
         e.sx = r.x + e.x; e.sy = r.y + e.y;
-        if (e.sy < top - 4 || e.sy - SPRITE_H > bot) continue;
+        if (e.sy < top - 4 || e.sy - SPRITE_H * e.q > bot) continue;
         vis.push(e);
       }
       const plats = vis.slice(n0).sort((a, b) => a.sy - b.sy);
@@ -368,14 +368,16 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
           fi = sh.frames > 1 ? st % sh.frames : 0;
           bob = e.gait.bob && st % 2 ? -1 : 0;
         }
-        const dx = Math.round(e.sx * dpr) - 16 * k, dy = Math.round((e.sy + bob) * dpr) - SPRITE_H * k;
+        // to scale (statureOf) in whole sprite pixels, feet on the platform line
+        const W = Math.round(SPRITE_W * e.q) * k, H = Math.round(SPRITE_H * e.q) * k;
+        const dx = Math.round(e.sx * dpr) - Math.round(W / 2 / k) * k, dy = Math.round((e.sy + bob) * dpr) - H;
         ctx.fillStyle = "rgba(0,0,0,0.45)";
-        ctx.fillRect(dx + 10 * k, Math.round(e.sy * dpr) - k, 12 * k, 2 * k);
+        ctx.fillRect(Math.round(e.sx * dpr) - 6 * k, Math.round(e.sy * dpr) - k, 12 * k, 2 * k);
         if (e.dir < 0) {
-          ctx.setTransform(-1, 0, 0, 1, dx + SPRITE_W * k, 0);
-          ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, 0, dy, SPRITE_W * k, SPRITE_H * k);
+          ctx.setTransform(-1, 0, 0, 1, dx + W, 0);
+          ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, 0, dy, W, H);
           ctx.setTransform(1, 0, 0, 1, 0, 0);
-        } else ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, dx, dy, SPRITE_W * k, SPRITE_H * k);
+        } else ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, dx, dy, W, H);
         if (e.s.you) {
           ctx.fillStyle = "#4ade80";
           const ax = Math.round(e.sx * dpr), ay = dy - 7 * k;
@@ -388,7 +390,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         if (e && vis.includes(e)) {
           const [tw, th] = tipSize.current;
           const tx = Math.max(2, Math.min(V.cssW - tw - 2, e.sx - tw / 2));
-          const ty = Math.max(2, (e.box && !plat[idx[e.room]] ? e.box[1] : e.sy - SPRITE_H * (k / dpr)) - th - 4);
+          const ty = Math.max(2, (e.box && !plat[idx[e.room]] ? e.box[1] : e.sy - SPRITE_H * e.q * (k / dpr)) - th - 4);
           tipEl.style.transform = `translate(${Math.round(tx)}px, ${Math.round(ty)}px)`;
           tipEl.style.visibility = "visible";
         } else tipEl.style.visibility = "hidden";
@@ -422,7 +424,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
             for (const it of row.items) {
               const e = it.a && here.get(it.a.i);
               if (!e) continue;
-              const bx = drawPose(ctx, sheetFor(e.s), it.a, actAt(it.a, hour, e.role, G.plan.type), X + it.a.x, Y + it.a.y, hh * it.a.s, t, phaseOf(e.s.name));
+              const bx = drawPose(ctx, sheetFor(e.s), it.a, actAt(it.a, hour, e.role, G.plan.type), X + it.a.x, Y + it.a.y, hh * it.a.s, t, phaseOf(e.s.name), fitStature(e.s, it.a.y, hh * it.a.s));
               e.box = bx; e.sx = (bx[0] + bx[2]) / 2; e.sy = bx[3];
               vis.push(e);
             }
@@ -437,12 +439,12 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
           const sh = sheetFor(e.s);
           let fi = 0, bob = 0;
           if (!V.reduced) { const st = Math.floor(e.animT * e.gait.fps); fi = sh.frames > 1 ? st % sh.frames : 0; bob = e.gait.bob && st % 2 ? -1 : 0; }
-          const ww = hh * (SPRITE_W / SPRITE_H), x = r.x + e.x, y = r.y + e.y;
+          const eh = hh * fitStature(e.s, e.y - (Y - r.y), hh), ww = eh * (SPRITE_W / SPRITE_H), x = r.x + e.x, y = r.y + e.y;
           try {
-            if (e.dir > 0) { ctx.save(); ctx.translate(Math.round(x + ww / 2), 0); ctx.scale(-1, 1); ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, 0, Math.round(y - hh + bob), Math.round(ww), Math.round(hh)); ctx.restore(); }
-            else ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, Math.round(x - ww / 2), Math.round(y - hh + bob), Math.round(ww), Math.round(hh));
+            if (e.dir > 0) { ctx.save(); ctx.translate(Math.round(x + ww / 2), 0); ctx.scale(-1, 1); ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, 0, Math.round(y - eh + bob), Math.round(ww), Math.round(eh)); ctx.restore(); }
+            else ctx.drawImage(sh.img, fi * SPRITE_W, 0, SPRITE_W, SPRITE_H, Math.round(x - ww / 2), Math.round(y - eh + bob), Math.round(ww), Math.round(eh));
           } catch { /* not decoded */ }
-          e.box = [x - ww / 2, y - hh, x + ww / 2, y]; e.sx = x; e.sy = y;
+          e.box = [x - ww / 2, y - eh, x + ww / 2, y]; e.sx = x; e.sy = y;
           vis.push(e);
         }
         // you, marked
@@ -508,9 +510,10 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
           if (dd < bd) { bd = dd; best = e; }
           continue;
         }
-        if (Math.abs(mx - e.sx) > hw || my < e.sy - hh - pad || my > e.sy + pad) continue;
+        const eh = hh * (e.q || 1);
+        if (Math.abs(mx - e.sx) > hw || my < e.sy - eh - pad || my > e.sy + pad) continue;
         if (!touch) return e;
-        const dd = Math.abs(mx - e.sx) + Math.abs(my - (e.sy - hh / 2)) * 0.5;
+        const dd = Math.abs(mx - e.sx) + Math.abs(my - (e.sy - eh / 2)) * 0.5;
         if (dd < bd) { bd = dd; best = e; }
       }
       return best;
