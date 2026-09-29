@@ -5,7 +5,7 @@ import { DISTRICTS, BUILDINGS, BUILDING, PLACES, LOOP_LINE, STATIONS, OPEN_LOTS,
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FONT } from "./cityUi.jsx";
-import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4 } from "./iso.js";
+import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4, LOD_NEAR } from "./iso.js";
 import { loopPieces, trainPoses, carCorners, carBox, stationGeo, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
@@ -13,6 +13,7 @@ import { PARK_LOTS, PARK_PLACES, fieldRole } from "./parkGeo.js";
 import { drawParkLot } from "./parkDraw.js";
 import { isoItems } from "./archGeo.js";
 import { drawBody, drawYardProp, drawArchGround, doorAt } from "./archDraw.js";
+import { findTarget, findLine } from "./find.js";
 
 // THE SUBSTRATE, SimCity-style: every building drawn in its own architecture (archGeo.js
 // massing, archDraw.js drawing: the projects, brownstones, the glass tower, the monolith...),
@@ -63,14 +64,18 @@ const SGEO = Object.fromEntries(Object.values(STATIONS).map(st => [st.id, statio
 let SAVED = null;
 
 export default memo(CityIso);
-function CityIso({ censusRef, onOpen, onEnter }) {
+function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const apiRef = useRef({});
   const [sel, setSel] = useState(null);
+  // FIND: { line, following } for the status strip; the camera work is in the loop (V.find).
+  const [found, setFound] = useState(null);
   const onOpenRef = useRef(onOpen); onOpenRef.current = onOpen;
   const onEnterRef = useRef(onEnter); onEnterRef.current = onEnter;
   const setSelRef = useRef(setSel); setSelRef.current = setSel;
+  const setFoundRef = useRef(setFound); setFoundRef.current = setFound;
+  const onFindEndRef = useRef(onFindEnd); onFindEndRef.current = onFindEnd;
 
   useEffect(() => {
     const canvas = canvasRef.current, wrap = wrapRef.current;
@@ -80,6 +85,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       cssW: 0, cssH: 0, dpr: 1, cam: { z: 6, ox: 0, oy: 0, r: 0 }, camTo: null, fitZ: 6, reduced: !!mq?.matches, need: true,
       sel: null, shown: null, lift: 0, geo: null, censusV: -1, inside: new Map(), occ: {}, outdoors: [], hits: [], labels: [], panel: null,
       seats: new Map(), plans: new Map(), wheelHint: 0, riders: new Map(), park: new Map(), parkSeats: new Map(),
+      find: null,
     };
 
     // ---- geometry for the current quarter turn ----------------------------------------
@@ -153,6 +159,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
     }
     function zoomAt(sx, sy, f) {
       hands();
+      if (V.find) V.find.fly = false;
       const z0 = V.cam.z, z1 = clampN(z0 * f, V.fitZ * 0.7, 42);
       V.cam.ox = sx - (sx - V.cam.ox) * (z1 / z0);
       V.cam.oy = sy - (sy - V.cam.oy) * (z1 / z0);
@@ -184,9 +191,88 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       }
       V.need = true;
     }
+    // ---- find: fly to a subject, mark them, follow them -----------------------------------
+    // V.find = { s, who, follow, fly, bId, t (findTarget), pos: map {x, y, h}, room, box }.
+    // Following, the camera eases onto them every frame (the train car included); inside a
+    // building their cutaway is open with their room and sprite marked. Any hand on the map
+    // (a drag, the arrows, a tap on a building, CLOSE, FIT) stops following; FOLLOW resumes.
+    function publishFind(force = false) {
+      const F = V.find;
+      if (!F || !F.t) return;
+      const line = findLine(F.s, F.t, V.mt);
+      if (force || line !== F.line || F.follow !== F.shownFollow) { F.line = line; F.shownFollow = F.follow; setFoundRef.current({ line, following: F.follow }); }
+    }
+    function unfollow() {
+      if (!V.find || !V.find.follow) return;
+      V.find.follow = false; V.find.fly = false;
+      publishFind();
+    }
+    function startFind(f) {
+      const prev = V.find;
+      if (!f) {
+        V.find = null;
+        if (prev && prev.bId && V.sel === prev.bId) select(null);
+        setFoundRef.current(null);
+        V.need = true;
+        return;
+      }
+      // a new find starts from the open city: whatever cutaway was up closes (theirs reopens)
+      if (V.sel) select(null);
+      V.find = { s: f.s, who: who(f.s), follow: true, fly: true, bId: undefined, t: null, pos: null, room: null, box: null, line: "", shownFollow: null, lineAt: 0 };
+      V.need = true;
+    }
+    function refollow() {
+      if (!V.find) return;
+      V.find.follow = true; V.find.fly = true; V.find.bId = undefined;
+      V.need = true;
+    }
+    // Where the subject is drawn, in map cells and storeys: the car they ride, the platform,
+    // the stairs, the pavement, or the roof of the building they are inside.
+    function findStep(mt, trains) {
+      const F = V.find;
+      const t = findTarget(F.s, mt);
+      F.t = t;
+      let x = t.x, y = t.y, h = 0;
+      if (t.mode === "riding") {
+        const car = trains.find(tr => tr.id === t.trainId)?.cars[t.car];
+        if (car) { x = car.pose.x; y = car.pose.y; }
+        h = CAR_Z + CAR_H;
+      } else if (t.mode === "platform" || t.mode === "street") {
+        const q = streetSpot(t.w);
+        if (q) [x, y, h] = q;
+      } else {
+        const it = V.geo.items.find(i => i.kind === "b" && i.b.id === t.buildingId);
+        h = it ? it.h : 1;
+      }
+      F.pos = { x, y, h };
+      if (performance.now() - F.lineAt > 400) { F.lineAt = performance.now(); publishFind(); }
+      if (!F.follow) return;
+      const want = t.mode === "inside" ? t.buildingId : null;
+      if (want !== F.bId) {
+        const was = F.bId;
+        F.bId = want;
+        if (want) {
+          select(want);
+          const b = BUILDING[want];
+          centreOn(b.pos.x, b.pos.y, clampN(Math.max(V.cam.z, V.fitZ * 1.6, 6), 0, 42), true);
+          F.fly = false;
+          return;
+        }
+        if (was && V.sel === was) select(null);
+        F.fly = true;
+      }
+      if (want) return;
+      // a moving subject: keep them at the centre (a little high on a phone, clear of the thumb)
+      const z = F.fly ? Math.max(V.cam.z, LOD_NEAR + 2) : V.cam.z;
+      const [u, v] = rot(x, y, V.cam.r);
+      const ox = V.cssW / 2 - (u - v) * z, oy = V.cssH * 0.5 - ((u + v) * z * 0.5 - h * STOREY * z);
+      if (F.fly && Math.abs(V.cam.z - z) < 0.05) F.fly = false;
+      setCam(z, ox, oy);
+    }
     apiRef.current = {
-      zoom: (f) => zoomAt(V.cssW / 2, V.cssH / 2, f), fit: () => { select(null); fit(); }, turn: (d) => turn(d), close: () => select(null),
+      zoom: (f) => zoomAt(V.cssW / 2, V.cssH / 2, f), fit: () => { unfollow(); select(null); fit(); }, turn: (d) => turn(d), close: () => { unfollow(); select(null); },
       enter: () => { const b = V.sel && BUILDING[V.sel]; if (b) onEnterRef.current?.(b.district, b.id); },
+      find: startFind, follow: refollow, endFind: () => onFindEndRef.current?.(),
     };
 
     // Only a real change of size resets the canvas (assigning width/height clears it): the
@@ -494,24 +580,27 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         } else {
           const w = whereOf(o.s, mt);
           if (!w || w.activity !== "commute" || w.sub === "riding") continue;
-          x = w.x; y = w.y;
-          // up on the deck: waiting, stepping off; on the stairs (climb 0..1, gate to platform):
-          // across the pavement to the foot of the flight, up it, along the platform.
-          if (w.sub === "waiting" || w.sub === "alighting") h = DECK;
-          else if (w.climb > 0 && SGEO[w.stationId]) {
-            const g = SGEO[w.stationId], c = Math.min(1, w.climb), mid = PLAT_OUT + STAIR_W / 2;
-            const foot = g.at(0.2 + STAIR_L, mid), head = g.at(0.2, mid), plat = g.at(0, LOOP_LINE.platformOffset);
-            let q;
-            if (c < 0.25) { q = lerp2([g.st.gate.x, g.st.gate.y], foot, c / 0.25); h = 0; }
-            else if (c < 0.9) { q = lerp2(foot, head, (c - 0.25) / 0.65); h = DECK * (c - 0.25) / 0.65; }
-            else { q = lerp2(head, plat, (c - 0.9) / 0.1); h = DECK; }
-            [x, y] = q;
-          }
+          [x, y, h] = streetSpot(w);
         }
         const [u, v] = rot(x, y, r);
         out.push({ kind: "p", s: o.s, u, v, h, box: { x0: u, y0: v, x1: u, y1: v } });
       }
       return out;
+    }
+
+    // A commuter on foot or on a platform -> [x, y, h]: up on the deck waiting or stepping
+    // off; on the stairs (climb 0..1, gate to platform): across the pavement to the foot of
+    // the flight, up it, along the platform; otherwise the pavement.
+    function streetSpot(w) {
+      if (w.sub === "waiting" || w.sub === "alighting") return [w.x, w.y, DECK];
+      if (w.climb > 0 && SGEO[w.stationId]) {
+        const g = SGEO[w.stationId], c = Math.min(1, w.climb), mid = PLAT_OUT + STAIR_W / 2;
+        const foot = g.at(0.2 + STAIR_L, mid), head = g.at(0.2, mid), plat = g.at(0, LOOP_LINE.platformOffset);
+        if (c < 0.25) return [...lerp2([g.st.gate.x, g.st.gate.y], foot, c / 0.25), 0];
+        if (c < 0.9) return [...lerp2(foot, head, (c - 0.25) / 0.65), DECK * (c - 0.25) / 0.65];
+        return [...lerp2(head, plat, (c - 0.9) / 0.1), DECK];
+      }
+      return [w.x, w.y, 0];
     }
 
     // One car: a steel box on the rails, turned to the track. Far: body, roof, the cyan
@@ -751,7 +840,10 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       const list = hq ? [] : (V.inside.get(rk) || []).filter(o => o.mode !== "leave");
       // on a field the footballers play and the sporting take the field first (parkGeo.fieldRole)
       const field = ORDERED_TYPES.has(plan.type);
-      const people = list.map(o => { const r = field ? fieldRole(o.s, o.w) : { role: roleOf(o.w), pri: 0 }; return { key: who(o.s), role: r.role, pri: r.pri, s: o.s }; });
+      // the subject being found is seated first, so a full room never leaves them in the "+N"
+      const F = V.find, fk = F && F.t?.mode === "inside" && F.t.buildingId === b.id ? F.who : null;
+      const people = list.map(o => { const r = field ? fieldRole(o.s, o.w) : { role: roleOf(o.w), pri: 0 }; const key = who(o.s); return { key, role: r.role, pri: key === fk && !field ? -1e9 : r.pri, s: o.s }; });
+      if (live && fk && f.index === F.t.floor && pid === F.t.placeId) F.room = { x: rx, y: ry, w: rw, h: rh };
       const prev = V.seats.get(rk);
       const { at, overflow } = assignAnchors(plan.anchors, people, prev && prev.plan === plan ? prev.at : null, hour, ORDERED_TYPES.has(plan.type));
       V.seats.set(rk, { plan, at });
@@ -765,6 +857,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
             if (!p) continue;
             const box = drawPose(ctx, sheetFor(p.s), a, actAt(a, hour, p.role, plan.type), rx + a.x, ry + a.y, sh * a.s, now, phaseOf(p.key), fitStature(p.s, a.y, sh * a.s));
             if (live) V.hits.push({ kind: "p", panel: true, s: p.s, box });
+            if (live && p.key === fk) F.box = box;
           }
         },
       });
@@ -787,10 +880,12 @@ function CityIso({ censusRef, onOpen, onEnter }) {
     function draw() {
       const t = performance.now();
       readCensus();
-      easeCam();
       if (!V.geo || V.geo.r !== V.cam.r) V.geo = buildGeo(V.cam.r);
       const mt = censusRef.current?.mt != null && V.reduced ? censusRef.current.mt : clockAt(Date.now()).mt;
       V.mt = mt;
+      const trains = trainPoses(trainsAt(mt));
+      if (V.find) findStep(mt, trains);
+      easeCam();
       const lod = lodFor(V.cam.z);
       ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
       ctx.imageSmoothingEnabled = false;
@@ -799,7 +894,6 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       drawGround();
       // movers slot between buildings and track by depth
       const { items, order } = V.geo;
-      const trains = trainPoses(trainsAt(mt));
       V.trainIn = new Set(trains.filter(t => t.dwell).map(t => t.stationId));
       const slots = new Map();
       const put = (k, m) => (slots.get(k) || slots.set(k, []).get(k)).push(m);
@@ -831,13 +925,89 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       V.lift = V.sel ? (V.reduced ? 1 : Math.min(1, V.lift + 0.08)) : (V.reduced ? 0 : Math.max(0, V.lift - 0.12));
       if (!V.sel && V.lift <= 0) V.shown = null;
       const b = V.shown && BUILDING[V.shown];
+      if (V.find && !b) drawFindMarker();
       if (b) {
         const e = 1 - Math.pow(1 - V.lift, 3);
         ctx.fillStyle = `rgba(4,8,4,${(0.62 * e).toFixed(3)})`; ctx.fillRect(0, 0, V.cssW, V.cssH);
         const it = items.find(x => x.kind === "b" && x.b.id === b.id);
         if (it && V.sel) drawBuilding(it, lod, 0, true);
+        if (V.find) { V.find.room = null; V.find.box = null; }
+        if (V.find && V.find.t?.buildingId !== b.id) drawFindMarker();
         drawCutaway(b, mt, e, !!V.sel);
+        if (V.find && V.find.t?.buildingId === b.id) drawFindInPanel(e);
         V.need = true;
+      }
+      if (V.find && !V.reduced) V.need = true;   // the ring pulses
+    }
+
+    // ---- the find marker: above everything, the same size at every zoom -----------------------
+    // A pulsing ring where they stand (or on the roof of the car, or the building they are in),
+    // a stem, and their name in inverse video. Off screen: the tag waits at the edge, pointing.
+    function findTag(text, x, y, pulse) {
+      ctx.font = `bold 12px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const w = Math.round(ctx.measureText(text).width + 12), h = 20;
+      const bx = Math.round(clampN(x - w / 2, 4, V.cssW - w - 4)), by = Math.round(clampN(y - h, 4, V.cssH - h - 4));
+      ctx.fillStyle = "#06210f"; ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
+      ctx.fillStyle = "#4ade80"; ctx.fillRect(bx, by, w, h);
+      ctx.fillStyle = "#06210f"; ctx.fillText(text, bx + w / 2, by + h / 2 + 1);
+      return { bx, by, w, h, pulse };
+    }
+    function ring(x, y, r, a, flat = 0.5) {
+      ctx.globalAlpha = a;
+      ctx.lineWidth = 4; ctx.strokeStyle = "rgba(6,33,15,0.9)";
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * flat, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 2; ctx.strokeStyle = "#4ade80";
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * flat, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    function findName() {
+      const n = V.find.s.name.toUpperCase();
+      return (n.length > 24 ? n.slice(0, 23) + "…" : n) + (V.find.s.you ? " (YOU)" : "");
+    }
+    function drawFindMarker() {
+      const F = V.find;
+      if (!F.pos) return;
+      const [x, y] = Q(F.pos.x, F.pos.y, F.pos.h);
+      const ph = V.reduced ? 0.35 : (performance.now() / 1400) % 1;
+      const off = x < 0 || x > V.cssW || y < 0 || y > V.cssH;
+      if (!off) {
+        const r0 = Math.max(9, V.cam.z * 0.7);
+        ring(x, y, r0 + ph * 26, 1 - ph);
+        ring(x, y, r0, 1);
+        ctx.fillStyle = "#4ade80"; ctx.fillRect(Math.round(x) - 1, Math.round(y - 44), 2, 44 - r0 * 0.5);
+        findTag(findName(), x, y - 44, ph);
+        return;
+      }
+      // off screen: the tag at the edge, and a wedge towards them
+      const cx = clampN(x, 14, V.cssW - 14), cy = clampN(y, 30, V.cssH - 14);
+      const a = Math.atan2(y - cy, x - cx);
+      ctx.fillStyle = "#4ade80"; ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * 12, cy + Math.sin(a) * 12);
+      ctx.lineTo(cx + Math.cos(a + 2.4) * 10, cy + Math.sin(a + 2.4) * 10);
+      ctx.lineTo(cx + Math.cos(a - 2.4) * 10, cy + Math.sin(a - 2.4) * 10);
+      ctx.closePath(); ctx.fill();
+      findTag(findName(), cx, cy + (y < 0 ? 38 : -14), ph);
+    }
+    // Inside the cutaway: their room outlined, and a ring and their name on the sprite.
+    function drawFindInPanel(e) {
+      const F = V.find, P0 = V.panel;
+      if (!F.room || !P0) return;
+      const R = F.room, top = P0.y0 + 44, bot = P0.y0 + P0.h;
+      if (R.y + R.h < top || R.y > bot) return;
+      const ph = V.reduced ? 0.35 : (performance.now() / 1400) % 1;
+      ctx.globalAlpha = e;
+      ctx.lineWidth = 2; ctx.strokeStyle = "#4ade80";
+      ctx.strokeRect(Math.round(R.x) + 1, Math.max(top, Math.round(R.y)) + 1, Math.round(R.w) - 2, Math.min(bot, R.y + R.h) - Math.max(top, R.y) - 2);
+      ctx.globalAlpha = 1;
+      if (F.box) {
+        const [x0, y0, x1, y1] = F.box, cx = (x0 + x1) / 2, r0 = Math.max(10, (x1 - x0) * 0.7);
+        ctx.save(); ctx.beginPath(); ctx.rect(P0.x0 + 1, top, P0.w - 2, P0.h - 45); ctx.clip();
+        ring(cx, y1, r0 + ph * 18, (1 - ph) * e, 0.4);
+        ring(cx, y1, r0, e, 0.4);
+        ctx.restore();
+        findTag(findName(), cx, y0 - 4, ph);
+      } else {
+        findTag(`${findName()} // IN THE ROOM`, R.x + R.w / 2, R.y + 20, ph);
       }
     }
 
@@ -877,7 +1047,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       }
       if (drag) {
         const [x, y] = local(e);
-        if (Math.abs(x - drag.x) + Math.abs(y - drag.y) > 4) { if (!drag.moved) hands(); drag.moved = true; }
+        if (Math.abs(x - drag.x) + Math.abs(y - drag.y) > 4) { if (!drag.moved) { hands(); unfollow(); } drag.moved = true; }
         if (drag.moved) { V.cam.ox = drag.ox + (x - drag.x); V.cam.oy = drag.oy + (y - drag.y); V.need = true; }
       }
     }
@@ -896,7 +1066,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         for (let i = V.hits.length - 1; i >= 0; i--) {
           const h = V.hits[i];
           if (!h.panel || !inBox(h)) continue;
-          if (h.kind === "close") select(null); else onOpenRef.current?.(h.s);
+          if (h.kind === "close") { unfollow(); select(null); } else onOpenRef.current?.(h.s);
           return;
         }
         return;
@@ -905,9 +1075,9 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         const h = V.hits[i];
         if (h.panel) continue;
         if (h.kind === "p" && inBox(h)) { onOpenRef.current?.(h.s); return; }
-        if (h.kind === "b" && inPoly(x, y, h.hull)) { select(V.sel === h.id ? null : h.id); return; }
+        if (h.kind === "b" && inPoly(x, y, h.hull)) { unfollow(); select(V.sel === h.id ? null : h.id); return; }
       }
-      if (V.sel) select(null);
+      if (V.sel) { unfollow(); select(null); }
     }
     // The wheel scrolls the page unless the city has been clicked (focused) or ctrl is held
     // (a trackpad pinch sends ctrl): a 600 px canvas must not trap the page.
@@ -922,10 +1092,11 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       else if (e.key === "e" || e.key === "E") { turn(1); e.preventDefault(); }
       else if (e.key === "+" || e.key === "=") zoomAt(V.cssW / 2, V.cssH / 2, 1.3);
       else if (e.key === "-") zoomAt(V.cssW / 2, V.cssH / 2, 1 / 1.3);
+      else if (e.key === "Escape" && V.find) { e.preventDefault(); apiRef.current.endFind(); }
       else if (e.key === "Escape" && V.sel) select(null);
       else if (e.key === "Enter" && V.sel) apiRef.current.enter();
       else if (e.key.startsWith("Arrow")) {
-        hands();
+        hands(); unfollow();
         const d = 40;
         if (e.key === "ArrowLeft") V.cam.ox += d; if (e.key === "ArrowRight") V.cam.ox -= d;
         if (e.key === "ArrowUp") V.cam.oy += d; if (e.key === "ArrowDown") V.cam.oy -= d;
@@ -938,6 +1109,14 @@ function CityIso({ censusRef, onOpen, onEnter }) {
     canvas.addEventListener("pointercancel", onUp);
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("keydown", onKey);
+    const onDocKey = (e) => {
+      if (e.key !== "Escape" || !V.find || e.defaultPrevented) return;
+      const a = document.activeElement;
+      if (a === canvas || (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
+      if (document.querySelector(".hvi-pen-card, [role='dialog']")) return;
+      apiRef.current.endFind();
+    };
+    window.addEventListener("keydown", onDocKey);
 
     // ---- loop --------------------------------------------------------------------------------
     let raf = 0, onScreenNow = true, dead = false;
@@ -967,7 +1146,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
     }
     SAVED = null;
     sync();
-    if (import.meta.env?.DEV) window.__hviIso = { V, turn, select, zoomAt, fit, tap, draw };
+    if (import.meta.env?.DEV) window.__hviIso = { V, turn, select, zoomAt, fit, tap, draw, startFind };
     return () => {
       SAVED = { cam: { ...(V.camTo ? { ...V.cam, ...V.camTo } : V.cam) }, sel: V.sel, cssW: V.cssW };
       dead = true; sync();
@@ -981,13 +1160,25 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       canvas.removeEventListener("pointercancel", onUp);
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onDocKey);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A new find (or the same one picked again: n) flies the camera; null ends it.
+  useEffect(() => { apiRef.current.find?.(find); }, [find]);
+
   const b = sel && BUILDING[sel];
   return (
     <div className="hvi-city-stage" ref={wrapRef}>
+      {found && (
+        <div className="hvi-city-found">
+          <span className="tag" aria-hidden="true">{found.following ? "TRACKING" : "FOUND"}</span>
+          <span className="l" role="status">{found.line}</span>
+          {!found.following && <button type="button" className="hvi-city-zb txt" onClick={() => apiRef.current.follow?.()}>FOLLOW</button>}
+          <button type="button" className="hvi-city-zb" aria-label="Stop finding" onClick={() => apiRef.current.endFind?.()}>×</button>
+        </div>
+      )}
       <TouchGate>
         <canvas ref={canvasRef} tabIndex={0} className="hvi-city-canvas" role="img"
           aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag to pan, pinch to zoom, click then wheel to zoom, Q and E to turn. Select a building to open its cutaway: every floor and room, and who is in it. The district directory below lists every district by keyboard." />

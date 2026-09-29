@@ -15,6 +15,8 @@ import DistrictView from "./DistrictView.jsx";
 import BuildingView from "./BuildingView.jsx";
 import { buildingHref, parseCityRoute } from "./city3d.js";
 import { readCaseId } from "../caseFile.jsx";
+import CityFind from "./CityFind.jsx";
+import { buildIndex, bySlug, findHref } from "./find.js";
 import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
 import SocialPanel from "./SocialPanel.jsx";
@@ -44,7 +46,7 @@ export default function City({ route }) {
   // The query minus the floor: what survives moving between views (?at=, ?stress=).
   const query = useMemo(() => {
     const q = new URLSearchParams(parsed.query.replace(/^\?/, ""));
-    q.delete("floor");
+    q.delete("floor"); q.delete("find");
     const s = q.toString();
     return s ? "?" + s : "";
   }, [parsed.query]);
@@ -63,6 +65,13 @@ export default function City({ route }) {
     return () => setClockOffset(0);
   }, [at]);
   const { roster, census } = useRoster();
+  // FIND: the census index is built when the roster changes, never per frame. #city?find=<slug>
+  // (a pick, or a shared link) flies the CITY view's camera to that subject and follows them.
+  const index = useMemo(() => buildIndex(roster), [roster]);
+  const findSlug = useMemo(() => new URLSearchParams(parsed.query.replace(/^\?/, "")).get("find"), [parsed.query]);
+  const findEntry = findSlug ? bySlug(index, findSlug) : null;
+  const selfEntry = useMemo(() => index.find(e => e.s.you) || null, [index]);
+  const [findN, setFindN] = useState(0);
   const censusRef = useRef({ v: 0, t: 0, mt: null, list: [], districtCounts: {}, transit: 0 });
   const [stats, setStats] = useState(() => ({ districts: [], transit: 0, riders: [], waiting: 0, self: null, sig: "", buildings: {}, bsig: "" }));
   const statsRef = useRef(stats);
@@ -171,6 +180,16 @@ export default function City({ route }) {
   const open = useCallback((s) => setCard({ ...s }), []);
   const close = useCallback(() => setCard(null), []);
   const [mode, setMode] = useCityViewMode();
+  // A find is shown in the CITY view: a pick (or a link) from MAP, STACK or STREET switches to it.
+  useEffect(() => { if (findSlug && !districtId && mode !== "city") setMode("city"); }, [findSlug, districtId, mode, setMode]);
+  const onPick = useCallback((e) => {
+    const href = findHref(e.key, query);
+    if (window.location.hash === href) setFindN(n => n + 1); else window.location.hash = href;
+  }, [query]);
+  const endFind = useCallback(() => { window.location.replace((window.location.href.split("#")[0]) + "#city" + query); }, [query]);
+  const findKey = findEntry?.key;
+  const find = useMemo(() => (findEntry ? { s: findEntry.s, key: findEntry.key, n: findN } : null), [findKey, findN]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const caseId = readCaseId();
   // Directives: a quest-giver's file carries its offer, or REPORT CONTACT inside its building.
   const quests = useQuests(readCaseId());
   // The open file does not re-render with the census clock.
@@ -211,11 +230,15 @@ export default function City({ route }) {
 
   return (
     <div>
-      <CityHeader clockText={<LiveClock />} right={right} pa={pa} />
+      <CityHeader clockText={<LiveClock />} right={right} pa={pa}
+        find={<CityFind index={index} onPick={onPick} self={selfEntry} caseId={caseId} />} />
       <div className="hvi-city-bar">
         <Breadcrumb crumbs={crumbs} />
         {!d && <ViewToggle mode={mode} onChange={setMode} />}
       </div>
+      {findSlug && !findEntry && census !== "pending" && (
+        <div className="hvi-city-note" role="status">NO SUBJECT ON FILE AS "{findSlug.toUpperCase()}". THE DEPARTMENT HAS CHECKED. TWICE.</div>
+      )}
       <Frame box title={b ? b.name : d ? d.name : iso ? "THE SUBSTRATE" : street ? "THE SUBSTRATE // STREET LEVEL" : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
         meta={b ? "CROSS-SECTION" : d ? "INTERIOR" : iso ? "DRAG // PINCH // TURN // TAP A BUILDING" : street ? "WALK // TURN // ENTER A DOOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} flush>
         {b
@@ -223,7 +246,7 @@ export default function City({ route }) {
           : d
             ? <DistrictView key={d.id} districtId={d.id} censusRef={censusRef} onOpen={open} onBuilding={onBuilding} counts={stats.buildings} />
             : iso
-              ? <CityIso censusRef={censusRef} onOpen={open} onEnter={goBuilding} />
+              ? <CityIso censusRef={censusRef} onOpen={open} onEnter={goBuilding} find={find} onFindEnd={endFind} />
             : street
               ? <Street censusRef={censusRef} onOpen={open} onEnter={goBuilding} />
               : three

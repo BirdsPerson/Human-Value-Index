@@ -22,6 +22,38 @@ const css = `
   .hvi-city-in { padding: var(--s3); }
   .hvi-city-in > .ui-disc { margin: 0; }
 
+  /* FIND: a name in the census, and FIND ME */
+  .hvi-city-find { display: flex; align-items: flex-start; gap: var(--s2); margin: var(--s2) 0 0; }
+  .hvi-city-find-box { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-start; gap: 1ch; }
+  .hvi-city-find-box > .p { flex: none; color: var(--accent); line-height: var(--hit-min); font-size: var(--t-s); white-space: pre; }
+  .hvi-city-find .ui-input { font-size: var(--t-m); text-transform: none; }
+  .hvi-city-find .ui-input::-webkit-search-cancel-button { filter: hue-rotate(90deg); }
+  .hvi-city-find-list { position: absolute; left: 0; right: 0; top: 100%; z-index: 40; margin: 0; padding: 0; list-style: none;
+    background: var(--bg); border: var(--bw) solid var(--accent); max-height: min(60vh, 440px); overflow-y: auto; }
+  .hvi-city-find-list li { display: flex; align-items: center; gap: var(--s2); min-height: var(--hit); padding: var(--s1) var(--s2); cursor: pointer; border-bottom: var(--bw) solid var(--line); }
+  .hvi-city-find-list li:last-child { border-bottom: 0; }
+  .hvi-city-find-list li.act { background: var(--accent); color: var(--accent-ink); }
+  .hvi-city-find-list li.act .w { color: var(--accent-ink); }
+  .hvi-city-find-list li.none { cursor: default; color: var(--fg-mute); font-size: var(--t-xs); }
+  .hvi-city-find-list .lead { flex: none; }
+  .hvi-city-find-list .hvi-city-thumb { display: block; width: 16px; height: 24px; image-rendering: pixelated; }
+  .hvi-city-find-list .txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+  .hvi-city-find-list .n { text-transform: none; font-size: var(--t-s); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hvi-city-find-list .w { text-transform: uppercase; font-size: var(--t-xs); color: var(--fg-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hvi-city-findme { flex: none; text-decoration: none; white-space: nowrap; }
+  .hvi-city-findme:disabled { color: var(--fg-mute); border-color: var(--line); cursor: default; }
+  @media (max-width: 720px) {
+    .hvi-city-find { flex-wrap: wrap; }
+    .hvi-city-find-box { flex-basis: 100%; }
+    .hvi-city-findme { width: 100%; }
+  }
+  /* the find's status: over the top of the stage, the [x] and FOLLOW keys at its end */
+  .hvi-city-found { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) 0 var(--s1) var(--s2); background: var(--bg); border-bottom: var(--bw) solid var(--accent); font-size: var(--t-xs); color: var(--fg); min-height: var(--hit-min); }
+  .hvi-city-found .tag { flex: none; color: var(--accent-ink); background: var(--accent); padding: 0 0.6ch; font-weight: 700; }
+  .hvi-city-found .l { flex: 1 1 auto; min-width: 0; }
+  .hvi-city-found .hvi-city-zb { border-top: 0; border-bottom: 0; border-right: 0; }
+  @media (max-width: 720px) { .hvi-city-found .tag { display: none; } }
+
   /* the bar under the header: where you are, and the view toggle */
   .hvi-city-bar { display: flex; justify-content: space-between; align-items: center; gap: var(--s1) var(--s3); margin: var(--s2) 0 var(--s3); min-width: 0; }
   .hvi-city-bar .ui-chips { margin: 0; flex: none; flex-wrap: nowrap; }
@@ -134,7 +166,7 @@ export function injectCityStyles() {
 
 // The machine clock, the census line, and the PA underneath. The PA rotates every few
 // seconds, so it is not a live region (the census would talk over everything).
-export function CityHeader({ clockText, right, pa }) {
+export function CityHeader({ clockText, right, pa, find = null }) {
   return (
     <>
       <div className="hvi-city-head">
@@ -144,6 +176,7 @@ export function CityHeader({ clockText, right, pa }) {
       <div className="hvi-city-pa" aria-hidden="true">
         <span className="tag">PA&gt;</span><Typed key={pa} as="span" text={pa} cps={45} />
       </div>
+      {find}
     </>
   );
 }

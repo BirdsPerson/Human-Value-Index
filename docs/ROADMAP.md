@@ -25,7 +25,7 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       championship, MVP; league rivalries feed social.js; the PA calls it. Later: more sports
       (the Bowl for football/soccer), a second division with promotion/relegation, and wagers
       in CYCLES once the economy exists.
-   b1b. **CITY SEARCH + FIND ME** (Scott 2026-09-29; next after the building design pass):
+   b1b. **CITY SEARCH + FIND ME** (Scott 2026-09-29; SHIPPED 2026-09-29: src/city/find.js, CityFind.jsx, check-find.mjs; #city?find=<slug>):
       FIND box on the city screen, type-ahead over the census; picking someone flies the
       camera to where they are now (whereAt), highlights and follows them; inside a building
       the cutaway opens on their floor; status line "NAME — PLACE, FLOOR. ACTIVITY." FIND ME
