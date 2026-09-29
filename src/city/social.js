@@ -126,6 +126,7 @@ export const TEMPLATE_LINES = LINES;   // checks read these
 export function advance(state, subjects, toHour, opts = {}) {
   const seed = state.seed || SIM.SEED;
   const people = dedupe(subjects);
+  forget(state, new Set(people.map(SIM.keyOf)));   // withdrawn/removed files leave the ledger
   SIM.setRoster(people);   // capacity-aware placement, same roster the browsers register
   for (const s of people) state.names[SIM.keyOf(s)] = displayName(s);
   // Make every snapshot the state already knows about visible to the sim.
@@ -146,6 +147,24 @@ export function advance(state, subjects, toHour, opts = {}) {
     }
   }
   prunePairs(state);
+  return state;
+}
+
+// Drop everyone not in the census: their pairs, events, name and friend-pull boosts.
+// The census must be complete (social-tick reads it strictly), or a Blobs hiccup would
+// erase every referral's relationships.
+export function forget(state, live) {
+  for (const pk of Object.keys(state.pairs)) {
+    const [a, b] = pk.split("|");
+    if (!live.has(a) || !live.has(b)) delete state.pairs[pk];
+  }
+  state.events = state.events.filter(e => live.has(e.a) && live.has(e.b));
+  for (const k of Object.keys(state.names)) if (!live.has(k)) delete state.names[k];
+  for (const snap of Object.values(state.snapshots)) {
+    let changed = false;
+    for (const k of Object.keys(snap.boosts || {})) if (!live.has(k)) { delete snap.boosts[k]; changed = true; }
+    if (changed) snap.ver = `${String(snap.ver).split(":")[0]}:${fnv(JSON.stringify(snap.boosts)).toString(36)}`;
+  }
   return state;
 }
 

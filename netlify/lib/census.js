@@ -6,8 +6,10 @@ import { publicFigure } from "./refer.js";
 import { REALITY_INDEX } from "./intake.js";
 import { sanitizeAvatar } from "../../src/avatar.js";
 
-export async function censusSubjects() {
-  const [cards, figures] = await Promise.all([listPenCards(), listFigures().catch(() => [])]);
+// strict: a failed figure read throws instead of returning no figures. The social tick
+// needs that, because it forgets anyone missing from the census.
+export async function censusSubjects({ strict = false } = {}) {
+  const [cards, figures] = await Promise.all([listPenCards(), strict ? listFigures() : listFigures().catch(() => [])]);
   return [
     ...cards.map(c => ({
       // Private citizens: score and tier only. Old cards may still carry a verdict

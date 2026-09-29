@@ -111,5 +111,36 @@ for (const [id, p] of Object.entries(SIM.PLACES)) {
 }
 BUILDING;   // (imported for parity with check-quests' view of the city)
 
+// ---- withdrawn subjects leave the ledger ------------------------------------------------
+// A file withdrawn by the Department (e.g. the wrong Frank Weiss) drops out of the census;
+// the next advance must drop its pairs, events, name and boosts, and so must /api/social.
+{
+  const gone = [...new Set(state.events.flatMap(e => [e.a, e.b]))].find(k => k.startsWith("citizen-q"))
+    || Object.keys(state.pairs).flatMap(pk => pk.split("|")).find(k => k.startsWith("citizen-q"));
+  assert.ok(gone, "a test citizen made at least one relationship to withdraw");
+  const st = structuredClone(state);
+  SOC.advance(st, roster.filter(s => SIM.keyOf(s) !== gone), st.hour + 48);
+  const blob = JSON.stringify(st);
+  assert.ok(!blob.includes(`"${gone}"`) && !blob.includes(`${gone}|`) && !blob.includes(`|${gone}"`), `${gone}: withdrawn subject gone from the stored state`);
+  const p2 = SOC.publish(st, st.hour);
+  assert.ok(!JSON.stringify(p2).includes(gone), `${gone}: withdrawn subject gone from the published ledger`);
+  assert.ok(Object.keys(st.pairs).length > 0, "everyone else keeps their relationships");
+
+  // The tick end to end, with a fake store: withdrawal drops them from bySubject too; a
+  // failed census read writes nothing (a hiccup must never pass for an empty city).
+  const { tick } = await import("../netlify/functions/social-tick.js");
+  const store = { state: structuredClone(state), pub: null };
+  const extra = roster.filter(s => s.kind === "citizen");
+  const io = (census) => ({ getState: async () => structuredClone(store.state), putState: async v => { store.state = v; }, putPublic: async v => { store.pub = v; }, census });
+  const nowMs = T0 + 60 * 60 * 1000;   // an hour of real time past the state's clock region
+  store.state.hour = Math.floor(SIM.machineClock(nowMs).mt) - 5;
+  await tick(nowMs, io(async () => extra.filter(s => SIM.keyOf(s) !== gone)));
+  assert.ok(!JSON.stringify(store.pub).includes(gone) && !JSON.stringify(store.state).includes(`"${gone}"`), `${gone}: tick drops the withdrawn subject everywhere`);
+  assert.ok(Object.keys(store.pub.bySubject).length > 0, "the tick still publishes everyone else");
+  const before = JSON.stringify(store.state);
+  await assert.rejects(tick(nowMs + 60_000, io(async () => { throw new Error("blobs down"); })));
+  assert.equal(JSON.stringify(store.state), before, "a failed census leaves the ledger untouched");
+}
+
 console.log(`social ok: ${Object.keys(state.pairs).length} pairs, ${pub.counts.friends} friendships, ${pub.counts.rivals} rivalries; ` +
   `friend co-location ${withBias} vs ${without} without feedback; quest window covered ${covered}/14 days; ${ms} ms`);

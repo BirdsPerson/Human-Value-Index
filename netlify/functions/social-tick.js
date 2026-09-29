@@ -11,7 +11,7 @@ import { getState, putState, putPublic } from "../lib/social-store.js";
 export const FAST_FORWARD_DAYS = 30;
 const MAX_HOURS_PER_RUN = 24 * 40;   // bounded work per invocation; a backlog catches up next hour
 
-const defaultIo = { getState, putState, putPublic, census: censusSubjects };
+const defaultIo = { getState, putState, putPublic, census: () => censusSubjects({ strict: true }) };
 
 // io is swappable so scripts/social-seed.mjs runs exactly this against production Blobs.
 export async function tick(nowMs = Date.now(), io = defaultIo) {
