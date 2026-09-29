@@ -51,8 +51,11 @@ export async function tick(nowMs = Date.now(), io, opts = {}) {
   try {
     // The census first: the tick forgets anyone missing from it, so a failed read must
     // write nothing (census() throws rather than pass for an empty city).
-    const roster = fullRoster(await io.census());
-    let { state, etag } = io.load ? await io.load() : { state: await io.getState().catch(() => null), etag: null };
+    // Where the time goes (reported with the run): Blobs I/O vs the sim itself.
+    const t = { io: 0, sim: 0 };
+    const timed = async (k, f) => { const a = clock(); try { return await f(); } finally { t[k] += clock() - a; } };
+    const roster = fullRoster(await timed("io", () => io.census()));
+    let { state, etag } = await timed("io", () => (io.load ? io.load() : io.getState().catch(() => null).then(state => ({ state, etag: null }))));
     const save = io.save ? (s, e) => io.save(s, e) : async (s) => { await io.putState(s); return null; };
     if (!state || state.seed !== SEED) {
       const start = nowHour - 24 * FAST_FORWARD_DAYS;
@@ -65,17 +68,21 @@ export async function tick(nowMs = Date.now(), io, opts = {}) {
       if (chunks > 0 && clock() - t0 >= budgetMs) break;
       const a = state.hour;
       const b = Math.min(target, (Math.floor(a / CHUNK_HOURS) + 1) * CHUNK_HOURS);
+      const c = clock();
       advance(state, roster, b);
+      t.sim += clock() - c;
       noteRoster(state, a, b, rosterVersion());
       chunks++;
       state.tick = { run, at: new Date(clock()).toISOString(), chunk: chunks };
-      etag = await save(state, etag);   // checkpoint; TickConflict if the ledger moved under us
+      etag = await timed("io", () => save(state, etag));   // checkpoint; TickConflict if the ledger moved under us
     }
+    const c = clock();
     const pub = publish(state, state.hour);
     pub.bySubject = publishAll(state, roster.map(s => s.slug), { relations: 8, events: 5 });
     pub.at = new Date(nowMs).toISOString();
-    await io.putPublic(pub);
-    return { run, hour: state.hour, nowHour, from, behind: nowHour - state.hour, chunks, ms: Math.round(clock() - t0), counts: pub.counts };
+    t.sim += clock() - c;
+    await timed("io", () => io.putPublic(pub));
+    return { run, hour: state.hour, nowHour, from, behind: nowHour - state.hour, chunks, ms: Math.round(clock() - t0), simMs: Math.round(t.sim), ioMs: Math.round(t.io), counts: pub.counts };
   } finally {
     if (io.lease) await io.lease.release(run).catch(() => {});
   }
