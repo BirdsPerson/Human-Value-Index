@@ -174,6 +174,8 @@ const globalStyles = `
   }
   .as-typed { text-transform: none; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  /* Typed text keeps a screen-reader copy beside the visible one; copying the page must not grab both. */
+  .typed > .sr-only { user-select: none; -webkit-user-select: none; }
 
   .hvi-wrap { max-width: 86ch; margin: 0 auto; padding: 0 max(var(--gutter), var(--safe-r)) var(--s6) max(var(--gutter), var(--safe-l)); position: relative; z-index: 1; }
   .hvi-wrap.wide { max-width: 1040px; }
