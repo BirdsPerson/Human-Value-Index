@@ -71,6 +71,14 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       reactor/foundry/construction; injured recover at WARD 7 (exists, has staff, no patients
       yet). Sprawl: new edge sectors built by the winning developer; SUBWAY extension is itself
       a project; THE UNDERCROFT beneath the city is where unrest organizes.
+   b6. **BUILDING DESIGN PASS** (Scott 2026-09-29; next after the soccer/football fields):
+      distinct architecture per building type instead of one generic block. Housing reads
+      by tier: low tiers in big brick PROJECTS (repeating balconies, laundry lines, chain-
+      link, broken lights), middle in BROWNSTONE rows/walk-ups with stoops, top tier in GLASS
+      HIGH-RISES (penthouse terraces, doorman, rooftop pool). Works = industrial sheds,
+      smokestacks, conveyors; Campus = gothic stone and ivy; Strip = neon and the casino
+      marquee; HQ = the Overlord monolith. Later, with the economy: buildings decay or
+      gentrify with their district's fortunes.
    c. **The Overlord tower (item 11) as the admin building:** Intake, Appeals desk, Review
       Board, Records, Calibration Lab, Holding Cells (item 12), and THE PEOPLE'S PETITION
       console = the People's Vote exactly as designed in docs/story/STORYLINE_TOURNAMENT.md
