@@ -334,6 +334,8 @@ async function main() {
   }
   if (!process.env.ANTHROPIC_API_KEY) {
     process.env.ANTHROPIC_API_KEY = execFileSync("netlify", ["env:get", "ANTHROPIC_API_KEY", "--context", "production"], { cwd: ROOT, encoding: "utf8" }).trim();
+    // An unlinked checkout (a git worktree) gets CLI text back, not a key, and the batch 401s.
+    if (!/^sk-ant-/.test(process.env.ANTHROPIC_API_KEY)) throw new Error(`netlify env:get gave no key in ${ROOT}; run \`netlify link\` there`);
   }
   // One process at a time: a Saturday run can still be waiting on a batch when a manual
   // kickstart (or the next Saturday) arrives.
