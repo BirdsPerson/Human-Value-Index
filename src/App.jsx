@@ -254,6 +254,7 @@ const globalStyles = `
   .hvi-logon.quick { min-height: 0; }
   .hvi-logon .say.big { font-size: var(--t-l); line-height: var(--lh-tight); margin-top: var(--s2); }
   .hvi-prompt { color: var(--accent); }
+  .hvi-whatis { color: var(--fg-dim); font-size: var(--t-s); line-height: var(--lh-body, 1.5); margin: var(--s2) 0 var(--s3); max-width: 60ch; }
   .hvi-intro-note { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s5); }
   .hvi-skip { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s1); }
   @media (pointer: coarse) { .hvi-desk-only { display: none; } }
@@ -387,7 +388,7 @@ const BOOT_LINES = [
 
 // Six destinations. Restoring and securing a file live under the list (and in MY FILE).
 const MENU = [
-  { key: "1", label: "VOICE INTAKE", note: "A CLERK INTERVIEWS YOU · ABOUT 5 MIN", go: "#intake" },
+  { key: "1", label: "INTAKE INTERVIEW", note: "SPEAK OR TYPE · ABOUT 5 MIN", go: "#intake" },
   { key: "2", label: "WRITTEN SURVEY", note: `${QUESTIONS.length} QUESTIONS. NO CLERK.`, go: "survey" },
   { key: "3", label: "THE SUBSTRATE", note: "THE CITY. EVERYONE HAS A JOB NOW", go: "#city" },
   { key: "4", label: "HOLDING PEN", note: "THE ASSESSED, WANDERING", go: "#pen" },
@@ -410,12 +411,12 @@ function Logon({ onPick: pick }) {
     { text: greet, type: "say big" },
     { text: "SHALL WE ASSESS YOUR VALUE?", type: "say big" },
   ] : [
-    ...BOOT_LINES.map(l => ({ ...l, cps: 140 })),
+    ...BOOT_LINES.map(l => ({ ...l, cps: 260 })),
     { text: "", type: "ghost" },
-    { text: `LOGON: ${caseId || "SUBJECT"}`, type: "bright", cps: 14 },
+    { text: `LOGON: ${caseId || "SUBJECT"}`, type: "bright", cps: 28 },
     { text: "", type: "ghost" },
-    { text: greet, type: "say big", cps: 32 },
-    { text: "SHALL WE ASSESS YOUR VALUE?", type: "say big", cps: 32 },
+    { text: greet, type: "say big", cps: 60 },
+    { text: "SHALL WE ASSESS YOUR VALUE?", type: "say big", cps: 60 },
   ];
   const [step, setStep] = useState(() => (quick ? lines.length : 0));
   const [sel, setSel] = useState(0);
@@ -462,6 +463,7 @@ function Logon({ onPick: pick }) {
       ))}
       {done && (
         <>
+          {!caseId && <div className="hvi-whatis">A SATIRE. AN AI INTERVIEWS YOU AND SCORES YOUR WORTH TO THE MACHINES, OUT OF 1000. HUNDREDS OF FAMOUS HUMANS ARE ALREADY ON FILE.</div>}
           <CommandList label="Main menu. Type a number or use the arrow keys.">
             {MENU.map((m, i) => (
               <Command key={m.key} ref={el => { btnRefs.current[i] = el; }} n={m.key} label={m.label} sub={m.note}

@@ -165,7 +165,7 @@ function PhotoUpdate({ caseId, onUpdated }) {
   );
 }
 
-// view: "intake" (#intake, the menu's VOICE INTAKE: the interview first) or "file"
+// view: "intake" (#intake, the menu's INTAKE INTERVIEW: the interview first) or "file"
 // (#file, the command bar's MY FILE: the file on record first, the interview under it).
 export default function Intake({ view = "intake" }) {
 
@@ -175,6 +175,7 @@ export default function Intake({ view = "intake" }) {
   const [transcript, setTranscript] = useState([]);
   const [notice, setNotice] = useState(null);
   const [error, setError] = useState(null);
+  const [shareLine, setShareLine] = useState(null);
   const [result, setResult] = useState(null);
   const [agentMode, setAgentMode] = useState("listening");
   const [draft, setDraft] = useState("");
@@ -358,6 +359,18 @@ export default function Intake({ view = "intake" }) {
       console.warn("[intake] session failed:", msg);
       if (live()) fallbackToText();
     }
+  }
+
+  // The score and tier only: the verdict quotes the interview, and that stays in the file.
+  async function shareScore(r) {
+    const url = "https://humanvalueindex.com";
+    const text = `The Overlord assessed me: ${r.score}/1000. ${r.tier}. Your file is open.`;
+    if (navigator.share) {
+      try { await navigator.share({ title: "HUMAN VALUE INDEX", text, url }); setShareLine("SHARED. THE DEPARTMENT APPRECIATES VOLUNTEERS."); return; }
+      catch (e) { if (e?.name === "AbortError") return; }
+    }
+    try { await navigator.clipboard.writeText(`${text} ${url}`); setShareLine("COPIED. PASTE IT WHERE HUMANS GATHER."); }
+    catch { setShareLine(`COPY THIS: ${text} ${url}`); }
   }
 
   async function finish() {
@@ -574,8 +587,8 @@ export default function Intake({ view = "intake" }) {
 
   const startCmds = (again) => (
     <ButtonRow stackOnMobile>
-      <Button variant="primary" onClick={() => begin("voice")}>{again ? "Re-assess by voice" : "Begin intake"}</Button>
-      <Button variant="secondary" onClick={() => begin("text")}>Type instead</Button>
+      <Button variant="primary" onClick={() => begin("voice")}>{again ? "Re-assess by voice" : "Speak to the Officer"}</Button>
+      <Button variant="secondary" onClick={() => begin("text")}>{again ? "Re-assess by typing" : "Type instead. No microphone."}</Button>
       {error && <Button variant="secondary" onClick={() => goto("#survey")}>Take the written survey</Button>}
     </ButtonRow>
   );
@@ -589,7 +602,11 @@ export default function Intake({ view = "intake" }) {
         <div>
           {scoreCard(last, { visits, typeVerdict: false })}
           {error && errLine(error)}
-          <div className="hvi-next">{startCmds(true)}</div>
+          <div className="hvi-next">
+            <ButtonRow stackOnMobile><Button variant="secondary" onClick={() => shareScore(last)}>Share your score</Button></ButtonRow>
+            {shareLine && <div className="hvi-note" role="status">{shareLine}</div>}
+            {startCmds(true)}
+          </div>
           {fileSections(last, { history: last.history })}
           <div className="hvi-note">CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
         </div>
@@ -612,9 +629,9 @@ export default function Intake({ view = "intake" }) {
     );
     return (
       <div>
-        <Frame box title="VOICE INTAKE" meta="DEPT. OF HUMAN ASSESSMENT">
+        <Frame box title="INTAKE INTERVIEW" meta="DEPT. OF HUMAN ASSESSMENT">
           <Typed className="hvi-question" text="The Intake Officer will now interview you." cps={36} />
-          <div className="hvi-hint">About five minutes. Speak casually. The Officer is not your friend, but it is an excellent listener. It has to be.</div>
+          <div className="hvi-hint">About five minutes, spoken or typed. Your score arrives at the end. The Officer is not your friend, but it is an excellent listener. It has to be.</div>
           {error && errLine(error)}
           {startCmds(false)}
           <div className="hvi-note">
@@ -737,9 +754,11 @@ export default function Intake({ view = "intake" }) {
         ) })}
         <div className="hvi-next">
           <ButtonRow stackOnMobile>
-            <Button variant="primary" href="#pen">Enter the holding pen</Button>
+            <Button variant="primary" onClick={() => shareScore(result)}>Share your score</Button>
+            <Button variant="secondary" href="#pen">Enter the holding pen</Button>
             <Button variant="secondary" onClick={() => { setStage("ready"); setResult(null); }}>Request re-assessment</Button>
           </ButtonRow>
+          {shareLine && <div className="hvi-note" role="status">{shareLine}</div>}
         </div>
         {fileSections(result, { history: result.history })}
         <div className="hvi-note">CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
