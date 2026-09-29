@@ -6,7 +6,8 @@ spriteStatus "pending" and a sprite_look written by the scoring model. This job,
 launchd every 10 minutes on the Mac (com.hvi.referral-sprites), finds those cards,
 generates the sprite with the same Higgsfield pipeline as the 62 on file
 (scripts/sprites.py), uploads the 64x48 sheet to hvi-sprites and marks the card ready.
-The pen polls /api/pen and swaps the placeholder for /api/sprite/<slug>.
+The pen polls /api/pen and swaps the placeholder for /api/sprite/<slug>; each pass then
+repacks the production atlas (scripts/prod-atlas.mjs) when any ready sprite changed.
 
   python3 scripts/referral_sprites.py                  # one pass over the queue
   python3 scripts/referral_sprites.py --dry-run        # list the queues, generate nothing
@@ -271,9 +272,25 @@ def sync_harm_reviews(idx):
         log(f"harm reviews skipped: {e}")
 
 
+def rebuild_atlas():
+    """Repack the production sprite atlas (scripts/prod-atlas.mjs) so browsers fetch a few
+    sheets, not one /api/sprite per face. It exits in two Blobs reads when no ready sprite
+    changed, so every pass calls it (which also retries a pack a failed pass missed).
+    Best-effort: a sprite missing from the atlas still loads from its own URL."""
+    try:
+        res = subprocess.run(["node", str(ROOT / "scripts" / "prod-atlas.mjs")], cwd=ROOT,
+                             capture_output=True, text=True, timeout=600)
+        out = (res.stdout or res.stderr or "").strip().splitlines()
+        if res.returncode != 0 or (out and "unchanged" not in out[0]):
+            log(" / ".join(out)[:300] if out else f"atlas: exit {res.returncode}")
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log(f"atlas skipped: {e}")
+
+
 def main():
     if "--takedown" in sys.argv:
         takedown(arg_after("--takedown"), excluded="--excluded" in sys.argv)
+        rebuild_atlas()
         return 0
     dry = "--dry-run" in sys.argv
     idx = get_json("hvi-figures", "index") or {"cards": []}
@@ -324,9 +341,11 @@ def main():
             log(f"FAIL   {slug} (attempt {attempt}/{MAX_ATTEMPTS}{', giving up' if attempt >= MAX_ATTEMPTS else ''}): {str(e)[:200]}")
         except Plumbing as e:
             log(f"STOP   {slug}: plumbing failure, no attempt charged, run ended: {str(e)[:200]}")
+            rebuild_atlas()
             return 1
         set_json("hvi-figures", slug, card)
         update_index(card)
+    rebuild_atlas()
     return 0
 
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { SPRITE_W, SPRITE_H, paintAvatar, paintPlaceholder, loadImage, loadRepoSprite } from "./sprites.js";
+import { SPRITE_W, SPRITE_H, paintAvatar, paintPlaceholder, loadSprite, loadRepoSprite } from "./sprites.js";
 import { sanitizeAvatar } from "./avatar.js";
 import { getTier } from "./figures.js";
 
@@ -49,7 +49,7 @@ function PhotoCanvas({ subject, scale, label }) {
     };
     const stand = () => paintPlaceholder(subject?.slug || strict(subject?.name) || "subject", getTier(subject?.score ?? 500).color, 1);
     if (src.spec) { draw(paintAvatar(src.spec, 1)); return; }
-    const tries = src.repo?.length ? src.repo.map(slug => () => loadRepoSprite(slug)) : (src.img || []).map(u => () => loadImage(u));
+    const tries = src.repo?.length ? src.repo.map(slug => () => loadRepoSprite(slug)) : (src.img || []).map(u => () => loadSprite(u));
     if (!tries.length) { draw(stand()); return; }
     (async () => {
       for (const load of tries) { const img = await load(); if (img) return draw(img); if (dead) return; }

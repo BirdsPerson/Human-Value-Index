@@ -36,7 +36,7 @@ export const getCard = slug => (slug && slug !== "index" ? retry(() => store("hv
 // the slug was already taken (the caller picks another or skips).
 // Blobs over the public internet drop the odd request ("fetch failed"); conditional
 // writes make a retry safe.
-async function retry(fn, tries = 4) {
+export async function retry(fn, tries = 4) {
   for (let i = 1; ; i++) {
     try { return await fn(); } catch (e) {
       if (i >= tries || !/fetch failed|ECONNRESET|ETIMEDOUT|socket/i.test(String(e?.message || e) + String(e?.cause?.code || ""))) throw e;

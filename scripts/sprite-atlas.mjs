@@ -2,7 +2,7 @@
 // plus a JSON of rects, so the pen and the city make one image request instead of ~65.
 // Pure node (zlib only): Netlify builds it with `npm run build`, and the Vite plugin in
 // vite.config.js serves it live on the dev server. Production referral sprites are
-// separate URLs drawn later by the Mac job; they stay individual and are not in here.
+// drawn later by the Mac job and packed separately (scripts/prod-atlas.mjs, /api/atlas.json).
 //
 //   node scripts/sprite-atlas.mjs            write dist-free preview to stdout (sizes)
 //   import { buildAtlas } from "./sprite-atlas.mjs"
@@ -90,6 +90,27 @@ export function encodePng(w, h, rgba) {
   return Buffer.concat([SIG, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw, { level: 9 })), chunk("IEND", Buffer.alloc(0))]);
 }
 
+// Shelf-pack decoded sheets ([{ slug, img: { w, h, rgba }, fw, frames }]) into one PNG,
+// tallest first, then by slug, so the same input always gives the same bytes. The
+// production atlas (scripts/prod-atlas.mjs) packs each of its sheets with this too.
+export function packSheets(sheets, { maxWidth = 1024 } = {}) {
+  const order = sheets.slice().sort((a, b) => b.img.h - a.img.h || a.slug.localeCompare(b.slug));
+  const rects = {};
+  let x = 0, y = 0, rowH = 0, W = 0;
+  for (const s of order) {
+    if (x > 0 && x + s.img.w > maxWidth) { y += rowH; x = 0; rowH = 0; }
+    rects[s.slug] = { x, y, w: s.img.w, h: s.img.h, fw: s.fw, frames: s.frames };
+    x += s.img.w; rowH = Math.max(rowH, s.img.h); W = Math.max(W, x);
+  }
+  const H = y + rowH;
+  const rgba = Buffer.alloc(Math.max(1, W) * Math.max(1, H) * 4);
+  for (const s of order) {
+    const r = rects[s.slug];
+    for (let row = 0; row < s.img.h; row++) s.img.rgba.copy(rgba, ((r.y + row) * W + r.x) * 4, row * s.img.w * 4, (row + 1) * s.img.w * 4);
+  }
+  return { png: encodePng(Math.max(1, W), Math.max(1, H), rgba), rects, w: W, h: H };
+}
+
 // Pack every sheet in `dir` into rows (shelf packing, tallest first). Sheets here are all
 // 64x48 today, so this is a grid in practice; the packer does not assume it.
 export function buildAtlas(dir, { maxWidth = 1024 } = {}) {
@@ -106,21 +127,7 @@ export function buildAtlas(dir, { maxWidth = 1024 } = {}) {
     const fw = meta.w || 32, frames = Math.max(1, meta.frames || Math.floor(img.w / fw) || 1);
     sheets.push({ slug, img, fw, frames });
   }
-  sheets.sort((a, b) => b.img.h - a.img.h || a.slug.localeCompare(b.slug));
-  const rects = {};
-  let x = 0, y = 0, rowH = 0, W = 0;
-  for (const s of sheets) {
-    if (x > 0 && x + s.img.w > maxWidth) { y += rowH; x = 0; rowH = 0; }
-    rects[s.slug] = { x, y, w: s.img.w, h: s.img.h, fw: s.fw, frames: s.frames };
-    x += s.img.w; rowH = Math.max(rowH, s.img.h); W = Math.max(W, x);
-  }
-  const H = y + rowH;
-  const rgba = Buffer.alloc(Math.max(1, W) * Math.max(1, H) * 4);
-  for (const s of sheets) {
-    const r = rects[s.slug];
-    for (let row = 0; row < s.img.h; row++) s.img.rgba.copy(rgba, ((r.y + row) * W + r.x) * 4, row * s.img.w * 4, (row + 1) * s.img.w * 4);
-  }
-  const png = encodePng(Math.max(1, W), Math.max(1, H), rgba);
+  const { png, rects, w: W, h: H } = packSheets(sheets, { maxWidth });
   const v = createHash("sha1").update(png).digest("hex").slice(0, 10);
   const sprites = Object.fromEntries(Object.keys(rects).sort().map(k => [k, rects[k]]));
   return { png, json: { v, png: `atlas.png?v=${v}`, w: W, h: H, count: sheets.length, sprites }, skipped };

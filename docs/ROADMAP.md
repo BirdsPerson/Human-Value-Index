@@ -10,9 +10,7 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 ## Backlog (priority order)
 
 0. [in progress 2026-09-29, Scott's order: scale -> community -> HQ]
-   a. **Scale.** One production sprite atlas (Mac job packs every ready referral sprite)
-      instead of ~300 /api/sprite requests; slim /api/pen (census fields only) with the
-      file's verdict/history/breakdown fetched on open.
+   a. [shipped 2026-09-29, see Done] **Scale.** Production sprite atlas + slim /api/pen.
    b. **Community + incidents.** Real-life ties from Wikidata (spouse, sibling, bandmates
       /member of, teammates, partners) raise affinity so real friends gravitate together;
       friendship cliques become named groups (Overlord-named) with a home hangout and group
@@ -99,6 +97,13 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Done
 
+- 2026-09-29 Scale (item 0a): production sprite atlas (scripts/prod-atlas.mjs packs every
+  ready referral sprite into content-hashed sheets in Blobs; /api/atlas.json + /api/atlas/<hash>.png;
+  the referral job repacks each pass, skipping in two reads when nothing changed; a sprite
+  newer than the pack loads its own /api/sprite URL). Slim census: /api/pen drops verdict,
+  scoreHistory and harmReview (breakdown stays: city jobs, friendships and analytics read it);
+  /api/figure/<slug> serves the whole file when it opens (src/fileDetail.js). Hashed /assets/*
+  and the repo atlas PNG are cached immutable.
 - 2026-09-29 Birth country on every subject (Scott: "notice who we're leaving out"): `origin`
   (ISO alpha-3, Wikidata birthplace country, else citizenship) on src/figures.js, every
   production card (scripts/backfill-origins.mjs) and at creation (refer, roster engine).

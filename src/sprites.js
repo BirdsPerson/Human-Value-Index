@@ -199,6 +199,25 @@ export function sparkPoints(values, w, h, pad = 4) {
 }
 
 // ---------------------------------------------------------------------------
+// The production atlas (scripts/prod-atlas.mjs, /api/atlas.json). A drawn referral's
+// sprite URL is /api/sprite/<slug>?v=<v>; the atlas holds it only when its rect was packed
+// from that same v. Anything else (drawn or redrawn since the last pack, a URL of another
+// shape) is null here and loads from its own URL.
+const PROD_SPRITE = /^\/api\/sprite\/([a-z0-9-]{1,80})\?v=([A-Za-z0-9._-]{1,40})$/;
+export function prodAtlasRect(atlas, src) {
+  const m = typeof src === "string" ? PROD_SPRITE.exec(src) : null;
+  if (!m || !atlas || !atlas.sprites || !Object.prototype.hasOwnProperty.call(atlas.sprites, m[1])) return null;
+  const r = atlas.sprites[m[1]];
+  if (!Array.isArray(r) || r[0] !== m[2] || typeof atlas.sheets?.[r[1]] !== "string") return null;
+  return { slug: m[1], sheet: atlas.sheets[r[1]], x: r[2], y: r[3], w: r[4], h: r[5], frames: r[6] };
+}
+// "/sprites/<slug>.png" (a citizen's hand-assigned repo sprite, any ?v=): its atlas slug.
+export function repoSpriteSlug(src) {
+  const m = typeof src === "string" ? /^\/sprites\/([a-z0-9-]{1,80})\.png(\?.*)?$/.exec(src) : null;
+  return m && m[1] !== "atlas" ? m[1] : null;
+}
+
+// ---------------------------------------------------------------------------
 // Browser only below.
 
 // A citizen's procedural file photo as a sprite sheet (frames side by side).
@@ -301,4 +320,44 @@ export async function loadRepoSprite(slug) {
     if (c) return c;
   }
   return loadImage(`/sprites/${slug}.png`);
+}
+
+// The production atlas: the JSON once per visit, each sheet once, when first needed.
+let prodP = null;
+const prodSheets = new Map();   // hash -> Promise<Image|null>
+const prodCut = new Map();      // src -> canvas
+export function loadProdAtlas() {
+  if (!prodP) {
+    prodP = (async () => {
+      try {
+        const r = await fetch("/api/atlas.json");
+        if (!r.ok) return null;
+        const j = await r.json();
+        return j && typeof j.sprites === "object" && Array.isArray(j.sheets) ? j : null;
+      } catch { return null; }
+    })();
+  }
+  return prodP;
+}
+
+// Any sprite URL a subject carries: cut from an atlas when one holds it, else the URL.
+export async function loadSprite(src) {
+  const repo = repoSpriteSlug(src);
+  if (repo) { const a = await loadAtlas(); if (a && Object.prototype.hasOwnProperty.call(a.sprites, repo)) return loadRepoSprite(repo); }
+  if (prodCut.has(src)) return prodCut.get(src);
+  const r = prodAtlasRect(await loadProdAtlas(), src);
+  if (r) {
+    if (!prodSheets.has(r.sheet)) prodSheets.set(r.sheet, loadImage(`/api/atlas/${r.sheet}.png`));
+    const img = await prodSheets.get(r.sheet);
+    if (img) {
+      try {
+        const c = document.createElement("canvas");
+        c.width = r.w; c.height = r.h;
+        c.getContext("2d").drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+        prodCut.set(src, c);
+        return c;
+      } catch { /* fall through to the URL */ }
+    }
+  }
+  return loadImage(src);
 }

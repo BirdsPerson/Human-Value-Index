@@ -446,3 +446,14 @@ export const publicFigure = c => ({
   height: Number.isFinite(c.height) ? c.height : null, sex: c.sex === "m" || c.sex === "f" ? c.sex : null,
   scoreHistory: Array.isArray(c.scoreHistory) ? c.scoreHistory.slice(-40) : null,
 });
+
+// The census (/api/pen, the social tick) carries what the city, pen, cube and analytics
+// read for every subject; these only a file shows, so /api/figure/<slug> serves them
+// when a file opens. Breakdown stays: the city's jobs and friendships and the analytics
+// category profile read it for everyone (~140 bytes a subject).
+export const FILE_ONLY = ["verdict", "scoreHistory", "harmReview"];
+export const censusFigure = c => {
+  const f = publicFigure(c);
+  for (const k of FILE_ONLY) delete f[k];
+  return f;
+};

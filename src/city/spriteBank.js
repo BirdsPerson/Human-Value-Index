@@ -2,7 +2,7 @@
 // as the Holding Pen: the drawn sprite when one exists, the procedural file photo for
 // citizens, the tier-coloured stand-in until either arrives. Browser only.
 
-import { SPRITE_W, SPRITE_H, paintAvatar, paintPlaceholder, loadManifest, loadImage, loadRepoSprite } from "../sprites.js";
+import { SPRITE_W, SPRITE_H, paintAvatar, paintPlaceholder, loadManifest, loadSprite, loadRepoSprite } from "../sprites.js";
 import { getTier, slugify, slugCandidates } from "../figures.js";
 
 let manifestP = null;
@@ -34,7 +34,7 @@ function attach(s, e, slug) {
     const key = slugCandidates(s.name).concat(slug).find(k => manifest && manifest[k]);
     if (!src && !key) return;
     const meta = (key && manifest[key]) || {};
-    (src ? loadImage(src) : loadRepoSprite(key)).then(img => {
+    (src ? loadSprite(src) : loadRepoSprite(key)).then(img => {
       if (!img) return;
       e.img = img; e.real = true; e.mini = null; e.v++;
       e.frames = Math.max(1, meta.frames || Math.floor(img.width / (meta.w || SPRITE_W)) || 1);

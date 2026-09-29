@@ -111,6 +111,8 @@ def main():
             both = Image.new("RGBA", (max(prev.width, cs.width), prev.height + cs.height), (236, 232, 222, 255))
             both.alpha_composite(prev, (0, 0)); both.alpha_composite(cs, (0, prev.height)); cs = both
         cs.save(out)
+    if any(ok for _, ok, _, _ in results):
+        R.rebuild_atlas()   # production redraws carry a new ?v=; repack so browsers get them in the atlas
     end = credits()
     print(json.dumps({"results": [(s, ok, w[:200]) for s, ok, w, _ in results], "credits_start": start,
                       "credits_end": end, "spent_estimate": spent}, indent=1))

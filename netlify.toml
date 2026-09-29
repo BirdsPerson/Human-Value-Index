@@ -12,3 +12,17 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Content-hashed files never change under the same URL: browsers keep them instead of
+# revalidating each visit. /assets/* are Vite's hashed bundles; the repo sprite atlas is
+# always requested as atlas.png?v=<content hash> (sprite-atlas.mjs), and a query string
+# is part of the browser's cache key.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/sprites/atlas.png"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

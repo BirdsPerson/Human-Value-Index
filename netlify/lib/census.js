@@ -2,7 +2,7 @@
 // Holding Pen serves. /api/pen returns it; the social tick simulates it (merged with the
 // 62 figures on file by src/city/roster.js, exactly as the browser does).
 import { listPenCards, listFigures } from "./store.js";
-import { publicFigure } from "./refer.js";
+import { censusFigure } from "./refer.js";
 import { REALITY_INDEX } from "./intake.js";
 import { sanitizeAvatar } from "../../src/avatar.js";
 
@@ -17,7 +17,8 @@ export async function censusSubjects({ strict = false } = {}) {
       slug: c.slug, name: c.name, score: c.score, tier: c.tier, sprite: c.sprite ?? null, avatar: sanitizeAvatar(c.avatar), kind: "citizen",
       quadrant: c.quadrant ?? null, warmth: c.warmth ?? null, competence: c.competence ?? null, judge: "UNRATIFIED", realityIndex: REALITY_INDEX,
     })),
-    // Referred figures: verdict and breakdown once fact-checked (see publicFigure).
-    ...figures.map(publicFigure),
+    // Referred figures: breakdown once fact-checked (see publicFigure); the verdict and
+    // the file's history come from /api/figure/<slug> when the file is opened.
+    ...figures.map(censusFigure),
   ];
 }

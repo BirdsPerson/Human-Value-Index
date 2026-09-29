@@ -4,9 +4,10 @@ import CubePanel, { CubeLine } from "./CubePanel.jsx";
 import { FAMOUS_FIGURES, getTier, slugify, slugCandidates, displayName } from "./figures.js";
 import {
   SPRITE_W, SPRITE_H, gaitFor, clamp,
-  paintPlaceholder, paintAvatar, loadManifest, loadImage, loadRepoSprite, mulberry32,
+  paintPlaceholder, paintAvatar, loadManifest, loadSprite, loadRepoSprite, mulberry32,
 } from "./sprites.js";
 import FilePhoto from "./FilePhoto.jsx";
+import { useFileDetail } from "./fileDetail.js";
 import { Associates, ASSOC_CSS } from "./city/Associates.jsx";
 import {
   FLOORS, F, FH, ROOF_H, BUILDING_H, FOUNDATION, SHAFT_X, SHAFT_W, ROOM_X0, WALL_TOP, WALK_TOP, DOOR_W,
@@ -217,7 +218,9 @@ function pick(arr, rnd) { return arr[Math.floor(rnd() * arr.length)]; }
 
 // where/back/assignment: the city opens the same file with its own location and job.
 // extra: a host panel under the name (the city's quest offer / REPORT CONTACT).
-export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return subject to pen", assignment = null, extra = null }) {
+export function SubjectCard({ subject: listed, onClose, where = "PEN B", back = "Return subject to pen", assignment = null, extra = null }) {
+  // The census carries no verdict or history for referred figures: the file fetches them.
+  const { subject, loading } = useFileDetail(listed);
   const closeRef = useRef(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -262,7 +265,13 @@ export function SubjectCard({ subject, onClose, where = "PEN B", back = "Return 
                 <Typed className="hvi-verdict-text" text="Private citizen. The file is sealed. The number is not." cps={40} />
               </>
             )}
-            {subject.kind !== "citizen" && subject.referred && !subject.verdict && (
+            {subject.kind !== "citizen" && subject.referred && !subject.verdict && loading && !subject.underReview && (
+              <>
+                <Rule label="OVERLORD VERDICT" />
+                <div className="hvi-verdict-text" aria-live="polite">[ .. ] PULLING THE FILE █</div>
+              </>
+            )}
+            {subject.kind !== "citizen" && subject.referred && !subject.verdict && (!loading || subject.underReview) && (
               // Referred living subjects: the verdict waits for review before publication.
               <>
                 <Rule label="OVERLORD VERDICT" />
@@ -862,7 +871,7 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
       const slug = slugCandidates(e.s.name).concat(e.slug).find(k => manifest && manifest[k]);
       if (!src && !slug) return;
       const meta = (slug && manifest[slug]) || {};
-      (src ? loadImage(src) : loadRepoSprite(slug)).then(img => {
+      (src ? loadSprite(src) : loadRepoSprite(slug)).then(img => {
         if (!img || cancelled) return;
         e.img = img; e.real = true;
         e.frames = Math.max(1, meta.frames || Math.floor(img.width / (meta.w || SPRITE_W)) || 1);

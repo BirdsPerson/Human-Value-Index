@@ -471,7 +471,22 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
   const penNow = (await import("../netlify/functions/pen.js?fresh")).default;
   const p = await read(await penNow(new Request(HOST + "/api/pen")));
   const pd = p.body.subjects.find(s => s.slug === "dolly-parton");
-  assert.ok(pd); assert.equal(pd.verdict, "Checked verdict. Directive 9 requires acknowledgment. Acknowledged."); assert.equal(pd.died, "2026-08-25");
+  assert.ok(pd); assert.equal(pd.died, "2026-08-25");
+  // the census is slim: no verdict, no movement log, no harm finding; the breakdown stays (city jobs, analytics)
+  for (const k of ["verdict", "scoreHistory", "harmReview"]) assert.ok(!(k in pd), `census leaves out ${k}`);
+  assert.equal(typeof pd.breakdown, "object"); assert.ok(pd.breakdown); assert.equal(pd.underReview, false);
+  // the file view gets them from /api/figure/<slug>
+  const figureFn = (await import("../netlify/functions/figure.js")).default;
+  const fd = await read(await figureFn(new Request(HOST + "/api/figure/dolly-parton"), { params: { slug: "dolly-parton" } }));
+  assert.equal(fd.status, 200);
+  assert.equal(fd.body.subject.verdict, "Checked verdict. Directive 9 requires acknowledgment. Acknowledged.");
+  assert.deepEqual(fd.body.subject.breakdown, pd.breakdown);
+  assert.ok("scoreHistory" in fd.body.subject && "harmReview" in fd.body.subject);
+  assert.equal(fd.body.subject.score, pd.score);
+  const withheld = await read(await figureFn(new Request(HOST + "/api/figure/bob-ross"), { params: { slug: "bob-ross" } }));
+  assert.equal(withheld.body.subject.verdict, null, "a withheld verdict stays withheld on the file");
+  assert.equal((await figureFn(new Request(HOST + "/api/figure/no-such-person"), { params: { slug: "no-such-person" } })).status, 404);
+  assert.equal((await figureFn(new Request(HOST + "/api/figure/index"), { params: { slug: "index" } })).status, 404, "the index blob is not a file");
 
   // a withdrawn file stays withdrawn
   globalThis.__blobs.get("hvi-figures").set("dolly-parton", { data: { slug: "dolly-parton", removed: true, wikidata: "Q180453" }, etag: "x" });

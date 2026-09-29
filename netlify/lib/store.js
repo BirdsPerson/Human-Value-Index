@@ -161,3 +161,8 @@ export async function listFigures() {
 export async function getSprite(slug) {
   return sprites().get(slug, { type: "arrayBuffer" });
 }
+
+// The production sprite atlas (scripts/prod-atlas.mjs writes it; /api/atlas serves it).
+const atlas = () => getStore({ name: "hvi-atlas", consistency: "strong" });
+export const getAtlasJson = () => atlas().get("current", { type: "json" });
+export const getAtlasSheet = hash => atlas().get(`sheet-${hash}`, { type: "arrayBuffer" });
