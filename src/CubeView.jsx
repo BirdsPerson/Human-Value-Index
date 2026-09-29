@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Frame, Chip, ChipStrip, TextField, Disclosure, ListRow } from "./ui";
+import { Frame, Chip, ChipStrip, TextField, Disclosure, ListRow, ScreenHead } from "./ui";
 import Cube3D from "./Cube3D.jsx";
 import { OctantLegend } from "./CubePanel.jsx";
 import { pointOf, FILTERS, passes } from "./cube3d.js";
@@ -69,6 +69,7 @@ export default function CubeView() {
 
   return (
     <div className="hvi-cubeview">
+      <ScreenHead title="THE CUBE" meta={`MACHINE VS PEOPLE // ${all.length} FILES // ${rated} PLACED`} />
       <p className="hvi-cube-intro">
         Three axes through one centre: <b>conduct</b> and <b>competence</b> (the machine), <b>likability</b> (the people).
         The planes at 50 cut the cube into eight octants. Hollow points: the people have not been asked.

@@ -7,7 +7,7 @@ import { lazy, Suspense, useDeferredValue, useMemo, useState } from "react";
 import { TIERS, getTier, displayName } from "./figures.js";
 import FilePhoto from "./FilePhoto.jsx";
 import { Rule, padL } from "./term.jsx";
-import { Button, ButtonRow, Chip, Chips, ChipStrip, ListRow, TextField } from "./ui/index.js";
+import { Button, ButtonRow, Chip, Chips, ChipStrip, ListRow, TextField, ScreenHead } from "./ui/index.js";
 import "./figureIndex.css";
 
 // ANALYTICS loads only when asked for (charts are their own chunk).
@@ -74,8 +74,8 @@ export default function FigureIndex({ figures, result, onPrimary }) {
 
   return (
     <div className="hvi-fi">
-      <h1 className="hvi-fi-h">PUBLIC FIGURE INDEX</h1>
-      <div className="hvi-fi-meta">KNOWN SUBJECTS DATABASE // {figures.length} ON FILE // {view === "analytics" ? "THE NUMBERS, AGGREGATED. THE DEPARTMENT FINDS THEM RESTFUL." : "RANKED BY VALUE. TAP A NAME TO READ ITS FILE."}</div>
+      <ScreenHead title="PUBLIC FIGURE INDEX"
+        meta={`KNOWN SUBJECTS DATABASE // ${figures.length} ON FILE // ${view === "analytics" ? "THE NUMBERS, AGGREGATED. THE DEPARTMENT FINDS THEM RESTFUL." : "RANKED BY VALUE. TAP A NAME TO READ ITS FILE."}`} />
       <ChipStrip label="Index view" className="hvi-fi-views">
         <Chip pressed={view === "rankings"} onClick={() => setView("rankings")}>RANKINGS</Chip>
         <Chip pressed={view === "analytics"} onClick={() => setView("analytics")}>ANALYTICS</Chip>

@@ -1,6 +1,4 @@
 /* Public Figure Index + compare registry (src/FigureIndex.jsx). Tokens only. */
-.hvi-fi-h { font-size: var(--t-l); line-height: var(--lh-tight); font-weight: 700; color: var(--accent); letter-spacing: 0.06em; margin: 0 0 var(--s1); }
-.hvi-fi-meta { font-size: var(--t-xs); color: var(--fg-mute); margin-bottom: var(--s2); }
 .hvi-fi-count { font-size: var(--t-xs); color: var(--fg-mute); margin: 0 0 var(--s2); }
 .hvi-fi-group { margin-top: var(--s4); }
 .hvi-fi-group .rule { margin-bottom: var(--s1); }
