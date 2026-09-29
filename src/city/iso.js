@@ -110,6 +110,22 @@ export function slotFor(u, v, boxes, order) {
   return slot;
 }
 
+// The same for a box at height h (a train car, a person as a point box): a deck it stands
+// on (an item with deck: true whose footprint it overlaps, at or above its top) counts as
+// behind it, so a car is painted after every piece of track under it and still before any
+// building in front of it.
+export function slotForBox(B, h, boxes, order) {
+  let slot = -1;
+  for (let k = 0; k < order.length; k++) {
+    const b = boxes[order[k]];
+    const behind = b.x1 <= B.x0 || b.y1 <= B.y0;
+    const front = B.x1 <= b.x0 || B.y1 <= b.y0;
+    const under = b.deck && h >= b.top && b.x0 <= B.x1 && B.x0 <= b.x1 && b.y0 <= B.y1 && B.y0 <= b.y1;
+    if ((behind && !front) || under) slot = k;
+  }
+  return slot;
+}
+
 // The screen silhouette of a box (a hexagon), for hit-testing a tap.
 export function boxHull(R, h, cam) {
   const P = (u, v, z) => project(u, v, z, cam);

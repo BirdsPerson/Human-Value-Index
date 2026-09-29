@@ -230,6 +230,97 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   ok(!/drawTrains\(/.test(iso), "train cars are slotted by depth, not painted over the buildings afterwards");
 }
 
+// The Loop in the iso view (2026-09-29, "the train kind of looks like shit"): a viaduct with
+// rounded corners, articulated cars placed by their bogies, a station at every district.
+// Cars stay on the deck through the corners, keep their count and spacing, never overlap,
+// and are painted after the track under them but before any building in front of them.
+{
+  const SIM = await import("../src/city/sim.js");
+  const G = await import("../src/city/loopGeo.js");
+  const { slotForBox, DECK } = await import("../src/city/iso.js");
+  const pitch = SIM.LOOP_LINE.carLen + SIM.LOOP_LINE.carGap;
+  const sat = (A, B) => {   // convex quads overlap (separating axis), strictly
+    for (const P of [A, B]) for (let i = 0; i < 4; i++) {
+      const [ax, ay] = P[i], [bx, by] = P[(i + 1) % 4], nx = by - ay, ny = ax - bx;
+      const pa = A.map(([x, y]) => x * nx + y * ny), pb = B.map(([x, y]) => x * nx + y * ny);
+      if (Math.max(...pa) <= Math.min(...pb) + 1e-9 || Math.max(...pb) <= Math.min(...pa) + 1e-9) return false;
+    }
+    return true;
+  };
+  const lapH = SIM.LOOP_LINE.lapHours, T0 = 24 * 40;
+  let off = 0, worst = 0, spacing = 0, overlap = 0, heading = 0, count = 0, inCorner = 0, samples = 0;
+  const cornerNear = (x, y) => G.CORNERS.some(c => Math.hypot(x - c.x, y - c.y) < G.CORNER_ZONE + G.BOGIE + 0.01);
+  const snaps = [];
+  for (let i = 0; i < 600; i++) {
+    const mt = T0 + (i / 600) * lapH;
+    const trains = G.trainPoses(SIM.trainsAt(mt));
+    snaps.push(trains);
+    for (const t of trains) {
+      if (t.cars.length !== SIM.TRAIN[t.id].cars || t.cars.length < 3 || t.cars.length > 4) count++;
+      t.cars.forEach((c, k) => {
+        samples++;
+        const q = G.carCorners(c.pose);
+        const edgeMids = q.map((p, j) => [(p[0] + q[(j + 1) % 4][0]) / 2, (p[1] + q[(j + 1) % 4][1]) / 2]);
+        for (const [x, y] of [...q, ...edgeMids]) { const d = G.offTrack(x, y); worst = Math.max(worst, d); if (d > G.DECK_HW + 1e-6) off++; }
+        if (cornerNear(c.pose.x, c.pose.y)) inCorner++;
+        const tan = G.pathAt(c.s);
+        if (tan.dx * c.pose.dx + tan.dy * c.pose.dy < 0.85) heading++;
+        if (k) {
+          const p = t.cars[k - 1].pose, d = Math.hypot(p.x - c.pose.x, p.y - c.pose.y);
+          const straight = !cornerNear(p.x, p.y) && !cornerNear(c.pose.x, c.pose.y);
+          if (straight ? Math.abs(d - pitch) > 1e-6 : d < 0.75 * pitch || d > pitch + 1e-6) spacing++;
+          if (sat(G.carCorners(p), q)) overlap++;
+        }
+      });
+    }
+  }
+  ok(count === 0, `every train keeps its 3-4 cars (${count} bad)`);
+  ok(inCorner > 50, `the lap sample takes cars through the corners (${inCorner} car-samples)`);
+  ok(off === 0, `car bodies stay on the deck through corners (${off} corners off; worst ${worst.toFixed(3)} of ${G.DECK_HW})`);
+  ok(heading === 0, `cars point along the track (${heading} of ${samples} off)`);
+  ok(spacing === 0, `car spacing = the sim's pitch on straights, at least 3/4 of it round a bend (${spacing} bad)`);
+  ok(overlap === 0, `coupled cars never overlap (${overlap})`);
+  const longest = Math.max(...SIM.TRAINS.map(t => t.length));
+  ok(2 * G.PLAT_HL >= longest, `platforms (${2 * G.PLAT_HL}) take the longest train (${longest.toFixed(1)})`);
+
+  // Painter's order against the buildings, all four quarter turns.
+  const { rotRect, depthOrder } = await import("../src/city/iso.js");
+  for (let r = 0; r < 4; r++) {
+    const items = [];
+    for (const b of SIM.BUILDINGS) {   // CityIso.buildGeo's footprints
+      const ix = Math.min(1.6, b.rect.w * 0.14), iy = Math.min(1.6, b.rect.h * 0.14);
+      items.push({ kind: "b", id: b.id, ...rotRect({ x: b.rect.x + ix, y: b.rect.y + iy, w: b.rect.w - 2 * ix, h: b.rect.h - 2 * iy }, r) });
+    }
+    const loop = G.loopPieces(r);
+    items.push(...loop);
+    const inside = (a, b) => a.x0 < b.x1 - 1e-9 && b.x0 < a.x1 - 1e-9 && a.y0 < b.y1 - 1e-9 && b.y0 < a.y1 - 1e-9;
+    let clash = "";
+    for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+      if (items[i].kind === "b" && items[j].kind === "b") continue;
+      if (inside(items[i], items[j]) && !clash) clash = `${items[i].kind}${items[i].id || ""} x ${items[j].kind}${items[j].id || ""}`;
+    }
+    ok(!clash, `r=${r}: viaduct, corners and stations overlap no building or each other (${clash || "none"})`);
+    ok(loop.filter(it => it.kind === "st").length === Object.keys(SIM.STATIONS).length, `r=${r}: a station item per STATIONS entry`);
+    const order = depthOrder(items), pos = new Map(order.map((i, k) => [i, k]));
+    let bad = "";
+    for (const trains of snaps.filter((_, i) => i % 5 === 0)) for (const t of trains) for (const c of t.cars) {
+      const B = G.carBox(c.pose, r);
+      const slot = slotForBox(B, DECK + 0.05, items, order);
+      items.forEach((b, i) => {
+        const k = pos.get(i);
+        if (b.kind === "b") {
+          // only pairs whose screen columns (u - v) overlap can cover each other
+          if (Math.min(B.x1 - B.y0, b.x1 - b.y0) - Math.max(B.x0 - B.y1, b.x0 - b.y1) <= 1e-6) return;
+          const front = B.x1 <= b.x0 || B.y1 <= b.y0, behind = b.x1 <= B.x0 || b.y1 <= B.y0;
+          if (front && !behind && k <= slot && !bad) bad = `${t.id} car ${c.index} over ${b.id} in front`;
+          if (behind && !front && k > slot && !bad) bad = `${t.id} car ${c.index} under ${b.id} behind`;
+        } else if (b.deck && inside(B, b) && k > slot && !bad) bad = `${t.id} car ${c.index} under the deck it rides`;
+      });
+    }
+    ok(!bad, `r=${r}: cars paint after their deck, never over a building in front (${bad || "ok"})`);
+  }
+}
+
 // Stature: every in-world figure is drawn to scale (sprites.statureOf), never through a
 // room's ceiling; portraits and thumbnails stay uniform.
 {

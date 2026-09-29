@@ -5,7 +5,8 @@ import { DISTRICTS, BUILDINGS, BUILDING, PLACES, LOOP_LINE, STATIONS, OPEN_LOTS,
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FONT } from "./cityUi.jsx";
-import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotFor, boxHull, inPoly, lodFor, STOREY, DECK, mod4 } from "./iso.js";
+import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4 } from "./iso.js";
+import { loopPieces, trainPoses, carCorners, carBox, stationGeo, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt } from "./props.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
 
@@ -39,12 +40,18 @@ const who = (s) => s.slug || s.name;
 const ABOVE = Object.fromEntries(BUILDINGS.map(b => [b.id, Math.max(1, b.floors.filter(f => f.level >= 0).length)]));
 const CAP = Object.fromEntries(BUILDINGS.map(b => [b.id, Math.max(1, b.floors.reduce((n, f) => n + (f.cap || 0), 0))]));
 
-// The Loop, sampled once into short deck segments (map cells).
-const TRACK = (() => {
-  const L = LOOP_LINE.length, step = 2.5, pts = [];
-  for (let s = 0; s <= L + 1e-6; s += step) pts.push(LOOP_LINE.at(s % L));
-  return pts;
-})();
+// The Loop's palette: poured concrete in the city's greens, steel cars, the line's cyan
+// as a thin accent (the legend's THE LOOP), warm windows after dark.
+const LOOP = {
+  deck: "#343f39", pier: "#2e3833", parapet: "#48554e", rail: "#a3b8ae", sleeper: "#221c16", cyan: "#22d3ee", cyanHi: "#67e8f9",
+  body: "#a9bab1", roof: "#cfdcd5", stripe: "#22d3ee", door: "#5d6b64", glassDay: "#3f6f78", glassNight: "#fcd34d", sil: "#0c1512",
+  plat: "#4a5650", platLit: "#5b6c63", edge: "#fbbf24", canopy: "#2a3a32", stair: "#4a554f",
+};
+const DECK_T = 0.16;          // deck slab thickness, storeys
+const CAR_H = 0.62;           // car body height, storeys
+const CAR_Z = DECK + 0.05;    // the car's floor, on the rails
+const CANOPY = DECK + 1.1;    // the station canopy's underside
+const SGEO = Object.fromEntries(Object.values(STATIONS).map(st => [st.id, stationGeo(st)]));
 
 // Where the view was when it unmounted (ENTER a building, then Back): the camera, the
 // quarter turn and the open cutaway come back as they were. One per page load.
@@ -67,7 +74,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
     const V = {
       cssW: 0, cssH: 0, dpr: 1, cam: { z: 6, ox: 0, oy: 0, r: 0 }, camTo: null, fitZ: 6, reduced: !!mq?.matches, need: true,
       sel: null, shown: null, lift: 0, geo: null, censusV: -1, inside: new Map(), occ: {}, outdoors: [], hits: [], labels: [], panel: null,
-      seats: new Map(), plans: new Map(), wheelHint: 0,
+      seats: new Map(), plans: new Map(), wheelHint: 0, riders: new Map(),
     };
 
     // ---- geometry for the current quarter turn ----------------------------------------
@@ -79,14 +86,11 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         const R = rotRect({ x: b.rect.x + ix, y: b.rect.y + iy, w: b.rect.w - 2 * ix, h: b.rect.h - 2 * iy }, r);
         items.push({ kind: "b", b, R, h: OPEN_LOTS.has(b.id) ? 0.05 : ABOVE[b.id], x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1 });
       }
-      for (let i = 0; i + 1 < TRACK.length; i++) {
-        const [u0, v0] = rot(TRACK[i].x, TRACK[i].y, r), [u1, v1] = rot(TRACK[i + 1].x, TRACK[i + 1].y, r);
-        items.push({ kind: "t", a: [u0, v0], c: [u1, v1], x0: Math.min(u0, u1) - 0.25, y0: Math.min(v0, v1) - 0.25, x1: Math.max(u0, u1) + 0.25, y1: Math.max(v0, v1) + 0.25, pillar: i % 3 === 0 });
-      }
+      // the viaduct: straight deck pieces, curved corners, a station at every district
+      items.push(...loopPieces(r));
       const order = depthOrder(items);
       const districts = DISTRICTS.map(d => ({ d, R: rotRect(d.rect, r) }));
-      const stations = Object.values(STATIONS).map(st => { const [u, v] = rot(st.x, st.y, r); return { kind: "st", u, v, h: DECK, slot: slotFor(u, v, items, order) }; });
-      return { r, items, order, districts, stations };
+      return { r, items, order, districts };
     }
 
     // ---- census -> occupancy, outdoor subjects, who is in which room -------------------
@@ -96,9 +100,10 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       const c = censusRef.current;
       if (!c || c.v === V.censusV) return;
       V.censusV = c.v;
-      const occ = {}, inside = new Map(), outdoors = [];
+      const occ = {}, inside = new Map(), outdoors = [], riders = new Map();
       for (const { s, w } of c.list || []) {
         if (!w) continue;
+        if (w.sub === "riding" && w.trainId) { const k = `${w.trainId}|${w.car}`; riders.set(k, (riders.get(k) || 0) + 1); }
         const r = roomIn(w, s);
         if (r) {
           occ[r.buildingId] = (occ[r.buildingId] || 0) + 1;
@@ -108,7 +113,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
         }
         if (w.activity === "commute" && w.sub !== "riding") outdoors.push({ s });
       }
-      V.occ = occ; V.inside = inside; V.outdoors = outdoors;
+      V.occ = occ; V.inside = inside; V.outdoors = outdoors; V.riders = riders;
       V.need = true;
     }
 
@@ -293,27 +298,177 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       label();
     }
 
-    function drawTrack(it) {
-      const [u0, v0] = it.a, [u1, v1] = it.c;
-      const a = P(u0, v0, DECK), b = P(u1, v1, DECK);
-      if (!onScreen([a, b])) return;
-      if (it.pillar) {
-        const g = P(u0, v0, 0);
-        ctx.strokeStyle = "rgba(120,140,130,0.45)"; ctx.lineWidth = Math.max(1, V.cam.z * 0.18);
-        ctx.beginPath(); ctx.moveTo(g[0], g[1]); ctx.lineTo(a[0], a[1]); ctx.stroke();
+    // ---- the Loop: viaduct, stations, trains --------------------------------------------
+    // Everything here is built in map cells (loopGeo.js) and turned to the current quarter
+    // on the way to the screen. A face is drawn when it faces the viewer (its turned normal
+    // points to +u+v) and shaded like the buildings: +u faces 0.72, +v faces 1.0, tops 1.4.
+    const Q = (x, y, h) => { const [u, v] = rot(x, y, V.cam.r); return P(u, v, h); };
+    const lerp2 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const add = (a, d, k) => [a[0] + d[0] * k, a[1] + d[1] * k];
+    // Turned normal of the map edge a->b, pointing away from `inside`; -> shade factor, or 0 if hidden.
+    function facing(a, b, inside) {
+      const [au, av] = rot(a[0], a[1], V.cam.r), [bu, bv] = rot(b[0], b[1], V.cam.r), [iu, iv] = rot(inside[0], inside[1], V.cam.r);
+      let nu = bv - av, nv = -(bu - au);
+      if (nu * (iu - au) + nv * (iv - av) > 0) { nu = -nu; nv = -nv; }
+      const n = Math.hypot(nu, nv) || 1;
+      nu /= n; nv /= n;
+      return nu + nv > 1e-6 ? 0.86 + 0.14 * (nv - nu) : 0;
+    }
+    function wall(a, b, inside, h0, h1, base) {
+      const f = facing(a, b, inside);
+      if (f) poly([Q(a[0], a[1], h1), Q(b[0], b[1], h1), Q(b[0], b[1], h0), Q(a[0], a[1], h0)], shade(base, f));
+      return f;
+    }
+    // A convex prism on a map footprint: its visible walls, then its top.
+    function prism(foot, h0, h1, base, topF = 1.4, alpha = 1) {
+      let cx = 0, cy = 0;
+      for (const p of foot) { cx += p[0]; cy += p[1]; }
+      const c = [cx / foot.length, cy / foot.length];
+      if (alpha < 1) ctx.globalAlpha = alpha;
+      for (let i = 0; i < foot.length; i++) wall(foot[i], foot[(i + 1) % foot.length], c, h0, h1, base);
+      poly(foot.map(p => Q(p[0], p[1], h1)), shade(base, topF));
+      if (alpha < 1) ctx.globalAlpha = 1;
+    }
+    function line(a, b, h, color, w) {
+      const A = Q(a[0], a[1], h), B = Q(b[0], b[1], h);
+      ctx.strokeStyle = color; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+    }
+    function polyline(pts, h, color, w) {
+      ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath();
+      pts.forEach((p, i) => { const S = Q(p[0], p[1], h); if (i) ctx.lineTo(S[0], S[1]); else ctx.moveTo(S[0], S[1]); });
+      ctx.stroke();
+    }
+    const px1 = () => Math.max(1, V.cam.z * 0.07);
+    // A pier: a square column to the ground and a cap across the deck's width.
+    function pier(m, d, lod) {
+      const p = [-d[1], d[0]], top = DECK - DECK_T;
+      const sq = (a, b, la, lb) => [add(add(m, d, a), p, la), add(add(m, d, b), p, la), add(add(m, d, b), p, lb), add(add(m, d, a), p, lb)];
+      prism(sq(-0.19, 0.19, 0.19, -0.19), 0, top - (lod === "far" ? 0 : 0.14), LOOP.pier, 1.1);
+      if (lod !== "far") prism(sq(-0.26, 0.26, DECK_HW * 0.85, -DECK_HW * 0.85), top - 0.14, top, LOOP.pier, 1.1);
+    }
+    // Deck edge details along a centreline polyline (map points, with its unit normals):
+    // parapets, rails, sleepers, the cyan fascia; the far parapet first, the near one last.
+    function deckDressing(pts, nrm, lod, len) {
+      const off = (k) => pts.map((p, i) => add(p, nrm[i], k));
+      const mid = Math.floor(pts.length / 2);
+      // which lateral side faces the viewer: the one whose outward normal turns towards +u+v
+      const [nu, nv] = (() => { const [a, b] = rot(0, 0, V.cam.r), [e, f] = rot(nrm[mid][0], nrm[mid][1], V.cam.r); return [e - a, f - b]; })();
+      const near = nu + nv > 0 ? 1 : -1;
+      const fascia = (sgn) => polyline(off(sgn * DECK_HW), DECK - 0.03, "rgba(34,211,238,0.6)", Math.max(1, V.cam.z * 0.06));
+      fascia(near);
+      if (lod === "far") return;
+      const parapet = (sgn) => {
+        const e = off(sgn * (DECK_HW - 0.04));
+        for (let i = 0; i + 1 < e.length; i++) poly([Q(e[i][0], e[i][1], DECK), Q(e[i + 1][0], e[i + 1][1], DECK), Q(e[i + 1][0], e[i + 1][1], DECK + 0.13), Q(e[i][0], e[i][1], DECK + 0.13)], LOOP.parapet);
+        polyline(e, DECK + 0.13, "#65756c", 1);
+      };
+      parapet(-near);
+      if (lod === "near") {
+        // sleepers across the two tracks' bed
+        ctx.strokeStyle = LOOP.sleeper; ctx.lineWidth = Math.max(1, V.cam.z * 0.1);
+        ctx.beginPath();
+        const n = Math.max(1, Math.round(len / 0.55));
+        for (let k = 0; k < n; k++) {
+          const t = (k + 0.5) / n * (pts.length - 1), i = Math.min(pts.length - 2, Math.floor(t)), f = t - i;
+          const m = lerp2(pts[i], pts[i + 1], f), nn = nrm[i];
+          const A = Q(...add(m, nn, 0.4), DECK + 0.01), B = Q(...add(m, nn, -0.4), DECK + 0.01);
+          ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]);
+        }
+        ctx.stroke();
       }
-      ctx.strokeStyle = "rgba(34,211,238,0.55)"; ctx.lineWidth = Math.max(1.5, V.cam.z * 0.3);
-      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      polyline(off(0.26), DECK + 0.03, LOOP.rail, px1());
+      polyline(off(-0.26), DECK + 0.03, LOOP.rail, px1());
+      parapet(near);
     }
 
-    // Everything that moves or sits on the deck, as points to slot into the painter's order:
-    // train cars, station platforms, and subjects outdoors (streets, lots, stairs, platforms).
-    function movers(mt) {
-      const out = [];
-      for (const t of trainsAt(mt)) for (const c of t.cars) {
-        const [u, v] = rot(c.x, c.y, V.cam.r);
-        out.push({ kind: "car", u, v, h: DECK + 0.35 });
+    function drawDeckPiece(it, lod) {
+      const { a, b, d, len } = it.map, p = [-d[1], d[0]];
+      const slab = [add(a, p, DECK_HW), add(b, p, DECK_HW), add(b, p, -DECK_HW), add(a, p, -DECK_HW)];
+      const m = lerp2(a, b, 0.5);
+      if (!onScreen([Q(...slab[0], DECK), Q(...slab[1], DECK), Q(...slab[2], DECK), Q(...slab[3], DECK), Q(m[0], m[1], 0)])) return;
+      if (it.pillar) pier(m, d, lod);
+      prism(slab, DECK - DECK_T, DECK, LOOP.deck, 1.12);
+      deckDressing([a, b], [p, p], lod, len);
+    }
+    function drawCorner(it, lod) {
+      const c = it.corner, N = lod === "far" ? 4 : 10;
+      const at = (th, rad) => [c.cx + rad * (-c.dout[0] * Math.cos(th) + c.din[0] * Math.sin(th)), c.cy + rad * (-c.dout[1] * Math.cos(th) + c.din[1] * Math.sin(th))];
+      const th = Array.from({ length: N + 1 }, (_, k) => (k / N) * Math.PI / 2);
+      const Ro = CORNER_R + DECK_HW, Ri = CORNER_R - DECK_HW;
+      if (!onScreen([Q(...at(0, Ro), DECK), Q(...at(Math.PI / 2, Ro), DECK), Q(...at(Math.PI / 4, Ri), 0)])) return;
+      const midT = Math.PI / 4, cm = at(midT, CORNER_R);
+      pier(cm, [(c.dout[0] + c.din[0]) * Math.SQRT1_2, (c.dout[1] + c.din[1]) * Math.SQRT1_2], lod);
+      for (let k = 0; k < N; k++) {
+        wall(at(th[k], Ro), at(th[k + 1], Ro), [c.cx, c.cy], DECK - DECK_T, DECK, LOOP.deck);
+        wall(at(th[k], Ri), at(th[k + 1], Ri), at((th[k] + th[k + 1]) / 2, CORNER_R), DECK - DECK_T, DECK, LOOP.deck);
       }
+      poly([...th.map(t => Q(...at(t, Ro), DECK)), ...th.slice().reverse().map(t => Q(...at(t, Ri), DECK))], shade(LOOP.deck, 1.12));
+      // outward normal at each sample: from the arc's centre
+      const pts = th.map(t => at(t, CORNER_R));
+      const nrm = th.map(t => [-c.dout[0] * Math.cos(t) + c.din[0] * Math.sin(t), -c.dout[1] * Math.cos(t) + c.din[1] * Math.sin(t)]);
+      deckDressing(pts, nrm, lod, CORNER_R * Math.PI / 2);
+    }
+
+    // A station: the platform on the district side, a glass-roofed canopy on posts, the name
+    // board on the roof, stairs down beside the platform. Lit (TRAIN IN) while a train stands.
+    function drawStation(it, lod, rank) {
+      const g = it.geo, st = g.st, at = g.at;
+      const lit = V.trainIn?.has(st.id);
+      if (!onScreen([Q(...at(-PLAT_HL, PLAT_OUT), CANOPY + 0.4), Q(...at(PLAT_HL, PLAT_IN), DECK), Q(...at(0, PLAT_OUT + STAIR_W), 0)])) return;
+      const [a0, b0] = rot(0, 0, V.cam.r), [a1, b1] = rot(g.n[0], g.n[1], V.cam.r);
+      const outFront = (a1 - a0) + (b1 - b0) > 0;   // the district side faces the viewer
+      const rect = (al0, al1, la0, la1) => [at(al0, la0), at(al1, la0), at(al1, la1), at(al0, la1)];
+      const stairs = () => {
+        if (lod === "far") return;
+        const [s0, s1, s2, s3] = g.stairs;   // s0,s3 at the top (platform end), s1,s2 at the street
+        // the stringer under the visible long side, a triangle to the ground
+        const side = outFront ? [s3, s2] : [s0, s1];
+        poly([Q(...side[0], DECK), Q(...side[1], 0), Q(...side[0], 0)], shade(LOOP.stair, 0.62));
+        poly([Q(...s0, DECK), Q(...s1, 0), Q(...s2, 0), Q(...s3, DECK)], shade(LOOP.stair, 1.25));
+        ctx.strokeStyle = "rgba(8,14,10,0.7)"; ctx.lineWidth = 1; ctx.beginPath();
+        const n = lod === "near" ? 12 : 6;
+        for (let k = 1; k < n; k++) { const t = k / n, A = Q(...lerp2(s0, s1, t), DECK * (1 - t)), B = Q(...lerp2(s3, s2, t), DECK * (1 - t)); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); }
+        ctx.stroke();
+        // handrail on the open side
+        const hs = outFront ? [s3, s2] : [s0, s1];
+        const A = Q(...hs[0], DECK + 0.4), B = Q(...hs[1], 0.4);
+        ctx.strokeStyle = "rgba(160,190,175,0.7)"; ctx.lineWidth = px1(); ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+      };
+      if (!outFront) stairs();
+      // supports under the outer edge
+      for (const al of [-PLAT_HL + 1, PLAT_HL - 1]) {
+        const m = at(al, (PLAT_IN + PLAT_OUT) / 2);
+        prism([add(add(m, g.d, -0.15), g.n, 0.15), add(add(m, g.d, 0.15), g.n, 0.15), add(add(m, g.d, 0.15), g.n, -0.15), add(add(m, g.d, -0.15), g.n, -0.15)], 0, DECK - DECK_T, LOOP.pier, 1.1);
+      }
+      prism(rect(-PLAT_HL, PLAT_HL, PLAT_IN, PLAT_OUT), DECK - DECK_T, DECK + 0.03, lit ? LOOP.platLit : LOOP.plat, 1.3);
+      // the yellow edge strip on the track side
+      poly([Q(...at(-PLAT_HL, PLAT_IN), DECK + 0.031), Q(...at(PLAT_HL, PLAT_IN), DECK + 0.031), Q(...at(PLAT_HL, PLAT_IN + 0.1), DECK + 0.031), Q(...at(-PLAT_HL, PLAT_IN + 0.1), DECK + 0.031)], LOOP.edge);
+      if (lit) poly(rect(-PLAT_HL + 0.2, PLAT_HL - 0.2, PLAT_IN + 0.12, PLAT_OUT - 0.05).map(p => Q(p[0], p[1], DECK + 0.032)), "rgba(103,232,249,0.16)");
+      // canopy: posts on the outer edge, a glazed roof, a lit fascia on the track side
+      const posts = lod === "far" ? [] : [-PLAT_HL + 1.2, -PLAT_HL / 3, PLAT_HL / 3, PLAT_HL - 1.2];
+      ctx.strokeStyle = "#6f7f77"; ctx.lineWidth = Math.max(1, V.cam.z * 0.09);
+      ctx.beginPath();
+      for (const al of posts) { const A = Q(...at(al, PLAT_OUT - 0.14), DECK + 0.03), B = Q(...at(al, PLAT_OUT - 0.14), CANOPY); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); }
+      ctx.stroke();
+      prism(rect(-PLAT_HL + 0.6, PLAT_HL - 0.6, PLAT_IN + 0.18, PLAT_OUT + 0.06), CANOPY, CANOPY + 0.07, LOOP.canopy, 1.6, lod === "far" ? 1 : 0.8);
+      line(at(-PLAT_HL + 0.6, PLAT_IN + 0.18), at(PLAT_HL - 0.6, PLAT_IN + 0.18), CANOPY, lit ? LOOP.cyanHi : "rgba(34,211,238,0.6)", Math.max(1, V.cam.z * (lit ? 0.12 : 0.07)));
+      // the name board over the roof: drawn in the label pass (legible, never overlapped)
+      if (lod !== "far") {
+        const [x, y] = Q(...at(0, (PLAT_IN + PLAT_OUT) / 2), CANOPY + 0.35);
+        V.labels.push({ id: `st:${st.id}`, station: true, lit, text: lit ? `${st.name} // TRAIN IN` : st.name, x, y, rank: 1e5 + rank });
+      }
+      if (outFront) stairs();
+    }
+
+    // Everything that moves on or under the deck, as boxes to slot into the painter's order:
+    // train cars, and subjects outdoors (streets, lots, the stairs, the platforms).
+    function movers(mt, trains) {
+      const out = [], r = V.cam.r;
+      const night = (() => { const h = ((mt % 24) + 24) % 24; return h >= 19 || h < 6.5; })();
+      for (const t of trains) t.cars.forEach((c, i) => {
+        out.push({ kind: "car", t, c, prev: i ? t.cars[i - 1].pose : null, night, riders: V.riders.get(`${t.id}|${c.index}`) || 0, box: carBox(c.pose, r, c.lead && night ? 1.4 : 0), h: CAR_Z });
+      });
       for (const o of V.outdoors) {
         let x, y, h = 0;
         if (o.open) {
@@ -325,27 +480,116 @@ function CityIso({ censusRef, onOpen, onEnter }) {
           const w = whereOf(o.s, mt);
           if (!w || w.activity !== "commute" || w.sub === "riding") continue;
           x = w.x; y = w.y;
-          // up on the deck: waiting, stepping off, or on the stairs (climb 0..1)
+          // up on the deck: waiting, stepping off; on the stairs (climb 0..1, gate to platform):
+          // across the pavement to the foot of the flight, up it, along the platform.
           if (w.sub === "waiting" || w.sub === "alighting") h = DECK;
-          else if (w.climb) h = w.climb * DECK;
+          else if (w.climb > 0 && SGEO[w.stationId]) {
+            const g = SGEO[w.stationId], c = Math.min(1, w.climb), mid = PLAT_OUT + STAIR_W / 2;
+            const foot = g.at(0.2 + STAIR_L, mid), head = g.at(0.2, mid), plat = g.at(0, LOOP_LINE.platformOffset);
+            let q;
+            if (c < 0.25) { q = lerp2([g.st.gate.x, g.st.gate.y], foot, c / 0.25); h = 0; }
+            else if (c < 0.9) { q = lerp2(foot, head, (c - 0.25) / 0.65); h = DECK * (c - 0.25) / 0.65; }
+            else { q = lerp2(head, plat, (c - 0.9) / 0.1); h = DECK; }
+            [x, y] = q;
+          }
         }
-        const [u, v] = rot(x, y, V.cam.r);
-        out.push({ kind: "p", s: o.s, u, v, h });
+        const [u, v] = rot(x, y, r);
+        out.push({ kind: "p", s: o.s, u, v, h, box: { x0: u, y0: v, x1: u, y1: v } });
       }
       return out;
     }
 
-    function drawCar(c) {
-      const [x, y] = P(c.u, c.v, c.h);
-      if (x < -30 || x > V.cssW + 30 || y < -30 || y > V.cssH + 30) return;
-      const w = Math.max(3, V.cam.z * 1.6), hh = Math.max(2, V.cam.z * 0.8);
-      ctx.fillStyle = "#0e7490"; ctx.fillRect(Math.round(x - w / 2), Math.round(y - hh / 2), Math.round(w), Math.round(hh));
-      ctx.fillStyle = "#67e8f9"; ctx.fillRect(Math.round(x - w / 2 + 1), Math.round(y - hh / 2 + 1), Math.round(w - 2), Math.max(1, Math.round(hh * 0.3)));
-    }
-    function drawStation(st) {
-      if (lodFor(V.cam.z) === "far") return;
-      const [x, y] = P(st.u, st.v, st.h);
-      ctx.fillStyle = "rgba(34,211,238,0.25)"; ctx.fillRect(Math.round(x - V.cam.z), Math.round(y - 2), Math.round(V.cam.z * 2), 3);
+    // One car: a steel box on the rails, turned to the track. Far: body, roof, the cyan
+    // stripe. Mid: a window band and the doors, the gangway to the car ahead. Near: each
+    // window, riders in them, the cab's windscreen and lamps, roof units.
+    function drawCar(m, lod) {
+      const { c, t, night } = m, p = c.pose;
+      const [x, y] = Q(p.x, p.y, CAR_Z);
+      const pad = V.cam.z * 3;
+      if (x < -pad || x > V.cssW + pad || y < -pad || y > V.cssH + pad) return;
+      const h0 = CAR_Z, h1 = CAR_Z + CAR_H, H = (k) => h0 + k * CAR_H;
+      const [FL, FR, BR, BL] = carCorners(p), ctr = [p.x, p.y], dir = [p.dx, p.dy];
+      const glass = night ? LOOP.glassNight : LOOP.glassDay;
+      // headlight pool on the deck ahead, at night
+      if (c.lead && night) {
+        const [gx, gy] = Q(...add(ctr, dir, CAR_HL + 0.9), DECK);
+        const r = V.cam.z * 1.3, gr = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
+        gr.addColorStop(0, "rgba(255,244,200,0.32)"); gr.addColorStop(1, "rgba(255,244,200,0)");
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(gx, gy, r, r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      // gangway to the car ahead (narrower than the body, so the coupling reads)
+      if (m.prev && lod !== "far") {
+        const q = m.prev, pp = [-p.dy, p.dx], qp = [-q.dy, q.dx];
+        const f = add(ctr, dir, CAR_HL), bk = add([q.x, q.y], [q.dx, q.dy], -CAR_HL);
+        prism([add(f, pp, 0.22), add(bk, qp, 0.22), add(bk, qp, -0.22), add(f, pp, -0.22)], h0 + 0.08, h1 - 0.1, "#262e2a", 1.1);
+      }
+      // underframe
+      if (lod !== "far") prism(carCorners(p, CAR_HL - 0.3, CAR_HW - 0.1), DECK + 0.02, h0 + 0.04, "#1a201d", 1);
+      const faces = [
+        { a: FL, b: FR, kind: c.lead ? "cab" : "end" },
+        { a: BR, b: FR, kind: "side" },
+        { a: BR, b: BL, kind: c.tail ? "tail" : "end" },
+        { a: BL, b: FL, kind: "side" },
+      ];
+      const quad = (F, t0, t1, k0, k1, fill, stroke) => poly([F(t0, k1), F(t1, k1), F(t1, k0), F(t0, k0)], fill, stroke);
+      for (const fc of faces) {
+        const f = facing(fc.a, fc.b, ctr);
+        if (!f) continue;
+        const F = (t, k) => { const q = lerp2(fc.a, fc.b, t); return Q(q[0], q[1], H(k)); };
+        quad(F, 0, 1, 0, 1, shade(LOOP.body, f));
+        quad(F, 0, 1, 0, 0.13, shade(LOOP.body, f * 0.45));                    // skirt
+        if (fc.kind === "side") {
+          quad(F, 0, 1, 0.24, 0.32, LOOP.stripe);                                // the Loop's stripe
+          if (lod === "far") { if (night) quad(F, 0.08, 0.92, 0.48, 0.72, glass); continue; }
+          const doors = [0.27, 0.73];
+          if (lod === "mid") {
+            quad(F, 0.05, 0.95, 0.44, 0.78, glass);
+            for (const dc of doors) { quad(F, dc - 0.055, dc + 0.055, 0.14, 0.86, shade(LOOP.door, f)); quad(F, dc - 0.035, dc + 0.035, 0.46, 0.76, glass); }
+            continue;
+          }
+          // near: each window, and riders standing or seated in them
+          const WIN = [[0.05, 0.19], [0.35, 0.44], [0.455, 0.545], [0.56, 0.65], [0.81, 0.95]];
+          const n = m.riders ? Math.max(1, Math.min(WIN.length, Math.round(m.riders / 12 * WIN.length))) : 0;
+          WIN.forEach(([t0, t1], i) => {
+            quad(F, t0, t1, 0.42, 0.8, glass, "rgba(20,28,24,0.9)");
+            const seat = Math.floor(h01(`${t.id}${c.index}${i}`) * 97) % WIN.length;
+            if ((i + seat) % WIN.length < n) {
+              const B = F((t0 + t1) / 2, 0.42), T = F((t0 + t1) / 2, 0.8), hh = B[1] - T[1];
+              if (hh >= 5) {
+                ctx.fillStyle = night ? "rgba(40,26,6,0.85)" : LOOP.sil;
+                ctx.beginPath(); ctx.arc(B[0], B[1] - hh * 0.6, hh * 0.15, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.ellipse(B[0], B[1], hh * 0.26, hh * 0.3, 0, Math.PI, 0); ctx.fill();
+              }
+            }
+          });
+          for (const dc of doors) {
+            quad(F, dc - 0.055, dc + 0.055, 0.14, 0.86, shade(LOOP.door, f), "rgba(20,28,24,0.9)");
+            quad(F, dc - 0.04, dc - 0.006, 0.46, 0.76, glass); quad(F, dc + 0.006, dc + 0.04, 0.46, 0.76, glass);
+          }
+          continue;
+        }
+        if (lod === "far") continue;
+        if (fc.kind === "cab") {
+          quad(F, 0.1, 0.9, 0.46, 0.86, night ? "#1d2a22" : "#10262b", "rgba(160,220,230,0.5)");
+          quad(F, 0.12, 0.26, 0.17, 0.27, "#fff4c2"); quad(F, 0.74, 0.88, 0.17, 0.27, "#fff4c2");
+        } else if (fc.kind === "tail") {
+          quad(F, 0.14, 0.86, 0.46, 0.8, glass);
+          quad(F, 0.12, 0.24, 0.17, 0.26, "#f87171"); quad(F, 0.76, 0.88, 0.17, 0.26, "#f87171");
+        } else {
+          quad(F, 0.32, 0.68, 0.14, 0.84, "#262e2a");
+        }
+      }
+      // roof, and at street zoom its units
+      poly([FL, FR, BR, BL].map(q => Q(q[0], q[1], h1)), LOOP.roof, lod === "far" ? null : "rgba(40,52,46,0.8)");
+      if (lod === "near") for (const al of [-0.7, 0.7]) {
+        const m0 = add(ctr, dir, al), pp = [-p.dy, p.dx];
+        prism([add(add(m0, dir, -0.32), pp, 0.2), add(add(m0, dir, 0.32), pp, 0.2), add(add(m0, dir, 0.32), pp, -0.2), add(add(m0, dir, -0.32), pp, -0.2)], h1, h1 + 0.07, "#7f8f87", 1.25);
+      }
+      // tail lamps glow at night
+      if (c.tail && night) {
+        const [gx, gy] = Q(...add(ctr, dir, -CAR_HL - 0.1), h0 + CAR_H * 0.22);
+        ctx.fillStyle = "rgba(248,113,113,0.35)"; ctx.beginPath(); ctx.arc(gx, gy, Math.max(2, V.cam.z * 0.35), 0, Math.PI * 2); ctx.fill();
+      }
     }
     function drawPerson(p, lod) {
       const [x, y] = P(p.u, p.v, p.h);
@@ -367,7 +611,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       }
       V.hits.push({ kind: "p", s: p.s, box: [x - hpx * 0.3, y - hpx, x + hpx * 0.3, y] });
     }
-    function drawMover(m, lod) { if (m.kind === "p") drawPerson(m, lod); else if (m.kind === "car") drawCar(m); else drawStation(m); }
+    function drawMover(m, lod) { if (m.kind === "p") drawPerson(m, lod); else drawCar(m, lod); }
 
     // ---- labels: one pass on top, nearest first, none over another --------------------------
     // They fade in over a zoom range instead of all switching on at once.
@@ -382,7 +626,8 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       ctx.globalAlpha = a;
       ctx.font = `${box.fs}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
       ctx.fillStyle = "rgba(6,10,6,0.86)"; ctx.fillRect(box.x0, box.y0, box.w, box.h);
-      ctx.fillStyle = L.selected ? "#4ade80" : "#a7d7b5"; ctx.fillText(L.text, Math.round(L.x), Math.round(L.y));
+      if (L.station) { ctx.fillStyle = L.lit ? "#67e8f9" : "rgba(34,211,238,0.55)"; ctx.fillRect(box.x0, box.y0 + box.h - 1, box.w, 1); }
+      ctx.fillStyle = L.station ? (L.lit ? "#e0fbff" : "#67e8f9") : L.selected ? "#4ade80" : "#a7d7b5"; ctx.fillText(L.text, Math.round(L.x), Math.round(L.y));
       ctx.globalAlpha = 1;
     }
     function drawLabels() {
@@ -530,16 +775,19 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       V.hits = []; V.labels = [];
       drawGround();
       // movers slot between buildings and track by depth
-      const { items, order, stations } = V.geo;
+      const { items, order } = V.geo;
+      const trains = trainPoses(trainsAt(mt));
+      V.trainIn = new Set(trains.filter(t => t.dwell).map(t => t.stationId));
       const slots = new Map();
       const put = (k, m) => (slots.get(k) || slots.set(k, []).get(k)).push(m);
-      for (const st of stations) put(st.slot, st);
-      for (const m of movers(mt)) put(slotFor(m.u, m.v, items, order), m);
+      for (const m of movers(mt, trains)) put(slotForBox(m.box, m.h, items, order), m);
       for (const m of slots.get(-1) || []) drawMover(m, lod);
       for (let k = 0; k < order.length; k++) {
         const it = items[order[k]];
         if (it.kind === "b") drawBuilding(it, lod, k);
-        else drawTrack(it);
+        else if (it.kind === "t") drawDeckPiece(it, lod);
+        else if (it.kind === "k") drawCorner(it, lod);
+        else drawStation(it, lod, k);
         for (const m of slots.get(k) || []) drawMover(m, lod);
       }
       drawLabels();
@@ -695,7 +943,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
     }
     SAVED = null;
     sync();
-    if (import.meta.env?.DEV) window.__hviIso = { V, turn, select, zoomAt, fit, tap };
+    if (import.meta.env?.DEV) window.__hviIso = { V, turn, select, zoomAt, fit, tap, draw };
     return () => {
       SAVED = { cam: { ...(V.camTo ? { ...V.cam, ...V.camTo } : V.cam) }, sel: V.sel, cssW: V.cssW };
       dead = true; sync();

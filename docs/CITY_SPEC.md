@@ -213,3 +213,32 @@ per dweller, each dweller AT a station doing a small looping task, capacity foll
 Measured (headless Chromium, 422 subjects): hab block at 21:00, 1440: frame gap 16.7 ms avg,
 p95 17.8; iso cutaway on a hab block: 16.7 / 18.0; works district at 390: 16.7 / 18.1; no
 long tasks. Screens: docs/screens/rooms-detail/.
+
+## The Loop as an elevated line (iso view, 2026-09-29)
+
+Scott: "the train kind of looks like shit." It was a thin cyan line with cyan dashes.
+
+- `loopGeo.js` (pure, checked in node): the viaduct round the ring with radius-2 curves at
+  the corners; the sim's arc within 6 cells of a corner is spread evenly over the drawn
+  straight-curve-straight, so cars ease through the bend and sit exactly where the sim has
+  them everywhere else (platforms included). A car is placed by its two bogies (centre
+  between them, heading along the chord). Straight deck pieces (at most 3 cells), four
+  corner pieces and one station item per STATIONS entry are boxes for `depthOrder`.
+- `CityIso.jsx`: concrete deck (top, fascia with the Loop's cyan line, parapets, rails,
+  sleepers up close), piers every other piece, steel cars (roof, shaded sides, cyan stripe,
+  window band then individual windows, doors, gangways, cab windscreen and headlamps on the
+  lead car, tail lamps on the last, roof units), warm windows 19:00-06:30 with a headlight
+  pool on the deck, glass by day, rider silhouettes in the windows from the census (`riding`,
+  trainId, car). Stations: platform with a yellow edge strip, glazed canopy on posts with a
+  lit fascia, stairs down beside the platform (commuters' `climb` is drawn along them), a
+  name board in the label pass; lit and `// TRAIN IN` while a train stands.
+- LOD: far = deck, piers, car bodies with the stripe; mid = rails, parapets, window bands,
+  doors, stairs, name boards; near = windows, riders, sleepers, lamps, roof units.
+- Painter's order: `iso.slotForBox` slots a car after every deck piece its box overlaps and
+  never after a building in front of it. `check-cityview` asserts car counts, spacing (the
+  sim's pitch on straights, >= 3/4 of it round a bend), no overlap between coupled cars,
+  bodies on the deck through all four corners, and the building order at all four turns.
+
+Measured (headless Chromium, 420 subjects, rush 08:20): frame gap 16.7 ms avg, p95 17.2-17.5
+at 1440 (fit, district, street) and 390x844; draw() 1.9 ms avg / 4.6 p95 at the busiest
+(1440 fit), 0.5-0.7 ms up close. Screens: docs/screens/city-loop/ (before-*.png = the old line).
