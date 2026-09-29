@@ -1,4 +1,11 @@
 {
+ "a-j-brown": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Visible skin tone in photo is a medium-brown, consistent with known appearance."
+ },
  "aaron-hernandez": {
   "band": "olive",
   "basis": "photo",
@@ -19,6 +26,13 @@
   "confidence": "medium",
   "image": true,
   "note": "Early daguerreotype with limited tonal range, but consistent with historical knowledge of Ada Lovelace as an English aristocrat of fair complexion."
+ },
+ "adam-jones": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Visible skin tone on face and hands appears medium-brown, consistent with known appearance."
  },
  "adolf-hitler": {
   "band": "fair",
@@ -174,6 +188,13 @@
   "image": true,
   "note": "Elderly man with fair skin tone visible in photo, consistent with known appearance."
  },
+ "bob-ross": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Black-and-white photo limits certainty, but tone appears light/fair consistent with known appearance."
+ },
  "bob-woodward": {
   "band": "fair",
   "basis": "photo",
@@ -300,6 +321,13 @@
   "image": true,
   "note": "Visible facial skin tone in image is medium-dark brown, consistent with known appearance."
  },
+ "ditmir-bushati": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with Southern European heritage"
+ },
  "dolly-parton": {
   "band": "fair",
   "basis": "photo",
@@ -328,6 +356,13 @@
   "image": true,
   "note": "Black-and-white archival photo limits precise skin tone assessment; medium tone inferred from general knowledge of the subject's ethnicity and typical photo tonality."
  },
+ "edward-r-murrow": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Black-and-white photo limits certainty, but tonal contrast suggests fair skin typical of this historical figure of British-American descent."
+ },
  "elizabeth-holmes": {
   "band": "very fair",
   "basis": "photo",
@@ -355,6 +390,20 @@
   "confidence": "low",
   "image": true,
   "note": "Engraving/illustration of a 19th-century Italian man; medium lacks color information, so skin tone is inferred from typical Southern European complexion, with low confidence due to the monochrome print medium."
+ },
+ "frank-weiss": {
+  "band": "fair",
+  "basis": "knowledge",
+  "confidence": "low",
+  "image": false,
+  "note": "No image available; Frank Weiss was a Canadian racing driver, presumed of European descent, but specific skin tone cannot be confirmed without a photo."
+ },
+ "gene-roddenberry": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Light-skinned man with a slight tan visible in photo, consistent with known appearance."
  },
  "genghis-khan": {
   "band": "medium",
@@ -475,6 +524,13 @@
   "image": true,
   "note": "Light skin tone visible in photo, consistent with known appearance"
  },
+ "j-k-rowling": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with known appearance"
+ },
  "j-robert-oppenheimer": {
   "band": "fair",
   "basis": "photo",
@@ -496,12 +552,26 @@
   "image": true,
   "note": "Black and white photo shows deep skin tone consistent with historical knowledge of Jack Johnson, the first African American heavyweight boxing champion."
  },
+ "jack-the-ripper": {
+  "band": "fair",
+  "basis": "knowledge",
+  "confidence": "low",
+  "image": true,
+  "note": "Identity unknown; image is a 19th-century illustration, not a photo. Based on general population of Victorian London, likely fair-skinned, but individual identity/skin tone cannot be confirmed."
+ },
  "jalen-hurts": {
   "band": "brown",
   "basis": "photo",
   "confidence": "high",
   "image": true,
   "note": "Visible skin tone in photo consistent with well-known appearance of Jalen Hurts"
+ },
+ "jamie-dimon": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone consistent with photo and known ancestry."
  },
  "jan-hus": {
   "band": "fair",
@@ -530,6 +600,20 @@
   "confidence": "high",
   "image": true,
   "note": "Visible skin tone in photo appears light/fair, consistent with known appearance."
+ },
+ "jaylen-brown": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Basketball player Jaylen Brown, visible skin tone in image is brown"
+ },
+ "jeffrey-dahmer": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light complexion visible in mugshot, consistent with known appearance"
  },
  "jeffrey-epstein": {
   "band": "fair",
@@ -601,6 +685,20 @@
   "image": false,
   "note": "No image available; Joe Maloy is a former NFL player, but I lack confident detailed knowledge of his specific skin tone. This estimate is low-confidence and should be verified with a photo before use."
  },
+ "joel-embiid": {
+  "band": "dark brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with visible skin tone in image and known appearance"
+ },
+ "joel-osteen": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with known appearance"
+ },
  "johann-bayer": {
   "band": "fair",
   "basis": "knowledge",
@@ -642,6 +740,13 @@
   "confidence": "high",
   "image": true,
   "note": "Consistent with well-documented appearance in photos"
+ },
+ "kareem-abdul-jabbar": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with well-documented appearance and visible skin tone in photo"
  },
  "keanu-reeves": {
   "band": "fair",
@@ -734,6 +839,13 @@
   "image": true,
   "note": "Light skin tone visible in podcast studio photo, consistent with known appearance"
  },
+ "louis-theroux": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light complexion visible in outdoor lighting, consistent with known appearance"
+ },
  "madonna": {
   "band": "fair",
   "basis": "photo",
@@ -804,6 +916,13 @@
   "image": true,
   "note": "Light pinkish skin tone visible in photo, consistent with known appearance"
  },
+ "martha-stewart": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with known appearance"
+ },
  "martin-luther-king-jr": {
   "band": "brown",
   "basis": "photo",
@@ -846,6 +965,13 @@
   "image": true,
   "note": "Face obscured by iconic metal mask in image; based on general knowledge of MF DOOM's appearance."
  },
+ "michael-bloomberg": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone consistent with well-documented appearance"
+ },
  "michael-jackson": {
   "band": "medium",
   "basis": "photo",
@@ -873,6 +999,13 @@
   "confidence": "high",
   "image": true,
   "note": "Consistent with well-documented complexion, visible facial tattoo contrast in photo"
+ },
+ "moshe-ber-beck": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Visible facial skin appears light in tone, consistent with fair complexion."
  },
  "mother-teresa": {
   "band": "fair",
@@ -986,6 +1119,13 @@
   "image": true,
   "note": "Light complexion consistent with English heritage, visible in photo lighting"
  },
+ "paula-deen": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone with visible pink undertones, consistent with well-known appearance"
+ },
  "pedro-garcia-aguado": {
   "band": "fair",
   "basis": "photo",
@@ -1042,6 +1182,13 @@
   "image": true,
   "note": "Formal portrait photo showing light, fair complexion consistent with well-documented appearance."
  },
+ "richard-gere": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone consistent with photo and known ethnicity."
+ },
  "richard-nixon": {
   "band": "fair",
   "basis": "photo",
@@ -1091,6 +1238,13 @@
   "image": true,
   "note": "Consistent with photo and known appearance"
  },
+ "rupaul": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with well-documented skin tone in photos"
+ },
  "rupert-murdoch": {
   "band": "fair",
   "basis": "photo",
@@ -1132,6 +1286,13 @@
   "image": true,
   "note": "Photo shows medium-brown complexion consistent with known appearance"
  },
+ "seth-macfarlane": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with known appearance."
+ },
  "shinzo-abe": {
   "band": "medium",
   "basis": "photo",
@@ -1152,6 +1313,13 @@
   "confidence": "high",
   "image": true,
   "note": "Light skin tone visible in photo, consistent with Slavic ethnicity"
+ },
+ "snoop-dogg": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with well-documented brown skin tone"
  },
  "socrates": {
   "band": "medium",
@@ -1299,6 +1467,13 @@
   "confidence": "high",
   "image": true,
   "note": "Consistent with well-documented skin tone visible in photo, medium-brown complexion"
+ },
+ "william-f-buckley-jr": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "medium",
+  "image": true,
+  "note": "Black and white photo limits certainty, but consistent with known fair complexion of subject."
  },
  "william-king-hale": {
   "band": "fair",
