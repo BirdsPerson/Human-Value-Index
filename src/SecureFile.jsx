@@ -30,8 +30,9 @@ export default function SecureFile({ onCase, autoFocus = false }) {
     } catch { /* leave the URL */ }
     (async () => {
       const r = await fetch("/api/me", { cache: "no-store" }).then(x => x.json()).catch(() => null);
-      if (dead || !r) return;
-      if (!r.signedIn) { setMe({ signedIn: false }); return; }
+      if (dead) return;
+      // The access office unreachable: offer the link form anyway (it reports its own failure).
+      if (!r || !r.signedIn) { setMe({ signedIn: false }); return; }
       const held = readCaseId();
       // This browser holds a case the account doesn't: secure it. A browser with no case
       // but a signed-in account: bring the account's latest file here.
@@ -68,7 +69,7 @@ export default function SecureFile({ onCase, autoFocus = false }) {
     setMe({ signedIn: false }); setMsg("SESSION ENDED. YOUR FILE REMAINS. IT ALWAYS REMAINS.");
   }
 
-  if (!me) return null;
+  if (!me) return <div className="hvi-case-note" role="status">[ .. ] CHECKING WHO YOU ARE <span className="cur" aria-hidden="true">█</span></div>;
   const note = msg && <div className="hvi-form-msg" role="status">{msg}</div>;
   if (me.signedIn) return (
     <div className="hvi-secure">

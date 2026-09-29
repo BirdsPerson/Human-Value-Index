@@ -95,8 +95,8 @@ function Held({ q, busy, act }) {
         {r?.lines.map((l, i) => <div key={i}>{l}</div>)}
       </div>
       <ButtonRow split stackOnMobile>
-        <Button variant="back" disabled={busy} onClick={() => act("abandon", q.id)}>Abandon</Button>
         {r?.go && <Button variant="primary" href={hrefOf(r.go)}>Go to {r.go.building}</Button>}
+        <Button variant="danger" disabled={busy} onClick={() => act("abandon", q.id)}>Abandon directive</Button>
       </ButtonRow>
     </div>
   );
@@ -111,17 +111,18 @@ export function QuestLog({ caseId }) {
   const done = new Set(state?.done || []);
   const closed = new Set(state?.closed || []);
   const open = QUESTS.filter(q => !done.has(q.id) && !closed.has(q.dim) && q.id !== held?.id);
+  // The payoff first: what the figures have already said for you, then the errand in
+  // hand, then the ones on offer. The rules are fine print, last.
   return (
     <div className="hvi-quests">
       {error && <div className="hvi-err" role="alert">!! {error}</div>}
       {note && <div className="hvi-case-note" role="status">{note}</div>}
+      {state && <Vouches vouches={state.vouches || []} />}
       {state && !state.eligible && <div className="hvi-case-note">NOBODY ON FILE RUNS ERRANDS FOR THE UNASSESSED. COMPLETE AN INTAKE FIRST.</div>}
       {state?.eligible && (
         <>
-          <div className="hvi-note">ONE DIRECTIVE AT A TIME. {state.perDay} A DAY. {state.today} DISCHARGED TODAY. A VOUCH IS ENTERED ON YOUR FILE. IT DOES NOT YET MOVE YOUR NUMBER.</div>
           {held && <Held q={held} busy={busy} act={act} />}
-          {open.length > 0 && <div className="hvi-quest-h">OPEN // {open.length} OF {QUESTS.length}</div>}
-          {closed.size > 0 && <div className="hvi-note">A CATEGORY WITH A VOUCH ON FILE ISSUES NO FURTHER DIRECTIVES. ONE VOICE EACH.</div>}
+          {open.length > 0 && <div className="hvi-quest-h">OPEN // {open.length} OF {QUESTS.length}{held ? " // ONE AT A TIME" : ""}</div>}
           <div role="list">
             {open.map(q => (
               <div role="listitem" key={q.id}>
@@ -137,18 +138,21 @@ export function QuestLog({ caseId }) {
               </div>
             ))}
           </div>
+          <div className="hvi-note hvi-quest-rules">
+            ONE DIRECTIVE AT A TIME. {state.perDay} A DAY. {state.today} DISCHARGED TODAY. A VOUCH IS ENTERED ON YOUR FILE. IT DOES NOT YET MOVE YOUR NUMBER.
+            {closed.size > 0 && " A CATEGORY WITH A VOUCH ON FILE ISSUES NO FURTHER DIRECTIVES. ONE VOICE EACH."}
+          </div>
         </>
       )}
-      <Vouches vouches={state?.vouches || []} />
     </div>
   );
 }
 
 export function Vouches({ vouches }) {
-  if (!vouches.length) return <div className="hvi-note">NO VOUCHES ON FILE. NOBODY ON FILE HAS SPOKEN FOR YOU.</div>;
+  if (!vouches.length) return <div className="hvi-note hvi-quest-none">NO VOUCHES ON FILE. NOBODY ON FILE HAS SPOKEN FOR YOU. YET.</div>;
   return (
     <>
-      <div className="hvi-quest-h">VOUCHES ON FILE // {vouches.length}</div>
+      <div className="hvi-quest-h first">VOUCHES ON FILE // {vouches.length}</div>
       <div role="list">
         {vouches.map(v => (
           <div role="listitem" key={v.quest}>

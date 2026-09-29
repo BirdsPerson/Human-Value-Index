@@ -205,3 +205,15 @@
   .hvi-move-row .hvi-move-note { grid-column: 1 / -1; }
 }
 .spark-marks { color: var(--warn); }
+
+/* SCORE OVER TIME (Intake.jsx Sparkline): block columns, the score under each. */
+.hvi-spark { margin: var(--s1) 0 var(--s4); }
+.hvi-spark-grid { overflow-x: auto; white-space: pre; line-height: 1; font-size: var(--t-s); padding-bottom: 2px; }
+.hvi-spark-row { white-space: pre; }
+.hvi-spark-row.lbl { margin-top: var(--s1); line-height: var(--lh); color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.hvi-spark-row.mk { color: var(--warn); line-height: 1.2; }
+.hvi-spark figcaption { margin-top: var(--s2); }
+.hvi-spark figcaption b { font-weight: 700; }
+.hvi-quest-h.first { margin-top: 0; }
+.hvi-quest-rules { margin-top: var(--s3); }
+.hvi-quest-none { margin-bottom: var(--s2); }

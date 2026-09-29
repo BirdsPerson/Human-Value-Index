@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getTier } from "./figures.js";
-import { Typed, BigNumber } from "./term.jsx";
+import { Typed, BigNumber, prefersReducedMotion } from "./term.jsx";
 import { Frame, Chip, Chips, Meter, ListRow, TextField, Button } from "./ui/components.jsx";
 import "./coreScreens.css";
 import { movement, CAUSE_LABEL } from "./movement.js";
@@ -51,13 +51,32 @@ export async function syncFile(caseId) {
 // The score card: the payoff, first. Block-digit score (and the file photo beside it
 // when there is one), then the state chips (tier, octant, judge), the tier line, and the
 // verdict in readable case. Everything secondary lives in Disclosures below it.
+// The digits count up once, like an odometer settling, when a verdict is fresh (the
+// same moments the verdict types). About 0.7s; reduced motion shows the number at once.
+function useCountUp(target, on) {
+  const [n, setN] = useState(() => (on && !prefersReducedMotion() ? 0 : target));
+  useEffect(() => {
+    if (!on || prefersReducedMotion() || typeof target !== "number") { setN(target); return undefined; }
+    let raf = 0; const t0 = performance.now(), dur = 700;
+    const tick = (t) => {
+      const p = Math.min(1, (t - t0) / dur);
+      setN(Math.round(target * (1 - (1 - p) ** 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, on]);
+  return n;
+}
+
 export function ScoreCard({ score, tierLabel, verdict, label = "YOUR VALUE INDEX", meta, photo = null, chips = null, children, typeVerdict = true }) {
   const tier = getTier(score);
+  const shownScore = useCountUp(score, typeVerdict && Boolean(verdict));
   return (
     <Frame double title={label} meta={meta} tone={tier.color} className="hvi-score">
       <div className="hvi-score-hero">
         <div className="hvi-score-num">
-          <BigNumber value={score} tone={tier.color} label={`${label}: ${score} of 1000, ${tierLabel || tier.label}`} />
+          <BigNumber value={String(shownScore).padStart(String(score).length, "0")} tone={tier.color} label={`${label}: ${score} of 1000, ${tierLabel || tier.label}`} />
           <div className="hvi-score-of" aria-hidden="true">/ 1000</div>
         </div>
         {photo && <div className="hvi-score-photo">{photo}</div>}

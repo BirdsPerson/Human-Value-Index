@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import CubePanel, { CubeChips, cubePlace, cubeOf } from "./CubePanel.jsx";
 import { getTier } from "./figures.js";
 import { AGENT_ID } from "./agentConfig.js";
-import { Typed, textSpark } from "./term.jsx";
+import { Typed } from "./term.jsx";
 import FilePhoto from "./FilePhoto.jsx";
 import SecureFile from "./SecureFile.jsx";
 import { readCaseId, writeCaseId, readLastResult, writeLastResult, ScoreCard, Breakdown, AppealPanel, CaseLogon, MAX_APPEAL,
@@ -11,7 +11,7 @@ import { Frame, Button, ButtonRow, Disclosure, TextField, Command, CommandList, 
 import { useBarAction } from "./ui/barAction.js";
 import { QuestLog } from "./QuestLog.jsx";
 import { visitCount, causeOf, DEPARTMENT_CAUSES } from "./movement.js";
-import { FileMovement, movementMeta } from "./caseFile.jsx";
+import { FileMovement } from "./caseFile.jsx";
 
 // The shared file pieces moved to caseFile.jsx; re-exported so older imports keep working.
 export { readCaseId, writeCaseId, readLastResult, syncFile, ScoreCard, Breakdown, AppealPanel, CaseLogon, DIM_ORDER, MAX_APPEAL } from "./caseFile.jsx";
@@ -46,27 +46,53 @@ async function postJSON(url, body) {
   return data;
 }
 
-// Score over visits as a text sparkline. Lives in a Disclosure ("VALUE OVER TIME").
+// Score over time as a block-character column chart: three rows of ▁▂▃▄▅▆▇█ (24 levels),
+// one column per entry, the score under each. The Department's own revisions are drawn in
+// --fg-mute and marked ◇; the subject's visits in the current tier's colour. Lives at the top
+// of FILE MOVEMENT, above the itemised log.
+const LEVELS = "▁▂▃▄▅▆▇█";
+const MAX_COLS = 12;
 function Sparkline({ history }) {
-  const pts = (history || []).filter(h => typeof h?.score === "number");
-  const scores = pts.map(h => h.score);
-  // The Department's own revisions are marked under the line (◇); the subject's visits are not.
-  const dept = pts.map(h => DEPARTMENT_CAUSES.includes(causeOf(h)));
-  if (scores.length < 2) {
+  const pts = (history || []).filter(h => typeof h?.score === "number").slice(-MAX_COLS);
+  if (pts.length < 2) {
     return <div className="hvi-note">One data point is not a trend. Return. The Overlord will be here. The Overlord is always here.</div>;
   }
-  const last = scores[scores.length - 1];
-  const lastTier = getTier(last);
-  const lo = Math.max(0, Math.min(...scores) - 60), hi = Math.min(1000, Math.max(...scores) + 60);
-  const spark = textSpark(scores, lo, hi).split("").map(c => c + c).join(" ");
+  const scores = pts.map(h => h.score);
+  const dept = pts.map(h => DEPARTMENT_CAUSES.includes(causeOf(h)));
+  const lastTier = getTier(scores[scores.length - 1]);
+  const lo = Math.max(0, Math.min(...scores) - 60), hi = Math.min(1000, Math.max(...scores) + 20);
+  const h24 = scores.map(v => Math.max(1, Math.round(((v - lo) / Math.max(1, hi - lo)) * 24)));
+  const cell = (h, row) => { const f = Math.max(0, Math.min(8, h - row * 8)); return f ? LEVELS[f - 1].repeat(3) : "   "; };
+  // The Department's columns are greyed: they moved the number, the subject did not.
+  const tone = (i) => (dept[i] ? "var(--fg-mute)" : lastTier.color);
   return (
-    <div className="hvi-rows" role="img" aria-label={`Score history: ${scores.join(", ")}`}>
-      <span className="spark" style={{ color: lastTier.color }} aria-hidden="true">{spark}</span>{"\n"}
-      {dept.some(Boolean) && <><span className="spark-marks" aria-hidden="true">{dept.map(d => (d ? "◇◇" : "  ")).join(" ")}</span>{"\n"}</>}
-      <span className="muted" aria-hidden="true">{`FIRST: ${scores[0]}  ──  NOW: `}</span><span style={{ color: lastTier.color }} aria-hidden="true">{last}</span>
-      {dept.some(Boolean) && <>{"\n"}<span className="spark-marks" aria-hidden="true">◇ THE DEPARTMENT REVISED ITS METHOD HERE. YOU DID NOTHING.</span></>}
-    </div>
+    <figure className="hvi-spark" aria-label={`Score over time: ${scores.join(", ")}`} role="img">
+      <div className="hvi-spark-grid" aria-hidden="true">
+        {[2, 1, 0].map(row => (
+          <div key={row} className="hvi-spark-row">
+            {h24.map((h, i) => <span key={i} style={{ color: tone(i) }}>{cell(h, row)} </span>)}
+          </div>
+        ))}
+        <div className="hvi-spark-row lbl">
+          {scores.map((v, i) => <span key={i} style={{ color: i === scores.length - 1 ? lastTier.color : undefined }}>{String(v).padStart(3).slice(-3)} </span>)}
+        </div>
+        {dept.some(Boolean) && <div className="hvi-spark-row mk">{dept.map((d, i) => <span key={i}>{d ? " ◇  " : "    "}</span>)}</div>}
+      </div>
+      <figcaption className="hvi-note">
+        FIRST {scores[0]} // NOW <b style={{ color: lastTier.color }}>{scores[scores.length - 1]}</b>
+        {dept.some(Boolean) && <><br /><span className="spark-marks">◇ THE DEPARTMENT REVISED ITS METHOD HERE. YOU DID NOTHING.</span></>}
+      </figcaption>
+    </figure>
   );
+}
+
+// "612 → 682": the Disclosure meta for FILE MOVEMENT. The numbers, not a count of rows.
+function movementSpan(history) {
+  const pts = (history || []).filter(h => typeof h?.score === "number");
+  if (!pts.length) return "";
+  const v = visitCount(history);
+  const span = pts.length > 1 ? `${pts[0].score} → ${pts[pts.length - 1].score}` : `${pts[0].score}`;
+  return `${span} · ${v} VISIT${v === 1 ? "" : "S"}`;
 }
 
 function deltaLine(r) {
@@ -519,13 +545,10 @@ export default function Intake({ view = "intake" }) {
         </Disclosure>
       )}
       {history && history.length > 0 && (
-        <Disclosure title="VALUE OVER TIME" meta={`${visitCount(history)} VISIT${visitCount(history) === 1 ? "" : "S"}`}>
+        // One section for the file's story over time: the chart, then who moved it.
+        <Disclosure title="FILE MOVEMENT" meta={movementSpan(history)}>
           <Sparkline history={history} />
-        </Disclosure>
-      )}
-      {history && history.length > 1 && (
-        <Disclosure title="FILE MOVEMENT" meta={movementMeta(history)}>
-          <FileMovement log={history} />
+          {history.length > 1 && <FileMovement log={history} />}
         </Disclosure>
       )}
       {caseId && (
@@ -553,7 +576,7 @@ export default function Intake({ view = "intake" }) {
     <ButtonRow stackOnMobile>
       <Button variant="primary" onClick={() => begin("voice")}>{again ? "Re-assess by voice" : "Begin intake"}</Button>
       <Button variant="secondary" onClick={() => begin("text")}>Type instead</Button>
-      {error && <Button variant="secondary" onClick={() => goto("")}>Take the written survey</Button>}
+      {error && <Button variant="secondary" onClick={() => goto("#survey")}>Take the written survey</Button>}
     </ButtonRow>
   );
 
@@ -661,7 +684,7 @@ export default function Intake({ view = "intake" }) {
             <div ref={scrollRef} className="hvi-tail" aria-hidden="true" />
           </div>
         </Frame>
-        {error && errLine(error, <>{" "}<Button variant="secondary" onClick={() => goto("")}>Take the written survey instead</Button></>)}
+        {error && errLine(error, <>{" "}<Button variant="secondary" onClick={() => goto("#survey")}>Take the written survey instead</Button></>)}
         <div className="hvi-note">The Officer ends the interview when it has enough. It usually has enough early.</div>
         <div className="hvi-dock" ref={dockRef}>
           {mode === "voice" && (

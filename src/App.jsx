@@ -552,6 +552,13 @@ export default function OverlordAssessment() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  // #survey (the intake's "take the written survey" fallback) opens the survey phase.
+  useEffect(() => {
+    if (route.split("?")[0] !== "#survey") return;
+    try { window.history.replaceState(null, "", window.location.pathname + window.location.search); } catch { /* keep the hash */ }
+    setRoute(""); setPhase("survey"); setCurrentQ(0);
+  }, [route]);
+
   useEffect(() => { window.scrollTo(0, 0); }, [phase, currentQ]);
 
   useEffect(() => {
