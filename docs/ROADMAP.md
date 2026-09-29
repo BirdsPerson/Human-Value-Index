@@ -13,7 +13,7 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
    a. [shipped 2026-09-29, see Done] **Scale.** Production sprite atlas + slim /api/pen.
    b. **Community + incidents.** Real-life ties from Wikidata (spouse, sibling, bandmates
       /member of, teammates, partners) raise affinity so real friends gravitate together;
-      friendship cliques become named groups (Overlord-named) with a home hangout and group
+      ties carry a sign from the public record where it exists (documented friendships warm, documented feuds/estrangements cold; Scott 2026-09-29: 'whatever's available'), then evolve freely in the sim; friendship cliques become named groups (Overlord-named) with a home hangout and group
       outings; odd cross-group pairs logged as gossip. Fallout Shelter incidents: a fire,
       reactor overload, vat flood, power cut; deterministic from the machine clock; nearby
       subjects with fitting jobs run to it and work it; logged on the PA and the Ledger.
@@ -30,11 +30,11 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       this world"). Buildings that show the real work, each with people doing jobs and an
       audience, tap a screen to watch in an overlay:
       - AUCTION HALL: bidders watching Electric Basement shop turntable product videos
-        (source: eb-command-center/edit renders; need their public URLs), paddles up, an
+        (source, found 2026-09-29: the Shopify store shop.electricbasement.tv hosts "turntable videos of items for sale" on cdn.shopify.com; pull product video media from the storefront, so new listings appear automatically), paddles up, an
         auctioneer figure.
       - CINEMA: rows of seated subjects watching EBTV channels (live.electricbasement.tv and
         the antenna lineup EBTV already carries; embed EB's own player, don't re-host third-
-        party streams). Haddonfield Film Society nights later.
+        party streams; Scott OK'd 2026-09-29). Haddonfield Film Society nights later.
       - EB TV STUDIO: the QVC-style set with the AI hosts from the host bible
         (eb-command-center/edit/qvc_hosts.md), cameras, crew, an ON AIR light.
       - The Arcade (b2) is part of this pass. Later candidates: Brainforest (analytics firm
