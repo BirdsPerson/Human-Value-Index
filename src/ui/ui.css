@@ -229,3 +229,12 @@ textarea.ui-input { resize: vertical; min-height: calc(var(--t-m) * var(--lh) * 
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; }
 }
+
+/* The satire line under every screen (App.jsx Screen). Copy: docs/legal/about.md. */
+.ui-foot { max-width: 86ch; margin: var(--s6) auto 0; padding: var(--s3) var(--gutter) var(--s4); border-top: var(--bw) solid var(--line);
+  font-size: var(--t-xs); line-height: 1.6; color: var(--fg-mute); letter-spacing: 0.02em; }
+.ui-foot a { color: var(--fg-dim); display: inline-block; padding: 4px 0; text-underline-offset: 3px; }
+/* The notice lives here, not in the JS: the logon's entry bundle is at its 90 KB budget
+   (scripts/check-bundle.mjs). Screen readers announce generated content. */
+.ui-foot::before { content: "SATIRE. SCORES AND VERDICTS ARE AI-GENERATED OPINION, NOT FACT."; display: block; margin-bottom: var(--s1); }
+.ui-foot a { margin-right: 2ch; }

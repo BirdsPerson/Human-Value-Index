@@ -159,6 +159,7 @@ const penStyles = `
   .hvi-card-panel .hvi-score { margin-top: var(--s4); }
   .hvi-card-assign { color: var(--accent); font-size: var(--t-xs); margin-top: var(--s2); }
   .hvi-card-note { color: var(--warn); font-size: var(--t-xs); margin: var(--s2) 0; }
+  .hvi-card-note a { color: var(--fg-dim); white-space: nowrap; display: inline-block; padding: 4px 0; }
   .hvi-card-foot { position: sticky; bottom: 0; background: var(--bg); border-top: var(--bw) solid var(--line); margin: var(--s4) 0 0;
     padding-bottom: var(--safe-b); z-index: 2; }
   .hvi-card-foot .ui-btn-row { margin: 0; }
@@ -300,6 +301,13 @@ export function SubjectCard({ subject: listed, onClose, where = "PEN B", back = 
               </Frame>
             );
           })()}
+          {subject.kind !== "citizen" && !subject.you && (
+            // Every public-figure file can be disputed (src/legal, /api/request).
+            <div className="hvi-card-note">
+              THE MACHINE'S AI-GENERATED OPINION OF THE PUBLIC RECORD, NOT A STATEMENT OF FACT.{" "}
+              <a href={`#dispute?file=${encodeURIComponent(displayName(subject))}`} onClick={onClose}>DISPUTE THIS FILE</a>
+            </div>
+          )}
           <div className="hvi-card-foot">
             <ButtonRow stackOnMobile>
               <Button variant="primary" block onClick={onClose}>{back}</Button>

@@ -1,0 +1,40 @@
+/* ABOUT / PRIVACY / TERMS / DISPUTE. Reading pages: body at --t-s, measure 72ch, the
+   Overlord's line in accent, TODO markers in warn so the draft shows what is open. */
+.lg-doc { max-width: 72ch; margin: var(--s5) 0 var(--s6); color: var(--fg); font-size: var(--t-s); line-height: 1.6; }
+.lg-doc p { margin: 0 0 var(--s3); }
+.lg-doc a { color: var(--accent); text-underline-offset: 3px; }
+.lg-doc strong { color: var(--fg); font-weight: 700; }
+.lg-doc em { color: var(--fg-dim); }
+.lg-h1 { font-size: var(--t-l); line-height: var(--lh-tight); color: var(--fg); margin: 0 0 var(--s3); letter-spacing: 0.04em; }
+.lg-h1::before { content: "> "; color: var(--fg-mute); font-weight: 400; }
+.lg-h2 { font-size: var(--t-xs); letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-dim); margin: var(--s5) 0 var(--s2);
+  padding-top: var(--s3); border-top: var(--bw) solid var(--line); }
+.lg-voice { color: var(--accent); border-left: 2px solid var(--accent); padding-left: var(--s3); }
+.lg-list { margin: 0 0 var(--s3); padding-left: 2ch; }
+.lg-list li { margin: 0 0 var(--s2); }
+.lg-list li::marker { content: "- "; color: var(--fg-mute); }
+.lg-todo { background: none; color: var(--warn); border: 1px dashed var(--warn); padding: 0 4px; font-size: var(--t-xs); }
+.lg-table-wrap { margin: 0 0 var(--s3); }
+.lg-table { width: 100%; border-collapse: collapse; font-size: var(--t-xs); }
+.lg-table th, .lg-table td { text-align: left; vertical-align: top; padding: var(--s2); border-bottom: var(--bw) solid var(--line); }
+.lg-table th { color: var(--fg-mute); font-weight: 400; letter-spacing: 0.08em; }
+@media (max-width: 560px) {
+  .lg-table thead { display: none; }
+  .lg-table tr { display: block; border-bottom: var(--bw) solid var(--line); padding: var(--s2) 0; }
+  .lg-table td { display: block; border: 0; padding: 2px 0; }
+  .lg-table td::before { content: attr(data-h) ": "; color: var(--fg-mute); }
+}
+.lg-nav { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); margin-top: var(--s5); padding-top: var(--s3); border-top: var(--bw) solid var(--line); font-size: var(--t-xs); }
+.lg-nav a { color: var(--fg-dim); min-height: 32px; display: inline-flex; align-items: center; }
+.lg-nav a[aria-current] { color: var(--accent); }
+.lg-form { margin: var(--s3) 0 var(--s4); }
+.lg-choice { border: 0; margin: var(--s3) 0; padding: 0; display: grid; gap: var(--s1); }
+.lg-choice legend { color: var(--fg-mute); font-size: var(--t-xs); margin-bottom: var(--s1); padding: 0; }
+.lg-choice label { display: flex; flex-wrap: wrap; align-items: center; gap: 0 1ch; min-height: var(--hit-min, 44px); padding: var(--s1) var(--s2);
+  border: var(--bw) solid var(--line); cursor: pointer; }
+.lg-choice label.on { border-color: var(--accent); background: var(--panel); }
+.lg-choice input { accent-color: var(--accent); margin: 0; width: 16px; height: 16px; }
+.lg-choice .l { color: var(--fg); font-size: var(--t-s); }
+.lg-choice .s { color: var(--fg-mute); font-size: var(--t-xs); flex-basis: 100%; padding-left: calc(16px + 1ch); }
+.lg-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.lg-purge, .lg-done { margin: var(--s4) 0; }

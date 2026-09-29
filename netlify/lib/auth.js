@@ -177,3 +177,64 @@ export async function maybeVerifyDomain(now = Date.now()) {
   } catch { /* next hour */ }
   return true;
 }
+
+// Any other Department mail (dispute copies to the operator). Same stub switch and the
+// same rule as sendLink: only the HTTP status is logged. Returns { ok } or { ok:false, reason }.
+export async function sendMail({ to, subject, text, replyTo }) {
+  if (process.env.HVI_AUTH_STUB === "1") {
+    console.log(`[mail stub] ${subject}`);
+    return { ok: true, stub: true };
+  }
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return { ok: false, reason: "no-key" };
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", "User-Agent": "human-value-index/1.0" },
+      body: JSON.stringify({ from: process.env.RESEND_FROM || FROM_DEFAULT, to: [to], subject, text, ...(replyTo ? { reply_to: replyTo } : {}) }),
+    });
+    if (res.ok) return { ok: true };
+    console.error("[mail] resend status", res.status);
+    return { ok: false, reason: `http_${res.status}` };
+  } catch (err) {
+    console.error("[mail] resend unreachable", err?.name || "error");
+    return { ok: false, reason: "network" };
+  }
+}
+
+// ---- purge ---------------------------------------------------------------------------
+// Detaches a case from whichever account holds it. Returns the owning account key or null.
+export async function caseOwner(caseId) {
+  return (await accounts().get(`case:${caseId}`, { type: "json" }))?.acct || null;
+}
+
+// Removes caseId from the account; if the account then holds nothing, deletes the account
+// (the email), its unexpired and spent sign-in tokens, and returns { accountDeleted: true }.
+export async function detachCase(key, caseId) {
+  const store = accounts();
+  await store.delete(`case:${caseId}`);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const cur = await store.getWithMetadata(key, { type: "json" });
+    if (!cur?.data) return { accountDeleted: false };
+    const cases = (cur.data.cases || []).filter(c => c !== caseId);
+    if (!cases.length) {
+      await store.delete(key);
+      await purgeTokensFor(cur.data.email);
+      return { accountDeleted: true };
+    }
+    const res = await store.setJSON(key, { ...cur.data, cases }, { onlyIfMatch: cur.etag });
+    if (res.modified) return { accountDeleted: false };
+  }
+  throw new Error("detachCase: lost the write race five times");
+}
+
+// Sign-in token records carry the address in clear; drop every one for this address.
+async function purgeTokensFor(email) {
+  const store = auth();
+  const n = normEmail(email);
+  const { blobs } = await store.list({ prefix: "tok:" });
+  for (const b of blobs) {
+    const rec = await store.get(b.key, { type: "json" }).catch(() => null);
+    if (rec?.email === n) await store.delete(b.key);
+  }
+}

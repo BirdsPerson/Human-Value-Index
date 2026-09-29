@@ -166,3 +166,29 @@ export async function getSprite(slug) {
 const atlas = () => getStore({ name: "hvi-atlas", consistency: "strong" });
 export const getAtlasJson = () => atlas().get("current", { type: "json" });
 export const getAtlasSheet = hash => atlas().get(`sheet-${hash}`, { type: "arrayBuffer" });
+
+// ---- purge (the subject's own request, /api/purge) ---------------------------------------
+export async function deleteCase(caseId) {
+  await cases().delete(caseId);
+}
+
+export async function removePenCard(caseId) {
+  const store = pen();
+  const key = `citizen:${caseId}`;
+  await store.delete(key);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const cur = await store.getWithMetadata(PEN_INDEX, { type: "json" });
+    if (!cur?.data?.cards) return;
+    const cards = cur.data.cards.filter(c => c.key !== key);
+    if (cards.length === cur.data.cards.length) return;
+    const res = await store.setJSON(PEN_INDEX, { cards }, { onlyIfMatch: cur.etag });
+    if (res.modified) return;
+  }
+  console.warn("pen index: lost the write race while purging; the card blob is gone");
+}
+
+// ---- correction / takedown requests ------------------------------------------------------
+const requests = () => getStore({ name: "hvi-requests", consistency: "strong" });
+export async function putRequest(id, rec) {
+  await requests().setJSON(id, rec, { onlyIfNew: true });
+}

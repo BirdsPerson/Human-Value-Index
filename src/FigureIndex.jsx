@@ -108,6 +108,7 @@ export default function FigureIndex({ figures, result, onPrimary }) {
                   {you && <Chip tone="mute">{you.score > fig.score ? `YOU +${you.score - fig.score}` : you.score < fig.score ? `YOU −${fig.score - you.score}` : "YOU ±0"}</Chip>}
                 </Chips>
                 <p className="hvi-fi-verdict">{fig.verdict}</p>
+                <a className="hvi-fi-dispute" href={`#dispute?file=${encodeURIComponent(displayName(fig))}`}>DISPUTE THIS FILE</a>
               </ListRow>
             );
           });

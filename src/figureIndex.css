@@ -11,6 +11,7 @@
 .hvi-fi-row + .sub { padding-left: var(--s3); padding-right: var(--s3); }
 .hvi-fi-chips { margin: var(--s2) 0; }
 .hvi-fi-verdict { margin: 0; font-size: var(--t-m); line-height: var(--lh); color: var(--fg); max-width: 68ch; }
+.hvi-fi-dispute { display: inline-flex; align-items: center; min-height: 32px; margin-top: var(--s1); font-size: var(--t-xs); color: var(--fg-mute); letter-spacing: 0.06em; text-underline-offset: 3px; }
 .hvi-fi-you { min-height: var(--hit-min); border: var(--bw) solid var(--accent); }
 .hvi-fi-you .name { color: var(--accent); font-weight: 700; }
 .hvi-fi-you .val { color: var(--accent); }

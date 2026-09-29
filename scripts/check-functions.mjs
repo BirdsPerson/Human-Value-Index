@@ -96,6 +96,7 @@ globalThis.fetch = async (url, init) => {
   return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(out) }], stop_reason: "end_turn" }), { status: 200 });
 };
 
+const { ipHash } = await import("../netlify/lib/http.js");
 const session = (await import("../netlify/functions/intake-session.js")).default;
 const score = (await import("../netlify/functions/intake-score.js")).default;
 const pen = (await import("../netlify/functions/pen.js")).default;
@@ -404,7 +405,7 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
   // anything is charged; in a namesake list they're shown sealed, not selectable.
   {
     const ipCount = ip => [...(globalThis.__blobs.get("hvi-limits")?.entries() || [])]
-      .filter(([k]) => k.endsWith(`refer-ip:${ip}`)).reduce((n, [, v]) => n + (v.data?.count || 0), 0);
+      .filter(([k]) => k.endsWith(`refer-ip:${ipHash(ip)}`)).reduce((n, [, v]) => n + (v.data?.count || 0), 0);
     wikiRoutes.unshift(
       [/srsearch=Muhammad&srlimit=10/, { query: { search: [{ title: "Muhammad" }] } }],
       [/titles=Muhammad%7CMuhammad%20\(disambiguation\)&prop=pageprops\|links/, { query: { pages: { "1": { title: "Muhammad", pageprops: {} } } } }],

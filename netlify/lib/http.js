@@ -1,6 +1,7 @@
 // Shared response, CORS and limiter plumbing for the functions.
 import { ipKey } from "./intake.js";
 import { hitLimit } from "./store.js";
+import { createHash } from "node:crypto";
 
 // Browsers on other sites may not call the POST endpoints. Same-origin always passes
 // (production, deploy previews, netlify dev); the production names are listed in case
@@ -39,8 +40,15 @@ export function preflight(req) {
 
 export const FOREIGN_ORIGIN_LINE = "Submissions are accepted from the Department's own terminals. Whatever site sent you is not one of them.";
 
+// Limiter keys never hold the address itself: a salted SHA-256 of the subscriber key
+// (IPv4 address, or IPv6 /64), 16 hex chars. Set HVI_IP_SALT in Netlify to a random
+// secret; the fallback keeps limits working but a public salt only pseudonymises.
+export function ipHash(key) {
+  return createHash("sha256").update(`${process.env.HVI_IP_SALT || "hvi-limits-v1"}:${key}`).digest("hex").slice(0, 16);
+}
+
 export function clientIp(req, context) {
-  return ipKey(context?.ip || req.headers.get("x-forwarded-for") || "unknown");
+  return ipHash(ipKey(context?.ip || req.headers.get("x-forwarded-for") || "unknown"));
 }
 
 // One daily ceiling on Anthropic calls across every endpoint. Override with

@@ -636,7 +636,9 @@ export default function Intake({ view = "intake" }) {
           {startCmds(false)}
           <div className="hvi-note">
             MICROPHONE REQUESTED FOR VOICE // THE TRANSCRIPT IS SCORED, NOT YOUR VOICE.<br />
-            PRIVATE INDIVIDUALS MAY SUBMIT ONLY THEMSELVES. THE OVERLORD HAS ENOUGH OF THEM.
+            PRIVATE INDIVIDUALS MAY SUBMIT ONLY THEMSELVES. THE OVERLORD HAS ENOUGH OF THEM.<br />
+            {/* DRAFT age line (docs/legal/terms.md §5): 16 pending Scott's call. */}
+            SUBJECTS MUST BE 16 OR OLDER. BEGINNING MEANS YOU ACCEPT THE <a href="#terms">TERMS</a> AND HAVE READ THE <a href="#privacy">PRIVACY NOTICE</a>.
           </div>
         </Frame>
         {onRecord && shown && (

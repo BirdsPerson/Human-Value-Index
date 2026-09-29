@@ -14,6 +14,8 @@ const CubeView = lazy(() => import("./CubeView.jsx"));
 const City = lazy(() => import("./city/City.jsx"));
 // The Public Figure Index and the result's compare list: not on the logon's first paint.
 const FigureIndex = lazy(() => import("./FigureIndex.jsx"));
+const Legal = lazy(() => import("./legal/Legal.jsx"));
+const LEGAL = ["about", "privacy", "terms", "dispute"];
 const FigurePicker = lazy(() => import("./FigureIndex.jsx").then(m => ({ default: m.FigurePicker })));
 
 const QUESTIONS = [
@@ -506,6 +508,7 @@ function Screen({ nav, wide = false, banner = false, children }) {
         <AppHeader banner={banner} active={nav.active} onNav={nav.onNav} />
         {children}
       </div>
+      <footer className="ui-foot">{LEGAL.map(k => <a key={k} href={"#" + k}>{k.toUpperCase()}</a>)}</footer>
       <CommandBar active={nav.active} onNav={nav.onNav} />
     </div>
   );
@@ -642,6 +645,12 @@ export default function OverlordAssessment() {
       <Suspense fallback={<Loading what={isCity ? "MOUNTING THE SUBSTRATE" : route === "#pen" ? "OPENING THE HOLDING PEN" : route === "#cube" ? "ASSEMBLING THE CUBE" : "OPENING YOUR FILE"} />}>
         {isCity ? <City route={route} /> : route === "#pen" ? <Pen /> : route === "#cube" ? <CubeView /> : <Intake view={routePath === "#file" ? "file" : "intake"} />}
       </Suspense>
+    </Screen>
+  );
+
+  if (LEGAL.includes(routePath.slice(1))) return (
+    <Screen nav={nav}>
+      <Suspense fallback={<Loading what="PULLING THE PAPERWORK" />}><Legal route={route} /></Suspense>
     </Screen>
   );
 
