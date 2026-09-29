@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
 import { buildAtlas } from './scripts/sprite-atlas.mjs'
+import { FAMOUS_FIGURES } from './src/figures.js'
 
 const SPRITES = fileURLToPath(new URL('./public/sprites/', import.meta.url))
 
@@ -31,8 +32,17 @@ function spriteAtlas() {
   }
 }
 
+// Link-preview scores come from the roster at build time, so a rescore never leaves the
+// share text quoting yesterday's numbers.
+function shareScores() {
+  const score = name => FAMOUS_FIGURES.find(f => f.name === name)?.score
+  const line = [['Tubman', 'Harriet Tubman'], ['Einstein', 'Albert Einstein'], ['Genghis Khan', 'Genghis Khan']]
+    .filter(([, n]) => typeof score(n) === 'number').map(([l, n]) => `${l} ${score(n)}.`).join(' ')
+  return { name: 'hvi-share-scores', transformIndexHtml: html => html.replaceAll('%HVI_SHARE_SCORES%', line) }
+}
+
 export default defineConfig({
-  plugins: [react(), spriteAtlas()],
+  plugins: [react(), spriteAtlas(), shareScores()],
   // Dev only: /api/* goes to `netlify functions:serve --port 9999` (local Blobs sandbox).
   // The functions' same-origin check sees the functions host, so the proxy presents it.
   server: { proxy: { '/api': { target: 'http://localhost:9999', changeOrigin: true, headers: { origin: 'http://localhost:9999' } } } },
