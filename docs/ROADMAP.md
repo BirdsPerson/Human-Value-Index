@@ -9,6 +9,8 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Backlog (priority order)
 
+0. [bug, do first] **Social tick keeps withdrawn subjects**: withdrawn/removed figures (e.g. frank-weiss) must be dropped from hvi-social state, events and /api/social; add a check.
+
 1. [in progress: slices 1 and 2 shipped, see Done] **Side quests → vouches.**
    Remaining slices: (b) [next] vouch → score effect: DECIDED by Scott 2026-09-28: +2 to that category per vouch (max +14 across 7); show it on the file and in the breakdown; each vouch appends a history entry with cause "vouch" (src/movement.js: YOUR CHANGES, not a visit, not capped);
    (c2) bring someone (needs a second player or a referral; witness shipped as c1);
