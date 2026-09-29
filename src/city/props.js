@@ -28,6 +28,7 @@ export const ROOM_TYPE = {
   "block-a": "hab", "block-b": "hab", "block-c": "hab", "block-d": "hab", "the-street": "street",
   "the-drip": "cafe", "gallery-annex": "gallery", "members-club": "lounge", "the-lantern": "bar",
   "allotment": "allotment", "night-market": "market", "the-plaza": "street",
+  "ball-field": "ballfield", "courts": "courts", "rec-park": "picnic",
 };
 export const typeOf = (placeId) => ROOM_TYPE[placeId] || "office";
 
@@ -43,6 +44,7 @@ const LOOK = {
   lofts: ["#1c1a18", "#302c28"], line: ["#200f0f", "#381c1c"], reactor: ["#0f2014", "#1a3a24"], foundry: ["#26140c", "#442414"],
   racks: ["#0e1618", "#1a2a2e"], docks: ["#0f1a22", "#1a2e3a"], vats: ["#0f2014", "#1c3a22"], barracks: ["#1a1c16", "#2e3226"],
   cells: ["#181818", "#2a2a2a"], canteen: ["#221a12", "#3a2c1e"], hab: ["#18181a", "#2c2c30"], street: ["#101410", "#222822"],
+  ballfield: ["#10202a", "#2f6b2a"], courts: ["#141c24", "#3a4250"], picnic: ["#10202a", "#2a5a24"],
 };
 
 // ---- plans ----------------------------------------------------------------------------
@@ -225,6 +227,22 @@ const PLANS = {
     back: { unit: [M(A("station", "stir", "staff", 1), "vat", 1.75, SIDE)] },
     front: { unit: [M(A("station", "stir", "staff", 1), "vat", 1.75, SIDE), M(A("station", "valve", "staff", 1), "valvePipe", 1.6, SIDE)] },
   },
+  // the recreation ground, side on: the field of play up the back, the battery and the
+  // stands in front; a hoop with its game; lawns with picnic tables
+  ballfield: {
+    back: { max: 9, span: "outfield", head: [M(A("stand", "pitch", "patron"), "mound", 1.5)], unit: [M(A("stand", "ready", "patron"), null, 1.35)] },
+    front: { head: [M(A("station", "umpire", "staff"), null, 1.15), M(A("stand", "catch", "patron"), "homePlate", 1.2), M(A("stand", "bat", "patron", 1), null, 1.4), M(A("stand", "rake", "staff", 1), "chalkLine", 1.5, SIDE)], unit: [M(A("seat", "watch", "any"), "bleacherSeat", 1.08)] },
+    solo: { head: [M(A("stand", "pitch", "patron"), "mound", 1.5), M(A("station", "umpire", "staff"), null, 1.15), M(A("stand", "catch", "patron"), "homePlate", 1.2), M(A("stand", "bat", "patron", 1), null, 1.4)], unit: [M(A("stand", "ready", "patron"), null, 1.35), M(A("seat", "watch", "any"), "bleacherSeat", 1.08)] },
+  },
+  courts: {
+    back: { head: [M(A("stand", "shoot", "patron", -1), "hoop", 1.7, 0.62)], unit: [M(A("stand", "defend", "patron"), null, 1.25), M(A("stand", "dribble", "patron", -1), null, 1.3)] },
+    front: { head: [M(A("station", "whistle", "staff"), null, 1.3)], unit: [M(A("seat", "watch", "any"), "courtBench", 1.1)] },
+    solo: { head: [M(A("stand", "shoot", "patron", -1), "hoop", 1.7, 0.62)], unit: [M(A("stand", "defend", "patron"), null, 1.25), M(A("stand", "dribble", "patron", -1), null, 1.3), M(A("station", "whistle", "staff"), null, 1.3)] },
+  },
+  picnic: {
+    back: { unit: [M(A("stand", "stroll", "patron", 0, true), "tree", 2.2), M(A("seat", "read", "patron"), "parkBench", 1.25)] },
+    front: { head: [M(A("stand", "rake", "staff", 1), "leafPile", 1.5, SIDE)], unit: [M(A("seat", "eat", "patron", 1), "picnicBench", 1.05), P("picnicTable", 0.62), M(A("seat", "talk", "patron", -1), "picnicBench", 1.05), P(null, 0.25), M(A("seat", "feed", "patron"), "parkBench", 1.25)] },
+  },
   street: {
     back: { unit: [M(A("stand", "stroll", "any", 0, true), "lamppost", 2.2)] },
     front: { unit: [M(A("stand", "sweep", "staff", 0, true), null, 2.2), M(A("seat", "rest", "patron"), "streetBench", 1.25), M(A("stand", "loiter", "patron"), null, 1.2)] },
@@ -341,7 +359,9 @@ function hkey(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { 
 // end; then any free one (visitors never behind the counter); then overflow.
 // -> {at: Map key -> index, overflow: [keys]}
 // At night (hour given and in the night) residents want a bunk before anything else.
-export function assignAnchors(anchors, people, prev = null, hour = null) {
+// ordered: fill the anchors in their listed order (the battery before the outfield, the
+// players before the stands) instead of from each person's own starting place.
+export function assignAnchors(anchors, people, prev = null, hour = null, ordered = false) {
   const n = anchors.length, taken = new Array(n).fill(null), at = new Map(), overflow = [];
   const night = hour != null && isNight(hour);
   const beds = night && anchors.some(a => a.kind === "bed");
@@ -354,7 +374,7 @@ export function assignAnchors(anchors, people, prev = null, hour = null) {
   }
   for (const p of waiting) {
     const tiers = PREFS[p.role] || PREFS.patron;
-    const start = n ? hkey(p.key) % n : 0;
+    const start = n && !ordered ? hkey(p.key) % n : 0;
     let got = -1;
     if (beds && p.role === "rest") for (let k = 0; k < n && got < 0; k++) { const i = (start + k) % n; if (!taken[i] && anchors[i].kind === "bed") got = i; }
     for (const t of tiers) {
@@ -372,12 +392,16 @@ export function assignAnchors(anchors, people, prev = null, hour = null) {
 // on by day; a worker on shift never sits about. More staff than stations (the sim drafts
 // general labour where it likes) puts the rest to work at the tables: a waiter at a café
 // table, a vendor among the crates, a warden by the cots.
-export const LEISURE_ACTS = new Set(["drink", "eat", "talk", "read", "write", "listen", "pray", "watch", "gamble", "rest", "sleep", "sit", "wait", "shop", "stroll", "loiter", "cheer", "view"]);
+export const LEISURE_ACTS = new Set(["drink", "eat", "talk", "read", "write", "listen", "pray", "watch", "gamble", "rest", "sleep", "sit", "wait", "shop", "stroll", "loiter", "cheer", "view",
+  "pitch", "bat", "ready", "catch", "shoot", "dribble", "defend", "feed"]);
+// Rooms whose people take their places in order (a game needs its battery first).
+export const ORDERED_TYPES = new Set(["ballfield", "courts", "picnic"]);
 const STAFF_ACT = {
   bar: "serve", cafe: "serve", diner: "serve", canteen: "serve", lounge: "serve", suite: "serve", market: "sell", casino: "deal",
   theatre: "perform", concert: "perform", lecture: "lecture", school: "lecture", library: "shelve", park: "rake", allotment: "dig",
   stadium: "sprint", cells: "guard", chapel: "preach", gallery: "guide", assembly: "confer", tribunal: "confer", street: "sweep",
   hab: "tend", lofts: "tend", barracks: "drill", press: "type", vault: "count",
+  ballfield: "rake", courts: "whistle", picnic: "rake",
 };
 export function actAt(a, hour, role = null, type = null) {
   let act = a.kind === "bed" && a.act === "sleep" ? (isNight(hour) ? "sleep" : "rest") : a.act;
@@ -430,6 +454,7 @@ export function drawRoom(c, placeId, x, y, w, h, u = 2, o = {}) {
   // or two stays on); the machine rooms get a cold wash.
   const cold = COLD.has(type);
   if (dark) R(c, "rgba(2,4,12,0.3)", x, y, w, h);
+  else if (OPEN_AIR.has(type)) { /* open air: the sky, not a ceiling */ }
   else {
     const n = Math.max(1, Math.round(w / (h * 1.6)));
     for (let i = 0; i < n; i++) {
@@ -442,6 +467,7 @@ export function drawRoom(c, placeId, x, y, w, h, u = 2, o = {}) {
   R(c, o.lit === false ? "rgba(255,255,255,0.03)" : "rgba(255,220,150,0.05)", x, y, w, 2 * u);
   c.restore();
 }
+const OPEN_AIR = new Set(["ballfield", "courts", "picnic"]);
 const COLD = new Set(["lab", "office", "exchange", "vault", "reactor", "racks", "vats", "ward", "cells", "line", "docks", "clock"]);
 const NOOP = () => {};
 
@@ -617,6 +643,48 @@ const DRAW = {
     across(x + u, w - 2 * u, 4 * u, bx => R(c, "#4b5563", bx, y + 2 * u, u, h * 0.55));   // bars, far wall
     R(c, "#6b7280", x, y + 2 * u, w, u);
   },
+  // the recreation ground: sky, the far side of the ground, the ground itself
+  ballfield(c, x, y, w, h, u, o) {
+    const dusk = (o.hour ?? 12) >= 18.5 || (o.hour ?? 12) < 6.5;
+    R(c, dusk ? "#070d18" : "#1c3346", x, y, w, h * 0.5);                      // sky
+    R(c, "#14532d", x, y + h * 0.36, w, h * 0.12);                             // the outfield wall
+    R(c, "#fbbf24", x, y + h * 0.36, w, u);                                    // its yellow line
+    across(x, w, 22 * u, (ax, i) => R(c, "#0f3f22", ax, y + h * 0.39, 11 * u, u));   // the ads, unreadable, as intended
+    R(c, "#2a6a28", x, y + h * 0.48, w, h * 0.52);                             // outfield grass
+    across(x, w, 16 * u, (sx, i) => { if (i % 2) R(c, "#2f7430", sx, y + h * 0.48, 8 * u, h * 0.3); });   // mowing stripes
+    R(c, "#8a5a32", x, y + h * 0.74, w, h * 0.1);                              // the infield skin
+    // the scoreboard over the wall, and the light towers at either end
+    const bx = x + w * 0.06, bw = Math.max(20 * u, w * 0.16);
+    R(c, "#0a0f0a", bx, y + 3 * u, bw, h * 0.26); R(c, "#374151", bx, y + 3 * u, bw, u);
+    R(c, "#374151", bx + bw / 2 - u, y + 3 * u + h * 0.26, 2 * u, h * 0.1);
+    for (const lx of [x + 2 * u, x + w - 5 * u]) { R(c, "#4b5563", lx + u, y + 6 * u, u, h * 0.42); R(c, "#6b7280", lx - u, y + 3 * u, 5 * u, 3 * u); }
+  },
+  courts(c, x, y, w, h, u, o) {
+    const dusk = (o.hour ?? 12) >= 19 || (o.hour ?? 12) < 6.5;
+    R(c, dusk ? "#070d18" : "#1a2c3c", x, y, w, h * 0.62);                     // sky
+    R(c, "#10261a", x, y + h * 0.42, w, h * 0.2);                              // hedges beyond the fence
+    // chain-link: posts, top rail, the diamond mesh
+    c.save(); c.beginPath(); c.rect(x, y + 4 * u, w, h * 0.58); c.clip();
+    c.strokeStyle = "rgba(160,172,184,0.22)"; c.lineWidth = 1; c.beginPath();
+    for (let k = -h; k < w + h; k += 5 * u) { c.moveTo(x + k, y + 4 * u); c.lineTo(x + k + h, y + 4 * u + h); c.moveTo(x + k, y + 4 * u); c.lineTo(x + k - h, y + 4 * u + h); }
+    c.stroke(); c.restore();
+    R(c, "#6b7280", x, y + 4 * u, w, u);
+    across(x, w, 24 * u, px => R(c, "#6b7280", px, y + 4 * u, u, h * 0.58));
+    R(c, "#2c4a6e", x, y + h * 0.62, w, h * 0.38);                             // the court, painted
+    R(c, "#e5e7eb", x, y + h * 0.62, w, u);
+    R(c, "#b45309", x + w * 0.04, y + h * 0.66, w * 0.26, h * 0.3);            // the key
+  },
+  picnic(c, x, y, w, h, u, o) {
+    const dusk = (o.hour ?? 12) >= 19 || (o.hour ?? 12) < 6.5;
+    R(c, dusk ? "#070d18" : "#1c3346", x, y, w, h * 0.5);
+    across(x, w, 13 * u, (tx, i) => R(c, i % 2 ? "#14532d" : "#166534", tx - 2 * u, y + h * (0.24 + (i % 3) * 0.04), 13 * u, h * 0.3));   // the treeline
+    R(c, "#2a5a24", x, y + h * 0.5, w, h * 0.5);
+    R(c, "#8a7a5a", x, y + h * 0.72, w, h * 0.06);                             // the gravel path
+    // the fountain, set back on the lawn
+    const fx = x + w * 0.5;
+    R(c, "#6b7280", fx - 14 * u, y + h * 0.56, 28 * u, 4 * u); R(c, "#1e4a6e", fx - 12 * u, y + h * 0.56, 24 * u, 2 * u);
+    R(c, "#6b7280", fx - u, y + h * 0.4, 2 * u, h * 0.16);
+  },
   street(c, x, y, w, h, u) {
     R(c, "#0c100c", x, y, w, h * 0.45);   // shopfronts, shuttered
     across(x, w, 16 * u, sx => { R(c, "#1c221c", sx + u, y + h * 0.1, 13 * u, h * 0.33); repeat(4, k => R(c, "#141814", sx + u, y + h * 0.12 + k * 3 * u, 13 * u, u)); });
@@ -687,6 +755,23 @@ const LIVE = {
   docks(c, x, y, w, h, u, { t }) { across(x, w, 7 * u, (wx, i) => R(c, "#22d3ee", wx + ((t * 3 * u + i * 2 * u) % (4 * u)), y + h * 0.3 + (i % 2) * 4 * u, 3 * u, u)); },
   stadium(c, x, y, w, h, u, { t }) { across(x, w, 5 * u, (sx, i) => { if (blink(t, 0.9, i * 0.29)) R(c, "#e5e5e5", sx, y + 4 * u + (i % 4) * 3 * u, u, u); }); },
   studio(c, x, y, w, h, u, { t }) { R(c, blink(t, 0.25) ? "#f87171" : "#5a1414", x + w * 0.1, y + 5 * u, w * 0.1, 2 * u); },
+  ballfield(c, x, y, w, h, u, { t, hour }) {
+    const on = hour >= 18.5 || hour < 6.5;
+    for (const lx of [x + 3 * u, x + w - 3 * u]) {
+      R(c, on ? "#fff7d6" : "#374151", lx - 2 * u, y + 4 * u, 4 * u, u);
+      if (on) { c.fillStyle = "rgba(255,247,214,0.05)"; c.beginPath(); c.moveTo(lx - 2 * u, y + 5 * u); c.lineTo(lx + 2 * u, y + 5 * u); c.lineTo(x + w / 2 + (lx - x - w / 2) * 0.2, y + h); c.lineTo(x + w / 2 + (lx - x - w / 2) * 0.6, y + h); c.closePath(); c.fill(); }
+    }
+    // the board: two teams, a light for each out, the inning ticking over
+    const bx = x + w * 0.06 + 2 * u, bw = Math.max(20 * u, w * 0.16) - 4 * u;
+    R(c, "#fbbf24", bx, y + 6 * u, bw * 0.4, u); R(c, "#f87171", bx, y + 9 * u, bw * 0.4, u);
+    repeat(3, k => R(c, (Math.floor(t / 4.2) % 3) > k ? "#4ade80" : "#14532d", bx + bw * 0.6 + k * 3 * u, y + 7 * u, 2 * u, 2 * u));
+  },
+  courts(c, x, y, w, h, u, { hour }) { if (hour >= 19 || hour < 6.5) across(x, w, 40 * u, lx => { R(c, "#fff7d6", lx - 2 * u, y + 2 * u, 4 * u, u); R(c, "rgba(255,247,214,0.05)", lx - 12 * u, y + 3 * u, 24 * u, h); }); },
+  picnic(c, x, y, w, h, u, { t }) {
+    const fx = x + w * 0.5;   // the fountain, running
+    for (let k = 0; k < 4; k++) { const f = ((t * 0.9 + k / 4) % 1 + 1) % 1; R(c, `rgba(147,197,253,${(0.7 * (1 - f)).toFixed(2)})`, fx + (k % 2 ? 1 : -1) * f * 9 * u, y + h * 0.4 - Math.sin(f * Math.PI) * 5 * u + f * h * 0.14, u, u); }
+    R(c, "#93c5fd", fx - u / 2, y + h * 0.38, u, 2 * u);
+  },
   street(c, x, y, w, h, u, { t }) { if (Math.floor(t * 6) % 41 !== 0) across(x + 8 * u, w - 16 * u, 30 * u, lx => R(c, "rgba(251,191,36,0.07)", lx - 6 * u, y + h * 0.5, 12 * u, h * 0.45)); },
   clock(c, x, y, w, h, u, { t }) {
     across(x + 3 * u, w * 0.6, 12 * u, (gx, i) => { const a = t * (i % 2 ? 0.6 : -0.6); R(c, "#8a7a4a", gx + Math.cos(a) * 3 * u, y + h * 0.3 + Math.sin(a) * 3 * u, u, u); });
@@ -872,6 +957,38 @@ export const PROP = {
     back(c, X, Y, W, p, t, a) { const [x0, x1] = rightOf(X, W, a, p); const vw = x1 - x0; R(c, "#94a3b8", x0, Y - 30 * p, vw, 30 * p); R(c, "#1f7a44", x0 + p, Y - 26 * p, vw - 2 * p, 24 * p); R(c, "#3fbf6f", x0 + p, Y - 26 * p, vw - 2 * p, 2 * p); for (let k = 0; k < 3; k++) { const f = ((t * 0.6 + k / 3 + (a?.i || 0) * 0.17) % 1); R(c, "#bbf7d0", x0 + 2 * p + ((k * 5) % Math.max(1, vw / p - 4)) * p, Y - 4 * p - f * 20 * p, p, p); } R(c, "#64748b", x0, Y - 31 * p, vw, 2 * p); puff(c, x0 + vw / 2, Y - 32 * p, p, t, (a?.i || 0) * 0.23, "rgba(187,247,208,"); },
   },
   mop: { back() {} },
+  // the recreation ground
+  outfield: { back(c, X, Y, W, p) { R(c, "#8a5a32", X, Y - 2 * p, W + 1, 3 * p); for (let bx = X + W * 0.2; bx < X + W; bx += W * 0.3) R(c, "#f5f5f5", bx, Y - 3 * p, 4 * p, 2 * p); } },
+  mound: { back(c, X, Y, W, p, t, a) { const x = personX(X, W, a); R(c, "#9a6a3a", x - 11 * p, Y - 2 * p, 22 * p, 3 * p); R(c, "#8a5a32", x - 7 * p, Y - 4 * p, 14 * p, 2 * p); R(c, "#f5f5f5", x - 3 * p, Y - 5 * p, 6 * p, p); } },
+  homePlate: { back(c, X, Y, W, p, t, a) { const x = personX(X, W, a); R(c, "#8a5a32", X, Y - 2 * p, W, 3 * p); R(c, "#f5f5f5", x + 6 * p, Y - 3 * p, 6 * p, 2 * p); R(c, "#f5f5f5", X + 2 * p, Y - 2 * p, p, p); } },
+  chalkLine: { back(c, X, Y, W, p, t, a) { const [x0, x1] = rightOf(X, W, a, p); R(c, "#f5f5f5", x0, Y - p, x1 - x0, p); R(c, "#374151", x0 + 2 * p, Y - 6 * p, 6 * p, 4 * p); R(c, "#e5e5e5", x0 + 2 * p, Y - 7 * p, 6 * p, p); R(c, "#111", x0 + 3 * p, Y - 2 * p, 2 * p, 2 * p); } },
+  bleacherSeat: {
+    back(c, X, Y, W, p) { R(c, "#6b7280", X, Y - 24 * p, W + 1, 2 * p); R(c, "#4b5563", X + W / 2, Y - 22 * p, p, 22 * p); R(c, "#9ca3af", X, Y - 11 * p, W + 1, 2 * p); },
+    front(c, X, Y, W, p) { R(c, "#4b5563", X, Y - 9 * p, W + 1, p); R(c, "#6b7280", X, Y - 3 * p, W + 1, p); },
+  },
+  hoop: {
+    back(c, X, Y, W, p) {
+      // turned to the room so it reads: pole, arm, the backboard face on, the rim and its net
+      const bx = X + 3 * p;
+      R(c, "#9ca3af", bx, Y - 74 * p, 3 * p, 74 * p); R(c, "#9ca3af", bx, Y - 72 * p, 9 * p, 2 * p);
+      R(c, "#f1f5f9", bx + 6 * p, Y - 86 * p, 22 * p, 15 * p); R(c, "#94a3b8", bx + 6 * p, Y - 86 * p, 22 * p, p);
+      R(c, "#dc2626", bx + 13 * p, Y - 79 * p, 8 * p, p); R(c, "#dc2626", bx + 13 * p, Y - 79 * p, p, 6 * p); R(c, "#dc2626", bx + 20 * p, Y - 79 * p, p, 6 * p);
+      R(c, "#f97316", bx + 11 * p, Y - 71 * p, 12 * p, 2 * p);                                            // the rim
+      for (let k = 0; k < 5; k++) R(c, "rgba(241,245,249,0.8)", bx + 11 * p + k * 2.75 * p, Y - 69 * p, p, 7 * p - Math.abs(k - 2) * p);   // the net
+      R(c, "#e5e7eb", X, Y - p, W + 1, p);                                                                 // the baseline
+    },
+  },
+  courtBench: { back(c, X, Y, W, p, t, a) { const x = personX(X, W, a); R(c, "#9ca3af", x - 9 * p, Y - 11 * p, 18 * p, 2 * p); R(c, "#4b5563", x - 8 * p, Y - 9 * p, p, 9 * p); R(c, "#4b5563", x + 7 * p, Y - 9 * p, p, 9 * p); R(c, "#e5e7eb", x + 5 * p, Y - 14 * p, 3 * p, 3 * p); } },
+  picnicBench: { front(c, X, Y, W, p, t, a) { const x = personX(X, W, a); R(c, "#8a6a42", x - 7 * p, Y - 11 * p, 14 * p, 2 * p); R(c, "#5a4428", x - 6 * p, Y - 9 * p, p, 9 * p); R(c, "#5a4428", x + 5 * p, Y - 9 * p, p, 9 * p); } },
+  picnicTable: {
+    back(c, X, Y, W, p) {
+      const x = X + W / 2;
+      R(c, "#5a4428", x - 7 * p, Y - 14 * p, 2 * p, 14 * p); R(c, "#5a4428", x + 5 * p, Y - 14 * p, 2 * p, 14 * p);
+      for (let k = 0; k < 6; k++) R(c, k % 2 ? "#f5f5f5" : "#dc2626", x - 10 * p + k * 3.4 * p, Y - 16 * p, 3.4 * p, 2 * p);   // the cloth, gingham
+      R(c, "#a16207", x - 4 * p, Y - 21 * p, 7 * p, 5 * p); R(c, "#78350f", x - 3 * p, Y - 23 * p, 5 * p, p);           // the basket
+      R(c, "#4ade80", x + 4 * p, Y - 19 * p, 2 * p, 3 * p);                                                                 // a regulation beverage
+    },
+  },
   lamppost: { back(c, X, Y, W, p) { const x = X + W / 2; R(c, "#374151", x - p, Y - 50 * p, 2 * p, 50 * p); R(c, "#fbbf24", x - 3 * p, Y - 52 * p, 6 * p, 3 * p); } },
   streetBench: { back(c, X, Y, W, p, t, a) { PROP.parkBench.back(c, X, Y, W, p, t, a); } },
 };

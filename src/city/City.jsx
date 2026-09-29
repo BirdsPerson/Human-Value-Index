@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { pad, padL } from "../term.jsx";
 import { Frame, Button, ButtonRow, Disclosure, ListRow } from "../ui/index.js";
 import { SubjectCard, injectPenStyles } from "../Pen.jsx";
-import { DISTRICTS, DISTRICT, BUILDING, TRAIN, STATIONS, districtCap, clockAt, whereOf, atDistrict, isOnLoop, setClockOffset, offsetFor, jobLine, loopEvents, roomIn } from "./simApi.js";
+import { DISTRICTS, DISTRICT, BUILDING, TRAIN, STATIONS, districtCap, clockAt, whereOf, atDistrict, isOnLoop, setClockOffset, offsetFor, jobLine, loopEvents, roomIn, gameAt, gameEvents } from "./simApi.js";
 import { clockLine, paLine } from "./cityKit.js";
 import { useRoster } from "./useRoster.js";
 import { clearBank } from "./spriteBank.js";
@@ -90,6 +90,11 @@ export default function City({ route }) {
         const ev = loopEvents(prev.mt, c.mt).filter(e => e.stationId === here).pop();
         if (ev) setPa(ev.text);
       }
+      // The recreation ground's first pitch and final whistle, on the map and in the Arena.
+      if ((!here || here === "arena") && prev.mt != null && c.mt > prev.mt && c.mt - prev.mt < 0.5) {
+        const gev = gameEvents(prev.mt, c.mt).pop();
+        if (gev) setPa(gev.text);
+      }
       // Only what the page shows goes into React state: the counts and riders, and only when
       // they actually change (the clock ticks in its own component). The views read the
       // census from the ref.
@@ -125,7 +130,10 @@ export default function City({ route }) {
     const evs = loopEvents(mt - 8 / 60, mt + 1e-6).filter(e => !here || e.stationId === here);
     // Every third line is gossip from the social ledger, when there is any.
     const gossip = socialRef.current?.events || [];
-    if (!here && gossip.length && k % 3 === 2) setPa(gossip[Math.floor(k / 3) % Math.min(gossip.length, 12)].text);
+    // While a fixture is on, every fourth line is the score (on the map and in the Arena).
+    const games = (!here || here === "arena") ? ["ball-field", "courts"].map(id => gameAt(id, mt)).filter(Boolean) : [];
+    if (games.length && k % 4 === 1) { const g = games[Math.floor(k / 4) % games.length]; setPa(`${g.kind === "ball" ? "THE DIAMOND" : "THE COURTS"}, ${g.name}: ${g.status}. ${g.kind === "ball" ? "ATTENDANCE COUNTS TOWARDS YOUR FILE." : "THE SCORE IS UNOFFICIAL. YOURS IS NOT."}`); }
+    else if (!here && gossip.length && k % 3 === 2) setPa(gossip[Math.floor(k / 3) % Math.min(gossip.length, 12)].text);
     else setPa(paLine(st, k, evs.length ? evs[evs.length - 1].text : null));
     // a new district re-reads its own station's line at once
   }, [k, roster, districtId]);

@@ -242,3 +242,46 @@ Scott: "the train kind of looks like shit." It was a thin cyan line with cyan da
 Measured (headless Chromium, 420 subjects, rush 08:20): frame gap 16.7 ms avg, p95 17.2-17.5
 at 1440 (fit, district, street) and 390x844; draw() 1.9 ms avg / 4.6 p95 at the busiest
 (1440 fit), 0.5-0.7 ms up close. Screens: docs/screens/city-loop/ (before-*.png = the old line).
+
+## The recreation ground (Arena, 2026-09-29)
+
+Scott: "Can we have a baseball diamond and basketball courts, like a park?" Three open lots
+beside the Bowl, on free ground inside the Loop (the Arena is now laid out by hand: every
+building there carries a `lot`, `sim.js` B()). The Bowl and Conditioning Hall take the west
+column; the lots take the rest.
+
+- Places: `ball-field` THE DIAMOND (mixed, cap 24), `courts` THE COURTS (mixed, 14),
+  `rec-park` RECREATION GROUND (leisure, 16). Buildings `the-diamond`, `the-courts`,
+  `rec-ground`, all in `OPEN_LOTS` (walkable, drawn as ground).
+- Jobs: Umpire (evening) and Diamond Groundskeeper at the Diamond, Court Referee (evening) at
+  the Courts. `draft` caps how many of the unplaceable each takes (general labour is otherwise
+  drafted in proportion to a place's capacity, which would staff a ballpark like a factory).
+- Leisure: sport (and coaching) figures lean to the Diamond and the Courts; middle tiers to all
+  three; low tiers to the Courts. Overflow families: the Diamond and Courts with the gym and the
+  Bowl; the Recreation Ground with the Green, the Allotment, the Plaza and the Street.
+- Fixtures (`GAMES`, `gameAt`, `gameEvents`): LEAGUE NIGHT at the Diamond 18:00-20:30 on
+  weekdays 2 and 4, THE WEEKEND FIXTURE 16:00-19:00 on 6 and 7; EVENING PICKUP at the Courts
+  17:30-21:30 on weekdays, THE WEEKEND RUN 14:30-20:00. Innings, runs and hoop scores are
+  hashed from the day, so every viewer sees the same score. A fixture on when a visit starts
+  pulls people to it (x3 their own liking). The PA calls first pitch and the final (Overlord
+  voice) on the map and in the Arena, and every fourth line reads the score while one is on.
+- Iso view (`parkGeo.js` pure geometry and anchors, `parkDraw.js` drawing): far = the green
+  fan, the dirt, blue courts, paths round the fountain, people as dots; mid = foul lines,
+  bases, the wall, stands, dugouts, hoops, the fence, trees, tables, small sprites; near =
+  chain-link, nets, the scoreboard (live score), light towers lit for an evening fixture, the
+  pitch and the odd hit, the ball dribbled and shot, everyone posed at their anchor: pitcher,
+  catcher and umpire crouched, batter, seven fielders, on deck, dugouts, both stands; two 2-on-2
+  games with who has next, the referee, the bench; strollers round the fountain, picnickers,
+  readers, a pigeon feeder, the groundskeeper. Anchors fill in order (the battery first).
+  The lots' labels carry the score; tapping one opens the cutaway with the fixture line.
+- Side-on rooms (cutaway, district and building views): `ballfield`, `courts`, `picnic` plans
+  in `props.js` with their decor (wall, scoreboard, lights; chain-link and a hoop; treeline and
+  fountain) and new acts in `poses.js` (pitch, bat, ready, catch, umpire, shoot, dribble,
+  defend, whistle, feed).
+- `check-cityview` checks the lots (in the Arena, overlapping no building, clear of the
+  viaduct at all four turns), the anchors (typed, posed, on their own ground, apart, at least
+  capacity, a staff post), the ordered fill, and the fixtures (sane scores, runs never come off
+  the board, 22 PA calls a week).
+
+Measured (headless Chromium, 250 subjects, league night): frame gap 16.6 ms avg, p95 17.5 at
+1440 street zoom on the Diamond; draw() 1.6 ms. Screens: docs/screens/rec-ground/.

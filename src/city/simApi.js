@@ -70,6 +70,9 @@ export const activityLine = (subject, mt) => SIM.statusLine(subject, mt);
 export const trainsAt = (mt) => SIM.trainsAt(mt);
 export const timetable = (stationId, mt, n) => SIM.timetable(stationId, mt, n);
 export const loopEvents = (fromMt, toMt) => SIM.loopEvents(fromMt, toMt);
+// The recreation ground's fixtures: the game on at a place now, and the PA's start/end lines.
+export const gameAt = (placeId, mt) => SIM.gameAt(placeId, mt);
+export const gameEvents = (fromMt, toMt) => SIM.gameEvents(fromMt, toMt);
 export const occupancyAt = (subjects, mt) => SIM.occupancy(subjects, mt);
 
 // Relationships bias where friends spend their leisure. Every page that reads the city

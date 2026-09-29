@@ -1,14 +1,16 @@
 import { memo, useEffect, useRef, useState } from "react";
 import TouchGate from "../ui/TouchGate.jsx";
 import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
-import { DISTRICTS, BUILDINGS, BUILDING, PLACES, LOOP_LINE, STATIONS, OPEN_LOTS, clockAt, whereOf, trainsAt, roomIn } from "./simApi.js";
+import { DISTRICTS, BUILDINGS, BUILDING, PLACES, LOOP_LINE, STATIONS, OPEN_LOTS, clockAt, whereOf, trainsAt, roomIn, gameAt } from "./simApi.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FONT } from "./cityUi.jsx";
 import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4 } from "./iso.js";
 import { loopPieces, trainPoses, carCorners, carBox, stationGeo, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
-import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt } from "./props.js";
+import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
+import { PARK_LOTS, PARK_PLACES, insetOf } from "./parkGeo.js";
+import { drawParkLot } from "./parkDraw.js";
 
 // THE SUBSTRATE, SimCity-style: every building a solid block (facade, roof, lit windows by
 // occupancy, a sign up close), the Loop on its deck with trains, subjects on the streets.
@@ -74,7 +76,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
     const V = {
       cssW: 0, cssH: 0, dpr: 1, cam: { z: 6, ox: 0, oy: 0, r: 0 }, camTo: null, fitZ: 6, reduced: !!mq?.matches, need: true,
       sel: null, shown: null, lift: 0, geo: null, censusV: -1, inside: new Map(), occ: {}, outdoors: [], hits: [], labels: [], panel: null,
-      seats: new Map(), plans: new Map(), wheelHint: 0, riders: new Map(),
+      seats: new Map(), plans: new Map(), wheelHint: 0, riders: new Map(), park: new Map(), parkSeats: new Map(),
     };
 
     // ---- geometry for the current quarter turn ----------------------------------------
@@ -82,9 +84,11 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       const items = [];
       for (const b of BUILDINGS) {
         // Footprints shrink inside their lots so the blocks read as towers with streets between.
-        const ix = Math.min(1.6, b.rect.w * 0.14), iy = Math.min(1.6, b.rect.h * 0.14);
+        const [ix, iy] = insetOf(b);
         const R = rotRect({ x: b.rect.x + ix, y: b.rect.y + iy, w: b.rect.w - 2 * ix, h: b.rect.h - 2 * iy }, r);
-        items.push({ kind: "b", b, R, h: OPEN_LOTS.has(b.id) ? 0.05 : ABOVE[b.id], x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1 });
+        // an open lot is ground: whoever walks across it is drawn after it (iso.slotForBox's deck rule)
+        const open = OPEN_LOTS.has(b.id);
+        items.push({ kind: "b", b, R, h: open ? 0.05 : ABOVE[b.id], x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1, ...(open ? { deck: true, top: 0 } : {}) });
       }
       // the viaduct: straight deck pieces, curved corners, a station at every district
       items.push(...loopPieces(r));
@@ -100,7 +104,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       const c = censusRef.current;
       if (!c || c.v === V.censusV) return;
       V.censusV = c.v;
-      const occ = {}, inside = new Map(), outdoors = [], riders = new Map();
+      const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map(PARK_PLACES.map(id => [id, []]));
       for (const { s, w } of c.list || []) {
         if (!w) continue;
         if (w.sub === "riding" && w.trainId) { const k = `${w.trainId}|${w.car}`; riders.set(k, (riders.get(k) || 0) + 1); }
@@ -110,10 +114,11 @@ function CityIso({ censusRef, onOpen, onEnter }) {
           const rk = `${r.buildingId}|${r.floor}|${r.placeId}`;
           (inside.get(rk) || inside.set(rk, []).get(rk)).push({ s, w, mode: r.mode });
           if (r.mode === "here" && OUTDOOR_PLACES.has(w.placeId)) outdoors.push({ s, open: w.placeId });
+          if (r.mode === "here" && park.has(w.placeId)) park.get(w.placeId).push({ s, w });
         }
         if (w.activity === "commute" && w.sub !== "riding") outdoors.push({ s });
       }
-      V.occ = occ; V.inside = inside; V.outdoors = outdoors; V.riders = riders;
+      V.occ = occ; V.inside = inside; V.outdoors = outdoors; V.riders = riders; V.park = park;
       V.need = true;
     }
 
@@ -241,10 +246,23 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       const selected = V.sel === b.id;
       const label = () => {
         if (lod === "far" && !selected) return;
-        const [x, y] = P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, h + 0.5);
-        const L = { id: b.id, text: b.name.length > 24 ? b.name.slice(0, 23) + "…" : b.name, x, y, selected, rank };
+        // a playing field keeps its label off the play: over its back corner
+        const [x, y] = PARK_LOTS[b.id] ? P(R.x0 + 0.6, R.y0 + 0.6, 0.4) : P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, h + 0.5);
+        // the recreation ground's labels carry the fixture: "THE DIAMOND // BOT 5TH 3-2"
+        const g = PARK_LOTS[b.id] && gameAt(PARK_LOTS[b.id], V.mt);
+        const text = g ? `${b.name} // ${g.kind === "ball" ? `${g.top ? "TOP" : "BOT"} ${g.inning} ${g.score[0]}-${g.score[1]}` : `GAME ${g.game} ${g.score[0]}-${g.score[1]}`}` : b.name;
+        const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
         if (top) drawLabel(L, 1); else V.labels.push(L);
       };
+      if (PARK_LOTS[b.id]) {
+        const pid = PARK_LOTS[b.id];
+        const G = { ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, t: V.reduced ? 0 : performance.now() / 1000, hits: top ? [] : V.hits, w: V.cssW, h: V.cssH };
+        const res = drawParkLot(G, b.id, lod, V.mt, V.park.get(pid) || [], V.parkSeats.get(pid) || null);
+        V.parkSeats.set(pid, res.at);
+        if (selected) poly([P(R.x0, R.y0, 0.02), P(R.x1, R.y0, 0.02), P(R.x1, R.y1, 0.02), P(R.x0, R.y1, 0.02)], null, "#4ade80");
+        label();
+        return;
+      }
       if (OPEN_LOTS.has(b.id)) {
         const pts = [P(R.x0, R.y0, 0), P(R.x1, R.y0, 0), P(R.x1, R.y1, 0), P(R.x0, R.y1, 0)];
         poly(pts, LOT_FILL[b.id] || "#20241f", selected ? "#4ade80" : "rgba(74,222,128,0.3)");
@@ -673,7 +691,11 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       ctx.fillText(fitText(`${b.name} // ${b.addr}`, pr.w - 20 - closeW), x0 + 10, y0 + 8);
       ctx.fillStyle = "#6b9a7c";
       const nF = b.floors.length;
-      ctx.fillText(b.id === "hq" ? "CENSUS CLASSIFIED" : `${V.occ[b.id] || 0} INSIDE // ${nF} FLOOR${nF === 1 ? "" : "S"}`, x0 + 10, y0 + 24);
+      const game = PARK_LOTS[b.id] && gameAt(PARK_LOTS[b.id], mt);
+      const sub = b.id === "hq" ? "CENSUS CLASSIFIED"
+        : PARK_LOTS[b.id] ? `${V.occ[b.id] || 0} ON THE GROUND // ${game ? game.short : PARK_LOTS[b.id] === "rec-park" ? "LEISURE IN PROGRESS. IT IS BEING ENJOYED." : "NO FIXTURE. PRACTICE IS PERMITTED."}`
+        : `${V.occ[b.id] || 0} INSIDE // ${nF} FLOOR${nF === 1 ? "" : "S"}`;
+      ctx.fillText(fitText(sub, pr.w - 20 - closeW), x0 + 10, y0 + 24);
       ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `13px ${FONT}`;
       ctx.strokeStyle = "rgba(74,222,128,0.5)"; ctx.strokeRect(x0 + pr.w - closeW - 2.5, y0 + 4.5, closeW - 4, 32);
       ctx.fillStyle = "#a7d7b5"; ctx.fillText("[ X ]", x0 + pr.w - closeW / 2 - 4, y0 + 21);
@@ -732,7 +754,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       const list = hq ? [] : (V.inside.get(rk) || []).filter(o => o.mode !== "leave");
       const people = list.map(o => ({ key: who(o.s), role: roleOf(o.w), s: o.s }));
       const prev = V.seats.get(rk);
-      const { at, overflow } = assignAnchors(plan.anchors, people, prev && prev.plan === plan ? prev.at : null, hour);
+      const { at, overflow } = assignAnchors(plan.anchors, people, prev && prev.plan === plan ? prev.at : null, hour, ORDERED_TYPES.has(plan.type));
       V.seats.set(rk, { plan, at });
       const byAnchor = new Array(plan.anchors.length);
       for (const p of people) { const i = at.get(p.key); if (i != null) byAnchor[i] = p; }
@@ -747,7 +769,8 @@ function CityIso({ censusRef, onOpen, onEnter }) {
           }
         },
       });
-      nameTab(many ? PLACES[pid].name : f.name, rx, ry, rw);
+      const fx = PARK_LOTS[b.id] && gameAt(pid, mt);
+      nameTab(fx ? `${fx.name} // IN PLAY` : many ? PLACES[pid].name : f.name, rx, ry, rw);
       if (hq) {
         ctx.font = `9px ${FONT}`; ctx.textAlign = "right"; ctx.textBaseline = "bottom"; ctx.fillStyle = "rgba(107,154,124,0.8)";
         ctx.fillText("OCCUPANCY CLASSIFIED", rx + rw - 4, ry + rh - 3);
@@ -768,6 +791,7 @@ function CityIso({ censusRef, onOpen, onEnter }) {
       easeCam();
       if (!V.geo || V.geo.r !== V.cam.r) V.geo = buildGeo(V.cam.r);
       const mt = censusRef.current?.mt != null && V.reduced ? censusRef.current.mt : clockAt(Date.now()).mt;
+      V.mt = mt;
       const lod = lodFor(V.cam.z);
       ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
       ctx.imageSmoothingEnabled = false;

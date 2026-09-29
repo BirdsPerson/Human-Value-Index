@@ -22,7 +22,11 @@ const HIP = 27;    // sprite rows kept above the seat
 const SHIN = 38;   // sprite rows from here down are the lower legs
 const SEAT = FH - SHIN;   // a seat is this many sprite rows off the floor
 
-const SIT = new Set(["drink", "eat", "talk", "read", "write", "listen", "pray", "watch", "gamble", "type", "trade", "count", "piano", "judge", "rest", "sit"]);
+// catch and umpire: the crouch behind the plate is the sitting cut with no seat under it
+const SIT = new Set(["drink", "eat", "talk", "read", "write", "listen", "pray", "watch", "gamble", "type", "trade", "count", "piano", "judge", "rest", "sit", "catch", "umpire", "feed"]);
+// The pitch and the swing share one clock (and the jump shot its own), so a battery and its
+// batter stay in time: callers pass the same phase to all three. Seconds per cycle.
+export const PITCH_S = 4.2, SHOT_S = 5;
 // a worker at somebody else's seat stands at it (sitting acts on a seat anchor only)
 const WALK = new Set(["shelve", "tend", "sprint", "stroll", "patrol", "patch", "sweep"]);
 export const poseOf = (a, act) => (act === "sleep" ? "lie" : a.walk && WALK.has(act) ? "walk" : SIT.has(act) && (act === a.act || a.kind === "seat" || a.kind === "bed") ? "sit" : "stand");
@@ -46,8 +50,10 @@ function blit(c, img, fi, sy, sh, x, y, w, h, flip) {
 // which grows them from the feet while furniture (seat, bunk) stays the anchor's size;
 // face: 1 turned right, -1/0 as drawn (the sprites face left).
 // -> the box that was drawn, for hit-testing: [x0, y0, x1, y1] (and the walker's x).
+const PITCH_ACTS = new Set(["pitch", "bat", "catch", "umpire", "ready"]);
 export function drawPose(c, sheet, a, act, x, y, hh0, t, ph, k = 1) {
   const img = sheet.img, frames = sheet.frames || 1;
+  if (PITCH_ACTS.has(act)) ph = 0;   // one pitch at a time: the battery, the batter and the field move together
   const bp = hh0 / FH, hh = hh0 * k;          // bp: one sprite pixel at the furniture's scale
   const f = hh / FH, ww = FW * f, px = f;   // one sprite pixel of this person
   let pose = poseOf(a, act);
@@ -91,6 +97,7 @@ export function drawPose(c, sheet, a, act, x, y, hh0, t, ph, k = 1) {
         if (act === "type" || act === "trade" || act === "count") bob = every(t, 0.28, 0.5, ph) && !every(t, 7, 0.25, ph) ? -px : 0;
         else if (act === "piano") bob = every(t, 0.5, 0.5, ph) ? -px : 0;
         else if (act === "talk") bob = every(t, 0.6, 0.5, ph) && every(t, 5, 0.5, ph) ? -px : 0;
+        else if (act === "catch" || act === "umpire") bob = frac(t / PITCH_S + ph) > 0.86 && frac(t / PITCH_S + ph) < 0.95 ? -px : 0;
         else bob = every(t, 3.2, 0.5, ph) ? -px : 0;
         if (act === "trade" && every(t, 9, 0.12, ph)) bob = -3 * px;   // a hand up: SELL
       }
@@ -105,6 +112,18 @@ export function drawPose(c, sheet, a, act, x, y, hh0, t, ph, k = 1) {
     if (t > 0 && pose !== "walk") {
       switch (act) {
         case "cheer": dy = every(t, 1.3, 0.25, ph) ? -3 * px : 0; break;
+        case "pitch": {   // set, leg lift and rock back, stride and release, follow through
+          const f = frac(t / PITCH_S + ph), side = flip ? 1 : -1;
+          if (f > 0.55 && f < 0.72) { dy = -2 * px; dx -= side * px; } else if (f >= 0.72 && f < 0.84) { dx += side * 2 * px; dy = px; }
+          break;
+        }
+        case "bat": { const f = frac(t / PITCH_S + ph); if (f > 0.8 && f < 0.9) dx += (flip ? 1 : -1) * px; break; }
+        case "ready": { const f = frac(t / PITCH_S + ph); dy = px; if (f > 0.8 && f < 0.95) dx += Math.round(Math.sin((ph + f) * 40)) * px; break; }
+        case "shoot": case "jump": { const f = frac(t / SHOT_S + ph); if (f > 0.7 && f < 0.86) dy = -Math.round(Math.sin((f - 0.7) / 0.16 * Math.PI) * 4) * px; break; }
+        case "dribble": case "hustle": dx += Math.round(Math.sin((t * 0.9 + ph) * Math.PI * 2)) * px; break;
+        case "defend": dx += Math.round(Math.sin((t * 1.3 + ph) * Math.PI * 2) * 1.4) * px; break;
+        case "whistle": if (every(t, 6, 0.3, ph)) flip = !flip; break;
+        case "amble": fi = frames > 1 ? Math.floor(t * 4 + ph * 8) % 2 : 0; dy = fi ? -px : 0; break;
         case "lift": dy = every(t, 2, 0.5, ph) ? 2 * px : 0; break;
         case "run": fi = frames > 1 ? Math.floor(t * 8 + ph * 8) % 2 : 0; dy = fi ? -px : 0; break;
         case "punch": dx += every(t, 1.1, 0.2, ph) ? 2 * px * (flip ? 1 : -1) : 0; break;
@@ -204,6 +223,58 @@ function tool(c, act, x, top, p, flip, t, ph, seated) {
       break;
     case "sing": case "perform": case "piano":
       if (t > 0) { const n = frac(t / 2 + ph); R(c, "#c8f5d8", x + (flip ? 6 : -8) * p + n * 3 * p * side, top - n * 10 * p, 2 * p, 2 * p); R(c, "#c8f5d8", x + (flip ? 7 : -7) * p + n * 3 * p * side, top - n * 10 * p - 3 * p, p, 3 * p); }
+      break;
+    case "pitch": {
+      const f = t > 0 ? frac(t / PITCH_S + ph) : 0.2;
+      if (f < 0.72) R(c, "#f5f5f5", x + (f > 0.55 ? -side * 6 : side * 2) * p, top + (f > 0.55 ? 10 : 22) * p, 2 * p, 2 * p);   // the ball, then cocked back
+      R(c, "#7c4a1e", x + side * 3 * p, top + 21 * p, 4 * p, 4 * p);   // the glove
+      break;
+    }
+    case "bat": {
+      const f = t > 0 ? frac(t / PITCH_S + ph) : 0.3, col = "#c8a26a";
+      if (f < 0.82) { R(c, col, x - side * 5 * p, top + 4 * p, 2 * p, 13 * p); R(c, "#2a1a0a", x - side * 5 * p, top + 16 * p, 2 * p, 2 * p); }   // cocked over the back shoulder
+      else if (f < 0.9) R(c, col, x + (side > 0 ? 0 : -15) * p, top + 20 * p, 15 * p, 2 * p);                                         // through the zone
+      else R(c, col, x + side * 3 * p, top + 6 * p, 2 * p, 12 * p);                                                                      // follow-through
+      break;
+    }
+    case "ready":
+      R(c, "#7c4a1e", hx - 2 * p, top + 26 * p, 5 * p, 4 * p);   // glove down, hands on knees
+      break;
+    case "catch": {
+      const f = t > 0 ? frac(t / PITCH_S + ph) : 0.2;
+      R(c, "#5a3418", x + side * 5 * p, top + 12 * p, 6 * p, 6 * p);   // the mitt, up as the target
+      if (f > 0.86 && f < 0.97) R(c, "#f5f5f5", x + side * 7 * p, top + 14 * p, 2 * p, 2 * p);
+      break;
+    }
+    case "umpire": {
+      R(c, "#111827", x - 3 * p, top + 5 * p, 6 * p, 2 * p);   // the mask
+      const f = t > 0 ? frac(t / PITCH_S + ph) : 0;
+      if (f > 0.9 || f < 0.04) R(c, "#111827", x + side * 6 * p, top - 5 * p, 2 * p, 12 * p);   // STRIKE (logged)
+      break;
+    }
+    case "shoot": {
+      const f = t > 0 ? frac(t / SHOT_S + ph) : 0.65;
+      if (f > 0.58 && f < 0.82) R(c, "#f97316", x - 2 * p, top - 4 * p, 4 * p, 4 * p);   // set, over the head
+      else if (f >= 0.82) { const k = (f - 0.82) / 0.18; R(c, "#f97316", x + side * k * 30 * p - 2 * p, top - 4 * p - Math.sin(k * Math.PI) * 16 * p, 4 * p, 4 * p); }
+      break;
+    }
+    case "dribble": {
+      const b = t > 0 ? Math.abs(Math.sin((t * 1.7 + ph) * Math.PI)) : 0.5;   // hand to floor and back
+      R(c, "#f97316", hx + side * 2 * p - 2 * p, top + 26 * p + (1 - b) * 18 * p, 4 * p, 4 * p);
+      break;
+    }
+    case "defend":
+      R(c, "#c8a27a", x - 10 * p, top + 12 * p, 2 * p, 3 * p); R(c, "#c8a27a", x + 8 * p, top + 12 * p, 2 * p, 3 * p);   // hands up, wide
+      break;
+    case "whistle":
+      if (t > 0 && every(t, 3, 0.25, ph)) { R(c, "#e5e5e5", x + side * 3 * p, top + 11 * p, 2 * p, p); R(c, "#111827", x + side * 7 * p, top - 3 * p, 2 * p, 10 * p); }
+      break;
+    case "feed":
+      for (let k = 0; k < 3; k++) {   // pigeons, pecking at what they are given
+        const hop = t > 0 && every(t, 0.7 + k * 0.23, 0.3, ph + k * 0.31) ? -p : 0;
+        R(c, "#9ca3af", x + side * (9 + k * 4) * p, top + 35 * p + hop, 3 * p, 2 * p); R(c, "#6b7280", x + side * (11 + k * 4) * p, top + 34 * p + hop, p, p);
+      }
+      if (t > 0 && every(t, 2.5, 0.2, ph)) R(c, "#d6c9a0", hx + side * 3 * p, top + 30 * p, p, p);
       break;
     case "tend": case "patch":
       R(c, act === "tend" ? "#e5e5e5" : "#22d3ee", hx - p, hy - 4 * p, 3 * p, 4 * p);

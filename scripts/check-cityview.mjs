@@ -287,8 +287,9 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   const { rotRect, depthOrder } = await import("../src/city/iso.js");
   for (let r = 0; r < 4; r++) {
     const items = [];
+    const { insetOf } = await import("../src/city/parkGeo.js");
     for (const b of SIM.BUILDINGS) {   // CityIso.buildGeo's footprints
-      const ix = Math.min(1.6, b.rect.w * 0.14), iy = Math.min(1.6, b.rect.h * 0.14);
+      const [ix, iy] = insetOf(b);
       items.push({ kind: "b", id: b.id, ...rotRect({ x: b.rect.x + ix, y: b.rect.y + iy, w: b.rect.w - 2 * ix, h: b.rect.h - 2 * iy }, r) });
     }
     const loop = G.loopPieces(r);
@@ -334,6 +335,85 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   for (const f of ["Pen.jsx", "city/CityIso.jsx", "city/RoomStage.jsx", "city/Street.jsx", "city/CityMap.jsx", "city/City3D.jsx"])
     ok(/statureOf|fitStature/.test(src(f)), `${f} draws subjects to scale`);
   ok(!/statureOf|fitStature/.test(src("FilePhoto.jsx")) && !/statureOf/.test(src("city/cityUi.jsx")), "portraits and thumbnails stay uniform");
+}
+
+// The recreation ground (2026-09-29, "a baseball diamond and basketball courts, like a
+// park"): three open lots in the Arena with a place for everyone on them. Every anchor is
+// typed, on its own ground, clear of the others and of every building and the Loop; there
+// are at least as many as the place holds; the staff have their posts; the fixtures keep
+// score sensibly and the PA announces each one's start and finish.
+{
+  const SIM = await import("../src/city/sim.js");
+  const PG = await import("../src/city/parkGeo.js");
+  const G = await import("../src/city/loopGeo.js");
+  const lots = Object.keys(PG.PARK_LOTS);
+  for (const id of lots) {
+    const b = SIM.BUILDING[id];
+    ok(b && SIM.OPEN_LOTS.has(id) && b.district === "arena", `${id}: an open lot in the Arena`);
+    for (const o of SIM.BUILDINGS) if (o.id !== id) {
+      const r = b.rect, q = o.rect;
+      ok(!(r.x < q.x + q.w - 1e-9 && q.x < r.x + r.w - 1e-9 && r.y < q.y + q.h - 1e-9 && q.y < r.y + r.h - 1e-9), `${id} does not overlap ${o.id}`);
+    }
+    for (let r = 0; r < 4; r++) {
+      const { rotRect } = await import("../src/city/iso.js");
+      const R = rotRect(b.rect, r);
+      const hit = G.loopPieces(r).find(it => it.x0 < R.x1 && R.x0 < it.x1 && it.y0 < R.y1 && R.y0 < it.y1);
+      ok(!hit, `${id} r=${r}: clear of the viaduct, piers, stations and stairs (${hit ? hit.kind : "clear"})`);
+    }
+  }
+  const solid = SIM.BUILDINGS.filter(b => !SIM.OPEN_LOTS.has(b.id));
+  const ISO_ACTS = { shoot: "jump", dribble: "hustle", stroll: "amble" };
+  for (const pid of PG.PARK_PLACES) {
+    const P = SIM.PLACES[pid], R = P.rect, as = PG.PARK_ANCHORS[pid];
+    ok(as.length >= P.cap, `${pid}: ${as.length} places on the ground for a capacity of ${P.cap}`);
+    ok(new Set(as.map(a => a.id)).size === as.length, `${pid}: anchor ids unique`);
+    ok(as.some(a => a.role === "staff"), `${pid}: a post for the staff`);
+    for (const j of JOBS.filter(j => j.place === pid)) ok(as.some(a => a.role === "staff"), `job ${j.id} has a post at ${pid}`);
+    for (const a of as) {
+      ok(KINDS.has(a.kind) && ROLES.has(a.role), `${pid} ${a.id}: kind ${a.kind}, role ${a.role}`);
+      for (const act of [a.act, ISO_ACTS[a.act]].filter(Boolean)) ok(["sit", "stand", "walk", "lie"].includes(poseOf(a, act)), `${pid} ${a.id}: ${act} has a pose`);
+      const pts = a.ring ? [0, 1, 2, 3].map(k => [a.ring.cx + a.ring.r * Math.cos(k * Math.PI / 2), a.ring.cy + a.ring.r * Math.sin(k * Math.PI / 2)]) : [[a.x, a.y]];
+      for (const [x, y] of pts) {
+        ok(x > R.x + 0.1 && x < R.x + R.w - 0.1 && y > R.y + 0.1 && y < R.y + R.h - 0.1, `${pid} ${a.id}: on its own ground (${x.toFixed(2)}, ${y.toFixed(2)})`);
+        ok(!solid.some(o => x > o.rect.x && x < o.rect.x + o.rect.w && y > o.rect.y && y < o.rect.y + o.rect.h), `${pid} ${a.id}: not inside a building`);
+      }
+    }
+    // nobody stands on anybody: fixed anchors at the same height keep a body's width apart
+    const fixed = as.filter(a => !a.ring);
+    let close = "";
+    for (let i = 0; i < fixed.length; i++) for (let j = i + 1; j < fixed.length; j++) {
+      const A = fixed[i], B = fixed[j];
+      if (Math.abs(A.h - B.h) < 0.05 && Math.hypot(A.x - B.x, A.y - B.y) < 0.44 && !close) close = `${A.id}/${B.id}`;
+    }
+    ok(!close, `${pid}: anchors keep apart (${close || "ok"})`);
+    // ordered fill: with three people on the diamond it is a battery and a batter, not three outfielders
+    if (pid === "ball-field") {
+      const three = [0, 1, 2].map(i => ({ key: `p${i}`, role: "patron" }));
+      const { at } = assignAnchors(as, three, null, 18, true);
+      ok([...at.values()].map(i => as[i].id).sort().join() === "batter,catcher,pitcher", "three on the diamond: pitcher, catcher, batter");
+      const ump = assignAnchors(as, [{ key: "u", role: "staff" }], null, 18, true).at.get("u");
+      ok(as[ump].id === "umpire", "the umpire takes the plate");
+    }
+  }
+  // the fixtures
+  const wk = 24 * 7 * 30;
+  let games = 0, bad = "";
+  for (let h = 0; h < 24 * 7; h += 0.05) for (const pid of Object.keys(SIM.GAMES)) {
+    const g = SIM.gameAt(pid, wk + h);
+    if (!g) continue;
+    games++;
+    if (g.kind === "ball" && !(g.inning >= 1 && g.inning <= 9 && g.score.every(n => n >= 0 && n < 40))) bad = `${pid} ${h}`;
+    if (g.kind === "hoops" && !(g.score[0] <= 20 && g.score[1] <= g.score[0])) bad = `${pid} ${h}`;
+    const later = SIM.gameAt(pid, wk + h + 0.04);
+    if (later && later.kind === "ball" && later.day === g.day && (later.score[0] < g.score[0] || later.score[1] < g.score[1])) bad = `${pid} runs came off the board at ${h}`;
+  }
+  ok(games > 100 && !bad, `fixtures keep score (${bad || games + " samples"})`);
+  const evs = SIM.gameEvents(wk, wk + 24 * 7);
+  const want = Object.values(SIM.GAMES).reduce((n, list) => n + list.reduce((m, g) => m + g.days.length * 2, 0), 0);
+  ok(evs.length === want && evs.every(e => /[A-Z]/.test(e.text) && e.text === e.text.toUpperCase()), `the PA calls every first pitch and final whistle (${evs.length} of ${want})`);
+  const fixture = [...Array(7)].map((_, d) => SIM.gameAt("ball-field", wk + d * 24 + 18.5)).filter(Boolean).length;
+  ok(fixture >= 2, `the Diamond has an evening fixture on ${fixture} days a week`);
+  console.log(`  recreation ground: ${PG.PARK_PLACES.map(id => `${id} ${PG.PARK_ANCHORS[id].length} anchors`).join(", ")}; ${games} fixture samples, ${evs.length} PA calls a week`);
 }
 
 console.log(fails ? `check-cityview: ${fails} FAILED` : "check-cityview: ok");

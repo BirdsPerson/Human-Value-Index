@@ -3,7 +3,7 @@ import { SPRITE_W, SPRITE_H, gaitFor, stepEntity, mulberry32, statureOf } from "
 import { getTier } from "../figures.js";
 import { activityLine, jobLine, clockAt, trainsAt, timetable, TRAIN } from "./simApi.js";
 import { sheetFor } from "./spriteBank.js";
-import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt } from "./props.js";
+import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
 import { FONT, SubjectTip } from "./cityUi.jsx";
 
@@ -257,7 +257,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
       }
       groups.forEach((people, i) => {
         if (plat[i] || !V.geo[i]) return;
-        const { at, overflow } = assignAnchors(V.geo[i].plan.anchors, people, V.seats[i], hourNow());
+        const { at, overflow } = assignAnchors(V.geo[i].plan.anchors, people, V.seats[i], hourNow(), ORDERED_TYPES.has(V.geo[i].plan.type));
         V.seats[i] = at; V.over[i] = overflow.length;
         for (const { key, role } of people) {
           const e = V.ents.get(key);

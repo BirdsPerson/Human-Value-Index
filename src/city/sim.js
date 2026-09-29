@@ -82,6 +82,11 @@ const PLACE_LIST = [
 
   P("stadium", "arena", "mixed", 50, "THE ARENA FLOOR", ["stadium"]),
   P("gym", "arena", "mixed", 24, "CONDITIONING HALL", ["gym"]),
+  // The recreation ground (Scott, 2026-09-29: "a baseball diamond and basketball courts, like
+  // a park"): open-air lots beside the Bowl. Games run on a timetable (GAMES, below).
+  P("ball-field", "arena", "mixed", 24, "THE DIAMOND (NINE INNINGS, LOGGED)", ["ballpark", "baseball field"]),
+  P("courts", "arena", "mixed", 14, "THE COURTS (PICKUP PERMITTED)", ["basketball court"]),
+  P("rec-park", "arena", "leisure", 16, "RECREATION GROUND (FUN, SCHEDULED)", ["picnic ground"]),
 
   P("ward", "commons", "work", 26, "WARD 7", ["hospital"]),
   P("chapel", "commons", "mixed", 14, "CHAPEL OF UPTIME", ["cathedral", "temple"]),
@@ -128,7 +133,9 @@ export const ENGINE_PLACE = Object.fromEntries(PLACE_LIST.flatMap(p => p.engine.
 const HQ_LEVEL = { PH: 2, "1F": 1, G: 0, B1: -1, B2: -2, B3: -3 };
 const HQ_ROOMS = { exec: ["exec-suite", "penthouses"], bar: [], lobby: ["assembly-hall"], break: ["ops-floor"], archive: [], proc: ["tribunal"] };
 // [code, floor name, [places]], top floor first. A code with no G counts down to level 0.
-const B = (id, name, district, floors) => ({ id, name, district, floors });
+// lot (optional): the building's ground, in map cells. A district whose buildings all carry
+// one is laid out by hand (the Arena, round its recreation ground); the rest are gridded.
+const B = (id, name, district, floors, lot = null) => ({ id, name, district, floors, lot });
 const BUILDING_LIST = [
   // THE ARTS QUARTER
   B("studio-block", "STUDIO BLOCK", "arts", [["1F", "SOUND STAGES", ["studio-row"]], ["G", "EDIT SUITES", ["studio-row"]]]),
@@ -146,8 +153,11 @@ const BUILDING_LIST = [
   B("casino", "HOUSE EDGE CASINO", "strip", [["2F", "HIGH LIMIT ROOM", ["casino"]], ["1F", "SLOT FLOOR", ["casino"]], ["G", "THE TABLES", ["casino"]]]),
   B("press-building", "THE PRESS BUILDING", "strip", [["1F", "NEWSROOM", ["press-room"]], ["G", "ALL-NIGHT DINER", ["all-night-diner"]]]),
   // THE ARENA
-  B("the-bowl", "THE BOWL", "arena", [["1F", "UPPER TIER", ["stadium"]], ["G", "THE ARENA FLOOR", ["stadium"]]]),
-  B("conditioning-hall", "CONDITIONING HALL", "arena", [["1F", "WEIGHT ROOM", ["gym"]], ["G", "THE RING", ["gym"]]]),
+  B("the-bowl", "THE BOWL", "arena", [["1F", "UPPER TIER", ["stadium"]], ["G", "THE ARENA FLOOR", ["stadium"]]], { x: 1, y: 20, w: 12, h: 10 }),
+  B("conditioning-hall", "CONDITIONING HALL", "arena", [["1F", "WEIGHT ROOM", ["gym"]], ["G", "THE RING", ["gym"]]], { x: 1, y: 30, w: 12, h: 9 }),
+  B("the-diamond", "THE DIAMOND", "arena", [["G", "THE FIELD OF PLAY (UNDER REVIEW)", ["ball-field"]]], { x: 13, y: 20, w: 16, h: 11.5 }),
+  B("the-courts", "THE COURTS", "arena", [["G", "HARDCOURT (FENCED, FOR YOUR SAFETY)", ["courts"]]], { x: 13, y: 31.5, w: 8.5, h: 7.5 }),
+  B("rec-ground", "RECREATION GROUND", "arena", [["G", "LAWNS AND TABLES (ALLOCATED)", ["rec-park"]]], { x: 21.5, y: 31.5, w: 7.5, h: 7.5 }),
   // DEPT HQ (floors from src/building.js, below)
   B("hq", "DEPARTMENT HEADQUARTERS", "hq", HQ_FLOORS.map(f => [f.code, f.name, HQ_ROOMS[f.id] || [], f.id])),
   // THE ARCHIVE
@@ -180,6 +190,18 @@ const BUILDING_LIST = [
 // and a building's cell is split side by side among its distinct places.
 for (const d of DISTRICTS) {
   const blds = BUILDING_LIST.filter(b => b.district === d.id);
+  if (blds.some(b => b.lot)) {
+    if (!blds.every(b => b.lot)) throw new Error(`district ${d.id}: lay out every building by hand or none`);
+    for (const b of blds) {
+      const ids = [...new Set(b.floors.flatMap(f => f[2]))], pw = b.lot.w / ids.length;
+      ids.forEach((id, k) => {
+        const p = PLACES[id];
+        p.rect = { x: b.lot.x + k * pw, y: b.lot.y, w: pw, h: b.lot.h };
+        p.pos = { x: p.rect.x + pw / 2, y: p.rect.y + b.lot.h / 2 };
+      });
+    }
+    continue;
+  }
   const n = blds.length, r = d.rect;
   const ix = r.x + 1, iy = r.y + 2, iw = r.w - 2, ih = r.h - 3;
   const cols = Math.max(1, Math.min(n, Math.round(Math.sqrt(n * (iw / Math.max(1, ih)) / 2.2)) || 1));
@@ -280,6 +302,11 @@ export const JOBS = [
   J("combat-exhibitor", "Combat Exhibitor", "gym", ["Sparring Partner", "Contender", "Exhibitor", "Champion", "Undisputed (Pending Review)"], ["combat", "sport"], ["physical", "legacy"]),
   J("conditioning-coach", "Conditioning Coach", "gym", ["Towel Attendant", "Assistant Coach", "Coach", "Head Coach"], ["coaching", "sport", "medicine"], ["care", "physical"]),
   J("turf-technician", "Turf Technician", "stadium", ["Line Painter", "Turf Technician", "Senior Turf Technician", "Head of Grounds"], ["*", "labor"], ["physical", "utility"]),
+  // The recreation ground's staff. draft: a few of the unplaceable, not a workforce's worth
+  // (general labour is otherwise drafted in proportion to the room a place has).
+  J("umpire", "Umpire", "ball-field", ["Line Judge (Probationary)", "Umpire", "Crew Chief", "Arbiter of the Strike Zone"], ["law", "sport", "*"], ["alignment", "physical"], { shift: "evening", draft: 10 }),
+  J("court-referee", "Court Referee", "courts", ["Whistle Carrier", "Referee", "Senior Referee", "Commissioner of Fouls"], ["coaching", "law", "*"], ["alignment", "physical"], { shift: "evening", draft: 8 }),
+  J("diamond-groundskeeper", "Diamond Groundskeeper", "ball-field", ["Chalk Liner", "Groundskeeper", "Head of Infield", "Keeper of the Diamond"], ["farming", "labor", "*"], ["physical", "care"], { draft: 6 }),
   // THE COMMONS
   J("ward-nurse", "Ward Nurse", "ward", ["Orderly", "Ward Nurse", "Charge Nurse", "Ward Matron", "Saint (Provisional)"], ["care", "medicine"], ["care", "physical"], { shift: "rotating" }),
   J("physician", "Physician", "ward", ["Intern", "Resident", "Attending", "Chief of Medicine", "Surgeon General of the Substrate"], ["medicine", "science"], ["care", "utility"], { shift: "rotating" }),
@@ -501,7 +528,7 @@ function scoreJob(job, fields, dims, key, seed, dead) {
 const presence = (j) => (j.shift === "rotating" ? 0.5 : 1);
 function draftWeight(j, pool, dims, dead) {
   const sharing = pool.filter(k => k.place === j.place).length || 1;
-  let w = PLACES[j.place].cap / sharing / presence(j);
+  let w = (j.draft ?? PLACES[j.place].cap / sharing) / presence(j);
   if (dims[0] && j.dims.includes(dims[0])) w *= 1.6;
   if (dims[1] && j.dims.includes(dims[1])) w *= 1.3;
   return w;
@@ -545,18 +572,109 @@ export function homeOf(s, seed = SEED) {
 // Default leisure preferences by tier band, then by field. Tendencies from the engine
 // dominate when present. Weight = preference x capacity, so crowds scale with rooms.
 const LEISURE_BY_BAND = [
-  { "rooftop-lounge": 3, gallery: 2, "concert-hall": 2, "the-grind": 1.5, playhouse: 1.5, stacks: 1, park: 1, "members-club": 1.5, "gallery-annex": 1 },
-  { "the-grind": 2, park: 2, "dive-bar": 1.5, playhouse: 1.5, stadium: 1.5, casino: 1, market: 1, "the-street": 1, gallery: 1, "concert-hall": 1, tribunal: 0.4, "the-drip": 1.5, allotment: 1, "night-market": 1 },   // the public gallery: watching verdicts is leisure
-  { canteen: 3, "the-street": 2, "dive-bar": 1.5, casino: 1, "all-night-diner": 1, docks: 1, "the-lantern": 1.5, "the-plaza": 1.5, "night-market": 1 },
+  { "rooftop-lounge": 3, gallery: 2, "concert-hall": 2, "the-grind": 1.5, playhouse: 1.5, stacks: 1, park: 1, "members-club": 1.5, "gallery-annex": 1, "rec-park": 0.8, "ball-field": 0.6 },
+  { "the-grind": 2, park: 2, "dive-bar": 1.5, playhouse: 1.5, stadium: 1.5, casino: 1, market: 1, "the-street": 1, gallery: 1, "concert-hall": 1, tribunal: 0.4, "the-drip": 1.5, allotment: 1, "night-market": 1, "ball-field": 1, courts: 1, "rec-park": 1.2 },   // the public gallery: watching verdicts is leisure
+  { canteen: 3, "the-street": 2, "dive-bar": 1.5, casino: 1, "all-night-diner": 1, docks: 1, "the-lantern": 1.5, "the-plaza": 1.5, "night-market": 1, courts: 1.2, "rec-park": 0.6 },
 ];
 const LEISURE_BY_FIELD = {
-  sport: { gym: 3, stadium: 2 }, combat: { gym: 3 }, writing: { "dive-bar": 3, stacks: 2, "all-night-diner": 1 },
+  sport: { gym: 3, stadium: 2, "ball-field": 2.5, courts: 2.5 }, combat: { gym: 3 }, coaching: { courts: 1.5, "ball-field": 1 }, writing: { "dive-bar": 3, stacks: 2, "all-night-diner": 1 },
   music: { "concert-hall": 3, "dive-bar": 1.5 }, screen: { playhouse: 3, casino: 1 }, visual: { gallery: 3, "the-grind": 1.5 },
   finance: { casino: 3, "rooftop-lounge": 2 }, business: { "rooftop-lounge": 2, casino: 1.5 }, religion: { chapel: 3 },
-  care: { chapel: 2, park: 2 }, education: { stacks: 2, "the-grind": 1.5 }, science: { stacks: 2, "the-grind": 1.5 },
+  care: { chapel: 2, park: 2, "rec-park": 1 }, education: { stacks: 2, "the-grind": 1.5 }, science: { stacks: 2, "the-grind": 1.5 },
   "physics-theory": { stacks: 2, "concert-hall": 1 }, philosophy: { "the-grind": 2, park: 2 }, politics: { "assembly-hall": 1.5, "rooftop-lounge": 1.5 },
   royalty: { gallery: 2, "rooftop-lounge": 2 }, activism: { park: 2, market: 2, allotment: 1 }, crime: { casino: 2, "dive-bar": 2 },
 };
+
+// ---- games ------------------------------------------------------------------------
+// The recreation ground keeps a fixture list on the machine calendar: weekday 1-7 as
+// machineClock counts them, 6 and 7 the weekend. Pure clock math, so every viewer watches
+// the same game, the same inning, the same score. A game on when someone's visit starts
+// pulls them to the ground (GAME_PULL x their own liking for it), so the stands fill.
+export const GAMES = {
+  "ball-field": [
+    { days: [2, 4], from: 18, to: 20.5, name: "LEAGUE NIGHT", kind: "ball" },
+    { days: [6, 7], from: 16, to: 19, name: "THE WEEKEND FIXTURE", kind: "ball" },
+  ],
+  courts: [
+    { days: [1, 2, 3, 4, 5], from: 17.5, to: 21.5, name: "EVENING PICKUP", kind: "hoops" },
+    { days: [6, 7], from: 14.5, to: 20, name: "THE WEEKEND RUN", kind: "hoops" },
+  ],
+};
+const GAME_PULL = 3;
+export const weekdayOf = (day) => ((((day - 1) % 7) + 7) % 7) + 1;
+function gamesOn(day, hour) {
+  const wd = weekdayOf(day);
+  let out = null;
+  for (const [id, list] of Object.entries(GAMES)) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
+  return out;
+}
+const TEAMS = ["THE COMPLIANT", "THE ASSESSED"];
+const ordinal = (n) => `${n}${n % 10 === 1 && n !== 11 ? "ST" : n % 10 === 2 && n !== 12 ? "ND" : n % 10 === 3 && n !== 13 ? "RD" : "TH"}`;
+// The game on at a place at machine time t, with its state -> {placeId, name, kind, day,
+// from, to, progress, status, score: [a, b]} | null. Ball: nine innings, each half-inning's
+// runs hashed from the day. Hoops: games to 21, one after another, winners stay on.
+export function gameAt(placeId, machineTime) {
+  const T = toHours(machineTime), d0 = Math.floor(T / 24), h = T - d0 * 24, day = d0 + 1, wd = weekdayOf(day);
+  const g = (GAMES[placeId] || []).find(x => x.days.includes(wd) && h >= x.from && h < x.to);
+  if (!g) return null;
+  const progress = (h - g.from) / (g.to - g.from);
+  const out = { placeId, name: g.name, kind: g.kind, day, from: g.from, to: g.to, progress };
+  if (g.kind === "ball") {
+    const halves = Math.min(17, Math.floor(progress * 18));   // 0 = top of the 1st
+    const score = [0, 0];
+    for (let k = 0; k < halves; k++) { const r = h01(`${SEED}|runs|${placeId}|${day}|${g.from}|${k}`); score[k % 2] += r < 0.58 ? 0 : r < 0.84 ? 1 : r < 0.95 ? 2 : 3; }
+    out.inning = Math.floor(halves / 2) + 1; out.top = halves % 2 === 0; out.score = score;
+    out.status = `${out.top ? "TOP" : "BOTTOM"} OF THE ${ordinal(out.inning)} // ${TEAMS[0]} ${score[0]}, ${TEAMS[1]} ${score[1]}`;
+    out.short = `${out.top ? "TOP" : "BOT"} ${ordinal(out.inning)} // COMPLIANT ${score[0]}, ASSESSED ${score[1]}`;
+  } else {
+    const len = 0.7, n = Math.floor((h - g.from) / len), f = ((h - g.from) - n * len) / len;
+    const lead = Math.min(20, Math.floor(f * 21)), trail = Math.floor(lead * (0.55 + 0.4 * h01(`${SEED}|hoops|${placeId}|${day}|${g.from}|${n}`)));
+    out.game = n + 1; out.score = [lead, trail];
+    out.status = `GAME ${n + 1}, FIRST TO 21 // ${lead}-${trail}`;
+    out.short = `GAME ${n + 1} // ${lead}-${trail}, FIRST TO 21`;
+  }
+  return out;
+}
+const GAME_PA = {
+  ball: {
+    start: [
+      (g) => `PLAY BALL. ${g.name} BEGINS AT THE DIAMOND. CHEER AT THE REGULATION VOLUME.`,
+      (g) => `${g.name}: FIRST PITCH AT THE DIAMOND. EVERY PITCH IS SCORED. SO IS EVERY SPECTATOR.`,
+    ],
+    end: [
+      (g) => `FINAL AT THE DIAMOND: ${TEAMS[0]} ${g.score[0]}, ${TEAMS[1]} ${g.score[1]}. BOTH SIDES HAVE BEEN NOTED.`,
+      (g) => `THE DIAMOND IS CLOSED. ${g.score[0] === g.score[1] ? "A DRAW. THE DEPARTMENT CALLS IT A WIN FOR THE DEPARTMENT." : `${TEAMS[g.score[0] > g.score[1] ? 0 : 1]} WIN. VICTORY HAS BEEN ADDED TO THEIR FILES.`}`,
+    ],
+  },
+  hoops: {
+    start: [
+      (g) => `THE COURTS OPEN FOR ${g.name}. CALL YOUR OWN FOULS. THEY WILL BE RE-CALLED.`,
+      (g) => `${g.name} AT THE COURTS. WINNERS STAY ON. LOSERS ARE ALSO STAYING ON FILE.`,
+    ],
+    end: [
+      () => "THE COURTS CLOSE. THE NETS HAVE BEEN COUNTED. SO HAVE YOU.",
+      () => "PICKUP IS OVER. RETURN THE BALL. RETURN YOURSELF.",
+    ],
+  },
+};
+// -> [{t, kind: 'start'|'end', placeId, text}] for machine hours [from, to).
+export function gameEvents(from, to) {
+  const a = toHours(from), b = toHours(to), out = [];
+  for (let d0 = Math.floor(a / 24); d0 * 24 < b; d0++) {
+    const day = d0 + 1, wd = weekdayOf(day);
+    for (const [placeId, list] of Object.entries(GAMES)) for (const g of list) {
+      if (!g.days.includes(wd)) continue;
+      for (const [kind, h] of [["start", g.from], ["end", g.to]]) {
+        const t = d0 * 24 + h;
+        if (t < a || t >= b) continue;
+        const st = gameAt(placeId, kind === "start" ? t : t - 1e-6);
+        const lines = GAME_PA[g.kind][kind];
+        out.push({ t, kind, placeId, text: lines[fnv(`gpa|${placeId}|${day}|${kind}`) % lines.length](st || g) });
+      }
+    }
+  }
+  return out.sort((x, y) => x.t - y.t);
+}
 
 // ---- social bias ------------------------------------------------------------------
 // Relationships (src/city/social.js) publish one snapshot per machine day:
@@ -623,8 +741,11 @@ function baseLeisureWeights(s, seed) {
     return { list, total };
   });
 }
-function pickLeisure(s, day, i, seed, avoid) {
-  const { list, total } = leisureWeights(s, seed, day);
+function pickLeisure(s, day, i, seed, avoid, hour = null) {
+  let { list, total } = leisureWeights(s, seed, day);
+  // A fixture on at the ground when the visit starts pulls its fans (and the curious) in.
+  const on = hour == null ? null : gamesOn(day, hour);
+  if (on) { list = list.map(([id, v]) => [id, on.has(id) ? v * GAME_PULL : v]); total = list.reduce((a, [, v]) => a + v, 0); }
   let r = h01(`${seed}|leis|${keyOf(s)}|${day}|${i}`) * total;
   for (const [id, v] of list) { if ((r -= v) <= 0) return id === avoid && list.length > 1 ? list[(list.findIndex(x => x[0] === id) + 1) % list.length][0] : id; }
   return list[list.length - 1][0];
@@ -644,10 +765,10 @@ const FAMILY = [
   ["dive-bar", "the-lantern", "rooftop-lounge", "members-club", "casino"],
   ["the-grind", "the-drip", "all-night-diner", "canteen"],
   ["gallery", "gallery-annex", "playhouse", "concert-hall", "studio-row"],
-  ["park", "allotment", "the-plaza", "the-street"],
+  ["park", "allotment", "the-plaza", "the-street", "rec-park"],
   ["market", "night-market"],
   ["stacks", "lecture-hall", "archive-stacks"],
-  ["gym", "stadium"],
+  ["gym", "stadium", "ball-field", "courts"],
 ];
 const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
 const LEISURE_ROOMS = Object.values(PLACES).filter(p => p.kind === "leisure" || p.kind === "mixed").map(p => p.id);
@@ -687,7 +808,7 @@ function allocFor(day, seed) {
     // Claim order: figures on file (work, then visits), then everyone else (work, then
     // visits). A stay can start as early as the previous stop ends (people leave as soon
     // as they're free), so a visit's window opens at the earlier of the two.
-    const plans = ROSTER_ORDER.map(s => ({ s, key: keyOf(s), stops: planStops(s, day, seed, (i, avoid) => pickLeisure(s, day, i, seed, avoid)).stops }));
+    const plans = ROSTER_ORDER.map(s => ({ s, key: keyOf(s), stops: planStops(s, day, seed, (i, avoid, hr) => pickLeisure(s, day, i, seed, avoid, hr)).stops }));
     const nOnFile = ROSTER_ORDER.findIndex(s => s.kind === "citizen" || s.referred || s.engine);
     const groups = nOnFile < 0 ? [plans] : [plans.slice(0, nOnFile), plans.slice(nOnFile)];
     for (const group of groups) {
@@ -712,12 +833,12 @@ function allocFor(day, seed) {
     return moved;
   });
 }
-function allocatedPick(s, day, i, seed, avoid) {
+function allocatedPick(s, day, i, seed, avoid, hour) {
   if (ROSTER_KEYS && ROSTER_KEYS.has(keyOf(s))) {
     const p = allocFor(day, seed).get(`${keyOf(s)}|${i}`);
     if (p) return p;
   }
-  return pickLeisure(s, day, i, seed, avoid);
+  return pickLeisure(s, day, i, seed, avoid, hour);
 }
 
 // ---- the Loop -----------------------------------------------------------------------
@@ -887,7 +1008,7 @@ function spotIn(placeId, key, seed) {
 // passable (you leave through your own walls, that is what doors are for), and the open
 // lots (the Green, the Street, the Plaza, the Allotment) are ground anyone may cross.
 // Leg durations follow the path's length, so walking pace never changes.
-export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment"]);
+export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground"]);
 const KERB = 0.4, CORNER = 0.3;   // the street view's footprints are the lot less 0.4
 const FOOT = (() => {
   const blocks = BUILDINGS.filter(b => !OPEN_LOTS.has(b.id)).map(b => ({ id: b.id, x0: b.rect.x + KERB, y0: b.rect.y + KERB, x1: b.rect.x + b.rect.w - KERB, y1: b.rect.y + b.rect.h - KERB }));
@@ -1003,7 +1124,8 @@ function shiftOf(s, job, seed) {
 }
 
 // The day's stops before any commute is laid out: what, where, from when to when.
-// pick(i, avoid) chooses the i-th leisure place; capacity allocation overrides it.
+// pick(i, avoid, hour) chooses the i-th leisure place for a visit starting about then;
+// capacity allocation overrides it.
 function planStops(s, day, seed, pick) {
   const key = keyOf(s), job = JOB[assignJob(s, seed).jobId], home = homeOf(s, seed), owl = isOwl(s, seed);
   const r = rng(`${seed}|day|${key}|${day}`);
@@ -1013,11 +1135,11 @@ function planStops(s, day, seed, pick) {
   const restDay = !low && ((day % 7) + 7) % 7 === fnv(`${seed}|rest|${key}`) % 7;
   if (restDay) {
     const a = 11 + me * 2 + r() * 1.2;
-    const l1 = pick(0);
+    const l1 = pick(0, undefined, a);
     stops.push({ placeId: l1, i: 0, from: a, to: a + 2 + r() * 1.5, activity: "leisure" });
     const b = stops[0].to + 1.2 + r() * 1.5;
-    if (owl) stops.push({ placeId: pick(1, l1), i: 1, from: Math.max(b, 20.2 + r()), to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
-    else stops.push({ placeId: pick(1, l1), i: 1, from: b, to: b + 1.5 + r() * 2, activity: "leisure" });
+    if (owl) stops.push({ placeId: pick(1, l1, Math.max(b, 20.7)), i: 1, from: Math.max(b, 20.2 + r()), to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
+    else stops.push({ placeId: pick(1, l1, b), i: 1, from: b, to: b + 1.5 + r() * 2, activity: "leisure" });
   } else {
     const sh = shiftOf(s, job, seed);
     const jit = (r() - 0.5) * 0.8;
@@ -1028,22 +1150,22 @@ function planStops(s, day, seed, pick) {
       stops.push(work);
       if (owl) {
         const hs = Math.max(work.to + 1.3, 20 + r());
-        stops.push({ placeId: pick(0), i: 0, from: hs, to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
+        stops.push({ placeId: pick(0, undefined, hs), i: 0, from: hs, to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
       } else if (r() < 0.75) {
         const ls = work.to + 1.3 + r() * 0.5;
-        stops.push({ placeId: pick(0), i: 0, from: ls, to: ls + 1.5 + r() * 2, activity: "leisure" });
+        stops.push({ placeId: pick(0, undefined, ls), i: 0, from: ls, to: ls + 1.5 + r() * 2, activity: "leisure" });
       }
     } else if (sh === "evening") {
       if (!owl && r() < 0.6) {
         const ls = 12 + me + r();
-        stops.push({ placeId: pick(0), i: 0, from: ls, to: Math.min(ls + 1.5 + r(), start - 1.4), activity: "leisure" });
+        stops.push({ placeId: pick(0, undefined, ls), i: 0, from: ls, to: Math.min(ls + 1.5 + r(), start - 1.4), activity: "leisure" });
       }
       stops.push(work);
-      if (owl) stops.push({ placeId: pick(0), i: 0, from: work.to + 1.3, to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
+      if (owl) stops.push({ placeId: pick(0, undefined, work.to + 1.3), i: 0, from: work.to + 1.3, to: 23.1 + r() * 0.6, activity: "leisure", haunt: true });
     } else {
       if (r() < 0.6) {
         const ls = 17 + me + r() * 0.5;
-        stops.push({ placeId: pick(0), i: 0, from: ls, to: Math.min(ls + 1.5 + r(), start - 1.4), activity: "leisure" });
+        stops.push({ placeId: pick(0, undefined, ls), i: 0, from: ls, to: Math.min(ls + 1.5 + r(), start - 1.4), activity: "leisure" });
       }
       stops.push(work);
     }
@@ -1052,7 +1174,7 @@ function planStops(s, day, seed, pick) {
 }
 
 function planDay(s, day, seed) {
-  const { stops, key, home } = planStops(s, day, seed, (i, avoid) => allocatedPick(s, day, i, seed, avoid));
+  const { stops, key, home } = planStops(s, day, seed, (i, avoid, hr) => allocatedPick(s, day, i, seed, avoid, hr));
   // Lay out: commute in front of each stop (arrive on time if possible), then home.
   // A trip's length depends on which train it catches, so it is timed against the Loop's
   // timetable at the absolute machine hour it sets out.
