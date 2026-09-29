@@ -51,6 +51,12 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 9. **City polish from the iso build:** Hab Block floors read as "STORAGE, LEVEL n" (warehouse-like) — give residential names; ward curtains drawn too tall; verify the "+K" crowd badge on a real crowded room; test pinch/twist on a real phone. STREET view is back burner (kept, not default).
 
+10. **Shared animation rig recoloured per person** (Scott 2026-09-28: faces hidden, identity by colours). Extract each subject's palette (hair, skin, top, bottom, shoes, accent) from their existing sprite; draw a small shared rig once (4-direction walk, sit, desk work, cheers, dance) in the design-system style; recolour per subject client-side (zero image generation). Real face only in front idle + file photo. Use in CITY iso, STREET, pen, building cutaways.
+
+11. **HQ as a tall SimTower building (~12 floors) of Overlord departments:** Intake, Records, Archive stacks, Calibration Lab (shows current method version), Review Board, Tribunal, Holding Cells, Operations, Executive Suite, roof. Real sim use per floor.
+
+12. **Holding Cells with meaning:** subjects under Review (arraignment/summons, appeals under hearing, harm reviews, news re-scores) walk into a holding cell until their case is heard at the Tribunal, then are released ("RELEASED. FILE AMENDED."). Driven by real events; visible "who is in trouble" board.
+
 ## Guardrails (the loop must obey)
 
 - One item per night; stop at the time budget and report partial work honestly.
