@@ -17,6 +17,14 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       outings; odd cross-group pairs logged as gossip. Fallout Shelter incidents: a fire,
       reactor overload, vat flood, power cut; deterministic from the machine clock; nearby
       subjects with fitting jobs run to it and work it; logged on the PA and the Ledger.
+   b1. **LEAGUES** (Scott 2026-09-29, after the rec ground shipped 70bbb2c): pickup games at
+      THE DIAMOND / THE COURTS grow into leagues. Teams per district (later per group/sector,
+      named by the Overlord), rosters drafted from who plays there (athletes first; ratings
+      from physical/competence and real sport field), a season schedule on the machine
+      calendar, deterministic results, STANDINGS board at the ground + a page, playoffs and a
+      championship, MVP; league rivalries feed social.js; the PA calls it. Later: more sports
+      (the Bowl for football/soccer), a second division with promotion/relegation, and wagers
+      in CYCLES once the economy exists.
    b2. **The Arcade** (Scott 2026-09-29; built with b; NOT named "Iridescent" yet, later).
       A building on the Strip: a cabinet floor and a game room. Cabinets = every live game in
       ../iridescent-site/works.json (division games; JETSAM! play-jetsam.netlify.app and
