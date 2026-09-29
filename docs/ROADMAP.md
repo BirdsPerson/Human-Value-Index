@@ -48,6 +48,21 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       (content rule: the living never speak) or the Overlord itself. Results feed a debate
       rating on the file. Stage 2 PvP: live player-vs-player debates, audience = players,
       judge reliability weighting per ARENA.md. That stage is the CivicGate rehearsal.
+   b5. **THE CIVIC MACHINE** (Scott 2026-09-29 "how is it all going to work?"; Claude's design,
+      review with the scale redesign since SECTORS are the natural data shards):
+      DEMAND (census growth, crowding, district mood, incidents) -> PROPOSAL (Dept of Planning
+      at HQ, or DEVELOPER figures bid: Trump, Robert Moses, Haussmann, Disney; Jane Jacobs
+      opposes) -> APPROVAL (district COUNCIL, one elected seat per district; OVERLORD veto
+      costs LEGITIMACY) -> BUILD (lot -> construction site with crews -> opening; overruns and
+      quality follow the developer's competence/conduct) -> OUTCOME feeds mood -> elections.
+      Elections: figures run; subjects vote by values/affinity; players vote (CivicGate
+      rehearsal). Legitimacy low -> unrest (item e). Performance: per-shift score (fit,
+      fatigue, incidents); bad streak -> warning -> demotion -> reassignment to the Works
+      (nobody leaves: everyone must work); good streak -> promotion. Scuffles (rivals, the Dive
+      late) among dead figures/anonymous only, living get heated arguments; accidents at
+      reactor/foundry/construction; injured recover at WARD 7 (exists, has staff, no patients
+      yet). Sprawl: new edge sectors built by the winning developer; SUBWAY extension is itself
+      a project; THE UNDERCROFT beneath the city is where unrest organizes.
    c. **The Overlord tower (item 11) as the admin building:** Intake, Appeals desk, Review
       Board, Records, Calibration Lab, Holding Cells (item 12), and THE PEOPLE'S PETITION
       console = the People's Vote exactly as designed in docs/story/STORYLINE_TOURNAMENT.md
