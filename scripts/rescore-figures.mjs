@@ -19,6 +19,7 @@ import { octantOf } from "../src/cube.js";
 import { rescoreOne, pool, RUNS } from "./rescore-lib.mjs";
 import { VILLAINS, SAINTS } from "./calibration-lib.mjs";
 import { appendFigureHistory } from "../src/movement.js";
+import { figureIndex, syncIndex } from "./roster/prod.mjs";
 
 // A re-read of the public record is the Department's change, logged on the file (cause "record").
 const RECORD_AT = new Date().toISOString();
@@ -48,8 +49,7 @@ const figureJobs = flags.has("--only-referrals") ? [] : FAMOUS_FIGURES.filter(f 
   .map(f => ({ kind: "figure", name: f.name, died: f.died || null, wikiTitle: bench[f.name]?.enwiki_title || f.name, harmReview: f.harmReview ?? null, before: f }));
 let referralJobs = [];
 if (!flags.has("--no-referrals")) {
-  const index = blobGet("hvi-figures", "index");
-  referralJobs = (index?.cards || []).filter(c => !c.removed && (full || want.has(c.name)))
+  referralJobs = (await figureIndex()).filter(c => !c.removed && (full || want.has(c.name)))
     .map(c => ({ kind: "referral", slug: c.slug, name: c.name, died: c.died || null, before: c }));
   for (const j of referralJobs) { const card = blobGet("hvi-figures", j.slug); j.card = card; j.wikiTitle = card?.wikiTitle || j.name; j.harmReview = card?.harmReview ?? null; }
   referralJobs = referralJobs.filter(j => j.card && !j.card.removed);
@@ -86,21 +86,15 @@ writeFileSync(path, src);
 const refDone = results.filter(x => x.kind === "referral");
 if (refDone.length) {
   const at = new Date().toISOString();
-  const j_hist = new Map();
   for (const { slug, card, r } of refDone) {
     const next = { ...card, score: r.score, tier: getTier(r.score), ...cube(r.breakdown), breakdown: r.breakdown, verdict: r.verdict,
       harm: r.harm ? { documented: r.harm.documented, era: r.harm.era, band: r.harm.band, severity: r.harm.severity ?? null } : card.harm ?? null,
       flags: r.flags, commendations: r.commendations, factCheck: r.factCheck ?? card.factCheck ?? null, rescoredAt: at,
       scoreHistory: recordLog(card.scoreHistory, card, r.score, getTier(r.score)) };
-    j_hist.set(slug, next.scoreHistory);
     blobSet("hvi-figures", slug, next);
   }
-  const index = blobGet("hvi-figures", "index");
-  const bySlug = new Map(refDone.map(x => [x.slug, x.r]));
-  index.cards = index.cards.map(c => (bySlug.has(c.slug)
-    ? { ...c, score: bySlug.get(c.slug).score, tier: getTier(bySlug.get(c.slug).score), breakdown: bySlug.get(c.slug).breakdown, verdict: bySlug.get(c.slug).verdict, harmReview: bySlug.get(c.slug).harmReview ?? c.harmReview ?? null, scoreHistory: j_hist.get(c.slug) ?? c.scoreHistory ?? null }
-    : c));
-  blobSet("hvi-figures", "index", index);
+  // The index entries are re-derived from the cards just written (one writer class for the index).
+  await syncIndex(refDone.map(x => x.slug));
 }
 
 // ---- report (full pass only) -----------------------------------------------------------

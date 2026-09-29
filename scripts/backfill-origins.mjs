@@ -4,7 +4,7 @@
 //   node scripts/backfill-origins.mjs            # dry run: prints the plan
 //   node scripts/backfill-origins.mjs --apply    # writes production cards + index
 import { originsOf } from "../netlify/lib/refer.js";
-import { store, figureIndex } from "./roster/prod.mjs";
+import { store, figureIndex, syncIndex } from "./roster/prod.mjs";
 
 const APPLY = process.argv.includes("--apply");
 // Wikidata has no birthplace or citizenship for these.
@@ -29,8 +29,5 @@ for (const [slug, origin] of Object.entries(plan)) {
     if ((await figs.setJSON(slug, { ...cur.data, origin }, { onlyIfMatch: cur.etag })).modified) break;
   }
 }
-for (let attempt = 0; attempt < 8; attempt++) {
-  const cur = await figs.getWithMetadata("index", { type: "json" });
-  const next = (cur?.data?.cards || []).map(e => (plan[e.slug] ? { ...e, origin: plan[e.slug] } : e));
-  if ((await figs.setJSON("index", { cards: next }, { onlyIfMatch: cur.etag })).modified) { console.log("index updated"); break; }
-}
+await syncIndex(Object.keys(plan));
+console.log("index updated");

@@ -1,6 +1,7 @@
 // Netlify Blobs access. Only works inside Functions v2 (default-export handlers);
 // v1 exports.handler throws MissingBlobsEnvironmentError.
 import { getStore } from "@netlify/blobs";
+import * as FI from "./figure-index.js";
 
 const cases = () => getStore({ name: "hvi-cases", consistency: "strong" });
 const pen = () => getStore({ name: "hvi-pen", consistency: "strong" });
@@ -108,13 +109,14 @@ export async function peekLimit(key, window = "day") {
 }
 
 // ---- referred public figures ------------------------------------------------
-// hvi-figures: slug -> card, plus an "index" blob the pen reads in one GET. The Mac
-// sprite job (scripts/referral_sprites.py) is the reader for spriteStatus "pending".
-const FIG_INDEX = "index";
-// ponytail: one index blob; the roster engine adds ~48 a week, so 5000 is ~2 years. Page the index past that.
-const FIG_MAX = 5000;
+// hvi-figures: slug -> card (plus the legacy "index" blob, kept as the migration's backup).
+// The census reads the sharded index (netlify/lib/figure-index.js). The Mac sprite job
+// (scripts/referral_sprites.py) is the reader for spriteStatus "pending".
+const FIG_INDEX = FI.LEGACY;
+const figIndex = () => getStore({ name: FI.INDEX_STORE, consistency: "strong" });
+const indexIo = () => ({ figures: figures(), index: figIndex() });
 
-// The index shares the store, so its key is never read as a figure ("Index" is a name).
+// The legacy index shares the store, so its key is never read as a figure ("Index" is a name).
 export async function getFigure(slug) {
   if (!slug || slug === FIG_INDEX) return null;
   return (await figures().get(slug, { type: "json" })) || null;
@@ -129,33 +131,31 @@ export async function createFigure(card) {
   return true;
 }
 
+// The card is already saved; a failed index write is logged, and the sprite job's repair
+// pass (scripts/index-sync.mjs --repair, every 10 minutes) indexes any card missing.
 export async function indexFigure(card) {
-  const store = figures();
-  const entry = figureIndexEntry(card);
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const cur = await store.getWithMetadata(FIG_INDEX, { type: "json" });
-    const base = cur?.data?.cards || [];
-    const cards = [entry, ...base.filter(c => c.slug !== card.slug)].slice(0, FIG_MAX);
-    const res = await store.setJSON(FIG_INDEX, { cards }, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
-    if (res.modified) return;
+  try {
+    await FI.writeEntries(indexIo(), [{ slug: card.slug, entry: figureIndexEntry(card) }], { tries: 5 });
+  } catch (e) {
+    console.warn(`figure index: ${e.message}; card saved`);
   }
-  console.warn("figure index: lost the write race; card saved");
 }
 
-// Keep in step with INDEX_KEYS in scripts/referral_sprites.py, which rewrites entries.
+// An index entry is derived from its card, never edited in place (scripts/index-sync.mjs).
 export const figureIndexEntry = c => ({
   slug: c.slug, name: c.name, qualifier: c.qualifier ?? null, score: c.score, tier: c.tier, breakdown: c.breakdown, verdict: c.verdict,
   verdictStatus: c.verdictStatus, noDangle: Boolean(c.noDangle), wikidata: c.wikidata, born: c.born ?? null, died: c.died ?? null,
   sprite: c.sprite ?? null, spriteStatus: c.spriteStatus, referredBy: c.referredBy, at: c.at, people: c.people ?? null, harmReview: c.harmReview ?? null, harmReviewPending: Boolean(c.harmReviewPending),
   source: c.source ?? null,
   places: c.places ?? null, stratum: c.stratum ?? null, description: c.description ?? null, origin: c.origin ?? null, height: c.height ?? null, sex: c.sex ?? null,
+  skin: c.skin ?? null,
   // The file's movement log (src/movement.js); the Department's changes shown apart from the subject's.
   scoreHistory: Array.isArray(c.scoreHistory) ? c.scoreHistory.slice(-40) : null,
 });
 
+// Every shard or a throw (never a partial census): see readShards.
 export async function listFigures() {
-  const idx = await figures().get(FIG_INDEX, { type: "json" });
-  return (idx?.cards || []).filter(c => c && c.slug && !c.removed);
+  return (await FI.readIndex(indexIo())).filter(c => c && c.slug && !c.removed);
 }
 
 export async function getSprite(slug) {

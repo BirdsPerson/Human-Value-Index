@@ -7,8 +7,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { FAMOUS_FIGURES } from "../src/figures.js";
 import { resolveCandidates, needsChoice, qualifierFrom, FIGURE_QIDS } from "../netlify/lib/refer.js";
-import { store, figureIndex } from "./roster/prod.mjs";
-import { figureIndexEntry } from "../netlify/lib/store.js";
+import { store, figureIndex, syncIndex } from "./roster/prod.mjs";
 
 const APPLY = process.argv.includes("--apply");
 // A bare name that is also a common word or title ("Prince") reads ambiguously even with
@@ -60,9 +59,5 @@ for (const [slug, q] of Object.entries(plan.cards)) {
   if (!card) continue;
   await figs.setJSON(slug, { ...card, qualifier: q });
 }
-for (let attempt = 0; attempt < 8; attempt++) {
-  const cur = await figs.getWithMetadata("index", { type: "json" });
-  const next = (cur?.data?.cards || []).map(e => (plan.cards[e.slug] ? { ...e, qualifier: plan.cards[e.slug] } : e));
-  const res = await figs.setJSON("index", { cards: next }, { onlyIfMatch: cur.etag });
-  if (res.modified) { console.log("index updated"); break; }
-}
+await syncIndex(Object.keys(plan.cards));
+console.log("index updated");

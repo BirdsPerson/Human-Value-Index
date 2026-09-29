@@ -1,11 +1,12 @@
 // Production Blobs from a local script (the Mac jobs). Same stores the functions use,
 // reached with the Netlify CLI's own login token, so conditional writes (onlyIfNew /
-// onlyIfMatch) work here too. The netlify CLI's blobs:set has no etag, which is why
-// referral_sprites.py needs repair_index(); this path doesn't.
+// onlyIfMatch) work here too. The figure index (netlify/lib/figure-index.js) is written
+// only from Node: the Python sprite job calls scripts/index-sync.mjs after a card write.
 import { getStore } from "@netlify/blobs";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { figureIndexEntry } from "../../netlify/lib/store.js";
+import * as FI from "../../netlify/lib/figure-index.js";
 
 export const SITE_ID = "3ac3fcb8-cab4-489b-8ea9-1e4153b87941";
 
@@ -20,9 +21,28 @@ function token() {
 let tok;
 export const store = name => getStore({ name, siteID: SITE_ID, token: (tok ??= token()), consistency: "strong" });
 
+export const indexIo = () => ({ figures: store("hvi-figures"), index: store(FI.INDEX_STORE) });
+
+// Every entry (withdrawn ones included, as the legacy blob held them), from all 64 shards
+// or the legacy blob before the migration. Throws on any unreadable shard.
 export async function figureIndex() {
-  const idx = await store("hvi-figures").get("index", { type: "json" });
-  return (idx?.cards || []).filter(c => c?.slug);
+  return FI.readIndex(indexIo());
+}
+
+// Re-derive the index entries of these slugs from their cards: a card that is gone or
+// withdrawn drops out. The one way a script outside the functions touches the index.
+export async function syncIndex(slugs) {
+  const figs = store("hvi-figures");
+  const uniq = [...new Set(slugs)].filter(s => s && s !== FI.LEGACY);
+  const changes = [];
+  for (let i = 0; i < uniq.length; i += 16) {
+    changes.push(...(await Promise.all(uniq.slice(i, i + 16).map(async slug => {
+      const card = await retry(() => figs.get(slug, { type: "json" }));
+      return { slug, entry: card && !card.removed && card.slug === slug ? figureIndexEntry(card) : null };
+    }))));
+  }
+  await retry(() => FI.writeEntries(indexIo(), changes));
+  return changes;
 }
 
 // Every Wikidata id already on file in production (referrals and earlier engine runs).
@@ -54,12 +74,6 @@ async function createCardOnce(card) {
   const res = await figs.setJSON(card.slug, card, { onlyIfNew: true });
   // A retry after a dropped response finds its own card already written: carry on to the index.
   if (!res.modified && (await figs.get(card.slug, { type: "json" }))?.run !== card.run) return false;
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const cur = await figs.getWithMetadata("index", { type: "json" });
-    const base = cur?.data?.cards || [];
-    const cards = [figureIndexEntry(card), ...base.filter(c => c.slug !== card.slug)];
-    const w = await figs.setJSON("index", { cards }, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
-    if (w.modified) return true;
-  }
-  throw new Error(`index write race lost 8 times for ${card.slug}; card saved, index not`);
+  await FI.writeEntries(indexIo(), [{ slug: card.slug, entry: figureIndexEntry(card) }]);
+  return true;
 }

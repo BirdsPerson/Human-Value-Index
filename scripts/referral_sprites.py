@@ -79,56 +79,33 @@ def set_json(store, key, data):
         Path(path).unlink(missing_ok=True)
 
 
-# Keep in step with figureIndexEntry in netlify/lib/store.js.
-INDEX_KEYS = ("slug", "name", "qualifier", "score", "tier", "breakdown", "verdict", "verdictStatus", "noDangle", "wikidata",
-              "born", "died", "sprite", "spriteStatus", "referredBy", "at", "people", "source",
-              "harmReview", "harmReviewPending", "places", "stratum", "description", "origin", "height", "sex", "skin", "scoreHistory")
+def index_sync(*args):
+    """The figure index is written only from Node (scripts/index-sync.mjs: 64 shards, conditional
+    writes); this job writes cards and asks Node to re-derive their entries. Raises on failure."""
+    res = subprocess.run(["node", str(ROOT / "scripts" / "index-sync.mjs"), *args], cwd=ROOT,
+                         capture_output=True, text=True, timeout=300)
+    if res.returncode != 0:
+        raise RuntimeError(f"index-sync {' '.join(args[:2])} failed: {(res.stderr or res.stdout).strip()[:300]}")
+    return res.stdout
 
 
-def index_entry(card):
-    return {k: card.get(k) for k in INDEX_KEYS}
+def load_index():
+    """The whole index as {"cards": [...]}, or an exception: never a partial or empty stand-in."""
+    return json.loads(index_sync("--dump"))
 
 
 def update_index(card, remove=False):
-    # ponytail: the CLI has no conditional writes, so a referral landing between this read
-    # and write can drop out of the index. repair_index() puts any such card back on the
-    # next pass, from the card blobs themselves.
-    idx = get_json("hvi-figures", "index") or {"cards": []}
-    cards = [c for c in idx.get("cards", []) if c.get("slug") != card["slug"]]
-    if not remove:
-        cards.insert(0, index_entry(card))
-    idx["cards"] = cards
-    set_json("hvi-figures", "index", idx)
-
-
-def card_keys():
-    out = json.loads(cli("blobs:list", "hvi-figures", "--json") or "{}")
-    return [b["key"] for b in out.get("blobs", []) if b.get("key") and b["key"] != "index"]
+    # The entry is derived from the card as stored (a withdrawn card drops out), so `remove`
+    # needs no separate path; kept for callers (scripts/redraw_gated.py).
+    index_sync(card["slug"])
 
 
 def repair_index(idx):
-    """Re-index card blobs missing from the index (lost to a write race). Returns the index."""
-    have = {c.get("slug") for c in idx.get("cards", [])}
-    missing = [k for k in card_keys() if k not in have]
-    for key in missing:
-        card = get_json("hvi-figures", key)
-        if not card or card.get("removed") or not card.get("slug"):
-            continue
-        update_index(card)
-        log(f"reindexed {key} (missing from the index)")
-    # Stale entries: an index entry still "pending"/"failed" whose card is already "ready" (or
-    # differs) was overwritten by a racing write. Only non-ready entries are checked, so this
-    # costs a few reads, not one per figure.
-    stale = 0
-    for entry in [c for c in idx.get("cards", []) if c.get("spriteStatus") != "ready"]:
-        card = get_json("hvi-figures", entry["slug"])
-        if not card or card.get("removed"):
-            continue
-        if card.get("spriteStatus") != entry.get("spriteStatus") or card.get("sprite") != entry.get("sprite"):
-            update_index(card)
-            stale += 1
-            log(f"resynced {entry['slug']} (index said {entry.get('spriteStatus')}, card says {card.get('spriteStatus')})")
-    return (get_json("hvi-figures", "index") or {"cards": []}) if (missing or stale) else idx
+    """Index card blobs missing from the index and resync entries behind their card. Returns the index."""
+    out = index_sync("--repair").strip()
+    for line in out.splitlines():
+        log(line)
+    return load_index() if out else idx
 
 
 def remember_look(slug, look):
@@ -293,12 +270,12 @@ def main():
         rebuild_atlas()
         return 0
     dry = "--dry-run" in sys.argv
-    idx = get_json("hvi-figures", "index") or {"cards": []}
+    idx = load_index()
     if not dry:
         idx = repair_index(idx)
     if "--retry-failed" in sys.argv:
         retry_failed(idx)
-        idx = get_json("hvi-figures", "index") or {"cards": []}
+        idx = load_index()
     cards = idx.get("cards", [])
     pending = [c for c in cards if c.get("spriteStatus") == "pending"]
     # Verdicts publish after the automatic fact-check in /api/refer; "withheld" means the

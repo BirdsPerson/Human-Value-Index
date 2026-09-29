@@ -33,7 +33,8 @@ def cli(*args):
 
 def prod_items(tmp):
     keys = [b["key"] for b in json.loads(cli("blobs:list", "hvi-sprites", "--json"))["blobs"]]
-    idx = json.loads(cli("blobs:get", "hvi-figures", "index") or "{}")
+    idx = json.loads(subprocess.run(["node", str(ROOT / "scripts" / "index-sync.mjs"), "--dump"], cwd=ROOT, check=True,
+                                    capture_output=True, text=True, timeout=300).stdout)
     names = {c["slug"]: c for c in idx.get("cards", [])}
     out = []
     for k in keys:

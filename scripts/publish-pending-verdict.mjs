@@ -6,8 +6,7 @@
 //
 //   node scripts/publish-pending-verdict.mjs <slug>             # promote it
 //   node scripts/publish-pending-verdict.mjs <slug> --dry-run   # show what would change
-import { store, retry } from "./roster/prod.mjs";
-import { figureIndexEntry } from "../netlify/lib/store.js";
+import { store, retry, syncIndex } from "./roster/prod.mjs";
 import { getTier, cube, computeScore } from "../netlify/lib/intake.js";
 import { appendFigureHistory } from "../src/movement.js";
 
@@ -55,10 +54,10 @@ for (let attempt = 0; attempt < 5; attempt++) {
   next = null;
 }
 if (!next) { console.error("lost the card write race 5 times; nothing published"); process.exit(1); }
-for (let attempt = 0; attempt < 8; attempt++) {
-  const cur = await retry(() => figs.getWithMetadata("index", { type: "json" }));
-  const cards = (cur?.data?.cards || []).map(e => (e.slug === slug ? figureIndexEntry(next) : e));
-  if ((await retry(() => figs.setJSON("index", { ...cur.data, cards }, { onlyIfMatch: cur.etag }))).modified) { console.log("published; index updated"); process.exit(0); }
+try {
+  await syncIndex([slug]);
+  console.log("published; index updated");
+} catch (e) {
+  console.error(`card published but the index write failed (${e.message}): re-run to repair the index entry`);
+  process.exit(1);
 }
-console.error("card published but the index write lost 8 races: re-run to repair the index entry");
-process.exit(1);

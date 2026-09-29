@@ -6,7 +6,7 @@
 // Recomputes the score by formula with the review, writes the card and its index entry under
 // an etag, clears harmReviewPending. Then `node scripts/harm-reviews.mjs` refreshes the desk.
 import fs from "node:fs";
-import { store } from "./roster/prod.mjs";
+import { store, syncIndex } from "./roster/prod.mjs";
 import * as L from "./calibration-lib.mjs";
 import { appendFigureHistory } from "../src/movement.js";
 
@@ -41,5 +41,5 @@ const upd = {
 console.log(`${card.name}: ${card.score} ${card.tier} -> ${score} ${tier} (${decision})`);
 if (DRY) process.exit(0);
 await update(slug, c => ({ ...c, ...upd }));
-await update("index", idx => ({ ...idx, cards: (idx.cards || []).map(c => (c.slug === slug ? { ...c, ...upd } : c)) }));
+await syncIndex([slug]);
 console.log("written");

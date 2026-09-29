@@ -114,8 +114,9 @@ def repo_subjects():
 
 
 def prod_subjects():
-    idx = json.loads(subprocess.run(["netlify", "blobs:get", "hvi-figures", "index"], cwd=ROOT,
-                                    capture_output=True, text=True, timeout=120).stdout or "{}")
+    # The figure index (64 shards) through Node; check=True: a failed read is an error, not no subjects.
+    idx = json.loads(subprocess.run(["node", str(ROOT / "scripts" / "index-sync.mjs"), "--dump"], cwd=ROOT, check=True,
+                                    capture_output=True, text=True, timeout=300).stdout)
     res = {}
     for c in idx.get("cards", []):
         if c.get("removed"):

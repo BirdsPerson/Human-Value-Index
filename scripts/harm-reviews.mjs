@@ -53,7 +53,7 @@ export function replaceSection(md, section) {
 async function main() {
   let index;
   if (process.argv.includes("--stdin")) index = JSON.parse(readFileSync(0, "utf8") || "{}");
-  else index = JSON.parse(execFileSync("netlify", ["blobs:get", "hvi-figures", "index"], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20 }));
+  else index = { cards: await (await import("./roster/prod.mjs")).figureIndex() };
   const cards = index?.cards || [];
   const section = sectionText(cards);
   const md = existsSync(REPORT) ? readFileSync(REPORT, "utf8") : "";

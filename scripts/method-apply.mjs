@@ -2,7 +2,7 @@
 // one, and logs it as the Department's change, not the subject's (Scott, 2026-09-28).
 //
 //   figures.js   formula rescore + scoreHistory entry (cause "method"), via calibration-lib
-//   hvi-figures  every production card + the index, conditional writes (etag)
+//   hvi-figures  every production card (etag), then its index entry re-derived (syncIndex)
 //   hvi-cases    each citizen gets a history entry {kind:"recalibration", cause:"method"}:
 //                not a visit, not capped, not an appeal. The score moves by exactly the change
 //                the new formula makes to their breakdown, so a held cap remainder is kept.
@@ -10,7 +10,7 @@
 //
 // Used by scripts/recalibrate.mjs (a one-off method change) and calibrate.mjs (an approved
 // weekly proposal).
-import { store } from "./roster/prod.mjs";
+import { store, syncIndex } from "./roster/prod.mjs";
 import * as L from "./calibration-lib.mjs";
 import { appendFigureHistory, publicHistory } from "../src/movement.js";
 
@@ -59,7 +59,7 @@ export async function applyToCards(prev, next, log, { dry = false } = {}) {
     if (!dry) await update(figs, key, c => ({ ...c, ...upd }));
   }
   if (!dry && changed.size) {
-    await update(figs, "index", idx => ({ ...idx, cards: (idx.cards || []).map(c => (changed.has(c.slug) ? { ...c, ...changed.get(c.slug).upd } : c)) }));
+    await syncIndex([...changed.keys()]);
   }
   return [...changed.values()].map(({ upd, ...r }) => r);
 }

@@ -512,6 +512,24 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
   // a non-owner stranger with no case is still refused
   r = await read(await post(refer, "/api/refer", { name: "Terence McKenna" }, { ip: "192.0.2.61" }));
   assert.ok(r.status === 200 || r.status === 403, "now on file, or refused: never scored for a stranger");
+
+  // The sharded index (netlify/lib/figure-index.js): referrals so far were written to the
+  // legacy blob and their shard; after the migration the same census comes from the shards.
+  const FI = await import("../netlify/lib/figure-index.js");
+  const { getStore } = await import("@netlify/blobs");
+  const fio = { figures: getStore({ name: "hvi-figures" }), index: getStore({ name: FI.INDEX_STORE }) };
+  const shardOf = slug => globalThis.__blobs.get(FI.INDEX_STORE).get(FI.shardKeyOf(slug))?.data.cards || [];
+  assert.ok(shardOf("terence-mckenna").some(c => c.slug === "terence-mckenna"), "a referral is indexed in its shard");
+  const { censusSubjects } = await import("../netlify/lib/census.js");
+  const before = (await censusSubjects({ strict: true })).map(s => s.slug).sort();
+  const m = await FI.migrate(fio);
+  assert.equal(m.ok, true, JSON.stringify(m));
+  assert.deepEqual((await censusSubjects({ strict: true })).map(s => s.slug).sort(), before, "the census is the same set from the shards");
+  const penShards = await read(await (await import("../netlify/functions/pen.js?shards")).default(new Request(HOST + "/api/pen")));
+  assert.ok(penShards.body.subjects.some(s => s.slug === "jack-johnson-musician"), "/api/pen reads the shards");
+  r = await read(await post(refer, "/api/refer", { name: "Jack Johnson", caseId }, { ip: "192.0.2.62" }));
+  assert.equal(r.body.status, "choose");
+  assert.deepEqual(r.body.candidates.find(c => c.title === "Jack Johnson").onFile, { score: 668, slug: "jack-johnson" }, "a lookup marks the figure on file from the shards");
 }
 
 

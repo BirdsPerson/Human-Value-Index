@@ -3,7 +3,7 @@
 //   node scripts/backfill-stature.mjs            # dry run
 //   node scripts/backfill-stature.mjs --apply    # writes production cards + index
 import { staturesOf } from "../netlify/lib/refer.js";
-import { store, figureIndex } from "./roster/prod.mjs";
+import { store, figureIndex, syncIndex } from "./roster/prod.mjs";
 
 const APPLY = process.argv.includes("--apply");
 const cards = await figureIndex();
@@ -25,8 +25,5 @@ for (const [slug, p] of Object.entries(plan)) {
     if ((await figs.setJSON(slug, { ...cur.data, ...p }, { onlyIfMatch: cur.etag })).modified) break;
   }
 }
-for (let attempt = 0; attempt < 8; attempt++) {
-  const cur = await figs.getWithMetadata("index", { type: "json" });
-  const next = (cur?.data?.cards || []).map(e => (plan[e.slug] ? { ...e, ...plan[e.slug] } : e));
-  if ((await figs.setJSON("index", { cards: next }, { onlyIfMatch: cur.etag })).modified) { console.log("index updated"); break; }
-}
+await syncIndex(Object.keys(plan));
+console.log("index updated");
