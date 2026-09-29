@@ -15,6 +15,7 @@ import {
   mergeRoster, tierCounts, histogram, tierMarkers, quadrantShare, categoryProfile, eraOf, domainOf,
   groupAverages, coverage, topBottom, scatterPoints, DIMS, mean,
 } from "./aggregate.js";
+import { regionOf, countryOf, representation } from "../origin.js";
 import "./analytics.css";
 
 // Marks: validated for the #0a0f0a surface (L 0.48-0.67, adjacent CVD >= 6 with direct
@@ -326,6 +327,31 @@ function Coverage({ subjects }) {
   );
 }
 
+// Birth region on file vs the planet: the bar is the file's share, the tick the world's.
+function Representation({ subjects }) {
+  const box = useRef(null); const tip = useTip(box);
+  const { rows, n, unknown } = representation(subjects);
+  const byWorld = [...rows].sort((a, b) => b.world - a.world);
+  const m = Math.max(...rows.map(r => Math.max(r.file, r.world)), 0.01);
+  const countries = groupAverages(subjects, countryOf, 1).rows.sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+  const worst = rows[0];
+  return (
+    <Section title="WHO IS ON FILE" meta={`N ${n}`}
+      caption={`BAR: SHARE OF THE FILE BY BIRTH REGION. TICK: SHARE OF THE PLANET (UN 2025). ${worst && worst.gap > 0 ? `${worst.region} IS ${pct(worst.world)} OF HUMANITY AND ${pct(worst.file)} OF THE FILE. THE DEPARTMENT IS CORRECTING ITS SAMPLE.` : "THE SAMPLE RESEMBLES THE PLANET. SUSPICIOUS."}`}>
+      <div ref={box} className="hvi-an-chart">
+        <HBars tip={tip} max={m} reference rows={byWorld.map(r => ({
+          label: `${r.region} (${r.count})`, value: r.file, ref: r.world, text: `${pct(r.file)} / ${pct(r.world)}`,
+          color: r.gap > 0.02 ? Q_COLOR.DISMISSED : MARK,
+          lines: [r.region, `FILE ${pct(r.file)} · ${r.count} SUBJECTS`, `PLANET ${pct(r.world)}`, r.gap > 0 ? `SHORT BY ${Math.round(r.gap * n)} FILES` : "OVER-SAMPLED"],
+        }))} />
+        {tip.node}
+      </div>
+      {unknown > 0 && <p className="hvi-an-note">{unknown} WITHOUT A BIRTHPLACE ON RECORD.</p>}
+      <Table caption="Subjects per birth country" head={["COUNTRY", "N", "MEAN"]} rows={countries.map(r => [r.label, r.n, r0(r.mean)])} />
+    </Section>
+  );
+}
+
 function Extremes({ subjects }) {
   const { top, bottom, n } = topBottom(subjects, 10);
   const List = ({ rows, title }) => (
@@ -376,6 +402,9 @@ export default function Analytics({ figures }) {
         caption="MEAN SCORE PER FIELD OF ENDEAVOUR. THE LINE IS THE MEAN OF EVERYONE." />
       <GroupChart subjects={subjects} title="VALUE BY ERA" keyFn={eraOf} noun="ERA"
         caption="MEAN SCORE BY BIRTH ERA. ANTIQUITY IS JUDGED ON WHAT SURVIVED OF IT." />
+      <Representation subjects={subjects} />
+      <GroupChart subjects={subjects} title="VALUE BY REGION" keyFn={regionOf} noun="REGION"
+        caption="MEAN SCORE BY BIRTH REGION. SMALL SAMPLES ARE NOISE, AND THE DEPARTMENT KNOWS IT." />
       <Coverage subjects={subjects} />
       <Extremes subjects={subjects} />
     </div>

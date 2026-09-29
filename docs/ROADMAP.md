@@ -69,6 +69,13 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Done
 
+- 2026-09-29 Birth country on every subject (Scott: "notice who we're leaving out"): `origin`
+  (ISO alpha-3, Wikidata birthplace country, else citizenship) on src/figures.js, every
+  production card (scripts/backfill-origins.mjs) and at creation (refer, roster engine).
+  Analytics: WHO IS ON FILE (region share vs UN 2025 population) + VALUE BY REGION. The
+  roster engine's Pantheon draws are weighted by each region's shortfall (src/origin.js
+  regionWeights); the Wikidata service/notorious pools are not steered yet. Check: check-origin.
+
 - 2026-09-29 Social tick drops withdrawn subjects (commit in git log, "Social tick: forget
   withdrawn subjects"): every advance forgets pairs, events, names and friend-pull boosts
   of anyone missing from the census; the tick reads the census strictly (a failed figure

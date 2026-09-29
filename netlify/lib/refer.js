@@ -1,5 +1,6 @@
 import { cube, validHarmReview } from "./intake.js";
 import { judged } from "../../src/cube.js";
+import { normOrigin } from "../../src/origin.js";
 // Referral logic: name validation, the Wikipedia gate, slugs and dedupe against the
 // figures already on file. The Wikipedia calls take an injectable fetch so
 // scripts/check-refer.mjs can run them offline.
@@ -225,6 +226,29 @@ async function humanFacts(qids, fetchImpl) {
   }
   return out;
 }
+// Birth country (ISO alpha-3) per Wikidata id: the birthplace's modern country, else
+// citizenship. Old states (USSR, Yugoslavia) are mapped to successors in src/origin.js.
+// Returns a Map; a failed lookup returns an empty Map (the card just goes without).
+export async function originsOf(qids, fetchImpl = fetch) {
+  const ids = [...new Set(qids)].filter(q => /^Q\d+$/.test(q || ""));
+  const out = new Map();
+  for (let i = 0; i < ids.length; i += 100) {
+    const values = ids.slice(i, i + 100).map(q => `wd:${q}`).join(" ");
+    const sparql = `SELECT ?p ?b ?c WHERE { VALUES ?p { ${values} } OPTIONAL { ?p wdt:P19/wdt:P17/wdt:P298 ?b } OPTIONAL { ?p wdt:P27/wdt:P298 ?c } }`;
+    try {
+      const data = await getJson(fetchImpl, `https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(sparql)}`, 8000);
+      const seen = {};
+      for (const r of data?.results?.bindings || []) {
+        const q = String(r.p?.value || "").split("/").pop();
+        const o = (seen[q] ??= { b: null, c: null });
+        o.b ??= normOrigin(r.b?.value); o.c ??= normOrigin(r.c?.value);
+      }
+      for (const [q, o] of Object.entries(seen)) if (o.b || o.c) out.set(q, o.b || o.c);
+    } catch (err) { console.error("origin lookup failed", err?.message || err); }
+  }
+  return out;
+}
+
 // SPARQL dateTime ("1878-03-31T00:00:00Z", "-0470-01-01T...") -> "1878" / "-470". Blank nodes -> null.
 export const yearOf = v => { const m = /^(-?)0*(\d+)-/.exec(String(v || "")); return m ? `${m[1]}${m[2]}` : null; };
 
@@ -347,5 +371,6 @@ export const publicFigure = c => ({
   places: Array.isArray(c.places) ? c.places.filter(p => typeof p === "string").slice(0, 4) : null,
   stratum: c.stratum ? { domain: c.stratum.domain ?? null, occupation: c.stratum.occupation ?? null } : null,
   description: typeof c.description === "string" ? c.description.slice(0, 120) : null,
+  origin: normOrigin(c.origin),
   scoreHistory: Array.isArray(c.scoreHistory) ? c.scoreHistory.slice(-40) : null,
 });

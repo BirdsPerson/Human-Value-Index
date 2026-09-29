@@ -5,7 +5,7 @@ import { callClaude, ScoreError } from "../lib/score.js";
 import { factCheck } from "../lib/factCheck.js";
 import { isCaseId, normalizeAssessment, computeScore, getTier, cube, harmGated, needsHarmReview } from "../lib/intake.js";
 import { slugify } from "../../src/figures.js";
-import { nameError, cleanName, resolveWikipedia, resolveTitle, resolveCandidates, needsChoice, qualifierFrom, matchesName, onFileByQid, fetchArticleText, onFileFigure, placeReferral, publicFigure, isHeadOfStateOrGov, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
+import { nameError, cleanName, resolveWikipedia, resolveTitle, resolveCandidates, needsChoice, qualifierFrom, matchesName, onFileByQid, fetchArticleText, onFileFigure, placeReferral, publicFigure, isHeadOfStateOrGov, originsOf, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
 import { displayName } from "../../src/figures.js";
 import { getCase, hitLimit, refundLimit, peekLimit, getFigure, createFigure, listFigures } from "../lib/store.js";
 import { EXCLUDED_LINE, excludedAmong } from "../lib/excluded.js";
@@ -229,9 +229,10 @@ export default async (req, context) => {
     // Leaders gated through state force are flagged for Scott's case-by-case review.
     const headOfState = harmGated(a.breakdown) && a.harm ? await isHeadOfStateOrGov(wiki.wikidata) : null;
     const harmReviewPending = needsHarmReview({ breakdown: a.breakdown, harm: a.harm, headOfState });
+    const origin = (await originsOf([wiki.wikidata])).get(wiki.wikidata) ?? null;
     const look = safeLook(typeof raw?.sprite_look === "string" ? raw.sprite_look.replace(/\s+/g, " ").trim().slice(0, MAX_LOOK) : "");
     const card = {
-      slug, name: stripped, qualifier, wikiTitle: wiki.title, wikidata: wiki.wikidata,
+      slug, name: stripped, qualifier, wikiTitle: wiki.title, wikidata: wiki.wikidata, origin,
       score, tier: getTier(score), ...cube(a.breakdown), breakdown: a.breakdown, confidence: null, verdict: a.verdict,
       verdictStatus, living: wiki.living, born: wiki.born, died: wiki.died,
       factCheck: fc ? { checked: fc.checked, removed: fc.removed, regenerated: Boolean(fc.regenerated), at: new Date().toISOString() } : null,

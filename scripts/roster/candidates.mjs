@@ -14,6 +14,7 @@
 import { EXCLUDED_QIDS, excludedAmong } from "../../netlify/lib/excluded.js";
 import { classifySummary } from "../../netlify/lib/refer.js";
 import { FIGURE_QIDS } from "../../netlify/lib/refer.js";
+import { pickRegion, countriesIn } from "../../src/origin.js";
 
 const UA = "HumanValueIndex-roster/1.0 (https://humanvalueindex.com; staglias@me.com)";
 
@@ -66,15 +67,17 @@ const shuffle = (a, rnd = Math.random) => { for (let i = a.length - 1; i > 0; i-
 
 // ---- Pantheon ---------------------------------------------------------------------------
 const PANTHEON = "https://api.pantheon.world";
-function pantheonQuery(occs, [lo, hi], [ya, yb]) {
-  const occ = occs.map(o => `"${o}"`).join(",");
-  return `occupation=in.(${encodeURIComponent(occ)})&l=gte.${lo}&l=lte.${hi}&birthyear=gte.${ya}&birthyear=lt.${yb}`;
+function pantheonQuery(occs, [lo, hi], [ya, yb], countries) {
+  const list = xs => encodeURIComponent(xs.map(o => `"${o}"`).join(","));
+  const where = countries?.length ? `&bplace_country=in.(${list(countries)})` : "";
+  return `occupation=in.(${list(occs)})&l=gte.${lo}&l=lte.${hi}&birthyear=gte.${ya}&birthyear=lt.${yb}${where}`;
 }
 
 // Up to `k` random people from one domain x era x fame band, with their Wikidata ids.
-export async function pantheonSample(domain, era, band, k = 12) {
+// `countries` (Pantheon bplace_country names) narrows the draw to a birth region.
+export async function pantheonSample(domain, era, band, k = 12, countries = null) {
   const [, ya, yb] = ERAS.find(([e]) => e === era) || ERAS[ERAS.length - 1];
-  const q = pantheonQuery(DOMAINS[domain], band, [ya, yb]);
+  const q = pantheonQuery(DOMAINS[domain], band, [ya, yb], countries);
   const head = await fetch(`${PANTHEON}/person_ranks?${q}&select=id&limit=1`, { headers: { Prefer: "count=exact", "User-Agent": UA } });
   const total = Number((head.headers.get("content-range") || "").split("/")[1] || 0);
   if (!total) return [];
@@ -135,7 +138,9 @@ const bornYear = born => { const m = /^(-?\d+)/.exec(String(born || "")); return
 
 // ---- the cohort -----------------------------------------------------------------------
 // taken: Set of Wikidata ids already on file (the 62 + production cards) plus this run's.
-export async function buildCohort(n, taken = new Set(), { log = () => {} } = {}) {
+// regions: weights per birth region (src/origin.js regionWeights) steering the Pantheon
+// draws toward where the file is thinnest; null draws from anywhere.
+export async function buildCohort(n, taken = new Set(), { log = () => {}, regions = null } = {}) {
   for (const q of Object.values(FIGURE_QIDS)) taken.add(q);
   // Founders and prophets of the world's faiths are never assessed (netlify/lib/excluded.js).
   for (const q of Object.keys(EXCLUDED_QIDS)) taken.add(q);
@@ -163,7 +168,8 @@ export async function buildCohort(n, taken = new Set(), { log = () => {} } = {})
     while (out.filter(c => c.stratum.pool === pool).length < slots[pool] && tries++ < slots[pool] * 6) {
       const domain = domains[Math.floor(Math.random() * domains.length)];
       const era = eras[Math.floor(Math.random() * eras.length)];
-      await take(pool, "pantheon", () => pantheonSample(domain, era, band), row => ({ domain, occupation: row.occupation }));
+      const region = regions ? pickRegion(regions) : null;
+      await take(pool, "pantheon", () => pantheonSample(domain, era, band, 12, region && countriesIn(region)), row => ({ domain, occupation: row.occupation, region }));
     }
   }
   for (const pool of ["service", "notorious"]) {
@@ -186,6 +192,7 @@ export async function buildCohort(n, taken = new Set(), { log = () => {} } = {})
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const n = Number(process.argv[2] || 16);
-  const cohort = await buildCohort(n, new Set(), { log: m => console.error(m) });
+  const regions = process.argv[3] ? { [process.argv[3]]: 1 } : null;   // e.g. "SOUTH ASIA"
+  const cohort = await buildCohort(n, new Set(), { log: m => console.error(m), regions });
   for (const c of cohort) console.log(`${c.stratum.pool.padEnd(9)} ${c.stratum.era.padEnd(12)} ${String(c.stratum.domain).padEnd(9)} ${c.title}  (${c.wikidata}, ${c.born || "?"}–${c.died || ""}) ${c.description}`);
 }

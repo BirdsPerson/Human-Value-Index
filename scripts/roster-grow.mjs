@@ -30,11 +30,13 @@ import { PUBLIC_RECORD, REFERRAL_ADDENDUM, ENGINE_ADDENDUM, PLACES, directiveFor
 import { parseModelJson } from "../netlify/lib/score.js";
 import { normalizeAssessment, computeScore, getTier, cube, medianSeverity, harmGated, needsHarmReview } from "../netlify/lib/intake.js";
 import { FACT_CHECK_SYSTEM, SOURCE_MAX, summarizeFactCheck, factCheckUser } from "../netlify/lib/factCheck.js";
-import { fetchArticleText, placeReferral, resolveCandidates, needsChoice, qualifierFrom, isHeadOfStateOrGov } from "../netlify/lib/refer.js";
+import { fetchArticleText, placeReferral, resolveCandidates, needsChoice, qualifierFrom, isHeadOfStateOrGov, originsOf } from "../netlify/lib/refer.js";
 import { medianBreakdown, distance, dispersion, RUNS } from "./rescore-lib.mjs";
 import { buildCohort } from "./roster/candidates.mjs";
 import { createBatch, getBatch, batchResults, resultText, resultUsage, estimateDollars, actualDollars, approxTokens } from "./roster/batch.mjs";
-import { prodQids, getCard, createCard } from "./roster/prod.mjs";
+import { prodQids, getCard, createCard, figureIndex } from "./roster/prod.mjs";
+import { regionWeights } from "../src/origin.js";
+import { FAMOUS_FIGURES } from "../src/figures.js";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const STATE_DIR = `${homedir()}/.cache/hvi-roster`;
@@ -92,9 +94,16 @@ export function planCredits(n, failedCells = 0, max = MAX_CREDITS) {
 }
 
 // ---- stages --------------------------------------------------------------------------
+// Birth-region weights from everything on file: the run draws where the file is thinnest.
+async function steering() {
+  const w = regionWeights([...FAMOUS_FIGURES, ...(await figureIndex())]);
+  log(`region steering: ${Object.entries(w).filter(([, v]) => v > 0).map(([r, v]) => `${r} ${v.toFixed(2)}`).join(", ")}`);
+  return w;
+}
+
 async function stageCandidates(run) {
   const taken = await prodQids();
-  const raw = await buildCohort(run.n, taken, { log });
+  const raw = await buildCohort(run.n, taken, { log, regions: await steering() });
   const cohort = fitDollars(raw);
   if (cohort.length < raw.length) log(`budget: cohort trimmed ${raw.length} -> ${cohort.length} to stay under $${MAX_DOLLARS}`);
   if (!cohort.length) throw new Error("budget allows no one this run");
@@ -262,8 +271,9 @@ async function stageStore(run) {
       s.qualifier = (k.ok && needsChoice(k.candidates)) || /\([^)]+\)\s*$/.test(c.title) ? qualifierFrom(c.title, c.description) : null;
       saveState(state);
     }
+    if (s.origin === undefined) { s.origin = (await originsOf([c.wikidata])).get(c.wikidata) ?? null; saveState(state); }
     const card = {
-      slug: s.slug, name: base, qualifier: s.qualifier, wikiTitle: c.title, wikidata: c.wikidata,
+      slug: s.slug, name: base, qualifier: s.qualifier, wikiTitle: c.title, wikidata: c.wikidata, origin: s.origin,
       score, tier: getTier(score), ...cube(s.breakdown), breakdown: s.breakdown, confidence: null, verdict: s.verdict,
       verdictStatus: s.verdictStatus || "withheld", living: c.living, born: c.born, died: c.died,
       factCheck: s.factCheck || null, noDangle: Boolean(s.noDangle), flags: s.flags, commendations: s.commendations,
@@ -317,7 +327,7 @@ async function main() {
   state = loadState();
   if (args.includes("--status")) { console.log(JSON.stringify(state.runs.map(r => ({ id: r.id, stage: r.stage, n: r.cohort?.length, stored: r.stored?.length, cost: r.cost })), null, 1)); return; }
   if (args.includes("--dry-run")) {
-    const cohort = await buildCohort(Number(arg("--n", 16)), await prodQids(), { log });
+    const cohort = await buildCohort(Number(arg("--n", 16)), await prodQids(), { log, regions: await steering() });
     console.log(`${cohort.length} candidates, est $${estimateRunDollars(cohort).toFixed(3)}, fits $${MAX_DOLLARS}: ${fitDollars(cohort).length}; credits plan ${JSON.stringify(planCredits(cohort.length))}`);
     for (const c of cohort) console.log(`  ${c.stratum.pool.padEnd(9)} ${c.stratum.era.padEnd(12)} ${c.title}`);
     return;
