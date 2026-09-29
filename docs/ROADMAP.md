@@ -39,6 +39,15 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
         (eb-command-center/edit/qvc_hosts.md), cameras, crew, an ON AIR light.
       - The Arcade (b2) is part of this pass. Later candidates: Brainforest (analytics firm
         office), the Unfinished Business stream booth, a pizza place for the road doc.
+   b4. **DEBATE HALL** (Scott 2026-09-29; later, the bridge to CivicGate). Build Debatr
+      (~/projects/debater: card engine, JUDGING-ENGINE, SCORING; ~/projects/debater-private
+      ARENA.md is the design) into the city. Stage 1 PvE: the player debates a figure on a
+      resolution in structured rounds (opening/rebuttal/cross/close); the card engine grades
+      factual claims live (VERIFIED/DISPUTED/DEBUNKED); an audience of subjects in the hall
+      shifts pre-poll -> post-poll (minds-moved scoring). Opponents: dead figures only
+      (content rule: the living never speak) or the Overlord itself. Results feed a debate
+      rating on the file. Stage 2 PvP: live player-vs-player debates, audience = players,
+      judge reliability weighting per ARENA.md. That stage is the CivicGate rehearsal.
    c. **The Overlord tower (item 11) as the admin building:** Intake, Appeals desk, Review
       Board, Records, Calibration Lab, Holding Cells (item 12), and THE PEOPLE'S PETITION
       console = the People's Vote exactly as designed in docs/story/STORYLINE_TOURNAMENT.md
