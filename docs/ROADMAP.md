@@ -17,6 +17,15 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       outings; odd cross-group pairs logged as gossip. Fallout Shelter incidents: a fire,
       reactor overload, vat flood, power cut; deterministic from the machine clock; nearby
       subjects with fitting jobs run to it and work it; logged on the PA and the Ledger.
+   b2. **The Arcade** (Scott 2026-09-29; built with b; NOT named "Iridescent" yet, later).
+      A building on the Strip: a cabinet floor and a game room. Cabinets = every live game in
+      ../iridescent-site/works.json (division games; JETSAM! play-jetsam.netlify.app and
+      ANAMNESIS anamnesis-eb.netlify.app are live and embeddable), synced by a script so each
+      new game appears automatically; in-development games stand as OUT OF ORDER cabinets.
+      Tap a cabinet: play it in a CRT frame overlay. Game room: chess, pool, cards; subjects
+      visiting play each other (deterministic results from the sim, rivalries and friendships
+      feed social.js, results on the Ledger/PA). Player vs a figure at chess (chess.js rules +
+      a small engine whose strength follows the figure's competence), result on the file.
    c. **The Overlord tower (item 11) as the admin building:** Intake, Appeals desk, Review
       Board, Records, Calibration Lab, Holding Cells (item 12), and THE PEOPLE'S PETITION
       console = the People's Vote exactly as designed in docs/story/STORYLINE_TOURNAMENT.md
