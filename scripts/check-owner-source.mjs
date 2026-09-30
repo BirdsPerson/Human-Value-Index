@@ -75,7 +75,7 @@ assert.match(rec, /^== SOURCE 1: https:\/\/a\.example\/1 \(T\) ==/);
 assert.ok(rec.length < 13000, "each source is capped for the scorer");
 
 // ---- prompt rules ---------------------------------------------------------------------
-for (const phrase of ["Use ONLY the SOURCES", "Do not use your own knowledge of this person", "The record is thin", "confidence under 35 and is then unassessed", "thin public record", "\"pending_candidate\"", "\"qualifier\"", "\"country\"", "Never guess skin tone"])
+for (const phrase of ["Use ONLY the SOURCES", "Do not use your own knowledge of this person", "The record is thin", "confidence under 35 and is then unassessed", "thin public record", "\"pending_candidate\"", "\"qualifier\"", "\"country\"", "Never guess skin tone", "\"confidence\": REQUIRED here"])
   assert.ok(OWNER_SOURCE_ADDENDUM.includes(phrase), `OWNER_SOURCE_ADDENDUM lost: ${phrase}`);
 // Election care is a living-subject rule, so it reaches every scorer (Wikipedia ones too).
 for (const phrase of ["CANDIDATE IN A PENDING ELECTION", "strictly factually", "No endorsement or opposition framing", "no prediction of the result", "no characterization of the campaign", "The Department does not vote."])

@@ -100,6 +100,7 @@ The Department's owner added this person: a real, living public official with no
 - Election care: if the SOURCES show the person is a current candidate in an election not yet held, the CANDIDATE IN A PENDING ELECTION rule above applies in full.
 
 Add these fields to the JSON:
+  "confidence": REQUIRED here: { "care": n, ... every dimension }, 0-100, how much evidence the SOURCES give for each dimension. Under 35 = unassessed. Never omit it.
   "is_human_public_figure": true only if the SOURCES describe a real, individual human who holds or held a public office or public role. false otherwise.
   "decline": null normally. "minor" if the person is under 18. "victim" if the SOURCES are chiefly about a crime or disaster done to them. "pending_case" if the SOURCES are chiefly about a criminal case against them that has not reached a verdict.
   "no_dangle": false unless the SOURCES state the person died by suicide, hanging, strangulation or execution.
