@@ -1189,3 +1189,68 @@ the sectors, the summary, the find index and the civic fold) with `expansion: tr
   people at their business (sunbathers on towels, swimmers to the waist, rods over the pier's
   rails, riders on the chairs). The mountain is painted in cells back to front with everything
   on it, so at every quarter turn a ridge hides what is behind it.
+
+## The Prefects (2026-09-30)
+
+Scott: "each district will have an elected representative, polarization will follow... the Overlord
+puts in place a representative of its own for each district, tailored to the specific tastes and
+population of each. Not the same dude over and over." Twelve DEPARTMENT PREFECTS, one per district
+(the Coast and the Heights included): machine constructs of the Overlord, never people, each with its
+own designation, look, temperament and voice. Code: `src/city/prefectData.js` (the twelve: temper,
+look, 14 lines each), `src/city/prefects.js` (lean, directive, clash, legitimacy, patrol; pure),
+`src/city/prefectDraw.js` (the procedural sprites, the iso drawing), `src/city/PrefectPanel.jsx`
+(district rows, the PREFECT card, `#city/prefects` = `#prefects`). Hooks: `civic.js` (the fold),
+`CityIso.jsx` (patrol, tap, tags), `CivicPanel.jsx`, `City.jsx` (page, card host, PA), `App.jsx`
+(the `#prefects` route). Check: `scripts/check-prefects.mjs`.
+
+| District | Designation | Style |
+|---|---|---|
+| Finance | FIN-01 THE AUDITOR | ledger-visor; strict on paper, lenient on capital |
+| The Strip | STR-04 THE PIT BOSS | dealer's eyeshade, chips; permissive after dark |
+| Campus | CAM-02 THE PROCTOR | mortarboard, gown, clipboard; silent, severe |
+| The Works | WRK-09 THE FOREMAN | hard-hat drone on treads, wrench; strict, shift-bound |
+| The Coast | CST-11 THE LIFEGUARD SENTINEL | periscope head, buoy; lenient by day, the sea closes at dusk |
+| The Heights | HTS-12 THE SKI PATROL | helmet and goggles, pole; orderly, controlled descent |
+| The Commons | COM-08 THE CHAPLAIN | hood, halo, lantern, robe; gentle, persistent, every door |
+| The Archive | ARC-07 THE LIBRARIAN | card-catalogue head, stamp; quiet, exacting |
+| The Arts Quarter | ART-03 THE CURATOR | picture-frame head, velvet rope; permissive but petty |
+| The Arena | ARN-05 THE REFEREE UNIT | siren dome, stripes, raised yellow card; by the book |
+| The Sprawl | SPR-10 THE HOUSING OFFICER | intercom-panel head, keys; door to door |
+| Dept HQ | HQ-00 THE AIDE | black monolith head, earpiece, tablet; loyal, correct |
+
+- **The lean** (one axis, PEOPLE -100 <-> ORDER +100). A subject: ORDER = threat, utility, rigidity
+  (100 - adaptability) and an ordering record (military, law, finance, business, royalty,
+  management, crime); PEOPLE = care, alignment and a caring record (activism, care, labour,
+  medicine, education, farming, philosophy, the arts). Citizens: competence over warmth. A
+  councillor (`seat.lean`, held seats only) = LEAN_GAIN (2.2) x (half its own lean + half the mean
+  lean of its district's workforce that would back it, `compat >= 0.05`), each less the city's
+  mean. Players' ballots are secret and carry no values, so they count through the holder; a player
+  citizen holding a seat leans by its own file and its backers.
+- **Polarization** = |lean| + the mood past the extremes (|raw| - 45), 0..100.
+- **The directive**, once per machine day: PERMITS (control -2), DECREES (0), WELLNESS CHECKS (1),
+  PATROLS (2), INSPECTIONS (2), CURFEW (3). Target C = temper strictness - lean/40 (it
+  COUNTERBALANCES: a PEOPLE council draws order, an ORDER council draws festivals) + the mood's pull
+  (seething: +1.6 clamp or -2 placate by temper; restless +-0.8; placated: +1 probe or -0.8 relax),
+  clamped -2..3. Chosen: the nearest control, its two preferred instruments favoured (0.45, 0.25),
+  a hashed day's whim (0..0.35). Intensity 1..5 = 1 + round(|C| + polarization/50). Input mood =
+  today's raw before the prefect's own factor, so the block stays recomputable from one plan.
+- **Clash** = |lean|/100 x the directive's control where it opposes the lean x intensity x 6,
+  0..100; vacant seat: none. **Mood**: new factor `prefect` = directive weight (curfew -4 ... permits
+  +3, scaled by intensity) - clash/5, -25..6. **Legitimacy** raw = 50 + 12 (a council sits) +
+  mood/4 - 0.8 clash - polarization/5 - 5 (heavy hand), 0..100, smoothed 0.6 today + 0.4
+  yesterday's raw; SANCTIONED 70 / ACCEPTED 50 / QUESTIONED 30 / CONTESTED 15 / REPUDIATED. The seed
+  of the unrest arc (ROADMAP e); nothing riots yet.
+- **In the record**: `summary.civic.districts[id].prefect = {directive, intensity, clash, polar,
+  legit: {s, raw, was}, was (yesterday's directive)}` (~110 bytes a district; 917 B/district at 5,000
+  subjects with every seat held, fold 76 ms), `seat.lean` on held seats.
+- **The patrol** (every viewer the same): one stop per 0.75 machine hours, walked along the streets
+  (`sim.footpath`) at 0.8 walking pace, then standing and gesturing via the rig. Stops: while the
+  Council sits, all twelve in a row before THE ASSEMBLY; a game in the district, the ground;
+  otherwise the busiest building of the district that hour (`summary.b`), the directive's haunts
+  preferred (homes for curfew / wellness, workplaces for inspections, leisure for permits), on the
+  kerb of the building's most open side. Tags (the designation) and speech bubbles (its own lines)
+  draw over everything so a prefect behind a building is still found; its lens glows at night. Tap
+  opens the PREFECT card (designation, jurisdiction, style, today's temper, directive and decree,
+  council v prefect, legitimacy, record of acts from the summaries held, patrol lines).
+- **Speech**: they are machines, not people, so they speak freely in the Overlord's register; each
+  line ends in its own sign-off (RECONCILED. / SHHH. / PLAY ON. ...). The PA reads their decrees.

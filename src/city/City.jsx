@@ -26,6 +26,8 @@ import { readCaseId } from "../caseFile.jsx";
 import CityFind from "./CityFind.jsx";
 import { CTL, controlBuildingId } from "./control.js";   // DRIVE YOURSELF
 import FunnelHost from "./FunnelOverlay.jsx";
+import { PrefectHost, PrefectsPage } from "./PrefectPanel.jsx";   // THE PREFECTS
+import { prefectPaLines } from "./prefects.js";
 import { buildIndex, bySlug, findHref } from "./find.js";
 import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
@@ -53,6 +55,8 @@ export default function City({ route }) {
   const districtId = parsed.districtId && DISTRICT[parsed.districtId] ? parsed.districtId : null;
   // #city/league: the league's table, fixtures and results over the city (CivicPanel.jsx)
   const leaguePage = parsed.districtId === "league";
+  // #city/prefects (and #prefects): the twelve prefects and their directives (PrefectPanel.jsx)
+  const prefectsPage = parsed.districtId === "prefects" || /^#prefects/.test(route || "");
   const b = districtId && parsed.buildingId && BUILDING[parsed.buildingId]?.districtId === districtId ? BUILDING[parsed.buildingId] : null;
   // HQ runs its own simulation (the Holding Pen): it has floors, but no view of them to focus.
   const floor = b && b.id !== "hq" && parsed.floor != null && b.floors[parsed.floor] ? parsed.floor : null;
@@ -229,6 +233,7 @@ export default function City({ route }) {
     const record = civicPaLines(civicOf(clock.day), here);
     if (civic.length && k % 5 === 3 && (!here || here === "commons")) setPa(civic[Math.floor(k / 5) % civic.length]);
     else if (record.length && k % 7 === 6) setPa(record[Math.floor(k / 7) % record.length]);
+    else if (k % 6 === 4 && prefectPaLines(civicOf(clock.day), here).length) { const pl = prefectPaLines(civicOf(clock.day), here); setPa(pl[Math.floor(k / 6) % pl.length]); }
     else if (games.length && k % 4 === 1) { const g = games[Math.floor(k / 4) % games.length]; setPa(`${GAME_VENUE[g.placeId]}, ${g.name}: ${g.status}. ${SCORE_TAG[g.kind]}`); }
     else if (!here && gossip.length && k % 3 === 2) setPa(gossip[Math.floor(k / 3) % Math.min(gossip.length, 12)].text);
     else setPa(paLine(st, k, evs.length ? evs[evs.length - 1].text : null));
@@ -301,6 +306,7 @@ export default function City({ route }) {
   const crumbs = [{ label: "CITY", go: () => go(null) }];
   if (d) crumbs.push({ label: d.name, go: () => go(d.id) });
   if (leaguePage) crumbs.push({ label: "THE LEAGUE" });
+  if (prefectsPage) crumbs.push({ label: "THE PREFECTS" });
   if (b) crumbs.push({ label: b.name, go: () => goBuilding(d.id, b.id) });
   if (b && floor != null) { const f = b.floors[floor]; crumbs.push({ label: `${f.code} ${f.name}` }); }
   const three = !d && mode === "stack";
@@ -326,12 +332,13 @@ export default function City({ route }) {
         find={<CityFind index={index} remote={sectors} onPick={onPick} self={selfEntry} caseId={caseId} />} />
       <div className="hvi-city-bar">
         <Breadcrumb crumbs={crumbs} />
-        {!d && !leaguePage && <ViewToggle mode={mode} onChange={setMode} />}
+        {!d && !leaguePage && !prefectsPage && <ViewToggle mode={mode} onChange={setMode} />}
       </div>
       {findSlug && !findEntry && !findPending && census !== "pending" && (
         <div className="hvi-city-note" role="status">NO SUBJECT ON FILE AS "{findSlug.toUpperCase()}". THE DEPARTMENT HAS CHECKED. TWICE.</div>
       )}
       {leaguePage && <LeaguePanel full />}
+      {prefectsPage && <PrefectsPage />}
       <Frame box title={b ? b.name : d ? d.name : iso ? "THE SUBSTRATE" : street ? "THE SUBSTRATE // STREET LEVEL" : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
         meta={b ? "CROSS-SECTION" : d ? "INTERIOR" : iso ? "DRAG // PINCH // TURN // TAP A BUILDING" : street ? "WALK // TURN // ENTER A DOOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} flush>
         {b
@@ -376,6 +383,7 @@ export default function City({ route }) {
       </ButtonRow>
       {cardEl}
       <FunnelHost />
+      <PrefectHost />
     </div>
   );
 }

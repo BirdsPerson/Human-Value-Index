@@ -139,7 +139,7 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       housing quality by earnings (penthouse vs bunk) -> a dissatisfaction meter per
       district (low tier, low wage, crowding) -> unrest events (strikes, sit-ins, a
       "revolution" in a sector) -> enforcement. Open question for the story: who runs the
-      police? The Overlord's WARDENS, a human CIVIC WATCH, or both, clashing. Candidate
+      police? The Overlord's WARDENS, a human CIVIC WATCH, or both, clashing. [2026-09-30 first step: THE PREFECTS, one machine construct of the Overlord per district, a daily directive that counterbalances the elected councillor's PEOPLE <-> ORDER lean, clashes feeding mood and a per-district LEGITIMACY meter (docs/CITY_SPEC.md "The Prefects"). Next: low legitimacy -> unrest events; WARDENS as the prefects' force.] Candidate
       Season 2 spine after UNRATIFIED. Guardrails: crowds are anonymous subjects; named
       living people never shown rioting or doing violence; cold satire, non-graphic.
 

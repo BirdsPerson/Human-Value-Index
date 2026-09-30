@@ -26,6 +26,7 @@
 import * as SIM from "./sim.js";
 import { displayName } from "../figures.js";
 import { seatsOn } from "./councilCalendar.js";
+import { councilLeans, prefectFold } from "./prefects.js";   // THE PREFECTS: directive, clash, legitimacy
 
 export const CIVIC_V = 1;
 // The league is the Loop's ten districts (its season was drawn before the city grew outward);
@@ -413,10 +414,15 @@ export function civicFold(plan, people, prev = null) {
   const stats = dayStats(plan, people);
   const lot = assemblyOn(day);
   const held = seatsOn(day, SEATS);
+  const leans = councilLeans(held, people);   // PEOPLE <-> ORDER, per held seat (prefects.js)
   const districts = {};
   for (const id of ALL) {
     const pos = standing.indexOf(id), fm = form(id);
     const f = factors(stats[id], [...fm].reduce((n, r) => n + (r === "W" ? 3 : r === "L" ? -3 : 0), 0), pos, lot, id);
+    // THE PREFECT (prefects.js): today's directive from the mood before its own factor and the
+    // council's lean; the clash and the directive's weight become the mood's `prefect` factor.
+    const pf = prefectFold(id, day, clamp(sum(f), -100, 100), held[id] ? leans[id] ?? 0 : null, prev?.v === CIVIC_V ? prev.districts?.[id]?.prefect : null);
+    f.prefect = pf.factor;
     const raw = clamp(sum(f), -100, 100);
     const was = prev?.v === CIVIC_V && Number.isFinite(prev.districts?.[id]?.mood?.raw) ? prev.districts[id].mood.raw : raw;
     const s = Math.round(0.6 * raw + 0.4 * was) || 0;   // no -0: the block is plain JSON
@@ -427,8 +433,9 @@ export function civicFold(plan, people, prev = null) {
       // the seat: nobody holds it until the first election. approval follows the mood.
       // the seat: nobody holds it until the first election is decided and sworn in (council.js).
       seat: held[id]
-        ? { holder: held[id].holder, name: held[id].name, term: held[id].term, cycle: held[id].cycle, by: held[id].by, approval: s, status: "HELD", acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] }
+        ? { holder: held[id].holder, name: held[id].name, term: held[id].term, cycle: held[id].cycle, by: held[id].by, approval: s, status: "HELD", lean: leans[id] ?? 0, acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] }
         : { holder: null, term: null, approval: s, status: "VACANT", acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] },
+      prefect: pf.block,
     };
   }
   const strip = (m) => ({ k: m.k, day: m.day, placeId: m.placeId, from: m.from, to: m.to, kind: m.kind, stage: m.stage, sides: m.sides, score: m.score, ...(m.tiebreak ? { tiebreak: m.tiebreak } : {}) });

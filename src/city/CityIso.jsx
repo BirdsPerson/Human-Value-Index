@@ -7,7 +7,9 @@ import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FONT } from "./cityUi.jsx";
 import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4, LOD_NEAR, LOD_MID, BOUNDS } from "./iso.js";
-import { wantSectors } from "./planClient.js";
+import { wantSectors, summaryOf } from "./planClient.js";
+import { patrolsAt } from "./prefects.js";   // THE PREFECTS: the Overlord's own, on patrol
+import { drawPrefectIso, drawPrefectTops, openPrefect } from "./prefectDraw.js";
 import { loopPieces, trainPoses, carCorners, carBox, stationGeo, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
 import { casinoHits } from "../casino/cityRooms.js";
@@ -649,6 +651,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         const [u, v] = rot(x, y, r);
         out.push({ kind: "p", s: o.s, u, v, h, box: { x0: u, y0: v, x1: u, y1: v } });
       }
+      // THE PREFECTS (prefects.js): one per district, walking the clock's patrol from the day's summary
+      const sum = summaryOf(Math.floor(mt / 24) + 1);
+      for (const pf of patrolsAt(mt, sum, sum?.civic)) {
+        const h = onTerrain(pf.x, pf.y) ? terrainH(pf.x, pf.y) : 0, [u, v] = rot(pf.x, pf.y, r);
+        out.push({ kind: "prefect", pf, u, v, h, civic: sum?.civic?.districts?.[pf.id] || null, box: { x0: u, y0: v, x1: u, y1: v } });
+      }
       ctl.movers(out, r);   // DRIVE YOURSELF: who is within reach, and the avatar itself
       return out;
     }
@@ -782,6 +790,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     }
     function drawMover(m, lod) {
       if (m.kind === "p") drawPerson(m, lod);
+      else if (m.kind === "prefect") {
+        const [x, y] = P(m.u, m.v, m.h);
+        if (x < -60 || x > V.cssW + 60 || y < -80 || y > V.cssH + 120) return;
+        const [ax] = Q(m.pf.x + m.pf.dx, m.pf.y + m.pf.dy, m.h);
+        drawPrefectIso({ ctx, z: V.cam.z, storey: STOREY, lod, t: V.reduced ? 0 : performance.now() / 1000, night: nightAt(((V.mt % 24) + 24) % 24), hits: V.hits, font: FONT, tops: V.pfTops || (V.pfTops = []) }, { pf: m.pf, x, y, face: ax > x + 0.01 ? 1 : 0 }, m.civic);
+      }
       else if (m.kind === "ctl") ctl.drawMover(m, lod);
       else if (m.kind === "pod") drawPod(coastG(), m.s, m.x, m.y, m.d, m.spur, lod, nightAt(((V.mt % 24) + 24) % 24), V.hits);
       else drawCar(m, lod);
@@ -1030,6 +1044,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         for (const m of slots.get(k) || []) drawMover(m, lod);
       }
       drawLabels();
+      drawPrefectTops(ctx, V.pfTops, FONT); V.pfTops = [];   // THE PREFECTS: designations over everything
       ctl.overlay();   // DRIVE YOURSELF: YOU
       // compass
       ctx.font = `11px ${FONT}`; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillStyle = "rgba(107,154,124,0.8)";
@@ -1197,6 +1212,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         const h = V.hits[i];
         if (h.panel) continue;
         if (h.kind === "p" && inBox(h)) { onOpenRef.current?.(h.s); return; }
+        if (h.kind === "prefect" && inBox(h)) { openPrefect(h.id); return; }
         if (h.kind === "b" && inPoly(x, y, h.hull)) { unfollow(); select(V.sel === h.id ? null : h.id); return; }
       }
       if (V.sel) { unfollow(); select(null); }
