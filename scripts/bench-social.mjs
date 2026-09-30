@@ -27,8 +27,8 @@ if (argv[0] !== "--one") {
     try { rows.push(JSON.parse(line)); } catch { rows.push({ N, error: r.signal ? `killed (${r.signal})` : (r.stderr || "").slice(-400) }); }
     console.error(JSON.stringify(rows[rows.length - 1]));
   }
-  console.table(rows.map(({ N, coldS, steadySimS, steadyF1S, steadyF2S, x9LambdaS, pairs, friends, friendsPerSubject, withFriend, maxDegree, stateKB, apiSocialKB, shardMaxKB }) =>
-    ({ N, coldS, steadySimS, steadyF1S, steadyF2S, x9LambdaS, pairs, friends, friendsPerSubject, withFriend, maxDegree, stateKB, apiSocialKB, shardMaxKB })));
+  console.table(rows.map(({ N, coldS, steadySimS, steadyF1S, steadyF2S, x9LambdaS, pairs, friends, friendsPerSubject, perOnFile, perEngine, withFriend, maxDegree, stateKB, apiSocialKB, shardMaxKB }) =>
+    ({ N, coldS, steadySimS, steadyF1S, steadyF2S, x9LambdaS, pairs, friends, friendsPerSubject, perOnFile, perEngine, withFriend, maxDegree, stateKB, apiSocialKB, shardMaxKB })));
   console.log(JSON.stringify(rows));
   process.exit(0);
 }
@@ -100,13 +100,20 @@ const pairs = st.buckets ? st.buckets.flatMap(b => Object.entries(b.pairs)) : Ob
 const deg = new Map(), fdeg = new Map();
 for (const [pk, rec] of pairs) for (const k of pk.split("|")) { deg.set(k, (deg.get(k) || 0) + 1); if (rec[0] >= 30) fdeg.set(k, (fdeg.get(k) || 0) + 1); }
 const friends = pairs.filter(([, r]) => r[0] >= 30).length;
+// by class: the figures on file carry full breakdowns and befriend far more readily than
+// engine figures and citizens, so the roster's mix moves the average; compare within a class.
+const cls = new Map(fullRoster(census).map(x => [SIM.keyOf(x), x.kind === "citizen" ? "citizen" : x.engine ? "engine" : "onFile"]));
+const perClass = {}, sizes = {};
+for (const c of cls.values()) sizes[c] = (sizes[c] || 0) + 1;
+for (const [pk, rec] of pairs) if (rec[0] >= 30) for (const k of pk.split("|")) perClass[cls.get(k)] = (perClass[cls.get(k)] || 0) + 1;
 const pub = JSON.parse(mem.pub);
 const { bySubject, ...city } = pub;
 const api = JSON.stringify({ ready: true, ...city });
 console.log(JSON.stringify({
   N: n, coldS: s(coldMs), steadySimS: s(steadySim), steadyF1S: s(steadyF1), steadyF2S: steadyF2 == null ? null : s(steadyF2),
   x9LambdaS: s((steadyF2 ?? steadyF1) * 9), steadyHours: h1 - h0,
-  pairs: pairs.length, friends, friendsPerSubject: +(2 * friends / n).toFixed(3), withFriend: fdeg.size, maxDegree: Math.max(0, ...deg.values()),
+  pairs: pairs.length, friends, friendsPerSubject: +(2 * friends / n).toFixed(3),
+  perOnFile: +((perClass.onFile || 0) / sizes.onFile).toFixed(3), perEngine: +((perClass.engine || 0) / (sizes.engine || 1)).toFixed(3), withFriend: fdeg.size, maxDegree: Math.max(0, ...deg.values()),
   stateKB: +(mem.state.length / 1024).toFixed(0), apiSocialKB: +(api.length / 1024).toFixed(0), apiSocialGzKB: +(gzipSync(api).length / 1024).toFixed(1),
   shardMaxKB: mem.shards.length ? +(Math.max(...mem.shards) / 1024).toFixed(1) : null,
 }));

@@ -474,6 +474,57 @@ BUILDING;   // (imported for parity with check-quests' view of the city)
   }
 }
 
+// ---- /api/social: the city, and one subject from its shard ---------------------------------------
+{
+  const fn = (await import("../netlify/functions/social.js")).default;
+  const { tickIo, subjectKey } = await import("../netlify/lib/social-store.js");
+  const { getStore } = await import("@netlify/blobs");
+  const store = () => getStore({ name: "hvi-social" });
+  const get = async (u) => { const r = await fn(new Request("https://x" + u)); return [r.status, await r.json()]; };
+  const [s0, b0] = await get("/api/social/ada-lovelace");
+  assert.equal(s0, 200); assert.equal(b0.ready, false, "nothing published yet: not ready");
+  // the one-blob public view only (before the first shard): ?subject= and /<slug> read bySubject
+  const all = SOC.publishAll(state, roster.map(x => x.slug), { relations: 12, events: 8 });
+  const [k1] = Object.keys(all);
+  await store().setJSON("public", { ...SOC.publish(state, state.hour), bySubject: { [k1]: all[k1] } });
+  const [, viaPub] = await get(`/api/social/${k1}`);
+  assert.deepEqual(viaPub.relations, all[k1].relations, "no shard yet: the public view's bySubject");
+  // shards written by the tick's io: /<slug> and ?subject= both read the subject's shard
+  await tickIo(store, null).putSubjects(all, { hour: state.hour, at: "x" });
+  (await import("../netlify/lib/social-store.js")).forgetShards();   // as a new instance would
+  const fn2 = fn;
+  const get2 = async (u) => { const r = await fn2(new Request("https://x" + u)); return [r.status, await r.json(), r]; };
+  for (const k of Object.keys(all).slice(0, 12)) {
+    const [st1, one] = await get2(`/api/social/${k}`);
+    const [, q] = await get2(`/api/social?subject=${k}`);
+    assert.equal(st1, 200); assert.equal(one.subject, k);
+    assert.deepEqual(one.relations, all[k].relations, `${k}: /api/social/<slug> serves the shard`);
+    assert.deepEqual(q, one, `${k}: ?subject= serves the same`);
+  }
+  const [, none] = await get2("/api/social/nobody-on-file");
+  assert.deepEqual([none.relations, none.events], [[], []], "a subject with no ties: empty lists");
+  assert.equal((await get2("/api/social/Bad%20Slug"))[0], 400);
+  const [, city] = await get2("/api/social");
+  assert.ok(city.ready && city.friends && !("bySubject" in city), "the city view never carries every subject");
+  assert.ok(globalThis.__blobs.get("hvi-social").has(subjectKey(SOC.subjectShard(k1))));
+}
+
+// ---- circles: a big roster meets in stable circles ------------------------------------------------
+{
+  assert.equal(SOC.circlesFor(430), 1); assert.equal(SOC.circlesFor(5000), 12); assert.equal(SOC.circlesFor(20000), 50);
+  const keys = Array.from({ length: 4000 }, (_, i) => `k${i}`);
+  const at = (G) => keys.map(k => SOC.circleOf("s", "the-drip", k, G));
+  const c12 = at(12), c13 = at(13);
+  assert.ok(c12.every(c => c >= 0 && c < 12), "every key in one of G circles");
+  const counts = Array(12).fill(0); c12.forEach(c => counts[c]++);
+  assert.ok(Math.min(...counts) > 4000 / 12 * 0.8, `circles evenly filled (${Math.min(...counts)}..${Math.max(...counts)})`);
+  const moved = c12.filter((c, i) => c !== c13[i]);
+  assert.ok(moved.length < 4000 / 13 * 1.25 && c13.filter((c, i) => c !== c12[i]).every(c => c === 12), `one more circle moves only its share, all into the new circle (${moved.length})`);
+  assert.deepEqual(SOC.pairsMet("s", 5, "the-drip", keys.slice(0, 30), 1), SOC.pairsMet("s", 5, "the-drip", keys.slice(0, 30)), "one circle: drawn as before");
+  const met = SOC.pairsMet("s", 5, "the-drip", keys.slice(0, 600), 12);
+  assert.ok(met.length > 0 && met.every(pk => { const [a, b] = pk.split("|"); return SOC.circleOf("s", "the-drip", a, 12) === SOC.circleOf("s", "the-drip", b, 12); }), "meetings stay within a circle");
+}
+
 // ---- sharded == monolith ------------------------------------------------------------------------
 // The tick reads presence per SECTOR from the published windows (plans.js format 2) and folds
 // per pair bucket; the reference reads whereAt for every subject every hour from the one-file
@@ -516,15 +567,15 @@ let shardedDays = 0;
     SIM.clearPlans(); SIM.clearSocialSnapshots();
     const st = structuredClone(seedSt);
     if (mode !== "sectors") for (const [p, v] of f1) SIM.setPlan(p, v);
-    if (mode === "whereAt") return SOC.advance(st, census, end, { presence: whereAtPresence });
-    if (mode === "schedule") return SOC.advance(st, census, end);
+    if (mode === "whereAt") return SOC.advance(st, census, end, { presence: whereAtPresence, circles: 3 });
+    if (mode === "schedule") return SOC.advance(st, census, end, { circles: 3 });
     let files = 0;
     while (st.hour < end) {
       const day = Math.floor(st.hour / 24) + 1, w = Math.floor((st.hour % 24) / SIM.WINDOW_H);
       const win = await PL.loadWindows(day, w, fake);
       assert.ok(win && win.ver === days[day].ver, `window ${day}/${w} loaded`);
       files += win.files.length;
-      SOC.advance(st, census, st.hour + SIM.WINDOW_H, { presence: SOC.sectorPresence(win) });
+      SOC.advance(st, census, st.hour + SIM.WINDOW_H, { presence: SOC.sectorPresence(win), circles: 3 });
     }
     assert.ok(files > DAYS * 4 * SPLIT.SECTORS.length, `windows read in parts (${files} files)`);
     assert.equal(SIM.planOf(D0), null, "the sector source leaves no plan loaded behind");

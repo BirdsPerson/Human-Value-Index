@@ -7,7 +7,7 @@ import { isCaseId } from "../lib/intake.js";
 import { getCase, updateCase, hitLimit } from "../lib/store.js";
 import { applyQuest, questState } from "../lib/quests.js";
 import { loadSocialSnapshots } from "../lib/social-store.js";
-import { loadPlans, questDays } from "../lib/plans.js";
+import { loadOnFile, questDays } from "../lib/plans.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { setRoster } from "../../src/city/sim.js";
@@ -16,7 +16,9 @@ import { baseRoster } from "../../src/city/roster.js";
 // Figures on file are placed first by the capacity allocator, so registering just them
 // puts every quest figure where the browsers (which register the whole census) see it.
 // When the day is published (netlify/lib/plans.js), the check reads the same plan every
-// browser draws instead, for every machine day the report's look-back window touches.
+// browser draws instead, for every machine day the report's look-back window touches: the
+// figures on file's whole-day rows from the day's summary (format 2), or the one-file plan
+// for a day not yet split.
 setRoster(baseRoster());
 
 export const QUEST_CALLS_PER_HOUR = 60;
@@ -52,7 +54,7 @@ export default async (req, context) => {
     const input = { action: body.action, questId: body.questId, buildingId: body.buildingId };
     let fail = null, vouch = null;
     const now = Date.now();
-    if (input.action === "complete") await loadPlans(questDays(now)).catch(err => { console.error("quest: plans unreadable, the sim decides", err?.message); });
+    if (input.action === "complete") await loadOnFile(questDays(now)).catch(err => { console.error("quest: plans unreadable, the sim decides", err?.message); });
     const saved = await updateCase(caseId, rec => {
       const r = applyQuest(rec, input, now);
       fail = null;

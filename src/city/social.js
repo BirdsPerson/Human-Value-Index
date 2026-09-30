@@ -259,13 +259,36 @@ export function sectorPresence(win) {
   };
 }
 
-// Who meets whom at one place in one machine hour: each person present tries twice to strike
-// something up, at a rate that thins as the room fills. Depends only on (seed, hour, place)
-// and who is there, never on the ledger, so the meetings can be listed before any fold.
-export function pairsMet(seed, h, placeId, keys) {
+// Who meets whom at one place in one machine hour. Each person present tries twice to strike
+// something up, at a rate that thins as the room fills, with someone in their own CIRCLE.
+// A roster of R subjects is G = floor(R / CIRCLE_ROSTER) circles: everyone belongs to one
+// circle per place (a consistent hash, so when the city grows by a circle only 1/G of them
+// move), and at any place, any hour, meets only their own circle there. A city of 20,000 is
+// socially 50 overlapping towns of 400: each regular keeps meeting the same few hundred
+// faces, as in the city of 430 the ledger was tuned on. Without circles a room drawn from
+// the whole roster never repeats a pair, and friendships (which need repeat meetings) fall
+// with the roster: 0.12 friends per subject at 430, 0.04 at 1,000, none at 5,000 (step 6).
+// Under 2 x CIRCLE_ROSTER the city is one circle, drawn as before. Depends only on (seed,
+// hour, place, G) and who is there, never on the ledger, so the meetings can be listed
+// before any fold.
+export const CIRCLE_ROSTER = 400;
+export const circlesFor = (rosterSize) => Math.max(1, Math.floor(rosterSize / CIRCLE_ROSTER));
+export function circleOf(seed, placeId, key, G) {
+  if (G <= 1) return 0;
+  const r = rng(`${seed}|circle|${placeId}|${key}`);   // jump consistent hash over this key's own draws
+  for (let b = 0, j = 0; ;) { b = j; j = Math.floor((b + 1) / (1 - r())); if (j >= G) return b; }
+}
+export function pairsMet(seed, h, placeId, keys, G = 1) {
   if (keys.length < 2) return [];
-  const p = ENCOUNTER_BASE[SIM.PLACES[placeId].kind] / (1 + (keys.length - 1) / 10);
-  const r = rng(`${seed}|enc|${h}|${placeId}`);
+  const base = ENCOUNTER_BASE[SIM.PLACES[placeId].kind];
+  if (G <= 1) return pairsIn(keys, base, rng(`${seed}|enc|${h}|${placeId}`));
+  const circles = new Map();
+  for (const k of keys) { const c = circleOf(seed, placeId, k, G), l = circles.get(c); if (l) l.push(k); else circles.set(c, [k]); }
+  return [...circles.keys()].sort((x, y) => x - y).flatMap(c => pairsIn(circles.get(c), base, rng(`${seed}|enc|${h}|${placeId}|${c}`)));
+}
+function pairsIn(keys, base, r) {
+  if (keys.length < 2) return [];
+  const p = base / (1 + (keys.length - 1) / 10);
   const met = new Set(), out = [];   // a pair meets once an hour at most, whoever starts it
   for (let i = 0; i < keys.length; i++) {
     for (let tries = 0; tries < 2; tries++) {
@@ -282,13 +305,13 @@ export function pairsMet(seed, h, placeId, keys) {
 }
 
 // Presence -> the meetings, in canonical order (hour, place, pair).
-export function meetingsOf(presence, seed) {
+export function meetingsOf(presence, seed, G = 1) {
   const groups = [...presence.entries()].map(([k, keys]) => { const i = k.indexOf("|"); return [Number(k.slice(0, i)), k.slice(i + 1), keys]; });
   groups.sort((x, y) => x[0] - y[0] || cmpStr(x[1], y[1]));
   const out = [];
   for (const [h, placeId, keys] of groups) {
     keys.sort(cmpStr);
-    for (const pk of pairsMet(seed, h, placeId, keys).sort(cmpStr)) out.push([h, placeId, pk]);
+    for (const pk of pairsMet(seed, h, placeId, keys, G).sort(cmpStr)) out.push([h, placeId, pk]);
   }
   return out;
 }
@@ -311,7 +334,7 @@ export function advance(state, subjects, toHour, opts = {}) {
   while (state.hour < toHour) {
     const h0 = state.hour, day = dayOfHour(h0);
     const h1 = Math.min(toHour, day * 24);
-    const met = meetingsOf(presence(day, h0, h1, people, new Map(), seed), seed);
+    const met = meetingsOf(presence(day, h0, h1, people, new Map(), seed), seed, opts.circles ?? circlesFor(people.length));
     foldBuckets(state, met, byKey, seed);
     state.hour = h1;
     if (h1 === day * 24) {   // end of machine day `day`

@@ -35,7 +35,8 @@ export function useSocial() {
   return d;
 }
 
-// One subject: {relations: [{key, name, affinity, level, meetings, lastPlace}], events}.
+// One subject: {relations: [{key, name, affinity, level, meetings, lastPlace}], events}, from
+// the subject's own shard (/api/social/<slug>), never the whole city.
 export function useAssociates(slug) {
   const [d, setD] = useState(() => bySubject.get(slug) || null);
   useEffect(() => {
@@ -43,7 +44,7 @@ export function useAssociates(slug) {
     let off = false;
     const hit = bySubject.get(slug);
     if (hit && Date.now() - hit.at < REFRESH_MS) { setD(hit); return; }
-    fetch(`/api/social?subject=${encodeURIComponent(slug)}`).then(r => (r.ok ? r.json() : null)).then(x => {
+    fetch(`/api/social/${encodeURIComponent(slug)}`).then(r => (r.ok ? r.json() : null)).then(x => {
       if (off || !x) return;
       const v = { at: Date.now(), ready: Boolean(x.ready), relations: x.relations || [], events: x.events || [] };
       bySubject.set(slug, v); setD(v);
