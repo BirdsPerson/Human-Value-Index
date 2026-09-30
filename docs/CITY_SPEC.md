@@ -479,6 +479,8 @@ build). Now the day is built once and published; every reader loads the same fil
   (`questDays`), the social tick the plans for the days it advances (`state.plans` records
   which plan placed each day). A subject the plan does not hold (indexed after it was
   built) is placed by the sim without the capacity allocation, the same for every viewer.
+  Since step 6 the quest check and the tick read format 2 first (see "Relations"); format 1
+  is their fallback for a day not yet split.
 - **Checks** (`scripts/check-plans.mjs`): plan whereAt == sim whereAt for every subject
   every 15 machine minutes over 2 days (production-shaped 430 and synthetic 1,500 with
   friend snapshots); quest judgement server (figures on file + plans) == browser (census +
@@ -607,3 +609,83 @@ it fetched them all: at 20k (synthetic, `scripts/bench-sectors.mjs`) 81 image re
   a new face re-encodes one sheet and changes one map; a redraw, a takedown, a new job move
   only that face; an old roster-wide atlas is repacked once; the lookup falls back to the
   own URL (redrawn, left out, another sector's map, a missing sheet, no map); `buyNow`.
+
+## Relations: bounded per subject, stored in buckets (scaling step 6, 2026-09-30)
+
+Before, the ledger kept at most 6,000 pairs city-wide (`MAX_PAIRS`) in one blob, and every
+room drew its meetings from everyone in it. Both diluted friendship as the roster grew:
+measured (synthetic, 30 machine days) 0.116 friends per subject at 430, 0.036 at 1,000,
+~0 at 5,000 and 20,000. Production sat at the cap between day boundaries.
+
+- **The bound** (`src/city/social.js`, `K` = 24): at each day boundary, after decay, every
+  subject ranks its pairs by `|affinity| + 2 x this week's meetings` (`keepScore`: meetings
+  count only if the pair last met within 7 machine days), ties by the latest meeting, then
+  the key, and keeps its best 24. **A pair survives only if both sides keep it**, so nobody
+  holds more than 24 after a boundary (between boundaries a subject can hold one machine
+  day of new pairs over). Deterministic and chunk-invariant: it runs only at day
+  boundaries, like the old cap. The ledger is at most 12 x N pairs.
+- **Circles**: a roster of R is `floor(R / 400)` circles (`circlesFor`). At any place, any
+  hour, a subject meets only their own circle there (`circleOf`: a jump consistent hash of
+  place and subject, so growth by one circle moves 1/G of them, all into the new one). A
+  city of 20,000 is socially 50 overlapping towns of 400, each regular meeting the same few
+  hundred faces. Under 800 the city is one circle, drawn exactly as before (production).
+  Without circles the bound alone does not hold density: a room of 400 drawn at random
+  never repeats a pair, and a friendship needs ~20 meetings.
+- **Two phases**. Presence: who is at which work or leisure place at each machine hour's
+  half (whereAt's answer), from segments (`simPresence`) or per SECTOR from a day's window
+  files (`sectorPresence`: a file emits only the hours spent at places in its own district,
+  so each (hour, place) comes from exactly one file; census subjects no file lists are
+  placed raw, as the plan would). Meetings: per (hour, place) from the people present and
+  `rng(seed, hour, place[, circle])`, never from the ledger. Fold: each meeting reads and
+  writes only its pair, with its own draws `rng(seed, hour, pair)`; the pair's latest event
+  hour is on the record (`rec[5]`: "again" is news once in 72 machine hours without reading
+  anyone else's log). Meetings fold per bucket in canonical (hour, place, pair) order.
+  Only the day boundary (decay, the bound, the next snapshot, pairs read in key order)
+  looks across buckets.
+- **Buckets** (`bucketOf`: 64 by a hash of the pair key; each holds `{pairs, events}`, the
+  latest 24 events of its pairs). Blobs (`netlify/lib/social-store.js`, store hvi-social):
+  `rel/b/<tag>/<nn>` write-once (a checkpoint writes only the buckets whose JSON changed,
+  under a new tag), then `rel/head` (`{v: 2, seed, hour, snapshots, rosters, plans, tick,
+  buckets: [64 keys]}`) with an etag condition: the header is the commit. A run killed
+  between its buckets and its header leaves orphans no header names; the next run reads the
+  last committed ledger and sweeps them (at the end of every run, under the lease). A
+  bucket the header names but Blobs cannot read stops the run before any write. Names are
+  not stored (the census has them).
+- **The tick** (`netlify/lib/social-tick.js`): a chunk is one 6-machine-hour window. It
+  reads the window's sector files (`plans.js loadWindows`, every part of every sector),
+  else the day's one-file plan (`loadPlans`), else the sim; `state.plans[day]` records the
+  plan version (the same for both formats) or "sim"; the run reports `sources`. The
+  background worker checkpoints at most every 20 s of work (`checkpointMs`) and always
+  after its last chunk.
+- **Public**: `public` is the city view `/api/social` serves (friends, rivals, gossip,
+  counts, snapshots), unchanged in shape. Each subject's relations (12) and events (8) are
+  in `pub/s/<nn>` (64 shards by slug hash); `/api/social/<slug>` and `/api/social?subject=`
+  read the subject's shard (the card's ASSOCIATES fetch `/api/social/<slug>`).
+- **Quests** (`plans.js loadOnFile`): the figures on file's whole-day rows from each split
+  day's summary (every quest figure and partner is on file), the one-file plan only for a
+  day not split.
+- **Migration** (2026-09-30): with no header, the first run converted the one-blob `state`
+  (`fromV1`: every record kept as it was, each event filed with its pair, each pair's
+  latest event hour noted). Shipped in three steps: write both (the header and buckets,
+  plus `state` rewritten each run and `bySubject` kept in `public`), switch the readers,
+  stop writing the old. Rollback: `node scripts/social-rollback.mjs --write` writes the
+  buckets back as `state` under the lease, then deploy the old code; to roll forward after
+  the old code has run, delete `rel/head` and the next run migrates again.
+- **Still reading format 1** (the one-file plan): the builder (the sector split is cut from
+  it), `/api/plan/<day>/<ver>` and the browser's legacy fallback (`planClient.js`, a day
+  with no split), and the tick's and quests' fallback for a day not split. Nothing reads it
+  when the builder is current.
+- **Checks** (`scripts/check-social.mjs`): nobody over K after a boundary (and the bound is
+  what bit); a pair survives only if both keep it; this week's meetings rank, last week's
+  do not; same state in one run or 5-hour chunks with the bound biting; circles evenly
+  filled, one more circle moves only its share, meetings stay within a circle; **sharded
+  == monolith**: a 712-subject census (12 files indexed after the plans), three machine
+  days, three circles: presence from the sector windows (in parts) folded per bucket ==
+  whereAt at every half hour folded in one pass == segments from the one-file plan, pair
+  for pair and event for event; buckets folded in reverse order == in order; the store:
+  migration keeps every record, one header per checkpoint, resume after every chunk ==
+  one run, fewer checkpoints == same ledger, an unchanged ledger rewrites no bucket, a
+  killed run and a run killed before its header both resume identically and the orphans
+  are swept, a missing bucket writes nothing, lease, CAS on the header, create-only first
+  write; `/api/social/<slug>` and `?subject=` serve the shard. `check-plans`: the tick
+  records its sources; quest figures from the summary == from the one-file plan.

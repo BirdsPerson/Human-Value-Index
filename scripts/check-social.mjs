@@ -210,12 +210,12 @@ BUILDING;   // (imported for parity with check-quests' view of the city)
   const { tick } = await import("../netlify/functions/social-tick.js");
   const store = { state: structuredClone(state), pub: null };
   const extra = roster.filter(s => s.kind === "citizen");
-  const io = (census) => ({ getState: async () => structuredClone(store.state), putState: async v => { store.state = v; }, putPublic: async v => { store.pub = v; }, census });
+  const io = (census) => ({ getState: async () => structuredClone(store.state), putState: async v => { store.state = v; }, putPublic: async v => { store.pub = v; }, putSubjects: async v => { store.subjects = v; }, census });
   const nowMs = T0 + 60 * 60 * 1000;   // an hour of real time past the state's clock region
   store.state.hour = Math.floor(SIM.machineClock(nowMs).mt) - 5;
   await tick(nowMs, io(async () => extra.filter(s => SIM.keyOf(s) !== gone)));
-  assert.ok(!JSON.stringify(store.pub).includes(gone) && !JSON.stringify(store.state).includes(`"${gone}"`), `${gone}: tick drops the withdrawn subject everywhere`);
-  assert.ok(Object.keys(store.pub.bySubject).length > 0, "the tick still publishes everyone else");
+  assert.ok(!JSON.stringify(store.pub).includes(gone) && !JSON.stringify(store.subjects).includes(gone) && !JSON.stringify(store.state).includes(`"${gone}"`), `${gone}: tick drops the withdrawn subject everywhere`);
+  assert.ok(Object.keys(store.subjects).length > 0, "the tick still publishes everyone else");
   const before = JSON.stringify(store.state);
   await assert.rejects(tick(nowMs + 60_000, io(async () => { throw new Error("blobs down"); })));
   assert.equal(JSON.stringify(store.state), before, "a failed census leaves the ledger untouched");
@@ -326,16 +326,23 @@ BUILDING;   // (imported for parity with check-quests' view of the city)
   assert.ok(s1.tick?.run && s1.tick.chunk === r1.chunks, "the state carries the checkpoint (run, chunk)");
   assert.ok(!("names" in f1.read(HEAD)), "names are not stored (the census has them)");
   assert.equal(f1.read("lease").until, 0, "the lease is released");
-  assert.ok(f1.read("public").at && Object.keys(f1.read("public").bySubject).length, "public written (with bySubject for old clients)");
+  assert.ok(f1.read("public").at && f1.read("public").friends && !("bySubject" in f1.read("public")), "public written: the city view, no bySubject");
   const live = new Set(f1.read(HEAD).buckets);
   assert.equal([...f1.m.keys()].filter(k => k.startsWith("rel/b/") && !live.has(k)).length, 0, "superseded bucket blobs swept at the end of the run");
-  assert.equal(f1.read("state").v, 1, "the one-blob rollback copy is rewritten");
-  assert.equal(f1.read("state").hour, nowHour, "at the ledger's hour");
-  assert.equal(JSON.stringify(SOC.fromV1(f1.read("state")).buckets.map(b => Object.keys(b.pairs).sort())), JSON.stringify(s1.buckets.map(b => Object.keys(b.pairs).sort())), "holding the same pairs");
-  // the per-subject shards (/api/social/<slug>) hold exactly the public view's subjects
+  assert.equal(f1.read("state").hour, seedV1.hour, "the one-blob ledger is left as it was migrated");
+  // With the rollback copy and the legacy public view on (increment 1 of step 6), the same run
+  // rewrites `state` at the ledger's hour and carries bySubject: both match the new formats.
+  SIM.clearSocialSnapshots();
+  const f1L = fresh();
+  await tick(nowMs, tickIo(() => f1L, census, { rollbackCopy: true }), { legacyPublic: true });
+  assert.equal(strip(ledger(f1L)), strip(s1), "the old formats change nothing in the ledger");
+  assert.equal(f1L.read("state").v, 1, "the one-blob rollback copy is rewritten");
+  assert.equal(f1L.read("state").hour, nowHour, "at the ledger's hour");
+  assert.equal(JSON.stringify(SOC.fromV1(f1L.read("state")).buckets.map(b => Object.keys(b.pairs).sort())), JSON.stringify(s1.buckets.map(b => Object.keys(b.pairs).sort())), "holding the same pairs");
+  // the per-subject shards (/api/social/<slug>) hold exactly the subjects the old view did
   const shardSubjects = {};
   for (let i = 0; i < SOC.SUBJECT_SHARDS; i++) for (const [k, v] of Object.entries(f1.read(subjectKey(i))?.subjects || {})) { assert.equal(SOC.subjectShard(k), i); shardSubjects[k] = v; }
-  const pubS = f1.read("public").bySubject;
+  const pubS = f1L.read("public").bySubject;
   assert.deepEqual(Object.keys(shardSubjects).sort(), Object.keys(pubS).sort(), "every subject in its shard");
   for (const [k, v] of Object.entries(pubS)) assert.deepEqual(v.relations, shardSubjects[k].relations.slice(0, 8), `${k}: shard == public`);
 

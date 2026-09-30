@@ -19,9 +19,10 @@ export const putState = (state) => social().setJSON("state", state);
 //                     written LAST with an etag condition: the header is the commit. A run
 //                     killed between its buckets and its header leaves orphans the header
 //                     never names (swept by the next run under the lease), never a torn ledger.
-//   state             the one-blob ledger (v1). Read once, to migrate, when there is no header;
-//                     rewritten at the end of every run while ROLLBACK_COPY is on, so the
-//                     previous tick could take over without losing an hour.
+//   state             the one-blob ledger (v1). Read once, to migrate, when there is no header.
+//                     Left as it was at the migration; scripts/social-rollback.mjs rewrites it
+//                     from the buckets (ROLLBACK_COPY on: at the end of every run) so the tick
+//                     before step 6 could take over without losing an hour.
 //   pub/s/<nn>        one subject shard of the public view (social.js subjectShard):
 //                     {hour, at, subjects: {slug: {relations, events}}}; /api/social/<slug>.
 //   public            the city-wide view /api/social serves (and the snapshots).
@@ -30,7 +31,7 @@ import { fromV1, toV1, BUCKETS, shardSubjects, subjectShard, SUBJECT_SHARDS } fr
 export const HEAD = "rel/head";
 export const bucketKey = (tag, i) => `rel/b/${tag}/${String(i).padStart(2, "0")}`;
 export const subjectKey = (i) => `pub/s/${String(i).padStart(2, "0")}`;
-export const ROLLBACK_COPY = true;
+export const ROLLBACK_COPY = false;   // on while step 6 bedded in; scripts/social-rollback.mjs writes it on demand
 
 async function inBatches(items, n, f) {
   const out = new Array(items.length);

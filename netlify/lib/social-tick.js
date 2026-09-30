@@ -123,8 +123,9 @@ export async function tick(nowMs = Date.now(), io, opts = {}) {
     pub.at = new Date(nowMs).toISOString();
     t.sim += clock() - c;
     if (io.putSubjects) await timed("io", () => io.putSubjects(bySubject, { hour: state.hour, at: pub.at }));
-    // The one-blob public view keeps bySubject for clients that still read ?subject= from it.
-    await timed("io", () => io.putPublic(opts.legacyPublic === false ? pub : { ...pub, bySubject: trimSubjects(bySubject) }));
+    // The city view only: a subject's relations live in its shard (/api/social/<slug>). With
+    // opts.legacyPublic the view also carries bySubject, as it did before step 6.
+    await timed("io", () => io.putPublic(opts.legacyPublic ? { ...pub, bySubject: trimSubjects(bySubject) } : pub));
     if (io.after) await timed("io", () => io.after(state));
     return { run, hour: state.hour, nowHour, from, sources, migrated: migrated || undefined, behind: nowHour - state.hour, chunks, ms: Math.round(clock() - t0), simMs: Math.round(t.sim), ioMs: Math.round(t.io), counts: pub.counts };
   } finally {
