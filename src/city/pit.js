@@ -57,28 +57,37 @@ export const CARD_TO = CARD_FROM + CARD_BOUTS * SLOT_H;   // 22:00
 const WALK = 0.08, ROUND = 0.14, BREAK = 0.04, READ = 0.06;   // hours: 5 + 3x8.4 + 2x2.4 + 3.6 = 40 min
 const ROUNDS = 3;
 
-// The week's card: the boxers in a hashed order box in the ring (the first two), everyone else
-// meets in the octagon, paired off in their own hashed order; who is left sits the week out. A
-// card that repeats last week's first bout is re-drawn once. The main event goes last.
+// The week's card: the boxers box in the ring, everyone else meets in the octagon. The pairings
+// cycle week by week through every match the roster allows (the ring's one bout through each
+// pair of boxers, the octagon's two through each way of pairing the rest), in an order hashed
+// from the seed, so no bout repeats in consecutive weeks and every pairing comes round; who is
+// left over sits the week out. The main event goes last.
 export const weekOf = (day) => Math.floor((day - 1) / 7);
-function draw(w) {
-  const order = (list) => list.slice().sort((a, b) => fnv(`${SEED}|pit|${w}|${a}`) - fnv(`${SEED}|pit|${w}|${b}`));
-  const box = order(FIGHTERS.filter(f => f[2] === "boxing").map(f => f[0]));
-  const rest = order(FIGHTERS.filter(f => f[2] !== "boxing").map(f => f[0]));
+const pairsOf = (list) => { const out = []; for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) out.push([list[i], list[j]]); return out; };
+// every way to pick n disjoint pairs from a list (a small roster: a handful of fighters)
+function matchings(list, n) {
+  if (n === 0) return [[]];
   const out = [];
-  if (box.length >= 2) out.push([box[0], box[1], "ring"]);
-  for (let i = 0; i + 1 < rest.length && out.length < CARD_BOUTS; i += 2) out.push([rest[i], rest[i + 1], "octagon"]);
-  // short of bouts: whoever is left meets under unified rules in the octagon
-  const used = new Set(out.flat()), left = order(FIGHTERS.map(f => f[0]).filter(k => !used.has(k)));
-  for (let i = 0; i + 1 < left.length && out.length < CARD_BOUTS; i += 2) out.push([left[i], left[i + 1], "octagon"]);
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const rest = list.filter((_, k) => k > i && k !== j);
+    for (const m of matchings(rest, n - 1)) out.push([[list[i], list[j]], ...m]);
+  }
   return out;
+}
+const hashedOrder = (arr, tag) => arr.map((x, i) => [fnv(`${SEED}|pit|${tag}|${i}`), x]).sort((a, b) => a[0] - b[0]).map(e => e[1]);
+const BOXERS = FIGHTERS.filter(f => f[2] === "boxing").map(f => f[0]).sort();
+const OTHERS = FIGHTERS.filter(f => f[2] !== "boxing").map(f => f[0]).sort();
+const RING_CYCLE = hashedOrder(pairsOf(BOXERS), "ring");
+const OCT_CYCLE = hashedOrder(matchings(OTHERS, Math.min(CARD_BOUTS - 1, Math.floor(OTHERS.length / 2))), "oct");
+function draw(w) {
+  const out = [];
+  if (RING_CYCLE.length) { const [a, b] = RING_CYCLE[((w % RING_CYCLE.length) + RING_CYCLE.length) % RING_CYCLE.length]; out.push([a, b, "ring"]); }
+  if (OCT_CYCLE.length) for (const [a, b] of OCT_CYCLE[((w % OCT_CYCLE.length) + OCT_CYCLE.length) % OCT_CYCLE.length]) out.push([a, b, "octagon"]);
+  return out.slice(0, CARD_BOUTS).map(([a, b, ring]) => (fnv(`${SEED}|corner|${w}|${a}|${b}`) % 2 ? [b, a, ring] : [a, b, ring]));
 }
 export function cardFor(day) {
   if (weekdayOf(day) !== CARD_DAY) return null;
-  const week = weekOf(day), key = (p) => [p[0], p[1]].sort().join("|");
-  let list = draw(week);
-  const last = new Set(draw(week - 1).map(key));
-  if (list.some(p => last.has(key(p)))) list = draw(week + 1000);
+  const list = draw(weekOf(day));
   // the main event last: the best-rated pair
   list.sort((p, q) => (FIGHTER[p[0]].rating + FIGHTER[p[1]].rating) - (FIGHTER[q[0]].rating + FIGHTER[q[1]].rating));
   return list.map(([a, b, ring], i) => {

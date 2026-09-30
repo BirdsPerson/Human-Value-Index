@@ -28,10 +28,13 @@ export const TENNIS_ON_FILE = [
 ];
 export const TENNIS_FIXTURES = VENUE_FIXTURES.tennis;
 
-// The pair for a fixture on a day: hashed, never the same pair two fixtures running if avoidable.
+// The pair for a fixture: every pairing of the players on file comes round in turn (a hashed
+// order), fixture after fixture, so no final is played twice running; who serves first by hash.
+const PAIRS = (() => { const out = []; for (let i = 0; i < TENNIS_ON_FILE.length; i++) for (let j = i + 1; j < TENNIS_ON_FILE.length; j++) out.push([TENNIS_ON_FILE[i], TENNIS_ON_FILE[j]]); return out.map((p, k) => [fnv(`${SEED}|tennispair|${k}`), p]).sort((a, b) => a[0] - b[0]).map(e => e[1]); })();
 function pairFor(day, from) {
-  const order = TENNIS_ON_FILE.map(p => p[0]).sort((a, b) => fnv(`${SEED}|tennis|${day}|${from}|${a}`) - fnv(`${SEED}|tennis|${day}|${from}|${b}`));
-  return [order[0], order[1]].map(k => TENNIS_ON_FILE.find(p => p[0] === k));
+  const week = Math.floor((day - 1) / 7), idx = week * TENNIS_FIXTURES.length + TENNIS_FIXTURES.findIndex(f => f.from === from && f.days.includes(weekdayOf(day)));
+  const [a, b] = PAIRS[((idx % PAIRS.length) + PAIRS.length) % PAIRS.length];
+  return fnv(`${SEED}|serve|${day}|${from}`) % 2 ? [b, a] : [a, b];
 }
 // The match, decided game by game: each game to the server's side more often than not, a
 // better player's edge on top; sets to six by two, seven-six on a tiebreak; best of three.
@@ -79,7 +82,8 @@ export function tennisAt(machineTime) {
   // the board's short name: the surname, or the first name when both finalists share one
   const last = (n) => n.split(" ").slice(-1)[0], same = last(players[0].name) === last(players[1].name);
   const surname = (n) => (same ? n.split(" ")[0] : last(n));
-  const setsTxt = sets.map(s => `${s[0]}-${s[1]}`).join(" ");
+  // the score from the winner's side once it is won (as tennis reads it), else from the first-named player's
+  const setsTxt = sets.map(s => (done && m.winner === 1 ? `${s[1]}-${s[0]}` : `${s[0]}-${s[1]}`)).join(" ");
   const out = { placeId: "tennis", name: f.name, day, from: f.from, to: f.to, progress, players, sets, set: sets.length, games, score, done, winner: done ? m.winner : null };
   out.label = done ? `${surname(players[m.winner].name)} WINS` : `SET ${out.set} ${games[0]}-${games[1]}`;
   out.status = done ? `${players[m.winner].name} TAKES ${f.name}, ${setsTxt}. THE TROPHY HAS BEEN LOGGED.` : `${players[0].name} V ${players[1].name} // SETS ${score[0]}-${score[1]}, ${games[0]}-${games[1]} IN THE ${["FIRST", "SECOND", "THIRD"][sets.length - 1]}`;

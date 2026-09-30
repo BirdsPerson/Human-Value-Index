@@ -119,6 +119,11 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       Bruce Lee...); nemesis-level rivalries can be settled there: dead rivals fight, living
       non-fighters name a champion; non-graphic ("RETIRED FROM THE BOUT"); outcomes move the
       rivalry; PA calls. (3) TENNIS COURTS (placed by the master plan, not tied to the golf vote).
+      [SHIPPED 2026-09-30: docs/planning/MASTER_PLAN.md. Layout 2 (the foothills, the belt, heavy
+      industry inward, the school moved), THE PIT (Friday cards, grievance nights: the living
+      name a dead champion), THE TENNIS CLUB, DEPT OF PLANNING (Moses and Jacobs), billboard
+      sites reserved. Next: the subway to the edges (b5), a pocket park in the Archive, the
+      reactor away from Hab A (layout 3), drawing the billboards.]
    c. **The Overlord tower (item 11) as the admin building:** Intake, Appeals desk, Review
       Board, Records, Calibration Lab, Holding Cells (item 12), and THE PEOPLE'S PETITION
       console = the People's Vote exactly as designed in docs/story/STORYLINE_TOURNAMENT.md

@@ -1256,3 +1256,40 @@ look, 14 lines each), `src/city/prefects.js` (lean, directive, clash, legitimacy
   council v prefect, legitimacy, record of acts from the summaries held, patrol lines).
 - **Speech**: they are machines, not people, so they speak freely in the Overlord's register; each
   line ends in its own sign-off (RECONCILED. / SHHH. / PLAY ON. ...). The PA reads their decrees.
+
+## THE MASTER PLAN: layout 2 (2026-09-30)
+
+Scott: "Maybe we should hire a city planner." The review, the findings (with the numbers), the
+moves and what they cost: docs/planning/MASTER_PLAN.md. In the code:
+
+- **Layout 2** (`sim.js LAYOUT_VERSION`, `HEIGHTS_DY` -10, `COAST_DY` +9): the Heights pulled back
+  behind THE FOOTHILLS (`the-foothills`, a Heights place drawn by `coastGeo/coastDraw`: pines, a
+  trail, the ranger's post, the Alpine Line's right of way); the bottom row runs to row 74 as a
+  belt (DEPT OF PLANNING in the Commons, THE PIT in the Works, THE ESTATE GARDENS and THE TENNIS
+  CLUB in the Sprawl); the Coast moved south behind it; the Works laid out by hand, heavy in, light
+  out (`WK(col, row)`, the old grid's cells); the Commons' school and allotment swapped. The Loop,
+  every id, every capacity and every home band are exactly layout 1's. The 3D view's `SPAN` grew
+  to 78 so the whole city fits at rest.
+- **At a day boundary**: plans name their layout; published days keep their segments and are
+  drawn on the new ground, `whereAt` fitting a trip's legs to the plan's own times (a local walk,
+  walk1 before the platform, walk2 after the train) whenever the ground has moved, so nobody jumps
+  mid-day; the first day built after a deploy is the first on the new ground.
+- **The venues' data** (`venueSim.js`, spread into `sim.js` like the funnels): places `pit`,
+  `tennis`, `planning-office`, `estate-gardens`, `foothills`; jobs Bout Referee, Ring Announcer,
+  Club Professional, Line Judge, Planning Officer, Forest Ranger (drafted a few each, the pros for
+  the tennis players); a `tennis` field; hints for the fighters and tennis players on the census;
+  `VENUE_FIXTURES` (the Pit's card, the club's fixtures) pull a crowd like `GAMES` without joining
+  the league's timetable.
+- **THE PIT** (`pit.js`, `venueGeo.js`, `venueDraw.js`, `PitPanel.jsx`, `social.js pitBoundary`):
+  the ring, the octagon, the stands, the locker rooms, the fight board; Friday cards; grievance
+  nights booked from nemesis pairs at a day boundary (the dead fight in person, the living name a
+  dead fighter on file as champion, never fight); `/api/social` publishes `pit`. Fighters and
+  finalists are drawn by projection (the council's pattern), anyone on the bill left out of the
+  crowd so nobody is drawn twice.
+- **THE TENNIS CLUB** (`tennis.js`): four courts, the clubhouse, the show court's fixture.
+- **DEPT OF PLANNING** (`planning.js`): the office's massing and facade (style `planning`, THE
+  PANORAMA on its plinth), the drawing office (room type `planning`, the advocates at their
+  lecterns as props), `planningLines` in the PA. The hook for future sessions: MASTER_PLAN.md.
+- **Billboard sites** (`billboards.js`): reserved, not drawn.
+- `scripts/check-planner.mjs`; the layout-1 fixtures in `scripts/fixtures/layout1-*.json`.
+
