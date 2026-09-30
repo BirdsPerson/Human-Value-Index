@@ -46,7 +46,7 @@ export default function WriteIn({ district, caseId, busy, mineKey, onPick }) {
       <div className="el-wi-head">{WRITEIN.head}</div>
       <div className="el-wi-box">
         <label htmlFor={`${id}-in`} className="p">NAME &gt;</label>
-        <input ref={inputRef} id={`${id}-in`} className="ui-input" type="search" value={q} placeholder="SEARCH THE DISTRICT'S FILES" autoComplete="off" spellCheck={false}
+        <input ref={inputRef} id={`${id}-in`} className="ui-input" type="search" value={q} placeholder="SEARCH THE CENSUS" autoComplete="off" spellCheck={false}
           enterKeyHint="search" role="combobox" aria-expanded={shown && rows.length > 0} aria-controls={`${id}-lb`} aria-autocomplete="list"
           aria-activedescendant={shown && rows[act] ? `${id}-o${act}` : undefined} disabled={busy}
           onChange={(ev) => { setQ(ev.target.value.slice(0, 80)); setOpen(true); setAct(0); }}
