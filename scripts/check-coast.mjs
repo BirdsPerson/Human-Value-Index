@@ -33,7 +33,8 @@ ok(["lifeguard", "boardwalk-vendor", "pier-warden", "surf-instructor", "ski-patr
 
 // ---- the spurs ------------------------------------------------------------------------------------
 {
-  const blocks = SIM.BUILDINGS.map(b => ({ id: b.id, x: b.rect.x + 0.3, y: b.rect.y + 0.3, w: b.rect.w - 0.6, h: b.rect.h - 0.6 }));
+  // open ground (a field, the Street, the foothills' cleared right of way) may be crossed; a building may not
+  const blocks = SIM.BUILDINGS.filter(b => !SIM.OPEN_LOTS.has(b.id)).map(b => ({ id: b.id, x: b.rect.x + 0.3, y: b.rect.y + 0.3, w: b.rect.w - 0.6, h: b.rect.h - 0.6 }));
   for (const sp of Object.values(SIM.SPURS)) {
     ok(SIM.STATIONS[sp.hub] && SIM.DISTRICT[sp.districtId].hub === sp.hub, `${sp.name}: from ${sp.hub}'s station`);
     const d = SIM.DISTRICT[sp.districtId].rect, [tx, ty] = sp.pts[sp.pts.length - 1];

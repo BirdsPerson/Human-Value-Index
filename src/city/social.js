@@ -15,6 +15,7 @@
 
 import * as SIM from "./sim.js";
 import { RECORD_TIES } from "./ties.js";
+import * as PIT from "./pit.js";
 
 export const LAG = 4;                 // machine days between a state and the snapshot it produces
 export const DECAY = 0.985;           // affinity kept per machine day
@@ -180,6 +181,7 @@ const LINES = {
   fallout: ["{A} AND {B} HAVE DRIFTED APART. THE FRIENDSHIP FILE IS CLOSED. IT WAS NEVER SEALED."],
   reconcile: ["{A} AND {B} HAVE RECONCILED. THE DEPARTMENT DID NOT SEE THAT COMING. IT RARELY ADMITS THIS."],
 };
+
 function line(kind, a, b, placeId, r) {
   const opts = LINES[kind];
   return opts[Math.floor(r() * opts.length)].replace("{A}", a.toUpperCase()).replace("{B}", b.toUpperCase()).replace("{P}", PLACE(placeId));
@@ -358,9 +360,107 @@ export function advance(state, subjects, toHour, opts = {}) {
       state.snapshots[snapDay] = snapshotFor(state, people, snapDay, seed);
       pruneSnapshots(state, snapDay, opts.keepSnapshots ?? KEEP_SNAPSHOTS);
       SIM.setSocialSnapshots({ [snapDay]: state.snapshots[snapDay] });
+      pitBoundary(state, byKey, day, seed);   // THE PIT: last night's grievances settled, the next booked
     }
   }
   return state;
+}
+
+// ---- THE PIT: grievances settled (the master plan, 2026-09-30; pit.js) ---------------------------
+// At the end of machine day D: (1) each grievance bout fought on D moves its pair's rivalry: the
+// grievance cools (+18..30 affinity), one in four reconcile, and the Pit's record gives the winning
+// side a W and the losing side an L; (2) pairs at nemesis may book the Pit for the night
+// GRIEVANCE_LAG days on (the published ledger has it well before then): up to GRIEVANCE_MAX a
+// night, the bitterest first, each on a coin (not every feud goes to the ring), none again within
+// 14 machine days. A side fights in person only if their file is among the dead; a living side
+// never fights over a grievance and names a CHAMPION: a fighter on file, dead, not a party to it,
+// with the most affinity to them (the ledger's, else compatibility). No champion to be had, no
+// bout. Everything is read from the ledger at the boundary and hashed from (seed, day, pair), so
+// any chunking of the tick books the same nights and the same results.
+const SETTLE_COOL = [18, 30], RECONCILE = 0.25, BOOK_CHANCE = 0.6, REBOOK_DAYS = 14, PIT_KEEP_DAYS = 10;
+export function pitBoundary(state, byKey, day, seed = state.seed || SIM.SEED) {
+  const pit = (state.pit ||= { bouts: [], last: {}, record: {} });
+  const nm = (k) => (state.names[k] || k).toUpperCase();
+  // (1) the night's results
+  for (const b of pit.bouts) {
+    if (b.day !== day || b.applied) continue;
+    b.applied = true;
+    const [s0, s1] = b.sides;
+    for (const [i, sd] of [s0, s1].entries()) {
+      const r = (pit.record[sd.key] ||= [0, 0, 0]);
+      if (b.win == null) r[2]++; else r[b.win === i ? 0 : 1]++;
+    }
+    const pk = pairKey(s0.key, s1.key), bucket = state.buckets[bucketOf(pk)], rec = bucket.pairs[pk];
+    if (!rec) continue;   // the pair has left the ledger since it booked
+    const r = rng(`${seed}|pitsettle|${b.id}`);
+    const before = rec[0];
+    let aff = clamp(before + SETTLE_COOL[0] + r() * (SETTLE_COOL[1] - SETTLE_COOL[0]), -100, 100);
+    const reconciled = r() < RECONCILE;
+    if (reconciled) aff = Math.max(aff, T.acquaintance + 2);
+    rec[0] = Math.round(aff * 100) / 100;
+    b.moved = [Math.round(before * 100) / 100, rec[0]];
+    b.reconciled = reconciled;
+    const [ka, kb] = s0.key < s1.key ? [s0.key, s1.key] : [s1.key, s0.key];
+    const res = PIT.resultLine(b);
+    pushEvent(bucket, rec, { h: day * 24 - 1, kind: reconciled ? "reconcile" : "settled", a: ka, b: kb, placeId: "pit",
+      text: reconciled ? `SETTLED AT THE PIT: ${res} ${nm(s0.key)} AND ${nm(s1.key)} HAVE SINCE BEEN SEEN SHAKING HANDS. THE DEPARTMENT DID NOT SEE THAT COMING.`
+        : `SETTLED AT THE PIT: ${res} THE GRIEVANCE BETWEEN ${nm(s0.key)} AND ${nm(s1.key)} IS CLOSED. THE FILE IS NOT.` });
+  }
+  // (2) the bookings
+  const night = day + PIT.GRIEVANCE_LAG;
+  if (!pit.bouts.some(b => b.day === night)) {
+    const recent = (pk) => pit.last[pk] != null && pit.last[pk] > day - REBOOK_DAYS;
+    const feuds = allPairs(state).filter(([pk, rec]) => rec[0] <= T.nemesis && !recent(pk)).sort((x, y) => x[1][0] - y[1][0] || cmpStr(x[0], y[0]));
+    const taken = new Set();
+    let slot = 0;
+    for (const [pk, rec] of feuds) {
+      if (slot >= PIT.GRIEVANCE_MAX) break;
+      if (h01s(`${seed}|pitbook|${day}|${pk}`) >= BOOK_CHANCE) continue;
+      const [x, y] = pk.split("|"), sx = byKey.get(x), sy = byKey.get(y);
+      if (!sx || !sy) continue;
+      const sides = [], used = new Set([x, y, ...taken]);
+      for (const [k, s] of [[x, sx], [y, sy]]) {
+        if (s.died) { sides.push({ key: k, name: nm(k), rating: PIT.FIGHTER[k]?.rating ?? PIT.inPersonRating(s) }); continue; }
+        const champ = championFor(state, s, byKey, used);
+        if (!champ) break;
+        used.add(champ);
+        sides.push({ key: k, name: nm(k), champ, champName: PIT.FIGHTER[champ].name, rating: PIT.FIGHTER[champ].rating });
+      }
+      if (sides.length < 2) continue;
+      for (const sd of sides) if (sd.champ) taken.add(sd.champ);
+      const ring = sides.every(sd => PIT.FIGHTER[sd.champ || sd.key]?.disc === "boxing") ? "ring" : "octagon";
+      const id = `g|${night}|${slot}`;
+      const bout = { id, kind: "grievance", day: night, slot, from: PIT.GRIEVANCE_FROM + slot * PIT.SLOT_H, ring, filed: day,
+        sides: sides.map(({ rating, ...sd }) => sd), ...PIT.boutOutcome(id, sides[0].rating, sides[1].rating, ring) };
+      pit.bouts.push(bout);
+      pit.last[pk] = day;
+      slot++;
+      const [ka, kb] = x < y ? [x, y] : [y, x];
+      const who = (sd) => (sd.champ ? `${sd.champName} WILL STAND FOR ${sd.name}` : `${sd.name} WILL STAND IN PERSON`);
+      pushEvent(state.buckets[bucketOf(pk)], rec, { h: day * 24 - 1, kind: "grievance", a: ka, b: kb, placeId: "pit",
+        text: `${nm(x)} AND ${nm(y)} HAVE TAKEN THEIR GRIEVANCE TO THE PIT. ${who(sides[0])}. ${who(sides[1])}. THE BOUT IS BOOKED. ATTENDANCE IS ENCOURAGED.` });
+    }
+  }
+  // keep a fortnight of the Pit's nights; bookings older than REBOOK_DAYS are forgotten
+  pit.bouts = pit.bouts.filter(b => b.day > day - PIT_KEEP_DAYS);
+  for (const pk of Object.keys(pit.last)) if (pit.last[pk] <= day - REBOOK_DAYS) delete pit.last[pk];
+  return state;
+}
+const h01s = (str) => fnv(str) / 4294967296;
+// The champion a living side names: a fighter on the census and among the dead, not already in
+// this bout, with the most affinity to them in the ledger, else the most compatible; ties by key.
+function championFor(state, s, byKey, used) {
+  const me = SIM.keyOf(s);
+  let best = null, bestSc = -Infinity;
+  for (const [slug] of PIT.FIGHTERS) {
+    if (used.has(slug)) continue;
+    const f = byKey.get(slug);
+    if (!f || !f.died) continue;
+    const rec = state.buckets[bucketOf(pairKey(me, slug))].pairs[pairKey(me, slug)];
+    const sc = rec ? 100 + rec[0] : 40 * compat(s, f);
+    if (sc > bestSc || (sc === bestSc && slug < best)) { best = slug; bestSc = sc; }
+  }
+  return best;
 }
 
 // Fold the meetings bucket by bucket, each in canonical order. A meeting reads and writes only
@@ -392,6 +492,7 @@ export function forget(state, live) {
     b.events = b.events.filter(e => live.has(e.a) && live.has(e.b));
   }
   for (const k of Object.keys(state.names)) if (!live.has(k)) delete state.names[k];
+  if (state.pit) state.pit.bouts = state.pit.bouts.filter(b => b.applied || b.sides.every(sd => live.has(sd.key) && (!sd.champ || live.has(sd.champ))));
   for (const pk of Object.keys(state.tied || {})) {   // a file that returns gets its tie again
     const [a, b] = pk.split("|");
     if (!live.has(a) || !live.has(b)) delete state.tied[pk];
@@ -548,7 +649,13 @@ export function publish(state, nowHour) {
     friends, rivals,
     events: allEvents(state).slice(-60).reverse(),
     counts: { pairs: npairs, friends: pairs.filter(p => p.affinity > 0).length, rivals: pairs.filter(p => p.affinity < 0).length },
+    // THE PIT's grievance nights (pit.js): booked and fought, the last few days and the next few
+    pit: { bouts: (state.pit?.bouts || []).filter(b => b.day >= nowDay - 3).map(({ applied, ...b }) => b), record: pitRecord(state) },
   };
+}
+function pitRecord(state) {
+  const rec = state.pit?.record || {};
+  return Object.entries(rec).map(([k, [w, l, d]]) => ({ key: k, name: state.names[k] || k, w, l, d })).sort((x, y) => y.w - x.w || x.l - y.l || cmpStr(x.key, y.key)).slice(0, 12);
 }
 
 // Relationships for one subject, for the card: a scan of every pair (the reference

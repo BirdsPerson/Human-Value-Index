@@ -19,6 +19,7 @@ export const RIG_ACTS = {
   dance: "dance", dance2: "dance2", wave: "wave", clap: "clap", applaud: "clap", point: "point", shrug: "shrug",
   facepalm: "facepalm", stumble: "stumble", swim: "swim", ski: "ski", snowboard: "snowboard", golf: "golf",
   deal: "deal", chips: "chips", arcade: "arcade", phone: "phone", carry: "carry", sittalk: "sittalk", hooray: "cheer",
+  spar: "box", grapple: "grapple", tennis: "tennis",   // the Pit and the tennis club (venueGeo.js)
 };
 
 // ---- reactions: sheet -> {anim, t0, t1, turn} ---------------------------------------------

@@ -13,6 +13,7 @@
 import { PLACES, assignJob, fieldsOf } from "./sim.js";
 import { roleOf } from "./props.js";
 import { COAST_LOTS } from "./coastGeo.js";
+import { VENUE_LOTS } from "./venueGeo.js";
 
 // The Bowl (a gridiron inside a stadium) and the estate pitch joined the recreation ground
 // on 2026-09-29: "we need a soccer field, though, too, and a football field."
@@ -39,7 +40,7 @@ export function fieldRole(s, w) {
 const rect = (id) => PLACES[id].rect;
 // How far a building's drawn footprint sits in from its lot (CityIso.buildGeo): blocks
 // stand back from the street; the recreation ground runs almost to the kerb.
-export const insetOf = (b) => (PARK_LOTS[b.id] || COAST_LOTS[b.id] ? [0.15, 0.15] : [Math.min(1.6, b.rect.w * 0.14), Math.min(1.6, b.rect.h * 0.14)]);
+export const insetOf = (b) => (PARK_LOTS[b.id] || COAST_LOTS[b.id] || VENUE_LOTS[b.id] ? [0.15, 0.15] : [Math.min(1.6, b.rect.w * 0.14), Math.min(1.6, b.rect.h * 0.14)]);
 // team: 0 | 1 on a player (the colour under their feet); gk: a keeper's own colour.
 const A = (id, x, y, kind, act, role, look = null, extra = {}) => ({ id, x, y, h: 0, kind, act, role, look, ring: null, ...extra });
 

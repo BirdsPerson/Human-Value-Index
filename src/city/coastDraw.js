@@ -16,7 +16,7 @@ import { assignAnchors, roleOf } from "./props.js";
 import { SPURS, PLACES, resortPhase } from "./sim.js";
 import { APPLICATIONS2 } from "../assembly/content002.js";
 import {
-  COAST_LOTS, COAST_ANCHORS, SEA, SEA_Y, TERRAIN, terrainH, BEACH, BOARDWALK, PIER, BREAK, LIFT, PISTES, SLOPE_HUTS, PINES,
+  COAST_LOTS, COAST_ANCHORS, SEA, SEA_Y, TERRAIN, terrainH, BEACH, BOARDWALK, PIER, BREAK, LIFT, PISTES, SLOPE_HUTS, PINES, FOOTHILLS,
   liftChair, liftChairs, pathAt, offPiste, SHORE, SUMMIT, SHELTER,
   PARCEL_ANCHORS, PARCEL_SITE, parcelFace, BEACH_RESORT, TOWERS, LIFTS2, RUNS2, SKI_LODGE, CANNONS, PRESERVE,
 } from "./coastGeo.js";
@@ -200,6 +200,7 @@ export function drawCoastLot(G, lotId, lod, mt, people, prev) {
   else if (pid === "surf") surf(K);
   else if (pid === "shore-lot") shoreLot(K);
   else if (pid === "slopes" || pid === "summit-lot") mountain(K, pid);
+  else if (pid === "foothills") foothills(K);
 
   for (const { p, a } of present) {
     const [x, y, h, dx, dy, ride] = pathAt(a, K.t);
@@ -242,6 +243,7 @@ export function coastLine(lotId, mt, n) {
     case "pier": return `${n} ON THE PIER // FISHING BY PERMIT. THE FISH HAVE NOT BEEN ASKED.`;
     case "surf": return `${n} IN THE BREAK // WAVES SCHEDULED. RIDE ONE AT A TIME.`;
     case "slopes": return `${n} ON THE MOUNTAIN // DESCENT MONITORED. THE LIFT RUNS UPHILL ONLY.`;
+    case "foothills": return `${n} ON THE TRAILS // STAY ON THE PATH. THE PATH HAS BEEN PLANNED.`;
     case "shore-lot": case "summit-lot": return "VACANT // A RESORT PARCEL. THE ASSEMBLY'S SESSION 002 DECIDES WHAT IS BUILT.";
     default: return `${n} HERE`;
   }
@@ -644,6 +646,45 @@ function mountain(K, pid) {
     put(ch.x, ch.y, () => chairSeat(K, ch.x, ch.y, h), 0.025);
   }
 }
+// ---- THE FOOTHILLS (the master plan, 2026-09-30) --------------------------------------------------------------
+// The buffer between the city and the mountain: forest floor, the trail winding through the pines,
+// benches at the viewpoints, the ranger's post, the Alpine Line's cleared right of way.
+function foothills(K) {
+  const { G, lod, ground, put, nf, night } = K, c = G.ctx, F = FOOTHILLS, L = F.lot;
+  ground(rectPts(L.x + 0.05, L.y + 0.05, L.x + L.w - 0.05, L.y + L.h - 0.05), shade(night ? "#16261c" : "#22382a", 1));
+  // the right of way: gravel either side of the track
+  ground(rectPts(F.spurX - F.clear + 0.3, L.y + 0.05, F.spurX + F.clear - 0.3, L.y + L.h - 0.05), shade("#3a3f38", nf), 0.011);
+  if (lod === "far") {
+    // the forest as a darker wash, every other pine a dark tuft on it
+    ground(rectPts(L.x + 0.6, L.y + 0.6, F.spurX - F.clear, L.y + L.h - 0.6), shade("#183322", nf), 0.012);
+    ground(rectPts(F.spurX + F.clear, L.y + 0.6, L.x + L.w - 0.6, L.y + L.h - 0.6), shade("#183322", nf), 0.012);
+    c.fillStyle = shade("#2c5e3a", nf);
+    F.trees.forEach(([x, y, s], i) => { if (i % 2) return; const [a, b] = G.Q(x, y, 0.4 * s), w = Math.max(1.5, G.z * 0.45 * s); c.beginPath(); c.moveTo(a, b - w * 1.4); c.lineTo(a - w, b + w * 0.4); c.lineTo(a + w, b + w * 0.4); c.closePath(); c.fill(); });
+    return;
+  }
+  // the trail: a packed-earth band along its line
+  c.strokeStyle = shade("#7a6a4a", nf); c.lineWidth = Math.max(2, G.z * 0.55); c.lineJoin = "round"; c.beginPath();
+  F.trail.forEach(([x, y], i) => { const [a, b] = G.Q(x, y, 0.012); if (i) c.lineTo(a, b); else c.moveTo(a, b); });
+  c.stroke();
+  // the pines, tall and short, in the painter's order with the walkers
+  for (const [x, y, s] of F.trees) put(x, y, () => {
+    const s1 = lod === "near" ? s : s * 0.9;
+    K.vline(x, y, 0, 0.25, shade("#4a3222", nf), Math.max(1, G.z * 0.08));
+    for (let k = 0; k < 3; k++) {
+      const hb = 0.18 + k * 0.42 * s1, w = (0.5 - k * 0.12) * s1 * G.z * 1.35, [ax, ay] = G.Q(x, y, hb + 0.7 * s1), [mx, my] = G.Q(x, y, hb);
+      c.fillStyle = shade(k === 2 ? "#2f6b3e" : k === 1 ? "#255a34" : "#1f4d2e", nf); c.beginPath(); c.moveTo(ax, ay); c.lineTo(mx - w, my); c.lineTo(mx + w, my); c.closePath(); c.fill();
+    }
+  }, 0.01);
+  // benches at the viewpoints, the ranger's post (a timber hut, its sign)
+  for (const [bx, by] of F.benches) put(bx, by, () => G.prism(rectPts(bx - 0.6, by - 0.12, bx + 0.6, by + 0.12), 0, 0.18, "#6a4a30", 1.2), 0.005);
+  const P = F.post;
+  put(P.x, P.y, () => {
+    G.prism(rectPts(P.x - 0.7, P.y - 0.5, P.x + 0.7, P.y + 0.5), 0, 0.85, "#7a5232", 1.15);
+    G.prism(rectPts(P.x - 0.85, P.y - 0.65, P.x + 0.85, P.y + 0.65), 0.85, 0.95, "#3f5a3a", 1.3);
+    if (lod === "near") { const [mx, my] = G.Q(P.x, P.y + 0.52, 0.6); c.font = `bold ${Math.max(6, Math.round(G.z * 0.3))}px 'Fira Mono', monospace`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "#fde68a"; c.fillText("RANGER", mx, my); }
+  }, 0.02);
+}
+
 // Distance from a point to the nearest of some polylines.
 function distPolys(x, y, polys) {
   let best = Infinity;

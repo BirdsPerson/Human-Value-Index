@@ -12,11 +12,12 @@
 // Anchors are {id, x, y, h, kind, act, role, look, path?}: a `path` anchor moves (a skier down a
 // piste, a chair up the lift, a surfer on a wave): its place at time t is pathAt(anchor, t).
 
-import { PLACES, SPURS } from "./sim.js";
+import { PLACES, SPURS, COAST_DY, HEIGHTS_DY } from "./sim.js";
 
 export const COAST_LOTS = {
   "the-beach": "beach", "the-boardwalk": "boardwalk", "the-pier": "pier", "the-break": "surf", "lot-shore": "shore-lot",
   "the-slopes": "slopes", "lot-summit": "summit-lot",
+  "the-foothills": "foothills",   // the master plan's buffer between the CBD and the mountain
 };
 export const COAST_PLACES = Object.values(COAST_LOTS);
 const rect = (id) => PLACES[id].rect;
@@ -25,14 +26,14 @@ const frac = (v) => ((v % 1) + 1) % 1;
 
 // ---- the sea -------------------------------------------------------------------------------------
 // The coast's southern rows are water from SEA_Y (the beach's edge) to the district's end.
-export const SEA_Y = 86;
-export const SEA = { x0: -3, x1: 112, y0: SEA_Y, y1: 93 };
+export const SEA_Y = 86 + COAST_DY;
+export const SEA = { x0: -3, x1: 112, y0: SEA_Y, y1: 93 + COAST_DY };
 
 // ---- the mountain ------------------------------------------------------------------------------
 // One terrain over the slopes and the parcel beside them: flat at the village's back (y -11),
 // rising to a ridge (RIDGE of the way north), two peaks, then falling away on the far side to
 // the district's north edge. Heights in storeys.
-export const TERRAIN = { x0: 9, x1: 100, y0: -30.5, y1: -11 };
+export const TERRAIN = { x0: 9, x1: 100, y0: -30.5 + HEIGHTS_DY, y1: -11 + HEIGHTS_DY };
 export const RIDGE = 0.8;
 export const RIDGE_Y = TERRAIN.y1 - RIDGE * (TERRAIN.y1 - TERRAIN.y0);
 export function terrainH(x, y) {
@@ -315,7 +316,46 @@ export const PARCEL_ANCHORS = {
 // Which face a parcel shows for a resortPhase(): "vacant" | "site" | the winning bid.
 export const parcelFace = (p) => (p.phase === "site" ? "site" : p.phase === "built" ? p.winner : "vacant");
 
-export const COAST_ANCHORS = { beach: beachAnchors(), boardwalk: boardwalkAnchors(), pier: pierAnchors(), surf: surfAnchors(), slopes: slopesAnchors(), "shore-lot": [], "summit-lot": [] };
+// ---- THE FOOTHILLS (the master plan, 2026-09-30) -------------------------------------------------------
+// The band between the city and the village: pine forest, a trail winding east to west with a
+// bridle loop, benches at the viewpoints, the ranger's post. Flat ground (the mountain rises
+// behind the village), the Alpine Line through a cleared right of way.
+const Fh = rect("foothills");
+const FH_CLEAR = 1.8;   // the spur's right of way: no pines within this of its track
+const spurX = SPURS.heights.pts[SPURS.heights.pts.length - 1][0];
+export const FOOTHILLS = (() => {
+  const x0 = Fh.x, x1 = Fh.x + Fh.w, y0 = Fh.y, y1 = Fh.y + Fh.h, my = (y0 + y1) / 2;
+  const trail = [[x0 + 1.5, my + 1.6], [x0 + 12, my - 1.8], [x0 + 24, my + 2.2], [x0 + 36, my - 1.2], [spurX - 3, my + 0.6], [spurX + 3, my + 0.6], [x0 + 58, my - 2], [x0 + 70, my + 1.8], [x0 + 82, my - 1.4], [x1 - 1.5, my + 1.2]];
+  const benches = [[x0 + 12.5, my - 2.9], [x0 + 36.5, my - 2.3], [x0 + 58.5, my - 3.1], [x0 + 82.5, my - 2.5]];
+  const post = { x: spurX + 5, y: y1 - 1.6 };
+  const trees = [];
+  for (let i = 0; i < 260; i++) {
+    const x = x0 + 0.6 + frac(i * 0.6180339 + 0.37) * (Fh.w - 1.2), y = y0 + 0.6 + frac(i * 0.7548776 + 0.11) * (Fh.h - 1.2);
+    if (Math.abs(x - spurX) < FH_CLEAR) continue;
+    if (distToLine(x, y, trail) < 1.1) continue;
+    if (benches.some(([bx, by]) => Math.hypot(x - bx, y - by) < 1.2) || Math.hypot(x - post.x, y - post.y) < 1.6) continue;
+    trees.push([x, y, 0.55 + frac(i * 0.4142) * 0.5]);
+  }
+  return { lot: Fh, trail, benches, post, trees, clear: FH_CLEAR, spurX };
+})();
+function distToLine(x, y, pts) {
+  let best = Infinity;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i], vx = bx - ax, vy = by - ay, t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy)));
+    best = Math.min(best, Math.hypot(x - ax - vx * t, y - ay - vy * t));
+  }
+  return best;
+}
+function foothillsAnchors() {
+  const F = FOOTHILLS, out = [];
+  out.push(A("ranger", F.post.x + 0.9, F.post.y + 0.2, "stand", "guard", "staff", { look: [F.post.x, F.post.y - 3] }));
+  F.benches.forEach(([x, y], i) => { out.push(A(`bench${i}a`, x - 0.35, y + 0.05, "seat", "read", "patron", { look: [x, y + 4] })); out.push(A(`bench${i}b`, x + 0.35, y + 0.05, "seat", "view", "patron", { look: [x, y + 4] })); });
+  // walkers on the trail, both ways, at their own pace
+  for (let k = 0; out.length < PLACES.foothills.cap; k++) out.push(A(`hike${k}`, F.trail[0][0], F.trail[0][1], "stand", "view", "patron", { hike: true, path: { kind: "line", pts: k % 2 ? F.trail : [...F.trail].reverse(), period: 220 + (k % 5) * 23, phase: frac(k * 0.137), wig: 0.12 } }));
+  return out;
+}
+
+export const COAST_ANCHORS = { beach: beachAnchors(), boardwalk: boardwalkAnchors(), pier: pierAnchors(), surf: surfAnchors(), slopes: slopesAnchors(), foothills: foothillsAnchors(), "shore-lot": [], "summit-lot": [] };
 
 // ---- the spurs as the painter sees them ----------------------------------------------------------------
 // The track is flat on the ground (drawn with the ground); the two shelters stand, as boxes.

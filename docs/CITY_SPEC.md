@@ -252,7 +252,9 @@ goes to the free hand when the leading one is busy.
 recovery, nobody falls), `swim` (for the Coast: under water from the waist, a crawl),
 `ski` and `snowboard` (the Heights), `golf` (address, backswing, through, follow-through),
 `deal` and `chips` (the casino), `arcade` (hands on the controls), `type`, `sweep`, `carry`
-(a box), `phone`. Props the move needs (cards, chips, a box, a broom, a club, poles and skis,
+(a box), `phone`; since the master plan, `box` (the guard, a bob, a jab into the air: THE PIT's
+ring, gloves drawn), `grapple` (the octagon's low stance and a check kick) and `tennis` (ready,
+backswing, contact, follow-through, a racket), all stylised: nobody is struck, nobody falls. Props the move needs (cards, chips, a box, a broom, a club, poles and skis,
 a board, a phone, the waterline) are drawn by the rig, a few pixels each.
 
 **API** (browser):

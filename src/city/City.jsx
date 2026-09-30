@@ -33,6 +33,12 @@ import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
 import SocialPanel from "./SocialPanel.jsx";
 import { useSocial, ensureSocial } from "./socialClient.js";
+// THE MASTER PLAN (docs/planning/MASTER_PLAN.md): the Pit's card, the club's fixture, the Dept of Planning
+import PitPanel from "./PitPanel.jsx";
+import { pitEvents, boutAt, billLine, resultLine } from "./pit.js";
+import { tennisAt, tennisEvents } from "./tennis.js";
+import { planningLines } from "./planning.js";
+import { actsNow } from "./acts.js";
 import { ensurePlans, knownSubjects, summaryOf, completeAt, checkDay, wantSectors, findBySlug, pinSubject, unpinSubject } from "./planClient.js";
 // The districts with a ground (the Arena, the Sprawl's estate pitch), and the PA's sign-off
 // under each kind of score.
@@ -228,13 +234,29 @@ export default function City({ route }) {
     const gossip = socialRef.current?.events || [];
     // While a fixture is on, every fourth line is the score (on the map and in its district).
     const games = Object.keys(GAMES).filter(id => !here || PLACES[id].district === here).map(id => gameAt(id, mt)).filter(Boolean);
-    const civic = civicPa(asmRef.current, mt);
+    const civic = [...civicPa(asmRef.current, mt), ...planningLines(asmRef.current, actsNow(), Math.floor(k / 5))];
+    // the Pit and the tennis club: their calls (the last half hour) and the state of play, on the
+    // map and in their districts; they join the fixtures' rotation
+    const venues = [];
+    if (!here || here === "works") {
+      const on = boutAt(mt), calls = pitEvents(mt - 0.5, mt + 1e-6);
+      if (calls.length) venues.push(calls[calls.length - 1].text);
+      else if (on) venues.push(on.phase.phase === "decision" || on.phase.phase === "over" ? `THE PIT: ${resultLine(on.bout)}` : `THE PIT, ${billLine(on.bout)}${on.phase.phase === "round" ? `: ROUND ${on.phase.round} OF 3. THE CROWD IS REMINDED TO REMAIN SEATED. IT WILL NOT.` : ". THE FIGHTERS ARE ON THEIR WAY TO THE FLOOR."}`);
+    }
+    if (!here || here === "sprawl") {
+      const m = tennisAt(mt), calls = tennisEvents(mt - 0.5, mt + 1e-6);
+      if (calls.length) venues.push(calls[calls.length - 1].text);
+      else if (m) venues.push(`THE TENNIS CLUB, ${m.name}: ${m.status}`);
+    }
     // the civic record (civic.js): this district's mood and team inside one; swings and the table on the map
     const record = civicPaLines(civicOf(clock.day), here);
     if (civic.length && k % 5 === 3 && (!here || here === "commons")) setPa(civic[Math.floor(k / 5) % civic.length]);
     else if (record.length && k % 7 === 6) setPa(record[Math.floor(k / 7) % record.length]);
     else if (k % 6 === 4 && prefectPaLines(civicOf(clock.day), here).length) { const pl = prefectPaLines(civicOf(clock.day), here); setPa(pl[Math.floor(k / 6) % pl.length]); }
-    else if (games.length && k % 4 === 1) { const g = games[Math.floor(k / 4) % games.length]; setPa(`${GAME_VENUE[g.placeId]}, ${g.name}: ${g.status}. ${SCORE_TAG[g.kind]}`); }
+    else if ((games.length || venues.length) && k % 4 === 1) {
+      const all = [...games.map(g => `${GAME_VENUE[g.placeId]}, ${g.name}: ${g.status}. ${SCORE_TAG[g.kind]}`), ...venues];
+      setPa(all[Math.floor(k / 4) % all.length]);
+    }
     else if (!here && gossip.length && k % 3 === 2) setPa(gossip[Math.floor(k / 3) % Math.min(gossip.length, 12)].text);
     else setPa(paLine(st, k, evs.length ? evs[evs.length - 1].text : null));
     // a new district re-reads its own station's line at once
@@ -355,6 +377,7 @@ export default function City({ route }) {
       </Frame>
       {d && !b && <DistrictCivic districtId={d.id} onLeague={(e) => { e.preventDefault(); window.location.hash = "#city/league" + query; }} />}
       {(!d || d.id === "commons") && <AssemblyRow asm={asm} />}
+      {!b && <PitPanel districtId={d?.id || null} />}
       {!d && <MapKey />}
       {!d && !b && <SocialPanel />}
       <div className="hvi-city-help">

@@ -9,6 +9,7 @@
 import { TIERS, getTier, slugify } from "../figures.js";
 import { FLOORS as HQ_FLOORS } from "../building.js";
 import { FUNNEL_PLACES, FUNNEL_BUILDINGS, FUNNEL_ARCH, FUNNEL_JOBS, FUNNEL_LEISURE_BAND, FUNNEL_LEISURE_FIELD, FUNNEL_FAMILY } from "./funnelSim.js";
+import { VENUE_PLACES, VENUE_BUILDINGS, VENUE_ARCH, VENUE_JOBS, VENUE_LEISURE_BAND, VENUE_LEISURE_FIELD, VENUE_FAMILY, VENUE_FIELD_HINTS, VENUE_FIELD_RULES, VENUE_OPEN_LOTS, VENUE_FIXTURES } from "./venueSim.js";
 
 export const SEED = "HVI-SUBSTRATE-01";
 // Day 1 of the Substrate. Machine days count from here.
@@ -30,6 +31,19 @@ function rng(str) {
 }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+// ---- the master plan (docs/planning/MASTER_PLAN.md, 2026-09-30) -------------------
+// Scott: "make sure that we're arranging the city accordingly. Maybe we should hire a city
+// planner." LAYOUT_VERSION names the arrangement a published plan was built with (buildPlan
+// records it). A layout change takes effect at a day boundary: days already published keep
+// their segments (whereAt fits a trip's legs to the plan's own times, so nobody jumps when
+// the ground under a published day moves), and every day built after the deploy is built on
+// the new ground. Version 2: the Heights pulled back behind a band of foothills, the Coast
+// moved south behind a civic and green belt (the bottom row runs to row 74), the Works laid
+// out heavy-in / light-out, the Commons' school away from the Works.
+export const LAYOUT_VERSION = 2;
+export const HEIGHTS_DY = -10, COAST_DY = 9;
+const heightsY = (y) => y + HEIGHTS_DY, coastY = (y) => y + COAST_DY;
+
 // ---- districts --------------------------------------------------------------------
 const D = (id, name, addr, x, y, w, h, blurb) => ({ id, name, addr, rect: { x, y, w, h }, blurb, places: [] });
 export const DISTRICTS = [
@@ -42,19 +56,24 @@ export const DISTRICTS = [
   D("archive", "THE ARCHIVE", "0x7A00", 79, 18, 30, 22, "The records library. Every upload indexed, every file open to anyone. Nothing here is ever deleted."),
   // The Commons runs 7 rows further south (2026-09-30), like the Sprawl: room for THE ASSEMBLY
   // and the vacant lot its first session decides (docs/ASSEMBLY.md). Its station is unmoved.
-  D("commons", "THE COMMONS", "0x6F00", 0, 45, 25, 20, "Care, worship and groceries. The soft infrastructure. Tolerated. Lately, also government."),
-  D("works", "THE WORKS", "0x8B00", 28, 45, 25, 13, "Power, cache and PROCESSING. Everyone is useful here, one way or another."),
+  // The master plan (2026-09-30) runs the whole bottom row to row 74: a civic, sporting and green
+  // belt between the core and the Coast (the Dept of Planning, THE PIT, the estate gardens, the
+  // tennis club). A bottom-row district's station sits over its centre column: none moved.
+  D("commons", "THE COMMONS", "0x6F00", 0, 45, 25, 29, "Care, worship and groceries. The soft infrastructure. Tolerated. Lately, also government."),
+  D("works", "THE WORKS", "0x8B00", 28, 45, 25, 29, "Power, cache and PROCESSING. Everyone is useful here, one way or another."),
   // The Sprawl runs 7 rows further south than the rest of the bottom row (2026-09-29): room
   // for the estate pitch beside the hab blocks. Its station (and so the Loop) is unmoved: a
   // bottom-row district's stop sits over its centre column.
-  D("sprawl", "THE SPRAWL", "0x9C00", 56, 45, 53, 20, "Residential storage. Subjects are returned here nightly for recharging."),
+  D("sprawl", "THE SPRAWL", "0x9C00", 56, 45, 53, 29, "Residential storage. Subjects are returned here nightly for recharging."),
   // THE CITY BUILT OUTWARD (Scott 2026-09-30: "keep building the city outward... mountain and ski
   // resort type stuff, maybe a resort area like a beach area"). Two expansion districts at the
   // edges, appended (a sector is a district, in this order): off the Loop, each served by a
   // surface spur of personal pods from a hub station (SPURS, below). Their resort parcels wait
   // for THE ASSEMBLY's session 002 (docs/ASSEMBLY.md).
-  { ...D("coast", "THE COAST", "0xAD00", 0, 68, 109, 22, "Sand, surf and a boardwalk. Leisure at the water's edge, supervised by lifeguards who are also supervised."), expansion: true, hub: "works" },
-  { ...D("heights", "THE HEIGHTS", "0xBE00", 8, -31, 93, 28, "Snow, slopes and a lodge. Altitude is a privilege. Descent is mandatory."), expansion: true, hub: "campus" },
+  { ...D("coast", "THE COAST", "0xAD00", 0, coastY(68), 109, 22, "Sand, surf and a boardwalk. Leisure at the water's edge, supervised by lifeguards who are also supervised."), expansion: true, hub: "works" },
+  // The Heights (master plan): pulled back ten rows, its southern band THE FOOTHILLS (forest,
+  // trails), so the mountain no longer stands against Finance's towers and the casino.
+  { ...D("heights", "THE HEIGHTS", "0xBE00", 8, heightsY(-31), 93, 38, "Snow, slopes and a lodge. Altitude is a privilege. Descent is mandatory."), expansion: true, hub: "campus" },
 ];
 export const DISTRICT = Object.fromEntries(DISTRICTS.map(d => [d.id, d]));
 // The Loop's districts (one station each); the expansion districts reach it by spur.
@@ -167,6 +186,9 @@ const PLACE_LIST = [
 ];
 // the funnels (funnelSim.js): the Arcade, the EB Shop, the Union lounge
 PLACE_LIST.push(...FUNNEL_PLACES.map(a => P(...a)));
+// THE MASTER PLAN's venues (venueSim.js): THE PIT, the tennis club, the Dept of Planning, the
+// estate gardens, the foothills
+PLACE_LIST.push(...VENUE_PLACES.map(a => P(...a)));
 for (const p of PLACE_LIST) DISTRICT[p.district].places.push(p.id);
 
 export const PLACES = Object.fromEntries(PLACE_LIST.map(p => [p.id, p]));
@@ -188,6 +210,8 @@ const HQ_ROOMS = { exec: ["exec-suite"], bar: [], lobby: ["assembly-hall"], brea
 const B = (id, name, district, floors, lot = null) => ({ id, name, district, floors, lot });
 // The Commons' old grid cell (col, row): 3 x 2 cells of 7.67 x 5 from (1, 47).
 const CM = (c, r) => ({ x: 1 + c * (23 / 3), y: 47 + r * 5, w: 23 / 3, h: 5 });
+// The Works' old grid cell (col, row): 3 x 3 cells of 7.67 x 3.33 from (29, 47).
+const WK = (c, r) => ({ x: 29 + c * (23 / 3), y: 47 + r * (10 / 3), w: 23 / 3, h: 10 / 3 });
 const BUILDING_LIST = [
   // THE ARTS QUARTER
   // the sound stages are Electric Basement TV's studio (funnelSim.js): the EBSN set, ON AIR when live
@@ -224,21 +248,25 @@ const BUILDING_LIST = [
   B("ward-7", "WARD 7", "commons", [["2F", "RECOVERY (TIME-LIMITED)", ["ward"]], ["1F", "THE WARD", ["ward"]], ["G", "TRIAGE", ["ward"]]], CM(0, 0)),
   B("chapel", "CHAPEL OF UPTIME", "commons", [["G", "THE NAVE", ["chapel"]]], CM(1, 0)),
   B("the-green", "THE GREEN", "commons", [["G", "OPEN AIR (MONITORED)", ["park"]]], CM(2, 0)),
-  B("the-allotment", "THE ALLOTMENT", "commons", [["G", "RAISED BEDS (COUNTED)", ["allotment"]]], CM(0, 1)),
+  B("the-allotment", "THE ALLOTMENT", "commons", [["G", "RAISED BEDS (COUNTED)", ["allotment"]]], CM(2, 1)),   // master plan: the green edge along the Works
   B("ration-market", "RATION MARKET", "commons", [["1F", "NIGHT MARKET", ["night-market"]], ["G", "THE STALLS", ["market"]]], CM(1, 1)),
-  B("schoolhouse", "SCHOOLHOUSE", "commons", [["1F", "CLASSROOMS", ["schoolhouse"]], ["G", "ASSEMBLY", ["schoolhouse"]]], CM(2, 1)),
+  B("schoolhouse", "SCHOOLHOUSE", "commons", [["1F", "CLASSROOMS", ["schoolhouse"]], ["G", "ASSEMBLY", ["schoolhouse"]]], CM(0, 1)),   // master plan: away from the foundry
   B("lot-6f07", "LOT 0x6F07", "commons", [["G", "THE LOT (PROPOSED DEVELOPMENT)", ["dev-lot"]]], { x: 9.5, y: 57.5, w: 14.5, h: 7 }),
   B("the-assembly", "THE ASSEMBLY", "commons", [["G", "THE FLOOR (NON-BINDING)", ["forum"]]], { x: 1, y: 57.5, w: 8.5, h: 7 }),
-  // THE WORKS
-  B("reclamation-line", "RECLAMATION LINE", "works", [["1F", "SORTING GALLERY", ["reclamation"]], ["G", "THE LINE (PROCESSING)", ["reclamation"]]]),
-  B("radiant-core", "RADIANT CORE", "works", [["G", "CONTROL ROOM", ["reactor"]], ["B1", "CONTAINMENT", ["reactor"]]]),
-  B("foundry", "FOUNDRY", "works", [["G", "THE POUR", ["foundry"]]]),
-  B("cache-farm", "CACHE FARM", "works", [["2F", "RACK HALL C", ["cache-farm"]], ["1F", "RACK HALL B", ["cache-farm"]], ["G", "RACK HALL A", ["cache-farm"]]]),
-  B("data-docks", "DATA DOCKS", "works", [["G", "THE QUAY", ["docks"]]]),
-  B("hydroponics", "HYDROPONIC VATS", "works", [["1F", "GROW DECK", ["hydroponics"]], ["G", "NUTRIENT TANKS", ["hydroponics"]]]),
-  B("barracks", "ENFORCEMENT BARRACKS", "works", [["1F", "BUNKS", ["barracks"]], ["G", "ARMOURY", ["barracks"]]]),
-  B("holding-cells", "HOLDING CELLS", "works", [["2F", "CELL TIER C", ["holding-cells"]], ["1F", "CELL TIER B", ["holding-cells"]], ["G", "CELL TIER A", ["holding-cells"]]]),
-  B("slag-canteen", "SLAG CANTEEN", "works", [["G", "THE TROUGH", ["canteen"]]]),
+  // THE WORKS, laid out by hand since the master plan (2026-09-30): the old grid's cells, but
+  // heavy in and light out. The foundry, the reclamation line and the cells take the west
+  // column (the Commons' green edge beyond), the core the centre; the east column, across the
+  // street from the Sprawl's hab blocks, gets the clean ones: the vats, the canteen, the docks.
+  // THE PIT (venueSim.js) fills the new southern rows.
+  B("reclamation-line", "RECLAMATION LINE", "works", [["1F", "SORTING GALLERY", ["reclamation"]], ["G", "THE LINE (PROCESSING)", ["reclamation"]]], WK(0, 1)),
+  B("radiant-core", "RADIANT CORE", "works", [["G", "CONTROL ROOM", ["reactor"]], ["B1", "CONTAINMENT", ["reactor"]]], WK(1, 0)),
+  B("foundry", "FOUNDRY", "works", [["G", "THE POUR", ["foundry"]]], WK(0, 0)),
+  B("cache-farm", "CACHE FARM", "works", [["2F", "RACK HALL C", ["cache-farm"]], ["1F", "RACK HALL B", ["cache-farm"]], ["G", "RACK HALL A", ["cache-farm"]]], WK(1, 1)),
+  B("data-docks", "DATA DOCKS", "works", [["G", "THE QUAY", ["docks"]]], WK(2, 2)),
+  B("hydroponics", "HYDROPONIC VATS", "works", [["1F", "GROW DECK", ["hydroponics"]], ["G", "NUTRIENT TANKS", ["hydroponics"]]], WK(2, 0)),
+  B("barracks", "ENFORCEMENT BARRACKS", "works", [["1F", "BUNKS", ["barracks"]], ["G", "ARMOURY", ["barracks"]]], WK(1, 2)),
+  B("holding-cells", "HOLDING CELLS", "works", [["2F", "CELL TIER C", ["holding-cells"]], ["1F", "CELL TIER B", ["holding-cells"]], ["G", "CELL TIER A", ["holding-cells"]]], WK(0, 2)),
+  B("slag-canteen", "SLAG CANTEEN", "works", [["G", "THE TROUGH", ["canteen"]]], WK(2, 1)),
   // THE SPRAWL
   // Laid out by hand since the pitch: the hab blocks where the grid had them, the Street and
   // the Plaza as two long strips under A and B, the pitch under C and D.
@@ -249,26 +277,27 @@ const BUILDING_LIST = [
   // THE COAST, laid out by hand: the seaside rows to the north (the Shore Line's terminal in the
   // gap at x 51-58), the boardwalk, the beach, the pier into the sea, the break off its end, and
   // the resort parcel to the east. The sea is the district's southern rows.
-  B("surf-shacks", "THE SURF SHACKS", "coast", [["G", "SHACKS (RENT BY THE TIDE)", ["shacks"]]], { x: 1, y: 68.5, w: 12, h: 7 }),
-  B("the-seawall", "THE SEAWALL ESTATE", "coast", [6, 5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "GROUND-LEVEL UNITS (DAMP)" : `UNIT LEVEL ${n - 1}`, ["seawall"]]), { x: 13.5, y: 68.5, w: 12, h: 7 }),
-  B("bungalow-row", "BUNGALOW ROW", "coast", [["1F", "UPSTAIRS (SEA VIEW, PARTIAL)", ["bungalows"]], ["G", "VERANDAS", ["bungalows"]]], { x: 26, y: 68.5, w: 12, h: 7 }),
-  B("seaview-flats", "SEAVIEW FLATS", "coast", [5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "GROUND FLOOR (SAND IN THE HALL)" : `FLATS LEVEL ${n - 1}`, ["seaview"]]), { x: 38.5, y: 68.5, w: 12, h: 7 }),
-  B("the-surfside", "THE SURFSIDE", "coast", [["PH", "PENTHOUSE DECK (SUNSET, SCHEDULED)", ["surfside"]], ...[4, 3, 2, 1].map(n => [`${n}F`, `OCEANFRONT LEVEL ${n}`, ["surfside"]]), ["G", "LOBBY (SAND REMOVED AT THE DOOR)", ["surfside"]]], { x: 58.5, y: 68.5, w: 13, h: 7 }),
-  B("lot-shore", "PARCEL 0xAD06", "coast", [["G", "THE PARCEL (PENDING SESSION 002)", ["shore-lot"]]], { x: 72.5, y: 68.5, w: 35.5, h: 11 }),
-  B("the-boardwalk", "THE BOARDWALK", "coast", [["G", "THE PLANKS (VENDORS LICENSED)", ["boardwalk"]]], { x: 1, y: 76, w: 70.5, h: 3 }),
-  B("the-beach", "THE BEACH", "coast", [["1F", "THE SHALLOWS (SWIMMING, SUPERVISED)", ["beach"]], ["G", "THE SAND (TOWELS REGISTERED)", ["beach"]]], { x: 1, y: 79.5, w: 62, h: 6.5 }),
-  B("the-pier", "THE PIER", "coast", [["G", "THE DECK (RAILINGS ADVISORY)", ["pier"]]], { x: 63.5, y: 79.5, w: 5, h: 10 }),
-  B("the-break", "THE BREAK", "coast", [["G", "THE SURF (WAVES SCHEDULED)", ["surf"]]], { x: 69.5, y: 85.5, w: 38.5, h: 4 }),
+  B("surf-shacks", "THE SURF SHACKS", "coast", [["G", "SHACKS (RENT BY THE TIDE)", ["shacks"]]], { x: 1, y: coastY(68.5), w: 12, h: 7 }),
+  B("the-seawall", "THE SEAWALL ESTATE", "coast", [6, 5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "GROUND-LEVEL UNITS (DAMP)" : `UNIT LEVEL ${n - 1}`, ["seawall"]]), { x: 13.5, y: coastY(68.5), w: 12, h: 7 }),
+  B("bungalow-row", "BUNGALOW ROW", "coast", [["1F", "UPSTAIRS (SEA VIEW, PARTIAL)", ["bungalows"]], ["G", "VERANDAS", ["bungalows"]]], { x: 26, y: coastY(68.5), w: 12, h: 7 }),
+  B("seaview-flats", "SEAVIEW FLATS", "coast", [5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "GROUND FLOOR (SAND IN THE HALL)" : `FLATS LEVEL ${n - 1}`, ["seaview"]]), { x: 38.5, y: coastY(68.5), w: 12, h: 7 }),
+  B("the-surfside", "THE SURFSIDE", "coast", [["PH", "PENTHOUSE DECK (SUNSET, SCHEDULED)", ["surfside"]], ...[4, 3, 2, 1].map(n => [`${n}F`, `OCEANFRONT LEVEL ${n}`, ["surfside"]]), ["G", "LOBBY (SAND REMOVED AT THE DOOR)", ["surfside"]]], { x: 58.5, y: coastY(68.5), w: 13, h: 7 }),
+  B("lot-shore", "PARCEL 0xAD06", "coast", [["G", "THE PARCEL (PENDING SESSION 002)", ["shore-lot"]]], { x: 72.5, y: coastY(68.5), w: 35.5, h: 11 }),
+  B("the-boardwalk", "THE BOARDWALK", "coast", [["G", "THE PLANKS (VENDORS LICENSED)", ["boardwalk"]]], { x: 1, y: coastY(76), w: 70.5, h: 3 }),
+  B("the-beach", "THE BEACH", "coast", [["1F", "THE SHALLOWS (SWIMMING, SUPERVISED)", ["beach"]], ["G", "THE SAND (TOWELS REGISTERED)", ["beach"]]], { x: 1, y: coastY(79.5), w: 62, h: 6.5 }),
+  B("the-pier", "THE PIER", "coast", [["G", "THE DECK (RAILINGS ADVISORY)", ["pier"]]], { x: 63.5, y: coastY(79.5), w: 5, h: 10 }),
+  B("the-break", "THE BREAK", "coast", [["G", "THE SURF (WAVES SCHEDULED)", ["surf"]]], { x: 69.5, y: coastY(85.5), w: 38.5, h: 4 }),
   // THE HEIGHTS, laid out by hand: the village along the foot of the mountain (the Alpine
   // Line's terminal in the gap at x 51.5-57.5), the slopes above it, the upper-slope parcel east.
-  B("the-bunkhouse", "THE BUNKHOUSE", "heights", [4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "LOWER BUNKS (BOOTS OFF)" : `BUNK LEVEL ${n - 1}`, ["bunkhouse"]]), { x: 9, y: -10.5, w: 13, h: 7 }),
-  B("alpine-flats", "ALPINE FLATS", "heights", [["3F", "FLATS LEVEL 3 (VIEW, RATIONED)", ["alpine-flats"]], ["2F", "FLATS LEVEL 2", ["alpine-flats"]], ["1F", "FLATS LEVEL 1", ["alpine-flats"]], ["G", "BOOT ROOM AND FLATS", ["alpine-flats"]]], { x: 22.5, y: -10.5, w: 14, h: 7 }),
-  B("the-lodge", "THE BASE LODGE", "heights", [["1F", "THE APRES (DRINKING AT ALTITUDE)", ["base-lodge"]], ["G", "THE HEARTH (COCOA, RATIONED)", ["base-lodge"]]], { x: 57.5, y: -10.5, w: 14, h: 7 }),
-  B("the-chalets", "THE CHALETS", "heights", [["1F", "LOFT BEDROOMS (FIREPLACE, LOGGED)", ["chalets"]], ["G", "GREAT ROOMS", ["chalets"]]], { x: 72, y: -10.5, w: 28, h: 7 }),
-  B("the-slopes", "THE SLOPES", "heights", [["1F", "THE SUMMIT (LIFT TOP, WIND LOGGED)", ["slopes"]], ["G", "THE PISTE (DESCENT MONITORED)", ["slopes"]]], { x: 9, y: -30.5, w: 50, h: 19.5 }),
-  B("lot-summit", "PARCEL 0xBE06", "heights", [["G", "THE PARCEL (PENDING SESSION 002)", ["summit-lot"]]], { x: 59, y: -30.5, w: 41, h: 19.5 }),
+  B("the-bunkhouse", "THE BUNKHOUSE", "heights", [4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "LOWER BUNKS (BOOTS OFF)" : `BUNK LEVEL ${n - 1}`, ["bunkhouse"]]), { x: 9, y: heightsY(-10.5), w: 13, h: 7 }),
+  B("alpine-flats", "ALPINE FLATS", "heights", [["3F", "FLATS LEVEL 3 (VIEW, RATIONED)", ["alpine-flats"]], ["2F", "FLATS LEVEL 2", ["alpine-flats"]], ["1F", "FLATS LEVEL 1", ["alpine-flats"]], ["G", "BOOT ROOM AND FLATS", ["alpine-flats"]]], { x: 22.5, y: heightsY(-10.5), w: 14, h: 7 }),
+  B("the-lodge", "THE BASE LODGE", "heights", [["1F", "THE APRES (DRINKING AT ALTITUDE)", ["base-lodge"]], ["G", "THE HEARTH (COCOA, RATIONED)", ["base-lodge"]]], { x: 57.5, y: heightsY(-10.5), w: 14, h: 7 }),
+  B("the-chalets", "THE CHALETS", "heights", [["1F", "LOFT BEDROOMS (FIREPLACE, LOGGED)", ["chalets"]], ["G", "GREAT ROOMS", ["chalets"]]], { x: 72, y: heightsY(-10.5), w: 28, h: 7 }),
+  B("the-slopes", "THE SLOPES", "heights", [["1F", "THE SUMMIT (LIFT TOP, WIND LOGGED)", ["slopes"]], ["G", "THE PISTE (DESCENT MONITORED)", ["slopes"]]], { x: 9, y: heightsY(-30.5), w: 50, h: 19.5 }),
+  B("lot-summit", "PARCEL 0xBE06", "heights", [["G", "THE PARCEL (PENDING SESSION 002)", ["summit-lot"]]], { x: 59, y: heightsY(-30.5), w: 41, h: 19.5 }),
 ];
 BUILDING_LIST.push(...FUNNEL_BUILDINGS.map(([id, name, district, floors]) => B(id, name, district, floors)));
+BUILDING_LIST.push(...VENUE_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
 // Each district is gridded by BUILDING (so a building's rooms stay one block on the map),
 // and a building's cell is split side by side among its distinct places.
 for (const d of DISTRICTS) {
@@ -321,6 +350,7 @@ export const ARCH = {
   "reclamation-line": "shed", "radiant-core": "reactor", foundry: "stacks", "cache-farm": "datahall", "data-docks": "docks", hydroponics: "tanks", barracks: "bunker", "holding-cells": "prison", "slag-canteen": "canteen",
   "hab-a": "projects", "hab-b": "projects", "hab-c": "brownstone", "hab-d": "brownstone", "the-street": "lot", "the-plaza": "lot", "the-pitch": "field",
   ...FUNNEL_ARCH,
+  ...VENUE_ARCH,
   "surf-shacks": "shacks", "the-seawall": "seawall", "bungalow-row": "bungalow", "seaview-flats": "seaview", "the-surfside": "condo", "lot-shore": "lot", "the-boardwalk": "lot", "the-beach": "lot", "the-pier": "lot", "the-break": "lot",
   "the-bunkhouse": "bunkhouse", "alpine-flats": "alpine", "the-lodge": "lodge", "the-chalets": "chalet", "the-slopes": "lot", "lot-summit": "lot",
 };
@@ -462,6 +492,7 @@ export const JOBS = [
   J("lodge-cook", "Lodge Cook", "base-lodge", ["Cocoa Stirrer", "Cook", "Head Cook", "Chef de Chalet"], ["*", "hospitality"], ["care", "utility"], { shift: "evening" }),
 ];
 JOBS.push(...FUNNEL_JOBS.map(a => J(...a)));
+JOBS.push(...VENUE_JOBS.map(a => J(...a)));
 export const JOB = Object.fromEntries(JOBS.map(j => [j.id, j]));
 
 // ---- subject reading --------------------------------------------------------------
@@ -503,10 +534,12 @@ const FIELD_HINTS = {
   "ghislaine-maxwell": ["crime"], "martin-shkreli": ["finance"], "bernie-madoff": ["finance", "crime"], "elizabeth-holmes": ["crime", "business"],
   "harvey-weinstein": ["crime", "screen"], "joe-jackson": ["management", "music"], "pablo-escobar": ["crime"], "oj-simpson": ["sport"],
   "aaron-hernandez": ["crime", "sport"], "aretha-franklin": ["music"],
+  ...VENUE_FIELD_HINTS,   // fighters and tennis players on the census (venueSim.js)
 };
 
 // Keyword -> field. First hit per rule; order doesn't matter, weights come from source.
 const FIELD_RULES = [
+  ...VENUE_FIELD_RULES,   // tennis (venueSim.js): before "sport", so a tennis player is read as one
   ["physics-theory", /theoretical physic|physicist|cosmolog|relativity|astronom|astrophysic/],
   ["radiation", /radioactiv|radiochem|nuclear|radiation|radiolog/],
   ["chemistry", /chemist/],
@@ -737,7 +770,9 @@ const LEISURE_BY_FIELD = {
   exploration: { slopes: 3, surf: 1, pier: 1.5 }, hospitality: { boardwalk: 1.5, "base-lodge": 1.5 },
 };
 FUNNEL_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
+VENUE_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
 for (const [f, m] of Object.entries(FUNNEL_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
+for (const [f, m] of Object.entries(VENUE_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
 // the sea and the snow, for the sporting and the idle
 for (const [f, w] of Object.entries({ sport: { surf: 0.8, slopes: 1 }, care: { beach: 1 }, visual: { pier: 1.2, beach: 0.8 }, writing: { pier: 1.5 }, music: { boardwalk: 1 }, finance: { slopes: 1.5 }, business: { slopes: 1 }, screen: { beach: 1.2 } })) Object.assign(LEISURE_BY_FIELD[f] ||= {}, w);
 
@@ -780,6 +815,8 @@ function gamesOn(day, hour) {
   const wd = weekdayOf(day);
   let out = null;
   for (const [id, list] of Object.entries(GAMES)) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
+  // the master plan's venues (the Pit's card, the tennis club's fixtures) pull a crowd the same way
+  for (const [id, list] of Object.entries(VENUE_FIXTURES)) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
   return out;
 }
 const TEAMS = ["THE COMPLIANT", "THE ASSESSED"];
@@ -1125,6 +1162,7 @@ const FAMILY = [
   ["slopes", "base-lodge"],
 ];
 for (const [k, id] of FUNNEL_FAMILY) FAMILY[k].push(id);
+for (const [k, id] of VENUE_FAMILY) FAMILY[k].push(id);
 const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
 const LEISURE_ROOMS = Object.values(PLACES).filter(p => p.kind === "leisure" || p.kind === "mixed").map(p => p.id);
 export const OVERFLOW = Object.fromEntries(Object.keys(PLACES).map(id => {
@@ -1355,8 +1393,8 @@ export const V_BUS = V_TRAIN;
 // pts: the track, hub stop first, terminal last (map cells).
 export const V_POD = 360;
 export const SPURS = {
-  coast: { id: "shore", districtId: "coast", hub: "works", name: "THE SHORE LINE", stop: "SHORE LINE // WORKS STOP", terminal: "SHORE LINE // COAST TERMINAL", pts: [[48.5, 44.3], [54.5, 44.3], [54.5, 69.8]] },
-  heights: { id: "alpine", districtId: "heights", hub: "campus", name: "THE ALPINE LINE", stop: "ALPINE LINE // CAMPUS STOP", terminal: "ALPINE LINE // HEIGHTS TERMINAL", pts: [[48.5, 13.7], [54.5, 13.7], [54.5, -5.6]] },
+  coast: { id: "shore", districtId: "coast", hub: "works", name: "THE SHORE LINE", stop: "SHORE LINE // WORKS STOP", terminal: "SHORE LINE // COAST TERMINAL", pts: [[48.5, 44.3], [54.5, 44.3], [54.5, coastY(69.8)]] },
+  heights: { id: "alpine", districtId: "heights", hub: "campus", name: "THE ALPINE LINE", stop: "ALPINE LINE // CAMPUS STOP", terminal: "ALPINE LINE // HEIGHTS TERMINAL", pts: [[48.5, 13.7], [54.5, 13.7], [54.5, heightsY(-5.6)]] },
 };
 export const SPUR_BY_ID = Object.fromEntries(Object.values(SPURS).map(sp => [sp.id, sp]));
 for (const sp of Object.values(SPURS)) {
@@ -1389,7 +1427,7 @@ function spotIn(placeId, key, seed) {
 // passable (you leave through your own walls, that is what doors are for), and the open
 // lots (the Green, the Street, the Plaza, the Allotment) are ground anyone may cross.
 // Leg durations follow the path's length, so walking pace never changes.
-export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch", "lot-6f07", "the-assembly", "the-boardwalk", "the-beach", "the-pier"]);
+export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch", "lot-6f07", "the-assembly", "the-boardwalk", "the-beach", "the-pier", ...VENUE_OPEN_LOTS]);
 const KERB = 0.4, CORNER = 0.3;   // the street view's footprints are the lot less 0.4
 const FOOT = (() => {
   const blocks = BUILDINGS.filter(b => !OPEN_LOTS.has(b.id)).map(b => ({ id: b.id, x0: b.rect.x + KERB, y0: b.rect.y + KERB, x1: b.rect.x + b.rect.w - KERB, y1: b.rect.y + b.rect.h - KERB }));
@@ -1752,7 +1790,7 @@ export function buildPlan(day, seed = SEED) {
     }
     subjects[key] = row;
   }
-  return { format: PLAN_FORMAT, day, seed, roster: ROSTER_VER, social: { [day]: socialVer(day), [day - 1]: socialVer(day - 1) }, n: ROSTER_ORDER.length, places, subjects };
+  return { format: PLAN_FORMAT, day, seed, layout: LAYOUT_VERSION, roster: ROSTER_VER, social: { [day]: socialVer(day), [day - 1]: socialVer(day - 1) }, n: ROSTER_ORDER.length, places, subjects };
 }
 
 // ---- sector windows (scaling step 4: netlify/lib/plans.js, src/city/sectors.js) --------------
@@ -1959,14 +1997,22 @@ export function whereAt(s, machineTime, seed = SEED) {
   };
   const r = route(g.fromPlaceId, g.placeId, key, seed), trip = g.trip;
   const t = Math.max(0, h - a);   // hours into the trip
-  if (r.local || !trip) return onLeg(r.legs, t, "out");
+  // THE LAYOUT AT A DAY BOUNDARY (the master plan, 2026-09-30): a published day keeps the
+  // times it was built with. When the ground has moved since (a building, a spur's terminal),
+  // the legs are walked at whatever pace fits those times, so nobody jumps; a day built on
+  // the current layout fits exactly and is untouched (the factor is only applied off 1).
+  if (r.local || !trip) {
+    const span = b - a;
+    return onLeg(r.legs, span > 0 && Math.abs(span - r.total) > 1e-6 ? t * (r.total / span) : t, "out");
+  }
   const sA = STATIONS[hA], sB = STATIONS[hB], train = { trainId: trip.trainId, car: trip.car, toStationId: hB };
   const eta = { boardAt: T - t + trip.board, alightAt: T - t + trip.off };
   // walk1 is street (-> terminal -> pod -> hub stop) -> gate -> up the stairs to the platform
-  if (t < r.w1) return onLeg(r.walk1, t, "out", { stationId: hA, ...train, ...eta });
+  const W1 = r.w1 <= trip.board - 0.02 ? r.w1 : Math.max(0.01, trip.board - 0.02);
+  if (t < W1) return onLeg(r.walk1, W1 === r.w1 ? t : t * (r.w1 / W1), "out", { stationId: hA, ...train, ...eta });
   if (t < trip.board) {
     // Along the platform to where the car will stop, then stand.
-    const walked = t - r.w1, need = dist(sA.entrance, trip.spotA) / V_WALK;
+    const walked = t - W1, need = dist(sA.entrance, trip.spotA) / V_WALK;
     const p = need <= 0 ? trip.spotA : lerp(sA.entrance, trip.spotA, clamp(walked / need, 0, 1));
     return { ...base, atDistrictId: hA, sub: "waiting", leg: "wait", stationId: hA, ...train, ...eta, x: p.x, y: p.y };
   }
@@ -1982,7 +2028,9 @@ export function whereAt(s, machineTime, seed = SEED) {
   // walk2 is platform -> down the stairs to the gate -> street (-> hub stop -> pod -> terminal
   // -> street); a trip read from a plan lays its street walk out here, on first use
   const walk2 = trip.walk2 || (trip.walk2 = [walkLeg(trip.spotB, sB.gate, hB, null, true), ...r.lastLegs]);
-  return onLeg(walk2, t - trip.out, "in", { stationId: hB, ...train, ...eta });
+  const left = (b - a) - trip.out, W2 = legsDur(walk2);
+  const t2 = left > 0 && W2 > left + 1e-6 ? (t - trip.out) * (W2 / left) : t - trip.out;
+  return onLeg(walk2, t2, "in", { stationId: hB, ...train, ...eta });
 }
 
 // -> {places, districts, buildings: {id: {total, floors: [n per floor index]}},

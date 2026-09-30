@@ -292,6 +292,14 @@ export const ANIMS = {
   sweep:   { fps: 3, key: 0, front: true, frames: [F({ aL: [30, -10], aR: [10, -35], p: "broom" }), F({ aL: [45, -10], aR: [25, -35], p: "broom", t: [-1, 0] }), F({ aL: [30, -10], aR: [10, -35], p: "broom" }), F({ aL: [15, -10], aR: [0, -35], p: "broom", t: [1, 0] })] },
   carry:   { fps: 6, key: 0, front: true, frames: [F({ aL: [40, -60], aR: [20, -85], p: "box", lL: 15, lR: -10 }), F({ aL: [40, -60], aR: [20, -85], p: "box", b: [0, -1] }), F({ aL: [40, -60], aR: [20, -85], p: "box", lL: -10, lR: 15 }), F({ aL: [40, -60], aR: [20, -85], p: "box", b: [0, -1] })] },
   phone:   { fps: 2, key: 0, front: true, frames: [F({ aL: [60, 150], p: "phone" }), F({ aL: [60, 150], p: "phone", h: [0, 1] }), F({ aL: [60, 150], p: "phone" }), F({ aL: [60, 150], aR: [20, -60], p: "phone" })] },
+  // THE PIT (the master plan, 2026-09-30): stylised, non-graphic. The guard up, a bob, a jab
+  // into the air in front (the leading hand, the facing side), back to the guard; nobody is
+  // struck and nobody falls. Gloves drawn by the rig.
+  box:     { fps: 6, key: 0, front: true, frames: [F({ aL: [30, -115], aR: [25, -120], p: "gloves" }), F({ aL: [30, -115], aR: [25, -120], b: [0, 1], p: "gloves" }), F({ aL: [80, -15], aR: [25, -120], t: [-1, 0], p: "gloves" }), F({ aL: [30, -115], aR: [25, -120], p: "gloves" }), F({ aL: [30, -115], aR: [25, -120], b: [1, 0], p: "gloves" }), F({ aL: [35, -110], aR: [65, -40], t: [-1, 0], h: [-1, 0], p: "gloves" })] },
+  // the octagon: a low stance, hands open and forward, circling; a check kick now and then
+  grapple: { fps: 5, key: 0, front: true, frames: [F({ t: [0, 1], aL: [45, -70], aR: [35, -80], lL: 8, lR: 8 }), F({ t: [0, 1], aL: [50, -65], aR: [40, -75], lL: 8, lR: 8, b: [-1, 0] }), F({ t: [0, 1], aL: [55, -60], aR: [35, -80], lL: 30, lR: 5 }), F({ t: [0, 1], aL: [45, -70], aR: [35, -80], lL: 8, lR: 8 }), F({ t: [0, 1], aL: [45, -70], aR: [40, -75], lL: 8, lR: 8, b: [1, 0] })] },
+  // the tennis club: ready, the backswing, contact, the follow-through; the racket drawn by the rig
+  tennis:  { fps: 5, key: 0, frames: [F({ aL: [30, -40], aR: [20, -50], p: "racket", t: [0, 1] }), F({ aL: [-30, 0], aR: [30, -40], p: "racket", t: [1, 0] }), F({ aL: [70, 0], aR: [20, -30], p: "racket", t: [-1, 0] }), F({ aL: [135, -10], aR: [20, -30], p: "racket", t: [-1, 0] }), F({ aL: [30, -40], aR: [20, -50], p: "racket" }), F({ aL: [30, -40], aR: [20, -50], p: "racket", b: [0, -1] })] },
 };
 // seated variants: the same moves from the waist up, on a seat (poses.js sit)
 export const SEATED = new Set(["sittalk"]);
@@ -475,7 +483,7 @@ export function rigFor(sheet) {
   return r || null;
 }
 
-const PROP_COL = { card: "#f5f5f5", deck: "#b91c1c", chip: "#facc15", chip2: "#dc2626", box: "#a16207", boxD: "#78350f", phone: "#111827", screen: "#22d3ee", wood: "#8a6a42", straw: "#d6b35a", ski: "#ef4444", pole: "#d1d5db", board: "#2563eb", club: "#d1d5db", water: "#2a5f8a", foam: "#bfe3f5" };
+const PROP_COL = { glove: "#dc2626", gloveD: "#7f1d1d", racket: "#e5e7eb", strings: "#fde68a", card: "#f5f5f5", deck: "#b91c1c", chip: "#facc15", chip2: "#dc2626", box: "#a16207", boxD: "#78350f", phone: "#111827", screen: "#22d3ee", wood: "#8a6a42", straw: "#d6b35a", ski: "#ef4444", pole: "#d1d5db", board: "#2563eb", club: "#d1d5db", water: "#2a5f8a", foam: "#bfe3f5" };
 
 // Draw one subject doing an animation.
 //   ctx      a 2D context
@@ -553,6 +561,15 @@ function prop(c, name, L, X, Y, s, t, sp) {
   const [hlx, hly] = L.hands.L, [hrx, hry] = L.hands.R;
   const feet = sp.bottom + 1 + L.b[1];
   switch (name) {
+    case "gloves": for (const [hx, hy] of [[hlx, hly], [hrx, hry]]) { R(PROP_COL.glove, hx - 1.5, hy - 1.5, 3, 3); R(PROP_COL.gloveD, hx - 1.5, hy + 1, 3, 1); } break;
+    case "racket": {
+      // the handle out past the hand along the forearm, the head an open frame with its strings
+      const ax = hlx - (sp.shoulder.L[0] + L.tx), ay = hly - (sp.shoulder.L[1] + L.ty), n = Math.hypot(ax, ay) || 1;
+      for (let k = 1; k <= 3; k++) R(PROP_COL.racket, hlx + (ax / n) * k, hly + (ay / n) * k, 1, 1);
+      const cx = hlx + (ax / n) * 5.5, cy = hly + (ay / n) * 5.5;
+      R(PROP_COL.strings, cx - 1, cy - 1, 3, 3); R(PROP_COL.racket, cx - 2, cy - 2, 5, 1); R(PROP_COL.racket, cx - 2, cy + 2, 5, 1); R(PROP_COL.racket, cx - 2, cy - 1, 1, 3); R(PROP_COL.racket, cx + 2, cy - 1, 1, 3);
+      break;
+    }
     case "deck": R(PROP_COL.deck, hrx - 2, hry - 1, 3, 2); break;
     case "card": R(PROP_COL.deck, hrx - 2, hry - 1, 3, 2); R(PROP_COL.card, hlx - 1, hly - 1, 2, 2); break;
     case "cardout": R(PROP_COL.deck, hrx - 2, hry - 1, 3, 2); R(PROP_COL.card, hlx - 4, hly, 2, 2); break;

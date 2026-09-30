@@ -30,6 +30,9 @@ import { funnelButtons } from "./funnels.js";
 import { openFunnel } from "./FunnelOverlay.jsx";
 import { COAST_LOTS, COAST_PLACES, SPUR_STOPS, terrainH, onTerrain } from "./coastGeo.js";
 import { drawCoastLot, drawCoastGround, drawSpurTracks, drawSpurStop, drawPod, coastLabel, coastLine } from "./coastDraw.js";
+// THE MASTER PLAN's venues (venueGeo.js, venueDraw.js): THE PIT, the tennis club; the estate gardens' trees
+import { VENUE_LOTS, VENUE_PLACES, GARDEN_TREES } from "./venueGeo.js";
+import { drawVenueLot, venueLabel, venueLine } from "./venueDraw.js";
 
 // THE SUBSTRATE, SimCity-style: every building drawn in its own architecture (archGeo.js
 // massing, archDraw.js drawing: the projects, brownstones, the glass tower, the monolith...),
@@ -45,8 +48,8 @@ import { drawCoastLot, drawCoastGround, drawSpurTracks, drawSpurStop, drawPod, c
 // the same order front to back, so what you see on top is what you get.
 
 const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316", coast: "#3a3322", heights: "#2a3440" };
-const LOT_FILL = { "the-green": "#123a18", "the-allotment": "#1a2e12", "the-street": "#20241f", "the-plaza": "#24261f" };
-const OUTDOOR_PLACES = new Set(["park", "the-street", "the-plaza", "allotment"]);
+const LOT_FILL = { "the-green": "#123a18", "the-allotment": "#1a2e12", "the-street": "#20241f", "the-plaza": "#24261f", "estate-gardens": "#15401c" };
+const OUTDOOR_PLACES = new Set(["park", "the-street", "the-plaza", "allotment", "estate-gardens"]);
 const PANEL_BG = "#060a06";
 const clampN = (v, a, b) => (v < a ? a : v > b ? b : v);
 const shade = (hex, f) => {
@@ -128,7 +131,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const c = censusRef.current;
       if (!c || c.v === V.censusV) return;
       V.censusV = c.v;
-      const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map([...PARK_PLACES, ...CIVIC_PLACES, ...COAST_PLACES].map(id => [id, []])), doors = new Map();
+      const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map([...PARK_PLACES, ...CIVIC_PLACES, ...COAST_PLACES, ...VENUE_PLACES].map(id => [id, []])), doors = new Map();
       for (const { s, w } of c.list || []) {
         if (!w) continue;
         if (ctl.skipSelf(s)) continue;   // DRIVE YOURSELF: the scheduled self steps out while you drive it
@@ -146,6 +149,10 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         if (w.activity === "commute" && w.sub !== "riding") outdoors.push({ s });
       }
       V.occ = occ; V.inside = inside; V.outdoors = outdoors; V.riders = riders; V.park = park; V.doors = doors;
+      // who is held, by slug: the Pit's fighters and the club's finalists are drawn from their own records
+      const bySlug = new Map();
+      for (const { s } of c.list || []) if (s && !s.crowd && s.slug) bySlug.set(s.slug, s);
+      V.bySlug = bySlug;
       V.need = true;
     }
 
@@ -406,6 +413,20 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         }
         return;
       }
+      if (VENUE_LOTS[b.id]) {
+        // THE PIT and THE TENNIS CLUB (venueDraw.js): the bout or the fixture on now, whoever is there
+        const pid = VENUE_LOTS[b.id];
+        const G = { ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, t: V.reduced ? 0 : performance.now() / 1000, hits: top ? [] : V.hits, w: V.cssW, h: V.cssH, lookup: (slug) => V.bySlug?.get(slug) || null };
+        const res = drawVenueLot(G, b.id, lod, V.mt, V.park.get(pid) || [], V.parkSeats.get(pid) || null);
+        V.parkSeats.set(pid, res.at);
+        if (selected) poly([P(R.x0, R.y0, 0.02), P(R.x1, R.y0, 0.02), P(R.x1, R.y1, 0.02), P(R.x0, R.y1, 0.02)], null, "#4ade80");
+        if (lod !== "far" || selected) {
+          const [x, y] = P(R.x0 + 0.6, R.y0 + 0.6, 0.6), text = venueLabel(b.id, V.mt);
+          const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
+          if (top) drawLabel(L, 1); else V.labels.push(L);
+        }
+        return;
+      }
       if (CIVIC_LOTS[b.id]) {
         // THE ASSEMBLY and its lot (civicDraw.js): the lot's face follows the recorded vote
         const pid = CIVIC_LOTS[b.id];
@@ -429,6 +450,17 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       if (OPEN_LOTS.has(b.id)) {
         const pts = [P(R.x0, R.y0, 0), P(R.x1, R.y0, 0), P(R.x1, R.y1, 0), P(R.x0, R.y1, 0)];
         poly(pts, LOT_FILL[b.id] || "#20241f", selected ? "#4ade80" : "rgba(74,222,128,0.3)");
+        if (lod !== "far" && b.id === "estate-gardens") {
+          // the estate gardens (the master plan): a path down the middle, trees either side
+          const r = b.rect, my = r.y + r.h / 2, [a0, a1] = rot(r.x + 0.4, my, V.geo.r), [b0, b1] = rot(r.x + r.w - 0.4, my, V.geo.r);
+          const A = P(a0, a1, 0.01), B = P(b0, b1, 0.01);
+          ctx.strokeStyle = "#8a7a5a"; ctx.lineWidth = Math.max(2, V.cam.z * 0.45); ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+          for (const [tx, ty] of GARDEN_TREES) {
+            const [u, v] = rot(tx, ty, V.geo.r), [x, y] = P(u, v, 0.7), [gx, gy] = P(u, v, 0);
+            ctx.strokeStyle = "#4a3222"; ctx.lineWidth = Math.max(1, V.cam.z * 0.08); ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(x, y); ctx.stroke();
+            ctx.fillStyle = "#22763a"; ctx.beginPath(); ctx.arc(x, y, Math.max(2, V.cam.z * 0.45), 0, Math.PI * 2); ctx.fill();
+          }
+        }
         if (lod !== "far" && (b.id === "the-green" || b.id === "the-allotment")) {
           for (let i = 0; i < 9; i++) {
             const u = R.x0 + (R.x1 - R.x0) * (0.15 + 0.7 * h01(b.id + i)), v = R.y0 + (R.y1 - R.y0) * (0.15 + 0.7 * h01(b.id + "v" + i));
@@ -878,6 +910,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const sub = b.id === "hq" ? "CENSUS CLASSIFIED"
         : CIVIC_LOTS[b.id] ? civicLine(b.id, mt, V.occ[b.id] || 0)
         : COAST_LOTS[b.id] ? coastLine(b.id, mt, V.occ[b.id] || 0)
+        : VENUE_LOTS[b.id] ? venueLine(b.id, mt, V.occ[b.id] || 0)
         : PARK_LOTS[b.id] ? `${V.occ[b.id] || 0} ${b.id === "the-bowl" ? "IN THE BOWL" : "ON THE GROUND"} // ${game ? game.short : PARK_LOTS[b.id] === "rec-park" ? "LEISURE IN PROGRESS. IT IS BEING ENJOYED." : "NO FIXTURE. PRACTICE IS PERMITTED."}`
         : `${V.occ[b.id] || 0} INSIDE // ${nF} FLOOR${nF === 1 ? "" : "S"}`;
       ctx.fillText(fitText(sub, pr.w - 20 - closeW), x0 + 10, y0 + 24);

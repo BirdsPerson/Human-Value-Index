@@ -3,6 +3,7 @@
 // and serves the gossip, the city-wide web and one subject's associates.
 import { useEffect, useState } from "react";
 import { setSocialSnapshots } from "./sim.js";
+import { setGrievances } from "./pit.js";
 
 const REFRESH_MS = 10 * 60 * 1000;   // new machine days publish new snapshots
 let city = null, cityAt = 0, inflight = null;
@@ -15,6 +16,7 @@ export function ensureSocial(force = false) {
   inflight = fetch("/api/social").then(r => (r.ok ? r.json() : null)).then(d => {
     if (d?.ready) {
       city = d; cityAt = Date.now();
+      setGrievances(d.pit?.bouts || []);   // THE PIT's grievance nights (social.js pitBoundary)
       if (setSocialSnapshots(d.snapshots || {}) && typeof window !== "undefined") window.dispatchEvent(new Event("hvi-social"));
     }
     return city;

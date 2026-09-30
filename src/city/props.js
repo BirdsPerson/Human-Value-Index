@@ -14,6 +14,7 @@
 // takes a 2D context. Poses (sitting, typing, sleeping...) live in poses.js.
 
 import { lotPhase, resortPhase, machineClock } from "./sim.js";
+import { PLANNING_ROOM_TYPE, PLANNING_LOOK, planningPlans, planningPropDrawers } from "./planning.js";
 import { FUNNEL_ROOM_TYPE, FUNNEL_LOOK, FUNNEL_ACTS, funnelPlans, funnelPropDrawers, funnelRooms, withTv } from "./funnelProps.js";
 import { floorRoomType, casinoPlans, casinoLook, casinoDraw, casinoLive, casinoProps } from "../casino/cityRooms.js";
 
@@ -38,6 +39,10 @@ export const ROOM_TYPE = {
   "beach": "picnic", "boardwalk": "market", "pier": "street", "surf": "park", "shore-lot": "street",
   "surfside": "suite", "bungalows": "lofts", "seaview": "lofts", "shacks": "hab", "seawall": "hab",
   "slopes": "park", "base-lodge": "cafe", "summit-lot": "street", "chalets": "suite", "alpine-flats": "lofts", "bunkhouse": "hab",
+  // THE MASTER PLAN (2026-09-30): the Pit's floor and locker rooms read as the gym (the ring
+  // and the bags), the tennis club's cutaway is its clubhouse cafe, the Dept of Planning an office
+  "pit": "gym", "tennis": "cafe", "estate-gardens": "park", "foothills": "park",
+  ...PLANNING_ROOM_TYPE,   // the Dept of Planning's drawing office (planning.js): the advocates at their lecterns
   ...FUNNEL_ROOM_TYPE,   // the Arcade, the EB Shop, the Union lounge, EBTV's stage, the boardwalk's cabinet (funnelProps.js); last, so it wins
 };
 // LOT 0x6F07 changes with THE ASSEMBLY's decision (sim.lotPhase): scrub and a site read as
@@ -70,6 +75,7 @@ const LOOK = {
   ballfield: ["#10202a", "#2f6b2a"], courts: ["#141c24", "#3a4250"], picnic: ["#10202a", "#2a5a24"], soccer: ["#10202a", "#2e7a30"],
 };
 Object.assign(LOOK, FUNNEL_LOOK);
+Object.assign(LOOK, PLANNING_LOOK);
 
 // ---- plans ----------------------------------------------------------------------------
 // A module is {w (in sprite widths), ax (where the person stands in it, 0..1), prop, a}.
@@ -284,7 +290,8 @@ const PLANS = {
     front: { unit: [M(A("stand", "sweep", "staff", 0, true), null, 2.2), M(A("seat", "rest", "patron"), "streetBench", 1.25), M(A("stand", "loiter", "patron"), null, 1.2)] },
   },
 };
-funnelPlans(PLANS, { A, M, P, SIDE });   // new rooms, and a JETSAM! cabinet in the bars, the diner, the casino
+funnelPlans(PLANS, { A, M, P, SIDE });
+planningPlans(PLANS, { A, M, P, SIDE });   // the Dept of Planning (planning.js)   // new rooms, and a JETSAM! cabinet in the bars, the diner, the casino
 Object.assign(PLANS, casinoPlans({ A, M, P }));
 Object.assign(LOOK, casinoLook);
 export const PLANNED_TYPES = Object.keys(PLANS);
@@ -756,6 +763,7 @@ const DRAW = {
 };
 const FUNNEL_ROOMS = funnelRooms();
 Object.assign(DRAW, FUNNEL_ROOMS.DRAW, { boardwalk: DRAW.market });
+DRAW.planning = DRAW.office;   // the Dept of Planning's drawing office: the office's walls
 Object.assign(DRAW, casinoDraw({ R, across }));
 export const DRAWN_TYPES = Object.keys(DRAW);
 
@@ -1088,7 +1096,8 @@ export const PROP = {
   lamppost: { back(c, X, Y, W, p) { const x = X + W / 2; R(c, "#374151", x - p, Y - 50 * p, 2 * p, 50 * p); R(c, "#fbbf24", x - 3 * p, Y - 52 * p, 6 * p, 3 * p); } },
   streetBench: { back(c, X, Y, W, p, t, a) { PROP.parkBench.back(c, X, Y, W, p, t, a); } },
 };
-Object.assign(PROP, funnelPropDrawers({ SIDE }));   // cabinets, standees, the shop counter, the EBSN desk
+Object.assign(PROP, funnelPropDrawers({ SIDE }));
+Object.assign(PROP, planningPropDrawers());   // the advocates, the plan chest   // cabinets, standees, the shop counter, the EBSN desk
 
 // HOUSE EDGE CASINO's floors: ambient light and table furniture (src/casino/cityRooms.js).
 Object.assign(LIVE, casinoLive({ R, across }));

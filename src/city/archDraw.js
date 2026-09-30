@@ -18,6 +18,8 @@
 
 import { rot, STOREY } from "./iso.js";
 import { funnelDeco, drawFunnelYard, FUNNEL_MAT, FUNNEL_ROOF, FUNNEL_STYLES_DRAWN, FUNNEL_PROPS } from "./funnelDraw.js";
+import { venueDeco, drawVenueYard, VENUE_STYLES_DRAWN } from "./venueDraw.js";
+import { VENUE_PROPS } from "./venueGeo.js";
 import { partOrder } from "./archGeo.js";
 
 export const DRAWN_STYLES = new Set(["projects", "brownstone", "lofts", "glass", "office", "monolith", "gothic", "clocktower", "neon", "casino", "diner", "gallery", "theatre", "cafe", "studio", "hall", "classical", "vault", "hospital", "chapel", "market", "school", "shed", "reactor", "stacks", "datahall", "docks", "tanks", "bunker", "prison", "canteen",
@@ -25,6 +27,8 @@ export const DRAWN_STYLES = new Set(["projects", "brownstone", "lofts", "glass",
 export const DRAWN_PROPS = new Set(["hoop", "fence", "bench", "tree", "lamp", "doorman", "planter", "fountain", "flag", "camera", "bollard", "statue", "hydrant", "poster", "table", "armoured", "booth", "ambulance", "grave", "stall", "conveyor", "containers", "sandbags", "watchtower", "bins", "palm", "pine", "surfboard", "skis", "umbrella", "hottub"]);
 for (const k of FUNNEL_STYLES_DRAWN) DRAWN_STYLES.add(k);
 for (const k of FUNNEL_PROPS) DRAWN_PROPS.add(k);
+for (const k of VENUE_STYLES_DRAWN) DRAWN_STYLES.add(k);
+for (const k of VENUE_PROPS) DRAWN_PROPS.add(k);
 
 const MAT = {
   brick: "#8a4a3a", brownstone: "#6d4a36", redbrick: "#94503b", glass: "#3f7598", steel: "#58718a", obsidian: "#141917",
@@ -1384,6 +1388,9 @@ const DECO = {
 const FUNNEL_KIT = { shade, faceText, neonOn, windowGrid, door, bladeSign, glow, facesOf };
 const FUNNEL = funnelDeco(FUNNEL_KIT);
 Object.assign(DECO, FUNNEL.deco); Object.assign(FAR, FUNNEL.far);
+// the Dept of Planning (venueDraw.js), with the same kit
+const VENUE = venueDeco(FUNNEL_KIT);
+Object.assign(DECO, VENUE.deco); Object.assign(FAR, VENUE.far);
 
 const ORDERS = new Map();
 // G: {ctx, Q, poly, facing, z, r}; env: {lod, night, hour, t, lit, bid (int), name, style}
@@ -1720,7 +1727,7 @@ export function drawYardProp(G, p, env) {
       for (let i = 0; i < 2; i++) { const c = { x0: p.x - 0.18 + i * 0.2, y0: p.y - 0.1, x1: p.x + i * 0.2, y1: p.y + 0.1, h0: 0, h1: 0.3 }; for (const f of facesOf(c, G)) G.poly(f.q(0, 1, 0, 0.3), shade(i ? "#2f5a3a" : "#3a3f44", f.sh * nf)); }
       break;
     }
-    default: drawFunnelYard(K, p, env, FUNNEL_KIT); break;
+    default: if (!drawVenueYard(K, p, env)) drawFunnelYard(K, p, env, FUNNEL_KIT); break;
   }
   K.flush();
 }
