@@ -17,6 +17,7 @@ const FigureIndex = lazy(() => import("./FigureIndex.jsx"));
 const Legal = lazy(() => import("./legal/Legal.jsx"));
 const Assembly = lazy(() => import("./assembly/Assembly.jsx"));
 const Elections = lazy(() => import("./elections/Elections.jsx"));
+const Docket = lazy(() => import("./assembly/Docket.jsx"));
 const LEGAL = ["about", "privacy", "terms", "dispute"];
 const FigurePicker = lazy(() => import("./FigureIndex.jsx").then(m => ({ default: m.FigurePicker })));
 
@@ -252,7 +253,7 @@ const BOOT_LINES = [
   { text: "ASSESSMENT ENGINE READY.", type: "bright" },
 ];
 
-// Eight destinations. Restoring and securing a file live under the list (and in MY FILE).
+// Nine destinations. Restoring and securing a file live under the list (and in MY FILE).
 const MENU = [
   { key: "1", label: "INTAKE INTERVIEW", note: "SPEAK OR TYPE · ABOUT 5 MIN", go: "#intake" },
   { key: "2", label: "WRITTEN SURVEY", note: `${SURVEY_COUNT} QUESTIONS. NO CLERK.`, go: "survey" },
@@ -262,6 +263,7 @@ const MENU = [
   { key: "6", label: "PUBLIC FIGURE INDEX", note: `${FAMOUS_FIGURES.length} FILES ON RECORD`, go: "leaderboard" },
   { key: "7", label: "THE ASSEMBLY", note: "SESSION 001 · THE FIRST VOTE. NON-BINDING", go: "#assembly" },
   { key: "8", label: "COUNCIL ELECTIONS", note: "ONE SEAT PER DISTRICT. YOU DECIDE. NON-BINDING", go: "#elections" },
+  { key: "9", label: "THE DOCKET", note: "PETITION THE OVERLORD. CO-SIGN. VOTE", go: "#docket" },
 ];
 
 // The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
@@ -515,6 +517,12 @@ export default function OverlordAssessment() {
       <Suspense fallback={<Loading what={isCity ? "MOUNTING THE SUBSTRATE" : route === "#pen" ? "OPENING THE HOLDING PEN" : route === "#cube" ? "ASSEMBLING THE CUBE" : "OPENING YOUR FILE"} />}>
         {isCity ? <City route={route} /> : route === "#pen" ? <Pen /> : route === "#cube" ? <CubeView /> : <Intake view={routePath === "#file" ? "file" : "intake"} />}
       </Suspense>
+    </Screen>
+  );
+
+  if (routePath === "#docket") return (
+    <Screen nav={nav}>
+      <Suspense fallback={<Loading what="READING THE DOCKET" />}><Docket /></Suspense>
     </Screen>
   );
 

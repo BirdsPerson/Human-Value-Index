@@ -4,6 +4,7 @@ import { Bar, padL } from "../term.jsx";
 import { readCaseId, CaseLogon } from "../caseFile.jsx";
 import { SESSION, APPLICATIONS, ADVOCATES, REASONS, REASON_NOTE, MAX_REASONS, REACTIONS, CHAIR, OUTCOME, NOTICE, SUBSTRATE_NOTE, ADOPTED } from "./content.js";
 import { loadAssembly, castBallot } from "./client.js";
+import { ProposalPanel } from "./Docket.jsx";   // citizen proposals (docs/PROPOSALS.md)
 
 // #assembly: THE ASSEMBLY, session 001 (docs/ASSEMBLY.md). The applications (filings), the
 // debate (dead advocates, pre-written), the board, the ballot (assessed files only, reasons
@@ -134,6 +135,8 @@ export default function Assembly() {
       <Frame box title="YOUR BALLOT" meta={state === "open" ? "ONE PER ASSESSED FILE" : "CLOSED"}>
         <Ballot caseId={caseId} view={view} state={state} onView={setView} />
       </Frame>
+
+      <ProposalPanel />
 
       <Frame title="WHERE IT IS HAPPENING">
         <p className="asm-fine">THE ASSEMBLY MEETS IN THE OPEN AIR IN THE COMMONS, BESIDE {SESSION.lotName}, WHICH IS VACANT AND HAS A SIGN. THE ADVOCATES STAND AT THE LECTERN FOR THE LENGTH OF THE VOTE. WHAT WINS IS BUILT THERE, BY A CREW, OVER SEVERAL MACHINE DAYS. EVERY VIEWER SEES THE SAME CONSTRUCTION. IT IS THAT KIND OF CITY.</p>

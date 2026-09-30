@@ -77,4 +77,7 @@ perl -e 'alarm shift; exec @ARGV' "$BUDGET" \
   >> "$LOG" 2>&1
 rc=$?
 say "end rc=$rc"
+# The citizen proposals desk reader (docs/PROPOSALS.md; scripts/hvi_desk.sh), after the session
+# has written MORNING_REPORT.md. Appended at the end on purpose: bash reads this file as it runs.
+[ "$MODE" = "build" ] && [ -f "$REPO/scripts/hvi_desk.sh" ] && /bin/bash "$REPO/scripts/hvi_desk.sh"
 exit 0

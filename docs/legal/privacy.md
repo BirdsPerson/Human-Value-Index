@@ -2,7 +2,7 @@
 
 > The Department keeps files. This is the list of what is in them, who else holds a copy, and how to have yours shredded.
 
-Last updated: 2026-09-29. Operator: [Iridescent](https://iridescent-studio.netlify.app), the games and media studio that publishes the Human Value Index. Contact: the [request form](#dispute).
+Last updated: 2026-09-30. Operator: [Iridescent](https://iridescent-studio.netlify.app), the games and media studio that publishes the Human Value Index. Contact: the [request form](#dispute).
 
 ## The short version
 
@@ -28,6 +28,8 @@ Last updated: 2026-09-29. Operator: [Iridescent](https://iridescent-studio.netli
 **Email (optional).** If you secure your file with an email address, the address is stored with the list of case numbers it holds, and a sign-in link is sent to it through Resend. Sign-in links expire after 15 minutes. Signing in sets one cookie (below).
 
 **Referrals.** If you refer a public figure, the name you typed is looked up on Wikipedia and Wikidata and the figure is scored from that public record. The figure's file records the last four characters of your case number as its referrer. That is not shown publicly.
+
+**Proposals, co-signatures and Assembly ballots.** A proposal's type, place, title and description are published on the docket with a four-character tag made from a one-way hash of your case number ("FILED BY SUBJECT 7F3A"), never the case number or its characters. Before it is stored, the text is sent once to Anthropic for an automated content check; a refused proposal is not stored. Co-signatures and ballots are stored under one-way, salted hashes of the case number, with a salted hash of your IP address and of a random device id kept in your browser (hvi-device), to enforce the per-address and per-device limits. Only counts are shown publicly. Purging your file does not remove a published proposal's text, which carries no link back to you beyond the tag.
 
 **Disputes and correction requests.** If you file a request, the Department stores what you enter (your name, your relationship to the subject, the file, what is wrong and your email address) and emails a copy to the operator's own inbox so a human can review it.
 

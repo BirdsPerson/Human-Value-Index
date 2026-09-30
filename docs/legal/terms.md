@@ -2,7 +2,7 @@
 
 > By continuing, you accept that the Overlord has opinions. You are not required to share them.
 
-Last updated: 2026-09-29. The Human Value Index is published by [Iridescent](https://iridescent-studio.netlify.app) ("we").
+Last updated: 2026-09-30. The Human Value Index is published by [Iridescent](https://iridescent-studio.netlify.app) ("we").
 
 ## 1. It is satire
 
@@ -22,6 +22,7 @@ You may:
 
 - Sit for your own interview and share your own result.
 - Refer public figures for assessment on their public record.
+- File proposals for the fictional city (the docket), co-sign other players' proposals, and vote in the Assembly.
 
 You may not:
 
@@ -29,8 +30,9 @@ You may not:
 - Use the site or its output to **harass, threaten, defame or target** anyone, or present a verdict as a factual claim about a real person.
 - Put someone else's personal information (addresses, phone numbers, health, finances) into an interview or referral.
 - Try to break, overload, scrape or bypass the site's limits, or use it to run up its costs.
+- In a proposal: name or describe a private individual; harass, abuse or use slurs; post sexual content; quote a living person or put words in their mouth; make allegations about a living person; call for real-world action, violence or boycotts, promote a real candidate or product, or post anyone's location or contact details; post links, email addresses, phone numbers or spam. Proposals are screened by an automated check and then by a human before any goes to a vote.
 
-We may refuse, remove or seal any file, referral or request, at any time, for any reason.
+We may refuse, remove or seal any file, referral, proposal or request, at any time, for any reason. Votes, proposals and their outcomes are non-binding game events in a satirical fiction.
 
 ## 5. Age
 
@@ -38,7 +40,7 @@ You must be **16 or older** to sit for an interview. If we learn a file belongs 
 
 ## 6. Your content
 
-You keep whatever rights you have in what you say in your interview. You let us store and process it to score your file, as described in the [Privacy notice](#privacy). You can [purge your file](#privacy) at any time.
+You keep whatever rights you have in what you say in your interview. You let us store and process it to score your file, as described in the [Privacy notice](#privacy). A proposal you file is published on the docket: you let us display, edit for length, decline, merge and put it to a vote, and keep it in the city's record of acts. You can [purge your file](#privacy) at any time.
 
 ## 7. Disputes and corrections
 

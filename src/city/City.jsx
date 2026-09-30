@@ -7,6 +7,7 @@ import { DistrictCivic, LeaguePanel, civicPaLines, useCivic } from "./CivicPanel
 import { moodWord } from "./civic.js";
 import { covers, setCivic, lotPhase } from "./sim.js";
 import { loadAssembly, assemblyNow } from "../assembly/client.js";
+import { loadActs, actPaLines } from "./acts.js";   // citizen proposals' acts (docs/PROPOSALS.md)
 import { paLines as assemblyPa, SESSION as ASM, APPLICATIONS as ASM_APPS, OUTCOME as ASM_OUT } from "../assembly/content.js";
 import { crowdAt, summaryCounts } from "./crowd.js";
 import { clockLine, paLine } from "./cityKit.js";
@@ -368,11 +369,12 @@ export default function City({ route }) {
 
 // The first census waits (briefly) for the Assembly too: the lot's state moves who visits it.
 function civicReady() {
+  loadActs().catch(() => null);
   return loadAssembly().then(d => { setCivic(d?.civic || null); return d; }).catch(() => null);
 }
 // The Assembly's PA lines: the running tally while the polls are open, then the lot's news.
 function civicPa(view, mt) {
-  const lines = assemblyPa(view);
+  const lines = [...assemblyPa(view), ...actPaLines()];
   const p = lotPhase(mt);
   if (p.phase === "approved") lines.push(`LOT ${ASM.lotAddr}: ${ASM_OUT.groundbreak(p.breakDay)}`);
   if (p.phase === "site") lines.push(`LOT ${ASM.lotAddr}, ${ASM_APPS[p.winner].proposal}: ${ASM_OUT.site(Math.round(p.progress * 100))}`);
