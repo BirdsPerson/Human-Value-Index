@@ -23,6 +23,7 @@ import { lotPhase } from "./sim.js";
 import { CIVIC_LOTS, CIVIC_ANCHORS, FORUM, SIGN, VACANT, SITE, GOLF, FARM, faceOf } from "./civicGeo.js";
 import { assemblyNow } from "../assembly/client.js";
 import { ADVOCATES, APPLICATIONS } from "../assembly/content.js";
+import { drawChamber } from "./councilDraw.js";
 
 const who = (s) => s.slug || s.name;
 const frac = (v) => ((v % 1) + 1) % 1;
@@ -44,7 +45,7 @@ export function drawCivicLot(G, lotId, lod, mt, people, prev) {
   const put = (x, y, draw, bias = 0) => { const [u, v] = rot(x, y, G.r); items.push({ k: u + v + bias, draw }); };
   const ground = (pts, fill, h = 0.01) => G.poly(pts.map(p => G.Q(p[0], p[1], h)), fill);
   const vline = (x, y, h0, h1, col, w) => { const A = G.Q(x, y, h0), B = G.Q(x, y, h1); G.ctx.strokeStyle = col; G.ctx.lineWidth = w; G.ctx.beginPath(); G.ctx.moveTo(A[0], A[1]); G.ctx.lineTo(B[0], B[1]); G.ctx.stroke(); };
-  const K = { G, lod, hour, put, ground, vline, carried, t: G.t, px: Math.max(1, G.z * 0.06), phase };
+  const K = { G, lod, hour, put, ground, vline, carried, t: G.t, px: Math.max(1, G.z * 0.06), phase, mt };
 
   const anchors = CIVIC_ANCHORS[face] || [];
   const list = people.map(o => ({ key: who(o.s), role: "patron", pri: 0, s: o.s }));
@@ -217,6 +218,7 @@ function forum(K) {
   const rows = v?.result ? ["THE RESULT", `001 GOLF ${String(v.result.votes.golf).padStart(4)}`, `002 FARM ${String(v.result.votes.farm).padStart(4)}`, subRow, v.result.decidedBy === "substrate" ? `ADOPTED: ${APPLICATIONS[v.result.winner].no}` : `APPROVED: ${APPLICATIONS[v.result.winner].no}`]
     : ["DEBATE BOARD", `001 GOLF ${String(g).padStart(4)}`, `002 FARM ${String(f).padStart(4)}`, subRow, open ? "VOTE: #ASSEMBLY" : "…"];
   panel(K, FORUM.board.a, FORUM.board.b, 0.55, 1.45, "#0b120c", rows, ["#86c9a0", "#fbbf24", "#4ade80", "#67e8f9", "#86c9a0"]);
+  drawChamber(K, D, K.mt);   // the Council's bench on the dais (councilDraw.js)
   // the advocates, by projection, while the polls are open
   if (open) for (const side of ["golf", "farm"]) projected(K, side, ...FORUM.podium[side]);
   // benches carry their sitters

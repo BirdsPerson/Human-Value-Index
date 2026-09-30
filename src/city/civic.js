@@ -25,6 +25,7 @@
 // Browsers only read it (planClient summaryOf(day).civic).
 import * as SIM from "./sim.js";
 import { displayName } from "../figures.js";
+import { seatsOn } from "./councilCalendar.js";
 
 export const CIVIC_V = 1;
 const DIST = SIM.DISTRICTS.map(d => d.id);
@@ -74,20 +75,114 @@ function drawOf(s) {
   const at = list.reduce((n, [id, v]) => n + (VENUES.has(id) ? v : 0), 0);
   return total > 0 && at / total >= 0.12 ? 1 : 0;
 }
-// The draft: each district's workforce (assignJob), athletes first, then those who play at the
-// grounds, then the rest; each group by rating, then key. -> {district: [[key, name, r], ...]}
-export function draft(subjects) {
+// THE OLD DRAFT (seasons 1-11): each district's workforce (assignJob), athletes first, then those
+// who play at the grounds, then the rest; each group by rating, then key. The Arena, where the
+// athletes work, fielded Kobe, Ali, Ohtani and Pele and won on rating alone. Kept for the
+// seasons it drafted (a broken chain recomputes them). -> {district: [[key, name, r], ...]}
+const byDraft = (a, b) => b.g - a.g || b.r - a.r || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+export function workforceDraft(subjects) {
   const pools = Object.fromEntries(DIST.map(id => [id, []]));
   for (const s of subjects) {
     const d = SIM.assignJob(s).district;
     if (pools[d]) pools[d].push({ key: SIM.keyOf(s), name: displayName(s), r: playerRating(s), g: drawOf(s) });
   }
   const out = {};
-  for (const id of DIST) {
-    out[id] = pools[id].sort((a, b) => b.g - a.g || b.r - a.r || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
-      .slice(0, ROSTER_N).map(p => [p.key, p.name, p.r]);
-  }
+  for (const id of DIST) out[id] = pools[id].sort(byDraft).slice(0, ROSTER_N).map(p => [p.key, p.name, p.r]);
   return out;
+}
+
+// ---- THE DRAFT (Scott 2026-09-30: "the league is bullshit, break it up and get a draft in there") --
+// From season 12 (machine day 309) the teams still carry their districts' names, but every roster
+// comes from one league-wide draft: the whole city's pool (athletes on record first, then the
+// regulars at the grounds, then the rest; each by rating, then key), taken in a snake over
+// ROSTER_N rounds, the order the reverse of last season's final table (the champion picks last).
+// Every team takes the best player left. No keepers. A player plays for the team that drafted
+// them wherever they work or live. Then THE COMMISSIONER'S CAP: while the strongest team's rating
+// is more than CAP_GAP over the weakest's, they trade their picks of the one round that closes
+// the gap most (at most MAX_TRADES trades; a trade that would not narrow it is not made). The
+// snake alone leaves the first pick's team a star the last pick's never sees; the cap is the
+// measured fix (docs/CITY_SPEC.md "The draft"). Deterministic: the season, the census, the table.
+export const DRAFT_FROM = 11;   // the season index (0-based) of the first league-wide draft: season 12
+export const CAP_GAP = 2, MAX_TRADES = 4;
+// The pool in draft order: the first teams x ROSTER_N of the city, best first.
+export function draftPool(subjects, n = DIST.length * ROSTER_N) {
+  return subjects.map(s => ({ key: SIM.keyOf(s), name: displayName(s), r: playerRating(s), g: drawOf(s) })).sort(byDraft).slice(0, n);
+}
+// The snake: pick p of round r goes to order[r even ? p : n - 1 - p].
+export const snakeTeam = (order, round, pick) => order[round % 2 ? order.length - 1 - pick : pick];
+const mean = (l) => (l.length ? l.reduce((n, p) => n + p[2], 0) / l.length : 20);
+// order: the districts, first pick first. -> {rosters: {district: [[key, name, r] x ROSTER_N, in
+// round order]}, trades: [[round, a, b]] (a, the stronger, and b swapped their round's picks)}
+export function snakeDraft(pool, order) {
+  const rosters = Object.fromEntries(order.map(id => [id, []]));
+  let i = 0;
+  for (let round = 0; round < ROSTER_N; round++) for (let p = 0; p < order.length; p++) {
+    const x = pool[i++];
+    if (x) rosters[snakeTeam(order, round, p)].push([x.key, x.name, x.r]);
+  }
+  const trades = [];
+  const spread = () => { const m = order.map(id => mean(rosters[id])); return Math.max(...m) - Math.min(...m); };
+  for (let t = 0; t < MAX_TRADES; t++) {
+    const now = spread();
+    if (now <= CAP_GAP) break;
+    const ranked = [...order].sort((a, b) => mean(rosters[b]) - mean(rosters[a]) || order.indexOf(a) - order.indexOf(b));
+    const a = ranked[0], b = ranked[ranked.length - 1];
+    let best = null;
+    for (let r = 0; r < Math.min(rosters[a].length, rosters[b].length); r++) {
+      if (rosters[a][r][2] <= rosters[b][r][2]) continue;
+      [rosters[a][r], rosters[b][r]] = [rosters[b][r], rosters[a][r]];
+      const s = spread();
+      [rosters[a][r], rosters[b][r]] = [rosters[b][r], rosters[a][r]];
+      if (s < now - 1e-9 && (!best || s < best.s - 1e-9)) best = { r, s };
+    }
+    if (!best) break;
+    [rosters[a][best.r], rosters[b][best.r]] = [rosters[b][best.r], rosters[a][best.r]];
+    trades.push([best.r, a, b]);
+  }
+  return { rosters, trades };
+}
+// The draft order from last season's end: the final table reversed, the champion last.
+export function draftOrder(table, champion) {
+  const rev = [...table].reverse().filter(id => DIST.includes(id));
+  for (const id of DIST) if (!rev.includes(id)) rev.unshift(id);   // a district new to the league picks first
+  return champion && rev.includes(champion) ? [...rev.filter(id => id !== champion), champion] : rev;
+}
+// A season's rosters from the census alone (the chain broken): the old rule before DRAFT_FROM,
+// else the draft from the season before's recomputed end. Memoised per census; depth is the
+// seasons since DRAFT_FROM, each a snake over the pool and the season's fixtures.
+const SEASONS = new Map();
+export function seasonRosters(season, subjects) {
+  const sig = fnv(subjects.map(x => SIM.keyOf(x)).join("|"));
+  if (SEASONS.get("sig") !== sig) { SEASONS.clear(); SEASONS.set("sig", sig); }
+  if (SEASONS.has(season)) return SEASONS.get(season);
+  if (season < DRAFT_FROM) {
+    const v = { rosters: workforceDraft(subjects), draft: null };
+    SEASONS.set(season, v);
+    return v;
+  }
+  let s0 = season;   // walk up from the last season on record: no deep recursion however long the league runs
+  while (s0 > DRAFT_FROM && !SEASONS.has(s0 - 1)) s0--;
+  for (let s = s0; s <= season; s++) {
+    const last = s - 1 < DRAFT_FROM ? seasonRosters(s - 1, subjects) : SEASONS.get(s - 1);
+    const end = seasonEnd(s - 1, last.rosters);
+    SEASONS.set(s, draftFrom(s, subjects, end.table, end.champion));
+  }
+  return SEASONS.get(season);
+}
+// A season's final table and champion from its rosters.
+export function seasonEnd(season, rosters) {
+  const rating = Object.fromEntries(DIST.map(id => [id, teamRating(rosters[id])]));
+  const all = seasonTo(season, seasonStart(season + 1), rating);
+  const fin = all.find(m => m.stage === "final");
+  return { table: order(tableOf(all)), champion: fin ? winnerOf(fin) : null };
+}
+// The draft of `season` from the pool and last season's end. -> {rosters, draft: {season (1-based),
+// order, trades}}
+export function draftFrom(season, subjects, table, champion) {
+  const ord = draftOrder(table, champion);
+  const { rosters, trades } = snakeDraft(draftPool(subjects), ord);
+  for (const id of DIST) rosters[id] ||= [];
+  return { rosters, draft: { season: season + 1, order: ord, trades } };
 }
 // A team's rating: its players' mean, or 20 for a district with nobody to field.
 export const teamRating = (roster) => (roster?.length ? Math.round(roster.reduce((n, p) => n + p[2], 0) / roster.length) : 20);
@@ -257,6 +352,13 @@ function assemblyOn(day) {
   return { winner: c.winner, closeDay: p.breakDay - SIM.LOT_BREAK, phase: p.phase };
 }
 
+// ---- the council's seats --------------------------------------------------------------------------
+// The closed election cycles (netlify/lib/elections.js seatRecord), set by the plan builder before
+// it folds, like the Assembly's outcome: [{cycle, closeAt, seats: {district: {key, name, by}}}].
+let SEATS = [];
+export function setSeats(record) { SEATS = Array.isArray(record) ? record : []; }
+export const seatsRecord = () => SEATS;
+
 // ---- the fold -------------------------------------------------------------------------------------
 export const MOOD_WORDS = [
   [45, "PLACATED"], [15, "COMPLIANT"], [-14, "INDIFFERENT"], [-44, "RESTLESS"], [-101, "SEETHING"],
@@ -286,9 +388,18 @@ export function civicFold(plan, people, prev = null) {
   const day = plan.day, season = seasonOf(day);
   // the season's rosters: carried from yesterday within a season, drafted on its first day
   // (or when the chain is broken: the same census drafts the same teams)
-  let rosters;
-  if (prev?.v === CIVIC_V && prev.league?.season === season + 1 && prev.districts) rosters = Object.fromEntries(DIST.map(id => [id, prev.districts[id]?.team?.roster || []]));
-  else rosters = draft(Object.keys(plan.subjects || {}).map(k => people.get(k) || { slug: k, name: k }));
+  let rosters, drafted = null;
+  const chained = prev?.v === CIVIC_V && prev.districts && prev.league;
+  if (chained && prev.league.season === season + 1) {
+    rosters = Object.fromEntries(DIST.map(id => [id, prev.districts[id]?.team?.roster || []]));
+    drafted = prev.league.draft || null;
+  } else {
+    const subjects = Object.keys(plan.subjects || {}).map(k => people.get(k) || { slug: k, name: k });
+    if (season >= DRAFT_FROM && chained && prev.league.season === season && prev.league.day === SEASON_DAYS) {
+      // draft day, the chain whole: last season's end is yesterday's table and champion
+      ({ rosters, draft: drafted } = draftFrom(season, subjects, prev.league.table, prev.league.champion));
+    } else ({ rosters, draft: drafted } = seasonRosters(season, subjects));
+  }
   const rating = Object.fromEntries(DIST.map(id => [id, teamRating(rosters[id])]));
   const all = seasonTo(season, day + 1, rating);
   const played = all.filter(m => m.day < day), today = all.filter(m => m.day === day);
@@ -298,6 +409,7 @@ export function civicFold(plan, people, prev = null) {
     .map(m => { const i = m.sides.indexOf(id), a = m.score[i], b = m.score[1 - i]; return a > b ? "W" : a < b ? "L" : "D"; }).join("");
   const stats = dayStats(plan, people);
   const lot = assemblyOn(day);
+  const held = seatsOn(day, SEATS);
   const districts = {};
   for (const id of DIST) {
     const pos = standing.indexOf(id), fm = form(id);
@@ -310,7 +422,10 @@ export function civicFold(plan, people, prev = null) {
       mood: { s, raw, was, f },
       team: { rating: rating[id], roster: rosters[id], pos: pos + 1, p: T.p, w: T.w, d: T.d, l: T.l, f: T.f, a: T.a, pts: T.pts, form: fm },
       // the seat: nobody holds it until the first election. approval follows the mood.
-      seat: { holder: null, term: null, approval: s, status: "VACANT", acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] },
+      // the seat: nobody holds it until the first election is decided and sworn in (council.js).
+      seat: held[id]
+        ? { holder: held[id].holder, name: held[id].name, term: held[id].term, cycle: held[id].cycle, by: held[id].by, approval: s, status: "HELD", acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] }
+        : { holder: null, term: null, approval: s, status: "VACANT", acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] },
     };
   }
   const strip = (m) => ({ k: m.k, day: m.day, placeId: m.placeId, from: m.from, to: m.to, kind: m.kind, stage: m.stage, sides: m.sides, score: m.score, ...(m.tiebreak ? { tiebreak: m.tiebreak } : {}) });
@@ -321,6 +436,7 @@ export function civicFold(plan, people, prev = null) {
       stage: today[0]?.stage || (played.length ? stageOf(played[played.length - 1].k + 1) : "regular"),
       table: standing, today: today.map(strip), recent: played.slice(-6).map(strip),
       champion: final ? winnerOf(final) : null,
+      ...(drafted ? { draft: drafted } : {}),
     },
     districts,
   };

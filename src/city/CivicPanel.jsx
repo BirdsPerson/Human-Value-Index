@@ -7,7 +7,9 @@ import { useEffect, useState } from "react";
 import { Frame, Meter, Disclosure } from "../ui/index.js";
 import { pad, padL } from "../term.jsx";
 import { DISTRICT, GAME_VENUE, clockAt, civicOf } from "./simApi.js";
-import { moodWord, teamName, teamShort, tableAt, STAGE_NAME, hoopGames } from "./civic.js";
+import { moodWord, teamName, teamShort, tableAt, STAGE_NAME, hoopGames, snakeTeam, seasonStart, DRAFT_FROM, ROSTER_N } from "./civic.js";
+import { CITY_EPOCH, DEFAULT_SCALE } from "./sim.js";
+import { loadElections, electionsNow } from "../elections/client.js";
 
 const FACTOR = { crowd: "CROWDING", tier: "TIER MIX", housing: "HOUSING", commute: "COMMUTE", league: "LEAGUE FORM", assembly: "THE LOT" };
 export const MOOD_LINE = {
@@ -68,12 +70,85 @@ export function DistrictCivic({ districtId, onLeague }) {
         <span className="k">ROSTER</span>
         <span className="v dim">{t.roster.length ? t.roster.map(p => p[1]).join(", ") : "NOBODY FIT TO FIELD. THE DEPARTMENT FIELDS A CONE."} (RATING {t.rating})</span>
         <span className="k">COUNCIL</span>
-        <span className="v">{x.seat.holder ? x.seat.holder : <b className="warn">SEAT VACANT. ELECTIONS PENDING.</b>} APPROVAL {sign(x.seat.approval)}.</span>
+        <span className="v"><CouncilLine id={districtId} seat={x.seat} /></span>
         {x.seat.acts.length > 0 && <>
           <span className="k">ACTS</span>
           <span className="v">{x.seat.acts.map(([s, day, w]) => `ACT 1 (ASSEMBLY SESSION ${s.slice(1)}, DAY ${day}): ${ACT[w] || w}`).join(" // ")}</span>
         </>}
       </div>
+    </Frame>
+  );
+}
+
+// The elections' live view (netlify/lib/elections.js), shared and refreshed at most once a minute.
+export function useElections() {
+  const [v, setV] = useState(() => electionsNow());
+  useEffect(() => {
+    const on = (e) => setV(e.detail);
+    window.addEventListener("hvi-elections", on);
+    loadElections().then(setV).catch(() => {});
+    const iv = setInterval(() => { if (!document.hidden) loadElections().then(setV).catch(() => {}); }, 60000);
+    return () => { window.removeEventListener("hvi-elections", on); clearInterval(iv); };
+  }, []);
+  return v;
+}
+// The seat: its holder and term from the day's record; while polls are open, the race.
+function CouncilLine({ id, seat }) {
+  const ev = useElections();
+  const race = ev?.races?.[id];
+  const open = ev?.state === "open" && race?.candidates?.length;
+  const names = race?.candidates?.map(c => c.name.toUpperCase()).join(", ");
+  return (
+    <>
+      {seat.holder
+        ? <><b>{String(seat.name || seat.holder).toUpperCase()}</b> (COUNCIL SASH). TERM: MACHINE DAYS {seat.term[0]}-{seat.term[1]}. {seat.by === "substrate" ? "SEATED ON THE SUBSTRATE'S PREFERENCE: THE CITIZENRY ABSTAINED." : "ELECTED BY ASSESSED FILES."}</>
+        : race?.result ? <>ELECTED: <b>{race.result.name.toUpperCase()}</b>. SWORN IN ON MACHINE DAY {ev.seatDay}.</>
+          : <b className="warn">SEAT VACANT.</b>}
+      {" "}APPROVAL {sign(seat.approval)}.
+      {open ? <> {seat.holder ? "RE-ELECTION" : "ELECTION"} OPEN: {names}. <a href="#elections">VOTE</a>.</> : race && !race.result ? <> <a href="#elections">THE ELECTIONS</a>.</> : null}
+    </>
+  );
+}
+
+// ---- THE DRAFT BOARD: the latest league-wide draft (civic.js snakeDraft) ------------------------
+const DRAFT_DAY = seasonStart(DRAFT_FROM);
+const dayAtMs = (day) => CITY_EPOCH + ((day - 1) * 24 * 3600 * 1000) / DEFAULT_SCALE;
+// -> [{round, pick, no, team (who picked), holder (who has the player: a capped trade), player}]
+export function draftPicks(block) {
+  const dr = block?.league?.draft;
+  if (!dr) return [];
+  const n = dr.order.length, out = [];
+  const swapped = new Map();
+  for (const [r, a, b] of dr.trades || []) { swapped.set(`${r}|${a}`, b); swapped.set(`${r}|${b}`, a); }
+  for (let r = 0; r < ROSTER_N; r++) for (let p = 0; p < n; p++) {
+    const team = snakeTeam(dr.order, r, p), holder = swapped.get(`${r}|${team}`) || team;
+    const player = block.districts[holder]?.team?.roster?.[r];
+    if (player) out.push({ round: r + 1, pick: p + 1, no: r * n + p + 1, team, holder, player });
+  }
+  return out;
+}
+export function DraftBoard() {
+  const { block } = useCivic();
+  const dr = block?.league?.draft;
+  if (!dr) {
+    return (
+      <Frame title="THE DRAFT BOARD" meta={`FIRST DRAFT: MACHINE DAY ${DRAFT_DAY}`} className="hvi-civic">
+        <div className="hvi-city-note">THE LEAGUE IS BEING BROKEN UP. FROM SEASON {DRAFT_FROM + 1} EVERY TEAM IS DRAFTED FROM THE WHOLE CITY: ATHLETES FIRST, THEN THE REGULARS AT THE GROUNDS; THE WORST TEAM PICKS FIRST, A SNAKE OVER {ROSTER_N} ROUNDS, NO KEEPERS. DRAFT DAY IS MACHINE DAY {DRAFT_DAY} ({new Date(dayAtMs(DRAFT_DAY)).toISOString().replace("T", " ").slice(0, 16)} UTC). UNTIL THEN EACH DISTRICT FIELDS ITS OWN WORKFORCE, AND THE ARENA WINS.</div>
+      </Frame>
+    );
+  }
+  const picks = draftPicks(block), n = dr.order.length;
+  const ratings = dr.order.map(id => block.districts[id].team.rating);
+  const line = (p) => `${pad(`${p.round}.${String(p.pick).padStart(2, "0")}`, 6)}${pad(teamShort(p.team), 11)}${pad(p.player[1].toUpperCase().slice(0, 19), 20)}${padL(p.player[2], 3)}${p.holder !== p.team ? `  TO ${teamShort(p.holder)}` : ""}\n`;
+  return (
+    <Frame title="THE DRAFT BOARD" meta={`SEASON ${dr.season} // DRAFT DAY ${seasonStart(dr.season - 1)}`} className="hvi-civic">
+      <div className="hvi-civic-line">ORDER: {dr.order.map((id, i) => `${i + 1}. ${teamShort(id)}`).join(" ")}. THE REVERSE OF LAST SEASON'S TABLE; THE CHAMPION PICKS LAST. THE ORDER SNAKES BACK EACH ROUND.</div>
+      <div className="hvi-city-room-h">ROUND 1</div>
+      <pre className="hvi-civic-table" aria-label="Round one">{picks.filter(p => p.round === 1).map(line).join("")}</pre>
+      <Disclosure className="hvi-city-disc" title={`ROUNDS 2-${ROSTER_N}`} meta={`${picks.length - n} PICKS`}>
+        <pre className="hvi-civic-table" aria-label="Later rounds">{picks.filter(p => p.round > 1).map(line).join("")}</pre>
+      </Disclosure>
+      <div className="hvi-civic-line">TEAM RATINGS AFTER THE DRAFT: {Math.min(...ratings)}-{Math.max(...ratings)}. {dr.trades?.length ? `THE COMMISSIONER'S CAP ORDERED ${dr.trades.length} TRADE${dr.trades.length === 1 ? "" : "S"} (${dr.trades.map(([r, a, b]) => `ROUND ${r + 1}: ${teamShort(a)} TO ${teamShort(b)}`).join("; ")}).` : "THE COMMISSIONER'S CAP ORDERED NO TRADES. THE SNAKE WAS FAIR ENOUGH."}</div>
     </Frame>
   );
 }
@@ -112,10 +187,10 @@ export function LeaguePanel({ full = false, highlight = null }) {
       {lg.recent.length ? [...lg.recent].reverse().map(m => (
         <div key={m.k} className="hvi-civic-fx">DAY {m.day} {GAME_VENUE[m.placeId]} // {m.stage !== "regular" ? `${STAGE_NAME[m.stage]}: ` : ""}{teamShort(m.sides[0])} {m.score[0]}-{m.score[1]} {teamShort(m.sides[1])}{m.tiebreak ? ` (${teamShort(m.tiebreak)} ON THE TIEBREAK)` : ""}</div>
       )) : <div className="hvi-city-note">NO RESULTS YET THIS SEASON. OPTIMISM IS NOT RECORDED.</div>}
-      <div className="hvi-city-note" style={{ marginTop: "var(--s3)" }}>ONE TEAM PER DISTRICT, DRAFTED FROM ITS WORKFORCE AT THE START OF EACH SEASON. ATHLETES FIRST. WIN 3, DRAW 1. TOP FOUR PLAY OFF. RESULTS ARE FINAL. SO ARE YOU.</div>
+      <div className="hvi-city-note" style={{ marginTop: "var(--s3)" }}>{lg.draft ? "ONE TEAM PER DISTRICT, DRAFTED FROM THE WHOLE CITY AT THE START OF EACH SEASON: THE WORST PICK FIRST, NO KEEPERS. A PLAYER PLAYS FOR WHOEVER DRAFTED THEM. " : `ONE TEAM PER DISTRICT, FROM ITS WORKFORCE, UNTIL THE FIRST LEAGUE-WIDE DRAFT ON MACHINE DAY ${DRAFT_DAY}. `}WIN 3, DRAW 1. TOP FOUR PLAY OFF. RESULTS ARE FINAL. SO ARE YOU.</div>
     </>
   );
-  if (full) return <Frame title={title} meta={meta} className="hvi-civic">{body}</Frame>;
+  if (full) return <><Frame title={title} meta={meta} className="hvi-civic">{body}</Frame><DraftBoard /></>;
   return <Disclosure className="hvi-city-disc" title={title} meta={meta}>{body}</Disclosure>;
 }
 
@@ -128,10 +203,24 @@ export function civicPaLines(block, here) {
     const m = block.districts[id].mood, w = moodWord(m.s), c = causeOf(m), sw = m.raw - m.was;
     return `${DISTRICT[id].name} IS ${w} (${sign(m.s)})${Math.abs(sw) >= 8 ? `, ${sw > 0 ? "UP" : "DOWN"} ${Math.abs(sw)} ON YESTERDAY` : ""}.${c ? ` CAUSE ON FILE: ${c[0]}.` : ""} ${MOOD_LINE[w]}`;
   };
+  const seatLine = (id) => {
+    const st = block.districts[id].seat;
+    return st?.holder ? `THE COUNCIL SEAT IS HELD BY ${String(st.name || st.holder).toUpperCase()}. APPROVAL ${sign(st.approval)}.` : "THE COUNCIL SEAT IS VACANT. THE ELECTIONS ARE AT #ELECTIONS.";
+  };
+  // Draft day (a season's first two days): the picks, in order, as the PA reads them.
+  const lg0 = block.league;
+  if (lg0?.draft && lg0.day <= 2) {
+    const picks = draftPicks(block);
+    const ORD = ["FIRST", "SECOND", "THIRD", "FOURTH", "FIFTH"];
+    for (const p of picks.slice(0, 5)) out.push(`WITH THE ${ORD[p.no - 1]} PICK IN THE SEASON ${lg0.draft.season} DRAFT, ${teamName(p.team)} SELECT ${p.player[1].toUpperCase()}. RATING ${p.player[2]}. CONGRATULATIONS ARE NOT REQUIRED.`);
+    const last = picks[picks.length - 1];
+    if (last) out.push(`WITH THE LAST PICK OF THE DRAFT, ${teamName(last.team)} SELECT ${last.player[1].toUpperCase()}. EVERYONE HAS BEEN CHOSEN. THIS IS RARE.`);
+    if (lg0.draft.trades?.length) out.push(`THE COMMISSIONER HAS ORDERED ${lg0.draft.trades.length} TRADE${lg0.draft.trades.length === 1 ? "" : "S"} UNDER THE CAP. BALANCE HAS BEEN IMPOSED.`);
+  }
   if (here && block.districts[here]) {
     out.push(say(here));
     const t = block.districts[here].team;
-    out.push(`${teamName(here)} STAND ${ord(t.pos)} IN THE DEPARTMENTAL LEAGUE ON ${t.pts} POINTS. THE COUNCIL SEAT IS VACANT. ELECTIONS ARE PENDING.`);
+    out.push(`${teamName(here)} STAND ${ord(t.pos)} IN THE DEPARTMENTAL LEAGUE ON ${t.pts} POINTS. ${seatLine(here)}`);
     return out;
   }
   const ids = Object.keys(block.districts);

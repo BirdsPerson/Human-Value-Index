@@ -747,7 +747,9 @@ board). Check: `scripts/check-civic.mjs`.
     PLACATED >= 45, COMPLIANT >= 15, INDIFFERENT >= -14, RESTLESS >= -44, else SEETHING.
   - `team`: `{rating, roster: [[key, name, rating] x 9], pos, p, w, d, l, f, a, pts, form}`:
     the table entering the day.
-  - `seat`: `{holder: null, term: null, approval (= mood s), status: "VACANT", acts}`.
+  - `seat`: `{holder: null, term: null, approval (= mood s), status: "VACANT", acts}`, or once
+    an election is decided and sworn in `{holder, name, term, cycle, by, approval, status: "HELD",
+    acts}` ("Council elections" below).
     `acts`: the Assembly's result as the Council's first act, `["A001", closeDay, winner]`,
     in every district's record from the day the ground breaks.
   - `league`: `{season, day (1..28), days, stage, table (district order), today (the day's
@@ -792,6 +794,66 @@ board). Check: `scripts/check-civic.mjs`.
 - **Size** (measured, `check-civic`): the block is ~750-790 bytes per district, the same at
   430, 5,000 and 20,000 subjects (7.5 / 7.8 / 7.9 KB), against a live summary of ~50 KB.
   The fold costs 2 / 34 / 152 ms at 430 / 5k / 20k (one pass over the plan's rows).
+- **The draft (from season 12, machine day 309; Scott 2026-09-30: "the league is bullshit,
+  break it up and get a draft in there").** The teams keep their districts' names; every roster
+  comes from one league-wide draft (`civic.js` `draftFrom` / `snakeDraft`). The pool: the city's
+  best teams x 9 players, athletes on record first (a sport field >= 5), then the regulars at the
+  grounds (>= 12% of leisure at the Diamond, the Courts, the Bowl or the Pitch), then the rest,
+  each by rating then key. The order: last season's final table reversed, the champion last
+  (`draftOrder`). A snake over 9 rounds, every team taking the best player left; no keepers. A
+  player plays for whoever drafted them, wherever they work or live. THE COMMISSIONER'S CAP: while
+  the strongest team's rating is more than 2 over the weakest's, the two swap their picks of the
+  round that narrows the gap most (at most 4 trades, only if it narrows). Measured: the live census
+  (725 subjects) had a spread of 40 under the workforce draft (the Arena 88: Kobe, Ali, Ohtani,
+  Bruce Lee; the Archive 52); the snake alone leaves 65.0-66.2 (spread 1), so the cap stays idle
+  there; on the synthetic 430 roster 45 -> 2; a pool with three 99s (the case the cap is for)
+  4.2 -> 3.0 after 4 trades (`check-civic`). Seasons 1-11 keep the old workforce draft (no
+  mid-season change). The block carries `league.draft` `{season, order, trades}`; rosters are in
+  round order, so the board is derived. Draft day is the season's first day: the PA reads the
+  first five picks and the last ("WITH THE FIRST PICK IN THE SEASON 12 DRAFT, THE CURATED SELECT
+  ..."), and `#city/league` shows THE DRAFT BOARD (the order, round 1, rounds 2-9, the cap's
+  trades). A broken chain recomputes the draft from the census: each season since the first draft
+  is replayed from the one before (memoised; a snake over 90 players and 48 fixtures a season).
+
+## Council elections (2026-09-30)
+
+One council seat per district, filled by election. Code: `src/city/council.js` (the slate, the
+Substrate's lean, the decision), `src/city/councilCalendar.js` (windows, terms, seats by day,
+sittings), `netlify/lib/elections.js` + `netlify/functions/elections.js` (`/api/elections`),
+`src/elections/` (`#elections`, menu item 8), `CivicPanel.jsx` (the seat on district pages),
+`spriteBank.js` (the sash), `councilDraw.js` (the chamber). Checks: `scripts/check-civic.mjs`.
+
+- **Candidates.** 2-3 per district, drawn when a cycle opens from the census and stored with it:
+  figures who work there with a record in politics, activism or business (field >= 5), then those
+  who live there, then anyone who works or lives there; ranked by 3 x that record + competence/2
+  + network/2. Nobody stands twice. Never a private citizen, a local official added from public
+  sources, or a real-world candidate. The incumbent stands again. Living and dead alike.
+- **Speech.** Living candidates never speak: STATEMENT: NONE ON FILE, and a filing (Form C-1, the
+  record, their job in the city, competence, network). A dead candidate may carry one line in
+  their manner from `PLATFORMS`, marked as the Department's reconstruction, no quotation marks.
+  Nothing on the page labels anyone living or dead (`check-no-death-labels`).
+- **Voting: players decide, the Substrate advises.** Every assessed case file has one ballot per
+  race (the Assembly's pattern: salted voter key, one blob per voter holding its races, CAS
+  tallies per race idempotent per revision, 4 files per address, 2 per device, 60 ballot POSTs
+  per address-hour, 10 revisions per race; a ballot can be withdrawn, and a file with no ballot
+  left gets its place back). Every figure "votes" where it works for the candidate it is most
+  compatible with (`social.js compat` + a tie on the record), or abstains below 0.05; shown as
+  advisory. Most ballots win; a players' tie goes to the Substrate's lean; a race with zero
+  player ballots adopts the Substrate's preference with "THE CITIZENRY ABSTAINED. THE
+  SUBSTRATE'S PREFERENCE IS ADOPTED."
+- **Calendar.** The first request anchors it (`hvi-elections` `anchor`): cycle 1's polls are
+  open 3 real days from then. A term is 15 seasons = 420 machine days = exactly 7 real days;
+  cycle k opens 7 real days after cycle k-1 (so re-election opens 4 real days into a term and
+  closes as it ends). Winners are seated 4 machine days after the close (the builder plans at
+  most 3 ahead, so every seated day is folded after the result exists).
+- **In the record.** The plan builder reads `seatRecord` (`io.elections`, strict like
+  `io.civic`) and the fold writes `seat: {holder, name, term: [from, to], cycle, by, approval
+  (= mood), status: "HELD"}`. Holders wear a red-and-gold sash in every view; THE ASSEMBLY's dais
+  has the COUNCIL CHAMBER bench (ten seats, one lamp each), and on machine Tuesdays and Fridays
+  10:00-13:00 the holders sit there by projection.
+- **Fix on the way:** `planIo` used to drop its `civic` reader, so the builder never read the
+  Assembly's result; it now passes `civic` and `elections` through.
+
 - **Database: not yet.** Everything here is derived from published, immutable inputs (the
   plans, the census, the Assembly's recorded result) and needs no concurrent writes. The
   trigger (docs/ASSEMBLY.md, the consortium plan): the first sustained concurrent human

@@ -8,12 +8,14 @@ import { buildPlans, planIo, STORE } from "../lib/plans.js";
 import { getStore } from "@netlify/blobs";
 import { civicOf, refreshSubstrate, STORE as ASSEMBLY_STORE } from "../lib/assembly.js";
 import { substrateSource } from "../lib/substrate-source.js";
+import { seatRecord, STORE as ELECTIONS_STORE } from "../lib/elections.js";
 
 export const BUDGET_MS = 12 * 60 * 1000;
 const defaultIo = () => planIo(() => getStore({ name: STORE, consistency: "strong" }), {
   census: () => censusSubjects({ strict: true }),
   snapshots: async () => (await getPublic())?.snapshots || {},
   civic: () => civicOf(getStore({ name: ASSEMBLY_STORE, consistency: "strong" })),
+  elections: () => seatRecord(getStore({ name: ELECTIONS_STORE, consistency: "strong" })),
 });
 
 export default async (req, _context, io = defaultIo()) => {

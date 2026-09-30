@@ -168,6 +168,209 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   SIM.setCivic(null);
 }
 
+// ---- 3b. THE DRAFT: league-wide from season 12, reverse order, snake, balanced ------------------------
+{
+  ok(C.seasonStart(C.DRAFT_FROM) === 309 && C.DRAFT_FROM === 11, "the first league-wide draft opens season 12, machine day 309");
+  const E0 = 307, EDAYS = [307, 308, 309, 310, 336, 337];
+  SIM.clearPlans(); SIM.setRoster(roster);
+  const P2 = new Map(EDAYS.map(d => [d, clone(SIM.buildPlan(d))]));
+  const ch = new Map();
+  let pv = null;
+  for (const d of EDAYS) { pv = C.civicFold(P2.get(d), people, ch.has(d - 1) ? ch.get(d - 1) : null); ch.set(d, pv); }
+  const n = DIST.length, subjects = Object.keys(P2.get(309).subjects).map(k => people.get(k));
+  // season 11 still plays the old draft: its workforce, not mid-season
+  for (const id of DIST) ok(ch.get(308).districts[id].team.roster.every(([k]) => SIM.assignJob(people.get(k)).district === id), `${id}: season 11 keeps its workforce roster (no mid-season draft)`);
+  ok(!ch.get(308).league.draft, "no draft record before season 12");
+  const b = ch.get(309), dr = b.league.draft, last = ch.get(308).league;
+  ok(dr && dr.season === 12 && b.league.day === 1, "draft day: season 12, day 1");
+  // the order: last season's table reversed, the champion last
+  const wantOrder = C.draftOrder(last.table, last.champion);
+  eq(dr.order, wantOrder, "the draft order is the reverse of last season's table");
+  if (last.champion) ok(dr.order[n - 1] === last.champion, "the champion picks last");
+  const rest = dr.order.filter(id => id !== last.champion);
+  eq(rest, [...last.table].reverse().filter(id => id !== last.champion), "the worst team picks first");
+  // the snake: every pick the best left, in snake order (a capped trade swaps one round's picks)
+  const pool = C.draftPool(subjects);
+  ok(pool.length === n * C.ROSTER_N, `the pool is ${n} x ${C.ROSTER_N}`);
+  const tradedRounds = new Map(dr.trades.map(([r, a, x]) => [`${r}|${a}`, x]).concat(dr.trades.map(([r, a, x]) => [`${r}|${x}`, a])));
+  for (let r = 0; r < C.ROSTER_N; r++) for (let p = 0; p < n; p++) {
+    const team = C.snakeTeam(dr.order, r, p);
+    ok(team === dr.order[r % 2 ? n - 1 - p : p], "snake: odd rounds run in reverse");
+    const holder = tradedRounds.get(`${r}|${team}`) || team;
+    eq(b.districts[holder].team.roster[r][0], pool[r * n + p].key, `round ${r + 1} pick ${p + 1}: ${team} takes the best player left`);
+  }
+  const keys = DIST.flatMap(id => b.districts[id].team.roster.map(x => x[0]));
+  ok(new Set(keys).size === keys.length && keys.length === n * C.ROSTER_N, "every player drafted once, nine per team");
+  ok(pool.filter(x => x.g === 2).every(x => keys.includes(x.key)), "athletes go first: every athlete on record is drafted");
+  ok(DIST.some(id => b.districts[id].team.roster.some(([k]) => SIM.assignJob(people.get(k)).district !== id)), "a player plays for the team that drafted them, not where they work");
+  // deterministic, and a broken chain drafts the same league (from the season number and the census)
+  eq(C.civicFold(clone(P2.get(309)), peopleOf(clone(roster)), clone(ch.get(308))), b, "draft day is deterministic");
+  eq(C.civicFold(P2.get(309), people, null).districts.arts.team.roster, b.districts.arts.team.roster, "draft day without yesterday: the same draft");
+  for (const id of DIST) eq(C.civicFold(P2.get(310), people, null).districts[id].team.roster, ch.get(310).districts[id].team.roster, `${id}: mid-season without yesterday, the same drafted roster`);
+  eq(ch.get(310).league.draft, dr, "the draft record rides the chain all season");
+  // season 13 drafts again, from season 12's end; the chain and the recompute agree
+  const b13 = ch.get(337);
+  ok(b13.league.draft.season === 13, "season 13 has its own draft");
+  eq(C.civicFold(P2.get(337), people, null).league.draft, b13.league.draft, "season 13's draft from the census alone equals the chain's");
+  // balance: the rating spread across teams, before (the workforce) and after (the draft)
+  const spread = (r) => { const m = DIST.map(id => C.teamRating(r[id])); return Math.max(...m) - Math.min(...m); };
+  const before = spread(C.workforceDraft(subjects)), after = spread(Object.fromEntries(DIST.map(id => [id, b.districts[id].team.roster])));
+  ok(after < before && after <= C.CAP_GAP + 1, `the draft balances the league: spread ${before} -> ${after}`);
+  globalThis.__draftSpread = [before, after];
+  // the results are still the scoreboards' finals; the standings still the sum of the results
+  const rating = Object.fromEntries(DIST.map(id => [id, b.districts[id].team.rating]));
+  const all = C.seasonTo(C.seasonOf(309), 311, rating);
+  for (const m of all) eq(m.score, C.boardFinal(C.fixturesOn(m.day).find(f => f.k === m.k)), `season 12 fixture ${m.k}: the scoreboard's final`);
+  const t = C.tableOf(all.filter(m => m.day < 310));
+  for (const id of DIST) ok(ch.get(310).districts[id].team.pts === t[id].pts, `${id}: season 12 standings are the sum of its results`);
+  // THE COMMISSIONER'S CAP: a pool with a few stars leaves the snake a gap; trades close it
+  const stars = Array.from({ length: n * C.ROSTER_N }, (_, i) => ({ key: `p${String(i).padStart(3, "0")}`, name: `P${i}`, r: i < 3 ? 99 : Math.max(20, 70 - i), g: 2 }));
+  const snakeOnly = (() => { const ros = Object.fromEntries(DIST.map(id => [id, []])); let i = 0; for (let r = 0; r < C.ROSTER_N; r++) for (let p = 0; p < n; p++) ros[C.snakeTeam(DIST, r, p)].push([stars[i].key, "", stars[i++].r]); return ros; })();
+  const mean = (l) => l.reduce((x, p) => x + p[2], 0) / l.length;
+  const gap = (ros) => Math.max(...DIST.map(id => mean(ros[id]))) - Math.min(...DIST.map(id => mean(ros[id])));
+  const capped = C.snakeDraft(stars, DIST);
+  ok(gap(snakeOnly) > C.CAP_GAP && capped.trades.length > 0 && capped.trades.length <= C.MAX_TRADES, `the cap trades when the snake leaves a gap (${gap(snakeOnly).toFixed(1)} -> ${gap(capped.rosters).toFixed(1)}, ${capped.trades.length} trades)`);
+  ok(gap(capped.rosters) < gap(snakeOnly), "every trade narrows the gap");
+  for (const [r, a, x] of capped.trades) ok(capped.rosters[a][r][2] <= capped.rosters[x][r][2], "a trade sends the stronger team's pick of a round to the weaker");
+  globalThis.__capDemo = [gap(snakeOnly), gap(capped.rosters), capped.trades.length];
+}
+
+// ---- 3c. COUNCIL ELECTIONS: the slate, the Substrate, the ballots, the seats ----------------------------
+{
+  const K = await import("../src/city/council.js");
+  const EL = await import("../netlify/lib/elections.js");
+  const { FAMOUS_FIGURES, slugify } = await import("../src/figures.js");
+  SIM.setRoster(roster);
+  const sl = K.slate(roster), sl2 = K.slate(clone(roster));
+  eq(sl, sl2, "the slate is deterministic");
+  const all = DIST.flatMap(id => sl[id].map(c => c.key));
+  ok(new Set(all).size === all.length, "nobody stands in two races");
+  for (const id of DIST) {
+    ok(sl[id].length >= K.MIN_CANDIDATES && sl[id].length <= K.MAX_CANDIDATES, `${id}: ${sl[id].length} candidates (2-3)`);
+    for (const c of sl[id]) {
+      const s = people.get(c.key);
+      ok(K.mayStand(s), `${c.key}: a figure on file, never a citizen, local official or real candidate`);
+      const SIMjob = SIM.assignJob(s).district, home = SIM.PLACES[SIM.homeOf(s)].district;
+      ok(SIMjob === id || home === id, `${c.key}: works or lives in ${id}`);
+    }
+  }
+  ok(DIST.some(id => sl[id].some(c => c.field)), "the driven stand first (politics, activism, business)");
+  ok(all.some(k => SIM.isDead(people.get(k))) && all.some(k => !SIM.isDead(people.get(k))), "living and dead both stand");
+  // no quotes for the living, anywhere: living candidates carry no platform, and nothing filed
+  // for anyone puts words in their mouth; platforms are only for the dead
+  const quoteRe = /["“”«»]|\b(SAYS|SAID|STATES|STATED|PROMISES|PROMISED|VOWS|VOWED|DECLARES|DECLARED)\b/i;
+  for (const c of DIST.flatMap(id => sl[id])) {
+    if (c.living) ok(c.platform === null, `${c.key}: a living candidate has no platform, only filings`);
+    for (const line of c.filing) ok(!quoteRe.test(line), `${c.key}: the filing quotes nobody`);
+    if (c.platform) ok(!/["“”]/.test(c.platform), `${c.key}: a platform is a reconstruction, not a quotation`);
+  }
+  const fam = new Map(FAMOUS_FIGURES.map(f => [slugify(f.name), f]));
+  for (const [k, line] of Object.entries(K.PLATFORMS)) {
+    const s = people.get(k) || fam.get(k);
+    ok(!s || SIM.isDead(s), `${k}: platforms are only for the dead`);
+    ok(typeof line === "string" && line.length < 160 && !/["“”]/.test(line), `${k}: one short line, no quotation marks`);
+  }
+  const EC = await import("../src/elections/content.js");
+  for (const line of [...EC.NOTICE, ...EC.RULES, EC.BLURB, EC.CHAIR.closed, EC.CHAIR.none, EC.CHAIR.open(10)]) ok(!/[“”]|\\"/.test(line) && !line.includes('"'), "no quotation marks on the page");
+  const cand = K.candidateOf({ name: "Living Test", slug: "living-test", kind: "figure", score: 500, qualifier: "politician" }, "hq");
+  ok(cand.living && cand.platform === null, "a living candidate never speaks, even one with a written line elsewhere");
+  // the Substrate: deterministic, advisory
+  const npc = K.substrateVotes(roster, sl);
+  eq(K.substrateVotes(clone(roster), sl), npc, "the Substrate's votes are deterministic");
+  for (const id of DIST) ok(npc[id].votes.reduce((a, x) => a + x, 0) + npc[id].abstain === npc[id].voters, `${id}: every registered figure votes or abstains`);
+  ok(DIST.some(id => npc[id].voters > 0), "the Substrate votes");
+
+  // ballots in memory: players decide, one per case per race
+  const { getStore } = await import("@netlify/blobs");
+  globalThis.__blobs = new Map();
+  const store = getStore({ name: EL.STORE });
+  const cases = new Map(), lim = new Map();
+  const io = {
+    store, census: async () => roster,
+    getCase: async (id) => cases.get(id) || null,
+    hitLimit: async (key, max) => { const x = (lim.get(key) || 0) + 1; if (x > max) return { ok: false }; lim.set(key, x); return { ok: true }; },
+  };
+  const t0 = Date.UTC(2026, 9, 1);
+  for (let i = 0; i < 400; i++) cases.set(`HVI-T${String(i).padStart(7, "0")}`, { history: [{ score: 1 }] });
+  cases.set("HVI-UNASSESS", { history: [] });
+  const v0 = await EL.publicView(io, t0);
+  ok(v0.state === "open" && v0.cycle === 1 && v0.closeAt - v0.openAt === K.ELECTION_MS, "the first GET opens cycle 1 for three real days");
+  eq(v0.races.hq.candidates, K.slate(roster).hq, "the stored slate is the census's");
+  eq(v0.races.hq.npc, K.substrateVotes(roster, K.slate(roster)).hq, "the stored advisory vote is the Substrate's");
+  const cast = (i, district, candidate, extra = {}) => EL.castBallot(io, { caseId: `HVI-T${String(i).padStart(7, "0")}`, district, candidate, ip: `ip${Math.floor(i / 4)}`, device: (i.toString(16).padStart(2, "0") + "a".repeat(30)), now: t0 + 1000, ...extra });
+  // the race the Substrate leans one way; the players vote the other way
+  const race = DIST.find(id => sl[id].length >= 2 && npc[id].votes.some(x => x > 0));
+  const nPick = K.substratePick(npc[race]), other = nPick === 0 ? 1 : 0;
+  let r = await cast(0, race, sl[race][other].key);
+  ok(r.status === 200 && r.body.mine[race] === other, "a ballot is cast");
+  r = await cast(0, race, sl[race][other].key);
+  ok(r.status === 200 && r.body.unchanged, "the same ballot again changes nothing");
+  r = await cast(0, race, sl[race][nPick].key);
+  ok(r.status === 200 && r.body.changed, "a ballot can be changed");
+  r = await cast(0, race, sl[race][other].key);
+  let t = await EL.readTally(store, 1, race);
+  ok(Object.keys(t.seen).length === 1 && EL.countsOf(t.seen, sl[race].length).voters === 1, "one ballot per case per race, however often it changes");
+  const racesOf = (await store.get(EL.KEYS.voter(1, EL.voterKey("HVI-T0000000")), { type: "json" })).b;
+  ok(Object.keys(racesOf).length === 1, "the file's ballot is keyed by race");
+  const second = DIST.find(id => id !== race && sl[id].length);
+  r = await cast(0, second, sl[second][0].key);
+  ok(r.status === 200 && Object.keys(r.body.mine).length === 2, "one ballot in each race: a second race takes its own");
+  r = await EL.castBallot(io, { caseId: "HVI-UNASSESS", district: race, candidate: sl[race][0].key, ip: "ipx", now: t0 + 1000 });
+  ok(r.status === 403, "an unassessed file does not vote");
+  r = await cast(1, race, "someone-else");
+  ok(r.status === 400, "write-ins are not read");
+  r = await cast(1, "nowhere", sl[race][0].key);
+  ok(r.status === 400, "no such race");
+  // limits: four files per address, two per device
+  const ipCase = (i) => EL.castBallot(io, { caseId: `HVI-T${String(i).padStart(7, "0")}`, district: race, candidate: sl[race][other].key, ip: "shared", device: null, now: t0 + 1000 });
+  const outs = [];
+  for (const i of [100, 101, 102, 103, 104]) outs.push((await ipCase(i)).status);
+  eq(outs, [200, 200, 200, 200, 429], "four files per address");
+  const devCase = (i) => EL.castBallot(io, { caseId: `HVI-T${String(i).padStart(7, "0")}`, district: race, candidate: sl[race][other].key, ip: `solo${i}`, device: "f".repeat(32), now: t0 + 1000 });
+  eq([(await devCase(110)).status, (await devCase(111)).status, (await devCase(112)).status], [200, 200, 429], "two files per device");
+  // withdraw: the tally drops it, and a file with no ballot left gives its place back
+  r = await ipCase(103);
+  r = await EL.castBallot(io, { caseId: "HVI-T0000103", district: race, candidate: null, ip: "shared", device: null, now: t0 + 1000 });
+  ok(r.status === 200 && r.body.withdrawn && !(race in r.body.mine), "a ballot can be withdrawn");
+  ok((await ipCase(104)).status === 200, "a withdrawn file's place on its address goes back");
+  // concurrent ballots: the tally equals the ballots
+  const conc = await Promise.all(Array.from({ length: 120 }, (_, k) => cast(200 + k, race, sl[race][other].key)));
+  ok(conc.every(x => x.status === 200), "120 concurrent ballots all land");
+  await EL.heal(store, 1, { now: t0 + 2000 });
+  t = await EL.readTally(store, 1, race);
+  const counted = EL.countsOf(t.seen, sl[race].length);
+  ok(counted.voters === 1 + 4 + 2 + 120 && counted.votes[other] === counted.voters, `the tally equals the ballots (${counted.voters})`);
+  // the close: players decide; a race nobody voted in adopts the Substrate's preference
+  const closeAt = v0.closeAt;
+  r = await cast(300, race, sl[race][other].key, { now: closeAt + 1 });
+  ok(r.status === 403 && r.body.closed, "closed after the deadline");
+  const res = await EL.finalize(store, await store.get(EL.KEYS.meta(1), { type: "json" }), closeAt + 5);
+  ok(res.races[race].by === "players" && res.races[race].winner === other && other !== nPick, "players decide, against the Substrate's lean");
+  const quiet = DIST.find(id => id !== race && id !== second && sl[id].length);
+  ok(res.races[quiet].by === "substrate" && res.races[quiet].winner === K.substratePick(npc[quiet]) && res.races[quiet].notice === K.ADOPTED, "no players: the Substrate's preference is adopted, with the notice");
+  eq(await EL.finalize(store, await store.get(EL.KEYS.meta(1), { type: "json" }), closeAt + 9999), res, "the result is decided once");
+  eq(K.decideRace([2, 2, 0], 4, { votes: [1, 9, 0] }), { winner: 1, by: "players", tie: true }, "a players' tie goes to the Substrate's lean");
+  // the seats: held from SEAT_LAG machine days after the close, for a term, then the next cycle
+  const rec = await EL.seatRecord(store, closeAt + 10);
+  ok(rec.length === 1 && rec[0].seats[race].key === sl[race][other].key, "the seat record carries the winners");
+  const sd = K.seatDayOf(closeAt);
+  C.setSeats(rec);
+  SIM.clearPlans(); SIM.setRoster(roster);
+  const pBefore = clone(SIM.buildPlan(sd - 1)), pAt = clone(SIM.buildPlan(sd));
+  const before = C.civicFold(pBefore, people, null), at = C.civicFold(pAt, people, null);
+  ok(DIST.every(id => before.districts[id].seat.status === "VACANT"), "vacant until the winners are sworn in (days built before the close stay true)");
+  const seat = at.districts[race].seat;
+  ok(seat.status === "HELD" && seat.holder === sl[race][other].key && seat.by === "players" && seat.approval === at.districts[race].mood.s, "the seat is held; approval is the mood");
+  eq(seat.term, [sd, sd + K.TERM_DAYS - 1], `a term is ${K.TERM_DAYS} machine days (${K.TERM_SEASONS} seasons, 7 real days)`);
+  ok(at.districts[quiet].seat.by === "substrate", "a substrate seat is marked as such");
+  ok(Math.abs(K.TERM_MS - 7 * 24 * 3600 * 1000) < 1, "a term is exactly one real week");
+  // the next cycle: opens a term after the first, the incumbent stands again, closes as the term ends
+  const v2 = await EL.publicView(io, v0.openAt + K.TERM_MS + 1000);
+  ok(v2.cycle === 2 && v2.state === "open" && v2.races[race].candidates.some(c => c.key === sl[race][other].key && c.incumbent), "re-election: cycle 2 opens a term later, the incumbent stands");
+  ok(K.seatDayOf(v2.closeAt) === sd + K.TERM_DAYS, "the next council is sworn in the day the term ends");
+  C.setSeats([]);
+}
+
 // ---- 4. the size: per district, not per subject ---------------------------------------------------
 const sizes = [];
 for (const n of process.argv.includes("--no-20k") ? [430, 5000] : [430, 5000, 20000]) {
@@ -211,4 +414,4 @@ SIM.setRoster(roster);
   eq(sum(d).civic, want, `day ${d}: re-split without yesterday's summary, the block is the chained one`);
 }
 
-console.log(`check-civic: ${checks} checks passed. civic block bytes by roster: ${sizes.map(([n, b, t]) => `${n}: ${b} B (${Math.round(b / DIST.length)}/district, fold ${t} ms)`).join("; ")}`);
+console.log(`check-civic: ${checks} checks passed. draft spread ${globalThis.__draftSpread?.join(" -> ")} (cap demo ${globalThis.__capDemo?.map(x => typeof x === "number" ? +x.toFixed(1) : x).join(" -> ")}). civic block bytes by roster: ${sizes.map(([n, b, t]) => `${n}: ${b} B (${Math.round(b / DIST.length)}/district, fold ${t} ms)`).join("; ")}`);

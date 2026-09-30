@@ -22,7 +22,7 @@ import { getStore } from "@netlify/blobs";
 import * as SIM from "../../src/city/sim.js";
 import { fullRoster } from "../../src/city/roster.js";
 import { splitDay, SECTORS, FORMAT as FORMAT2 } from "../../src/city/planSplit.js";
-import { civicFold, CIVIC_V } from "../../src/city/civic.js";
+import { civicFold, CIVIC_V, setSeats } from "../../src/city/civic.js";
 
 export const STORE = "hvi-plans";
 export const FORMAT = SIM.PLAN_FORMAT;
@@ -64,9 +64,12 @@ export function versionOf(json) {
 // io for buildPlans: Blobs by default. census() -> census subjects (strict: a failed read
 // throws rather than build a city without them); snapshots() -> the published per-day
 // social snapshots ({day: {ver, boosts}}), the same ones /api/social gives every browser.
-export function planIo(s = store, { census, snapshots }) {
+// civic() -> the Assembly's outcome (netlify/lib/assembly.js civicOf); elections() -> the
+// closed council cycles (netlify/lib/elections.js seatRecord). Both optional; when given, a
+// failed read builds nothing.
+export function planIo(s = store, { census, snapshots, civic, elections }) {
   return {
-    census, snapshots,
+    census, snapshots, ...(civic ? { civic } : {}), ...(elections ? { elections } : {}),
     async manifest() {
       const r = await s().getWithMetadata(MANIFEST, { type: "json" });
       return r ? { manifest: r.data, etag: r.etag } : { manifest: null, etag: null };
@@ -142,6 +145,8 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
       // THE ASSEMBLY's outcome (netlify/lib/assembly.js): what the vacant lot is becoming. Read
       // like the census: a failed read builds nothing (a listed day never changes).
       civic = io.civic ? await io.civic() : null;
+      // The council's closed cycles (netlify/lib/elections.js): who holds each seat, and from when.
+      setSeats(io.elections ? await io.elections() : []);
       civicRead = true;
       SIM.clearPlans();   // the builder reads the sim, never a plan
       SIM.clearSocialSnapshots();
@@ -182,7 +187,11 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
       const todo = want.filter(d => manifest.days[d] && !m2.days[d]);
       // The civic fold (src/city/civic.js) reads the Assembly's outcome like the build does: a
       // failed read splits nothing (a listed day never changes).
-      if (todo.length && !civicRead && io.civic) { civic = await io.civic(); civicRead = true; SIM.setCivic(civic); }
+      if (todo.length && !civicRead) {
+        if (io.civic) { civic = await io.civic(); SIM.setCivic(civic); }
+        setSeats(io.elections ? await io.elections() : []);
+        civicRead = true;
+      }
       const civics = new Map();
       let people = null;
       for (const day of todo) {
