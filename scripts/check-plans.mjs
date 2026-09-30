@@ -299,4 +299,19 @@ for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["sy
   ok(got[day] === ver && SIM.planOf(Number(day))?.ver === ver, "loadPlans loads the manifest's version");
   SIM.clearPlans();
 }
+// ---- 6. the stall alarm (scripts/plan-health.mjs, run by the referral-sprites job) -------------
+{
+  const { health, withSection } = await import("./plan-health.mjs");
+  const now = T0 + 5 * 60 * 1000;   // day D
+  ok((await health(async () => ({ latest: D + 2 }), now)).ok, "built ahead: healthy");
+  ok(!(await health(async () => ({ latest: D }), now)).ok, "tomorrow missing: stalled");
+  ok(!(await health(async () => ({ latest: null, days: {} }), now)).ok, "empty manifest: stalled");
+  ok(!(await health(async () => { throw new Error("HTTP 503"); }, now)).ok, "unreadable manifest: stalled");
+  const rep = "# Report\n\n## Needs you\n- a\n  b\n\n## Shipped\n- x\n";
+  const one = withSection(rep, "- stalled\n  detail");
+  const two = withSection(one, "- stalled again\n  detail");
+  ok(two.split("## City plans stalled").length === 2 && two.includes("stalled again") && !two.includes("- stalled\n"), "the section is replaced in place, never appended twice");
+  ok(withSection(two, null).trim() === rep.trim(), "recovery removes the section and leaves the rest untouched");
+  ok(withSection(rep, null) === rep, "healthy with no section: the report is not rewritten");
+}
 console.log(`check-plans: ${checks} checks passed`);

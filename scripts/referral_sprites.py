@@ -264,12 +264,25 @@ def rebuild_atlas():
         log(f"atlas skipped: {e}")
 
 
+def check_plans():
+    """The plan builder's stall alarm (scripts/plan-health.mjs): a manifest without tomorrow
+    puts a section on MORNING_REPORT.md, a recovery removes it. It rides this 10-minute job
+    so no new launchd agent is needed. Best-effort: never stops the sprite run."""
+    try:
+        subprocess.run(["node", str(ROOT / "scripts" / "plan-health.mjs")], cwd=ROOT,
+                       capture_output=True, text=True, timeout=180)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log(f"plan health skipped: {e}")
+
+
 def main():
     if "--takedown" in sys.argv:
         takedown(arg_after("--takedown"), excluded="--excluded" in sys.argv)
         rebuild_atlas()
         return 0
     dry = "--dry-run" in sys.argv
+    if not dry:
+        check_plans()
     idx = load_index()
     if not dry:
         idx = repair_index(idx)
