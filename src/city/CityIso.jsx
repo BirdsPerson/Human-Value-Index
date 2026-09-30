@@ -701,7 +701,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       const [x, y] = P(p.u, p.v, p.h);
       if (x < -20 || x > V.cssW + 20 || y < -40 || y > V.cssH + 20) return;
       if (lod === "far") {
-        ctx.fillStyle = FAMILY_COLOR[familyOf(p.s)] || "#6b9a7c";
+        ctx.fillStyle = FAMILY_COLOR[familyOf(p.s).family] || "#6b9a7c";
         ctx.fillRect(Math.round(x) - 1, Math.round(y) - 2, 2, 2);
         return;
       }

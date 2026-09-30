@@ -94,7 +94,7 @@ function personDraw(K, pid, a, p) {
   const draw = () => {
     const [sx, sy] = G.Q(x, y, a.h);
     if (sx < -40 || sx > G.w + 40 || sy < -60 || sy > G.h + 40) return;
-    if (lod === "far") { G.ctx.fillStyle = FAMILY_COLOR[familyOf(p.s)] || "#6b9a7c"; G.ctx.fillRect(Math.round(sx) - 1, Math.round(sy) - 2, 2, 2); return; }
+    if (lod === "far") { G.ctx.fillStyle = FAMILY_COLOR[familyOf(p.s).family] || "#6b9a7c"; G.ctx.fillRect(Math.round(sx) - 1, Math.round(sy) - 2, 2, 2); return; }
     // a player's side, as a colour on the ground under them
     if (a.team != null && a.kind === "stand" && KIT[pid]) {
       const col = a.gk ? KEEPER_KIT[a.team] : KIT[pid][a.team], r = Math.max(2, G.z * 0.2);

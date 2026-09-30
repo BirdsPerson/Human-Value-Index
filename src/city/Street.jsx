@@ -431,7 +431,7 @@ function Street({ censusRef, onOpen, onEnter }) {
         const hpx = p.y - q.y;
         // a stand-in from the day's summary (crowd.js) is drawn like anyone, and never opens
         if (hpx < 11) {
-          const col = FAMILY_COLOR[familyOf(it.s)] || C.dim;
+          const col = FAMILY_COLOR[familyOf(it.s).family] || C.dim;
           ctx.fillStyle = alpha(col, fog);
           const r = Math.max(1.2, hpx / 5);
           ctx.fillRect(p.x - r, p.y - r * 2.5, r * 2, r * 2.5);
