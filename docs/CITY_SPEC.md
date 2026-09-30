@@ -450,3 +450,49 @@ fit draw 4.8 ms avg / 9.4 p95 (was 2.9 / 5.9), district 2.6 / 2.9 (1.2 / 1.8), s
 (0.5 / 0.6); 390 fit 1.2 / 1.7, district 1.1 / 1.7, street 1.6 / 2.1. Frame gap 16.7-17.4 ms
 p95 everywhere; five seconds at 1440 fit: 300 frames, none over 20 ms. Screens:
 docs/screens/buildings/ (compare-*.png: before and after side by side; after-*.png: the rest).
+
+## Plans: the day built once, server side (scaling step 3, 2026-09-29)
+
+Every browser used to build each machine day itself: the capacity allocation over the whole
+roster (`allocFor`, whole-roster coupling) and every subject's street routes (81% of the cold
+build). Now the day is built once and published; every reader loads the same file.
+
+- **Format** (`sim.js` `buildPlan` / `setPlan`, `PLAN_FORMAT` 1): per subject, `schedule()`'s
+  segments for the day, compact: home place, then each segment's end time, place, activity
+  (work / leisure / commute / home), haunt, the clipped span, and for a Loop trip the train,
+  car and boarding time. Times are the sim's own floats (JSON round-trips them exactly), so
+  `whereAt` from a plan is identical to `whereAt` from the sim. Routes are not in the plan:
+  a commuter's street path is laid out from their personal spot when first drawn (only the
+  few people in transit pay it, not the whole roster). The plan names the roster version
+  and the social snapshot versions (day and day - 1) it was built with.
+- **Builder** (`netlify/lib/plans.js`): `plan-build.js` (scheduled every 10 real minutes)
+  wakes `plan-build-background.js` (15 min, lease like the social tick), which builds every
+  missing day in [today - 1, today + 3], oldest first, from the strict census and the
+  published snapshots. A day more than one ahead waits for its snapshot; today and tomorrow
+  never wait. Each day: blob `f1/day/<day>/<ver>` (write-once) first, then the manifest
+  `f1/manifest` with an etag condition (written last: a listed day is always complete, and a
+  listed day never changes). Days older than today - 2 retire from the manifest and Blobs.
+- **Readers**: `/api/plan` (manifest, 30 s) and `/api/plan/<day>/<ver>` (immutable, a year).
+  The browser (`planClient.js`) loads today's plan before the first census (tomorrow's in
+  the last machine hours of today) and falls back to the local sim when there is none. The
+  quest check (`quest.js`) loads the plans for every day its 90 s look-back touches
+  (`questDays`), the social tick the plans for the days it advances (`state.plans` records
+  which plan placed each day). A subject the plan does not hold (indexed after it was
+  built) is placed by the sim without the capacity allocation, the same for every viewer.
+- **Checks** (`scripts/check-plans.mjs`): plan whereAt == sim whereAt for every subject
+  every 15 machine minutes over 2 days (production-shaped 430 and synthetic 1,500 with
+  friend snapshots); quest judgement server (figures on file + plans) == browser (census +
+  plans) including across midnight; the ledger advanced over plans == advanced by the sim;
+  the builder's cadence never skips a day at 10- or 60-minute runs.
+- **Where it runs, measured** (`scripts/bench-plans.mjs`, Mac M5 Pro; Netlify Lambda runs
+  this code ~9x slower, measured on the social tick): cold day / each further day / 4-day
+  backfill: 432 (live) 0.34 / 0.11 / 0.66 s (Lambda ~3 / 1 / 6 s), 5k 3.6 / 1.2 / 7.3 s
+  (~33 / 11 / 66 s, 189 MB), 20k 15 / 5.4 / 31 s (~135 / 49 / 281 s, 520 MB). A run is
+  bounded at 12 minutes and publishes day by day, so it fits Background Functions to ~20k
+  (the roster engine's 48 a week reaches 5k in ~2 years); past ~40k the heap outgrows
+  1 GB, which the sector split (step 4) removes.
+- **Payload** (one file per day): 432 → 109 KB raw / 47 KB gzip; 5k → 1.25 MB / 0.5 MB;
+  20k → 5 MB / 2 MB (the 6 MB function response limit is near: step 4 splits by sector).
+- **Known seam**: a day's overnight tail is recomputed when the next day is built; if the
+  roster changed between the two builds, someone out past midnight may jump at 00:00
+  (before, a roster change could move anyone at any moment).

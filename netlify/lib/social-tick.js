@@ -34,7 +34,16 @@ function noteRoster(state, from, to, ver) {
   if (log.length > ROSTER_LOG) log.splice(0, log.length - ROSTER_LOG);
 }
 
-// io: { census, putPublic } plus either
+// Which published plan (sim.js setPlan) placed each machine day the tick processed, so a
+// ledger can be traced to the city it saw. Bounded like the roster log.
+function notePlans(state, from, to, plans) {
+  const log = (state.plans ||= {});
+  for (let d = Math.floor(from / 24) + 1; d <= Math.floor((to - 1) / 24) + 1; d++) log[d] = plans[d] || "sim";
+  const days = Object.keys(log).map(Number).sort((x, y) => x - y);
+  for (const d of days.slice(0, Math.max(0, days.length - ROSTER_LOG))) delete log[d];
+}
+
+// io: { census, putPublic, plans? (days -> {day: ver} loaded into the sim) } plus either
 //   load() -> { state, etag } and save(state, etag) -> newEtag (throws TickConflict), with an
 //   optional lease { acquire(run, ms) -> bool, release(run) }   (netlify/lib/social-store.js)
 // or the plain getState()/putState(state) pair (benchmarks: no conditional writes).
@@ -63,6 +72,14 @@ export async function tick(nowMs = Date.now(), io, opts = {}) {
     }
     const from = state.hour;
     const target = Math.min(nowHour, state.hour + MAX_HOURS_PER_RUN);
+    // The published plans for the days this run covers (netlify/lib/plans.js): the tick
+    // meets people where every browser sees them. A day without a plan runs the sim.
+    let plans = {};
+    if (io.plans && target > state.hour) {
+      const days = [];
+      for (let d = Math.floor(state.hour / 24) + 1; d <= Math.floor((target - 1) / 24) + 1; d++) days.push(d);
+      plans = await timed("io", () => io.plans(days)).catch(err => { console.error("social tick: plans unreadable, the sim decides", err?.message); return {}; });
+    }
     let chunks = 0;
     while (state.hour < target) {
       if (chunks > 0 && clock() - t0 >= budgetMs) break;
@@ -72,6 +89,7 @@ export async function tick(nowMs = Date.now(), io, opts = {}) {
       advance(state, roster, b);
       t.sim += clock() - c;
       noteRoster(state, a, b, rosterVersion());
+      notePlans(state, a, b, plans);
       chunks++;
       state.tick = { run, at: new Date(clock()).toISOString(), chunk: chunks };
       etag = await timed("io", () => save(state, etag));   // checkpoint; TickConflict if the ledger moved under us
@@ -82,7 +100,7 @@ export async function tick(nowMs = Date.now(), io, opts = {}) {
     pub.at = new Date(nowMs).toISOString();
     t.sim += clock() - c;
     await timed("io", () => io.putPublic(pub));
-    return { run, hour: state.hour, nowHour, from, behind: nowHour - state.hour, chunks, ms: Math.round(clock() - t0), simMs: Math.round(t.sim), ioMs: Math.round(t.io), counts: pub.counts };
+    return { run, hour: state.hour, nowHour, from, plans: Object.keys(plans).length, behind: nowHour - state.hour, chunks, ms: Math.round(clock() - t0), simMs: Math.round(t.sim), ioMs: Math.round(t.io), counts: pub.counts };
   } finally {
     if (io.lease) await io.lease.release(run).catch(() => {});
   }

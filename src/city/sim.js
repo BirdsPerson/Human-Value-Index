@@ -525,11 +525,15 @@ function rankFor(tIdx, job) {
 }
 
 const memo = new Map();
+let MEMO_CAP = 40000;
 function remember(key, make) {
   let v = memo.get(key);
-  if (v === undefined) { if (memo.size > 40000) memo.clear(); v = make(); memo.set(key, v); }
+  if (v === undefined) { if (memo.size > MEMO_CAP) memo.clear(); v = make(); memo.set(key, v); }
   return v;
 }
+// The plan builder (netlify/lib/plans.js) holds a whole roster's days at once; above ~5k
+// subjects the default cap clears mid-build and the build goes quadratic (scaling audit).
+export function setMemoCap(n) { MEMO_CAP = Math.max(40000, n | 0); }
 // The memo key must cover every input the sim reads, or a subject whose file fills in
 // mid-visit (the census adds warmth and competence, a referral's verdict publishes)
 // keeps the job it was first given. Fingerprinted once per subject object.
@@ -1323,8 +1327,9 @@ function planStops(s, day, seed, pick) {
   return { stops, key, home };
 }
 
-function planDay(s, day, seed) {
-  const { stops, key, home } = planStops(s, day, seed, (i, avoid, hr) => allocatedPick(s, day, i, seed, avoid, hr));
+function planDay(s, day, seed, raw = false) {
+  const pick = raw ? (i, avoid, hr) => pickLeisure(s, day, i, seed, avoid, hr) : (i, avoid, hr) => allocatedPick(s, day, i, seed, avoid, hr);
+  const { stops, key, home } = planStops(s, day, seed, pick);
   // Lay out: commute in front of each stop (arrive on time if possible), then home.
   // A trip's length depends on which train it catches, so it is timed against the Loop's
   // timetable at the absolute machine hour it sets out.
@@ -1352,26 +1357,131 @@ function planDay(s, day, seed) {
 }
 
 // [{from, to, placeId, activity, fromPlaceId?, haunt?}] covering [0, 24) exactly.
-// Yesterday's overnight tail comes first; gaps are home.
+// Yesterday's overnight tail comes first; gaps are home. A day with a published plan
+// (setPlan, below) reads it from the plan instead: the same segments, built once server
+// side. A subject the plan does not hold (a file indexed after it was built) is placed
+// without the capacity allocation, as a subject outside the registered roster always was.
 export function schedule(s, day, seed = SEED) {
-  return remember(`sch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}|${ROSTER_VER}`, () => {
-    const home = homeOf(s, seed);
-    const raw = [
-      ...planDay(s, day - 1, seed).map(g => ({ ...g, from: g.from - 24, to: g.to - 24 })),
-      ...planDay(s, day, seed),
-    ].filter(g => g.to > 0 && g.from < 24);
-    const out = [];
-    let t = 0;
-    for (const g of raw) {
-      const from = Math.max(g.from, t);   // a late tail clips today's first departure
-      if (from > t) out.push({ from: t, to: from, placeId: home, activity: "home" });
-      const to = Math.min(g.to, 24);
-      if (to > from) out.push({ ...g, from, to, span: [g.from, g.to] });
-      t = Math.max(t, to);
+  const plan = seed === SEED ? PLANS.get(day) : undefined;
+  if (plan) {
+    const key = keyOf(s), row = plan.rows.get(key);
+    if (row) return remember(`psch|${plan.ver}|${key}`, () => planSegs(plan, row));
+    return remember(`rsch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}`, () => simSchedule(s, day, seed, true));
+  }
+  return remember(`sch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}|${ROSTER_VER}`, () => simSchedule(s, day, seed, false));
+}
+function simSchedule(s, day, seed, raw) {
+  const home = homeOf(s, seed);
+  const raws = [
+    ...planDay(s, day - 1, seed, raw).map(g => ({ ...g, from: g.from - 24, to: g.to - 24 })),
+    ...planDay(s, day, seed, raw),
+  ].filter(g => g.to > 0 && g.from < 24);
+  const out = [];
+  let t = 0;
+  for (const g of raws) {
+    const from = Math.max(g.from, t);   // a late tail clips today's first departure
+    if (from > t) out.push({ from: t, to: from, placeId: home, activity: "home" });
+    const to = Math.min(g.to, 24);
+    if (to > from) out.push({ ...g, from, to, span: [g.from, g.to] });
+    t = Math.max(t, to);
+  }
+  if (t < 24) out.push({ from: t, to: 24, placeId: home, activity: "home" });
+  return out;
+}
+
+// ---- published plans --------------------------------------------------------------------
+// The city built once per machine day (netlify/lib/plans.js, docs/CITY_SPEC.md "Plans"):
+// every subject's schedule() for the day, in a compact form, from the whole roster and the
+// social snapshots the builder saw. Loaded plans replace the local build (the capacity
+// allocation and every subject's routes), and every reader of the same plan sees the same
+// city: browsers, the quest checks, the social tick. whereAt from a plan equals whereAt from
+// the sim for the roster and snapshots it was built with (scripts/check-plans.mjs).
+//
+// Format 1: {format, day, seed, roster, social: {day: ver, day-1: ver}, places: [ids],
+//   subjects: {key: [homeIdx, ...segs]}}. The segments tile [0, 24): each starts where the
+//   one before it ends. seg = [to] for home, else [to, placeIdx, act, flags, ...extra]:
+//   act 1 work, 2 leisure, 3 commute. flags: 1 haunt, 2 span[0] != from (then span0),
+//   4 span[1] != to (then span1), 8 local trip, 16 from given (then from). A commute adds
+//   fromPlaceIdx, then for a Loop trip k (train), car, board (hours from departure).
+//   Extras come in that order: from, span0, span1, fromPlaceIdx, k, car, board.
+export const PLAN_FORMAT = 1;
+const PLAN_ACT = { work: 1, leisure: 2, commute: 3 };
+const PLAN_ACT_NAME = [null, "work", "leisure", "commute"];
+const PLANS = new Map();   // day -> {ver, day, places, rows: Map key -> row, meta}
+export const planVersion = (plan) => plan?.ver || null;
+export function setPlan(json, ver) {
+  if (!json || json.format !== PLAN_FORMAT || json.seed !== SEED || !Number.isFinite(json.day) || !json.subjects) return false;
+  const v = String(ver || json.ver || "");
+  if (!v || PLANS.get(json.day)?.ver === v) return false;
+  PLANS.set(json.day, { ver: v, day: json.day, places: json.places, rows: new Map(Object.entries(json.subjects)), meta: { roster: json.roster, social: json.social, n: json.n } });
+  return true;
+}
+export const plannedDays = () => [...PLANS.keys()].sort((a, b) => a - b);
+export const planOf = (day) => { const p = PLANS.get(day); return p ? { day, ver: p.ver, ...p.meta } : null; };
+export function dropPlan(day) { return PLANS.delete(day); }
+export function clearPlans() { PLANS.clear(); }
+
+function planSegs(plan, row) {
+  const P = plan.places, home = P[row[0]], out = [];
+  let t = 0;
+  for (let i = 1; i < row.length; i++) {
+    const e = row[i];
+    if (e.length === 1) { out.push({ from: t, to: e[0], placeId: home, activity: "home" }); t = e[0]; continue; }
+    const [to, pi, act, fl] = e;
+    let j = 4;
+    const from = fl & 16 ? e[j++] : t;
+    const span0 = fl & 2 ? e[j++] : from, span1 = fl & 4 ? e[j++] : to;
+    const g = { from, to, placeId: P[pi], activity: PLAN_ACT_NAME[act] };
+    if (act === 3) {
+      g.fromPlaceId = P[e[j++]];
+      if (fl & 8) g.trip = { local: true };
+      else {
+        const k = e[j++], car = e[j++], board = e[j++];
+        const dA = PLACES[g.fromPlaceId].district, dB = PLACES[g.placeId].district;
+        const off = board + rideHours(dA, dB);
+        g.trip = { local: false, k, trainId: TRAINS[k].id, car, spotA: platformSpot(STATIONS[dA], carArc(k, car, STATIONS[dA].s)), spotB: platformSpot(STATIONS[dB], carArc(k, car, STATIONS[dB].s)), board, off, out: off + ALIGHT };
+      }
     }
-    if (t < 24) out.push({ from: t, to: 24, placeId: home, activity: "home" });
-    return out;
-  });
+    if (fl & 1) g.haunt = true;
+    g.span = [span0, span1];
+    out.push(g);
+    t = to;
+  }
+  return out;
+}
+
+// The builder's side: this roster's (setRoster) schedules for `day` in format 1, from the
+// sim itself (a plan already loaded for the day is not read). -> {format, day, ..., subjects}
+export function buildPlan(day, seed = SEED) {
+  const places = PLACE_LIST.map(p => p.id), idx = Object.fromEntries(places.map((id, i) => [id, i]));
+  const subjects = {};
+  for (const s of ROSTER_ORDER) {
+    const key = keyOf(s);
+    const segs = remember(`sch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}|${ROSTER_VER}`, () => simSchedule(s, day, seed, false));
+    const row = [idx[homeOf(s, seed)]];
+    let t = 0;
+    for (const g of segs) {
+      if (g.activity === "home") {
+        if (g.from !== t || g.placeId !== homeOf(s, seed)) throw new Error(`plan ${day}: ${key} home segment out of order`);
+        row.push([g.to]); t = g.to; continue;
+      }
+      let fl = 0;
+      const extra = [];
+      if (g.haunt) fl |= 1;
+      if (g.from !== t) { fl |= 16; extra.push(g.from); }
+      if (g.span[0] !== g.from) { fl |= 2; extra.push(g.span[0]); }
+      if (g.span[1] !== g.to) { fl |= 4; extra.push(g.span[1]); }
+      if (g.activity === "commute") {
+        extra.push(idx[g.fromPlaceId]);
+        if (g.trip.local) fl |= 8;
+        else extra.push(g.trip.k, g.trip.car, g.trip.board);
+      }
+      row.push([g.to, idx[g.placeId], PLAN_ACT[g.activity], fl, ...extra]);
+      t = g.to;
+    }
+    subjects[key] = row;
+  }
+  return { format: PLAN_FORMAT, day, seed, roster: ROSTER_VER, social: { [day]: socialVer(day), [day - 1]: socialVer(day - 1) }, n: ROSTER_ORDER.length, places, subjects };
 }
 
 // ---- time -------------------------------------------------------------------------
@@ -1476,8 +1586,10 @@ export function whereAt(s, machineTime, seed = SEED) {
     const p = lerp(c, trip.spotB, clamp((t - trip.off) / ALIGHT, 0, 1));
     return { ...base, atDistrictId: dB, sub: "alighting", leg: "alight", stationId: dB, ...train, ...eta, x: p.x, y: p.y };
   }
-  // walk2 is platform -> down the stairs to the gate -> street
-  const { p, i, k } = alongLegs(trip.walk2, t - trip.out);
+  // walk2 is platform -> down the stairs to the gate -> street (a trip read from a plan
+  // lays its street walk out here, on first use)
+  const walk2 = trip.walk2 || (trip.walk2 = [walkLeg(trip.spotB, sB.gate, dB), r.last]);
+  const { p, i, k } = alongLegs(walk2, t - trip.out);
   return { ...base, atDistrictId: dB, sub: "walking", leg: "walk", stationId: dB, climb: i === 0 ? 1 - k : 0, ...train, ...eta, x: p.x, y: p.y };
 }
 

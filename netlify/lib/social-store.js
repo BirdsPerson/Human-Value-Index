@@ -14,9 +14,11 @@ export const putState = (state) => social().setJSON("state", state);
 // The tick's io (netlify/lib/social-tick.js) over a Blobs store: conditional state writes
 // and a lease, so two workers (a retry, a hung run, the Mac's social-seed) can never both
 // advance the ledger or roll it back. `store` is a function returning the hvi-social store.
-export function tickIo(store = social, census) {
+// plans (optional): days -> load the published plans for them into the sim (plans.js loadPlans).
+export function tickIo(store = social, census, { plans } = {}) {
   return {
     census,
+    ...(plans ? { plans } : {}),
     putPublic: (pub) => store().setJSON("public", pub),
     async load() {
       const r = await store().getWithMetadata("state", { type: "json" });
