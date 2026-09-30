@@ -35,6 +35,32 @@ DISPUTE link on the page.
 - **Duration.** Three real days from the first run after deploy: the first GET of
   /api/assembly writes `meta` {openAt, closeAt} once (onlyIfNew). Nothing is in code.
 
+## THE SUBSTRATE (ADVISORY) (Scott 2026-09-30: "NPCs vote, and may abstain")
+
+Rule chosen: PLAYERS DECIDE, NPCs ADVISORY. Every subject in the census (the full roster the
+city simulates) casts one deterministic advisory ballot, or abstains, from its record alone
+(`src/assembly/substrate.js`, leans in `content.js` SUBSTRATE): fields (athletes, business,
+finance, royalty lean golf; care, activism, farming, food lean farm), tier band (the top leans
+golf, the bottom farm), values (care, network), ties on file (a friend or relative of an
+applicant leans with them; a grudge votes the other way, citing SPITE), and the mood of the
+district they work in (a SEETHING or RESTLESS district leans against what the top of the
+ladder would pick, and spitefully). Abstention: low network, high threat, the bottom of the
+ladder, an INDIFFERENT district, or no preference either way. The applicants are recused.
+Reasons come from the same fixed list; one to three, like a player's.
+
+- Counted by `refreshSubstrate` (netlify/lib/assembly.js) at most every 10 minutes while the
+  polls are open, from the census and today's moods (`netlify/lib/substrate-source.js`): the
+  plan builder's run asks every 10 minutes, the page's GET asks too. Stored as `s001/substrate`;
+  a failed or empty census read keeps the last count; frozen at the close.
+- Shown on the debate board as THE SUBSTRATE (ADVISORY) beside THE CITIZENRY (the page, the
+  forum's board in the city, the PA). Totals only: no subject's advisory ballot is published by
+  name.
+- At the close: if ZERO players voted, the substrate's preference is adopted (`decidedBy:
+  "substrate"`, the notice THE CITIZENRY ABSTAINED. THE SUBSTRATE'S PREFERENCE IS ADOPTED.);
+  otherwise the players' majority decides (the coin on a tie), whatever the substrate says. A
+  level substrate, or none on record, with no players leaves it to the chair's coin. The
+  result carries the substrate's final count.
+
 ## Where
 
 - `#assembly` (menu item 7; linked from the city's directory row and the Commons):

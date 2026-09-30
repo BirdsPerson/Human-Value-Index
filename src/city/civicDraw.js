@@ -86,7 +86,8 @@ export function civicLabel(lotId, mt) {
 export function civicLine(lotId, mt, n) {
   if (CIVIC_LOTS[lotId] === "forum") {
     const v = assemblyNow();
-    return v?.session?.state === "open" ? `${n} WATCHING // IN SESSION: GOLF ${v.tally.votes.golf}, FARM ${v.tally.votes.farm}. VOTE AT #ASSEMBLY.` : `${n} ON THE FLOOR // ADJOURNED. THE BENCHES REMAIN.`;
+    const sub = v?.substrate ? ` (SUBSTRATE ${v.substrate.votes.golf}-${v.substrate.votes.farm}, ADVISORY)` : "";
+    return v?.session?.state === "open" ? `${n} WATCHING // IN SESSION: GOLF ${v.tally.votes.golf}, FARM ${v.tally.votes.farm}${sub}. VOTE AT #ASSEMBLY.` : `${n} ON THE FLOOR // ADJOURNED. THE BENCHES REMAIN.`;
   }
   const p = lotPhase(mt);
   if (p.phase === "vacant") return "VACANT // TWO APPLICATIONS BEFORE THE ASSEMBLY";
@@ -210,9 +211,12 @@ function forum(K) {
   // the board: the running tally while the polls are open, the result after
   const v = assemblyNow(), open = v?.session?.state === "open";
   const g = v?.tally?.votes?.golf ?? 0, f = v?.tally?.votes?.farm ?? 0;
-  const rows = v?.result ? ["THE RESULT", `001 GOLF ${String(v.result.votes.golf).padStart(4)}`, `002 FARM ${String(v.result.votes.farm).padStart(4)}`, `APPROVED: ${APPLICATIONS[v.result.winner].no}`]
-    : ["DEBATE BOARD", `001 GOLF ${String(g).padStart(4)}`, `002 FARM ${String(f).padStart(4)}`, open ? "VOTE: #ASSEMBLY" : "…"];
-  panel(K, FORUM.board.a, FORUM.board.b, 0.55, 1.45, "#0b120c", rows, ["#86c9a0", "#fbbf24", "#4ade80", "#86c9a0"]);
+  // THE SUBSTRATE (ADVISORY): the census's own count, under the players'
+  const sub = v?.result ? v.result.substrate : v?.substrate;
+  const subRow = sub ? `SUBSTRATE ${sub.votes.golf}-${sub.votes.farm}` : "SUBSTRATE …";
+  const rows = v?.result ? ["THE RESULT", `001 GOLF ${String(v.result.votes.golf).padStart(4)}`, `002 FARM ${String(v.result.votes.farm).padStart(4)}`, subRow, v.result.decidedBy === "substrate" ? `ADOPTED: ${APPLICATIONS[v.result.winner].no}` : `APPROVED: ${APPLICATIONS[v.result.winner].no}`]
+    : ["DEBATE BOARD", `001 GOLF ${String(g).padStart(4)}`, `002 FARM ${String(f).padStart(4)}`, subRow, open ? "VOTE: #ASSEMBLY" : "…"];
+  panel(K, FORUM.board.a, FORUM.board.b, 0.55, 1.45, "#0b120c", rows, ["#86c9a0", "#fbbf24", "#4ade80", "#67e8f9", "#86c9a0"]);
   // the advocates, by projection, while the polls are open
   if (open) for (const side of ["golf", "farm"]) projected(K, side, ...FORUM.podium[side]);
   // benches carry their sitters

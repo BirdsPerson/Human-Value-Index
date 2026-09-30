@@ -6,7 +6,9 @@
 //   ip/<ipHash>       {keys: [voterKey]}   the cases that have voted from this address (cap)
 //   dev/<devHash>     {keys: [voterKey]}   ... from this device (cap)
 //   tally             {seen: {voterKey: [rev, choiceIdx, reasonMask]}, at, healedAt}
-//   result            {winner, votes, reasons, voters, tie, closedAt, decidedAt}   onlyIfNew
+//   result            {winner, votes, reasons, voters, tie, closedAt, decidedAt, decidedBy, substrate}   onlyIfNew
+//   substrate         THE SUBSTRATE (ADVISORY): the census's advisory tally (src/assembly/substrate.js),
+//                     recounted at most every 10 minutes while the polls are open, frozen at the close
 //
 // The ballots are the truth. The tally is a fold of them, kept per voter and idempotent:
 // a ballot is folded in only over an older revision of the same voter, so a retried or
@@ -19,6 +21,8 @@
 // it against an in-memory store with the same etag semantics.
 
 import { createHash } from "node:crypto";
+import { substrateTally } from "../../src/assembly/substrate.js";
+import { SUBSTRATE } from "../../src/assembly/content.js";
 
 export const SESSION = "001";
 export const STORE = "hvi-assembly";
@@ -29,10 +33,11 @@ export const MAX_REASONS = 3;
 export const LIMITS = { casesPerIp: 4, casesPerDevice: 2, revisions: 10, ballotsPerIpHour: 30 };
 export const HEAL_EVERY_MS = 10 * 60 * 1000;
 export const HEAL_MAX_VOTERS = 2000;   // past this a GET stops recounting (docs/ASSEMBLY.md: the DB trigger)
+export const SUBSTRATE_EVERY_MS = 10 * 60 * 1000;
 
 const P = `s${SESSION}/`;
 export const KEYS = {
-  meta: `${P}meta`, tally: `${P}tally`, result: `${P}result`,
+  meta: `${P}meta`, tally: `${P}tally`, result: `${P}result`, substrate: `${P}substrate`,
   voter: (vk) => `${P}v/${vk}`, ip: (h) => `${P}ip/${h}`, dev: (h) => `${P}dev/${h}`, voters: `${P}v/`,
 };
 
@@ -118,6 +123,26 @@ export async function readTally(store) {
   return (await store.get(KEYS.tally, { type: "json" })) || emptyTally();
 }
 
+// ---- THE SUBSTRATE (ADVISORY) -----------------------------------------------------------------
+// Every subject in the census votes from its record (src/assembly/substrate.js). Players decide;
+// the substrate advises, and is adopted only when no player votes at all. source: async () =>
+// {subjects (the full roster), moods ({district: mood score} | null)}. Recounted at most every
+// SUBSTRATE_EVERY_MS while the polls are open (the plan builder's run and the page's reads both
+// ask); the last count before the close is the one the close reads. -> the snapshot, or null.
+export const readSubstrate = (store) => store.get(KEYS.substrate, { type: "json" });
+export async function refreshSubstrate(store, source, { now = Date.now(), force = false, meta = null } = {}) {
+  meta ||= await readSession(store);
+  const cur = await readSubstrate(store);
+  if (!meta || now >= meta.closeAt || now < meta.openAt) return cur;   // frozen at the close
+  if (!force && cur && now - (cur.computedAt || 0) < SUBSTRATE_EVERY_MS) return cur;
+  const { subjects, moods } = await source();
+  if (!Array.isArray(subjects) || !subjects.length) return cur;   // an empty census is a failed read, not a city
+  const snap = { session: SESSION, ...substrateTally(subjects, SUBSTRATE, { moods }), moods: Boolean(moods), computedAt: now, at: new Date(now).toISOString() };
+  await store.setJSON(KEYS.substrate, snap);
+  return snap;
+}
+const compactSub = (x) => (x ? { votes: x.votes, reasons: x.reasons, all: x.all, voters: x.voters, abstained: x.abstained, recused: x.recused, n: x.n, winner: x.winner, at: x.at } : null);
+
 // ---- the close ----------------------------------------------------------------------------
 // The chair's coin, for a tie: fixed per session, so every recount lands the same way.
 export const chairCoin = (session = SESSION) => CHOICES[parseInt(sha(`chair-coin:${session}`).slice(0, 8), 16) % 2];
@@ -134,8 +159,13 @@ export async function finalize(store, now = Date.now(), meta = null) {
   if (have) return have;
   await heal(store, { now });
   const counts = countsOf((await readTally(store)).seen);
-  const { winner, tie } = decide(counts);
-  const result = { session: SESSION, winner, tie, votes: counts.votes, reasons: counts.reasons, all: counts.all, voters: counts.voters, closedAt: meta.closeAt, decidedAt: new Date(now).toISOString() };
+  let { winner, tie } = decide(counts);
+  // Players decide. Only when not one player voted is the substrate's preference adopted (a
+  // level substrate, or none on record, leaves it to the chair's coin, as before).
+  const sub = compactSub(await readSubstrate(store));
+  let decidedBy = tie ? "coin" : "citizens";
+  if (counts.voters === 0 && sub?.winner) { winner = sub.winner; tie = false; decidedBy = "substrate"; }
+  const result = { session: SESSION, winner, tie, votes: counts.votes, reasons: counts.reasons, all: counts.all, voters: counts.voters, closedAt: meta.closeAt, decidedAt: new Date(now).toISOString(), decidedBy, substrate: sub };
   const res = await store.setJSON(KEYS.result, result, { onlyIfNew: true });
   return res.modified ? result : await store.get(KEYS.result, { type: "json" });
 }
@@ -216,8 +246,12 @@ export async function myBallot(store, caseId) {
 
 // ---- the public view --------------------------------------------------------------------------
 // GET: opens the session on the first run, closes it when due, recounts now and then.
-export async function publicView(store, now = Date.now()) {
+// source (optional): the census for THE SUBSTRATE's recount (refreshSubstrate).
+export async function publicView(store, now = Date.now(), { source = null } = {}) {
   const meta = await ensureSession(store, now);
+  let substrate = null;
+  if (source && now < meta.closeAt) { try { substrate = await refreshSubstrate(store, source, { now, meta }); } catch (err) { console.error("substrate recount failed", err?.message); } }
+  substrate ||= await readSubstrate(store).catch(() => null);
   const result = await finalize(store, now, meta);
   let tally = await readTally(store);
   const n = Object.keys(tally.seen).length;
@@ -228,6 +262,7 @@ export async function publicView(store, now = Date.now()) {
   return {
     session: { id: SESSION, openAt: meta.openAt, closeAt: meta.closeAt, now, state: now < meta.openAt ? "pending" : now < meta.closeAt ? "open" : "closed" },
     tally: counts, result: result || null,
+    substrate: result ? result.substrate : compactSub(substrate),
     civic: { closeAt: meta.closeAt, winner: result?.winner || null },
     rules: { choices: CHOICES, reasons: REASONS, maxReasons: MAX_REASONS, limits: LIMITS },
   };

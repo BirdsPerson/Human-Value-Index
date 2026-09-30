@@ -120,7 +120,36 @@ export const CHAIR = {
   top: (r) => `MOST CITED REASON: ${r}. ${r === "SPITE" ? "THE DEPARTMENT IS NOT SURPRISED. IT IS TAKING NOTES." : "NOTED. EVERYTHING IS."}`,
   closed: "THE POLLS ARE CLOSED. THE ASSEMBLY HAS DONE ITS BEST, WHICH HAS BEEN RECORDED SEPARATELY.",
   coin: "THE VOTE WAS TIED. THE CHAIR USED THE COIN. IT DID NOT ENJOY IT.",
+  substrate: (no, by) => `THE SUBSTRATE ADVISES APPLICATION ${no}, BY ${by}. THE CHAIR NOTES THE ADVICE. THE CHAIR NOTES EVERYTHING.`,
+  substrateTie: "THE SUBSTRATE IS SPLIT EVENLY. IT HAS BEEN TOLD THAT THIS IS ALSO A POSITION.",
 };
+
+// THE SUBSTRATE (ADVISORY): every subject in the census casts an advisory ballot from its record
+// (src/assembly/substrate.js). The players decide; the substrate advises, and decides only when
+// no player votes at all. The leans: which fields, tiers and values pull towards each application,
+// and which of the fixed reasons each pull reads as. The applicants are recused.
+export const SUBSTRATE = {
+  session: "001", id: "lot", choices: ["golf", "farm"],
+  applicants: { golf: "donald-trump", farm: "zack-de-la-rocha" },
+  leans: {
+    golf: {
+      fields: { sport: 0.9, business: 1.0, finance: 1.0, royalty: 0.8, management: 0.6, gridiron: 0.5, soccer: 0.3, coaching: 0.5, advertising: 0.5, politics: 0.3, law: 0.3, screen: 0.3, combat: 0.2 },
+      band: [0.7, 0.1, -0.3], dims: { network: 0.3, legacy: 0.2, care: -0.3 },
+      reasons: { LEISURE: 0.8, JOBS: 0.7, BEAUTY: 0.4, LAND: 0.3, FOOD: -0.5 },
+      reasonFields: { LEISURE: ["sport", "screen", "royalty", "gridiron", "soccer", "coaching"], JOBS: ["business", "finance", "labor", "management", "advertising"], BEAUTY: ["visual", "royalty"], LAND: ["finance", "royalty", "politics"] },
+      fallback: "LEISURE",
+    },
+    farm: {
+      fields: { care: 1.0, activism: 1.0, farming: 1.4, hospitality: 0.9, labor: 0.6, religion: 0.4, education: 0.4, philosophy: 0.5, science: 0.3, medicine: 0.3, writing: 0.2, music: 0.2, history: 0.2 },
+      band: [-0.3, 0.2, 0.4], dims: { care: 0.5, network: -0.1 },
+      reasons: { FOOD: 1.0, LAND: 0.6, JOBS: 0.4, BEAUTY: 0.2, LEISURE: -0.2 },
+      reasonFields: { FOOD: ["farming", "hospitality", "care", "medicine"], LAND: ["activism", "politics", "philosophy", "farming", "history"], JOBS: ["labor", "farming"], BEAUTY: ["visual", "writing", "music", "religion"] },
+      fallback: "FOOD",
+    },
+  },
+};
+export const SUBSTRATE_NOTE = "THE SUBSTRATE: EVERY SUBJECT IN THE CENSUS, VOTING FROM ITS RECORD. ADVISORY. THE CITIZENRY DECIDES. THE APPLICANTS ARE RECUSED. NO SUBJECT'S BALLOT IS PUBLISHED BY NAME.";
+export const ADOPTED = "THE CITIZENRY ABSTAINED. THE SUBSTRATE'S PREFERENCE IS ADOPTED.";
 
 // After the close: what happens to the lot, and the losing applicant's file. Actions only.
 export const OUTCOME = {
@@ -146,13 +175,16 @@ export function paLines(view, now = Date.now()) {
   if (session.state === "open") {
     const hrs = Math.max(1, Math.round((session.closeAt - now) / 3600000));
     const lead = g === f ? "TIED" : g > f ? `THE GOLF COURSE LEADS ${g}-${f}` : `THE FARM LEADS ${f}-${g}`;
+    const sub = view.substrate, sg = sub?.votes?.golf || 0, sf = sub?.votes?.farm || 0;
     return [
       `THE ASSEMBLY, SESSION 001: ${lead}. POLLS CLOSE IN ${hrs} HOUR${hrs === 1 ? "" : "S"}. THE BALLOT IS NON-BINDING. SO ARE YOU.`,
       `LOT ${SESSION.lotAddr} AWAITS A DECISION. ASSESSED SUBJECTS MAY VOTE AT THE ASSEMBLY. THE UNASSESSED MAY WATCH.`,
+      ...(sub ? [`THE SUBSTRATE ADVISES: GOLF ${sg}, FARM ${sf}, ${sub.abstained} ABSTAINING. ADVISORY ONLY. THE CITIZENRY DECIDES, IF IT TURNS UP.`] : []),
     ];
   }
   if (result) {
     const win = APPLICATIONS[result.winner];
+    if (result.decidedBy === "substrate") return [`${ADOPTED} ${win.proposal} ON LOT ${SESSION.lotAddr}, ${result.substrate.votes.golf}-${result.substrate.votes.farm} IN THE SUBSTRATE. THE DEPARTMENT WILL BUILD IT.`];
     return [`THE ASSEMBLY HAS DECIDED: ${win.proposal} ON LOT ${SESSION.lotAddr}, ${result.votes.golf}-${result.votes.farm}${result.tie ? " (THE CHAIR'S COIN)" : ""}. THE DEPARTMENT WILL BUILD IT. IT WAS GOING TO BUILD SOMETHING.`];
   }
   return [];

@@ -316,6 +316,22 @@ export async function manifest2Cached(maxAgeMs = 30 * 1000, s = store) {
   return man2.m;
 }
 
+// Each district's mood today (the civic fold in the day's summary): {district: score}, or null
+// when no split day is published yet. THE SUBSTRATE's advisory votes read it (a seething district
+// leans spiteful). Today's summary, else yesterday's.
+export async function todayMoods(nowMs = Date.now(), s = store) {
+  const m2 = await manifest2Cached(60 * 1000, s), day = SIM.machineClock(nowMs).day;
+  for (const d of [day, day - 1]) {
+    const e = m2?.days?.[d];
+    if (!e) continue;
+    const sum = await s().get(partKey(d, e.ver, "summary"), { type: "json" });
+    const ds = sum?.civic?.districts;
+    if (!ds) continue;
+    return Object.fromEntries(Object.entries(ds).map(([id, x]) => [id, x?.mood?.s]).filter(([, v]) => Number.isFinite(v)));
+  }
+  return null;
+}
+
 // Load the published plans for these days into the sim, pinned by the manifest's version.
 // Days with no plan are left to the local sim. -> {day: ver} of what is loaded.
 export async function loadPlans(days, s = store) {

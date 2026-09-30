@@ -9,8 +9,10 @@ import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE } from "../lib/http.js";
 import { STORE, publicView, castBallot, parseBallot, myBallot } from "../lib/assembly.js";
+import { substrateSource } from "../lib/substrate-source.js";
 
 const store = () => getStore({ name: STORE, consistency: "strong" });
+const source = substrateSource();
 
 export default async (req, context) => {
   if (req.method === "OPTIONS") return preflight(req);
@@ -20,7 +22,7 @@ export default async (req, context) => {
   try {
     if (req.method === "GET") {
       const s = store();
-      const view = await publicView(s);
+      const view = await publicView(s, Date.now(), { source });
       const caseId = String(new URL(req.url).searchParams.get("caseId") || "").trim().toUpperCase();
       if (isCaseId(caseId)) view.mine = await myBallot(s, caseId);
       return json(200, view, noStore);

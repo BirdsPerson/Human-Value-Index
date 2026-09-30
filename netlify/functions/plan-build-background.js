@@ -6,7 +6,8 @@ import { censusSubjects } from "../lib/census.js";
 import { getPublic, tickAuthorized } from "../lib/social-store.js";
 import { buildPlans, planIo, STORE } from "../lib/plans.js";
 import { getStore } from "@netlify/blobs";
-import { civicOf, STORE as ASSEMBLY_STORE } from "../lib/assembly.js";
+import { civicOf, refreshSubstrate, STORE as ASSEMBLY_STORE } from "../lib/assembly.js";
+import { substrateSource } from "../lib/substrate-source.js";
 
 export const BUDGET_MS = 12 * 60 * 1000;
 const defaultIo = () => planIo(() => getStore({ name: STORE, consistency: "strong" }), {
@@ -20,6 +21,12 @@ export default async (req, _context, io = defaultIo()) => {
   try {
     const r = await buildPlans(Date.now(), io, { budgetMs: BUDGET_MS });
     console.log("plan build", JSON.stringify(r));
+    // THE SUBSTRATE's advisory count (netlify/lib/assembly.js), at most every 10 minutes while the
+    // polls are open, so the close always reads a recent one even when nobody opens the page
+    if (!io.test) {
+      const sub = await refreshSubstrate(getStore({ name: ASSEMBLY_STORE, consistency: "strong" }), substrateSource()).catch(err => { console.error("substrate recount failed", err?.message); return null; });
+      if (sub) console.log("substrate", JSON.stringify({ votes: sub.votes, abstained: sub.abstained, n: sub.n, at: sub.at }));
+    }
   } catch (err) {
     console.error("plan build failed", err);
   }

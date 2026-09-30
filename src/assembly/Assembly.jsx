@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Frame, Button, ButtonRow, PaLine, ScreenHead, Chip, Chips } from "../ui/index.js";
 import { Bar, padL } from "../term.jsx";
 import { readCaseId, CaseLogon } from "../caseFile.jsx";
-import { SESSION, APPLICATIONS, ADVOCATES, REASONS, REASON_NOTE, MAX_REASONS, REACTIONS, CHAIR, OUTCOME, NOTICE } from "./content.js";
+import { SESSION, APPLICATIONS, ADVOCATES, REASONS, REASON_NOTE, MAX_REASONS, REACTIONS, CHAIR, OUTCOME, NOTICE, SUBSTRATE_NOTE, ADOPTED } from "./content.js";
 import { loadAssembly, castBallot } from "./client.js";
 
 // #assembly: THE ASSEMBLY, session 001 (docs/ASSEMBLY.md). The applications (filings), the
@@ -33,6 +33,7 @@ const CSS = `
 .asm-board-row .l { color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asm-board-row .b { overflow: hidden; white-space: nowrap; }
 .asm-sub-h { font-size: var(--t-xs); color: var(--fg-mute); margin: var(--s3) 0 var(--s1); }
+.asm-board-h { font-size: var(--t-xs); color: var(--accent); letter-spacing: 0.04em; margin: 0 0 var(--s2); border-bottom: var(--bw) solid var(--line); padding-bottom: 2px; }
 .asm-err { color: var(--harm); margin-top: var(--s2); }
 .asm-ok { color: var(--accent); margin-top: var(--s2); }
 .asm-fine { font-size: var(--t-xs); color: var(--fg-mute); margin: 0 0 var(--s2); }
@@ -94,7 +95,10 @@ export default function Assembly() {
   const g = tally?.votes?.golf || 0, f = tally?.votes?.farm || 0;
   const top = topReason(tally);
   const result = view?.result;
-  const chairLine = state === "closed" ? (result?.tie ? CHAIR.coin : CHAIR.closed)
+  const sub = view?.substrate;
+  const sg = sub?.votes?.golf || 0, sf = sub?.votes?.farm || 0;
+  const subLine = !sub || state === "closed" ? null : sg === sf ? CHAIR.substrateTie : sg > sf ? CHAIR.substrate(APPLICATIONS.golf.no, sg - sf) : CHAIR.substrate(APPLICATIONS.farm.no, sf - sg);
+  const chairLine = state === "closed" ? (result?.decidedBy === "substrate" ? ADOPTED : result?.tie ? CHAIR.coin : CHAIR.closed)
     : !g && !f ? CHAIR.none : g === f ? CHAIR.tie : g > f ? CHAIR.lead(APPLICATIONS.golf.no, g - f) : CHAIR.lead(APPLICATIONS.farm.no, f - g);
 
   return (
@@ -109,6 +113,7 @@ export default function Assembly() {
         </div>
         <PaLine tag="CHAIR>" text={chairLine} />
         {top && <PaLine tag="CHAIR>" text={CHAIR.top(top)} />}
+        {subLine && <PaLine tag="CHAIR>" text={subLine} />}
         {err && <div className="asm-err" role="alert">!! {err}</div>}
       </Frame>
 
@@ -123,7 +128,7 @@ export default function Assembly() {
       </Frame>
 
       <Frame title="THE DEBATE BOARD" meta={state === "closed" ? "FINAL" : "RUNNING TALLY"}>
-        <Board tally={tally} />
+        <Board tally={tally} substrate={sub} />
       </Frame>
 
       <Frame box title="YOUR BALLOT" meta={state === "open" ? "ONE PER ASSESSED FILE" : "CLOSED"}>
@@ -205,39 +210,59 @@ function Debate({ top }) {
   );
 }
 
-function Board({ tally }) {
-  if (!tally) return <div className="asm-note">READING THE BOARD…</div>;
-  const g = tally.votes.golf, f = tally.votes.farm, max = Math.max(1, g, f);
-  const row = (label, n, m, tone) => (
-    <div className="asm-board-row" key={label}>
-      <span className="l">{label}</span>
-      <span className="b"><Bar value={n} max={m} width={24} tone={tone} /></span>
-      <span className="n">{n}</span>
-    </div>
-  );
+const boardRow = (label, n, m, tone, key = label) => (
+  <div className="asm-board-row" key={key}>
+    <span className="l">{label}</span>
+    <span className="b"><Bar value={n} max={m} width={24} tone={tone} /></span>
+    <span className="n">{n}</span>
+  </div>
+);
+// One side of the board: the votes, then the reasons behind each application.
+function Tally({ t, who, extra = null }) {
+  const g = t.votes.golf, f = t.votes.farm, max = Math.max(1, g, f, extra?.n || 0);
   return (
-    <div role="list" aria-label={`Application 001, ${g} ballots. Application 002, ${f} ballots.`}>
-      {row("001 GOLF", g, max, "var(--warn)")}
-      {row("002 FARM", f, max, "var(--accent)")}
+    <div role="list" aria-label={`${who}: application 001, ${g}. Application 002, ${f}.${extra ? ` ${extra.label}, ${extra.n}.` : ""}`}>
+      {boardRow("001 GOLF", g, max, "var(--warn)")}
+      {boardRow("002 FARM", f, max, "var(--accent)")}
+      {extra && boardRow(extra.label, extra.n, max, "var(--fg-mute)")}
       {["golf", "farm"].map(k => {
-        const rs = tally.reasons[k], m = Math.max(1, ...REASONS.map(r => rs[r]));
+        const rs = t.reasons[k], m = Math.max(1, ...REASONS.map(r => rs[r]));
         return (
           <div key={k}>
             <div className="asm-sub-h">WHY {APPLICATIONS[k].no} ({k === "golf" ? "GOLF" : "FARM"}): REASONS CITED</div>
-            {REASONS.map(r => row(r, rs[r], m, k === "golf" ? "var(--warn)" : "var(--accent)"))}
+            {REASONS.map(r => boardRow(r, rs[r], m, k === "golf" ? "var(--warn)" : "var(--accent)", `${k}${r}`))}
           </div>
         );
       })}
-      <div className="asm-note">REASONS ARE PICKED FROM A FIXED LIST. THE DEPARTMENT DOES NOT READ FREE TEXT. IT HAS READ ENOUGH.</div>
     </div>
+  );
+}
+function Board({ tally, substrate }) {
+  if (!tally) return <div className="asm-note">READING THE BOARD…</div>;
+  return (
+    <>
+      <div className="asm-apps">
+        <div>
+          <div className="asm-board-h">THE CITIZENRY // {tally.voters} BALLOT{tally.voters === 1 ? "" : "S"} // DECIDES</div>
+          <Tally t={tally} who="The citizenry" />
+        </div>
+        <div>
+          <div className="asm-board-h">THE SUBSTRATE (ADVISORY) // {substrate ? `${substrate.n} POLLED` : "COUNTING"}</div>
+          {substrate ? <Tally t={substrate} who="The substrate, advisory" extra={{ label: "ABSTAINED", n: substrate.abstained }} /> : <div className="asm-note">THE CENSUS IS BEING POLLED. IT WAS NOT ASKED WHETHER IT WISHED TO BE.</div>}
+        </div>
+      </div>
+      <div className="asm-note">{SUBSTRATE_NOTE}</div>
+      <div className="asm-note">REASONS ARE PICKED FROM A FIXED LIST. THE DEPARTMENT DOES NOT READ FREE TEXT. IT HAS READ ENOUGH.</div>
+    </>
   );
 }
 
 function ResultFrame({ result }) {
   const win = APPLICATIONS[result.winner], lose = APPLICATIONS[result.winner === "golf" ? "farm" : "golf"];
   return (
-    <Frame box title="THE RESULT" meta={`${result.votes.golf}-${result.votes.farm}`} tone="accent">
+    <Frame box title="THE RESULT" meta={result.decidedBy === "substrate" ? `SUBSTRATE ${result.substrate.votes.golf}-${result.substrate.votes.farm}` : `${result.votes.golf}-${result.votes.farm}`} tone="accent">
       <div className="asm-big">{win.proposal}</div>
+      {result.decidedBy === "substrate" && <p className="asm-count">{ADOPTED}</p>}
       <p className="asm-count">{OUTCOME.approved(win)}</p>
       <p className="asm-count">{OUTCOME.denied(lose)}</p>
       {result.tie && <p className="asm-note">{CHAIR.coin}</p>}

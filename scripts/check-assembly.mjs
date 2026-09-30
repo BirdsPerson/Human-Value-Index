@@ -8,6 +8,8 @@ import * as SIM from "../src/city/sim.js";
 import { LOOKAHEAD, buildPlans } from "../netlify/lib/plans.js";
 import * as C from "../src/assembly/content.js";
 import { CIVIC_ANCHORS, CIVIC_LOTS, FORUM, GOLF, FARM, SITE, SIGN } from "../src/city/civicGeo.js";
+import { substrateTally, substrateBallot } from "../src/assembly/substrate.js";
+import { fullRoster } from "../src/city/roster.js";
 
 let fails = 0;
 const ok = (c, msg) => { if (!c) { fails++; console.log("  FAIL", msg); } };
@@ -167,6 +169,66 @@ for (const failTally of [0, 0.35]) {
   ok(pv.session.state === "closed" && pv.result.winner === r1.winner && pv.tally.votes.golf === r1.votes.golf, "the public view shows the result once closed");
 }
 ok(ASM.decide({ votes: { golf: 3, farm: 3 } }).tie && ASM.decide({ votes: { golf: 3, farm: 3 } }).winner === ASM.chairCoin(), "a tie goes to the chair's coin, the same every time");
+
+// ---- THE SUBSTRATE (ADVISORY): the census votes; players decide ---------------------------------------
+{
+  const { TIERS } = await import("../src/figures.js");
+  const synth = [];
+  for (let i = 0; i < 400; i++) {
+    const score = 60 + (i * 53) % 900;
+    synth.push({ name: `Citizen ${i}`, slug: `citizen-${i}`, score, tier: (TIERS.find(t => score >= t.min) || TIERS[TIERS.length - 1]).label, kind: "citizen", warmth: 20 + (i * 17) % 70, competence: 25 + (i * 29) % 70 });
+  }
+  const roster = fullRoster([...synth, { name: "Donald Trump", slug: "donald-trump", score: 300, kind: "figure" }, { name: "Zack de la Rocha", slug: "zack-de-la-rocha", score: 600, kind: "figure" }, { name: "Tom Morello", slug: "tom-morello", score: 650, kind: "figure", qualifier: "guitarist" }, { name: "Mary L. Trump", slug: "mary-l-trump", score: 640, kind: "figure", qualifier: "psychologist and author" }]);
+  const moods = Object.fromEntries(SIM.DISTRICTS.map((d, i) => [d.id, -60 + i * 13]));
+  const a = substrateTally(roster, C.SUBSTRATE, { moods }), b = substrateTally([...roster].reverse(), C.SUBSTRATE, { moods });
+  ok(JSON.stringify(a) === JSON.stringify(b), "the substrate's count is deterministic, whatever order the census arrives in");
+  ok(a.n === roster.length && a.voters + a.abstained + a.recused === a.n, `every subject votes, abstains or is recused (${a.voters} + ${a.abstained} + ${a.recused} = ${a.n})`);
+  ok(a.abstained > 0 && a.abstained < a.n * 0.5, `some abstain, most do not (${a.abstained} of ${a.n})`);
+  ok(a.recused === 2 && substrateBallot(roster.find(s => s.slug === "donald-trump"), C.SUBSTRATE, { moods }).abstain === "RECUSED", "the applicants are recused from their own motion");
+  ok(a.votes.golf > 0 && a.votes.farm > 0, `the substrate is not unanimous (golf ${a.votes.golf}, farm ${a.votes.farm})`);
+  ok(Object.values(a.reasons).every(rs => Object.keys(rs).every(r => ASM.REASONS.includes(r))) && a.all.SPITE > 0, "advisory reasons come from the fixed list, spite included");
+  let reasonsOk = true;
+  for (const s of roster) { const x = substrateBallot(s, C.SUBSTRATE, { moods }); if (x.choice && (x.reasons.length < 1 || x.reasons.length > ASM.MAX_REASONS)) reasonsOk = false; }
+  ok(reasonsOk, "every advisory ballot gives one to three reasons, as a player's must");
+  ok(substrateBallot(roster.find(s => s.slug === "tom-morello"), C.SUBSTRATE, { moods: null }).choice === "farm", "a bandmate of an applicant on file leans with him");
+  const mary = substrateBallot(roster.find(s => s.slug === "mary-l-trump"), C.SUBSTRATE, { moods: null });
+  ok(mary.choice === "farm" && mary.reasons.includes("SPITE"), "a grudge on file against an applicant votes the other way, spitefully");
+  const seething = substrateTally(roster, C.SUBSTRATE, { moods: Object.fromEntries(SIM.DISTRICTS.map(d => [d.id, -80])) }), placated = substrateTally(roster, C.SUBSTRATE, { moods: Object.fromEntries(SIM.DISTRICTS.map(d => [d.id, 80])) });
+  ok(seething.all.SPITE > placated.all.SPITE && seething.votes.farm > placated.votes.farm, "a seething city leans spiteful, against what the top of the ladder would pick");
+
+  // the snapshot: recounted while open, frozen at the close, never replaced by an empty census
+  const st = memStore(), io = makeIo(st);
+  const meta = await ASM.ensureSession(st, T0);
+  const src = async () => ({ subjects: roster, moods });
+  const s1 = await ASM.refreshSubstrate(st, src, { now: T0 + 1000 });
+  ok(s1 && s1.votes.golf === a.votes.golf && s1.voters === a.voters, "the snapshot is the census's count");
+  const s2 = await ASM.refreshSubstrate(st, async () => ({ subjects: [], moods }), { now: T0 + 1000 + ASM.SUBSTRATE_EVERY_MS + 1 });
+  ok(s2.computedAt === s1.computedAt, "an empty census read keeps the last count");
+  const s3 = await ASM.refreshSubstrate(st, async () => { throw new Error("census down"); }, { now: T0 + 2000 }).catch(() => "threw");
+  ok(s3 !== "threw" && s3.computedAt === s1.computedAt, "within ten minutes the count is not redone");
+  const pv = await ASM.publicView(st, T0 + 3000, { source: async () => { throw new Error("census down"); } });
+  ok(pv.substrate && pv.substrate.votes.golf === a.votes.golf && pv.tally.voters === 0, "the board shows the substrate beside the citizenry (a failed census read shows the last count)");
+  // zero players: the substrate's preference is adopted
+  const late = await ASM.refreshSubstrate(st, src, { now: meta.closeAt + 1, force: true });
+  ok(late.computedAt === s1.computedAt, "the count is frozen at the close");
+  const r = await ASM.finalize(st, meta.closeAt + 5);
+  ok(r.voters === 0 && r.decidedBy === "substrate" && r.winner === a.winner && !r.tie, `no player voted: the substrate's preference (${a.winner}) is adopted`);
+  ok(C.paLines({ session: { state: "closed" }, tally: {}, result: r })[0].startsWith(C.ADOPTED), "and the PA says so: THE CITIZENRY ABSTAINED");
+  // one player: players decide, even against the whole substrate
+  const st2 = memStore(), io2 = makeIo(st2);
+  const m2 = await ASM.ensureSession(st2, T0);
+  await ASM.refreshSubstrate(st2, src, { now: T0 + 1000 });
+  const against = a.winner === "golf" ? "farm" : "golf";
+  const cast = await ASM.castBallot(io2, { caseId: ids[5], choice: against, reasons: ["LAND"], ip: "one", device: dev(5), now: T0 + 2000 });
+  ok(cast.status === 200, "one player votes against the substrate");
+  const r2 = await ASM.finalize(st2, m2.closeAt + 5);
+  ok(r2.winner === against && r2.decidedBy === "citizens" && r2.substrate.winner === a.winner, `players decide: one ballot for ${against} beats ${a.voters} advisory ones`);
+  // no players and no substrate on record: the chair's coin, as before
+  const st3 = memStore();
+  const m3 = await ASM.ensureSession(st3, T0);
+  const r3 = await ASM.finalize(st3, m3.closeAt + 5);
+  ok(r3.winner === ASM.chairCoin() && r3.decidedBy === "coin", "no players, no substrate on record: the chair's coin");
+}
 
 // ---- the winner, built in the city ---------------------------------------------------------------------
 {
