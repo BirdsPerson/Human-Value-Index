@@ -165,8 +165,10 @@ function boardText(K, a, b, h, rows, colors, h0 = null) {
   const fs = Math.min(Math.max(6, Math.round(G.z * 0.26)), Math.floor((wpx - 4) / Math.max(...rows.map(r => r.length)) / 0.62), Math.floor((tall - 3) / (rows.length * 1.2)));
   if (fs < 6) return;
   c.save(); c.font = `${fs}px "Fira Mono", monospace`; c.textBaseline = "top"; c.textAlign = "left";
-  c.translate(A[0], A[1]); c.rotate(Math.atan2(B[1] - A[1], B[0] - A[0]));
-  rows.forEach((t, i) => { c.fillStyle = colors[i] || colors[colors.length - 1]; c.fillText(t, fs * 0.35, 2 + i * fs * 1.15); });
+  const ang = Math.atan2(B[1] - A[1], B[0] - A[0]), lh = fs * 1.15;
+  c.translate(A[0], A[1]); c.rotate(ang);
+  // rows step straight down the upright board (screen-vertical), not across the rotated frame
+  rows.forEach((t, i) => { c.fillStyle = colors[i] || colors[colors.length - 1]; c.fillText(t, fs * 0.35 + (2 + i * lh) * Math.tan(ang), 2 + i * lh); });
   c.restore();
 }
 // A flat upright panel from a to b between h0 and h1 (both faces), with text on it.
