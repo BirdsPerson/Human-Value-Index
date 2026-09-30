@@ -19,14 +19,36 @@ export function loadElections({ force = false, caseId = null } = {}) {
   return p;
 }
 
-// candidate: a candidate key, or null to withdraw that race's ballot.
-export async function castVote(caseId, district, candidate) {
+// candidate: a candidate key, or null to withdraw that race's ballot; writein: a write-in's
+// key (a subject from the picker) instead of a candidate.
+export async function castVote(caseId, district, candidate, writein = null) {
   const r = await fetch("/api/elections", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ caseId, district, candidate, device: deviceId() }),
+    body: JSON.stringify(writein ? { caseId, district, writein, device: deviceId() } : { caseId, district, candidate, device: deviceId() }),
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || "The Council refused your ballot. It gave no reason. It does not owe you one.");
   publish(d);
+  return d;
+}
+
+// The write-in picker's type-ahead. -> {hits: [{key, name, living, self}], self: {key, name} | null}
+export async function searchWriteIns(district, q, caseId = null) {
+  const p = new URLSearchParams({ writein: district, q });
+  if (caseId) p.set("caseId", caseId);
+  const r = await fetch(`/api/elections?${p}`, { cache: "no-store" });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || "The census is unreachable.");
+  return d;
+}
+
+// A player citizen elected declines or resigns its seat (MY FILE).
+export async function resignSeat(caseId, cycle, district) {
+  const r = await fetch("/api/elections", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ caseId, resign: { cycle, district } }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || "The Council did not accept the resignation. It gave no reason.");
   return d;
 }

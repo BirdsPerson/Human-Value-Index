@@ -273,7 +273,7 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
     ok(typeof line === "string" && line.length < 160 && !/["“”]/.test(line), `${k}: one short line, no quotation marks`);
   }
   const EC = await import("../src/elections/content.js");
-  for (const line of [...EC.NOTICE, ...EC.RULES, EC.BLURB, EC.CHAIR.closed, EC.CHAIR.none, EC.CHAIR.open(10)]) ok(!/[“”]|\\"/.test(line) && !line.includes('"'), "no quotation marks on the page");
+  for (const line of [...EC.NOTICE, ...EC.RULES, EC.BLURB, EC.CHAIR.closed, EC.CHAIR.none, EC.CHAIR.open(10), ...Object.values(EC.WRITEIN).map(x => (typeof x === "function" ? x("Subject ABCD") : x)), EC.SEAT.elected("Subject ABCD", "The Works"), EC.SEAT.term(1, 2, true), EC.SEAT.confirm, EC.SEAT.done("X")]) ok(!/[“”]|\\"/.test(line) && !line.includes('"'), "no quotation marks on the page");
   const cand = K.candidateOf({ name: "Living Test", slug: "living-test", kind: "figure", score: 500, qualifier: "politician" }, "hq");
   ok(cand.living && cand.platform === null, "a living candidate never speaks, even one with a written line elsewhere");
   // the Substrate: deterministic, advisory
@@ -320,7 +320,7 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   r = await EL.castBallot(io, { caseId: "HVI-UNASSESS", district: race, candidate: sl[race][0].key, ip: "ipx", now: t0 + 1000 });
   ok(r.status === 403, "an unassessed file does not vote");
   r = await cast(1, race, "someone-else");
-  ok(r.status === 400, "write-ins are not read");
+  ok(r.status === 400, "a name not on the slate is not a candidate (write-ins go through the picker)");
   r = await cast(1, "nowhere", sl[race][0].key);
   ok(r.status === 400, "no such race");
   // limits: four files per address, two per device
@@ -370,6 +370,169 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   const v2 = await EL.publicView(io, v0.openAt + K.TERM_MS + 1000);
   ok(v2.cycle === 2 && v2.state === "open" && v2.races[race].candidates.some(c => c.key === sl[race][other].key && c.incumbent), "re-election: cycle 2 opens a term later, the incumbent stands");
   ok(K.seatDayOf(v2.closeAt) === sd + K.TERM_DAYS, "the next council is sworn in the day the term ends");
+  C.setSeats([]);
+}
+
+// ---- 3d. WRITE-INS: the picker's scope, the exclusions, one ballot per race, the board, the winner ------
+{
+  const K = await import("../src/city/council.js");
+  const EL = await import("../netlify/lib/elections.js");
+  const IN = await import("../netlify/lib/intake.js");
+  const { getStore } = await import("@netlify/blobs");
+  SIM.setRoster(roster);
+  const sl = K.slate(roster), npc = K.substrateVotes(roster, sl);
+  const onSlate = new Set(DIST.flatMap(id => sl[id].map(c => c.key)));
+  // the exclusions: figures from the pool, each given one reason to be closed
+  const base = roster.filter(s => K.mayStand(s) && !onSlate.has(SIM.keyOf(s)) && !s.died && s.breakdown && !IN.effectivelyGated(s.breakdown) && !IN.seriousHarm(s.breakdown));
+  const flags = {
+    gated: { harmReview: { decision: "gate", note: "" } }, pending: { harmReviewPending: true }, serious: { breakdown: { ...base[0].breakdown, threat: 95 } },
+    withheld: { underReview: true, breakdown: null }, candidate: { candidate: true }, official: { localOfficial: true }, nodangle: { noDangle: true }, closed: {},
+  };
+  const bad = Object.fromEntries(Object.entries(flags).map(([why, f], i) => [why, { ...base[i + 1], ...f }]));
+  ok(IN.seriousHarm(bad.serious.breakdown), "the serious-cap stand-in is serious harm");
+  const badKeys = new Set(Object.values(bad).map(s => SIM.keyOf(s)));
+  const roster2 = roster.map(s => Object.values(bad).find(b => SIM.keyOf(b) === SIM.keyOf(s)) || s);
+  const closed = new Set([SIM.keyOf(bad.closed)]);
+  const meta = { cycle: 1, slate: sl };
+  const pool = EL.writeinPool(roster2, meta, closed);
+  const citizens = roster2.filter(s => s.kind === "citizen").map(s => SIM.keyOf(s));
+  for (const id of DIST) {
+    for (const s of pool.byDistrict[id]) {
+      const k = SIM.keyOf(s);
+      ok(EL.districtsOf(s).includes(id), `${k}: in ${id}'s picker because it lives or works there`);
+      ok(!onSlate.has(k) && !badKeys.has(k) && s.kind !== "citizen", `${k}: not on a slate, not closed, not a citizen`);
+    }
+  }
+  ok(DIST.every(id => pool.byDistrict[id].length > 0), "every race has write-ins to pick from");
+  for (const [why, s] of Object.entries(bad)) {
+    const k = SIM.keyOf(s);
+    for (const id of EL.districtsOf(s)) {
+      ok(EL.writeinFor(pool, id, k) === null, `${why}: refused as a write-in in its own district`);
+      ok(!EL.writeinSearch(pool, id, s.name).some(h => h.key === k), `${why}: never offered by the picker`);
+    }
+  }
+  const other = citizens[0];
+  ok(DIST.every(id => EL.writeinFor(pool, id, other) === null), "another player's citizen is never a write-in");
+  ok(DIST.every(id => EL.writeinFor(pool, id, sl[id][0].key) === null), "a listed candidate is not a write-in (they are on the ballot)");
+  // search: type-ahead, accents off, scoped to the race
+  const accented = roster2.find(s => /[^\x00-\x7f]/.test(s.name) && pool.byDistrict[EL.districtsOf(s)[0]]?.includes(s));
+  if (accented) {
+    const id = EL.districtsOf(accented)[0], plain = accented.name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+    ok(EL.writeinSearch(pool, id, plain.slice(0, 4)).some(h => h.key === SIM.keyOf(accented)), `accent-insensitive type-ahead: ${plain.slice(0, 4)} finds ${accented.name}`);
+  }
+  const outside = DIST.find(id => !pool.byDistrict[id].some(s => SIM.keyOf(s) === SIM.keyOf(pool.byDistrict.hq[0] || {})));
+  const hq0 = pool.byDistrict.hq[0];
+  if (hq0 && outside) ok(EL.writeinFor(pool, outside, SIM.keyOf(hq0)) === null && !EL.writeinSearch(pool, outside, hq0.name).some(h => h.key === SIM.keyOf(hq0)), "the picker is scoped to the race's district");
+  // yourself: a player may run, where its citizen lives or works; a harm-flagged file may not
+  const SELF = "HVI-W000ABCD", rec = { history: [{ score: 520, tier: "ORDINARY", breakdown: base[0].breakdown }] };
+  const me = EL.selfWriteIn(pool, SELF, rec);
+  ok(me && me.key === "citizen-abcd" && me.name === "Subject ABCD" && me.districts.length >= 1, "your own citizen: SUBJECT and its tag");
+  const home = me.districts[0], away = DIST.find(id => !me.districts.includes(id));
+  ok(EL.writeinFor(pool, home, me.key, me)?.key === me.key && EL.writeinSearch(pool, home, "subject abcd", me)[0]?.self, "yourself: offered and accepted where you live or work");
+  ok(!away || EL.writeinFor(pool, away, me.key, me) === null, "yourself: not in a district you neither live nor work in");
+  ok(EL.selfWriteIn(pool, SELF, { history: [{ breakdown: bad.serious.breakdown }] }) === null && EL.selfWriteIn(pool, SELF, { history: [] }) === null, "yourself: never with a harm finding, never unassessed");
+
+  // ballots in memory
+  globalThis.__blobs = new Map();
+  const store = getStore({ name: EL.STORE });
+  const cases = new Map(), lim = new Map();
+  const io = {
+    store, census: async () => roster2, writeins: async () => pool,
+    getCase: async (id) => cases.get(id) || null,
+    hitLimit: async (key, max) => { const x = (lim.get(key) || 0) + 1; if (x > max) return { ok: false }; lim.set(key, x); return { ok: true }; },
+  };
+  const t0 = Date.UTC(2026, 10, 1);
+  const cid = (i) => `HVI-X${String(i).padStart(7, "0")}`;
+  for (let i = 0; i < 60; i++) cases.set(cid(i), { history: [{ score: 500, tier: "ORDINARY" }] });
+  cases.set(SELF, rec);
+  const v0 = await EL.publicView(io, t0);
+  const race = DIST.find(id => id !== home && sl[id].length && pool.byDistrict[id].length >= 2), cands = v0.races[race].candidates;
+  const figs = pool.byDistrict[race].map(s => SIM.keyOf(s));
+  const [wA, wB] = figs;
+  const vote = (i, o, district = race) => EL.castBallot(io, { caseId: typeof i === "string" ? i : cid(i), district, ip: `wip${i}`, device: null, now: t0 + 1000, candidate: null, ...o });
+  // live cycle untouched: a ballot in the old shape counts as it did
+  eq(EL.countsOf({ a: [1, 0], b: [2, 1], c: [3, -1] }, 2), { votes: [1, 1], voters: 2, writeins: {} }, "old tallies count the same");
+  let r = await vote(0, { candidate: cands[0].key });
+  ok(r.status === 200 && r.body.mine[race] === 0, "a listed ballot");
+  r = await vote(0, { writein: wA });
+  ok(r.status === 200 && r.body.changed && r.body.mine[race] === wA && r.body.mineWrite[race].key === wA, "changed to a write-in: the same ballot");
+  r = await vote(0, { writein: wA });
+  ok(r.status === 200 && r.body.unchanged, "the same write-in again changes nothing");
+  let t = await EL.readTally(store, 1, race);
+  let c = EL.countsOf(t.seen, cands.length);
+  ok(Object.keys(t.seen).length === 1 && c.voters === 1 && c.writeins[wA] === 1 && c.votes.every(x => x === 0), "one ballot per race per case, listed or write-in");
+  r = await vote(0, { candidate: cands[0].key, writein: wA });
+  ok(r.status === 400, "one name per ballot");
+  r = await vote(1, { writein: SIM.keyOf(bad.gated) });
+  ok(r.status === 400 && r.body.error === EL.WRITEIN_REFUSED, "a closed file: refused, neutrally");
+  r = await vote(1, { writein: other });
+  ok(r.status === 400 && r.body.error === EL.WRITEIN_REFUSED, "another player's citizen: refused, the same words");
+  r = await vote(1, { writein: "free text name" });
+  ok(r.status === 400 && r.body.error === EL.WRITEIN_REFUSED, "free text is not a subject");
+  r = await vote(1, { writein: cands[1].key });
+  ok(r.status === 200 && r.body.mine[race] === 1, "a write-in of a listed candidate is a vote for them");
+  // the board: named at WRITEIN_SHOW ballots, a number below
+  await vote(2, { writein: wA });
+  let v = await EL.publicView(io, t0 + 2000);
+  ok(v.races[race].writeins.length === 0 && v.races[race].writeinOther === 2, "below the threshold: counted, shown only as a number");
+  await vote(3, { writein: wA });
+  v = await EL.publicView(io, t0 + 3000);
+  const wa = v.races[race].writeins.find(w => w.key === wA);
+  ok(wa && wa.votes === 3 && v.races[race].writeinOther === 0 && v.races[race].voters === 4, `at ${EL.WRITEIN_SHOW} ballots it joins the board`);
+  ok(wa.living ? wa.platform === null : true, "a living write-in has no statement");
+  ok(!JSON.stringify(v).includes('"seen"') && !JSON.stringify(v).includes('"order"'), "the public view carries no voter list and no hidden ranking");
+  // withdraw a write-in: the tally drops it
+  r = await vote(3, { writein: null });
+  ok(r.status === 200 && r.body.withdrawn && !(race in r.body.mine), "a write-in ballot can be withdrawn");
+  await vote(3, { writein: wA });
+  await vote(14, { writein: wB });
+  // yourself: only your own file can write your citizen in (other players' files are closed)
+  r = await vote(SELF, { writein: me.key }, home);
+  ok(r.status === 200 && r.body.mine[home] === me.key, "a player writes itself in");
+  r = await vote(15, { writein: me.key }, home);
+  ok(r.status === 400 && r.body.error === EL.WRITEIN_REFUSED, "nobody else can write a player's citizen in");
+  // a quiet race with only a write-in ballot: players still decide (the Substrate never writes in)
+  const quiet = DIST.find(id => id !== race && id !== home && sl[id].length && pool.byDistrict[id].length);
+  const qk = SIM.keyOf(pool.byDistrict[quiet][0]);
+  r = await EL.castBallot(io, { caseId: cid(20), district: quiet, writein: qk, ip: "q", device: null, now: t0 + 1000 });
+  ok(r.status === 200, "a lone write-in ballot");
+  const silent = DIST.find(id => id !== race && id !== quiet && id !== home && sl[id].length);
+  // the winner
+  eq(K.decideRace([1, 0], 3, { votes: [5, 1] }, { x: 2 }), { winner: "x", by: "players", tie: false }, "a write-in with the most ballots wins");
+  eq(K.decideRace([2, 0], 4, { votes: [0, 9] }, { x: 2 }), { winner: 0, by: "players", tie: true }, "a tie with a write-in goes to the Substrate's lean (a write-in has none)");
+  eq(K.decideRace([0, 0], 0, { votes: [1, 7] }, {}), { winner: 1, by: "substrate", tie: false }, "no player ballots: the Substrate's preference among the listed");
+  eq(K.rankRace([0, 0], 0, { votes: [1, 7] }, { x: 4 }), [1, 0], "the Substrate's ranking ignores write-ins");
+  const meta1 = await store.get(EL.KEYS.meta(1), { type: "json" });
+  const res = await EL.finalize(store, meta1, v0.closeAt + 5);
+  const rb = res.races[race];
+  ok(rb.writein && rb.key === wA && rb.winner === null && rb.by === "players" && rb.writeins[0].key === wA && rb.writeinOther === 1, "a write-in with the most ballots wins; the one below the threshold stays a number");
+  const rr = res.races[home];
+  ok(rr.writein && rr.key === me.key && rr.winner === null && rr.by === "players", "the player's citizen wins as a write-in");
+  ok(rr.name === "Subject ABCD" && rr.order[0][0] === me.key, "the winner is SUBJECT and its tag");
+  ok(res.races[quiet].by === "players" && res.races[quiet].key === qk, "a race with only write-in ballots is decided by the players");
+  ok(res.races[silent].by === "substrate" && res.races[silent].key === sl[silent][K.substratePick(npc[silent])].key, "a race with no ballots: the Substrate's pick among the listed");
+  const vr = await EL.publicView(io, v0.closeAt + 10);
+  const blob = JSON.stringify(vr) + JSON.stringify(await EL.seatRecord(store, v0.closeAt + 10));
+  ok(!blob.includes(SELF) && !blob.includes(SELF.slice(4)) && !blob.includes(EL.voterKey(SELF)), "the citizen winner never shows its case number or voter key");
+  ok(vr.races[home].result.key === me.key && !("order" in vr.races[home].result), "the public result names the winner, not the ranking");
+  let rec1 = await EL.seatRecord(store, v0.closeAt + 10);
+  ok(rec1[0].seats[home].key === me.key && rec1[0].seats[home].name === "Subject ABCD", "the seat record seats the citizen");
+  const sd = K.seatDayOf(v0.closeAt);
+  C.setSeats(rec1); SIM.clearPlans(); SIM.setRoster(roster2);
+  const at = C.civicFold(clone(SIM.buildPlan(sd)), peopleOf(roster2), null);
+  ok(at.districts[home].seat.holder === me.key && at.districts[home].seat.status === "HELD" && at.districts[home].seat.name === "Subject ABCD", "the citizen holds the seat (sash and chamber read seat.holder)");
+  eq(at.districts[home].seat.term, [sd, sd + K.TERM_DAYS - 1], "the same term as anyone");
+  // MY FILE: the seat is yours; declining hands it to the runner-up
+  let mine = await EL.mySeats(store, SELF, v0.closeAt + 10);
+  ok(mine.length === 1 && mine[0].district === home && mine[0].name === "Subject ABCD" && !mine[0].sworn, "MY FILE shows the seat won");
+  ok((await EL.resignSeat(io, { caseId: cid(0), cycle: 1, district: home, ip: "z", now: v0.closeAt + 20 })).status === 403, "only the holder may decline");
+  r = await EL.resignSeat(io, { caseId: SELF, cycle: 1, district: home, ip: "z", now: v0.closeAt + 20 });
+  ok(r.status === 200 && r.body.successor, "declined");
+  rec1 = await EL.seatRecord(store, v0.closeAt + 30);
+  ok(rec1[0].seats[home].key === rr.order[1][0] && rec1[0].seats[home].key !== me.key, `the runner-up takes the seat (${rec1[0].seats[home].name})`);
+  const vd = await EL.publicView(io, v0.closeAt + 30);
+  ok(vd.races[home].result.declined && vd.races[home].result.key === rr.order[1][0], "the page says the seat was declined");
+  ok((await EL.mySeats(store, SELF, v0.closeAt + 30)).length === 0, "the seat leaves MY FILE");
   C.setSeats([]);
 }
 

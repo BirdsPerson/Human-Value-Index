@@ -929,6 +929,27 @@ sittings), `netlify/lib/elections.js` + `netlify/functions/elections.js` (`/api/
   advisory. Most ballots win; a players' tie goes to the Substrate's lean; a race with zero
   player ballots adopts the Substrate's preference with "THE CITIZENRY ABSTAINED. THE
   SUBSTRATE'S PREFERENCE IS ADOPTED."
+- **Write-ins (2026-09-30).** Scott: "so no write-ins for elections?" A ballot may name, instead
+  of a listed candidate, any subject on file who lives or works in the district (homeOf /
+  assignJob over the census, the slate's own reading), or the voter's own citizen (players may
+  run). Never free text: the page's picker (`src/elections/WriteIn.jsx`) searches
+  `GET /api/elections?writein=<district>&q=` (find.js ranking, accents off) and the POST sends
+  the subject's key, which the server checks against the same pool (`writeinPool`, cached 10
+  min per instance). Excluded, with one neutral refusal: every file `petition.js
+  closedToOpinion` closes (harm finding made or pending, harm-gated, serious-cap, withheld
+  verdict, the real-world candidate flag, owner-source local officials, noDangle), anyone on a
+  slate, and every player citizen but your own (so only you can write yourself in). Still one
+  ballot per race per file, changeable and withdrawable, same limits. A write-in with
+  `WRITEIN_SHOW` (3) ballots joins the board as WRITE-IN with its tally; below that the race shows
+  "N WRITE-IN BALLOTS". Living write-ins: STATEMENT NONE ON FILE; dead ones carry their
+  `PLATFORMS` line if they have one. Winner: most player ballots over listed and write-ins; ties
+  to the Substrate's lean (write-ins have none), then slate order; zero ballots adopts the
+  Substrate's pick among the listed (it never writes in). A subject can win only one seat per
+  cycle (the next in that race's ranking takes the other). The result keeps the whole ranking
+  (`order`, never served): a player citizen elected (seat.holder = `citizen-<tag>`, shown as
+  SUBJECT <TAG>, never the case number) can DECLINE or RESIGN from MY FILE
+  (`src/elections/MySeat.jsx`, `c<NNN>/resign`), and the runner-up serves the rest of the term.
+  Checks: check-civic section 3d.
 - **Calendar.** The first request anchors it (`hvi-elections` `anchor`): cycle 1's polls are
   open 3 real days from then. A term is 15 seasons = 420 machine days = exactly 7 real days;
   cycle k opens 7 real days after cycle k-1 (so re-election opens 4 real days into a term and

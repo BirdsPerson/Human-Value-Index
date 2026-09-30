@@ -139,16 +139,26 @@ export function substrateVotes(subjects, sl) {
 // The Substrate's preference: most votes, then the slate's order (the Department's ranking).
 export const substratePick = (npc) => (npc?.votes?.length ? npc.votes.reduce((b, v, i, a) => (v > a[b] ? i : b), 0) : 0);
 
-// A race decided: players decide; ties among them go to the Substrate's lean, then the slate
-// order; no players at all adopts the Substrate's preference. -> {winner, by, tie}
-export function decideRace(players, voters, npc) {
-  if (!voters) return { winner: substratePick(npc), by: "substrate", tie: false };
-  const max = Math.max(...players);
-  const top = players.map((v, i) => (v === max ? i : -1)).filter(i => i >= 0);
-  if (top.length === 1) return { winner: top[0], by: "players", tie: false };
+// A race ranked: players' ballots first (listed candidates and write-ins alike), ties to the
+// Substrate's lean (write-ins have none: figures never write in), then the slate's order, then
+// write-ins by key; no player ballots at all ranks the listed candidates by the Substrate's
+// lean alone (a write-in needs a ballot). writeins: {key: ballots}. -> [index | key, ...]
+export function rankRace(players, voters, npc, writeins = {}) {
   const nv = npc?.votes || [];
-  const w = top.reduce((b, i) => ((nv[i] || 0) > (nv[b] || 0) ? i : b), top[0]);
-  return { winner: w, by: "players", tie: true };
+  const opts = players.map((v, i) => ({ id: i, v: voters ? v : 0, lean: nv[i] || 0, o: i }));
+  if (voters) Object.keys(writeins).sort().forEach((k, j) => { if (writeins[k] > 0) opts.push({ id: k, v: writeins[k], lean: 0, o: players.length + j }); });
+  opts.sort((a, b) => b.v - a.v || b.lean - a.lean || a.o - b.o);
+  return opts.map(x => x.id);
+}
+// A race decided: players decide; ties among them go to the Substrate's lean, then the slate
+// order; no players at all adopts the Substrate's preference among the listed candidates.
+// winner: a candidate index, or a write-in's key. -> {winner, by, tie}
+export function decideRace(players, voters, npc, writeins = {}) {
+  if (!voters) return { winner: substratePick(npc), by: "substrate", tie: false };
+  const all = [...players, ...Object.values(writeins)];
+  const max = Math.max(...all);
+  const tie = all.filter(v => v === max).length > 1;
+  return { winner: rankRace(players, voters, npc, writeins)[0], by: "players", tie };
 }
 
 // ---- platforms: the dead may speak, once, in their own voice ------------------------------------

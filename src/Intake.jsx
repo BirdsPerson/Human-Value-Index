@@ -12,6 +12,7 @@ import { useBarAction } from "./ui/barAction.js";
 import { QuestLog } from "./QuestLog.jsx";
 import { visitCount, causeOf, DEPARTMENT_CAUSES } from "./movement.js";
 import { FileMovement } from "./caseFile.jsx";
+import MySeat from "./elections/MySeat.jsx";
 
 // The shared file pieces moved to caseFile.jsx; re-exported so older imports keep working.
 export { readCaseId, writeCaseId, readLastResult, syncFile, ScoreCard, Breakdown, AppealPanel, CaseLogon, DIM_ORDER, MAX_APPEAL } from "./caseFile.jsx";
@@ -611,6 +612,8 @@ export default function Intake({ view = "intake" }) {
             {shareLine && <div className="hvi-note" role="status">{shareLine}</div>}
             {startCmds(true)}
           </div>
+          {/* a council seat this file's citizen won (src/elections/MySeat.jsx): decline or resign */}
+          <MySeat caseId={caseId} />
           {fileSections(last, { history: last.history })}
           <div className="hvi-note">CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
         </div>
