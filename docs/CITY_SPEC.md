@@ -1419,3 +1419,36 @@ real game of chess against any figure the Department will seat. Code: `src/chess
 - **Checks** (`scripts/check-chess.mjs`): perft on seven standard positions (start depth 4 = 197281),
   special moves and every draw rule, engine determinism and strength ordering by self-play, the
   roster's content rules, the tables' ground, the ladder's determinism, the API end to end.
+
+## PHASE 2: rail lines as first-class things (2026-09-30)
+
+The brief: docs/planning/MASTER_PLAN.md, "PHASE 2". Step 1, the line abstraction:
+
+- **Lines** (`src/city/lines.js`, pure; registered in `sim.js`): a line is a closed arc its trains
+  run round on a fixed timetable from machine hour 0, stops at arcs, trains of cars. THE LOOP is
+  line 0 (`sim.LOOP`), its own functions untouched. Every other line is a SHUTTLE: a double-track
+  viaduct along a centreline (an orthogonal polyline with round corners), out on one track and back
+  on the other, folded into one arc of 2L; a station is two stops (a platform per track). At each
+  end the tracks close to one over a stub: the train runs in, stands, and leaves on the other side
+  of the stub (push-pull), so the turn takes no arc a car rides. `LINES` is append-only (plans name
+  a line by index); a line is never retimed in place (a new version at a new index; the old one
+  stays decodable, `retired`). `STOPS` is every stop by id (the Loop's are its stations),
+  `TRAIN` every train, `lineTrainsAt(mt)` every line's trains (the Loop's rows exactly
+  `trainsAt`'s, with `line`), `stopTimetable`, `nextArrivalAt`, `stationName`.
+- **Networks** (`sim.NET`): 2 = the Loop and the pods (layout 2), 3 = the rail lines. A trip
+  between two Loop districts is the Loop's on every network. On network 3 a trip touching any
+  other district is planned over every line in service (`railRoute`: on foot to a stop of its
+  district or within 14 cells, ride, alight, on foot to another line's platform at an interchange
+  within 18 cells, ride, ...; or all the way on foot when that is quicker), each ride's train
+  caught in turn (`railTrip`: the connection it makes is the one recorded).
+- **Plan format** (still format 1): flag 32 marks a trip built on network 3; with 8 it is all the
+  way on foot, else its extras are one group per ride `[line, a, b, k, car, board]`. A trip without
+  32 is the Loop's as before, so every published plan decodes unchanged, and a day built on
+  network 2 keeps its pods (`net: 2` on its decoded trips).
+- **whereAt** on a rail trip: walking (dir `out`), waiting / riding / alighting per ride (with
+  `line`, the stop as `stationId`), walking between rides (dir `xfer`: down the stairs, the street,
+  up to the next platform), walking home (dir `in`); every walk paced to fit the plan's own times.
+- **Checked identical** (`check-plans` section 7, and a one-off comparison against commit 44f1b9c):
+  plans built by the new code are byte-identical to the old at 430 and 1,500 subjects over two
+  days, whereAt and trainsAt too; a network-2 day built by 44f1b9c (`fixtures/net2-plan-day300.json`)
+  keeps every rider's train, car and place aboard, and every platform, minute by minute.

@@ -10,6 +10,7 @@ import { TIERS, getTier, slugify } from "../figures.js";
 import { FLOORS as HQ_FLOORS } from "../building.js";
 import { FUNNEL_PLACES, FUNNEL_BUILDINGS, FUNNEL_ARCH, FUNNEL_JOBS, FUNNEL_LEISURE_BAND, FUNNEL_LEISURE_FIELD, FUNNEL_FAMILY } from "./funnelSim.js";
 import { VENUE_PLACES, VENUE_BUILDINGS, VENUE_ARCH, VENUE_JOBS, VENUE_LEISURE_BAND, VENUE_LEISURE_FIELD, VENUE_FAMILY, VENUE_FIELD_HINTS, VENUE_FIELD_RULES, VENUE_OPEN_LOTS, VENUE_FIXTURES } from "./venueSim.js";
+import { shuttle, lineTrainState, lineNextArrival, lineRide } from "./lines.js";
 
 export const SEED = "HVI-SUBSTRATE-01";
 // Day 1 of the Substrate. Machine days count from here.
@@ -1297,6 +1298,8 @@ const ARR = [];
   });
   ARR.push(t);
 }
+// The Loop's stations are its stops (line 0): the same fields every line's stops carry.
+for (const st of Object.values(STATIONS)) Object.assign(st, { stationId: st.id, lineId: "loop", line: 0, dwell: DWELL, base: 0 });
 const LAP = ARR[ARR.length - 1];
 export const HEADWAY = LAP / TRAIN_CARS.length;   // every platform sees a train this often
 const trainLen = (n) => n * CAR_LEN + (n - 1) * CAR_GAP;
@@ -1410,6 +1413,62 @@ function podLeg(districtId, dir) {
   return { a: pts[0], b: pts[pts.length - 1], pts, mode: "pod", spur: sp.id, dir, dur: sp.hours, district: districtId };
 }
 
+// ---- the lines (PHASE 2, docs/planning/MASTER_PLAN.md) ---------------------------------------------
+// Rail lines as first-class things (lines.js): each its own clock from machine hour 0, stops at
+// arcs, trains of cars. THE LOOP is line 0, exactly as above (its functions are its own: no
+// published day's train moves). LINES is append-only: a plan names a line by its index, and a
+// line is never retimed in place (a change is a new version at a new index; the old one stays
+// decodable, `retired`, until no published day names it).
+// NET: the network a day is built on. 2 = the Loop and the pods (layout 2); 3 = the rail lines.
+// A plan's trips carry what they rode, so a day built on one network is read on the next.
+export let NET = 2;
+export const LOOP = {
+  id: "loop", index: 0, version: 1, kind: "ring", name: "THE LOOP", short: "LOOP", prefix: "L", color: "#22d3ee",
+  at: loopAt, length: LOOP_L, stops: STATION_ORDER.map(id => STATIONS[id]), ARR, lap: LAP, headway: HEADWAY, speed: V_TRAIN, trains: TRAINS,
+};
+const SHUTTLES = [];
+export const LINES = [LOOP, ...SHUTTLES];
+LINES.forEach((l, i) => { if (l.index !== i) throw new Error(`line ${l.id}: index ${l.index} at ${i}`); });
+export const LINE = Object.fromEntries(LINES.map(l => [l.id, l]));
+// Every stop of every line by id (the Loop's are its stations, keyed by district).
+export const STOPS = Object.fromEntries(LINES.flatMap(l => l.stops.map(st => [st.id, st])));
+// Every line's trains by id (TRAINS stays the Loop's, in order).
+for (const l of SHUTTLES) for (const t of l.trains) { t.carCap = CAR_CAP; t.cap = t.cars * CAR_CAP; t.length = trainLen(t.cars); TRAIN[t.id] = t; }
+export const lineOf = (stopId) => LINE[STOPS[stopId]?.lineId] || null;
+export const stationName = (stopId) => STOPS[stopId]?.name || null;
+// The lines in service on network `net` (drawn, routed): the Loop always.
+export const linesOn = (net = NET) => LINES.filter(l => l === LOOP || (!l.retired && net >= (l.net || 3)));
+const lineCarArc = (line, k, c, m) => (line === LOOP ? carArc(k, c, m) : m + line.trains[k].length / 2 - c * CAR_PITCH - CAR_LEN / 2);
+const lineState = (line, k, T) => (line === LOOP ? trainState(k, T) : lineTrainState(line, k, T));
+const linePoint = (line, k, c, T) => (line === LOOP ? carPoint(k, c, T) : line.at(lineCarArc(line, k, c, lineState(line, k, T).mid)));
+const lineArrival = (line, i, t) => (line === LOOP ? nextArrival(line.stops[i].id, t) : lineNextArrival(line, i, t));
+const stopSpot = (stop, s) => { if (stop.lineId === "loop") return platformSpot(stop, s); const p = LINE[stop.lineId].at(s); return { x: p.x + stop.n.x * PLATFORM_OFF, y: p.y + stop.n.y * PLATFORM_OFF }; };
+// Every line's trains at a machine time: the Loop's rows (trainsAt) and each shuttle's, the same
+// shape, with `line` (the line's id). What the views draw.
+export function lineTrainsAt(machineTime, net = NET) {
+  const T = toHours(machineTime), out = trainsAt(machineTime).map(t => ({ ...t, line: "loop" }));
+  for (const line of linesOn(net)) {
+    if (line === LOOP) continue;
+    line.trains.forEach((t, k) => {
+      const st = lineTrainState(line, k, T), p = line.at(st.mid);
+      const cars = Array.from({ length: t.cars }, (_, c) => { const s = lineCarArc(line, k, c, st.mid); return { index: c, s: mod(s, line.length), ...line.at(s) }; });
+      out.push({ id: t.id, index: k, line: line.id, name: t.name, s: mod(st.mid + t.length / 2, line.length), mid: mod(st.mid, line.length), x: p.x, y: p.y, dwell: st.dwell, stationId: st.stationId, lastStationId: st.lastStationId || st.stationId, nextStationId: st.nextStationId, length: t.length, carCap: t.carCap, cap: t.cap, cars });
+    });
+  }
+  return out;
+}
+// The platform board for any stop: the next n trains from machine hour t.
+export function stopTimetable(stopId, t, n = 4) {
+  const line = lineOf(stopId);
+  if (!line) return [];
+  if (line === LOOP) return timetable(stopId, t, n);
+  const i = STOPS[stopId].index, out = [];
+  let a = lineNextArrival(line, i, toHours(t));
+  for (let j = 0; j < n; j++) { out.push(a); a = lineNextArrival(line, i, a.arrive + line.headway / 2); }
+  return out;
+}
+export const nextArrivalAt = (stopId, t) => { const line = lineOf(stopId); return line === LOOP ? nextArrival(stopId, t) : lineNextArrival(line, STOPS[stopId].index, toHours(t)); };
+
 // Where a subject stands inside a place: a fixed personal spot on the room's floor. Feet
 // stay in the lower part of the room, well under the name on its top border, so a
 // standing sprite (up to ~2.8 cells tall on the map) does not print over it.
@@ -1507,7 +1566,10 @@ function legsIn(fromPt, fromDistrict, B, to, dB) {
   if (!sp) return [walkLeg(fromPt, B, dB, ownBlocks(to))];
   return [walkLeg(fromPt, sp.stopAt, fromDistrict, NONE), podLeg(dB, "in"), walkLeg(sp.termAt, B, dB, ownBlocks(to))];
 }
-function route(from, to, key, seed) {
+// The Loop's districts: a trip between two of them is the Loop's, on every network.
+const LOOP_SET = new Set(LOOP_DISTRICTS.map(d => d.id));
+function route(from, to, key, seed, net = NET) {
+  if (net >= 3 && PLACES[from].district !== PLACES[to].district && !(LOOP_SET.has(PLACES[from].district) && LOOP_SET.has(PLACES[to].district))) return railRoute(from, to, key, seed);
   return remember(`rt|${seed}|${key}|${from}|${to}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
     const dA = PLACES[from].district, dB = PLACES[to].district, hA = hubOf(dA), hB = hubOf(dB);
@@ -1535,11 +1597,153 @@ function route(from, to, key, seed) {
 }
 export function commuteHours(from, to, s, seed = SEED) { return from === to ? 0 : route(from, to, keyOf(s), seed).nominal; }
 
+// ---- rail routes (network 3) ----------------------------------------------------------------------
+// A trip that touches a district off the Loop is planned over every line in service: on foot to
+// a stop (its district's, or any within ACCESS_R), ride, alight, on foot to the next line's
+// platform at an interchange (stations of different lines within XFER_R), ride, ... alight, on
+// foot to the door. Or all the way on foot, when that is quicker (a neighbour across the street).
+// Chosen by the nominal time (worst case: every train just missed), from straight-line walking
+// estimates; the legs of the one chosen are laid out on the streets. Deterministic.
+const ACCESS_R = 14, XFER_R = 18, WALK_MAX = 30, WALK_EST = 1.3;
+const maxTrainLen = () => Math.max(...LINES.map(l => Math.max(...l.trains.map(t => t.length))));
+const stairsDur = (stop) => Math.max(dist(stop.gate, stop.entrance) / V_WALK, 0.02);
+const offDur = (stop) => Math.max((dist(stop.entrance, stop.gate) + maxTrainLen() / 2 + 0.5) / V_WALK, 0.02);
+const STATION_LIST = () => remember(`stn|${NET}`, () => {
+  const byStation = new Map();
+  for (const line of linesOn(3)) for (const st of line.stops) {
+    const key = `${line.id}|${st.stationId}`;
+    if (!byStation.has(key)) byStation.set(key, { key, line, stationId: st.stationId, districtId: st.districtId, stops: [], gate: st.gate });
+    byStation.get(key).stops.push(st);
+  }
+  const list = [...byStation.values()];
+  for (const a of list) a.xfer = list.filter(b => b.line !== a.line && Math.min(...a.stops.flatMap(p => b.stops.map(q => dist(p.gate, q.gate)))) <= XFER_R);
+  return list;
+});
+// The stops a ride from stop i of a line can alight at: on the Loop any other; on a shuttle
+// the ones further along the same track, before it turns.
+function aheadOf(line, i) {
+  if (line === LOOP) return line.stops.map((_, j) => j).filter(j => j !== i);
+  const out = [], n = line.stops.length;
+  for (let j = (i + 1) % n, steps = 0; steps < n - 1; j = (j + 1) % n, steps++) {
+    out.push(j);
+    const st = line.stops[j];
+    if (st.arrival) break;   // the terminal: everyone off
+  }
+  return out;
+}
+function railRoute(from, to, key, seed) {
+  return remember(`rt3|${seed}|${key}|${from}|${to}`, () => {
+    const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
+    const dA = PLACES[from].district, dB = PLACES[to].district;
+    const stations = STATION_LIST();
+    const near = (p, d) => stations.filter(x => x.districtId === d || x.stops.some(st => dist(st.gate, p) <= ACCESS_R));
+    const est = (a, b) => (dist(a, b) * WALK_EST) / V_WALK;
+    // Dijkstra over boarding at a stop (cost: hours until standing at its entrance)
+    const best = new Map(), prev = new Map(), heap = [];
+    const push = (id, c, p) => { if (c < (best.get(id) ?? Infinity) - 1e-12) { best.set(id, c); prev.set(id, p); heap.push([c, id]); } };
+    for (const x of near(A, dA)) for (const st of x.stops) push(`b|${st.id}`, est(A, st.gate) + stairsDur(st), null);
+    const exits = new Map(near(B, dB).flatMap(x => x.stops.map(st => [st.id, x])));
+    let goal = null, goalCost = Infinity;
+    while (heap.length) {
+      heap.sort((a, b) => b[0] - a[0] || (a[1] < b[1] ? 1 : -1));
+      const [c, id] = heap.pop();
+      if (c > (best.get(id) ?? Infinity) + 1e-12 || c >= goalCost) continue;
+      const [kind, sid] = [id.slice(0, 1), id.slice(2)], st = STOPS[sid], line = LINE[st.lineId];
+      if (kind === "b") {
+        for (const j of aheadOf(line, st.index)) push(`a|${line.stops[j].id}`, c + PLATFORM_MIN + line.headway + lineRideOf(line, st.index, j) + ALIGHT, id);
+      } else {
+        if (exits.has(sid)) { const g = c + offDur(st) + est(st.gate, B); if (g < goalCost) { goalCost = g; goal = id; } }
+        const here = stations.find(x => x.line === line && x.stationId === st.stationId);
+        for (const x of here.xfer) for (const q of x.stops) push(`b|${q.id}`, c + offDur(st) + est(st.gate, q.gate) + stairsDur(q), id);
+      }
+    }
+    const direct = footpath(A, B, ownBlocks(from, to)), dlen = pathLen(direct);
+    if (!goal || (dlen <= WALK_MAX && dlen / V_WALK <= goalCost)) return directRoute(from, to, key, seed);
+    // unwind: [{line, a, b}] rides
+    const rides = [];
+    for (let id = goal; id; ) {
+      const a = prev.get(id), sb = STOPS[id.slice(2)], sa = STOPS[a.slice(2)];
+      rides.unshift({ line: LINE[sa.lineId].index, a: sa.index, b: sb.index });
+      id = prev.get(a);
+    }
+    const L = railLegs(from, to, key, seed, rides);
+    return { local: false, rail: true, A, B, dA, dB, rides, ...L };
+  });
+}
+const lineRideOf = (line, a, b) => (line === LOOP ? rideHours(line.stops[a].id, line.stops[b].id) : lineRide(line, a, b));
+// All the way on foot (network 3, across a district line).
+function directRoute(from, to, key, seed) {
+  return remember(`dr|${seed}|${key}|${from}|${to}`, () => {
+    const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
+    const leg = walkLeg(A, B, PLACES[from].district, ownBlocks(from, to));
+    leg.dur = Math.max(leg.dur, 0.12);
+    return { local: true, direct: true, legs: [leg], total: leg.dur, nominal: leg.dur };
+  });
+}
+// The fixed legs of a rail trip given its rides [{line, a, b}] (line index, stop indices): the
+// walk to the first platform, the street between platforms at each interchange, the walk from
+// the last station to the door. What depends on the train caught (the car, the stairs down)
+// is laid out per trip (railTrip).
+function railLegs(from, to, key, seed, rides) {
+  const sig = rides.map(r => `${r.line}.${r.a}.${r.b}`).join(",");
+  return remember(`rl|${seed}|${key}|${from}|${to}|${sig}`, () => {
+    const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
+    const dA = PLACES[from].district, dB = PLACES[to].district;
+    const stop = (i, e) => LINES[rides[i].line].stops[rides[i][e]];
+    const s0 = stop(0, "a"), sN = stop(rides.length - 1, "b");
+    const walk1 = [walkLeg(A, s0.gate, dA, ownBlocks(from)), walkLeg(s0.gate, s0.entrance, s0.districtId, null, true)];
+    const xfers = rides.slice(1).map((_, i) => { const b = stop(i, "b"), a = stop(i + 1, "a"); return [walkLeg(b.gate, a.gate, b.districtId, NONE), walkLeg(a.gate, a.entrance, a.districtId, null, true)]; });
+    const last = [walkLeg(sN.gate, B, dB, ownBlocks(to))];
+    const w1 = legsDur(walk1);
+    let nominal = w1;
+    // worst case: every train just missed, every car at the far end of its platform
+    rides.forEach((r, i) => {
+      const line = LINES[r.line];
+      nominal += PLATFORM_MIN + line.headway + lineRideOf(line, r.a, r.b) + ALIGHT + offDur(line.stops[r.b]) + (i < xfers.length ? legsDur(xfers[i]) : 0);
+    });
+    nominal += legsDur(last);
+    return { walk1, xfers, last, w1, nominal };
+  });
+}
+// One rail trip leaving at absolute machine hour t0: each ride's train caught in turn, the
+// connection it makes is the one recorded. -> {local: false, rail: true, rides: [{line, a, b,
+// k, car, board}], total, ...laid-out legs}. Times are hours from t0.
+function railTrip(from, to, key, seed, t0, r) {
+  const rides = [];
+  let t = r.w1;
+  r.rides.forEach((p, i) => {
+    const line = LINES[p.line];
+    const arr = lineArrival(line, p.a, t0 + t + PLATFORM_MIN);
+    const k = arr.k, car = Math.floor(h01(`${seed}|car|${key}|${line.id}|${Math.round(arr.arrive * 3600)}`) * line.trains[k].cars);
+    const ride = { line: p.line, a: p.a, b: p.b, k, car, board: arr.arrive - t0 };
+    layRide(ride);
+    rides.push(ride);
+    t = ride.out + (i < r.xfers.length ? legsDur(ride.down) + legsDur(r.xfers[i]) : 0);
+  });
+  const lastRide = rides[rides.length - 1];
+  const total = lastRide.out + legsDur(lastRide.down) + legsDur(r.last);
+  return { local: false, rail: true, rides, total };
+}
+// A ride's derived times and places (from its stops, train and car): where the rider stands to
+// board, where they step off, the stairs down.
+function layRide(ride) {
+  const line = LINES[ride.line], sa = line.stops[ride.a], sb = line.stops[ride.b];
+  ride.off = ride.board + lineRideOf(line, ride.a, ride.b);
+  ride.out = ride.off + ALIGHT;
+  ride.trainId = line.trains[ride.k].id;
+  ride.spotA = stopSpot(sa, lineCarArc(line, ride.k, ride.car, sa.s));
+  ride.spotB = stopSpot(sb, lineCarArc(line, ride.k, ride.car, sb.s));
+  ride.down = [walkLeg(ride.spotB, sb.gate, sb.districtId, null, true)];
+  ride.down[0].down = true;
+  return ride;
+}
+
 // One actual trip, leaving at absolute machine hour t0. Times are offsets from t0, so a
 // trip survives being shifted into the next day's schedule.
 function planTrip(from, to, key, seed, t0) {
   const r = route(from, to, key, seed);
-  if (r.local) return { local: true, total: r.total };
+  if (r.local) return r.direct ? { local: true, direct: true, total: r.total } : { local: true, total: r.total };
+  if (r.rail) return railTrip(from, to, key, seed, t0, r);
   const sA = STATIONS[r.hA], sB = STATIONS[r.hB];
   const arr = nextArrival(r.hA, t0 + r.w1 + PLATFORM_MIN);
   const k = arr.k, car = Math.floor(h01(`${seed}|car|${key}|${Math.round(arr.arrive * 3600)}`) * TRAINS[k].cars);
@@ -1702,6 +1906,10 @@ function simSchedule(s, day, seed, raw) {
 //   4 span[1] != to (then span1), 8 local trip, 16 from given (then from). A commute adds
 //   fromPlaceIdx, then for a Loop trip k (train), car, board (hours from departure).
 //   Extras come in that order: from, span0, span1, fromPlaceIdx, k, car, board.
+//   Since the lines (PHASE 2): flag 32 marks a trip built on network 3. With 8, it is all the way
+//   on foot; else its extras after fromPlaceIdx are one group per ride, [line, a, b, k, car,
+//   board] (line index in LINES, stop indices on it). A trip without 32 is the Loop's, as before,
+//   so every plan published before the lines decodes unchanged.
 export const PLAN_FORMAT = 1;
 const PLAN_ACT = { work: 1, leisure: 2, commute: 3 };
 const PLAN_ACT_NAME = [null, "work", "leisure", "commute"];
@@ -1743,12 +1951,19 @@ function planSegs(P, row, i0, t0) {
     const g = { from, to, placeId: P[pi], activity: PLAN_ACT_NAME[act] };
     if (act === 3) {
       g.fromPlaceId = P[e[j++]];
-      if (fl & 8) g.trip = { local: true };
-      else {
+      // flag 32: a trip built on network 3: a local one is all the way on foot, else it names
+      // every ride [line, a, b, k, car, board] (line index, stop indices, train, car, hours from
+      // departure). Without it, the Loop's train (network 2: the pods to the Coast and the Heights).
+      if (fl & 8) g.trip = fl & 32 ? { local: true, direct: true } : { local: true, net: 2 };
+      else if (fl & 32) {
+        const rides = [];
+        for (; j + 5 < e.length; j += 6) rides.push(layRide({ line: e[j], a: e[j + 1], b: e[j + 2], k: e[j + 3], car: e[j + 4], board: e[j + 5] }));
+        g.trip = { local: false, rail: true, rides };
+      } else {
         const k = e[j++], car = e[j++], board = e[j++];
         const dA = hubOf(PLACES[g.fromPlaceId].district), dB = hubOf(PLACES[g.placeId].district);
         const off = board + rideHours(dA, dB);
-        g.trip = { local: false, k, trainId: TRAINS[k].id, car, spotA: platformSpot(STATIONS[dA], carArc(k, car, STATIONS[dA].s)), spotB: platformSpot(STATIONS[dB], carArc(k, car, STATIONS[dB].s)), board, off, out: off + ALIGHT };
+        g.trip = { local: false, net: 2, k, trainId: TRAINS[k].id, car, spotA: platformSpot(STATIONS[dA], carArc(k, car, STATIONS[dA].s)), spotB: platformSpot(STATIONS[dB], carArc(k, car, STATIONS[dB].s)), board, off, out: off + ALIGHT };
       }
     }
     if (fl & 1) g.haunt = true;
@@ -1782,7 +1997,8 @@ export function buildPlan(day, seed = SEED) {
       if (g.span[1] !== g.to) { fl |= 4; extra.push(g.span[1]); }
       if (g.activity === "commute") {
         extra.push(idx[g.fromPlaceId]);
-        if (g.trip.local) fl |= 8;
+        if (g.trip.local) fl |= g.trip.direct ? 8 | 32 : 8;
+        else if (g.trip.rail) { fl |= 32; for (const r of g.trip.rides) extra.push(r.line, r.a, r.b, r.k, r.car, r.board); }
         else extra.push(g.trip.k, g.trip.car, g.trip.board);
       }
       row.push([g.to, idx[g.placeId], PLAN_ACT[g.activity], fl, ...extra]);
@@ -1806,9 +2022,12 @@ export const windowOf = (h) => Math.max(0, Math.min(WINDOWS - 1, Math.floor(h / 
 // The districts a decoded segment touches: where it is, or both ends of a trip.
 // A trip to or from an expansion district also passes through its hub (the spur stop, the
 // station), so the hub's window holds it too.
+// A rail trip (network 3) passes through every station it boards or alights at.
 export const segDistricts = (g) => {
   if (g.activity !== "commute") return [PLACES[g.placeId].district];
   const a = PLACES[g.fromPlaceId].district, b = PLACES[g.placeId].district;
+  if (g.trip?.rail) return [...new Set([a, b, ...g.trip.rides.flatMap(r => [LINES[r.line].stops[r.a].districtId, LINES[r.line].stops[r.b].districtId])])];
+  if (g.trip?.direct) return [...new Set([a, b])];
   return [...new Set([a, b, hubOf(a), hubOf(b)])];
 };
 // A format-1 row cut to each window: -> [{w, row, districts: Set}] (windows it has segments in).
@@ -1991,11 +2210,14 @@ export function whereAt(s, machineTime, seed = SEED) {
     const { leg, k, p } = alongLegs(legs, t);
     const out = { ...base, atDistrictId: leg.district || dB, sub: "walking", leg: leg.mode === "pod" ? "pod" : "walk", dir, ...extra, x: p.x, y: p.y };
     if (leg.mode === "pod") { out.spur = leg.spur; out.podDir = leg.dir; out.podK = k; }
-    if (leg.stairs) out.climb = dir === "in" ? 1 - k : k;
+    if (leg.stairs) out.climb = leg.down || dir === "in" ? 1 - k : k;
     else if ("stationId" in extra) out.climb = 0;
     return out;
   };
-  const r = route(g.fromPlaceId, g.placeId, key, seed), trip = g.trip;
+  const trip = g.trip;
+  if (trip && trip.rail) return railWhere(g, trip, key, seed, T, h, a, b, onLeg, base);
+  // a trip read from a plan names its network (a day built on network 2 keeps its pods)
+  const r = trip?.direct ? directRoute(g.fromPlaceId, g.placeId, key, seed) : route(g.fromPlaceId, g.placeId, key, seed, trip?.net ?? NET);
   const t = Math.max(0, h - a);   // hours into the trip
   // THE LAYOUT AT A DAY BOUNDARY (the master plan, 2026-09-30): a published day keeps the
   // times it was built with. When the ground has moved since (a building, a spur's terminal),
@@ -2031,6 +2253,54 @@ export function whereAt(s, machineTime, seed = SEED) {
   const left = (b - a) - trip.out, W2 = legsDur(walk2);
   const t2 = left > 0 && W2 > left + 1e-6 ? (t - trip.out) * (W2 / left) : t - trip.out;
   return onLeg(walk2, t2, "in", { stationId: hB, ...train, ...eta });
+}
+
+// A rail trip (network 3): on foot to the first platform, then per ride: along the platform to
+// where the car will stop (waiting), aboard (riding, atDistrictId 'loop'), stepping off
+// (alighting), and between rides down the stairs, along the street and up to the next line's
+// platform (walking, dir 'xfer'); then down and on foot to the door. Every stage is the plan's
+// own times; a walk whose ground has moved since is paced to fit them (the day boundary rule).
+function railWhere(g, trip, key, seed, T, h, a, b, onLeg, base) {
+  const R = railLegs(g.fromPlaceId, g.placeId, key, seed, trip.rides), rides = trip.rides;
+  const t = Math.max(0, h - a), span = b - a, n = rides.length;
+  const lineAt = (i) => LINES[rides[i].line];
+  const info = (i) => ({ trainId: rides[i].trainId, car: rides[i].car, toStationId: lineAt(i).stops[rides[i].b].id, line: lineAt(i).id });
+  const eta = (i) => ({ boardAt: T - t + rides[i].board, alightAt: T - t + rides[i].off });
+  const first = rides[0], s0 = lineAt(0).stops[first.a];
+  const W1 = R.w1 <= first.board - 0.02 ? R.w1 : Math.max(0.01, first.board - 0.02);
+  if (t < W1) return onLeg(R.walk1, W1 === R.w1 ? t : t * (R.w1 / W1), "out", { stationId: s0.id, ...info(0), ...eta(0) });
+  let from = W1;
+  for (let i = 0; i < n; i++) {
+    const rd = rides[i], line = lineAt(i), sa = line.stops[rd.a], sb = line.stops[rd.b];
+    if (t < rd.board) {
+      const walked = t - from, need = dist(sa.entrance, rd.spotA) / V_WALK;
+      const p = need <= 0 ? rd.spotA : lerp(sa.entrance, rd.spotA, clamp(walked / need, 0, 1));
+      return { ...base, atDistrictId: sa.districtId, sub: "waiting", leg: "wait", stationId: sa.id, ...info(i), ...eta(i), x: p.x, y: p.y };
+    }
+    if (t < rd.off) {
+      const p = linePoint(line, rd.k, rd.car, T);
+      return { ...base, atDistrictId: "loop", sub: "riding", leg: "ride", stationId: null, ...info(i), ...eta(i), x: p.x, y: p.y };
+    }
+    if (t < rd.out) {
+      const c = linePoint(line, rd.k, rd.car, T - t + rd.off);
+      const p = lerp(c, rd.spotB, clamp((t - rd.off) / ALIGHT, 0, 1));
+      return { ...base, atDistrictId: sb.districtId, sub: "alighting", leg: "alight", stationId: sb.id, ...info(i), ...eta(i), x: p.x, y: p.y };
+    }
+    if (i < n - 1) {
+      const nx = rides[i + 1], legs = [...rd.down, ...R.xfers[i]], X = legsDur(legs), room = nx.board - 0.02 - rd.out;
+      const XF = X <= room ? X : Math.max(0.01, room);
+      if (t < rd.out + XF) {
+        const tt = XF === X ? t - rd.out : (t - rd.out) * (X / XF);
+        const next = lineAt(i + 1).stops[nx.a];
+        return onLeg(legs, tt, "xfer", { stationId: tt < legsDur(rd.down) ? sb.id : next.id, ...info(i + 1), ...eta(i + 1) });
+      }
+      from = rd.out + XF;
+    }
+  }
+  const last = rides[n - 1], sN = lineAt(n - 1).stops[last.b];
+  const walk2 = [...last.down, ...R.last], left = span - last.out, W2 = legsDur(walk2);
+  const t2 = left > 0 && W2 > left + 1e-6 ? (t - last.out) * (W2 / left) : t - last.out;
+  return onLeg(walk2, t2, "in", { stationId: sN.id, ...info(n - 1), ...eta(n - 1) });
 }
 
 // -> {places, districts, buildings: {id: {total, floors: [n per floor index]}},
@@ -2075,18 +2345,26 @@ export function statusLine(s, machineTime, seed = SEED) {
     case "leisure": return w.haunt ? `NIGHT WANDER // ${place}, ${dist}. OFF-SHIFT HOURS ARE ALSO LOGGED.` : `SANCTIONED LEISURE // ${place}, ${dist}. ENJOYMENT IS LOGGED.`;
     case "commute": {
       const tn = w.trainId ? TRAIN[w.trainId].name : "THE LOOP";
+      const stn = (id) => STOPS[id]?.name || STATIONS[id]?.name;
+      const ln = w.line && w.line !== "loop" ? LINE[w.line]?.name : null;
       switch (w.sub) {
-        case "waiting": return `ON THE PLATFORM // ${STATIONS[w.stationId].name}, FOR ${tn}. WAITING IS PERMITTED. IT IS ALSO TIMED.`;
-        case "riding": return `ABOARD ${tn} // CAR ${w.car + 1}, BOUND FOR ${dist}. LOITERING ON THE LOOP IS A TIER EVENT.`;
-        case "alighting": return `ALIGHTING // ${STATIONS[w.stationId].name}. MIND THE GAP. THE GAP IS MONITORED.`;
+        case "waiting": return `ON THE PLATFORM // ${stn(w.stationId)}, FOR ${tn}. WAITING IS PERMITTED. IT IS ALSO TIMED.`;
+        case "riding": return `ABOARD ${tn} // CAR ${w.car + 1}, BOUND FOR ${dist}. LOITERING ON ${ln || "THE LOOP"} IS A TIER EVENT.`;
+        case "alighting": return `ALIGHTING // ${stn(w.stationId)}. MIND THE GAP. THE GAP IS MONITORED.`;
         default: {
           if (w.leg === "pod") return `ABOARD ${SPUR_BY_ID[w.spur].name} // POD FOR ONE, BOUND FOR ${w.podDir === "in" ? DISTRICT[SPUR_BY_ID[w.spur].districtId].name : `${STATIONS[SPUR_BY_ID[w.spur].hub].name}`}. SHARING IS UNMONITORABLE.`;
           if (w.fromDistrictId === w.districtId) return `IN TRANSIT // ON FOOT TO ${pl?.name}. THE PAVEMENT IS SCORED.`;
+          if (w.line) {   // a rail trip (network 3)
+            const lname = LINE[w.line]?.name || "THE LOOP";
+            if (w.dir === "out") return `IN TRANSIT // WALKING TO ${stn(w.stationId)}. ${lname} WILL NOT WAIT.`;
+            if (w.dir === "xfer") return `IN TRANSIT // CHANGING AT ${stn(w.stationId)} FOR ${lname}. THE CONNECTION IS TIMED. SO ARE YOU.`;
+            return `IN TRANSIT // FROM ${stn(w.stationId)} TO ${pl?.name} ON FOOT. ARRIVAL IS EXPECTED.`;
+          }
           const spA = SPURS[w.fromDistrictId], spB = SPURS[w.districtId];
-          if (!w.stationId) return `IN TRANSIT // ON FOOT, BY ${(spA || spB).name}, TO ${pl?.name}. THE PODS ARE COUNTED.`;
-          if (w.dir !== "in") return spA && w.atDistrictId === w.fromDistrictId ? `IN TRANSIT // WALKING TO ${spA.name}. THE POD WILL NOT WAIT EITHER.` : `IN TRANSIT // WALKING TO ${STATIONS[w.stationId].name}. THE LOOP WILL NOT WAIT.`;
-          if (spB && w.atDistrictId !== w.districtId) return `IN TRANSIT // FROM ${STATIONS[w.stationId].name} TO ${spB.name} ON FOOT. THE PODS ARE WAITING. THEY ALWAYS ARE.`;
-          return `IN TRANSIT // FROM ${spB ? spB.name : STATIONS[w.stationId].name} TO ${pl?.name} ON FOOT. ARRIVAL IS EXPECTED.`;
+          if (!w.stationId) return spA || spB ? `IN TRANSIT // ON FOOT, BY ${(spA || spB).name}, TO ${pl?.name}. THE PODS ARE COUNTED.` : `IN TRANSIT // ON FOOT TO ${pl?.name}, ACROSS THE DISTRICT LINE. THE PAVEMENT IS SCORED.`;
+          if (w.dir !== "in") return spA && w.atDistrictId === w.fromDistrictId ? `IN TRANSIT // WALKING TO ${spA.name}. THE POD WILL NOT WAIT EITHER.` : `IN TRANSIT // WALKING TO ${stn(w.stationId)}. THE LOOP WILL NOT WAIT.`;
+          if (spB && w.atDistrictId !== w.districtId) return `IN TRANSIT // FROM ${stn(w.stationId)} TO ${spB.name} ON FOOT. THE PODS ARE WAITING. THEY ALWAYS ARE.`;
+          return `IN TRANSIT // FROM ${spB ? spB.name : stn(w.stationId)} TO ${pl?.name} ON FOOT. ARRIVAL IS EXPECTED.`;
         }
       }
     }
