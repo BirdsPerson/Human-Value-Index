@@ -73,7 +73,7 @@ if [ $DRY -eq 1 ]; then say "dry run: would run claude -p (${#PROMPT} chars prom
 say "start"
 # No `timeout` on macOS; perl alarm is the budget (same as organize/nightly_sweep.sh).
 perl -e 'alarm shift; exec @ARGV' "$BUDGET" \
-  "$CLAUDE" -p "$PROMPT" --model opus --permission-mode acceptEdits --allowedTools "${TOOLS[@]}" \
+  "$CLAUDE" -p "$PROMPT" --model "$([ "${1:-build}" = playtest ] && echo opus || echo sonnet)" --permission-mode acceptEdits --allowedTools "${TOOLS[@]}" \
   >> "$LOG" 2>&1
 rc=$?
 say "end rc=$rc"
