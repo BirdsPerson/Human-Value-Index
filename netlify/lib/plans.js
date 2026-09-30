@@ -22,6 +22,7 @@ import { getStore } from "@netlify/blobs";
 import * as SIM from "../../src/city/sim.js";
 import { fullRoster } from "../../src/city/roster.js";
 import { splitDay, SECTORS, FORMAT as FORMAT2 } from "../../src/city/planSplit.js";
+import { civicFold, CIVIC_V } from "../../src/city/civic.js";
 
 export const STORE = "hvi-plans";
 export const FORMAT = SIM.PLAN_FORMAT;
@@ -93,6 +94,7 @@ export function planIo(s = store, { census, snapshots }) {
       return r.etag || (await s().getMetadata(MANIFEST2))?.etag;
     },
     async list2() { return (await s().list({ prefix: `f${FORMAT2}/day/` })).blobs.map(b => b.key); },
+    async getPart(key) { return s().get(key, { type: "json" }); },
     lease: {
       async acquire(run, ms) {
         const now = Date.now();
@@ -132,14 +134,15 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
     const want = wantedDays(nowMs, opts.lookahead ?? LOOKAHEAD);
     const missing = want.filter(d => !manifest.days[d]);
     const built = [], jsons = new Map();
-    let waiting = null, roster = null;
+    let waiting = null, roster = null, civic = null, civicRead = false;
     if (missing.length) {
       // Read everything first: a failed census or ledger read builds nothing.
       roster = fullRoster(await io.census());
       const snaps = (await io.snapshots()) || {};
       // THE ASSEMBLY's outcome (netlify/lib/assembly.js): what the vacant lot is becoming. Read
       // like the census: a failed read builds nothing (a listed day never changes).
-      const civic = io.civic ? await io.civic() : null;
+      civic = io.civic ? await io.civic() : null;
+      civicRead = true;
       SIM.clearPlans();   // the builder reads the sim, never a plan
       SIM.clearSocialSnapshots();
       SIM.setSocialSnapshots(snaps);
@@ -177,13 +180,20 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
       let { manifest: m2, etag: e2 } = await io.manifest2();
       m2 ||= { format: FORMAT_2, days: {}, at: null };
       const todo = want.filter(d => manifest.days[d] && !m2.days[d]);
+      // The civic fold (src/city/civic.js) reads the Assembly's outcome like the build does: a
+      // failed read splits nothing (a listed day never changes).
+      if (todo.length && !civicRead && io.civic) { civic = await io.civic(); civicRead = true; SIM.setCivic(civic); }
+      const civics = new Map();
+      let people = null;
       for (const day of todo) {
         if ((built.length || split.length) && clock() - t0 >= budgetMs) break;
         const a = clock(), e = manifest.days[day];
         const json = jsons.get(day) || await io.getDay(e.key);
         if (!json) continue;
         roster ||= fullRoster(await io.census());
-        const entry = await publishSplit(io, json, e.ver, roster, run, clock);
+        people ||= new Map(roster.map(s => [SIM.keyOf(s), s]));
+        const prev = await yesterdayCivic(io, day, people, { m2, manifest, have: civics });
+        const entry = await publishSplit(io, json, e.ver, roster, run, clock, PART_MAX, { prev, out: civics });
         for (let tries = 0; ; tries++) {
           if (m2.days[day]) break;
           const next = { format: FORMAT_2, days: { ...m2.days, [day]: entry }, at: entry.at };
@@ -230,14 +240,36 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
 }
 const dayOfKey = (key) => Number(String(key).split("/")[2]);
 
+// Yesterday's civic block for the fold of `day` (docs/CITY_SPEC.md "The civic fold"): this
+// run's own, else yesterday's published summary, else recomputed from yesterday's plan (the
+// fold's window is two days, so the recompute is the block the chain would have read), else
+// null (the oldest day kept: today's mood stands alone).
+export async function yesterdayCivic(io, day, people, { m2, manifest, have } = {}) {
+  if (have?.has(day - 1)) return have.get(day - 1);
+  const e2 = m2?.days?.[day - 1];
+  if (e2 && io.getPart) {
+    const sum = await io.getPart(partKey(day - 1, e2.ver, "summary"));
+    if (sum?.civic?.v === CIVIC_V) return sum.civic;
+  }
+  const e1 = manifest?.days?.[day - 1];
+  if (e1 && io.getDay) {
+    const plan = await io.getDay(e1.key);
+    if (plan?.subjects) return civicFold(plan, people, null);
+  }
+  return null;
+}
+
 // One day's format-2 files from its format-1 plan: windows and the find index first, the
-// summary, then (by the caller) the manifest. -> the manifest entry.
-export async function publishSplit(io, json, ver, roster, run, clock = Date.now, partMax = PART_MAX) {
+// summary (with the day's civic block), then (by the caller) the manifest. -> the manifest entry.
+// civ: {prev: yesterday's civic block | null, out: Map day -> block (filled)}.
+export async function publishSplit(io, json, ver, roster, run, clock = Date.now, partMax = PART_MAX, civ = {}) {
   SIM.setPlan(json, ver);   // the split reads whereAt from the plan itself
   const people = new Map(roster.map(s => [SIM.keyOf(s), s]));
   let parts;
   try { parts = splitDay(json, ver, people); } finally { SIM.dropPlan(json.day); }   // the builder reads the sim, never a plan
   const { windows, summary, find } = parts;
+  summary.civic = civicFold(json, people, civ.prev || null);
+  civ.out?.set(json.day, summary.civic);
   const files = {}, jobs = [];
   let bytes = 0;
   summary.parts = {};

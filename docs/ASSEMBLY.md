@@ -89,4 +89,7 @@ table updated in the same transaction.
 ## Next sessions
 
 The machinery takes a session id; a second session needs its own lot, content and a
-`SESSION` bump. ROADMAP b5 continues: councils, a legitimacy meter, elections.
+`SESSION` bump. ROADMAP b5 continues: councils, a legitimacy meter, elections. Since the
+civic fold (docs/CITY_SPEC.md "The civic fold") each district has a vacant COUNCIL seat, and
+this session's result is recorded as the Council's first act in every district's record
+(from the day the ground breaks); the outcome also moves the districts' moods.

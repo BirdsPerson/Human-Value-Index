@@ -723,3 +723,80 @@ THE ASSEMBLY (`forum`, leisure, cap 18: an open-air forum with the lectern) and 
 The lot's face follows the Assembly's recorded vote (`sim.setCivic`, `sim.lotPhase`):
 vacant, approved, a construction site, then the golf course or the farm; it takes no
 visitors until the site opens. Design, storage and the rules: docs/ASSEMBLY.md.
+
+## The civic fold: mood, leagues, council seats (scaling step 7, 2026-09-30)
+
+Per-district civic state, computed once per machine day by the plan builder and written into
+that day's SUMMARY (`summary.civic`), so it scales with the sectors and every viewer reads
+the same record. It is the substrate for councils, elections, leagues and the economy.
+Code: `src/city/civic.js` (the fold, pure), `netlify/lib/plans.js` (`publishSplit`,
+`yesterdayCivic`), `src/city/CivicPanel.jsx` (the city's reading), `src/city/simApi.js`
+(`gameAt` / `gameEvents` name the league teams), `src/city/parkDraw.js` (the STANDINGS
+board). Check: `scripts/check-civic.mjs`.
+
+- **The block.** `{v: 1, day, league, districts: {<district>: {mood, team, seat}}}`.
+  - `mood`: `{s, raw, was, f}`. `f` holds the factors, each an integer: `crowd` (room
+    person-hours over capacity per capacity-hour, homes at half weight, saturating at -35),
+    `tier` (the mean tier of the district's workers and residents, +-20), `housing` (their
+    shares in the Meridian's glass tower against the projects, +-14), `commute` (a worker's
+    machine hours in transit past the two a round trip costs, to -20), `league` (the team's
+    last five: W +3, L -3; first +4, last -4), `assembly` (what LOT 0x6F07 became, from the
+    day the ground breaks: a course pleases Finance and HQ and costs the Commons, the Sprawl
+    and the Works; a farm the reverse; half during the build). `raw` = their sum (clamped
+    -100..100); `was` = yesterday's raw; `s` = round(0.6 raw + 0.4 was). Words (Overlord):
+    PLACATED >= 45, COMPLIANT >= 15, INDIFFERENT >= -14, RESTLESS >= -44, else SEETHING.
+  - `team`: `{rating, roster: [[key, name, rating] x 9], pos, p, w, d, l, f, a, pts, form}`:
+    the table entering the day.
+  - `seat`: `{holder: null, term: null, approval (= mood s), status: "VACANT", acts}`.
+    `acts`: the Assembly's result as the Council's first act, `["A001", closeDay, winner]`,
+    in every district's record from the day the ground breaks.
+  - `league`: `{season, day (1..28), days, stage, table (district order), today (the day's
+    matches with results), recent (the last six), champion}`.
+- **The chain.** The mood's smoothing window is two days, on purpose: yesterday's raw is read
+  from yesterday's summary (this run's own block first); if that summary is missing (or was
+  published before the fold existed) yesterday is folded again from its format-1 plan, which
+  gives the same raw the chain would have read (`check-civic`: recompute == chain, and a
+  re-split through the builder with yesterday's summary deleted gives the same block). No
+  hidden state: a longer (exponential) memory would need every earlier day to recompute.
+  The Assembly moves a mood only from `closeDay + LOT_BREAK`: the builder plans at most 3
+  days ahead, so every day with an effect is folded after the result is on record.
+- **Leagues.** One team per district, its workforce (`assignJob`): THE CURATED (Arts), THE
+  TENURED (Campus), THE LEVERAGED (Finance), THE HOUSE EDGE (Strip), THE CONDITIONED
+  (Arena), THE DEPARTMENT (HQ), THE INDEXED (Archive), THE TOLERATED (Commons), THE
+  PROCESSED (Works), THE RETURNED (Sprawl). Nine players drafted on a season's first day:
+  athletes on record (a sport field >= 5), then those who play at the grounds (>= 12% of
+  their leisure weight at the Diamond, the Courts, the Bowl or the Pitch), then the rest;
+  each by rating = 0.45 physical + 0.35 competence + 2 x sport field (0..99). The rosters
+  ride the chain for the season (a mid-season arrival waits for the next draft; a broken
+  chain re-drafts from the same census, which agrees). A season is 28 machine days on the
+  existing GAMES timetable (14 scored fixtures a week; Thursday practice keeps no score):
+  fixtures 0-44 a single round robin (the circle method, reshuffled each season), 45-46
+  semi-finals (1st v 4th, 2nd v 3rd), 47 the final, then exhibitions under the old generic
+  sides. A result is the scoreboard's own final (`sim.gameAt` at the whistle; the Courts
+  count games won, each game's winner hashed), and the side that won it goes to the team
+  better on the day (rating + 50 x a hashed luck), so the board, the PA and the table
+  always agree. Win 3, draw 1; playoffs have no draws (the better team takes the
+  Department's tiebreak). Standings = the sum of the results (checked), and `tableAt(block,
+  h)` adds each match once its whistle has gone, so the page never shows a result early.
+- **In the city.** A district page: a CIVIC RECORD panel (MOOD word + bar + cause + the
+  factors, TEAM + standing + form + roster, COUNCIL: SEAT VACANT. ELECTIONS PENDING., acts)
+  and MOOD in the header. The city page: mood words in the district directory, THE
+  DEPARTMENTAL LEAGUE (table, today's fixtures, recent results) as a panel, and the page
+  `#city/league`. The Diamond's scoreboard, the Bowl's and the Pitch's name the league
+  teams; a STANDINGS board beside the Diamond's scoreboard shows the top four as the table
+  stands that minute. The PA: kickoffs and finals name the teams and the stage ("FINAL AT
+  THE DIAMOND: ... THE TABLE HAS BEEN UPDATED."), and every seventh line is from the civic
+  record (inside a district its mood and standing; on the map the notable swings, >= 8 on
+  yesterday's raw, and the top and bottom of the table). Legacy mode (no summary): generic
+  sides, and the panels say the record is being counted.
+- **Size** (measured, `check-civic`): the block is ~750-790 bytes per district, the same at
+  430, 5,000 and 20,000 subjects (7.5 / 7.8 / 7.9 KB), against a live summary of ~50 KB.
+  The fold costs 2 / 34 / 152 ms at 430 / 5k / 20k (one pass over the plan's rows).
+- **Database: not yet.** Everything here is derived from published, immutable inputs (the
+  plans, the census, the Assembly's recorded result) and needs no concurrent writes. The
+  trigger (docs/ASSEMBLY.md, the consortium plan): the first sustained concurrent human
+  writes. That is elections with player votes at scale (the Assembly's tally blob stops
+  recounting past ~2,000 voters or ~5 ballots a second), or CYCLES balances (the economy:
+  every wage and purchase is a write against a balance). Then ballots and balances become
+  rows (unique (session, voter); balances with transactional updates), and the fold reads
+  their aggregates the way it reads the Assembly's result now.

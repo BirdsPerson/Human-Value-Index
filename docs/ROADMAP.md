@@ -17,7 +17,11 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       outings; odd cross-group pairs logged as gossip. Fallout Shelter incidents: a fire,
       reactor overload, vat flood, power cut; deterministic from the machine clock; nearby
       subjects with fitting jobs run to it and work it; logged on the PA and the Ledger.
-   b1. **LEAGUES** (Scott 2026-09-29, after the rec ground shipped 70bbb2c): pickup games at
+   b1. [first step shipped 2026-09-30 with the civic fold, docs/CITY_SPEC.md "The civic fold":
+      ten district teams, 28-day seasons on the GAMES fixtures, semis and a final, standings in
+      the day summary, STANDINGS board at the Diamond, #city/league, the PA names the teams;
+      left: MVP, rivalries into social.js, the Bowl/Pitch as their own divisions, wagers]
+      **LEAGUES** (Scott 2026-09-29, after the rec ground shipped 70bbb2c): pickup games at
       THE DIAMOND / THE COURTS grow into leagues. Teams per district (later per group/sector,
       named by the Overlord), rosters drafted from who plays there (athletes first; ratings
       from physical/competence and real sport field), a season schedule on the machine
@@ -71,7 +75,10 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       judge reliability weighting per ARENA.md. That stage is the CivicGate rehearsal.
    b5. [first step shipped 2026-09-30: THE ASSEMBLY, session 001, docs/ASSEMBLY.md: two
       applications for LOT 0x6F07 (golf course / community farm), dead advocates debate, assessed
-      files vote with fixed reasons for 3 days, the winner is built in the Commons] **THE CIVIC MACHINE** (Scott 2026-09-29 "how is it all going to work?"; Claude's design,
+      files vote with fixed reasons for 3 days, the winner is built in the Commons; 2026-09-30
+      the civic fold (docs/CITY_SPEC.md): per-district MOOD in every day summary, one COUNCIL
+      seat per district (vacant; holder/term/approval shape; the Assembly's result recorded as
+      its first act). Next: elections fill the seats] **THE CIVIC MACHINE** (Scott 2026-09-29 "how is it all going to work?"; Claude's design,
       review with the scale redesign since SECTORS are the natural data shards):
       DEMAND (census growth, crowding, district mood, incidents) -> PROPOSAL (Dept of Planning
       at HQ, or DEVELOPER figures bid: Trump, Robert Moses, Haussmann, Disney; Jane Jacobs
@@ -106,7 +113,8 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       construction sites (crews at work, cranes, scaffolds), then buildings (a sports arena
       first). Growth is driven by the census (more subjects -> more housing/jobs) and later
       by where CYCLES are invested (item 5). Always people involved: builders, inspectors.
-   e. **Economy -> inequality -> unrest -> enforcement** (design with Scott before building;
+   e. [the dissatisfaction meter exists: the civic fold's per-district MOOD, docs/CITY_SPEC.md;
+      wages and CYCLES would add factors to it] **Economy -> inequality -> unrest -> enforcement** (design with Scott before building;
       Scott 2026-09-29 "things I want to be thinking about"). Chain: item 5 wages/CYCLES ->
       housing quality by earnings (penthouse vs bunk) -> a dissatisfaction meter per
       district (low tier, low wage, crowding) -> unrest events (strikes, sit-ins, a
