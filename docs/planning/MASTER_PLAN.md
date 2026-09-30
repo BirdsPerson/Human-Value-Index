@@ -195,3 +195,86 @@ published); the Pit's and the club's anchors on their ground and apart; the club
 best of three, the board only counts up, the PA); the planning lines (every motion, never quoted,
 marked as reconstruction); the billboard sites at four turns. `check-cityview`, `check-coast`,
 `check-control`, `check-city` (capacity), `check-quests` and `check-plans` all run on layout 2.
+
+## PHASE 2: growth in every direction, and rail to reach it (planned, not built)
+
+Scott, 2026-09-30: "make sure we're extending in lots of different directions, planning where
+things should best be located; the train track needs to extend to different parts of the city;
+I'll leave it all to you." This section is the brief for the follow-up build. Nothing here is in
+the code yet.
+
+### Why growth is needed, measured
+
+The city today houses 1,902 in homes and seats 1,438 elsewhere (work and leisure rooms), for a
+census of about 725. At 5,000 subjects the homes are 2.6x over; at 20,000, 10.5x. The Coast and
+the Heights took the first overflow (at a 2,000 census half the city already lives there, and
+their commute is the longest). Phase 2 adds room for 5,000 first and 20,000 eventually, spread
+round the compass so no single edge carries it, each new district with a job base of its own so
+growth does not all commute into the core.
+
+### (a) The growth plan: six new districts, four directions
+
+Map today: x 0-109, y -41 (the Heights) to 99 (the Coast). New land goes west of x 0, east of
+x 109, and on the diagonals. Each district is appended to `DISTRICTS` (a sector is a district, in
+order) with its own homes by tier band, jobs and leisure, and a station on a rail line (below).
+
+| District (working name) | Where (map cells) | What it is for | Homes (5k / 20k build-out) | Jobs |
+|---|---|---|---|---|
+| THE PORT (west waterfront) | x -60 to -8, y 30 to 99; the sea continues from the Coast round the south-west corner | Heavy industry moves out of the core to where it belongs: container quay, shipyard, a second reactor later; the Works keeps light industry and THE PIT. Worker housing inland of the quay behind a green buffer (the rule the master plan applied to the Works) | 600 / 2,400 (mostly tiers 3-5) | 900: stevedores, shipwrights, crane operators, the customs house |
+| THE OLD TOWN (west, north of the Port) | x -52 to -8, y -20 to 26 | A pre-Substrate quarter: narrow streets, brownstones and walk-ups, a cathedral, a covered market, a museum of the city. Mixed use by design (Jacobs): shops under flats, short blocks | 800 / 3,000 (tiers 1-2) | 500: shopkeepers, guides, the cathedral, the museum |
+| THE SUBURBS (east) | x 116 to 180, y 0 to 70 | Detached houses on curving streets, a high school, a mall, a park per estate. The middle tiers' family housing; car-free (the Department does not issue cars): every street within 600 m of a station | 1,400 / 6,000 (tiers 1-3) | 400: the mall, the high school, a clinic |
+| THE AIRPORT (far east) | x 186 to 240, y -10 to 60, beyond the Suburbs, its runway east-west (planes over the Suburbs' far edge, never over the core) | THE DEPARTURES HALL, one runway, a control tower, hangars, the airport hotel. Jobs and visitors, no homes: it is the city's door (a funnel site: arrivals for #arrivals) | 0 | 700: ground crew, air traffic control, security, the hotel |
+| THE FARMLAND (north-west, behind the Old Town) | x -80 to -20, y -60 to -24 | Fields, orchards, a dairy, the grain elevator, a farmers' market town at its station. The land the Commons' LOT 0x6F07 farm vote hinted at, at scale; food for the city, the lowest density | 300 / 1,000 (tiers 2-5, farmhands' cottages to the manor) | 400: farmhands, the dairy, the elevator, the vet |
+| THE ENGINE (north-east, behind the Strip and the Heights' east parcel) | x 116 to 180, y -60 to -8 | The city's second business district (a planned edge city): research park, data halls moved out of the Works, a university annex. Keeps new office jobs off the core's streets | 900 / 5,600 (towers: all tiers) | 1,200: engineers, researchers, the cache moved from the Works |
+
+5k build-out: +4,000 homes (5,900 total, room for 5,000 with the old overflow relieved); 20k: +20,000.
+Each district is built out in stages over machine weeks by the ROADMAP d "city grows" mechanic
+(construction sites first), so the build-out follows the census rather than preceding it.
+
+Placement rules carried from the master plan: heavy industry only at the Port, behind a buffer; a
+green edge wherever homes meet work; every home within 20 cells of green; venues (stadiums,
+the airport hotel) at stations; no district's homes more than a 10-cell walk from its station.
+
+### (b) The transit plan: the Loop, and real rail beyond it
+
+The Loop stays exactly as it is (its ten stations and lap are what every published day's trains
+depend on). New service is added as separate lines, each with its own timetable, meeting the Loop
+at interchanges. The pod spurs are replaced by rail.
+
+| Line | Route | Stations | Interchanges | Replaces |
+|---|---|---|---|---|
+| THE SHORE LINE (rail) | The Works station south to the Coast, then west along the Coast to the Port | Works (interchange), Coast Central, Coast West, Port Quay, Port Town | Works (the Loop) | the Shore Line pods |
+| THE ALPINE LINE (rail) | Campus north to the Heights village, on to the summit parcel | Campus (interchange), Foothills, Heights Village, Summit | Campus (the Loop) | the Alpine Line pods |
+| THE WEST LINE | Arena station west through the Old Town to the Farmland's market town | Arena (interchange), Old Town Cathedral, Old Town Market, Farmland Market | Arena (the Loop); Old Town Market with THE SHORE LINE via a Port branch | new |
+| THE EAST LINE | Archive station east through the Suburbs to the Airport | Archive (interchange), Suburbs North, Suburbs Mall, Suburbs South, Airport Terminal | Archive (the Loop) | new |
+| THE ENGINE SHUTTLE | Strip station north-east to the Engine | Strip (interchange), Engine Campus, Engine Towers | Strip (the Loop) | new |
+| THE OUTER RING (20k stage) | A ring through the six new districts: Port, Old Town, Farmland, Engine, Suburbs, Airport, back via the Coast | one per new district | all the radial lines above | new |
+
+Timetable principles (so published days stay valid):
+1. **Each line is its own clock.** A line runs a fixed timetable from machine hour 0 like the Loop
+   (`trainsAt`, `nextArrival` per line: stations by arc, DWELL, headway from the line's length and
+   its trains). Adding or changing one line never moves another line's trains.
+2. **A published day names its lines.** Plans already name their layout (`LAYOUT_VERSION`); the
+   plan format gains a line id beside each trip's train and car (format 1 stores `k`, `car`,
+   `board` for the Loop only: add `line`, defaulting to the Loop so every existing plan decodes
+   unchanged). A new line or new stations take effect at a day boundary: the first day built after
+   the deploy is the first that uses them; days already published keep their routes, and
+   `whereAt` walks their legs to fit their own times (the master plan's rule).
+3. **Interchanges are timed, not assumed.** A trip with a change is planned leg by leg against
+   each line's timetable (`planTrip` becomes a sequence: walk, wait, ride, alight, walk to the
+   other platform, wait, ride): the connection it catches is the one the plan records.
+4. **Never retime a line in place.** Changing a line's stations or headway is a new line version
+   (a new id); the old version keeps running for any published day that names it until that day
+   retires from the manifest (today - 2), then it is removed.
+5. **Capacity drives headway, measured.** Cars of 16 seats; a line's trains are sized so its
+   busiest car at the rush stays under 1.5x seated (the Loop's measure), from the plan builder's
+   own counts (`summary` already counts riders per car).
+6. **Checks** extend `check-plans` (plan whereAt == sim whereAt with lines), `check-cityview`
+   (every line's viaduct or track clear of buildings at four turns, cars on the track through
+   curves) and `check-planner` (every station within a 10-cell walk of its district's homes; no
+   published day's train changes when a line is added).
+
+Build order for the follow-up: (1) line abstraction under the Loop with the Loop as line 0, no
+behaviour change, checked identical; (2) the Shore and Alpine lines as rail replacing the pods;
+(3) THE PORT and THE OLD TOWN with the West Line; (4) THE SUBURBS and THE AIRPORT with the East
+Line; (5) THE FARMLAND and THE ENGINE; (6) THE OUTER RING at the 20k stage.
