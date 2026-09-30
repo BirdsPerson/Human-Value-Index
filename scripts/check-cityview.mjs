@@ -452,7 +452,7 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
     if (!g) continue;
     games++;
     if (g.kind === "ball" && !(g.inning >= 1 && g.inning <= 9 && g.score.every(n => n >= 0 && n < 40))) bad = `${pid} ${h}`;
-    if (g.kind === "hoops" && !(g.score[0] <= 20 && g.score[1] <= g.score[0])) bad = `${pid} ${h}`;
+    if (g.kind === "hoops" && !(g.score[0] <= 21 && g.score[1] <= g.score[0])) bad = `${pid} ${h}`;
     if (g.kind === "gridiron" && !g.practice && !(g.quarter >= 1 && g.quarter <= 4 && g.score.every(n => n >= 0 && n <= 70) && g.down >= 1 && g.down <= 4)) bad = `${pid} ${h}`;
     if (g.kind === "gridiron" && g.practice && g.score !== null) bad = `${pid} practice keeps score at ${h}`;
     if (g.kind === "soccer" && !(g.minute >= 1 && g.minute <= 91 && g.score.every(n => n >= 0 && n <= 10))) bad = `${pid} ${h}`;

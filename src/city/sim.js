@@ -857,7 +857,7 @@ export function gameAt(placeId, machineTime) {
     out.short = `${out.top ? "TOP" : "BOT"} ${ordinal(out.inning)} // COMPLIANT ${score[0]}, ASSESSED ${score[1]}`;
   } else if (g.kind === "hoops") {
     const len = 0.7, n = Math.floor((h - g.from) / len), f = ((h - g.from) - n * len) / len;
-    const lead = Math.min(20, Math.floor(f * 21)), trail = Math.floor(lead * (0.55 + 0.4 * h01(`${SEED}|hoops|${placeId}|${day}|${g.from}|${n}`)));
+    const lead = Math.min(21, Math.floor(f * 22)), trail = Math.floor(lead * (0.55 + 0.4 * h01(`${SEED}|hoops|${placeId}|${day}|${g.from}|${n}`)));
     out.game = n + 1; out.score = [lead, trail];
     out.status = `GAME ${n + 1}, FIRST TO 21 // ${lead}-${trail}`;
     out.short = `GAME ${n + 1} // ${lead}-${trail}, FIRST TO 21`;

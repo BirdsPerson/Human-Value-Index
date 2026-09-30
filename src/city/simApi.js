@@ -78,7 +78,7 @@ export const loopEvents = (fromMt, toMt) => SIM.loopEvents(fromMt, toMt);
 // The grounds' fixtures: the game on at a place now, and the PA's kickoff, score and final lines.
 // A fixture the league plays (the day's civic block, civic.js) names its teams: the scoreboard's
 // sides, the status, the PA. Without the day's summary (legacy mode) the generic sides play.
-export const civicOf = (day) => summaryOf(day)?.civic || null;
+export const civicOf = (day) => (import.meta.env?.DEV && typeof window !== "undefined" && window.__HVI_CIVIC_PREVIEW__) || summaryOf(day)?.civic || null;   // dev: a civic block to preview (the leagues before they open)
 export function leagueAt(placeId, mt) {
   const T = SIM.toHours(mt);
   return leagueMatchAt(civicOf(Math.floor(T / 24) + 1), placeId, T);
@@ -87,7 +87,8 @@ export const gameAt = (placeId, mt) => withLeague(SIM.gameAt(placeId, mt), mt);
 function withLeague(g, mt) {
   if (!g) return g;
   const m = leagueAt(g.placeId, mt);
-  if (!m || m.from !== g.from) return g;
+  if (!m || (m.slotFrom ?? m.from) !== g.from) return g;
+  if (m.sport) return withSport(g, m);
   const names = m.sides.map(teamName), shorts = m.sides.map(teamShort), S = SIM.SIDES[g.kind];
   let { status, short } = g;
   if (S) {
@@ -100,22 +101,76 @@ function withLeague(g, mt) {
   }
   return { ...g, league: m, sides: shorts, status, short };
 }
+// A league match on the board (the leagues, from season 13): the sport's teams on the scoreboard.
+function withSport(g, m) {
+  const names = m.sides.map(id => sportTeamName(id, m.sport)), shorts = m.sides.map(teamShort), S = SIM.SIDES[g.kind];
+  let { status, short } = g;
+  const stage = m.stage !== "regular" ? `${STAGE_NAME[m.stage]} // ` : "";
+  if (S) {
+    status = stage + status.replace(S[0][0], names[0]).replace(S[1][0], names[1]);
+    short = short.replace(S[0][1], shorts[0]).replace(S[1][1], shorts[1]);
+  } else if (g.kind === "hoops") {
+    status = `${stage}LEAGUE GAME ${m.j + 1}, FIRST TO 21 // ${names[0]} ${g.score[0]}, ${names[1]} ${g.score[1]}`;
+    short = `${shorts[0]} ${g.score[0]}-${g.score[1]} ${shorts[1]} // G${m.j + 1}`;
+  }
+  return { ...g, league: m, sides: shorts, status, short };
+}
 // The league table as it stands at machine time mt (the day's block plus every whistle so far):
 // -> [{id, pos, short, pts, ...}] | null
 export function leagueTableAt(mt) {
   const T = SIM.toHours(mt), d0 = Math.floor(T / 24), block = civicOf(d0 + 1);
+  if (block?.leagues) return sportTableAt(block, "baseball", T - d0 * 24).map(r => ({ ...r, short: teamShort(r.id) }));   // the Diamond's board: baseball
   return block ? tableAt(block, T - d0 * 24).map(r => ({ ...r, short: teamShort(r.id) })) : null;
 }
 // The PA's lines for a fixture the league plays: kickoff and final name the teams and the stage.
 export function gameEvents(fromMt, toMt) {
-  return SIM.gameEvents(fromMt, toMt).map(e => {
+  const out = SIM.gameEvents(fromMt, toMt).map(e => {
     const m = leagueAt(e.placeId, e.kind === "end" ? e.t - 1e-6 : e.t + 1e-6);
     if (!m) return e;
+    if (m.sport) return sportEvent(e, m);
     const S = SIM.SIDES[m.kind], names = m.sides.map(teamName), venue = SIM.GAME_VENUE[e.placeId];
     if (e.kind === "start") return { ...e, text: `${venue}: ${STAGE_NAME[m.stage]}, ${names[0]} V ${names[1]}. ${S ? e.text.replace(S[0][0], names[0]).replace(S[1][0], names[1]) : e.text}` };
     if (e.kind === "end") return { ...e, league: m, text: finalLine(m) };
     return { ...e, text: S ? e.text.replace(S[0][0], names[0]).replace(S[1][0], names[1]) : e.text };
   });
+  return [...out, ...leagueFinals(fromMt, toMt)].sort((a, b) => a.t - b.t);
+}
+// The leagues' PA (from season 13): kickoff names the sport's teams; the final names the result, the
+// stage and, on a matchday with ties behind closed doors, the first of the other results.
+function sportEvent(e, m) {
+  const S = SIM.SIDES[m.kind], names = m.sides.map(id => sportTeamName(id, m.sport)), venue = SIM.GAME_VENUE[e.placeId];
+  const sub = (t) => (S ? t.replace(S[0][0], names[0]).replace(S[1][0], names[1]) : t);
+  if (e.kind === "start") return { ...e, text: `${venue}: ${SPORT[m.sport].name} ${STAGE_NAME[m.stage]}, ${names[0]} V ${names[1]}. ${sub(e.text)}` };
+  if (e.kind === "end") return { ...e, league: m, text: sportFinalLine(m) };
+  return { ...e, text: sub(e.text) };
+}
+function sportFinalLine(m) {
+  const venue = SIM.GAME_VENUE[m.placeId], w = m.score[0] > m.score[1] ? m.sides[0] : m.score[1] > m.score[0] ? m.sides[1] : m.tiebreak;
+  const tail = m.stage === "final" ? `${sportTeamName(w, m.sport)} ARE ${SPORT[m.sport].name} CHAMPIONS. THE TROPHY HAS BEEN RETAINED BY THE DEPARTMENT.`
+    : m.stage === "semi" ? `${sportTeamName(w, m.sport)} ADVANCE TO THE FINAL. THE OTHERS ADVANCE TO WORK.`
+      : "THE TABLE HAS BEEN UPDATED. SO HAS THE CUP.";
+  return `FINAL AT ${venue}: ${sportMatchLine(m)}. ${tail}`;
+}
+// Finals the grounds' own fixtures do not call: every league game at the Courts, and the ties played
+// behind closed doors (one line a matchday, at its whistle).
+function leagueFinals(fromMt, toMt) {
+  const a = SIM.toHours(fromMt), b = SIM.toHours(toMt), out = [];
+  for (let d0 = Math.floor(a / 24); d0 * 24 < b; d0++) {
+    const block = civicOf(d0 + 1), V = block?.leagues && leaguesView(block);
+    if (!V) continue;
+    for (const sp of SPORTS) {
+      const today = V.all[sp].filter(m => m.day === d0 + 1);
+      if (sp === "basketball") {
+        for (const m of today) { const t = d0 * 24 + m.to - 0.02; if (t >= a && t < b) out.push({ t, kind: "end", placeId: m.placeId, league: m, text: sportFinalLine(m) }); }
+        continue;
+      }
+      const shut = today.filter(m => !m.featured);
+      if (!shut.length) continue;
+      const t = d0 * 24 + shut[0].to + 0.02;
+      if (t >= a && t < b) out.push({ t, kind: "score", placeId: shut[0].placeId, text: `ELSEWHERE IN ${SPORT[sp].name}, BEHIND CLOSED DOORS: ${shut.slice(0, 2).map(m => `${teamShort(m.sides[0])} ${m.score[0]}, ${teamShort(m.sides[1])} ${m.score[1]}`).join("; ")}${shut.length > 2 ? `; ${shut.length - 2} MORE ON FILE` : ""}. THE FACILITY IS NOT OPEN TO THE PUBLIC.` });
+    }
+  }
+  return out;
 }
 function finalLine(m) {
   const venue = SIM.GAME_VENUE[m.placeId], w = m.score[0] > m.score[1] ? m.sides[0] : m.score[1] > m.score[0] ? m.sides[1] : m.tiebreak;
@@ -132,5 +187,6 @@ import { ensureSocial } from "./socialClient.js";
 // ... and the published plans: the day's city built once server side (planClient.js), so
 // no view pays the whole roster's day build. Without one the sim builds the day locally.
 import { startPlans, setPlanClockOffset, summaryOf } from "./planClient.js";
-import { leagueMatchAt, tableAt, teamName, teamShort, hoopGames, matchLine, STAGE_NAME } from "./civic.js";
+import { leagueMatchAt, tableAt, teamName, teamShort, hoopGames, matchLine, STAGE_NAME, sportTableAt, leaguesView, sportMatchLine } from "./civic.js";
+import { SPORTS, SPORT, sportTeamName } from "./leagues.js";
 if (typeof window !== "undefined") { ensureSocial(); startPlans(); }

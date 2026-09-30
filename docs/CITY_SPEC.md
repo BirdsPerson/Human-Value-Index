@@ -1293,3 +1293,70 @@ moves and what they cost: docs/planning/MASTER_PLAN.md. In the code:
 - **Billboard sites** (`billboards.js`): reserved, not drawn.
 - `scripts/check-planner.mjs`; the layout-1 fixtures in `scripts/fixtures/layout1-*.json`.
 
+## The leagues and the Departmental Cup (from season 13, machine day 337; Scott 2026-09-30)
+
+Scott chose per-sport leagues and an overall DEPARTMENTAL CUP in place of the single mixed league,
+from the season boundary after the running one: seasons 1-12 keep the league they were drawn with
+(season 12's league-wide draft included; `check-civic` folds season 12's last day exactly as before).
+Code: `src/city/leagues.js` (pure mechanics: pools, drafts, the calendar, results, box scores, stats,
+the ladder, the Pit, the Cup), `src/city/civic.js` (`LEAGUES_FROM`, `sportDraft`,
+`sportSeasonRosters`, the fold, `leaguesView` / `sportTableAt` / `cupTableAt` / `decidedAt`),
+`src/city/LeagueHub.jsx` (`#city/league/<tab>`), `CivicPanel.jsx` (district teams, the Cup panel,
+the PA), `simApi.js` (boards and PA). Check: `scripts/check-civic.mjs` section 3d.
+
+- **Four leagues, one team per Loop district per sport.** BASEBALL at the Diamond (THE CURATED NINE,
+  9 a side), BASKETBALL at the Courts (THE CURATED FIVE, 5), FOOTBALL at the Bowl (THE CURATED
+  ELEVEN, 11), SOCCER at the Estate Pitch (CURATED F.C., 11; F.C. STANDS FOR FULLY COMPLIANT). The
+  scoreboards keep the district's short name (the ground says the sport); the PA and the pages use
+  the sport's name.
+- **The drafts.** Each league drafts its own every season: the reverse of its own last table, the
+  champion last (season 13: the mixed league's season-12 end), a snake over the roster's rounds, then
+  the Commissioner's cap (`snakeDraftN` `fine`: up to 8 trades between the strongest and weakest,
+  each lowering the league's variance of team means). The pools (`sportPools`) are exclusive: the
+  sport's specialists on file first (`specialtyOf`: named figures, then the record's text: MLB to
+  baseball, NBA to basketball, NFL to football, footballers to soccer), then athletes (spread to the
+  least-filled league), then the regulars at that ground (>= 12% of leisure), then the rest, each by
+  `sportRating` (playerRating with a sport record for the named athletes; the mixed league's rating
+  is untouched). Fighters on file and tennis players are not drafted. Live census, first picks:
+  Ohtani, Kobe, Brady, Ronaldo/Pele (THE HOUSE EDGE picks first everywhere: it finished last).
+- **Matchdays.** Every scored GAMES slot at a league's ground is a matchday: a full round of five.
+  The Courts play all five on the board, one game to 21 after another (the board now shows 21 at the
+  final basket). The other grounds put one tie on the board (rotating through the round; the first
+  semi and the final); the other four are played BEHIND CLOSED DOORS at a Department facility, scored
+  by the same model from their own seed, released at the whistle. The side that won a board goes to
+  the team better on the day (rating + 50 x hashed luck). Formats (the calendar decides): baseball 16
+  matchdays: 9 rounds, semis, final; basketball 28: 18 rounds (every pair twice), semis, final;
+  soccer 8: 6 rounds of the circle, semis, final; football 4: 3 rounds, then THE BOWL GAME (1st v
+  2nd). Win 3, draw 1; playoffs never draw (the Department's tiebreak).
+- **Individual.** THE TENNIS LADDER (`ladderRun`): seeded each season (the tennis players on file,
+  the club's regulars, then athletes; 10 rungs); the show court's match (tennis.js) counts, and Ladder
+  Night adds three challenges one or two rungs up; a winning challenger takes the rung. THE PIT
+  RANKINGS (`pitRun`): the season's Friday cards, W 3 D 1, fewer losses then stoppages break ties.
+  Individuals score for the district they work in (the club's pros work in the Sprawl, most fighters
+  in the Arena: a standing bias, documented, not corrected).
+- **THE DEPARTMENTAL CUP** (`cupTable`, `positionPoints`): per league 10 8 6 5 4 3 2 1 0 0 by
+  position (the playoffs decide the top; teams level on points, difference and scored share; nothing
+  before a ball is played), plus 3/2/1 for the ladder's and the Pit's top three. Decided at the last
+  final whistle (the Bowl Game, the season's last Sunday); the next season records it
+  (`leagues.cup.last`). The mood's `league` factor (label SPORTING FORM) is now the Cup form: the last
+  five results across the district's four teams (W +3, L -3) plus Cup first +4 / last -4, clamped
+  +-19.
+- **Box scores and stats** (`boxScore`, `seasonStats`, `leadersOf`, `mvpOf`): every match's player
+  lines hashed from its seed and summed to the final exactly (runs and RBIs, points from 2s, 3s and
+  free throws, touchdowns/kicks to points with passing yards = receiving yards, goals and assists;
+  pitchers' ER and keepers' clean sheets from the other side). Never stored: the browser recomputes
+  the season's matches from the block's rosters with the fold's own code, then the stats.
+- **The block** (from season 13): `leagues {season, day, days, sports {<sport>: {stage, table,
+  champion, draft}}, tennis {seed, ladder}, pit {dist, rank}, cup {table, last}}`;
+  `districts[id].teams {<sport>: {rating, roster, pos, p, w, d, l, f, a, pts, form}}` and `cup {pos,
+  pts}` (the Coast and the Heights: `cup.pos` null, no teams); no `league`, no `team`. Measured:
+  ~2.5-2.6 KB per district at 430 / 5,000 / 20,000 subjects (the rosters are most of it), fold
+  ~150 ms at 5,000.
+- **In the city.** `#city/league` is a hub: BASEBALL / BASKETBALL / FOOTBALL / SOCCER (table with
+  Cup points, today, results with box scores, leaders, sortable player stats, team stats, rosters,
+  the draft board), TENNIS, PIT, CUP. A district page shows its Cup position and its four teams; the
+  city page's panel is the Cup; a person's file carries their SEASON LINE. The PA reads each league's
+  first pick on draft day, kickoffs and finals with the sport's teams, every league game at the
+  Courts, one closed-doors line a matchday, the Cup's leader and the champions. Before day 337 the
+  hub shows the mixed league and the date. Dev: `window.__HVI_CIVIC_PREVIEW__` (a civic block) is
+  read in place of the summary under `vite` only.

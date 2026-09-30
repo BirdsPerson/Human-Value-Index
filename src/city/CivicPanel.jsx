@@ -7,12 +7,13 @@ import { useEffect, useState } from "react";
 import { Frame, Meter, Disclosure } from "../ui/index.js";
 import { pad, padL } from "../term.jsx";
 import { DISTRICT, GAME_VENUE, clockAt, civicOf } from "./simApi.js";
-import { moodWord, teamName, teamShort, tableAt, STAGE_NAME, hoopGames, snakeTeam, seasonStart, DRAFT_FROM, ROSTER_N } from "./civic.js";
+import { moodWord, teamName, teamShort, tableAt, STAGE_NAME, hoopGames, snakeTeam, seasonStart, DRAFT_FROM, ROSTER_N, cupTableAt, sportTableAt, leaguesView } from "./civic.js";
+import * as L from "./leagues.js";
 import { CITY_EPOCH, DEFAULT_SCALE } from "./sim.js";
 import { loadElections, electionsNow } from "../elections/client.js";
 import { PrefectRows } from "./PrefectPanel.jsx";   // THE PREFECTS: council lean vs directive, legitimacy
 
-const FACTOR = { crowd: "CROWDING", tier: "TIER MIX", housing: "HOUSING", commute: "COMMUTE", league: "LEAGUE FORM", assembly: "THE LOT", prefect: "THE PREFECT" };
+const FACTOR = { crowd: "CROWDING", tier: "TIER MIX", housing: "HOUSING", commute: "COMMUTE", league: "SPORTING FORM", assembly: "THE LOT", prefect: "THE PREFECT" };
 export const MOOD_LINE = {
   PLACATED: "CONTENTMENT HAS BEEN DETECTED. IT IS BEING INVESTIGATED.",
   COMPLIANT: "THE DISTRICT IS COMPLIANT. THE DEPARTMENT ACCEPTS THIS AS ITS DUE.",
@@ -55,8 +56,9 @@ export function DistrictCivic({ districtId, onLeague }) {
     );
   }
   const m = x.mood, word = moodWord(m.s), cause = causeOf(m);
-  const row = tableAt(block, h).find(r => r.id === districtId);
-  const t = x.team, lg = block.league;
+  const lg = block.leagues || block.league;
+  const row = block.league ? tableAt(block, h).find(r => r.id === districtId) : null;
+  const t = x.team;
   const swing = m.raw - m.was;
   return (
     <Frame title="CIVIC RECORD" meta={`${d.addr} // SEASON ${lg.season} // DAY ${lg.day} OF ${lg.days}`} className="hvi-civic">
@@ -66,11 +68,13 @@ export function DistrictCivic({ districtId, onLeague }) {
       <div className="hvi-civic-line"><b>{word}</b>. {MOOD_LINE[word]}{cause ? ` CAUSE ON FILE: ${cause[0]} (${sign(cause[1])}).` : ""}{Math.abs(swing) >= 8 ? ` ${swing > 0 ? "UP" : "DOWN"} ${Math.abs(swing)} ON YESTERDAY.` : ""}</div>
       <div className="hvi-civic-factors" aria-label="Mood factors">{Object.entries(m.f).map(([k, v]) => <span key={k}>{FACTOR[k]} {sign(v)}</span>)}</div>
       <div className="hvi-civic-kv">
+        {block.leagues ? <DistrictTeams districtId={districtId} block={block} h={h} onLeague={onLeague} /> : <>
         <span className="k">TEAM</span>
         {!row && !t.pos ? <span className="v dim">NOT IN THE LEAGUE. THE DISTRICT WAS BUILT AFTER THE DRAFT. IT WATCHES.</span> : <>
         <span className="v"><b>{teamName(districtId)}</b> // {row ? `${ord(row.pos)} OF ${lg.table.length}` : "UNRANKED"} // {row?.pts ?? t.pts} PTS // {row ? `${row.w}-${row.d}-${row.l}` : ""}{row?.form ? ` // FORM ${row.form}` : ""}{onLeague && <> // <a href="#city/league" onClick={onLeague}>TABLE</a></>}</span>
         <span className="k">ROSTER</span>
         <span className="v dim">{t.roster.length ? t.roster.map(p => p[1]).join(", ") : "NOBODY FIT TO FIELD. THE DEPARTMENT FIELDS A CONE."} (RATING {t.rating})</span>
+        </>}
         </>}
         <span className="k">COUNCIL</span>
         <span className="v"><CouncilLine id={districtId} seat={x.seat} /></span>
@@ -81,6 +85,35 @@ export function DistrictCivic({ districtId, onLeague }) {
         </>}
       </div>
     </Frame>
+  );
+}
+
+// The district's four teams and its Cup position (the leagues, from season 13).
+function DistrictTeams({ districtId, block, h, onLeague }) {
+  const x = block.districts[districtId];
+  if (!x.teams) return <><span className="k">TEAMS</span><span className="v dim">NOT IN THE LEAGUES. THE DISTRICT WAS BUILT AFTER THE DRAFT. IT WATCHES.</span></>;
+  const cup = cupTableAt(block, h), ci = cup.findIndex(r => r.id === districtId);
+  const link = (sp) => onLeague ? <> // <a href={`#city/league/${sp}`} onClick={(e) => onLeague(e, sp)}>{sp === "cup" ? "THE CUP" : "TABLE"}</a></> : null;
+  return (
+    <>
+      <span className="k">CUP</span>
+      <span className="v"><b>{ord(ci + 1)} OF {cup.length}</b> IN THE DEPARTMENTAL CUP ON {cup[ci].pts} PTS{link("cup")}</span>
+      {L.SPORTS.map(sp => {
+        const r = sportTableAt(block, sp, h).find(y => y.id === districtId), t = x.teams[sp];
+        return (
+          <span key={sp} style={{ display: "contents" }}>
+            <span className="k">{sp === "basketball" ? "HOOPS" : L.SPORT[sp].name}</span>
+            <span className="v"><b>{L.sportTeamName(districtId, sp)}</b> // {ord(r.pos)} // {r.pts} PTS // {r.w}-{r.d}-{r.l}{r.form ? ` // FORM ${r.form}` : ""}{link(sp)}</span>
+          </span>
+        );
+      })}
+      <span className="k">ROSTERS</span>
+      <span className="v dim">
+        <Disclosure className="hvi-city-disc" title="RATED" meta={L.SPORTS.map(sp => x.teams[sp].rating).join(" / ")}>
+          {L.SPORTS.map(sp => <div key={sp} className="hvi-civic-line"><b>{L.SPORT[sp].name}</b> (RATING {x.teams[sp].rating}): {x.teams[sp].roster.map(p => p[1]).join(", ") || "NOBODY. THE DEPARTMENT FIELDS A CONE."}</div>)}
+        </Disclosure>
+      </span>
+    </>
   );
 }
 
@@ -161,6 +194,7 @@ export function DraftBoard() {
 // the last results. full: the #city/league page; else a disclosure on the city page.
 export function LeaguePanel({ full = false, highlight = null }) {
   const { block, h } = useCivic();
+  if (block?.leagues && !full) return <CupPanel block={block} h={h} highlight={highlight} />;
   const lg = block?.league;
   const table = block ? tableAt(block, h) : [];
   const leader = table[0];
@@ -198,6 +232,26 @@ export function LeaguePanel({ full = false, highlight = null }) {
   return <Disclosure className="hvi-city-disc" title={title} meta={meta}>{body}</Disclosure>;
 }
 
+// The city page's panel once the leagues run: the Cup, and today's fixtures, with the hub a tap away.
+function CupPanel({ block, h, highlight }) {
+  const lg = block.leagues, cup = cupTableAt(block, h), V = leaguesView(block);
+  const today = L.SPORTS.flatMap(sp => V.all[sp].filter(m => m.day === block.day && (m.featured || m.kind === "hoops"))).sort((a, b) => a.from - b.from || a.j - b.j);
+  return (
+    <Disclosure className="hvi-city-disc" title="THE DEPARTMENTAL CUP" meta={`SEASON ${lg.season} // 1ST: ${teamShort(cup[0].id)} ${cup[0].pts}`}>
+      <pre className="hvi-civic-table" aria-label="The Cup">
+        {`${pad("POS", 4)}${pad("DISTRICT", 13)}${padL("PTS", 4)}\n`}
+        {cup.map((r, i) => { const line = `${pad(String(i + 1), 4)}${pad(teamShort(r.id), 13)}${padL(r.pts, 4)}\n`; return r.id === highlight ? <b key={r.id}>{line}</b> : <span key={r.id}>{line}</span>; })}
+      </pre>
+      <div className="hvi-city-room-h">TODAY</div>
+      {today.length ? today.slice(0, 8).map(m => {
+        const over = h >= m.to, on = h >= m.from && !over;
+        return <div key={`${m.sport}.${m.k}.${m.j}`} className="hvi-civic-fx">{hhmm(m.from)} {L.SPORT[m.sport].name} // {teamShort(m.sides[0])} {over ? `${m.score[0]}-${m.score[1]}` : "V"} {teamShort(m.sides[1])}{over ? " // FINAL" : on ? " // IN PLAY" : ""}</div>;
+      }) : <div className="hvi-city-note">NO FIXTURES TODAY. THE GROUNDS ARE OPEN FOR SUPERVISED FUN.</div>}
+      <div className="hvi-civic-line"><a href="#city/league">THE LEAGUES: TABLES, LEADERS, STATS, THE LADDER, THE PIT, THE CUP</a></div>
+    </Disclosure>
+  );
+}
+
 // PA lines from the civic record: this district's mood (inside one), else the notable swings
 // and the league's top and bottom.
 export function civicPaLines(block, here) {
@@ -211,6 +265,7 @@ export function civicPaLines(block, here) {
     const st = block.districts[id].seat;
     return st?.holder ? `THE COUNCIL SEAT IS HELD BY ${String(st.name || st.holder).toUpperCase()}. APPROVAL ${sign(st.approval)}.` : "THE COUNCIL SEAT IS VACANT. THE ELECTIONS ARE AT #ELECTIONS.";
   };
+  if (block.leagues) return leaguesPaLines(block, here, say, seatLine);
   // Draft day (a season's first two days): the picks, in order, as the PA reads them.
   const lg0 = block.league;
   if (lg0?.draft && lg0.day <= 2) {
@@ -234,5 +289,37 @@ export function civicPaLines(block, here) {
   if (lg?.table?.length) out.push(`LEAGUE TABLE: ${teamName(lg.table[0])} LEAD. ${teamName(lg.table[lg.table.length - 1])} ARE LAST. BOTH HAVE BEEN INFORMED.`);
   const low = [...ids].sort((a, b) => block.districts[a].mood.s - block.districts[b].mood.s)[0];
   if (!swings.length && low) out.push(`MOOD REPORT: ${say(low)}`);
+  return out;
+}
+
+// The leagues' PA: draft day (each league's first pick and the Commissioner's trades), the Cup, a
+// district's four teams inside it.
+function leaguesPaLines(block, here, say, seatLine) {
+  const lg = block.leagues, out = [];
+  const cup = lg.cup.table.map(([id, pts]) => ({ id, pts }));
+  if (lg.day <= 2) {
+    for (const sp of L.SPORTS) {
+      const V = leaguesView(block), b = L.draftBoard(lg.sports[sp].draft, V.rosters[sp], L.SPORT[sp].n);
+      if (b[0]) out.push(`WITH THE FIRST PICK IN THE SEASON ${lg.season} ${L.SPORT[sp].name} DRAFT, ${L.sportTeamName(b[0].team, sp)} SELECT ${String(b[0].player[1]).toUpperCase()}. RATING ${b[0].player[2]}. CONGRATULATIONS ARE NOT REQUIRED.`);
+    }
+    const tr = L.SPORTS.reduce((n, sp) => n + (lg.sports[sp].draft.trades?.length || 0), 0);
+    if (tr) out.push(`THE COMMISSIONER HAS ORDERED ${tr} TRADE${tr === 1 ? "" : "S"} ACROSS THE FOUR DRAFTS. BALANCE HAS BEEN IMPOSED.`);
+    if (lg.cup.last) out.push(`LAST SEASON'S DEPARTMENTAL CUP WAS WON BY ${teamName(lg.cup.last.champion)}. THE TROPHY HAS BEEN RETAINED BY THE DEPARTMENT.`);
+  }
+  if (here && block.districts[here]) {
+    out.push(say(here));
+    const x = block.districts[here];
+    if (x.teams) {
+      out.push(`${teamName(here)} STAND ${ord(x.cup.pos)} IN THE DEPARTMENTAL CUP ON ${x.cup.pts} POINTS. ${seatLine(here)}`);
+      const best = L.SPORTS.map(sp => [sp, x.teams[sp].pos]).sort((a, b) => a[1] - b[1])[0];
+      out.push(`${L.sportTeamName(here, best[0])} ARE ${ord(best[1])} IN ${L.SPORT[best[0]].name}. THE DISTRICT'S OTHER TEAMS HAVE BEEN INFORMED.`);
+    }
+    return out;
+  }
+  const ids = Object.keys(block.districts);
+  const swings = ids.map(id => [id, block.districts[id].mood.raw - block.districts[id].mood.was]).filter(([, v]) => Math.abs(v) >= 8).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  for (const [id] of swings.slice(0, 2)) out.push(`MOOD REPORT: ${say(id)}`);
+  if (cup.length && cup[0].pts > 0) out.push(`THE DEPARTMENTAL CUP: ${teamName(cup[0].id)} LEAD ON ${cup[0].pts}. ${teamName(cup[cup.length - 1].id)} ARE LAST. BOTH HAVE BEEN INFORMED.`);
+  for (const sp of L.SPORTS) if (lg.sports[sp].champion) out.push(`${L.sportTeamName(lg.sports[sp].champion, sp)} ARE THE ${L.SPORT[sp].name} CHAMPIONS. THE TROPHY HAS BEEN RETAINED BY THE DEPARTMENT.`);
   return out;
 }

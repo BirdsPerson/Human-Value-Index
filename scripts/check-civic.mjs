@@ -210,10 +210,10 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   eq(C.civicFold(P2.get(309), people, null).districts.arts.team.roster, b.districts.arts.team.roster, "draft day without yesterday: the same draft");
   for (const id of DIST) eq(C.civicFold(P2.get(310), people, null).districts[id].team.roster, ch.get(310).districts[id].team.roster, `${id}: mid-season without yesterday, the same drafted roster`);
   eq(ch.get(310).league.draft, dr, "the draft record rides the chain all season");
-  // season 13 drafts again, from season 12's end; the chain and the recompute agree
+  // season 13 opens the per-sport leagues (section 3d); the chain and the recompute agree on its drafts
   const b13 = ch.get(337);
-  ok(b13.league.draft.season === 13, "season 13 has its own draft");
-  eq(C.civicFold(P2.get(337), people, null).league.draft, b13.league.draft, "season 13's draft from the census alone equals the chain's");
+  ok(!b13.league && b13.leagues?.season === 13, "season 13 is the leagues' first season");
+  eq(C.civicFold(P2.get(337), people, null).leagues.sports, b13.leagues.sports, "season 13's drafts from the census alone equal the chain's");
   // balance: the rating spread across teams, before (the workforce) and after (the draft)
   const spread = (r) => { const m = DIST.map(id => C.teamRating(r[id])); return Math.max(...m) - Math.min(...m); };
   const before = spread(C.workforceDraft(subjects)), after = spread(Object.fromEntries(DIST.map(id => [id, b.districts[id].team.roster])));
@@ -235,6 +235,169 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   ok(gap(capped.rosters) < gap(snakeOnly), "every trade narrows the gap");
   for (const [r, a, x] of capped.trades) ok(capped.rosters[a][r][2] <= capped.rosters[x][r][2], "a trade sends the stronger team's pick of a round to the weaker");
   globalThis.__capDemo = [gap(snakeOnly), gap(capped.rosters), capped.trades.length];
+}
+
+// ---- 3d. THE LEAGUES (season 13 on): four sports, the ladder, the Pit, the Departmental Cup -------------
+{
+  const L = await import("../src/city/leagues.js");
+  const PIT = await import("../src/city/pit.js"), TENNIS = await import("../src/city/tennis.js");
+  const PIT_FIGHTER = (s) => Boolean(PIT.FIGHTER[SIM.keyOf(s)]);
+  ok(C.LEAGUES_FROM === 12 && C.seasonStart(C.LEAGUES_FROM) === 337, "the leagues open season 13, machine day 337 (the running season is left as it was drawn)");
+  const LDAYS = [335, 336, 337, 338, 339, 340];
+  SIM.clearPlans(); SIM.setRoster(roster);
+  const P3 = new Map([...LDAYS, 363, 364, 365].map(d => [d, clone(SIM.buildPlan(d))]));
+  const ch = new Map();
+  let pv = null;
+  for (const d of LDAYS) { pv = C.civicFold(P3.get(d), people, pv); ch.set(d, pv); }
+  const subjects = Object.keys(P3.get(337).subjects).map(k => people.get(k));
+  // the transition: the running season keeps the mixed league to its last day; the leagues from the next
+  ok(ch.get(336).league && !ch.get(336).leagues && DIST.every(id => ch.get(336).districts[id].team && !ch.get(336).districts[id].teams), "day 336 (season 12's last): the mixed league, untouched");
+  ok(ch.get(337).leagues && !ch.get(337).league && DIST.every(id => ch.get(337).districts[id].teams && !ch.get(337).districts[id].team), "day 337: the leagues, and no mixed league");
+  eq(C.civicFold(P3.get(336), people, ch.get(335)), ch.get(336), "the running season folds as it always did");
+  const b = ch.get(337), lg = b.leagues;
+  ok(lg.season === 13 && lg.day === 1 && L.SPORTS.every(sp => lg.sports[sp].draft.season === 13), "draft day: four drafts, season 13");
+  // the first drafts: every league in the reverse of the mixed league's end, the champion last
+  const endOld = C.seasonEnd(12 - 1, Object.fromEntries(DIST.map(id => [id, ch.get(336).districts[id].team.roster])));
+  for (const sp of L.SPORTS) eq(lg.sports[sp].draft.order, L.draftOrder(endOld.table, endOld.champion), `${sp}: the first draft order is the mixed league's table reversed`);
+  // deterministic; the chain and the census alone agree (draft day and mid-season)
+  eq(C.civicFold(clone(P3.get(337)), peopleOf(clone(roster)), clone(ch.get(336))), b, "draft day is deterministic");
+  for (const d of [337, 338, 340]) eq(C.civicFold(P3.get(d), people, null), C.civicFold(P3.get(d), people, null), `day ${d}: the same block twice`);
+  for (const d of [337, 339]) eq(C.civicFold(P3.get(d), people, null).leagues, ch.get(d).leagues, `day ${d}: without yesterday, the same leagues`);
+  for (const d of [338, 340]) for (const id of DIST) eq(ch.get(d).districts[id].teams, C.civicFold(P3.get(d), people, C.civicFold(P3.get(d - 1), people, null)).districts[id].teams, `day ${d} ${id}: recomputing yesterday gives the same teams`);
+  // the pools: sport-appropriate, exclusive, ten teams' worth each
+  const pools = L.sportPools(subjects);
+  const inPool = new Map();
+  for (const sp of L.SPORTS) {
+    ok(pools[sp].length === DIST.length * L.SPORT[sp].n, `${sp}: the pool is ${DIST.length} x ${L.SPORT[sp].n}`);
+    for (const x of pools[sp]) { ok(!inPool.has(x.key), `${x.key} is in one pool only`); inPool.set(x.key, sp); }
+    for (let i = 1; i < pools[sp].length; i++) ok(pools[sp][i - 1].g >= pools[sp][i].g, `${sp}: specialists, then athletes, then regulars, then the rest`);
+  }
+  const spec = subjects.filter(s => L.specialtyOf(s));
+  ok(spec.length >= 8, `the census has specialists to draft (${spec.length})`);
+  for (const s of spec) { const k = SIM.keyOf(s), sp = L.specialtyOf(s); ok(inPool.get(k) === sp && pools[sp].find(x => x.key === k).g === 3, `${k}: drafted into ${sp}, where the record says they play`); }
+  ok(subjects.every(s => !(PIT_FIGHTER(s) || L.isTennis(s)) || !inPool.has(SIM.keyOf(s))), "fighters and tennis players keep their own sports");
+  // the snakes: every pick the best left (a capped trade swaps one round's picks); nobody twice
+  for (const sp of L.SPORTS) {
+    const dr = lg.sports[sp].draft, n = DIST.length, N = L.SPORT[sp].n;
+    const ros = Object.fromEntries(DIST.map(id => [id, b.districts[id].teams[sp].roster]));
+    const swapped = new Map(dr.trades.flatMap(([r, a, x]) => [[`${r}|${a}`, x], [`${r}|${x}`, a]]));
+    let good = 0;
+    for (let r = 0; r < N; r++) for (let p = 0; p < n; p++) { const team = L.snakeTeam(dr.order, r, p), holder = swapped.get(`${r}|${team}`) || team; if (ros[holder][r][0] === pools[sp][r * n + p].key) good++; }
+    ok(good === n * N, `${sp}: all ${n * N} picks in snake order, the best player left`);
+    const keys = DIST.flatMap(id => ros[id].map(x => x[0]));
+    ok(new Set(keys).size === keys.length && keys.length === n * N, `${sp}: every player drafted once, ${N} a side`);
+    ok(dr.trades.length <= L.L_TRADES, `${sp}: at most ${L.L_TRADES} trades`);
+    const mean = (l) => l.reduce((x, q) => x + q[2], 0) / l.length;
+    const unguarded = L.snakeDraftN(pools[sp], dr.order, N, { maxTrades: 0 }).rosters;
+    const gap = (R) => Math.max(...DIST.map(id => mean(R[id]))) - Math.min(...DIST.map(id => mean(R[id])));
+    const vr = (R) => { const m = DIST.map(id => mean(R[id])), mu = m.reduce((a, x) => a + x, 0) / m.length; return m.reduce((a, x) => a + (x - mu) ** 2, 0); };
+    ok(vr(ros) <= vr(unguarded) + 1e-9 && gap(ros) <= 6, `${sp}: balanced (spread ${gap(unguarded).toFixed(1)} -> ${gap(ros).toFixed(1)}, ${dr.trades.length} trades)`);
+    (globalThis.__sportSpread ||= []).push(`${sp} ${gap(unguarded).toFixed(1)}->${gap(ros).toFixed(1)}`);
+    const first = L.draftBoard(dr, ros, N)[0];
+    ok(first && L.specialtyOf(people.get(first.player[0])) === sp, `${sp}: the first pick plays the sport (${first?.player[1]})`);
+    (globalThis.__firstPicks ||= []).push(`${sp}: ${L.draftBoard(dr, ros, N).slice(0, 3).map(p => `${p.player[1]} (${L.teamShort(p.team)})`).join(", ")}`);
+  }
+  // a whole season: results are the boards, the tables the sum of the results, the playoffs the table
+  const full = C.civicFold(P3.get(364), people, null), V = C.leaguesView(full);
+  for (const sp of L.SPORTS) {
+    const all = V.all[sp], S = L.SPORT[sp], reg = all.filter(m => m.stage === "regular");
+    ok(reg.length === S.rounds * DIST.length / 2, `${sp}: ${S.rounds} rounds of five (${reg.length} league matches)`);
+    const pairs = new Map();
+    for (const m of reg) { const k = [...m.sides].sort().join("|"); pairs.set(k, (pairs.get(k) || 0) + 1); }
+    ok([...pairs.values()].every(c => c <= Math.ceil(S.rounds / 9)), `${sp}: no pair meets more often than the rounds allow`);
+    for (const id of DIST) ok(reg.filter(m => m.sides.includes(id)).length === S.rounds, `${sp} ${id}: plays every round`);
+    for (const m of all) {
+      const slot = L.slotsOn(sp, m.day).find(x => x.md === m.k);
+      ok(slot && m.placeId === S.venue && (m.kind === "hoops" ? m.from === slot.from + m.j * L.HOOP_LEN : m.from === slot.from), `${sp} ${m.day}.${m.k}.${m.j}: on the GAMES timetable at ${S.ground}`);
+      if (m.featured) {
+        const g = SIM.gameAt(m.placeId, (m.day - 1) * 24 + m.to - (m.kind === "hoops" ? 1e-4 : 1e-6));
+        eq(m.score, g.score, `${sp} ${m.day}.${m.k}.${m.j}: the board at the whistle shows the result`);
+      } else eq(m.score, L.matchFinal(m), `${sp} ${m.day}.${m.k}.${m.j}: the closed-door result is its own seed's`);
+      if (m.kind === "hoops") ok(m.score[0] === 21 && m.score[1] < 21, `${sp} ${m.day}.${m.j}: first to 21`);
+    }
+    for (const d of [338, 339, 340]) {
+      const blk = ch.get(d);
+      const t2 = L.tableOf(C.leaguesView(blk).all[sp].filter(m => m.day < d));
+      for (const id of DIST) {
+        const x = blk.districts[id].teams[sp];
+        eq([x.p, x.w, x.d, x.l, x.f, x.a, x.pts], [t2[id].p, t2[id].w, t2[id].d, t2[id].l, t2[id].f, t2[id].a, t2[id].pts], `day ${d} ${sp} ${id}: the standings are the sum of the results`);
+        ok(x.pts === 3 * x.w + x.d && x.p === x.w + x.d + x.l, `day ${d} ${sp} ${id}: points and games add up`);
+      }
+      ok(DIST.reduce((n, id) => n + blk.districts[id].teams[sp].w, 0) === DIST.reduce((n, id) => n + blk.districts[id].teams[sp].l, 0), `day ${d} ${sp}: every win is someone's loss`);
+      if (d < 340) { const at = C.sportTableAt(blk, sp, 24); for (const r of at) eq([r.pts, r.p], [ch.get(d + 1).districts[r.id].teams[sp].pts, ch.get(d + 1).districts[r.id].teams[sp].p], `day ${d} ${sp} ${r.id}: the table after today's whistles is tomorrow's`); }
+    }
+    const table = L.order(L.tableOf(reg)), semis = all.filter(m => m.stage === "semi"), fin = all.find(m => m.stage === "final");
+    ok(fin, `${sp}: a final is played`);
+    if (S.finalOnly) eq([...fin.sides].sort(), [table[0], table[1]].sort(), `${sp}: the top two meet in the final`);
+    else {
+      eq(semis.map(m => [...m.sides].sort()), [[table[0], table[3]].sort(), [table[1], table[2]].sort()], `${sp}: semi-finals 1st v 4th, 2nd v 3rd`);
+      eq([...fin.sides].sort(), semis.map(L.winnerOf).sort(), `${sp}: the final is between the semi-final winners`);
+    }
+    ok(all.filter(m => m.stage !== "regular").every(m => L.winnerOf(m)), `${sp}: the playoffs always have a winner`);
+    // box scores: deterministic, every side's scoring sums to its score; season stats sum to the table
+    const sk = { baseball: "runs", basketball: "pts", football: "pts", soccer: "goals" }[sp];
+    let sums = 0;
+    for (const m of all) {
+      const bx = L.boxScore(m, V.rosters[sp]);
+      eq(bx, L.boxScore(clone(m), clone(V.rosters[sp])), `${sp} ${m.day}.${m.k}.${m.j}: the box score is the same every time`);
+      for (const s of [0, 1]) {
+        ok(bx.sides[s].reduce((n, x) => n + x[sk], 0) === m.score[s], `${sp} ${m.day}.${m.k}.${m.j} side ${s}: the players' ${sk} sum to the score`);
+        if (sp === "baseball") ok(bx.sides[s].reduce((n, x) => n + x.rbi, 0) === m.score[s] && bx.sides[s].every(x => x.hr <= x.h && x.h <= x.ab), `baseball ${m.day}.${m.k}.${m.j}: RBIs sum to the runs; HR <= H <= AB`);
+        if (sp === "basketball") ok(bx.sides[s].every(x => x.pts === 2 * (x.fgm - x.tpm) + 3 * x.tpm + x.ftm && x.fgm <= x.fga), `basketball ${m.day}.${m.j}: points are the baskets`);
+        if (sp === "football") ok(bx.sides[s][0].passYds === bx.sides[s].reduce((n, x) => n + x.recYds, 0), `football ${m.day}.${m.j}: passing yards are the receiving yards`);
+        sums++;
+      }
+    }
+    const st = L.seasonStats(sp, all, V.rosters[sp]);
+    for (const id of DIST) { const T = st.teams[id]; ok(T && T[sk] === T.f, `${sp} ${id}: the season's player ${sk} sum to the team's (${T?.f})`); }
+    ok(L.leadersOf(sp, st.players).every(c => c.rows.length <= 5), `${sp}: five leaders a category`);
+    ok(L.mvpOf(sp, st.players), `${sp}: an MVP`);
+    (globalThis.__boxes ||= 0), globalThis.__boxes += sums;
+  }
+  // the Cup: the formula, and it moves the mood (bounded)
+  const cup = C.cupTableAt(full, 24);
+  const dist = { ...Object.fromEntries(full.leagues.tennis.seed.map(([k, , , d]) => [k, d])), ...full.leagues.pit.dist };
+  const ladder = L.ladderRun(full.leagues.tennis.seed, 12, 364 * 24).ladder, pitRank = L.pitRun(12, 364 * 24).rank.map(x => x.key);
+  for (const r of cup) {
+    let want = 0;
+    for (const sp of L.SPORTS) want += L.positionPoints(sp, V.all[sp])[r.id];
+    ladder.slice(0, 3).forEach((k, i) => { if (dist[k] === r.id) want += L.IND_PTS[i]; });
+    pitRank.slice(0, 3).forEach((k, i) => { if (dist[k] === r.id) want += L.IND_PTS[i]; });
+    ok(r.pts === want && r.pts === Object.values(r.by).reduce((a, x) => a + x, 0), `the Cup: ${r.id} ${r.pts} = its positions in four leagues + the ladder + the Pit`);
+  }
+  for (const sp of L.SPORTS) { const pp = L.positionPoints(sp, V.all[sp]), fin = V.all[sp].find(m => m.stage === "final"); ok(pp[L.winnerOf(fin)] === 10 && pp[L.loserOf(fin)] === 8, `${sp}: the champion takes 10 Cup points, the runner-up 8`); }
+  ok(L.SPORTS.every(sp => Object.values(L.positionPoints(sp, [])).every(x => x === 0)), "no Cup points before a ball is played");
+  ok(DIST.every(id => ch.get(337).districts[id].cup.pts === Object.fromEntries(ch.get(337).leagues.cup.table)[id]), "each district's Cup record is the table's");
+  for (const d of LDAYS.slice(2)) for (const id of ALL) { const f = ch.get(d).districts[id].mood.f.league; ok(f >= -19 && f <= 19, `day ${d} ${id}: the Cup form's pull on the mood is bounded (${f})`); }
+  ok(SIM.DISTRICTS.filter(x => x.expansion).every(x => ch.get(338).districts[x.id].cup.pos === null && !ch.get(338).districts[x.id].teams), "the Coast and the Heights watch the leagues");
+  // the ladder and the Pit
+  const lr = L.ladderRun(full.leagues.tennis.seed, 12, 365 * 24);
+  eq([...lr.ladder].sort(), full.leagues.tennis.seed.map(x => x[0]).sort(), "the ladder keeps its players, reordered");
+  ok(lr.matches.every(m => m.a !== m.b) && lr.matches.length > 8, `ladder matches are played (${lr.matches.length})`);
+  for (const m of lr.matches.filter(x => x.show)) { const g = TENNIS.tennisAt((m.day - 1) * 24 + m.to + 0.01); ok(g && g.done && g.players[g.winner].key === (m.win === 0 ? m.a : m.b), `day ${m.day}: the show court's winner is the ladder's`); }
+  ok(Object.values(lr.stats).reduce((n, x) => n + x.w, 0) === lr.matches.length, "every ladder match has one winner");
+  const pr = L.pitRun(12, 365 * 24);
+  ok(pr.rank.reduce((n, x) => n + x.w, 0) === pr.rank.reduce((n, x) => n + x.l, 0) && pr.bouts.length === 12, `the Pit ranks the season's four cards (${pr.bouts.length} bouts)`);
+  // season 14's drafts come from season 13's own tables; the chain's draft day and the census agree
+  const c364 = C.civicFold(P3.get(364), people, C.civicFold(P3.get(363), people, null)), c365 = C.civicFold(P3.get(365), people, c364);
+  eq(c365.leagues.sports, C.civicFold(P3.get(365), people, null).leagues.sports, "season 14's drafts: the chain and the census alone agree");
+  for (const sp of L.SPORTS) { const e = L.sportEnd(sp, 12, V.rosters[sp]); eq(c365.leagues.sports[sp].draft.order, L.draftOrder(e.table, e.champion), `${sp}: season 14 drafts in the reverse of its own table`); }
+  ok(c365.leagues.cup.last?.season === 13 && c365.leagues.cup.last.champion === C.cupTableAt(full, 24)[0].id, `season 14 remembers season 13's Cup (${c365.leagues.cup.last?.champion})`);
+  // the size: per district, bounded (the fixtures are recomputed, never stored)
+  for (const n of process.argv.includes("--no-20k") ? [430, 5000] : [430, 5000, 20000]) {
+    const r = n === 430 ? roster : synthRoster(n, { rich: true });
+    SIM.clearPlans(); SIM.setMemoCap(Math.max(200000, n * 60)); SIM.setRoster(r);
+    const p = SIM.buildPlan(340);
+    const t = performance.now();
+    const blk = C.civicFold(p, peopleOf(r), null);
+    const ms = performance.now() - t;
+    const bytes = JSON.stringify(blk).length;
+    (globalThis.__lgSizes ||= []).push([n, bytes, Math.round(ms)]);
+    ok(bytes / DIST.length < 2800, `leagues, ${n}: ${bytes} bytes, ${Math.round(bytes / DIST.length)} per district`);
+  }
+  const zs = globalThis.__lgSizes;
+  ok(zs[zs.length - 1][1] < zs[0][1] * 1.3, `the leagues' block does not grow with the census (${zs.map(x => x[1]).join(" / ")} bytes)`);
+  SIM.setRoster(roster);
 }
 
 // ---- 3c. COUNCIL ELECTIONS: the slate, the Substrate, the ballots, the seats ----------------------------
@@ -699,4 +862,5 @@ SIM.setRoster(roster);
   eq(sum(d).civic, want, `day ${d}: re-split without yesterday's summary, the block is the chained one`);
 }
 
+console.log(`check-civic: leagues first picks: ${globalThis.__firstPicks?.join(" | ")}. league spreads ${globalThis.__sportSpread?.join(", ")}. ${globalThis.__boxes} box scores summed. leagues block bytes: ${globalThis.__lgSizes?.map(([n, b, t]) => `${n}: ${b} B (${Math.round(b / DIST.length)}/district, fold ${t} ms)`).join("; ")}`);
 console.log(`check-civic: ${checks} checks passed. draft spread ${globalThis.__draftSpread?.join(" -> ")} (cap demo ${globalThis.__capDemo?.map(x => typeof x === "number" ? +x.toFixed(1) : x).join(" -> ")}). civic block bytes by roster: ${sizes.map(([n, b, t]) => `${n}: ${b} B (${Math.round(b / DIST.length)}/district, fold ${t} ms)`).join("; ")}`);

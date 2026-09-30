@@ -4,6 +4,7 @@ import { Frame, Button, ButtonRow, Disclosure, ListRow } from "../ui/index.js";
 import { SubjectCard, injectPenStyles } from "../Pen.jsx";
 import { DISTRICTS, DISTRICT, BUILDING, TRAIN, STATIONS, PLACES, GAMES, GAME_VENUE, districtCap, clockAt, whereOf, atDistrict, isOnLoop, setClockOffset, offsetFor, jobLine, loopEvents, roomIn, gameAt, gameEvents, civicOf } from "./simApi.js";
 import { DistrictCivic, LeaguePanel, civicPaLines, useCivic } from "./CivicPanel.jsx";
+import { LeagueHub, SeasonLine } from "./LeagueHub.jsx";   // #city/league: the four leagues, the ladder, the Pit, the Cup
 import { moodWord } from "./civic.js";
 import { covers, setCivic, lotPhase, resortPhase } from "./sim.js";
 import { loadAssembly, assemblyNow } from "../assembly/client.js";
@@ -311,9 +312,12 @@ export default function City({ route }) {
   // The open file does not re-render with the census clock.
   const cardEl = useMemo(() => card && (
     <SubjectCard subject={card} onClose={close} where="THE SUBSTRATE" back="Return subject to the Substrate" assignment={`ASSIGNMENT: ${jobLine(card)}`}
-      extra={card.kind === "figure" && questsFor(card.slug).map(q => (
-        <QuestCardPanel key={q.id} quests={quests} q={q} slug={card.slug} buildingId={b?.id || controlBuildingId() || null} />
-      ))} />
+      extra={<>
+        <SeasonLine subject={card} />
+        {card.kind === "figure" && questsFor(card.slug).map(q => (
+          <QuestCardPanel key={q.id} quests={quests} q={q} slug={card.slug} buildingId={b?.id || controlBuildingId() || null} />
+        ))}
+      </>} />
   ), [card, close, quests, b]);
   const d = districtId && DISTRICT[districtId];
   const here = d && stats.districts.find(x => x.id === d.id);
@@ -327,7 +331,7 @@ export default function City({ route }) {
 
   const crumbs = [{ label: "CITY", go: () => go(null) }];
   if (d) crumbs.push({ label: d.name, go: () => go(d.id) });
-  if (leaguePage) crumbs.push({ label: "THE LEAGUE" });
+  if (leaguePage) crumbs.push({ label: "THE LEAGUES" });
   if (prefectsPage) crumbs.push({ label: "THE PREFECTS" });
   if (b) crumbs.push({ label: b.name, go: () => goBuilding(d.id, b.id) });
   if (b && floor != null) { const f = b.floors[floor]; crumbs.push({ label: `${f.code} ${f.name}` }); }
@@ -359,7 +363,7 @@ export default function City({ route }) {
       {findSlug && !findEntry && !findPending && census !== "pending" && (
         <div className="hvi-city-note" role="status">NO SUBJECT ON FILE AS "{findSlug.toUpperCase()}". THE DEPARTMENT HAS CHECKED. TWICE.</div>
       )}
-      {leaguePage && <LeaguePanel full />}
+      {leaguePage && <LeagueHub tab={parsed.buildingId} />}
       {prefectsPage && <PrefectsPage />}
       <Frame box title={b ? b.name : d ? d.name : iso ? "THE SUBSTRATE" : street ? "THE SUBSTRATE // STREET LEVEL" : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
         meta={b ? "CROSS-SECTION" : d ? "INTERIOR" : iso ? "DRAG // PINCH // TURN // TAP A BUILDING" : street ? "WALK // TURN // ENTER A DOOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} flush>
@@ -375,7 +379,7 @@ export default function City({ route }) {
               ? <City3D censusRef={censusRef} onDistrict={go} onOpen={open} onFloor={goBuilding} query={query} />
               : <CityMap censusRef={censusRef} onDistrict={go} onOpen={open} />}
       </Frame>
-      {d && !b && <DistrictCivic districtId={d.id} onLeague={(e) => { e.preventDefault(); window.location.hash = "#city/league" + query; }} />}
+      {d && !b && <DistrictCivic districtId={d.id} onLeague={(e, sp) => { e.preventDefault(); window.location.hash = `#city/league${sp ? "/" + sp : ""}` + query; }} />}
       {(!d || d.id === "commons") && <AssemblyRow asm={asm} />}
       {!b && <PitPanel districtId={d?.id || null} />}
       {!d && <MapKey />}

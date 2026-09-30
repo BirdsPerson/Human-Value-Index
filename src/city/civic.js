@@ -27,6 +27,8 @@ import * as SIM from "./sim.js";
 import { displayName } from "../figures.js";
 import { seatsOn } from "./councilCalendar.js";
 import { councilLeans, prefectFold } from "./prefects.js";   // THE PREFECTS: directive, clash, legitimacy
+import * as L from "./leagues.js";   // THE LEAGUES: four sports, the ladder, the Pit, the Departmental Cup
+import { playerRating, draftOrder, teamName, teamShort } from "./leagues.js";
 
 export const CIVIC_V = 1;
 // The league is the Loop's ten districts (its season was drawn before the city grew outward);
@@ -43,34 +45,11 @@ function fnv(str) {
 const h01 = (s) => fnv(`${SIM.SEED}|civic|${s}`) / 4294967296;
 
 // ---- the teams --------------------------------------------------------------------------------
-// Named by the Overlord, one per district: [name, scoreboard name].
-export const TEAMS = {
-  arts: ["THE CURATED", "CURATED"],
-  campus: ["THE TENURED", "TENURED"],
-  finance: ["THE LEVERAGED", "LEVERAGED"],
-  strip: ["THE HOUSE EDGE", "HOUSE EDGE"],
-  arena: ["THE CONDITIONED", "CONDITIONED"],
-  hq: ["THE DEPARTMENT", "DEPARTMENT"],
-  archive: ["THE INDEXED", "INDEXED"],
-  commons: ["THE TOLERATED", "TOLERATED"],
-  works: ["THE PROCESSED", "PROCESSED"],
-  sprawl: ["THE RETURNED", "RETURNED"],
-};
-export const teamName = (id) => TEAMS[id]?.[0] || String(id || "").toUpperCase();
-export const teamShort = (id) => TEAMS[id]?.[1] || String(id || "").toUpperCase();
+// Named by the Overlord, one per district (leagues.js TEAMS): [name, scoreboard name].
+export { TEAMS, teamName, teamShort, playerRating, snakeTeam, draftOrder, CAP_GAP, MAX_TRADES } from "./leagues.js";
 export const ROSTER_N = 9;
 const VENUES = new Set(Object.keys(SIM.GAMES));
 const SPORT_FIELDS = ["sport", "soccer", "gridiron", "combat", "coaching"];
-
-// A player's rating, 0..99: the body, the competence, and a record in sport.
-export function playerRating(s) {
-  const b = s?.breakdown || {};
-  const physical = typeof b.physical === "number" ? b.physical : 40;
-  const competence = typeof s?.competence === "number" ? s.competence : typeof b.utility === "number" ? b.utility : 40;
-  const f = SIM.fieldsOf(s);
-  const sport = Math.max(0, ...SPORT_FIELDS.map(k => f[k] || 0));
-  return clamp(Math.round(0.45 * physical + 0.35 * competence + 2 * sport), 0, 99);
-}
 // 2: an athlete on record; 1: plays at the grounds (a real share of their leisure is there); 0: drafted.
 function drawOf(s) {
   const f = SIM.fieldsOf(s);
@@ -107,50 +86,13 @@ export function workforceDraft(subjects) {
 // snake alone leaves the first pick's team a star the last pick's never sees; the cap is the
 // measured fix (docs/CITY_SPEC.md "The draft"). Deterministic: the season, the census, the table.
 export const DRAFT_FROM = 11;   // the season index (0-based) of the first league-wide draft: season 12
-export const CAP_GAP = 2, MAX_TRADES = 4;
 // The pool in draft order: the first teams x ROSTER_N of the city, best first.
 export function draftPool(subjects, n = DIST.length * ROSTER_N) {
   return subjects.map(s => ({ key: SIM.keyOf(s), name: displayName(s), r: playerRating(s), g: drawOf(s) })).sort(byDraft).slice(0, n);
 }
-// The snake: pick p of round r goes to order[r even ? p : n - 1 - p].
-export const snakeTeam = (order, round, pick) => order[round % 2 ? order.length - 1 - pick : pick];
-const mean = (l) => (l.length ? l.reduce((n, p) => n + p[2], 0) / l.length : 20);
 // order: the districts, first pick first. -> {rosters: {district: [[key, name, r] x ROSTER_N, in
 // round order]}, trades: [[round, a, b]] (a, the stronger, and b swapped their round's picks)}
-export function snakeDraft(pool, order) {
-  const rosters = Object.fromEntries(order.map(id => [id, []]));
-  let i = 0;
-  for (let round = 0; round < ROSTER_N; round++) for (let p = 0; p < order.length; p++) {
-    const x = pool[i++];
-    if (x) rosters[snakeTeam(order, round, p)].push([x.key, x.name, x.r]);
-  }
-  const trades = [];
-  const spread = () => { const m = order.map(id => mean(rosters[id])); return Math.max(...m) - Math.min(...m); };
-  for (let t = 0; t < MAX_TRADES; t++) {
-    const now = spread();
-    if (now <= CAP_GAP) break;
-    const ranked = [...order].sort((a, b) => mean(rosters[b]) - mean(rosters[a]) || order.indexOf(a) - order.indexOf(b));
-    const a = ranked[0], b = ranked[ranked.length - 1];
-    let best = null;
-    for (let r = 0; r < Math.min(rosters[a].length, rosters[b].length); r++) {
-      if (rosters[a][r][2] <= rosters[b][r][2]) continue;
-      [rosters[a][r], rosters[b][r]] = [rosters[b][r], rosters[a][r]];
-      const s = spread();
-      [rosters[a][r], rosters[b][r]] = [rosters[b][r], rosters[a][r]];
-      if (s < now - 1e-9 && (!best || s < best.s - 1e-9)) best = { r, s };
-    }
-    if (!best) break;
-    [rosters[a][best.r], rosters[b][best.r]] = [rosters[b][best.r], rosters[a][best.r]];
-    trades.push([best.r, a, b]);
-  }
-  return { rosters, trades };
-}
-// The draft order from last season's end: the final table reversed, the champion last.
-export function draftOrder(table, champion) {
-  const rev = [...table].reverse().filter(id => DIST.includes(id));
-  for (const id of DIST) if (!rev.includes(id)) rev.unshift(id);   // a district new to the league picks first
-  return champion && rev.includes(champion) ? [...rev.filter(id => id !== champion), champion] : rev;
-}
+export const snakeDraft = (pool, order) => L.snakeDraftN(pool, order, ROSTER_N);
 // A season's rosters from the census alone (the chain broken): the old rule before DRAFT_FROM,
 // else the draft from the season before's recomputed end. Memoised per census; depth is the
 // seasons since DRAFT_FROM, each a snake over the pool and the season's fixtures.
@@ -386,38 +328,145 @@ function factors(x, formPts, pos, lot, id) {
 }
 const sum = (f) => Object.values(f).reduce((a, b) => a + b, 0);
 
+// ---- THE LEAGUES (from season 13): four sports, the ladder, the Pit, the Departmental Cup ---------
+// Scott 2026-09-30: per-sport leagues and a Cup replace the single mixed league from the season
+// boundary after the running one. Seasons before LEAGUES_FROM keep the league they were drawn with.
+export const LEAGUES_FROM = 12;   // the season index (0-based): season 13, machine day 337
+const censusSig = (subjects) => fnv(subjects.map(x => SIM.keyOf(x)).join("|"));
+const POOLS = new Map();
+function poolsFor(subjects) {
+  const sig = censusSig(subjects);
+  if (!POOLS.has(sig)) { POOLS.clear(); POOLS.set(sig, L.sportPools(subjects)); }
+  return POOLS.get(sig);
+}
+// A per-sport season's draft from the census and each league's last end ({sport: {table, champion}}).
+// -> {rosters: {sport: {district: roster}}, drafts: {sport: {season, order, trades}}, tennis (the
+// ladder's seed), pit (fighter -> district)}
+export function sportDraft(season, subjects, ends) {
+  const pools = poolsFor(subjects), rosters = {}, drafts = {};
+  for (const sp of L.SPORTS) {
+    const ord = draftOrder(ends[sp].table, ends[sp].champion);
+    const { rosters: r, trades } = L.snakeDraftN(pools[sp], ord, L.SPORT[sp].n, { fine: true, maxTrades: L.L_TRADES });
+    for (const id of DIST) r[id] ||= [];
+    rosters[sp] = r; drafts[sp] = { season: season + 1, order: ord, trades };
+  }
+  const people = new Map(subjects.map(s => [SIM.keyOf(s), s]));
+  return { rosters, drafts, tennis: L.ladderSeed(subjects), pit: L.pitDistricts(people) };
+}
+// Each league's end of `season` from its rosters (the mixed league's for the season before the first).
+function endsOf(season, v) {
+  if (season < LEAGUES_FROM) { const e = seasonEnd(season, v.rosters); return Object.fromEntries(L.SPORTS.map(sp => [sp, e])); }
+  return Object.fromEntries(L.SPORTS.map(sp => [sp, L.sportEnd(sp, season, v.rosters[sp])]));
+}
+// The Cup at machine hour T of `season` (v: that season's draft). -> [{id, pts, by}]
+export function cupAt(season, v, T) {
+  const day = Math.min(seasonStart(season + 1), Math.floor(T / 24) + 1);
+  const pos = {};
+  for (const sp of L.SPORTS) {
+    const rating = Object.fromEntries(DIST.map(id => [id, teamRating(v.rosters[sp][id])]));
+    pos[sp] = L.positionPoints(sp, L.sportSeason(sp, season, day + 1, rating).filter(m => (m.day - 1) * 24 + m.to <= T));
+  }
+  const dist = { ...Object.fromEntries(v.tennis.map(([k, , , d]) => [k, d])), ...v.pit };
+  return L.cupTable(pos, L.ladderRun(v.tennis, season, T).ladder, L.pitRun(season, T).rank.map(x => x.key), dist);
+}
+const lastCupOf = (season, v) => { if (!v || season < LEAGUES_FROM) return null; const t = cupAt(season, v, seasonStart(season + 1) * 24); return { season: season + 1, champion: t[0].id, table: t.map(r => [r.id, r.pts]) }; };
+// From the census alone (the chain broken): each per-sport season is drafted from the one before's
+// recomputed end, walking up from the last season on record (memoised per census).
+const SPORT_SEASONS = new Map();
+export function sportSeasonRosters(season, subjects) {
+  const sig = censusSig(subjects);
+  if (SPORT_SEASONS.get("sig") !== sig) { SPORT_SEASONS.clear(); SPORT_SEASONS.set("sig", sig); }
+  if (SPORT_SEASONS.has(season)) return SPORT_SEASONS.get(season);
+  let s0 = season;
+  while (s0 > LEAGUES_FROM && !SPORT_SEASONS.has(s0 - 1)) s0--;
+  for (let s = s0; s <= season; s++) {
+    const prevV = s - 1 < LEAGUES_FROM ? seasonRosters(s - 1, subjects) : SPORT_SEASONS.get(s - 1);
+    const v = sportDraft(s, subjects, endsOf(s - 1, prevV));
+    v.last = lastCupOf(s - 1, s - 1 < LEAGUES_FROM ? null : prevV);
+    SPORT_SEASONS.set(s, v);
+  }
+  return SPORT_SEASONS.get(season);
+}
+// Matchdays a sport has played in the season before `day`.
+const mdBefore = (sp, day) => { let n = 0; for (let d = seasonStart(seasonOf(day)); d < day; d++) n += L.slotsOn(sp, d).length; return n; };
+const byTime = (a, b) => a.day - b.day || a.from - b.from || a.j - b.j;
+// The season's state entering `day`: -> {v, rating, played: {sport: [...]}, cup, ladder, pit}
+function leaguesOn(plan, people, prev, day, season) {
+  let v;
+  const chained = prev?.v === CIVIC_V && prev.districts;
+  const prevRosters = () => Object.fromEntries(L.SPORTS.map(sp => [sp, Object.fromEntries(DIST.map(id => [id, prev.districts[id]?.teams?.[sp]?.roster || []]))]));
+  if (chained && prev.leagues?.season === season + 1) {
+    const P = prev.leagues;
+    v = { rosters: prevRosters(), drafts: Object.fromEntries(L.SPORTS.map(sp => [sp, P.sports[sp].draft])), tennis: P.tennis.seed, pit: P.pit.dist, last: P.cup.last || null };
+  } else {
+    const subjects = Object.keys(plan.subjects || {}).map(k => people.get(k) || { slug: k, name: k });
+    const lastDay = chained && (prev.leagues || prev.league)?.season === season && (prev.leagues || prev.league).day === SEASON_DAYS;
+    if (lastDay && prev.leagues) {
+      // draft day, the chain whole: each league's end from yesterday's rosters
+      const pv = { rosters: prevRosters(), tennis: prev.leagues.tennis.seed, pit: prev.leagues.pit.dist };
+      v = sportDraft(season, subjects, endsOf(season - 1, pv));
+      v.last = lastCupOf(season - 1, pv);
+    } else if (lastDay && prev.league && season - 1 < LEAGUES_FROM) {
+      // the first per-sport draft: every league drafts in the reverse of the mixed league's end
+      v = sportDraft(season, subjects, endsOf(season - 1, { rosters: Object.fromEntries(DIST.map(id => [id, prev.districts[id]?.team?.roster || []])) }));
+      v.last = null;
+    } else v = sportSeasonRosters(season, subjects);
+  }
+  const rating = {}, played = {}, today = {};
+  for (const sp of L.SPORTS) {
+    rating[sp] = Object.fromEntries(DIST.map(id => [id, teamRating(v.rosters[sp][id])]));
+    const all = L.sportSeason(sp, season, day + 1, rating[sp]);
+    played[sp] = all.filter(m => m.day < day); today[sp] = all.filter(m => m.day === day);
+  }
+  const T0 = (day - 1) * 24;
+  const ladder = L.ladderRun(v.tennis, season, T0), pit = L.pitRun(season, T0);
+  const dist = { ...Object.fromEntries(v.tennis.map(([k, , , d]) => [k, d])), ...v.pit };
+  const pos = Object.fromEntries(L.SPORTS.map(sp => [sp, L.positionPoints(sp, played[sp])]));
+  const cup = L.cupTable(pos, ladder.ladder, pit.rank.map(x => x.key), dist);
+  const tables = Object.fromEntries(L.SPORTS.map(sp => [sp, L.tableOf(played[sp])]));
+  const standings = Object.fromEntries(L.SPORTS.map(sp => [sp, L.order(tables[sp])]));
+  return { v, rating, played, today, ladder, pit, cup, tables, standings };
+}
+
 // plan: that day's format-1 plan. people: key -> census subject. prev: yesterday's block (from
 // its summary, or recomputed from its plan) or null. -> the day's civic block.
 export function civicFold(plan, people, prev = null) {
   const day = plan.day, season = seasonOf(day);
-  // the season's rosters: carried from yesterday within a season, drafted on its first day
-  // (or when the chain is broken: the same census drafts the same teams)
-  let rosters, drafted = null;
-  const chained = prev?.v === CIVIC_V && prev.districts && prev.league;
-  if (chained && prev.league.season === season + 1) {
-    rosters = Object.fromEntries(DIST.map(id => [id, prev.districts[id]?.team?.roster || []]));
-    drafted = prev.league.draft || null;
-  } else {
-    const subjects = Object.keys(plan.subjects || {}).map(k => people.get(k) || { slug: k, name: k });
-    if (season >= DRAFT_FROM && chained && prev.league.season === season && prev.league.day === SEASON_DAYS) {
-      // draft day, the chain whole: last season's end is yesterday's table and champion
-      ({ rosters, draft: drafted } = draftFrom(season, subjects, prev.league.table, prev.league.champion));
-    } else ({ rosters, draft: drafted } = seasonRosters(season, subjects));
-  }
-  const rating = Object.fromEntries(DIST.map(id => [id, teamRating(rosters[id])]));
-  const all = seasonTo(season, day + 1, rating);
-  const played = all.filter(m => m.day < day), today = all.filter(m => m.day === day);
-  const table = tableOf(played), standing = order(table);
-  const final = played.find(m => m.stage === "final");
-  const form = (id) => played.filter(m => m.stage === "regular" && m.sides.includes(id)).slice(-5)
+  const perSport = season >= LEAGUES_FROM;
+  let lg = null, X = null;   // the mixed league (before LEAGUES_FROM) | the leagues (from it)
+  if (!perSport) {
+    // the season's rosters: carried from yesterday within a season, drafted on its first day
+    // (or when the chain is broken: the same census drafts the same teams)
+    let rosters, drafted = null;
+    const chained = prev?.v === CIVIC_V && prev.districts && prev.league;
+    if (chained && prev.league.season === season + 1) {
+      rosters = Object.fromEntries(DIST.map(id => [id, prev.districts[id]?.team?.roster || []]));
+      drafted = prev.league.draft || null;
+    } else {
+      const subjects = Object.keys(plan.subjects || {}).map(k => people.get(k) || { slug: k, name: k });
+      if (season >= DRAFT_FROM && chained && prev.league.season === season && prev.league.day === SEASON_DAYS) {
+        // draft day, the chain whole: last season's end is yesterday's table and champion
+        ({ rosters, draft: drafted } = draftFrom(season, subjects, prev.league.table, prev.league.champion));
+      } else ({ rosters, draft: drafted } = seasonRosters(season, subjects));
+    }
+    const rating = Object.fromEntries(DIST.map(id => [id, teamRating(rosters[id])]));
+    const all = seasonTo(season, day + 1, rating);
+    const played = all.filter(m => m.day < day), today = all.filter(m => m.day === day);
+    const table = tableOf(played), standing = order(table);
+    lg = { rosters, drafted, rating, played, today, table, standing, final: played.find(m => m.stage === "final") };
+  } else X = leaguesOn(plan, people, prev, day, season);
+  const form = (id) => lg.played.filter(m => m.stage === "regular" && m.sides.includes(id)).slice(-5)
     .map(m => { const i = m.sides.indexOf(id), a = m.score[i], b = m.score[1 - i]; return a > b ? "W" : a < b ? "L" : "D"; }).join("");
+  // the Cup form: the district's last five results across its four teams
+  const allPlayed = X ? L.SPORTS.flatMap(sp => X.played[sp]).sort(byTime) : null;
+  const cupPos = X ? X.cup.map(r => r.id) : null;
   const stats = dayStats(plan, people);
   const lot = assemblyOn(day);
   const held = seatsOn(day, SEATS);
   const leans = councilLeans(held, people);   // PEOPLE <-> ORDER, per held seat (prefects.js)
   const districts = {};
   for (const id of ALL) {
-    const pos = standing.indexOf(id), fm = form(id);
+    const pos = X ? cupPos.indexOf(id) : lg.standing.indexOf(id), fm = X ? L.formOf(allPlayed, id) : form(id);
     const f = factors(stats[id], [...fm].reduce((n, r) => n + (r === "W" ? 3 : r === "L" ? -3 : 0), 0), pos, lot, id);
     // THE PREFECT (prefects.js): today's directive from the mood before its own factor and the
     // council's lean; the clash and the directive's weight become the mood's `prefect` factor.
@@ -426,16 +475,41 @@ export function civicFold(plan, people, prev = null) {
     const raw = clamp(sum(f), -100, 100);
     const was = prev?.v === CIVIC_V && Number.isFinite(prev.districts?.[id]?.mood?.raw) ? prev.districts[id].mood.raw : raw;
     const s = Math.round(0.6 * raw + 0.4 * was) || 0;   // no -0: the block is plain JSON
-    const T = table[id] || { p: 0, w: 0, d: 0, l: 0, f: 0, a: 0, pts: 0 };   // outside the league
-    districts[id] = {
-      mood: { s, raw, was, f },
-      team: { rating: rating[id] ?? 20, roster: rosters[id] || [], pos: pos + 1 || null, p: T.p, w: T.w, d: T.d, l: T.l, f: T.f, a: T.a, pts: T.pts, form: fm },
-      // the seat: nobody holds it until the first election. approval follows the mood.
-      // the seat: nobody holds it until the first election is decided and sworn in (council.js).
-      seat: held[id]
-        ? { holder: held[id].holder, name: held[id].name, term: held[id].term, cycle: held[id].cycle, by: held[id].by, approval: s, status: "HELD", lean: leans[id] ?? 0, acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] }
-        : { holder: null, term: null, approval: s, status: "VACANT", acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] },
-      prefect: pf.block,
+    const rec = { mood: { s, raw, was, f } };
+    if (X) {
+      if (DIST.includes(id)) {
+        rec.teams = Object.fromEntries(L.SPORTS.map(sp => {
+          const T = X.tables[sp][id], st = X.standings[sp];
+          return [sp, { rating: X.rating[sp][id], roster: X.v.rosters[sp][id], pos: st.indexOf(id) + 1, p: T.p, w: T.w, d: T.d, l: T.l, f: T.f, a: T.a, pts: T.pts, form: L.formOf(X.played[sp], id) }];
+        }));
+        rec.cup = { pos: pos + 1, pts: X.cup[pos].pts };
+      } else rec.cup = { pos: null, pts: 0 };   // built after the leagues were drawn: it watches
+    } else {
+      const T = lg.table[id] || { p: 0, w: 0, d: 0, l: 0, f: 0, a: 0, pts: 0 };   // outside the league
+      rec.team = { rating: lg.rating[id] ?? 20, roster: lg.rosters[id] || [], pos: pos + 1 || null, p: T.p, w: T.w, d: T.d, l: T.l, f: T.f, a: T.a, pts: T.pts, form: fm };
+    }
+    // the seat: nobody holds it until the first election is decided and sworn in (council.js).
+    rec.seat = held[id]
+      ? { holder: held[id].holder, name: held[id].name, term: held[id].term, cycle: held[id].cycle, by: held[id].by, approval: s, status: "HELD", lean: leans[id] ?? 0, acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] }
+      : { holder: null, term: null, approval: s, status: "VACANT", acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] };
+    rec.prefect = pf.block;
+    districts[id] = rec;
+  }
+  if (X) {
+    const sports = {};
+    for (const sp of L.SPORTS) {
+      const fin = X.played[sp].find(m => m.stage === "final");
+      sports[sp] = { stage: X.today[sp][0]?.stage || L.stageOf(sp, mdBefore(sp, day)), table: X.standings[sp], champion: fin ? L.winnerOf(fin) : null, draft: X.v.drafts[sp] };
+    }
+    return {
+      v: CIVIC_V, day,
+      leagues: {
+        season: season + 1, day: day - seasonStart(season) + 1, days: SEASON_DAYS, sports,
+        tennis: { seed: X.v.tennis, ladder: X.ladder.ladder },
+        pit: { dist: X.v.pit, rank: X.pit.rank.map(x => x.key) },
+        cup: { table: X.cup.map(r => [r.id, r.pts]), last: X.v.last || null },
+      },
+      districts,
     };
   }
   const strip = (m) => ({ k: m.k, day: m.day, placeId: m.placeId, from: m.from, to: m.to, kind: m.kind, stage: m.stage, sides: m.sides, score: m.score, ...(m.tiebreak ? { tiebreak: m.tiebreak } : {}) });
@@ -443,10 +517,10 @@ export function civicFold(plan, people, prev = null) {
     v: CIVIC_V, day,
     league: {
       season: season + 1, day: day - seasonStart(season) + 1, days: SEASON_DAYS,
-      stage: today[0]?.stage || (played.length ? stageOf(played[played.length - 1].k + 1) : "regular"),
-      table: standing, today: today.map(strip), recent: played.slice(-6).map(strip),
-      champion: final ? winnerOf(final) : null,
-      ...(drafted ? { draft: drafted } : {}),
+      stage: lg.today[0]?.stage || (lg.played.length ? stageOf(lg.played[lg.played.length - 1].k + 1) : "regular"),
+      table: lg.standing, today: lg.today.map(strip), recent: lg.played.slice(-6).map(strip),
+      champion: lg.final ? winnerOf(lg.final) : null,
+      ...(lg.drafted ? { draft: lg.drafted } : {}),
     },
     districts,
   };
@@ -455,6 +529,12 @@ export function civicFold(plan, people, prev = null) {
 // ---- readers (browsers) ---------------------------------------------------------------------------
 // The league match on at a ground at machine time T, from that day's block: -> match | null
 export function leagueMatchAt(block, placeId, T) {
+  if (block?.leagues) {
+    const sp = L.SPORT_AT[placeId], V = sp && leaguesView(block);
+    if (!V) return null;
+    const h = T - Math.floor(T / 24) * 24;
+    return V.all[sp].find(m => m.day === block.day && m.featured && h >= m.from && h < m.to) || null;
+  }
   if (!block?.league) return null;
   const d0 = Math.floor(T / 24), h = T - d0 * 24;
   return block.league.today.find(m => m.placeId === placeId && h >= m.from && h < m.to) || null;
@@ -482,3 +562,47 @@ export function hoopGames(m, done) {
 }
 export const matchLine = (m) => `${teamName(m.sides[0])} ${m.score[0]}, ${teamName(m.sides[1])} ${m.score[1]}${m.tiebreak ? ` (${teamShort(m.tiebreak)} ON THE DEPARTMENT'S TIEBREAK)` : ""}`;
 export const STAGE_NAME = { regular: "LEAGUE", semi: "SEMI-FINAL", final: "THE FINAL", off: "EXHIBITION" };
+
+// ---- readers for the leagues (from season 13) -------------------------------------------------------
+// The season as the browser reads it: every match of each league through the block's day,
+// recomputed from the block's rosters by the code the fold ran (so the summary carries no fixtures).
+const VIEWS = new Map();
+export function leaguesView(block) {
+  const lg = block?.leagues;
+  if (!lg) return null;
+  const key = `${block.day}|${lg.season}`;
+  if (VIEWS.has(key) && VIEWS.get(key).block === block) return VIEWS.get(key);
+  const season = lg.season - 1, rosters = {}, rating = {}, all = {};
+  for (const sp of L.SPORTS) {
+    rosters[sp] = Object.fromEntries(DIST.map(id => [id, block.districts[id]?.teams?.[sp]?.roster || []]));
+    rating[sp] = Object.fromEntries(DIST.map(id => [id, teamRating(rosters[sp][id])]));
+    all[sp] = L.sportSeason(sp, season, block.day + 1, rating[sp]);
+  }
+  const v = { block, season, rosters, rating, all, tennis: lg.tennis.seed, pit: lg.pit.dist };
+  VIEWS.set(key, v);
+  if (VIEWS.size > 4) VIEWS.delete(VIEWS.keys().next().value);
+  return v;
+}
+const T_OF = (block, h) => (block.day - 1) * 24 + h;
+// A sport's matches decided by hour h of the block's day.
+export function decidedAt(block, sport, h = 24) {
+  const V = leaguesView(block);
+  if (!V) return [];
+  const T = T_OF(block, h);
+  return V.all[sport].filter(m => (m.day - 1) * 24 + m.to <= T);
+}
+// A sport's table as it stands at hour h: -> [{id, pos, p, w, d, l, f, a, pts, form}]
+export function sportTableAt(block, sport, h = 24) {
+  const done = decidedAt(block, sport, h), t = L.tableOf(done);
+  return L.order(t).map((id, i) => ({ id, pos: i + 1, ...t[id], form: L.formOf(done, id) }));
+}
+// The Cup as it stands at hour h: -> [{id, pts, by}]
+export function cupTableAt(block, h = 24) {
+  const V = leaguesView(block);
+  if (!V) return [];
+  const T = T_OF(block, h), pos = {};
+  for (const sp of L.SPORTS) pos[sp] = L.positionPoints(sp, decidedAt(block, sp, h));
+  const dist = { ...Object.fromEntries(V.tennis.map(([k, , , d]) => [k, d])), ...V.pit };
+  return L.cupTable(pos, L.ladderRun(V.tennis, V.season, T).ladder, L.pitRun(V.season, T).rank.map(x => x.key), dist);
+}
+export const sportMatchLine = (m) => `${L.sportTeamName(m.sides[0], m.sport)} ${m.score[0]}, ${L.sportTeamName(m.sides[1], m.sport)} ${m.score[1]}${m.tiebreak ? ` (${teamShort(m.tiebreak)} ON THE DEPARTMENT'S TIEBREAK)` : ""}`;

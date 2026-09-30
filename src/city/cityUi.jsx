@@ -36,6 +36,31 @@ const css = `
   .hvi-civic-table b { color: var(--accent); font-weight: 700; }
   .hvi-civic-fx { font-size: var(--t-xs); color: var(--fg-dim); padding: 2px 0; }
   .hvi-city-in > .ui-disc { margin: 0; }
+  /* THE LEAGUES hub (LeagueHub.jsx): tabs, leaders, sortable stat tables, box scores */
+  .hvi-lg-tabs { margin: 0 0 var(--s3); }
+  .hvi-lg .ui-disc { margin: var(--s2) 0 0; }
+  .hvi-lg-leaders { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 30ch), 1fr)); gap: var(--s2) var(--s4); margin: 0 0 var(--s3); font-size: var(--t-xs); }
+  .hvi-lg-lead .t { color: var(--accent); letter-spacing: 0.06em; margin: 0 0 2px; }
+  .hvi-lg-lead .r { display: flex; justify-content: space-between; gap: var(--s2); color: var(--fg-dim); min-width: 0; }
+  .hvi-lg-lead .r span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hvi-lg-lead .r i { font-style: normal; color: var(--fg-mute); }
+  .hvi-lg-lead .r b { color: var(--fg); font-weight: 700; flex: none; }
+  .hvi-lg-lead .r.dim { color: var(--fg-mute); }
+  .hvi-lg-scroll { overflow-x: auto; max-height: 60vh; overflow-y: auto; }
+  .hvi-lg-stats { border-collapse: collapse; font-size: var(--t-xs); color: var(--fg-dim); white-space: nowrap; }
+  .hvi-lg-stats th, .hvi-lg-stats td { padding: 2px 1ch; text-align: right; border-bottom: var(--bw) solid var(--line); }
+  .hvi-lg-stats .n { text-align: left; position: sticky; left: 0; background: var(--bg); color: var(--fg); max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
+  .hvi-lg-stats thead th { position: sticky; top: 0; background: var(--bg); color: var(--fg-mute); font-weight: 400; z-index: 1; }
+  .hvi-lg-stats thead th.n { z-index: 2; }
+  .hvi-lg-stats th button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; letter-spacing: 0.04em; min-height: 24px; }
+  .hvi-lg-stats th button[aria-pressed="true"] { color: var(--accent); }
+  .hvi-lg-stats td.on { color: var(--accent); }
+  .hvi-lg-fx { display: block; width: 100%; text-align: left; font: inherit; font-size: var(--t-xs); background: none; border: 0; cursor: pointer; color: var(--fg-dim); padding: 2px 0; }
+  .hvi-lg-fx:hover, .hvi-lg-fx[aria-expanded="true"] { color: var(--accent); }
+  .hvi-lg-box { display: flex; flex-wrap: wrap; gap: 0 var(--s4); padding: var(--s1) 0 var(--s2) 2ch; }
+  .hvi-lg-link { color: var(--accent); margin-right: 2ch; }
+  .hvi-lg-season { margin: var(--s2) 0; }
+  .hvi-lg-season a { color: var(--accent); }
 
   /* FIND: a name in the census, and FIND ME */
   .hvi-city-find { display: flex; align-items: flex-start; gap: var(--s2); margin: var(--s2) 0 0; }
