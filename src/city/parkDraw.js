@@ -27,6 +27,7 @@ import { assignAnchors, actAt, typeOf } from "./props.js";
 import { DIAMOND, COURTS, REC, BOWL, PITCH, PARK_ANCHORS, PARK_LOTS, ringAt, fieldRole } from "./parkGeo.js";
 import { gameAt, leagueTableAt } from "./simApi.js";
 import { scoreCheer } from "./rigReact.js";
+import { drawChessTables } from "../chess/tableDraw.js";   // PARK CHESS: the stone tables (src/chess/)
 
 const who = (s) => s.slug || s.name;
 function h01(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 100000) / 100000; }
@@ -422,6 +423,8 @@ function recGround(K) {
       else side(ty - 0.55, far);
     });
   }
+  // PARK CHESS (src/chess/park.js): the stone tables on the north-east lawn, their games, the kibitzers
+  drawChessTables(G, "rec-ground", lod, K.mt, put);
   // benches along the cross path
   for (const [bx0, by0] of R.benches) {
     const ids = [0, 1].map(k => `bn${bx0.toFixed(1)}${k}`);

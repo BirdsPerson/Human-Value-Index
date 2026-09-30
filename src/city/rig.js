@@ -299,6 +299,12 @@ export const ANIMS = {
   // the octagon: a low stance, hands open and forward, circling; a check kick now and then
   grapple: { fps: 5, key: 0, front: true, frames: [F({ t: [0, 1], aL: [45, -70], aR: [35, -80], lL: 8, lR: 8 }), F({ t: [0, 1], aL: [50, -65], aR: [40, -75], lL: 8, lR: 8, b: [-1, 0] }), F({ t: [0, 1], aL: [55, -60], aR: [35, -80], lL: 30, lR: 5 }), F({ t: [0, 1], aL: [45, -70], aR: [35, -80], lL: 8, lR: 8 }), F({ t: [0, 1], aL: [45, -70], aR: [40, -75], lL: 8, lR: 8, b: [1, 0] })] },
   // the tennis club: ready, the backswing, contact, the follow-through; the racket drawn by the rig
+  // PARK CHESS (src/chess/, 2026-09-30): seated at a stone table. The move: a reach over the board, a
+  // piece between the fingers, set down, the hand back; the clock tapped; the chin stroked while the
+  // other one thinks (standing, the kibitzers stroke theirs too).
+  chessmove: { fps: 3, key: 1, front: true, frames: [F({ aL: [30, -60] }), F({ aL: [55, -45], t: [-1, 0], p: "piece" }), F({ aL: [70, -30], t: [-1, 0], h: [-1, 0], p: "piece" }), F({ aL: [70, -30], t: [-1, 0], h: [-1, 0] }), F({ aL: [40, -55] }), F({ aR: [35, -55] }), F({ aR: [50, -40], h: [0, 1] }), F({})] },
+  chinstroke: { fps: 2, key: 1, front: true, frames: [F({ aL: [35, 125] }), F({ aL: [35, 135], h: [0, 1] }), F({ aL: [35, 125] }), F({ aL: [35, 135] }), F({ aL: [30, 120], h: [0, 1] }), F({ aL: [35, 130] })] },
+  clocktap: { fps: 4, key: 1, front: true, frames: [F({ aL: [45, -50] }), F({ aL: [60, -35], b: [0, 0] }), F({ aL: [60, -45] }), F({ aL: [45, -50] }), F({}), F({})] },
   tennis:  { fps: 5, key: 0, frames: [F({ aL: [30, -40], aR: [20, -50], p: "racket", t: [0, 1] }), F({ aL: [-30, 0], aR: [30, -40], p: "racket", t: [1, 0] }), F({ aL: [70, 0], aR: [20, -30], p: "racket", t: [-1, 0] }), F({ aL: [135, -10], aR: [20, -30], p: "racket", t: [-1, 0] }), F({ aL: [30, -40], aR: [20, -50], p: "racket" }), F({ aL: [30, -40], aR: [20, -50], p: "racket", b: [0, -1] })] },
 };
 // seated variants: the same moves from the waist up, on a seat (poses.js sit)
@@ -483,7 +489,7 @@ export function rigFor(sheet) {
   return r || null;
 }
 
-const PROP_COL = { glove: "#dc2626", gloveD: "#7f1d1d", racket: "#e5e7eb", strings: "#fde68a", card: "#f5f5f5", deck: "#b91c1c", chip: "#facc15", chip2: "#dc2626", box: "#a16207", boxD: "#78350f", phone: "#111827", screen: "#22d3ee", wood: "#8a6a42", straw: "#d6b35a", ski: "#ef4444", pole: "#d1d5db", board: "#2563eb", club: "#d1d5db", water: "#2a5f8a", foam: "#bfe3f5" };
+const PROP_COL = { pawn: "#f5f5f4", glove: "#dc2626", gloveD: "#7f1d1d", racket: "#e5e7eb", strings: "#fde68a", card: "#f5f5f5", deck: "#b91c1c", chip: "#facc15", chip2: "#dc2626", box: "#a16207", boxD: "#78350f", phone: "#111827", screen: "#22d3ee", wood: "#8a6a42", straw: "#d6b35a", ski: "#ef4444", pole: "#d1d5db", board: "#2563eb", club: "#d1d5db", water: "#2a5f8a", foam: "#bfe3f5" };
 
 // Draw one subject doing an animation.
 //   ctx      a 2D context
@@ -576,6 +582,7 @@ function prop(c, name, L, X, Y, s, t, sp) {
     case "chips": R(PROP_COL.chip, hlx - 3, hly, 3, 1); R(PROP_COL.chip2, hlx - 3, hly - 1, 3, 1); break;
     case "chipsout": R(PROP_COL.chip, hlx - 5, hly, 3, 1); R(PROP_COL.chip2, hlx - 5, hly - 1, 3, 1); break;
     case "box": { const cx = (hlx + hrx) / 2 - 4, cy = Math.min(hly, hry) - 5; R(PROP_COL.box, cx, cy, 8, 6); R(PROP_COL.boxD, cx, cy + 2, 8, 1); break; }
+    case "piece": R(PROP_COL.pawn, hlx - 1, hly - 3, 2, 2); R(PROP_COL.pawn, hlx - 1, hly - 1, 3, 1); break;
     case "phone": R(PROP_COL.phone, hlx - 1, hly - 2, 2, 3); R(PROP_COL.screen, hlx - 1, hly - 2, 1, 1); break;
     case "broom": {
       const bx = (hlx + hrx) / 2;

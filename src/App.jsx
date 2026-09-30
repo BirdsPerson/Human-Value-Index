@@ -19,6 +19,7 @@ const Assembly = lazy(() => import("./assembly/Assembly.jsx"));
 const Elections = lazy(() => import("./elections/Elections.jsx"));
 const Docket = lazy(() => import("./assembly/Docket.jsx"));
 const Casino = lazy(() => import("./casino/Casino.jsx"));
+const Chess = lazy(() => import("./chess/Chess.jsx"));
 const LEGAL = ["about", "privacy", "terms", "dispute"];
 const FigurePicker = lazy(() => import("./FigureIndex.jsx").then(m => ({ default: m.FigurePicker })));
 
@@ -553,6 +554,13 @@ export default function OverlordAssessment() {
   if (routePath === "#casino" || routePath.startsWith("#casino/")) return (
     <Screen nav={nav} wide>
       <Suspense fallback={<Loading what="OPENING THE CAGE" />}><Casino route={route} /></Suspense>
+    </Screen>
+  );
+
+  // #chess[?vs=<slug>][&table=<id>]: PARK CHESS, play a figure at a stone table (src/chess/)
+  if (routePath === "#chess") return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="SETTING UP THE PIECES" />}><Chess route={route} /></Suspense>
     </Screen>
   );
 

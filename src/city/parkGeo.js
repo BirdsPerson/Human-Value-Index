@@ -249,7 +249,8 @@ function recAnchors() {
   out.push(bench(R.benches[1], 0, "talk"), bench(R.benches[1], 1, "rest"));
   out.push(...table(R.tables[1], 4));
   out.push(A("walk2", cx, cy - R.ringR, "stand", "stroll", "patron", null, { ring }));
-  out.push(A("keeper", G.x + G.w - 1.1, G.y + 1.5, "stand", "rake", "staff", null));
+  // the groundskeeper rakes the east lawn: the north-east one holds the chess tables (src/chess/park.js)
+  out.push(A("keeper", G.x + G.w - 1.2, cy + 0.65, "stand", "rake", "staff", null));
   return out;
 }
 

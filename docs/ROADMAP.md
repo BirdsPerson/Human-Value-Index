@@ -45,6 +45,9 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
    b2. [cabinet floor shipped 2026-09-30 with the funnels, docs/CITY_SPEC.md "The funnels": THE ARCADE on the
       Strip, cabinets synced from works.json (live / BETA / OUT OF ORDER), CRT overlay plays JETSAM! and ANAMNESIS,
       JETSAM! cabinets in the Dive, diner, casino, Union lounge. Next: the game room (chess, pool, cards)]
+      [chess shipped 2026-09-30 as PARK CHESS, docs/CITY_SPEC.md "Park chess": stone tables at the Recreation Ground,
+      the Green and the Estate Gardens, NPC games + the park ladder, #chess?vs=<slug> vs a figure (src/chess/), results on
+      the file via /api/chess. Next: pool and cards in the game room]
       **The Arcade** (Scott 2026-09-29; built with b; NOT named "Iridescent" yet, later).
       A building on the Strip: a cabinet floor and a game room. Cabinets = every live game in
       ../iridescent-site/works.json (division games; JETSAM! play-jetsam.netlify.app and

@@ -1,0 +1,81 @@
+/* PARK CHESS. The terminal's own tokens; the board is phosphor green on black, the pieces bone and
+   ink (pieces.jsx). Squares are 44px or more wherever the screen allows (8 x 44 = 352px: a 390px
+   phone, its 16px gutters, the frame's border). */
+.ch { --sq-l: #3a6446; --sq-d: #1a3021; }
+.ch-p { margin: 0 0 var(--s3); }
+.ch-p a, .ch-err a { color: var(--fg-dim); }
+.ch-small { font-size: var(--t-xs); color: var(--fg-dim); }
+.ch-dim { color: var(--fg-mute); font-weight: 400; font-size: var(--t-xs); }
+.ch-big { font-size: var(--t-m); color: var(--fg); font-weight: 700; letter-spacing: 0.04em; margin-bottom: var(--s2); }
+.ch-err { color: var(--harm); margin: var(--s2) 0; }
+.ch-win { color: var(--accent); }
+.ch-lose { color: var(--harm); }
+.ch-sub-h { font-size: var(--t-xs); color: var(--fg-mute); margin: var(--s4) 0 var(--s1); letter-spacing: 0.04em; }
+.ch-lines { list-style: none; margin: 0; padding: 0; font-size: var(--t-xs); color: var(--fg-dim); display: grid; gap: 2px; }
+.ch-lines li::before { content: "> "; color: var(--fg-mute); }
+.ch-mine { margin-bottom: var(--s3); color: var(--fg); }
+
+/* the figure */
+.ch-dossier { display: flex; gap: var(--s3); align-items: flex-start; margin-bottom: var(--s3); }
+.ch-sprite { flex: none; display: inline-flex; align-items: center; justify-content: center; background-repeat: no-repeat; background-size: auto 100%; background-position: 0 0; image-rendering: pixelated; border: var(--bw) solid var(--line); background-color: #0d140d; }
+.ch-sprite.s { width: 32px; height: 48px; }
+.ch-sprite.m { width: 40px; height: 60px; }
+.ch-sprite.l { width: 64px; height: 96px; }
+.ch-sprite .ini { color: var(--fg-mute); font-size: var(--t-xs); }
+
+/* the opponents */
+.ch-opps { list-style: none; margin: 0 0 var(--s3); padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s1) var(--s3); }
+.ch-opp { display: flex; align-items: center; gap: var(--s2); min-height: 52px; padding: 2px var(--s1); color: var(--fg); text-decoration: none; border: var(--bw) solid transparent; }
+.ch-opp:hover, .ch-opp:focus-visible { border-color: var(--line-hi); background: var(--panel-hi); outline: none; }
+.ch-opp .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ch-opp .tag { display: block; font-size: var(--t-xs); color: var(--warn); }
+.ch-opp .rt { color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+
+/* the board */
+.ch-play { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: var(--s4); align-items: start; margin-bottom: var(--s4); }
+.ch-board-wrap { position: relative; }
+.ch-board { display: grid; grid-template-columns: repeat(8, 1fr); width: min(512px, calc(100vw - 32px)); aspect-ratio: 1; border: var(--bw) solid var(--line-hi); user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.ch-sq { position: relative; border: 0; padding: 0; margin: 0; min-width: 0; min-height: 0; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; cursor: default; font: inherit; }
+.ch-board.live .ch-sq { cursor: pointer; }
+.ch-sq.l { background: var(--sq-l); }
+.ch-sq.d { background: var(--sq-d); }
+.ch-sq .pc { width: 82%; height: 82%; display: block; pointer-events: none; }
+.ch-sq.last { box-shadow: inset 0 0 0 999px rgba(251, 191, 36, 0.16); }
+.ch-sq.sel { box-shadow: inset 0 0 0 3px var(--accent); }
+.ch-sq.chk { box-shadow: inset 0 0 0 3px var(--harm); background: #4a1d1d; }
+.ch-sq.tgt::after { content: ""; position: absolute; width: 26%; height: 26%; background: var(--accent); opacity: 0.75; }
+.ch-sq.cap::after { content: ""; position: absolute; inset: 3px; border: 3px solid var(--accent); opacity: 0.8; }
+.ch-sq:focus-visible { outline: var(--focus); outline-offset: -2px; z-index: 1; }
+.ch-sq .rk, .ch-sq .fl { position: absolute; font-size: 10px; line-height: 1; color: var(--fg-mute); pointer-events: none; }
+.ch-sq .rk { top: 2px; left: 2px; }
+.ch-sq .fl { bottom: 2px; right: 3px; }
+.ch-promo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--s1); padding: var(--s2); background: var(--panel); border: var(--bw) solid var(--accent); max-width: 92%; }
+.ch-promo span { width: 100%; text-align: center; font-size: var(--t-xs); color: var(--fg-dim); }
+.ch-promo button { width: 52px; height: 52px; background: var(--sq-l); border: var(--bw) solid var(--line-hi); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; }
+.ch-promo button .pc { width: 100%; height: 100%; }
+.ch-promo button.x { width: auto; padding: 0 var(--s3); color: var(--fg-dim); background: none; font: inherit; font-size: var(--t-xs); }
+.ch-promo button:focus-visible { outline: var(--focus); }
+
+.ch-side { min-width: 0; }
+.ch-status { font-weight: 700; letter-spacing: 0.04em; margin-bottom: var(--s2); min-height: 1.5em; }
+.ch-talk { list-style: none; margin: 0 0 var(--s3); padding: 0; font-size: var(--t-xs); display: grid; gap: 2px; }
+.ch-talk li { color: var(--fg-mute); }
+.ch-talk li:first-child { color: var(--fg); }
+.ch-talk li.act { font-style: normal; }
+.ch-talk li.act::before { content: "* "; }
+.ch-moves { text-transform: none; list-style: none; margin: 0 0 var(--s3); padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(15ch, 1fr)); gap: 0 var(--s3); font-size: var(--t-xs); max-height: 12.5em; overflow-y: auto; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.ch-moves .n { color: var(--fg-mute); }
+
+/* the ladders */
+.ch-table { width: 100%; border-collapse: collapse; font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
+.ch-table th { text-align: left; color: var(--fg-mute); font-weight: 400; border-bottom: var(--bw) solid var(--line); padding: 2px var(--s1); }
+.ch-table td { padding: 3px var(--s1); border-bottom: var(--bw) solid rgba(31, 74, 44, 0.4); }
+.ch-table td a { color: var(--fg); }
+.ch-table tr.me td { color: var(--accent); }
+.ch-results { list-style: none; margin: 0; padding: 0; font-size: var(--t-xs); color: var(--fg-dim); display: grid; gap: var(--s1); }
+.ch-results li::before { content: "PA> "; color: var(--accent); }
+
+@media (max-width: 760px) {
+  .ch-play { grid-template-columns: minmax(0, 1fr); }
+  .ch-board { margin: 0 auto; }
+}

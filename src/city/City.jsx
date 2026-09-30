@@ -39,6 +39,7 @@ import PitPanel from "./PitPanel.jsx";
 import { pitEvents, boutAt, billLine, resultLine } from "./pit.js";
 import { tennisAt, tennisEvents } from "./tennis.js";
 import { planningLines } from "./planning.js";
+import { paLines as chessPa } from "../chess/park.js";   // PARK CHESS: results, the game on, the ladder
 import { actsNow } from "./acts.js";
 import { ensurePlans, knownSubjects, summaryOf, completeAt, checkDay, wantSectors, findBySlug, pinSubject, unpinSubject } from "./planClient.js";
 // The districts with a ground (the Arena, the Sprawl's estate pitch), and the PA's sign-off
@@ -249,6 +250,8 @@ export default function City({ route }) {
       if (calls.length) venues.push(calls[calls.length - 1].text);
       else if (m) venues.push(`THE TENNIS CLUB, ${m.name}: ${m.status}`);
     }
+    // PARK CHESS (src/chess/park.js): a result, the game on at a board, the ladder; with the venues
+    { const ch = chessPa(mt, here || null); if (ch.length) venues.push(ch[Math.floor(k / 4) % ch.length]); }
     // the civic record (civic.js): this district's mood and team inside one; swings and the table on the map
     const record = civicPaLines(civicOf(clock.day), here);
     if (civic.length && k % 5 === 3 && (!here || here === "commons")) setPa(civic[Math.floor(k / 5) % civic.length]);

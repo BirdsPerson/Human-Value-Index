@@ -6,6 +6,7 @@
 import { isCaseId } from "../lib/intake.js";
 import { getCase, deleteCase, removePenCard, hitLimit } from "../lib/store.js";
 import { deleteWallet, dropFromBoard } from "../lib/casino-store.js";
+import { deleteChess } from "../lib/chess-store.js";
 import { requireAccount, caseOwner, detachCase, revokeSession, clearCookie } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
@@ -39,6 +40,7 @@ export default async (req, context) => {
     await deleteCase(caseId);
     await removePenCard(caseId);
     await Promise.all([deleteWallet(caseId), dropFromBoard(caseId)]).catch(err => console.warn("purge: casino wallet", err?.message));
+    await deleteChess(caseId).catch(err => console.warn("purge: chess record", err?.message));
     if (owner) ({ accountDeleted } = await detachCase(owner, caseId));
     const extra = { "Cache-Control": "no-store" };
     if (accountDeleted) { await revokeSession(req).catch(() => {}); extra["Set-Cookie"] = clearCookie(); }

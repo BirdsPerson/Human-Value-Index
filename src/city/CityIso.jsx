@@ -33,6 +33,7 @@ import { drawCoastLot, drawCoastGround, drawSpurTracks, drawSpurStop, drawPod, c
 // THE MASTER PLAN's venues (venueGeo.js, venueDraw.js): THE PIT, the tennis club; the estate gardens' trees
 import { VENUE_LOTS, VENUE_PLACES, GARDEN_TREES } from "./venueGeo.js";
 import { drawVenueLot, venueLabel, venueLine } from "./venueDraw.js";
+import { drawChessTables } from "../chess/tableDraw.js";   // PARK CHESS: the stone tables on the Green and in the estate gardens
 
 // THE SUBSTRATE, SimCity-style: every building drawn in its own architecture (archGeo.js
 // massing, archDraw.js drawing: the projects, brownstones, the glass tower, the monolith...),
@@ -440,7 +441,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       }
       if (PARK_LOTS[b.id]) {
         const pid = PARK_LOTS[b.id];
-        const G = { ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, t: V.reduced ? 0 : performance.now() / 1000, hits: top ? [] : V.hits, w: V.cssW, h: V.cssH };
+        const G = { ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, t: V.reduced ? 0 : performance.now() / 1000, hits: top ? [] : V.hits, w: V.cssW, h: V.cssH , lookup: (slug) => V.bySlug?.get(slug) || null };
         const res = drawParkLot(G, b.id, lod, V.mt, V.park.get(pid) || [], V.parkSeats.get(pid) || null);
         V.parkSeats.set(pid, res.at);
         if (selected) poly([P(R.x0, R.y0, 0.02), P(R.x1, R.y0, 0.02), P(R.x1, R.y1, 0.02), P(R.x0, R.y1, 0.02)], null, "#4ade80");
@@ -468,6 +469,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
             ctx.fillStyle = i % 2 ? "#22c55e" : "#15803d"; ctx.beginPath(); ctx.arc(x, y, Math.max(2, V.cam.z * (b.id === "the-green" ? 0.6 : 0.3)), 0, Math.PI * 2); ctx.fill();
           }
         }
+        // PARK CHESS (src/chess/): the stone tables, their games and kibitzers
+        if (b.id === "the-green" || b.id === "estate-gardens") drawChessTables({ ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, t: V.reduced ? 0 : performance.now() / 1000, hits: top ? [] : V.hits, w: V.cssW, h: V.cssH, lookup: (slug) => V.bySlug?.get(slug) || null }, b.id, lod, V.mt);
         label();
         return;
       }
@@ -1246,6 +1249,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         if (h.panel) continue;
         if (h.kind === "p" && inBox(h)) { onOpenRef.current?.(h.s); return; }
         if (h.kind === "prefect" && inBox(h)) { openPrefect(h.id); return; }
+        if (h.kind === "chess" && inBox(h)) { window.location.hash = h.go; return; }   // PARK CHESS: sit at the table
         if (h.kind === "b" && inPoly(x, y, h.hull)) { unfollow(); select(V.sel === h.id ? null : h.id); return; }
       }
       if (V.sel) { unfollow(); select(null); }

@@ -18,6 +18,7 @@ import { findTarget } from "./find.js";
 import { displayName } from "../figures.js";
 import { rot, STOREY, DECK, LOD_NEAR } from "./iso.js";
 import { readPad, pressedSince } from "./gamepad.js";
+import { tableNear, tableGo } from "../chess/park.js";   // PARK CHESS: E at a stone table
 import {
   CTL, publishUi, keysVector, screenToMapDir, stepStreet, stepInside, stateFromTarget, loadControl, saveControl,
   doorOf, doorNear, groundAt, isClassified, benchNear, stationNear, stairFoot, platformPoint, platformStep,
@@ -116,6 +117,7 @@ export function makeIsoControl(K) {
     if (n.kind === "person") { K.onOpen(n.s); return; }
     if (n.kind === "door" || n.kind === "ground") { enter(n.b); return; }
     if (n.kind === "station") { climb(n.id); return; }
+    if (n.kind === "chess") { window.location.hash = n.go; return; }
     if (n.kind === "bench") { Object.assign(st, { mode: "bench", bench: n.bench, x: n.bench.x, y: n.bench.y }); return; }
     if (n.kind === "stand-bench") { const [x, y] = freeSpot(st.x, st.y + 0.5); Object.assign(st, { mode: "street", bench: null, x, y }); return; }
     if (n.kind === "sit") { st.seat = { placeId: n.placeId, i: n.i }; return; }
@@ -227,6 +229,8 @@ export function makeIsoControl(K) {
       if (V.ctlPeople) { let best = null, bd = PERSON_REACH; for (const p of V.ctlPeople) { const k = Math.hypot(p.x - st.x, p.y - st.y); if (k < bd) { bd = k; best = p.s; } } if (best) { near = { kind: "person", s: best, label: `READ THE FILE: ${nameOf(best)}` }; return; } }
       const dn = doorNear(st.x, st.y);
       if (dn) { near = { kind: "door", b: dn.b, label: isClassified(dn.b) ? "HEADQUARTERS (SEALED TO YOU)" : `ENTER ${dn.b.name}` }; return; }
+      const ct = tableNear(st.x, st.y);
+      if (ct) { const tg = tableGo(ct, mt); near = { kind: "chess", go: tg.go, label: tg.vs ? `PLAY CHESS: SIT ACROSS ${tg.vs.name}` : "PLAY CHESS AT THE TABLE" }; return; }
       const g = groundAt(st.x, st.y);
       if (g) { near = { kind: "ground", b: g, label: `STEP INTO ${g.name}` }; return; }
       const sid = stationNear(st.x, st.y);

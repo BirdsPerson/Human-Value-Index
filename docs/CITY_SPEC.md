@@ -254,7 +254,7 @@ recovery, nobody falls), `swim` (for the Coast: under water from the waist, a cr
 `deal` and `chips` (the casino), `arcade` (hands on the controls), `type`, `sweep`, `carry`
 (a box), `phone`; since the master plan, `box` (the guard, a bob, a jab into the air: THE PIT's
 ring, gloves drawn), `grapple` (the octagon's low stance and a check kick) and `tennis` (ready,
-backswing, contact, follow-through, a racket), all stylised: nobody is struck, nobody falls. Props the move needs (cards, chips, a box, a broom, a club, poles and skis,
+backswing, contact, follow-through, a racket), all stylised: nobody is struck, nobody falls. Since park chess (below), `chessmove` (a reach over the board with a piece between the fingers), `chinstroke` and `clocktap`. Props the move needs (cards, chips, a box, a broom, a club, poles and skis,
 a board, a phone, the waterline) are drawn by the rig, a few pixels each.
 
 **API** (browser):
@@ -1360,3 +1360,62 @@ the PA), `simApi.js` (boards and PA). Check: `scripts/check-civic.mjs` section 3
   Courts, one closed-doors line a matchday, the Cup's leader and the champions. Before day 337 the
   hub shows the mixed league and the date. Dev: `window.__HVI_CIVIC_PREVIEW__` (a civic block) is
   read in place of the summary under `vite` only.
+
+
+## Park chess (2026-09-30)
+
+Scott: "what happened to the chess boards in the park? Are those there?" They were on the roadmap (b2)
+and never built. Now: stone tables (Washington Square's, more or less) in the green spaces, the city's
+figures playing each other on them all day with a crowd of kibitzers, THE PARK CHESS LADDER, and a
+real game of chess against any figure the Department will seat. Code: `src/chess/`.
+
+- **The tables** (`park.js TABLES`, placed from the lots' own rectangles): two on THE RECREATION
+  GROUND's north-east lawn beside the fountain's ring (the groundskeeper's anchor moved round to the
+  east lawn to make room), a row of three across THE GREEN (the Commons), two beside the path through
+  THE ESTATE GARDENS (the master plan's green for the Sprawl), placed where its trees leave room.
+- **Who plays** (`roster.js`): the chess players on file first, with the Department's own park rating
+  (0..99, set like the Pit's fighters): Bobby Fischer 99, Peter Thiel 82, Stanley Kubrick 80 (he
+  hustled chess in Washington Square), Alan Turing 70, Benjamin Franklin 68, RZA 66, Karl Marx 64,
+  Bill Gates 45; then the file's strongest (rating from competence x 0.55 + adaptability x 0.25,
+  capped at 78; the top fourteen at 60 and up); then eight nameless regulars (THE MAN WITH THE THERMOS,
+  AN UNLICENSED SPEED HUSTLER, A PIGEON FEEDER...) drawn with procedural avatars that never open.
+  Nobody whose file documents grave harm sits: a `harm` band, the SOYLENT GREEN tier, threat 80+.
+- **The day** (`park.js`): open 07:00-23:00, a game per 45 machine minutes per table, pairings hashed
+  per day, slot and table (chess players weighted first, close ratings favoured, a mismatch now and
+  then). Results from the two park ratings (Elo expectation) and a hashed luck; draws likelier between
+  strong, even players; decisive mismatches are short. The last stretch of a slot the result stands.
+  Pairings and results read the park ratings only, so a day's games are the same however the ladder
+  is counted. **THE LADDER**: Elo, K 24, over the last 120 machine days, fixed at the start of each
+  machine day (today's games move tomorrow's). Every viewer sees the same games and the same ladder.
+- **Drawn** (`tableDraw.js`; hooks: `parkDraw.recGround`, CityIso's open-lot branch for the Green and
+  the gardens): stone top on a pedestal, the board inlaid (8x8 up close), two stone stools, the clock;
+  the one to move reaches over the board with a piece (`chessmove`) and taps the clock (`clocktap`),
+  the other strokes a chin (`chinstroke`); kibitzers (ladder players not at a board, more round a
+  chess player on file) stroke chins, point, clap or shrug a result; the pieces left on the board thin
+  out as the game goes on. Over: the winner talks it through (`sittalk`), the loser `facepalm`s, a
+  draw is two shrugs. Players are drawn by projection (the Pit's pattern).
+- **The PA** (`park.paLines`, in City.jsx with the venues): a result from the last hour ("FISCHER BEAT A
+  PIGEON FEEDER IN 14 MOVES. THE PIGEONS ARE APPEALING."; upsets, routs, long grinds and draws have
+  their own), the game on at a board, the ladder's top three (on the map and in the Arena).
+- **Play a figure** (`#chess?vs=<slug>[&table=<id>]`, `Chess.jsx`): tap a table (you sit across the
+  stronger figure at it) or E at one while driving yourself, or pick from the list. Full rules
+  (`rules.js`: 0x88, castling, en passant, promotion to any piece, check, mate, stalemate, threefold,
+  fifty moves, dead material; SAN; perft-checked). The figure's engine (`engine.js`) runs in a Web
+  Worker: iterative-deepening alpha-beta, a node budget (never a clock: deterministic), strength from
+  the park rating: >= 95 sees 5 plies, 80-94 4, 65-79 3, 45-64 2, below 1; >= 55 also searches every
+  capture to the end; every position misjudged by up to (100 - rating) x 2.2 centipawns (fixed per
+  position and game); below 50 a blunder in (50 - rating) / 160 of its moves; threat on file makes it
+  attack the king. The dead talk (their own written lines, or the house's); the living only act
+  ("PETER THIEL ADJUSTS A PIECE THAT WAS ALREADY STRAIGHT."). Tap-to-move, 44 px squares at 390, pixel
+  pieces, the move list, resign.
+- **On file** (`/api/chess`, `netlify/lib/chess-store.js`, `chess-verify.js`): the server deals a game
+  (a seed for the figure's engine) and files the result only when it replays: every move legal, the
+  end real (or a resignation), a sample of the figure's moves (always the last) re-played by the
+  engine with the game's seed, at least 1.2 s a move since the deal, a win at least five moves, the
+  same winning line never twice, one result per game, 40 starts and 40 results an hour. A citizen
+  rating (Elo from 1200, K 32, against the figure's park rating), a leaderboard (case last-4 only,
+  with the best scalp) and lines on MY FILE ("DEFEATED BOBBY FISCHER. THE DEPARTMENT DOUBTS IT.").
+  No stakes, no prizes. The purge deletes the record.
+- **Checks** (`scripts/check-chess.mjs`): perft on seven standard positions (start depth 4 = 197281),
+  special moves and every draw rule, engine determinism and strength ordering by self-play, the
+  roster's content rules, the tables' ground, the ladder's determinism, the API end to end.

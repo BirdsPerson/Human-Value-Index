@@ -13,6 +13,7 @@ import { QuestLog } from "./QuestLog.jsx";
 import { visitCount, causeOf, DEPARTMENT_CAUSES } from "./movement.js";
 import { FileMovement } from "./caseFile.jsx";
 import MySeat from "./elections/MySeat.jsx";
+import MyChess from "./chess/MyChess.jsx";
 
 // The shared file pieces moved to caseFile.jsx; re-exported so older imports keep working.
 export { readCaseId, writeCaseId, readLastResult, syncFile, ScoreCard, Breakdown, AppealPanel, CaseLogon, DIM_ORDER, MAX_APPEAL } from "./caseFile.jsx";
@@ -614,6 +615,8 @@ export default function Intake({ view = "intake" }) {
           </div>
           {/* a council seat this file's citizen won (src/elections/MySeat.jsx): decline or resign */}
           <MySeat caseId={caseId} />
+          {/* games against the figures at the stone tables (src/chess/MyChess.jsx) */}
+          <MyChess caseId={caseId} />
           {fileSections(last, { history: last.history })}
           <div className="hvi-note">CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
         </div>
