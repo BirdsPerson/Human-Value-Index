@@ -114,7 +114,7 @@ export default function Docket() {
           </ul>
         </Frame>
       )}
-      <Frame title="THE ACTS OF THE ASSEMBLY" meta={view ? `${view.acts.length} ON RECORD` : "…"}>
+      <Frame title="THE ACTS OF THE ASSEMBLY" meta={view ? String(view.acts.length) : "…"}>
         {view?.acts?.length ? (
           <ul className="dk-list">
             {view.acts.slice().reverse().map(a => (

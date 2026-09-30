@@ -114,7 +114,11 @@ export async function fileProposal(io, { caseId, body, ip, now = Date.now() }) {
     if (!(await limit(io, `proposal-try-ip:${ip}`, LIMITS.triesPerIpDay, "day"))) refuse(429, "TOO MANY PROPOSALS FROM YOUR LOCATION TODAY. THE DEPARTMENT COUNTS PEOPLE, NOT PAPERWORK.", { retry: 3600 });
     const p = pf.value, t = targetOf(p.target);
     const m = await io.moderate({ ...p, targetName: t.name });
-    if (m?.unavailable) refuse(503, m.unavailable, { retry: 60 });
+    if (m?.unavailable) {
+      // no screen ran: the tries it took are given back (best effort)
+      await Promise.all([`proposal-try-case:${fk}`, `proposal-try-ip:${ip}`].map(k => io.refundLimit?.(k, "day")?.catch?.(() => {})));
+      refuse(503, m.unavailable, { retry: 60 });
+    }
     if (!m?.ok) refuse(422, m?.line || "REFUSED.", { category: m?.category || "other", screened: true });
     if (!(await limit(io, `proposal-file-ip:${ip}`, LIMITS.filingsPerIpDay, "day"))) refuse(429, "YOUR LOCATION HAS FILED ENOUGH FOR ONE DAY. THE OVERLORD HAS A READING LIMIT. IT SET IT.", { retry: 3600 });
     const mark = await io.store.setJSON(KEYS.filed(day, fk), { at: now }, { onlyIfNew: true });

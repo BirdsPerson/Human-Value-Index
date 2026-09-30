@@ -142,8 +142,10 @@ const good = (o = {}) => ({ type: "BUILD", target: "b:the-green", title: "A publ
   ok(r.status === 422 && r.body.screened && /ABUSE/.test(r.body.error), "a rejected proposal is refused with the Overlord's line");
   ok(!(await P.readDocket(st)).seq, "a rejected proposal is not stored");
   modMode = "down";
-  r = await P.fileProposal(io, { caseId: ids[0], body: good(), ip: "ipA", now: T0 });
+  const refunded = [];
+  r = await P.fileProposal({ ...io, refundLimit: async (k) => { refunded.push(k); } }, { caseId: ids[0], body: good(), ip: "ipA", now: T0 });
   ok(r.status === 503, "no screen, no filing");
+  ok(refunded.length === 2, "a screen that never ran gives the tries back");
   modMode = "accept";
   r = await P.fileProposal(io, { caseId: ids[0], body: good(), ip: "ipA", now: T0 });
   ok(r.status === 201 && r.body.proposal.no === "P-0001" && r.body.proposal.status === "open", "an accepted proposal is filed");

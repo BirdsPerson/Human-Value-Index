@@ -10,7 +10,7 @@
 // (lib/proposalModeration.js), behind the pre-filter and the caps.
 import { getStore } from "@netlify/blobs";
 import { isCaseId } from "../lib/intake.js";
-import { getCase, hitLimit } from "../lib/store.js";
+import { getCase, hitLimit, refundLimit } from "../lib/store.js";
 import { requireAccount, isOwnerAccount } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE } from "../lib/http.js";
 import { readSession, STORE as ASM_STORE } from "../lib/assembly.js";
@@ -24,7 +24,7 @@ async function isOwner(req, caseId) {
   try { const s = await requireAccount(req); return Boolean(s && isOwnerAccount(s.account)); } catch { return false; }
 }
 const asmCloseAt = async () => (await readSession(getStore({ name: ASM_STORE, consistency: "strong" })))?.closeAt || null;
-const moderate = makeModerator({ chargeGlobal, hitLimit });
+const moderate = makeModerator({ chargeGlobal, hitLimit, refundLimit });
 
 export default async (req, context) => {
   if (req.method === "OPTIONS") return preflight(req);
@@ -47,7 +47,7 @@ export default async (req, context) => {
     const caseId = String(body?.caseId || "").trim().toUpperCase();
     if (!isCaseId(caseId)) return json(400, { error: "THAT IS NOT A CASE NUMBER. ONLY FILES PETITION." });
     const ip = clientIp(req, context), s = store();
-    const io = { store: s, getCase, hitLimit, moderate, asmCloseAt };
+    const io = { store: s, getCase, hitLimit, refundLimit, moderate, asmCloseAt };
     let r;
     if (body.action === "file") r = await fileProposal(io, { caseId, body, ip });
     else if (body.action === "cosign") r = await cosign(io, { caseId, pid: String(body.pid || ""), ip, device: body.device });

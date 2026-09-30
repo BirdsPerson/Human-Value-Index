@@ -59,13 +59,14 @@ export function readVerdict(raw) {
   return { ok: false, category, line: refusalLine(category, v?.line) };
 }
 
-// The live screen. deps: {chargeGlobal(n), hitLimit(key, max, window)} so the caps are the
+// The live screen. deps: {chargeGlobal(n), hitLimit(key, max, window), refundLimit?} so the caps are the
 // site's own counters. -> {ok} | {ok: false, category, line} | {unavailable: line}
-export function makeModerator({ chargeGlobal, hitLimit, call = claudeText }) {
+export function makeModerator({ chargeGlobal, hitLimit, refundLimit = null, call = claudeText }) {
   return async (p) => {
     let budget;
     try {
-      budget = (await hitLimit("proposal-mod-global", MOD_DAILY, "day")).ok && (await chargeGlobal(1));
+      budget = (await hitLimit("proposal-mod-global", MOD_DAILY, "day")).ok;
+      if (budget && !(await chargeGlobal(1))) { budget = false; await refundLimit?.("proposal-mod-global", "day").catch(() => {}); }
     } catch {
       return { unavailable: "THE CENSOR'S LEDGER IS UNAVAILABLE. NOTHING IS FILED OFF THE BOOKS. TRY AGAIN SHORTLY." };
     }
