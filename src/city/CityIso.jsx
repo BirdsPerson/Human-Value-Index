@@ -10,6 +10,7 @@ import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox,
 import { wantSectors } from "./planClient.js";
 import { loopPieces, trainPoses, carCorners, carBox, stationGeo, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
+import { casinoHits } from "../casino/cityRooms.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
 import { greet } from "./rigReact.js";
 import { PARK_LOTS, PARK_PLACES, fieldRole } from "./parkGeo.js";
@@ -914,9 +915,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     function drawRoomCut(b, f, pid, rx, ry, rw, rh, many, mt, now, live) {
       const u = Math.max(1, Math.round(rh / 40));
       const sh = clampN(Math.round(rh * 0.42), 16, 64), sw = sh * (SPRITE_W / SPRITE_H);
-      const pk = `${pid}|${typeOf(pid)}|${Math.round(rw)}|${rh}|${sh}`;
+      const rt = typeOf(pid, f.code);
+      const pk = `${pid}|${rt}|${Math.round(rw)}|${rh}|${sh}`;
       let plan = V.plans.get(pk);
-      if (!plan) { plan = roomPlan(typeOf(pid), rw, rh, sw, Math.round(PLACES[pid].cap / PLACES[pid].floors.length)); V.plans.set(pk, plan); }
+      if (!plan) { plan = roomPlan(rt, rw, rh, sw, Math.round(PLACES[pid].cap / PLACES[pid].floors.length)); V.plans.set(pk, plan); }
+      // the casino's tables answer a tap with their game; pushed first, so people on top win
+      if (live) for (const h of casinoHits(plan, rx, ry)) V.hits.push({ kind: "casino", panel: true, go: h.go, box: h.box });
       const hour = ((mt % 24) + 24) % 24;
       const hq = b.id === "hq";
       const rk = `${b.id}|${f.index}|${pid}`;
@@ -1184,7 +1188,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         for (let i = V.hits.length - 1; i >= 0; i--) {
           const h = V.hits[i];
           if (!h.panel || !inBox(h)) continue;
-          if (h.kind === "close") { unfollow(); select(null); } else if (h.kind === "funnel") openFunnel(h.spec); else onOpenRef.current?.(h.s);
+          if (h.kind === "close") { unfollow(); select(null); } else if (h.kind === "funnel") openFunnel(h.spec); else if (h.kind === "casino") window.location.hash = h.go; else onOpenRef.current?.(h.s);
           return;
         }
         return;

@@ -263,6 +263,12 @@ function tool(c, act, x, top, p, flip, t, ph, seated) {
       R(c, "#8a6a42", hx + side * 2 * p, top + 18 * p, p, 24 * p);
       R(c, act === "dig" ? "#6b7280" : "#a16207", hx + side * 2 * p - p, top + 42 * p, 4 * p, 2 * p);
       break;
+    case "gamble": case "wager": {
+      // a stack of chips in hand, pushed out and pulled back; now and then one more goes on
+      const n = 1 + Math.floor(frac(t / 3.5 + ph) * 3), out = t > 0 && every(t, 2.6, 0.3, ph) ? side * 3 * p : 0;
+      for (let k = 0; k < n; k++) R(c, k % 2 ? "#c9a227" : "#fbbf24", hx - p + out, hy - 2 * p - k * p, 3 * p, p);
+      break;
+    }
     case "deal": case "sell":
       if (t > 0 && every(t, 2.2, 0.4, ph)) R(c, act === "deal" ? "#e5e5e5" : "#f97316", hx + side * 4 * p, hy - 2 * p, 3 * p, 2 * p);
       break;

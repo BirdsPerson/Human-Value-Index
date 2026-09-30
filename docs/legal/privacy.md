@@ -66,6 +66,7 @@ A sweep runs once a day and deletes whatever has passed these limits.
 - **Sign-in links:** single use, expire after 15 minutes, and are deleted within a day after that.
 - **Sessions:** 30 days, or until you log out. Expired sessions are deleted within a day.
 - **Dispute requests:** **2 years** after they are filed, then deleted. The copy emailed to the operator's inbox is deleted on the same 2-year schedule.
+- **Casino chips:** the play-chip balance and any table in progress are stored under the case number, and deleted with the file (purged or expired). The weekly casino board shows only the last four characters of a case number.
 - **Rate-limit counters:** hashed, and deleted **7 days** after the hour, day or month they count.
 
 ## Purge your file

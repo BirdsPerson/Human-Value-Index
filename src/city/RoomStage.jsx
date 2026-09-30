@@ -7,6 +7,7 @@ import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES
 import { fieldRole } from "./parkGeo.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
 import { greet } from "./rigReact.js";
+import { casinoTap } from "../casino/cityRooms.js";
 import { FONT, SubjectTip } from "./cityUi.jsx";
 
 // Rooms as terminal boxes on one canvas, with the subjects the census puts in each one
@@ -101,7 +102,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         const { w: rw, h: rh } = V.rects[i];
         const cols = Math.floor((rw - 4) / V.cw), rows = Math.floor((rh - 6) / ch);
         const ix = 2 + V.cw, iy = 16, iw = 2 + (cols - 1) * V.cw - ix, ih = 2 + (rows - 1) * ch + 4 - iy;
-        return { ix, iy, iw, ih, plan: roomPlan(typeOf(placeOf[i]), iw, ih, sw, c.cap || null), u: Math.max(1, Math.round(ih / 50)) };
+        return { ix, iy, iw, ih, plan: roomPlan(typeOf(placeOf[i], c.floorCode), iw, ih, sw, c.cap || null), u: Math.max(1, Math.round(ih / 50)) };
       });
       V.seats = cells.map(() => null);
       V.seenV = -1;   // re-seat everyone on the new plans
@@ -544,6 +545,10 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
       const e = hit(x, y, touch);
       if (!e) {
         hideTip();
+        // a casino table opens its game (src/casino/cityRooms.js)
+        const ri = V.rects.findIndex(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h), G = ri >= 0 ? V.geo[ri] : null;
+        const game = G && casinoTap(G.plan, x - V.rects[ri].x - G.ix, y - V.rects[ri].y - G.iy);
+        if (game) { window.location.hash = game; return; }
         const c = cellAt(x, y);
         if (c && cb.current.onCell) cb.current.onCell(c);
         return;

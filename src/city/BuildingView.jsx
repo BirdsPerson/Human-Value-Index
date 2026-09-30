@@ -6,6 +6,7 @@ import { Occupant } from "./cityUi.jsx";
 import { ListRow } from "../ui/index.js";
 import { funnelButtons } from "./funnels.js";
 import { openFunnel } from "./FunnelOverlay.jsx";
+import CasinoDoor from "../casino/CasinoDoor.jsx";
 
 // #city/<district>/<building>[?floor=N]: one building in cross-section, SimTower-style.
 // Floors stacked top to bottom with the lift shaft down the left; each floor's rooms
@@ -48,7 +49,7 @@ function Floors({ b, floor, censusRef, onOpen, onFloor }) {
   // top floor first, as a lobby directory reads; floors with no rooms on record are skipped
   const floorsDesc = useMemo(() => b.floors.slice().reverse(), [b]);
   const cells = useMemo(() => floorsDesc.flatMap(f => f.places.map(pid => ({
-    id: cellId(f.index, pid), floor: f.index, placeId: pid,
+    id: cellId(f.index, pid), floor: f.index, placeId: pid, floorCode: f.code,
     title: `${f.code} // ${f.name}`,
     // the room's own name, when the building holds more than one kind of room
     tag: b.places.length > 1 && f.name !== placeName(pid) ? placeName(pid) : undefined,
@@ -100,6 +101,7 @@ function Floors({ b, floor, censusRef, onOpen, onFloor }) {
           {funnelButtons(b.id).map(f => <button key={f.label} type="button" className="hvi-city-zb txt" aria-label={f.aria} onClick={() => openFunnel(f.spec)}>{f.label}</button>)}
         </div>
       )}
+      {b.id === "casino" && <CasinoDoor />}
       <RoomStage key={b.id} cells={cells} layout={layout} assign={assign} censusRef={censusRef} onOpen={onOpen} onPresent={setPresent} onCell={onCell} focusId={focusCell} focusScroll={focusScroll}
         ariaLabel={`${b.name}, in cross-section: ${b.floors.length} floors, ${total} subjects present. The floor directory below lists everyone by floor.`} />
       <div className="hvi-city-floors hvi-city-in" role="list" aria-label="Floor directory">

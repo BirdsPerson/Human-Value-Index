@@ -15,6 +15,7 @@
 
 import { lotPhase, machineClock } from "./sim.js";
 import { FUNNEL_ROOM_TYPE, FUNNEL_LOOK, FUNNEL_ACTS, funnelPlans, funnelPropDrawers, funnelRooms, withTv } from "./funnelProps.js";
+import { floorRoomType, casinoPlans, casinoLook, casinoDraw, casinoLive, casinoProps } from "../casino/cityRooms.js";
 
 // place id -> interior type
 export const ROOM_TYPE = {
@@ -42,7 +43,11 @@ export const ROOM_TYPE = {
 // LOT 0x6F07 changes with THE ASSEMBLY's decision (sim.lotPhase): scrub and a site read as
 // the street; the course as a park; the farm as an allotment.
 const LOT_TYPE = { golf: "park", farm: "allotment" };
-export const typeOf = (placeId) => {
+// floor (optional): the floor's code; a building can furnish its floors differently (the
+// casino's tables and high limit room, src/casino/cityRooms.js).
+export const typeOf = (placeId, floor = null) => {
+  const ft = floorRoomType(placeId, floor);
+  if (ft) return ft;
   if (placeId === "dev-lot") { const p = lotPhase(machineClock().mt); return (p.phase === "built" && LOT_TYPE[p.winner]) || "street"; }
   return ROOM_TYPE[placeId] || "office";
 };
@@ -277,6 +282,8 @@ const PLANS = {
   },
 };
 funnelPlans(PLANS, { A, M, P, SIDE });   // new rooms, and a JETSAM! cabinet in the bars, the diner, the casino
+Object.assign(PLANS, casinoPlans({ A, M, P }));
+Object.assign(LOOK, casinoLook);
 export const PLANNED_TYPES = Object.keys(PLANS);
 
 // Rooms deep enough for two rows get a back row, smaller and set up the wall.
@@ -422,7 +429,7 @@ export function assignAnchors(anchors, people, prev = null, hour = null, ordered
 // on by day; a worker on shift never sits about. More staff than stations (the sim drafts
 // general labour where it likes) puts the rest to work at the tables: a waiter at a café
 // table, a vendor among the crates, a warden by the cots.
-export const LEISURE_ACTS = new Set(["drink", "eat", "talk", "read", "write", "listen", "pray", "watch", "gamble", "rest", "sleep", "sit", "wait", "shop", "stroll", "loiter", "cheer", "view",
+export const LEISURE_ACTS = new Set(["drink", "eat", "talk", "read", "write", "listen", "pray", "watch", "gamble", "wager", "rest", "sleep", "sit", "wait", "shop", "stroll", "loiter", "cheer", "view",
   "pitch", "bat", "ready", "catch", "shoot", "dribble", "defend", "feed",
   "snap", "stance", "throw", "receive", "wrap", "carry", "kick", "footwork", "kickball", "header", "keeper", "mark", "chase", ...FUNNEL_ACTS]);
 // Rooms whose people take their places in order (a game needs its battery first).
@@ -458,7 +465,7 @@ const blink = (t, hz, ph = 0) => ((t * hz + ph) % 1 + 1) % 1 < 0.5;
 // row's occupants (the caller knows who sits where).
 //   o: {t: seconds (0 when motion is reduced), hour: machine hour, plan, people}
 export function drawRoom(c, placeId, x, y, w, h, u = 2, o = {}) {
-  const type = typeOf(placeId);
+  const type = o.plan?.type || typeOf(placeId);
   const [wall, floor] = LOOK[type] || LOOK.office;
   const t = o.t || 0, hour = o.hour ?? 12;
   const home = type === "hab" || type === "lofts" || type === "suite" || type === "barracks";
@@ -746,6 +753,7 @@ const DRAW = {
 };
 const FUNNEL_ROOMS = funnelRooms();
 Object.assign(DRAW, FUNNEL_ROOMS.DRAW);
+Object.assign(DRAW, casinoDraw({ R, across }));
 export const DRAWN_TYPES = Object.keys(DRAW);
 
 // ---- ambient life: subtle, in the terminal palette; still when motion is reduced --------
@@ -1078,3 +1086,7 @@ export const PROP = {
   streetBench: { back(c, X, Y, W, p, t, a) { PROP.parkBench.back(c, X, Y, W, p, t, a); } },
 };
 Object.assign(PROP, funnelPropDrawers({ SIDE }));   // cabinets, standees, the shop counter, the EBSN desk
+
+// HOUSE EDGE CASINO's floors: ambient light and table furniture (src/casino/cityRooms.js).
+Object.assign(LIVE, casinoLive({ R, across }));
+Object.assign(PROP, casinoProps({ R }));

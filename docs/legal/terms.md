@@ -53,3 +53,7 @@ These terms may change. The date at the top says when they last did.
 ## 9. Governing law
 
 These terms are governed by the laws of the State of New Jersey, USA, without regard to its conflict-of-law rules. Any dispute arising from them or from the site is brought in the state or federal courts located in New Jersey.
+
+## 10. The casino
+
+The [HOUSE EDGE CASINO](#casino) uses **play chips only**. House chips are a free daily allowance on an assessed case file. They **cannot be bought**, cashed out, sold, transferred or gifted to another player, or exchanged for money, goods or anything else of value, and there are **no prizes**. They have no value outside the game and may be reset or removed at any time. The games use real probability and a real house edge, as stated on each table; the figures you play against are simulations, not the people. You must be 16 or older to play, as for everything else here.

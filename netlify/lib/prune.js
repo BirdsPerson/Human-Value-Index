@@ -9,6 +9,7 @@
 import { getStore } from "@netlify/blobs";
 import { isCaseId } from "./intake.js";
 import { deleteCase, removePenCard } from "./store.js";
+import { deleteWallet } from "./casino-store.js";
 import { caseOwner, detachCase } from "./auth.js";
 import { YOUR_CAUSES, causeOf } from "../../src/movement.js";
 
@@ -123,6 +124,7 @@ export async function prune({ now = Date.now(), dryRun = false, budgetMs = BUDGE
       await removePenCard(id);
       const owner = await caseOwner(id);
       if (owner) await detachCase(owner, id);
+      await deleteWallet(id);   // the casino's chips go with the file
       await deleteCase(id);
     } catch (err) { report.errors++; console.error("prune case failed", err?.name); } }));
     last = chunk[chunk.length - 1];

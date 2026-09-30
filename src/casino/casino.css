@@ -1,0 +1,123 @@
+/* HOUSE EDGE CASINO. The terminal's own tokens; gold (--warn) is the only extra meaning:
+   chips and the high limit room. Red suits and red numbers use --harm. */
+.cz { --felt: #0b1f12; --gold: var(--warn); }
+.cz-p { margin: 0 0 var(--s3); }
+.cz-fine { font-size: var(--t-xs); color: var(--fg-mute); margin: var(--s3) 0 0; }
+.cz-fine a, .cz-p a { color: var(--fg-dim); }
+.cz-dim { color: var(--fg-mute); }
+.cz-small { font-size: var(--t-xs); }
+.cz-warn { color: var(--warn); }
+.cz-win { color: var(--accent); }
+.cz-lose { color: var(--harm); }
+.cz-err { color: var(--harm); margin: var(--s2) 0; }
+.cz-big { font-size: var(--t-l); color: var(--fg); font-weight: 700; letter-spacing: 0.04em; }
+.cz-sub-h { font-size: var(--t-xs); color: var(--fg-mute); margin: var(--s3) 0 var(--s1); letter-spacing: 0.04em; }
+.cz-kv { display: grid; grid-template-columns: 11ch minmax(0, 1fr); column-gap: 1ch; row-gap: var(--s1); margin: 0 0 var(--s3); align-items: center; }
+.cz-kv .k { color: var(--fg-mute); font-size: var(--t-xs); }
+.cz-kv .v { min-width: 0; overflow-wrap: anywhere; }
+.cz-chips { color: var(--gold); font-weight: 700; }
+.cz-rooms { margin-top: var(--s3); }
+.cz-high { --line: #6b5314; }
+.cz-high .ui-frame-ttl .t { color: var(--gold); }
+
+.cz-tabs { display: flex; gap: 0; border-bottom: var(--bw) solid var(--line); margin-bottom: var(--s3); overflow-x: auto; }
+.cz-tab { background: none; border: 0; color: var(--fg-dim); padding: 0 var(--s3); min-height: var(--hit-min); cursor: pointer; letter-spacing: 0.04em; white-space: nowrap; }
+.cz-tab.on { background: var(--accent); color: var(--accent-ink); }
+.cz-tab:focus-visible { outline: var(--focus); outline-offset: -2px; }
+
+/* cards */
+.cz-hand { display: inline-flex; gap: 4px; flex-wrap: wrap; vertical-align: middle; }
+.cz-card { display: inline-flex; align-items: center; justify-content: center; min-width: 3.2ch; height: 36px; padding: 0 3px; border: var(--bw) solid var(--fg-dim); background: #e8efe8; color: #0a0f0a; font-weight: 700; font-size: var(--t-m); text-transform: none; }
+.cz-card.red { color: #b91c1c; }
+.cz-card.back { background: repeating-linear-gradient(45deg, #14532d 0 3px, #0d140d 3px 6px); color: transparent; border-color: var(--line-hi); }
+.cz-card.sm { height: 26px; min-width: 2.8ch; font-size: var(--t-s); }
+
+/* sprites (the first frame of a figure's sheet) */
+.cz-sprite { flex: none; display: inline-flex; align-items: center; justify-content: center; background-repeat: no-repeat; background-size: auto 100%; background-position: 0 0; image-rendering: pixelated; border: var(--bw) solid var(--line); background-color: #0d140d; }
+.cz-sprite.s { width: 32px; height: 48px; }
+.cz-sprite.m { width: 40px; height: 60px; }
+.cz-sprite .ini { color: var(--fg-mute); font-size: var(--t-xs); }
+
+/* roulette */
+.cz-rl-top { display: grid; grid-template-columns: auto minmax(180px, 260px) minmax(0, 1fr); gap: var(--s4); align-items: start; }
+.cz-rl-top .cz-layout { margin: 0; }
+@media (max-width: 900px) { .cz-rl-top { grid-template-columns: auto minmax(0, 1fr); } .cz-rl-top .cz-layout { grid-column: 1 / -1; grid-row: 2; } }
+@media (max-width: 640px) { .cz-rl-top { grid-template-columns: 1fr; } .cz-rl-top .cz-layout { grid-row: auto; order: 3; } .cz-rl-side { order: 2; } }
+.cz-wheel-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--s2); }
+.cz-wheel { display: block; max-width: 100%; height: auto; }
+.cz-hist { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; max-width: 260px; font-size: var(--t-xs); }
+.cz-num { display: inline-block; min-width: 3ch; text-align: center; padding: 0 2px; border: var(--bw) solid var(--line); }
+.cz-num.red { color: #fecaca; background: #7f1d1d; border-color: #7f1d1d; }
+.cz-num.black { color: var(--fg); background: #0d140d; }
+.cz-num.green { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.cz-outside { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.cz-ob { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: var(--hit-min); background: #0d140d; color: var(--fg); border: var(--bw) solid var(--line-hi); cursor: pointer; letter-spacing: 0.03em; }
+.cz-ob small { color: var(--fg-mute); font-size: 10px; }
+.cz-ob.red { color: #fecaca; background: #3f0f0f; border-color: #7f1d1d; }
+.cz-ob:active, .cz-cell:active { transform: translateY(1px); }
+.cz-layout { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; margin: var(--s3) 0; max-width: 420px; }
+.cz-cell { min-height: 34px; border: var(--bw) solid var(--line-hi); background: #0d140d; color: var(--fg); font-weight: 700; cursor: pointer; position: relative; }
+.cz-cell.red { background: #3f0f0f; color: #fecaca; border-color: #7f1d1d; }
+.cz-cell.zero { grid-column: 1 / -1; background: #0f2a18; color: var(--accent); border-color: var(--accent-dim); }
+.cz-cell.on::after { content: ""; position: absolute; right: 4px; top: 50%; width: 9px; height: 9px; margin-top: -5px; border-radius: 50%; background: var(--gold); box-shadow: inset 0 0 0 2px #7a5a14; }
+.cz-cell.pick { outline: 2px solid var(--gold); outline-offset: -2px; }
+.cz-cell.hit { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cz-bets { margin: var(--s2) 0; }
+.cz-betrow { display: grid; grid-template-columns: minmax(0, 1fr) 6ch 7ch 3ch; gap: 1ch; align-items: center; font-size: var(--t-s); border-bottom: var(--bw) dotted var(--line); }
+.cz-x { background: none; border: 0; color: var(--harm); min-height: 32px; cursor: pointer; font-size: var(--t-m); }
+.cz-result { margin: var(--s3) 0; padding: var(--s2) var(--s3); border: var(--bw) solid var(--line-hi); background: var(--panel); }
+
+/* felt (blackjack, baccarat) */
+.cz-felt { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); background: var(--felt); border: var(--bw) solid #1f4a2c; padding: var(--s3); }
+@media (max-width: 560px) { .cz-felt { grid-template-columns: 1fr; } }
+.cz-seat .cz-sub-h { margin-top: 0; }
+.cz-seat.won { outline: 1px solid var(--accent); outline-offset: 4px; }
+.cz-bjhand { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin-bottom: var(--s2); padding: 2px 0; }
+.cz-bjhand.cur { border-left: 3px solid var(--gold); padding-left: var(--s2); }
+.cz-stake { display: grid; grid-template-columns: 14ch 6ch minmax(0, 1fr); gap: 1ch; align-items: center; margin: var(--s2) 0; }
+.cz-stake .k { font-size: var(--t-xs); color: var(--fg-mute); }
+.cz-stake .v { color: var(--gold); font-weight: 700; text-align: right; }
+@media (max-width: 560px) { .cz-stake { grid-template-columns: 1fr 6ch; } .cz-stake .ui-chips { grid-column: 1 / -1; } }
+.cz-offer { margin: var(--s3) 0; }
+
+/* poker */
+.cz-ptable { background: var(--felt); border: var(--bw) solid #1f4a2c; padding: var(--s3); display: flex; flex-direction: column; gap: var(--s3); }
+.cz-pseats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s2); }
+.cz-pseat { display: flex; gap: var(--s2); align-items: flex-start; padding: var(--s2); border: var(--bw) solid var(--line); background: rgba(10, 15, 10, 0.6); min-width: 0; }
+.cz-pseat.cur { border-color: var(--gold); }
+.cz-pseat.won { border-color: var(--accent); }
+.cz-pseat.out { opacity: 0.55; }
+.cz-pseat.me { border-color: var(--line-hi); }
+.cz-pinfo { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cz-pinfo .nm { font-size: var(--t-s); overflow-wrap: anywhere; }
+.cz-pinfo .nm .cz-dim { font-size: 10px; }
+.cz-pinfo .st { font-size: var(--t-xs); color: var(--gold); }
+.cz-btn { display: inline-block; margin-left: 6px; width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 50%; background: #e8efe8; color: #0a0f0a; font-size: 10px; font-weight: 700; }
+.cz-board { text-align: center; padding: var(--s2) 0; border-top: var(--bw) dashed #1f4a2c; border-bottom: var(--bw) dashed #1f4a2c; }
+.cz-board .cz-sub-h { margin-top: 0; }
+.cz-pacts { margin: var(--s3) 0; }
+.cz-raise { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin-top: var(--s2); }
+.cz-to { display: inline-flex; gap: 1ch; align-items: center; }
+.cz-to .k { font-size: var(--t-xs); color: var(--fg-mute); }
+.cz-to input { width: 9ch; background: var(--panel); color: var(--fg); border: var(--bw) solid var(--line-hi); min-height: var(--hit-min); padding: 0 var(--s2); font-size: var(--t-m); }
+.cz-log { list-style: none; margin: 0; padding: var(--s2); max-height: 260px; overflow-y: auto; border: var(--bw) solid var(--line); font-size: var(--t-xs); line-height: 1.45; }
+.cz-log li { margin: 0 0 2px; color: var(--fg-dim); }
+.cz-log .street { color: var(--fg); margin-top: var(--s1); }
+.cz-log .winl { color: var(--accent); }
+.cz-log .tell { color: var(--fg-mute); font-style: italic; }
+.cz-log .say .sp { color: var(--gold); margin-right: 1ch; }
+.cz-log .say .tx { color: var(--fg); }
+.cz-dossier { margin-bottom: var(--s3); }
+.cz-dossier .nm { color: var(--fg); }
+
+/* the house edge, the board */
+.cz-edges { display: flex; flex-direction: column; gap: var(--s2); }
+.cz-edge { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 2ch; border-bottom: var(--bw) dotted var(--line); padding-bottom: var(--s1); }
+.cz-edge .e { color: var(--gold); font-weight: 700; text-align: right; }
+.cz-edge .n { grid-column: 1 / -1; font-size: var(--t-xs); color: var(--fg-mute); }
+.cz-board-list { list-style: none; margin: 0; padding: 0; }
+.cz-board-list li { display: grid; grid-template-columns: 4ch minmax(0, 1fr) auto; gap: 1ch; font-size: var(--t-s); border-bottom: var(--bw) dotted var(--line); padding: 2px 0; }
+.cz-board-list li.me { color: var(--accent); }
+.cz-board-list .ch { color: var(--gold); text-align: right; }
+@media (max-width: 420px) { .cz-tab { padding: 0 6px; font-size: var(--t-xs); } }
+@media (max-width: 420px) { .cz-edge { grid-template-columns: 1fr; } .cz-edge .e { text-align: left; } }
