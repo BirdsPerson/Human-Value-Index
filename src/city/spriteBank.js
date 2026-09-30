@@ -3,13 +3,19 @@
 // citizens, the tier-coloured stand-in until either arrives. Browser only.
 
 import { SPRITE_W, SPRITE_H, paintAvatar, paintPlaceholder, loadManifest, loadSprite, loadRepoSprite } from "../sprites.js";
-import { getTier, slugify, slugCandidates } from "../figures.js";
+import { getTier, slugify, slugCandidates, FAMOUS_FIGURES } from "../figures.js";
 
 let manifestP = null;
 const bank = new Map();   // name -> entry
 
 // entry: { img, frames, real, mini, v } — v bumps when the image changes.
+// A stand-in from the day summary (crowd.js) wears the likeness of one of the figures on
+// file (their sprites ship with the site): a crowd seen from afar looks like a crowd, and
+// costs no download. It never opens, so it is nobody.
+const LOOKS = FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name), kind: "figure" }));
+const lookOf = (s) => { let h = 0; for (let i = 0; i < s.name.length; i++) h = (h * 31 + s.name.charCodeAt(i)) | 0; return LOOKS[Math.abs(h) % LOOKS.length]; };
 export function sheetFor(s) {
+  if (s.crowd) s = s.look || (s.look = lookOf(s));
   let e = bank.get(s.name);
   const slug = s.slug || slugify(s.name);
   if (e) {

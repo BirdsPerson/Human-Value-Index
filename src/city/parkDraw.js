@@ -105,13 +105,13 @@ function personDraw(K, pid, a, p) {
     if (lod === "mid" || hpx < 18) {
       const m = miniFor(p.s), sc = hpx / (SPRITE_H / 2);
       try { G.ctx.drawImage(m, Math.round(sx - (SPRITE_W / 4) * sc), Math.round(sy - hpx), Math.round((SPRITE_W / 2) * sc), Math.round(hpx)); } catch { /* not decoded yet */ }
-      G.hits.push({ kind: "p", s: p.s, box: [sx - hpx * 0.3, sy - hpx, sx + hpx * 0.3, sy] });
+      if (!p.s.crowd) G.hits.push({ kind: "p", s: p.s, box: [sx - hpx * 0.3, sy - hpx, sx + hpx * 0.3, sy] });   // a stand-in (crowd.js) never opens
       return;
     }
     let face = 0;
     if (look) { const [lx] = G.Q(look[0], look[1], a.h); face = lx > sx + 0.5 ? 1 : -1; }
     const box = drawPose(G.ctx, sheetFor(p.s), { kind: a.kind, act, face, walk: null }, act, sx, sy, hh0, G.t, ph, k);
-    G.hits.push({ kind: "p", s: p.s, box });
+    if (!p.s.crowd) G.hits.push({ kind: "p", s: p.s, box });
   };
   return { x, y, draw };
 }

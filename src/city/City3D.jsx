@@ -5,6 +5,7 @@ import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
 import { clockAt, whereOf, jobLine, activityLine, roomIn, DISTRICT, DISTRICTS } from "./simApi.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
+import { wantSectors } from "./planClient.js";
 import { FONT, SubjectTip, ZoomBar } from "./cityUi.jsx";
 import {
   buildScene, viewFor, P, depthOf, panTarget, pointInPoly, hull, locate, subjectPoint, trains, carArc, loopAt, toWorld,
@@ -162,6 +163,8 @@ function City3D({ censusRef, onDistrict, onOpen, onFloor, query = "" }) {
     function select(id) {
       if (V.sel && V.sel !== id) V.open.set(V.sel, V.open.get(V.sel) ?? 1);
       V.sel = id;
+      // an opened stack lists its floors' people: load its district (planClient.wantSectors)
+      wantSectors("stack", id && BUILDING[id] ? [BUILDING[id].districtId] : []);
       if (id) {
         if (!V.open.has(id)) V.open.set(id, 0);
         const b = BUILDING[id], c = toWorld(b.rect.x + b.rect.w / 2, b.rect.y + b.rect.h / 2);
@@ -408,12 +411,12 @@ function City3D({ censusRef, onDistrict, onOpen, onFloor, query = "" }) {
           else ctx.drawImage(img, 0, 0, SPRITE_W, SPRITE_H, x, y, bw, bh);
         } catch { /* sheet not decoded yet */ }
         ctx.fillStyle = e.col; ctx.fillRect(S.x - bw * 0.3, S.y - 1, bw * 0.6, e.rated ? 2 : 1);
-        V.hitS.push({ e, x: S.x, y: S.y - bh / 2, rx: bw / 2 + 2, ry: bh / 2 + 2 });
+        if (!e.s.crowd) V.hitS.push({ e, x: S.x, y: S.y - bh / 2, rx: bw / 2 + 2, ry: bh / 2 + 2 });
       } else {
         const r = clampN(S.f * 2.1 * Math.sqrt(V.cam.zoom), 1.6, 3.6);
         ctx.beginPath(); ctx.arc(S.x, S.y, r, 0, Math.PI * 2);
         if (e.rated) { ctx.fillStyle = e.col; ctx.fill(); } else { ctx.strokeStyle = e.col; ctx.lineWidth = 1; ctx.stroke(); }
-        V.hitS.push({ e, x: S.x, y: S.y, rx: r + 3, ry: r + 3 });
+        if (!e.s.crowd) V.hitS.push({ e, x: S.x, y: S.y, rx: r + 3, ry: r + 3 });   // a stand-in (crowd.js) never opens
       }
       if (e.s.you) { ctx.fillStyle = "#e5ffe9"; ctx.fillRect(S.x - 0.5, S.y - (sh >= 18 ? sh + 7 : 9), 1, 5); }
       e.sx = S.x; e.sy = S.y;
@@ -684,6 +687,7 @@ function City3D({ censusRef, onDistrict, onOpen, onFloor, query = "" }) {
 
     return () => {
       dead = true; sync();
+      wantSectors("stack", []);
       io?.disconnect();
       document.removeEventListener("visibilitychange", sync);
       ro ? ro.disconnect() : window.removeEventListener("resize", resize);

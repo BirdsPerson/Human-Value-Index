@@ -5,7 +5,8 @@ import { DISTRICTS, BUILDINGS, BUILDING, PLACES, LOOP_LINE, STATIONS, OPEN_LOTS,
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FONT } from "./cityUi.jsx";
-import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4, LOD_NEAR } from "./iso.js";
+import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4, LOD_NEAR, LOD_MID } from "./iso.js";
+import { wantSectors } from "./planClient.js";
 import { loopPieces, trainPoses, carCorners, carBox, stationGeo, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
@@ -116,11 +117,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
         const r = roomIn(w, s);
         if (r) {
           occ[r.buildingId] = (occ[r.buildingId] || 0) + 1;
+          // a stand-in (crowd.js) lights a window and fills a street, never a room list
           const rk = `${r.buildingId}|${r.floor}|${r.placeId}`;
-          (inside.get(rk) || inside.set(rk, []).get(rk)).push({ s, w, mode: r.mode });
+          if (!s.crowd) (inside.get(rk) || inside.set(rk, []).get(rk)).push({ s, w, mode: r.mode });
           if (r.mode === "here" && OUTDOOR_PLACES.has(w.placeId)) outdoors.push({ s, open: w.placeId });
           if (r.mode === "here" && park.has(w.placeId)) park.get(w.placeId).push({ s, w });
-          if (r.mode !== "here") (doors.get(r.buildingId) || doors.set(r.buildingId, []).get(r.buildingId)).push(s);
+          if (r.mode !== "here" && !s.crowd) (doors.get(r.buildingId) || doors.set(r.buildingId, []).get(r.buildingId)).push(s);
         }
         if (w.activity === "commute" && w.sub !== "riding") outdoors.push({ s });
       }
@@ -713,7 +715,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
         const s = hpx / SPRITE_H;
         try { ctx.drawImage(e.img, 0, 0, SPRITE_W, SPRITE_H, Math.round(x - (SPRITE_W / 2) * s), Math.round(y - hpx), Math.round(SPRITE_W * s), Math.round(hpx)); } catch { /* not ready */ }
       }
-      V.hits.push({ kind: "p", s: p.s, box: [x - hpx * 0.3, y - hpx, x + hpx * 0.3, y] });
+      if (!p.s.crowd) V.hits.push({ kind: "p", s: p.s, box: [x - hpx * 0.3, y - hpx, x + hpx * 0.3, y] });   // a stand-in (crowd.js) never opens
     }
     function drawMover(m, lod) { if (m.kind === "p") drawPerson(m, lod); else drawCar(m, lod); }
 
@@ -877,10 +879,33 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       }
     }
 
+    // ---- which districts to load (planClient.wantSectors) -------------------------------------
+    // The overview (the whole city, or near it) is drawn from the day's summary: stand-ins
+    // (crowd.js) drawn the way anyone is at that size. Zoomed in past it (1.6x the fit, and
+    // never before people are ~25 px tall), every district on screen loads its window, so its own
+    // people replace the stand-ins; the open cutaway's district and a followed subject's too.
+    // Only once the camera has settled: a zoom passes over most of the city on its way in,
+    // and nothing it passes is worth downloading.
+    function wantView(t) {
+      const sig = `${V.cam.z.toFixed(2)}|${Math.round(V.cam.ox)}|${Math.round(V.cam.oy)}|${V.cam.r}|${V.sel}|${V.find?.t?.w?.districtId}`;
+      if (sig !== V.camSig) { V.camSig = sig; V.camAt = t; }
+      if (V.camTo || t - V.camAt < 350 || t - (V.wantAt || 0) < 300) return;
+      V.wantAt = t;
+      const ids = new Set();
+      if (V.cam.z >= Math.max(LOD_MID * 1.5, V.fitZ * 1.6)) for (const { d, R } of V.geo.districts) {
+        if (onScreen([P(R.x0, R.y0, 0), P(R.x1, R.y0, 0), P(R.x1, R.y1, 0), P(R.x0, R.y1, 0)], 60)) ids.add(d.id);
+      }
+      if (V.sel && BUILDING[V.sel]) ids.add(BUILDING[V.sel].districtId);
+      const fw = V.find?.t?.w;
+      if (fw) ids.add(fw.atDistrictId && fw.atDistrictId !== "loop" ? fw.atDistrictId : fw.districtId);
+      wantSectors("iso", [...ids]);
+    }
+
     function draw() {
       const t = performance.now();
       readCensus();
       if (!V.geo || V.geo.r !== V.cam.r) V.geo = buildGeo(V.cam.r);
+      wantView(t);
       const mt = censusRef.current?.mt != null && V.reduced ? censusRef.current.mt : clockAt(Date.now()).mt;
       V.mt = mt;
       const trains = trainPoses(trainsAt(mt));
@@ -1122,6 +1147,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
     let raf = 0, onScreenNow = true, dead = false;
     function frame() {
       if (!V.reduced || V.need || censusRef.current?.v !== V.censusV) { V.need = false; draw(); }
+      else if (V.geo) wantView(performance.now());   // still, and drawing nothing new: the camera settles
       raf = requestAnimationFrame(frame);
     }
     function sync() {
@@ -1150,6 +1176,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
     return () => {
       SAVED = { cam: { ...(V.camTo ? { ...V.cam, ...V.camTo } : V.cam) }, sel: V.sel, cssW: V.cssW };
       dead = true; sync();
+      wantSectors("iso", []);
       io?.disconnect();
       document.removeEventListener("visibilitychange", sync);
       ro ? ro.disconnect() : window.removeEventListener("resize", resize);

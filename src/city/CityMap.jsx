@@ -4,6 +4,7 @@ import { SPRITE_W, SPRITE_H, hashStr, statureOf } from "../sprites.js";
 import { DISTRICTS, PLACES, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, placesOf, placeName, districtCap, activityLine, jobLine, clockAt, whereOf, trainsAt } from "./simApi.js";
 import { CELL_W, CELL_H, layoutDistricts, FAMILY_COLOR, familyOf, lodFor, roomLabel } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
+import { wantSectors } from "./planClient.js";
 import { FONT, SubjectTip, ZoomBar } from "./cityUi.jsx";
 
 // THE SUBSTRATE: the whole city as one canvas. District blocks drawn in box characters,
@@ -334,7 +335,22 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
     // Drawn as a dot (far away, or indoors) rather than a sprite.
     const asDot = (e, lod) => lod === "dot" || indoors(e);
 
+    // Which districts to load (planClient.wantSectors): those on screen once faces show.
+    // Until then the dots include the day summary's stand-ins (crowd.js), which never open.
+    function wantView() {
+      const t = performance.now();
+      if (t - (V.wantAt || 0) < 300) return;
+      V.wantAt = t;
+      const c = V.cam, ch = CELL_H * c.z, ids = [];
+      if (ch >= 7) for (const b of layout.blocks) {   // from just before faces show (cityKit.lodFor: 9)
+        const x0 = (b.x * CELL_W - c.x) * c.z, y0 = (b.y * CELL_H - c.y) * c.z, x1 = x0 + b.w * CELL_W * c.z, y1 = y0 + b.h * CELL_H * c.z;
+        if (x1 > -40 && x0 < V.cssW + 40 && y1 > -40 && y0 < V.cssH + 40) ids.push(b.id);
+      }
+      wantSectors("map", ids);
+    }
+
     function draw() {
+      wantView();
       if (V.dirty) drawStatic();
       const C0 = censusRef.current;
       const { dpr } = V;
@@ -509,6 +525,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       let best = null, bd = Infinity;
       for (let i = V.vis.length - 1; i >= 0; i--) {
         const e = V.vis[i];
+        if (e.s.crowd) continue;
         const dotE = asDot(e, lod), q = dotE ? 1 : statureOf(e.s), bw = (dotE ? dotBox : sprBox)[0] * q, bh = (dotE ? dotBox : sprBox)[1] * q;
         const top = dotE ? e.sy - bh / 2 : e.sy - bh;
         if (mx < e.sx - bw / 2 - pad || mx > e.sx + bw / 2 + pad || my < top - pad || my > (dotE ? e.sy + bh / 2 : e.sy) + pad) continue;
@@ -634,6 +651,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
 
     return () => {
       dead = true; sync();
+      wantSectors("map", []);
       io?.disconnect();
       document.removeEventListener("visibilitychange", sync);
       ro ? ro.disconnect() : window.removeEventListener("resize", resize);

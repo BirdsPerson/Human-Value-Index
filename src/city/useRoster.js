@@ -2,9 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { baseRoster, mergeCensus } from "./roster.js";
 import { setRoster } from "./sim.js";
 import { readCaseId, readLastResult } from "../caseFile.jsx";
+import { fetchPen } from "../penClient.js";
+import { startSectors, planMode, setSelf } from "./planClient.js";
 
-// Everyone uploaded into the Substrate: the figures on file, every citizen and referral
-// the census returns, and this browser's own file. Loaded once per visit to #city.
+// Everyone uploaded into the Substrate. Since scaling step 4 (docs/CITY_SPEC.md "Sectors")
+// the city does not download them: the published plan's summary draws the crowds and each
+// district's window brings its people (planClient.js). mode "sectors" then; the roster here
+// is the figures on file and your own file. Without a split day ("legacy") it is what it
+// always was: the figures on file, every citizen and referral the census returns (all of
+// /api/pen, page by page), and this browser's own file.
 
 const base = baseRoster;
 
@@ -37,6 +43,7 @@ function stress(list) {
 }
 
 export function useRoster() {
+  const [mode, setMode] = useState(planMode);
   const [census, setCensus] = useState("pending");
   const [extra, setExtra] = useState([]);
   // Your own file lands in this browser after the census may already be in: the app
@@ -44,24 +51,35 @@ export function useRoster() {
   const [selfV, setSelfV] = useState(0);
   useEffect(() => {
     const bump = () => setSelfV(v => v + 1);
+    const flip = () => setMode(planMode());
     window.addEventListener("hvi-file", bump);
     window.addEventListener("hvi-case", bump);
-    return () => { window.removeEventListener("hvi-file", bump); window.removeEventListener("hvi-case", bump); };
+    window.addEventListener("hvi-plan-mode", flip);
+    let off = false;
+    startSectors().then(m => { if (!off) setMode(m); });
+    return () => { off = true; window.removeEventListener("hvi-file", bump); window.removeEventListener("hvi-case", bump); window.removeEventListener("hvi-plan-mode", flip); };
   }, []);
   useEffect(() => {
+    if (mode === "sectors") { setCensus("ok"); return; }
+    if (mode !== "legacy") return;
     let off = false;
-    fetch("/api/pen").then(r => (r.ok ? r.json() : Promise.reject(r.status))).then(d => {
+    fetchPen().then(list => {
       if (off) return;
-      const out = mergeCensus(d?.subjects);
-      setExtra(out);
+      setExtra(mergeCensus(list));
       setCensus("ok");
     }).catch(() => { if (!off) setCensus("down"); });
     return () => { off = true; };
-  }, []);
+  }, [mode]);
   const roster = useMemo(() => {
+    if (mode !== "legacy") {
+      const list = withSelf(base());
+      const me = list.find(s => s.you);
+      setSelf(me || null);
+      return list;
+    }
     const list = stress(withSelf([...base(), ...extra]));
     setRoster(list);   // leisure is placed with room capacity in mind, across this whole roster
     return list;
-  }, [extra, selfV]);   // eslint-disable-line react-hooks/exhaustive-deps
-  return { roster, census };
+  }, [extra, selfV, mode]);   // eslint-disable-line react-hooks/exhaustive-deps
+  return { roster, census, mode };
 }

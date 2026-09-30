@@ -196,6 +196,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
       const want = new Map(), aboard = new Set();
       const fn = cb.current.assign;
       for (const { s, w } of C.list) {
+        if (s.crowd) continue;   // stand-ins (crowd.js) fill the map, never a room: the district's window brings its people
         const m = fn(w, s);
         if (m && idx[m.cell] !== undefined) want.set(s.name, { s, w, r: m.cell, mode: m.mode });
         else if (w.sub === "riding") aboard.add(s.name);

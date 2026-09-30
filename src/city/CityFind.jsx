@@ -1,18 +1,31 @@
-import { memo, useId, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
 import { clockAt } from "./simApi.js";
 import { searchIndex, findTarget, whereShort } from "./find.js";
+import { searchCensus } from "./planClient.js";
 import { SpriteThumb } from "./cityUi.jsx";
 
 // FIND > [name........] [FIND ME]. A combobox over the census index (find.js): type, arrow
 // through the top eight (each with where they are now), Enter or tap to pick. Escape
 // clears. FIND ME is the viewer's own file, or what to do about not having one.
-export default memo(function CityFind({ index, onPick, self, caseId }) {
+// remote: the city holds only what it looks at (planClient.js), so the search is the
+// server's (/api/find, the same ranking), a beat after the last keystroke.
+export default memo(function CityFind({ index, remote = false, onPick, self, caseId }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [act, setAct] = useState(0);
   const inputRef = useRef(null);
   const id = useId().replace(/:/g, "");
-  const list = useMemo(() => (open ? searchIndex(index, q, 8) : []), [index, q, open]);
+  const [found, setFound] = useState({ q: "", list: [] });
+  useEffect(() => {
+    if (!remote || !open || !q.trim()) return;
+    let off = false;
+    const t = setTimeout(() => {
+      searchCensus(q, 8).then(list => { if (!off) setFound({ q, list: list || searchIndex(index, q, 8) }); });
+    }, 120);
+    return () => { off = true; clearTimeout(t); };
+  }, [remote, open, q, index]);
+  const list = useMemo(() => (!open ? [] : remote ? (found.q === q ? found.list : found.list) : searchIndex(index, q, 8)), [index, q, open, remote, found]);
+  const searching = remote && open && q.trim() !== "" && found.q !== q;
   // Where each match is, read once per keystroke (8 lookups), not per frame.
   const mt = useMemo(() => clockAt(Date.now()).mt, [list]);   // eslint-disable-line react-hooks/exhaustive-deps
   const rows = useMemo(() => list.map(e => ({ e, where: whereShort(findTarget(e.s, mt), mt) })), [list, mt]);
@@ -24,7 +37,7 @@ export default memo(function CityFind({ index, onPick, self, caseId }) {
     else if (ev.key === "Enter") { ev.preventDefault(); pick(rows[act]?.e || rows[0]?.e); }
     else if (ev.key === "Escape") { if (q || open) { ev.preventDefault(); ev.stopPropagation(); setQ(""); setOpen(false); } }
   };
-  const status = shown ? (rows.length ? `${rows.length} MATCH${rows.length === 1 ? "" : "ES"}. ARROWS TO CHOOSE, ENTER TO FIND.` : "NO SUBJECT ON FILE BY THAT NAME.") : "";
+  const status = shown ? (rows.length ? `${rows.length} MATCH${rows.length === 1 ? "" : "ES"}. ARROWS TO CHOOSE, ENTER TO FIND.` : searching ? "SEARCHING THE CENSUS." : "NO SUBJECT ON FILE BY THAT NAME.") : "";
   return (
     <div className="hvi-city-find" role="search">
       <div className="hvi-city-find-box">
@@ -36,7 +49,7 @@ export default memo(function CityFind({ index, onPick, self, caseId }) {
           onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)} onKeyDown={onKey} />
         {shown && (
           <ul id={`${id}-lb`} role="listbox" className="hvi-city-find-list" aria-label="Matches">
-            {rows.length === 0 && <li className="none" role="presentation">NO SUBJECT ON FILE BY THAT NAME. THE DEPARTMENT HAS CHECKED.</li>}
+            {rows.length === 0 && <li className="none" role="presentation">{searching ? "SEARCHING THE CENSUS. EVERYONE IS IN IT." : "NO SUBJECT ON FILE BY THAT NAME. THE DEPARTMENT HAS CHECKED."}</li>}
             {rows.map((r, i) => (
               <li key={r.e.key} id={`${id}-o${i}`} role="option" aria-selected={i === act} className={i === act ? "act" : undefined}
                 onPointerDown={(ev) => ev.preventDefault()} onClick={() => pick(r.e)} onPointerEnter={() => setAct(i)}>

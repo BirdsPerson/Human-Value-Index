@@ -10,6 +10,7 @@ import { Chip, Chips } from "../ui/index.js";
 import { DISTRICTS, DISTRICT, clockAt, whereOf, jobLine, activityLine } from "./simApi.js";
 import { familyOf, FAMILY_COLOR } from "./cityKit.js";
 import { sheetFor } from "./spriteBank.js";
+import { wantSectors } from "./planClient.js";
 import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
 import { locate, trains, carArc, STATIONS as ST3D } from "./city3d.js";
 import {
@@ -154,8 +155,18 @@ function Street({ censusRef, onOpen, onEnter }) {
       }
     }
 
+    // Which districts to load (planClient.wantSectors): those within sight of the walk.
+    let wantAt = 0;
+    function wantView(c, now) {
+      if (now - wantAt < 500) return;
+      wantAt = now;
+      const R = 45;
+      wantSectors("street", DISTRICTS.filter(d => { const r = d.rect, dx = Math.max(r.x - c.x, 0, c.x - r.x - r.w), dy = Math.max(r.y - c.y, 0, c.y - r.y - r.h); return Math.hypot(dx, dy) < R; }).map(d => d.id));
+    }
+
     function render(now) {
       const c = cam.current;
+      wantView(c, now);
       const view = viewFor(W, H);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.imageSmoothingEnabled = false;
@@ -418,12 +429,13 @@ function Street({ censusRef, onOpen, onEnter }) {
         if (!p || !q) return;
         const fog = fogAt(p.f);
         const hpx = p.y - q.y;
+        // a stand-in from the day's summary (crowd.js) is drawn like anyone, and never opens
         if (hpx < 11) {
           const col = FAMILY_COLOR[familyOf(it.s)] || C.dim;
           ctx.fillStyle = alpha(col, fog);
           const r = Math.max(1.2, hpx / 5);
           ctx.fillRect(p.x - r, p.y - r * 2.5, r * 2, r * 2.5);
-          hp.push({ s: it.s, w: it.w, x: p.x - 4, y: p.y - 10, w2: 8, h: 10, f: p.f });
+          if (!it.s.crowd) hp.push({ s: it.s, w: it.w, x: p.x - 4, y: p.y - 10, w2: 8, h: 10, f: p.f });
           return;
         }
         const e = sheetFor(it.s);
@@ -437,7 +449,7 @@ function Street({ censusRef, onOpen, onEnter }) {
           ctx.fillStyle = C.accent; ctx.font = `${Math.round(Math.min(14, Math.max(9, hpx / 5)))}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
           ctx.fillText("▼ YOU", p.x, q.y - 2);
         }
-        hp.push({ s: it.s, w: it.w, x: p.x - wpx / 2, y: q.y, w2: wpx, h: hpx, f: p.f });
+        if (!it.s.crowd) hp.push({ s: it.s, w: it.w, x: p.x - wpx / 2, y: q.y, w2: wpx, h: hpx, f: p.f });
       }
       function drawSign(it, v) {
         const p = project(toCam(c, it.x, it.y, 3.6), v), b = project(toCam(c, it.x, it.y, 0), v);
@@ -475,7 +487,7 @@ function Street({ censusRef, onOpen, onEnter }) {
     const onVis = () => { if (!document.hidden && !raf) { last = performance.now(); raf = requestAnimationFrame(frame); } };
     document.addEventListener("visibilitychange", onVis);
     if (import.meta.env?.DEV) window.__hviStreet = { cam, input, perf, reset: () => { perf.current = { n: 0, sum: 0, max: 0 }; } };
-    return () => { cancelAnimationFrame(raf); ro?.disconnect(); io?.disconnect(); document.removeEventListener("visibilitychange", onVis); };
+    return () => { cancelAnimationFrame(raf); ro?.disconnect(); io?.disconnect(); document.removeEventListener("visibilitychange", onVis); wantSectors("street", []); };
   }, [censusRef, enter]);
 
   // ---- input ----------------------------------------------------------------------

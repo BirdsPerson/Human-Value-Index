@@ -30,6 +30,7 @@ const QUADRANT_FAMILY = { ADMIRED: "good", "TRUSTED RESERVE": "dim", ENVIED: "ch
 // Dot colour by octant family; files the people have not rated fall back to their
 // quadrant and draw hollow, as on the cube.
 export function familyOf(subject) {
+  if (subject?.crowdFam) return { family: subject.crowdFam, rated: true, octant: null };   // a stand-in (crowd.js)
   const c = cubeOf(subject);
   if (c?.octant) return { family: OCTANT_FAMILY[c.octant] || "dim", rated: true, octant: c.octant };
   return { family: QUADRANT_FAMILY[c?.quadrant] || "dim", rated: false, octant: null };

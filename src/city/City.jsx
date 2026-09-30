@@ -3,6 +3,8 @@ import { pad, padL } from "../term.jsx";
 import { Frame, Button, ButtonRow, Disclosure, ListRow } from "../ui/index.js";
 import { SubjectCard, injectPenStyles } from "../Pen.jsx";
 import { DISTRICTS, DISTRICT, BUILDING, TRAIN, STATIONS, PLACES, GAMES, GAME_VENUE, districtCap, clockAt, whereOf, atDistrict, isOnLoop, setClockOffset, offsetFor, jobLine, loopEvents, roomIn, gameAt, gameEvents } from "./simApi.js";
+import { covers } from "./sim.js";
+import { crowdAt, summaryCounts } from "./crowd.js";
 import { clockLine, paLine } from "./cityKit.js";
 import { useRoster } from "./useRoster.js";
 import { clearBank } from "./spriteBank.js";
@@ -21,7 +23,7 @@ import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
 import SocialPanel from "./SocialPanel.jsx";
 import { useSocial, ensureSocial } from "./socialClient.js";
-import { ensurePlans } from "./planClient.js";
+import { ensurePlans, knownSubjects, summaryOf, completeAt, checkDay, wantSectors, findBySlug, pinSubject, unpinSubject } from "./planClient.js";
 // The districts with a ground (the Arena, the Sprawl's estate pitch), and the PA's sign-off
 // under each kind of score.
 const GAME_DISTRICTS = new Set(Object.keys(GAMES).map(id => PLACES[id].district));
@@ -65,13 +67,30 @@ export default function City({ route }) {
     setOffsetV(v => v + 1);
     return () => setClockOffset(0);
   }, [at]);
-  const { roster, census } = useRoster();
+  const { roster, census, mode: dataMode } = useRoster();
+  const sectors = dataMode === "sectors";
   // FIND: the census index is built when the roster changes, never per frame. #city?find=<slug>
   // (a pick, or a shared link) flies the CITY view's camera to that subject and follows them.
+  // With the city in sectors (planClient.js) nobody downloads the census: the search and a
+  // link's subject come from /api/find, and a followed subject is pinned (its rows fetched
+  // window by window as it crosses the city).
   const index = useMemo(() => buildIndex(roster), [roster]);
   const findSlug = useMemo(() => new URLSearchParams(parsed.query.replace(/^\?/, "")).get("find"), [parsed.query]);
-  const findEntry = findSlug ? bySlug(index, findSlug) : null;
+  const [remoteFind, setRemoteFind] = useState(null);   // {slug, entry | null}
+  useEffect(() => {
+    if (!sectors || !findSlug) return;
+    const local = bySlug(index, findSlug);
+    if (local) { setRemoteFind({ slug: findSlug, entry: local }); return; }
+    let off = false;
+    findBySlug(findSlug.toLowerCase()).then(e => { if (!off) setRemoteFind({ slug: findSlug, entry: e }); });
+    return () => { off = true; };
+  }, [sectors, findSlug, index]);
+  const findEntry = !findSlug ? null : sectors ? (remoteFind?.slug === findSlug ? remoteFind.entry : null) : bySlug(index, findSlug);
+  const findPending = Boolean(findSlug && sectors && remoteFind?.slug !== findSlug);
+  useEffect(() => { if (!findEntry?.s) return; pinSubject(findEntry.s); return () => { if (!findEntry.s.you) unpinSubject(findEntry.s); }; }, [findEntry]);
   const selfEntry = useMemo(() => index.find(e => e.s.you) || null, [index]);
+  // A district or building page shows everyone in its district: load its window.
+  useEffect(() => { wantSectors("page", districtId ? [districtId] : []); return () => wantSectors("page", []); }, [districtId]);
   const [findN, setFindN] = useState(0);
   const censusRef = useRef({ v: 0, t: 0, mt: null, list: [], districtCounts: {}, transit: 0 });
   const [stats, setStats] = useState(() => ({ districts: [], transit: 0, riders: [], waiting: 0, self: null, sig: "", buildings: {}, bsig: "" }));
@@ -84,20 +103,51 @@ export default function City({ route }) {
   useEffect(() => {
     function take() {
       const c = clockAt(Date.now());
-      const list = new Array(roster.length);
-      const counts = {}, bcounts = {};
-      let transit = 0, waiting = 0, self = null;
+      const counts = {}, bcounts = {}, waitAt = {};
+      let transit = 0, waiting = 0, self = null, list, pop = roster.length;
       const riders = [];
-      for (let i = 0; i < roster.length; i++) {
-        const s = roster[i], w = whereOf(s, c.mt);
-        list[i] = { s, w };
+      const count = (s, w) => {
         const at = atDistrict(w);
         if (isOnLoop(at)) { transit++; riders.push({ s, t: w.trainId, c: w.car }); }
         else counts[at] = (counts[at] || 0) + 1;
-        if (w.sub === "waiting") waiting++;
+        if (w.sub === "waiting") { waiting++; waitAt[w.stationId] = (waitAt[w.stationId] || 0) + 1; }
         const r = roomIn(w, s);
         if (r) bcounts[r.buildingId] = (bcounts[r.buildingId] || 0) + 1;
         if (s.you) self = { s, at, w };
+      };
+      if (sectors && checkDay(c.mt) === "sectors") {
+        // Everyone this browser holds, where the plan covers them (your own file even when
+        // the plan does not hold it yet: the sim places it, as it always did), then the
+        // summary's crowds in every district whose window is not loaded.
+        const d0 = Math.floor(c.mt / 24), h = c.mt - d0 * 24, sum = summaryOf(d0 + 1), next = h > 23.5 ? summaryOf(d0 + 2) : null;
+        const complete = completeAt(c.mt);
+        list = [];
+        for (const s of knownSubjects()) {
+          if (!covers(s, c.mt) && !(s.you && !s.cj)) continue;
+          const w = whereOf(s, c.mt);
+          list.push({ s, w });
+          count(s, w);
+        }
+        // Counts the page prints: the loaded districts exactly, the rest from the summary.
+        if (sum) {
+          const sc = summaryCounts(sum, h, next);
+          pop = sum.n;
+          for (const d of DISTRICTS) if (!complete.has(d.id)) counts[d.id] = sc.districts[d.id] || 0;
+          for (const id of Object.keys(bcounts)) if (!complete.has(BUILDING[id]?.districtId)) delete bcounts[id];
+          for (const [id, n] of Object.entries(sc.buildings)) if (!complete.has(BUILDING[id]?.districtId) && n) bcounts[id] = n;
+          if (complete.size < DISTRICTS.length) {
+            transit = sc.loop;
+            waiting = DISTRICTS.reduce((n, d) => n + (complete.has(d.id) ? waitAt[d.id] || 0 : sc.waiting[d.id] || 0), 0);
+          }
+          list = list.concat(crowdAt(sum, h, complete, list, next));
+        }
+      } else {
+        list = new Array(roster.length);
+        for (let i = 0; i < roster.length; i++) {
+          const s = roster[i], w = whereOf(s, c.mt);
+          list[i] = { s, w };
+          count(s, w);
+        }
       }
       riders.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : a.c - b.c));
       const prev = censusRef.current;
@@ -117,10 +167,10 @@ export default function City({ route }) {
       // Only what the page shows goes into React state: the counts and riders, and only when
       // they actually change (the clock ticks in its own component). The views read the
       // census from the ref.
-      const sig = `${DISTRICTS.map(d => counts[d.id] || 0).join(",")}|${riders.map(r => r.s.name + r.t + r.c).join("\u0001")}|${waiting}|${self ? self.s.name + "@" + self.at + (self.w.buildingId || "") : ""}`;
+      const sig = `${DISTRICTS.map(d => counts[d.id] || 0).join(",")}|${riders.map(r => r.s.name + r.t + r.c).join("\u0001")}|${transit}|${waiting}|${pop}|${self ? self.s.name + "@" + self.at + (self.w.buildingId || "") : ""}`;
       const bsig = Object.keys(bcounts).sort().map(id => id + bcounts[id]).join(",");
       const old = statsRef.current;
-      let next = old.sig === sig ? old : { transit, riders, waiting, self, sig, buildings: old.buildings, bsig: old.bsig, districts: DISTRICTS.map(d => ({ id: d.id, name: d.name, count: counts[d.id] || 0, cap: districtCap(d.id) })) };
+      let next = old.sig === sig ? old : { transit, riders, waiting, self, pop, sig, buildings: old.buildings, bsig: old.bsig, districts: DISTRICTS.map(d => ({ id: d.id, name: d.name, count: counts[d.id] || 0, cap: districtCap(d.id) })) };
       if (bsig !== old.bsig) next = { ...next, buildings: bcounts, bsig };
       if (next !== old) { statsRef.current = next; setStats(next); }
     }
@@ -134,10 +184,13 @@ export default function City({ route }) {
       take();
       iv = setInterval(() => { if (!document.hidden) take(); }, 1000);
     };
+    // A district's window landing re-takes the census at once (its people replace its crowd).
+    const now = () => { if (iv && !document.hidden) take(); };
+    window.addEventListener("hvi-sectors", now);
     Promise.allSettled([ensureSocial(), ensurePlans()]).finally(start);
     const late = setTimeout(start, 1500);
-    return () => { dead = true; clearTimeout(late); clearInterval(iv); };
-  }, [roster, offsetV]);
+    return () => { dead = true; clearTimeout(late); clearInterval(iv); window.removeEventListener("hvi-sectors", now); };
+  }, [roster, offsetV, sectors]);
 
   // The PA rotates every eight seconds: every other line is the Loop's own announcement
   // (the latest at this district's station inside one, anywhere on the map).
@@ -208,7 +261,7 @@ export default function City({ route }) {
     ? b.id === "hq" ? `${b.addr} // 6F // CENSUS CLASSIFIED` : `${b.addr} // ${b.floors.length}F // ${bn} INSIDE`
     : d
       ? d.id === "hq" ? `${d.addr} // HOLDING PEN B // CENSUS CLASSIFIED` : `${d.addr} // ${here?.count ?? 0} ON SITE // CAP ${districtCap(d.id)}`
-      : `POP ${roster.length} // ABOARD ${stats.transit} // ON PLATFORMS ${stats.waiting}${census === "down" ? " // CENSUS OFFLINE" : ""}`;
+      : `POP ${stats.pop ?? roster.length} // ABOARD ${stats.transit} // ON PLATFORMS ${stats.waiting}${census === "down" ? " // CENSUS OFFLINE" : ""}`;
 
   const crumbs = [{ label: "CITY", go: () => go(null) }];
   if (d) crumbs.push({ label: d.name, go: () => go(d.id) });
@@ -233,12 +286,12 @@ export default function City({ route }) {
   return (
     <div>
       <CityHeader clockText={<LiveClock />} right={right} pa={pa}
-        find={<CityFind index={index} onPick={onPick} self={selfEntry} caseId={caseId} />} />
+        find={<CityFind index={index} remote={sectors} onPick={onPick} self={selfEntry} caseId={caseId} />} />
       <div className="hvi-city-bar">
         <Breadcrumb crumbs={crumbs} />
         {!d && <ViewToggle mode={mode} onChange={setMode} />}
       </div>
-      {findSlug && !findEntry && census !== "pending" && (
+      {findSlug && !findEntry && !findPending && census !== "pending" && (
         <div className="hvi-city-note" role="status">NO SUBJECT ON FILE AS "{findSlug.toUpperCase()}". THE DEPARTMENT HAS CHECKED. TWICE.</div>
       )}
       <Frame box title={b ? b.name : d ? d.name : iso ? "THE SUBSTRATE" : street ? "THE SUBSTRATE // STREET LEVEL" : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
@@ -270,7 +323,7 @@ export default function City({ route }) {
               ? <>DRAG TO TURN THE CITY. PINCH OR WHEEL TO ZOOM. TAP A BUILDING TO OPEN IT, A FLOOR TO GO IN.<span className="hvi-desk-only"> BY KEYBOARD: [ AND ] OPEN THE NEXT BUILDING, ENTER CHOOSES A FLOOR.</span> A LIT PLATFORM HAS A TRAIN STANDING AT IT.</>
               : "EVERYONE HAS BEEN UPLOADED. EVERYONE HAS A JOB. THE LOOP RUNS ON TIME. ZOOM IN TO SEE FACES."}
       </div>
-      {!d && <LoopPanel riders={stats.riders} waiting={stats.waiting} self={stats.self} onOpen={open} onDistrict={go} />}
+      {!d && <LoopPanel riders={stats.riders} aboard={stats.transit} waiting={stats.waiting} self={stats.self} onOpen={open} onDistrict={go} />}
       {d
         ? <Disclosure className="hvi-city-dir" title="DISTRICT DIRECTORY" meta={`${stats.districts.length} DISTRICTS`}>{directory}</Disclosure>
         : <Frame title="DISTRICT DIRECTORY" meta={`${stats.districts.length} ON RECORD`} className="hvi-city-dir">{directory}</Frame>}
@@ -298,11 +351,14 @@ function LiveClock() {
 // The map's keyboard route to the people it cannot list by district: whoever is aboard
 // the Loop right now, train by train, and your own file wherever it is.
 // Memoized: its props only change identity when the census signature does.
-const LoopPanel = memo(function LoopPanel({ riders, waiting, self, onOpen, onDistrict }) {
+// With the city in sectors (planClient.js) the page holds only the districts it has loaded:
+// the count is the whole Loop's (the summary), the names are the riders it holds.
+const LoopPanel = memo(function LoopPanel({ riders, aboard = riders.length, waiting, self, onOpen, onDistrict }) {
   const byTrain = [];
   for (const r of riders) { const last = byTrain[byTrain.length - 1]; if (last && last.t === r.t) last.list.push(r); else byTrain.push({ t: r.t, list: [r] }); }
+  const unnamed = Math.max(0, aboard - riders.length);
   return (
-    <Disclosure className="hvi-city-disc" title={`ABOARD THE LOOP (${riders.length})${self ? " // YOUR FILE" : ""}`} meta={`${waiting} WAITING`}>
+    <Disclosure className="hvi-city-disc" title={`ABOARD THE LOOP (${aboard})${self ? " // YOUR FILE" : ""}`} meta={`${waiting} WAITING`}>
       {self && (
         <>
           <div className="hvi-city-room-h">YOUR FILE // {isOnLoop(self.at) ? `ABOARD ${TRAIN[self.w.trainId]?.name || "THE LOOP"}` : DISTRICT[self.at]?.name || "UNLOCATED"}</div>
@@ -313,8 +369,8 @@ const LoopPanel = memo(function LoopPanel({ riders, waiting, self, onOpen, onDis
           )}
         </>
       )}
-      <div className="hvi-city-room-h">THE LOOP // {riders.length} ABOARD // {waiting} ON PLATFORMS</div>
-      {riders.length === 0
+      <div className="hvi-city-room-h">THE LOOP // {aboard} ABOARD // {waiting} ON PLATFORMS</div>
+      {aboard === 0
         ? <div className="hvi-city-note">NOBODY ABOARD. THE LOOP RUNS ANYWAY. IT IS NOT FOR YOU.</div>
         : byTrain.map(g => (
           <div key={g.t}>
@@ -322,6 +378,7 @@ const LoopPanel = memo(function LoopPanel({ riders, waiting, self, onOpen, onDis
             {g.list.map(r => <Occupant key={r.s.name} s={r.s} onOpen={onOpen} note={`CAR ${r.c + 1}`} />)}
           </div>
         ))}
+      {unnamed > 0 && <div className="hvi-city-note">{riders.length ? `AND ${unnamed} MORE` : `${unnamed} ABOARD`}, BOARDED IN DISTRICTS YOU ARE NOT WATCHING. ZOOM IN ON A DISTRICT TO READ ITS PASSENGERS. THEY ARE ON FILE EITHER WAY.</div>}
       <div className="hvi-city-note" style={{ marginTop: "var(--s3)" }}>{Object.keys(STATIONS).length} STATIONS. ONE PER DISTRICT. ENTER A DISTRICT TO STAND ON ITS PLATFORM.</div>
     </Disclosure>
   );

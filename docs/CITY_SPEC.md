@@ -496,3 +496,55 @@ build). Now the day is built once and published; every reader loads the same fil
 - **Known seam**: a day's overnight tail is recomputed when the next day is built; if the
   roster changed between the two builds, someone out past midnight may jump at 00:00
   (before, a roster change could move anyone at any moment).
+
+## Sectors: a browser downloads what it looks at (scaling step 4, 2026-09-29)
+
+Before, every visit to #city fetched the whole census (`/api/pen`) and the whole day's plan,
+so a visit grew with the roster (and `/api/pen` passes Netlify's 6 MB response limit near
+9,400). Now the published day is also split for browsers, and the city holds only what it
+shows.
+
+- **Format 2** (`src/city/planSplit.js`, written by `netlify/lib/plans.js` after each day's
+  format-1 plan, under the same version; a day already planned is split from its f1 blob):
+  - `w/<sector>/<w>/<p>`: a SECTOR is a district, a WINDOW 6 machine hours. The file lists
+    everyone with a segment in that district during those hours, each with its display record
+    (the census record less breakdown, stratum and place tendencies, plus `cj`: the job the
+    sim assigned) and its window row: every segment overlapping the window, wherever it is
+    (`[homeIdx, from0, ...format-1 entries]`, `sim.js splitRow`). A window of more than
+    `PART_MAX` (3,000) subjects is spread over parts by a hash of the key.
+  - `summary`: every 30 machine minutes, the census the city takes, counted the way it counts
+    (per district, building (simApi.roomIn), place, at work / at home, walkers per district,
+    on each platform and waiting, riders per car and on the Loop), the roster's family mix,
+    the parts per window, and the whole-day rows of the figures on file (quests, the Loop panel).
+  - `find`: key, display name, the sector each subject is in per window (`/api/find`).
+  - `f2/manifest` written last, per day `{ver, n, files: {sector: [[n, bytes, parts] x4]}}`.
+    `/api/plan` lists the split days as `sectors: {day: ver}`; `/api/plan/<day>/<ver>/summary`
+    and `/api/plan/<day>/<ver>/<sector>/<w>/<p>` are immutable.
+- **Browser** (`src/city/planClient.js`): the manifest and today's summary (the next day's in
+  the last 45 machine minutes). A view names the districts it shows up close
+  (`wantSectors`): CITY when zoomed past 1.6x the fit (and people ~25 px tall), the open
+  cutaway's district, a followed subject's; MAP once faces show; STACK the opened building's;
+  STREET within 45 cells; a district or building page its own. Each loads the current window
+  (the next one 45 machine minutes before it starts) into the sim (`addPlanRows`: whereAt is
+  the whole plan's, to the float). The census (City.jsx) reads everyone held where the plan
+  covers them (`covers`), and fills every district not loaded with the summary's crowd
+  (`src/city/crowd.js`): anonymous stand-ins shaped like whereAt answers (sim.js `standIn*`),
+  as many as the summary counts less whoever is held there, capped at 1.25x a place's
+  capacity, wearing the likenesses of the figures on file. They are drawn like anyone at that
+  size and never open, list or count; the header and the directory print the summary's counts
+  for districts not loaded, their own for loaded ones. FIND asks `/api/find` (the same
+  ranking, server side); a pick, a `?find=` link, FIND ME and a follow are pinned: their rows
+  come from `/api/find?slug=&day=&w=` one window ahead. The Loop panel names the riders held
+  and counts the rest.
+- **Fallback** ("legacy"): a day with no split (builder behind, office down) runs as before:
+  the whole census from `/api/pen` page by page, the f1 plan when there is one, else the sim.
+  `plan-health.mjs` also alarms when tomorrow is planned but not split.
+- **Lists**: `/api/pen` is paged (`limit` up to 2000, `cursor` = last slug, `fields=list|cube`,
+  `kind=figure`); the pen (`fields=list`), the cube (`fields=cube&kind=figure`) and the
+  analytics (`kind=figure`) walk the pages (`src/penClient.js`).
+- **Checks** (`check-plans` section 7): every window loaded reassembles to the whole day
+  (whereAt equal every 15 machine minutes); one window alone places everyone in it for its
+  hours; each segment is in every sector it touches and nobody is listed where they never are;
+  the summary equals the plan's occupancy at every sample; the crowd is the summary less what
+  is held (zero when everyone is held or every district is loaded); the find index points at a
+  file holding the subject; parts partition a window; /api/plan and /api/find serve them.

@@ -21,7 +21,7 @@ export const districtCap = (districtId) => placesOf(districtId).reduce((n, p) =>
 // Dev only (City.jsx sets it from #city?at=HH:MM): shifts the machine clock so a given
 // hour can be inspected. Always 0 in production, where every viewer shares one clock.
 let offsetMs = 0;
-export function setClockOffset(ms) { offsetMs = ms || 0; }
+export function setClockOffset(ms) { offsetMs = ms || 0; setPlanClockOffset(offsetMs); }
 // Real ms that move today's machine clock to hh:mm (the next occurrence, not the past).
 // wd (1-7, optional): on the next machine day with that weekday (the fixtures keep a week).
 export function offsetFor(hh, mm = 0, realMs = Date.now(), wd = null) {
@@ -38,7 +38,10 @@ export function clockAt(realMs) {
   return { day: c.day, hour: c.hour, minute: c.minute, shift: c.shift, mt: c.mt };
 }
 
-export const whereOf = (subject, mt) => SIM.whereAt(subject, mt);
+// A stand-in from the day summary's crowds (crowd.js) knows its own way.
+export const whereOf = (subject, mt) => (subject?.crowd ? subject.at(mt) : SIM.whereAt(subject, mt));
+// A stand-in: drawn as a dot, never opened, never listed.
+export const isCrowd = (subject) => Boolean(subject?.crowd);
 // Which floor of its place's building a subject keeps while there (stable per stay).
 export const floorFor = (subject, placeId) => SIM.floorOf(placeId, SIM.keyOf(subject));
 export const stationOf = (districtId) => STATIONS[districtId] || null;
@@ -82,5 +85,5 @@ export const occupancyAt = (subjects, mt) => SIM.occupancy(subjects, mt);
 import { ensureSocial } from "./socialClient.js";
 // ... and the published plans: the day's city built once server side (planClient.js), so
 // no view pays the whole roster's day build. Without one the sim builds the day locally.
-import { startPlans } from "./planClient.js";
+import { startPlans, setPlanClockOffset } from "./planClient.js";
 if (typeof window !== "undefined") { ensureSocial(); startPlans(); }
