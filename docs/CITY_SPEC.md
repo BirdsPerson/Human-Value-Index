@@ -1082,7 +1082,7 @@ one-line hooks.
   body, mounted once by City.jsx): the game in a CRT (iframe; both live games send no
   X-Frame-Options, and OPEN IN A NEW TAB is always there), "AN IRIDESCENT PRODUCTION. ALSO ON
   ITCH.IO"; the shop's live stock with each item's turntable video and BUY AT THE EB SHOP; EBTV's
-  own stream (native HLS, else hls.js 1.6.15 from cdnjs with SRI) and now.json's NOW PLAYING.
+  own stream (hls.js 1.6.15 from cdnjs with SRI wherever Media Source exists, native HLS on iPhone) and now.json's NOW PLAYING.
 - **The shop proxy.** `/api/funnel?shop=1` (`netlify/lib/funnels.js`): Shopify's public
   `products.json` (up to 3 pages) and the newest 36 in-stock products' `.js` pages for their
   video, the shop's own listings (vendor EBShop) first, 24 shown, videos first. Blobs keeps the

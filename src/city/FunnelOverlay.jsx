@@ -266,14 +266,17 @@ function Ebtv({ campaign, now }) {
     const go = () => { v.play().then(() => !dead && setState("on")).catch(() => { if (dead) return; v.muted = true; v.play().then(() => !dead && setState("on")).catch(() => !dead && setState("tap")); }); };
     const onErr = () => { if (!dead && v.getAttribute("src") !== null) setState("off"); };
     v.addEventListener("error", onErr);
-    if (v.canPlayType("application/vnd.apple.mpegurl")) { v.src = EBTV_STREAM; go(); }
+    // hls.js wherever Media Source Extensions exist (Chrome's own HLS is new and unreliable);
+    // the browser's native HLS only without them (iPhone Safari)
+    const native = () => { if (v.canPlayType("application/vnd.apple.mpegurl")) { v.src = EBTV_STREAM; go(); } else setState("off"); };
+    if (!(window.MediaSource || window.ManagedMediaSource)) native();
     else loadHls().then(Hls => {
       if (dead) return;
-      if (!Hls?.isSupported()) { setState("off"); return; }
+      if (!Hls?.isSupported()) { native(); return; }
       hls = new Hls({ lowLatencyMode: false });
       hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) setState("off"); });
       hls.loadSource(EBTV_STREAM); hls.attachMedia(v); go();
-    }).catch(() => setState("off"));
+    }).catch(() => { if (!dead) native(); });
     countFunnel(campaign, "play", EBTV_STREAM);
     return () => { dead = true; v.removeEventListener("error", onErr); hls?.destroy(); v.removeAttribute("src"); v.load(); };
   }, [campaign]);
