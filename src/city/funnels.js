@@ -30,11 +30,11 @@ export const FUNNEL_OF = {
 // Cabinets standing elsewhere, by place: the game and the campaign their links carry.
 export const CABINET_PLACES = {
   "dive-bar": ["jetsam"], "the-lantern": ["jetsam"], "all-night-diner": ["jetsam"], casino: ["jetsam"],
-  "campus-lounge": ["jetsam", "anamnesis"],
+  "campus-lounge": ["jetsam", "anamnesis"], boardwalk: ["jetsam"],
 };
-export const CAMPAIGN_OF_PLACE = { "dive-bar": "the-dive", "the-lantern": "the-dive", "all-night-diner": "the-diner", casino: "casino", "campus-lounge": "union-lounge", arcade: "the-arcade", "eb-shop": "eb-shop", "studio-row": "ebtv-station" };
+export const CAMPAIGN_OF_PLACE = { "dive-bar": "the-dive", "the-lantern": "the-dive", "all-night-diner": "the-diner", casino: "casino", "campus-lounge": "union-lounge", arcade: "the-arcade", "eb-shop": "eb-shop", "studio-row": "ebtv-station", boardwalk: "the-boardwalk" };
 // Buildings whose rooms hold a cabinet (the toolbar offers PLAY there too).
-export const CABINET_BUILDINGS = { "the-dive": "the-dive", "press-building": "the-diner", casino: "casino", "eb-shop": "union-lounge" };
+export const CABINET_BUILDINGS = { "the-dive": "the-dive", "press-building": "the-diner", casino: "casino", "eb-shop": "union-lounge", "the-boardwalk": "the-boardwalk" };
 
 // -> the url with the city's tags (an existing query and hash kept; a tag already there replaced)
 export function utm(url, campaign, content = null) {

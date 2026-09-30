@@ -34,11 +34,11 @@ export const ROOM_TYPE = {
   "allotment": "allotment", "night-market": "market", "the-plaza": "street",
   "ball-field": "ballfield", "courts": "courts", "rec-park": "picnic", "pitch": "soccer",
   "forum": "assembly", "dev-lot": "street",
-  ...FUNNEL_ROOM_TYPE,   // the Arcade, the EB Shop, the Union lounge, EBTV's stage (funnelProps.js)
   // THE COAST and THE HEIGHTS (2026-09-30)
   "beach": "picnic", "boardwalk": "market", "pier": "street", "surf": "park", "shore-lot": "street",
   "surfside": "suite", "bungalows": "lofts", "seaview": "lofts", "shacks": "hab", "seawall": "hab",
   "slopes": "park", "base-lodge": "cafe", "summit-lot": "street", "chalets": "suite", "alpine-flats": "lofts", "bunkhouse": "hab",
+  ...FUNNEL_ROOM_TYPE,   // the Arcade, the EB Shop, the Union lounge, EBTV's stage, the boardwalk's cabinet (funnelProps.js); last, so it wins
 };
 // LOT 0x6F07 changes with THE ASSEMBLY's decision (sim.lotPhase): scrub and a site read as
 // the street; the course as a park; the farm as an allotment.
@@ -752,7 +752,7 @@ const DRAW = {
   },
 };
 const FUNNEL_ROOMS = funnelRooms();
-Object.assign(DRAW, FUNNEL_ROOMS.DRAW);
+Object.assign(DRAW, FUNNEL_ROOMS.DRAW, { boardwalk: DRAW.market });
 Object.assign(DRAW, casinoDraw({ R, across }));
 export const DRAWN_TYPES = Object.keys(DRAW);
 
@@ -846,7 +846,7 @@ const LIVE = {
     across(x + 3 * u, w * 0.6, 12 * u, (gx, i) => { const a = t * (i % 2 ? 0.6 : -0.6); R(c, "#8a7a4a", gx + Math.cos(a) * 3 * u, y + h * 0.3 + Math.sin(a) * 3 * u, u, u); });
   },
 };
-Object.assign(LIVE, FUNNEL_ROOMS.LIVE); withTv(LIVE);   // EBTV on the telly in the bars and the diner
+Object.assign(LIVE, FUNNEL_ROOMS.LIVE, LIVE.market ? { boardwalk: LIVE.market } : {}); withTv(LIVE);   // EBTV on the telly in the bars and the diner
 
 // ---- furniture ---------------------------------------------------------------------------
 // PROP[name] = {back, front}: back is drawn before the row's people, front after them.

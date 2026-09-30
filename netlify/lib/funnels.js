@@ -13,7 +13,7 @@ export const SHOP_TTL = 15 * 60 * 1000;           // Shopify is read at most thi
 export const SHOP_STALE = 24 * 3600 * 1000;       // a copy this old still beats CLOSED
 export const SHOP_MAX = 24;                       // items shown
 const CANDIDATES = 36;                            // newest in stock, read for their turntable videos
-export const CAMPAIGNS = new Set(["the-arcade", "eb-shop", "ebtv-station", "the-dive", "the-diner", "casino", "union-lounge", "city"]);
+export const CAMPAIGNS = new Set(["the-arcade", "eb-shop", "ebtv-station", "the-dive", "the-diner", "casino", "union-lounge", "the-boardwalk", "city"]);
 export const KINDS = new Set(["open", "play", "out"]);
 export const HOSTS = new Set(["play-jetsam.netlify.app", "anamnesis-eb.netlify.app", "birdsperson.itch.io", "shop.electricbasement.tv", "electricbasement.tv", "live.electricbasement.tv", "iridescent-studio.netlify.app"]);
 

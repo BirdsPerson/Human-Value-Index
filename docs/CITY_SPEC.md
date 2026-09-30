@@ -1058,7 +1058,7 @@ one-line hooks.
   counter; not named Iridescent). EB SHOP (Campus's free lot, 0x2B04: the shop floor, THE UNION
   LOUNGE upstairs). The Arts sound stages are now ELECTRIC BASEMENT TV (same building id
   `studio-block`, style `station`: mast, dish, ON AIR). JETSAM! cabinets also stand in the Dive,
-  the Lantern, the all-night diner and a corner of the casino; JETSAM! and ANAMNESIS in the Union.
+  the Lantern, the all-night diner, a corner of the casino and among the stalls on the Coast's boardwalk (its own `boardwalk` room type: the market plan plus the cabinet); JETSAM! and ANAMNESIS in the Union.
   Data: `funnelSim.js` (places, buildings, the prize clerk's job, who visits), spread into
   `sim.js` after everything else, so each took its district's next free grid cell and nothing
   moved.

@@ -12,8 +12,8 @@
 import { GAMES, GAME, PLAYABLE, cabColors, highScore, ebtvNow, ebtvLive, CAMPAIGN_OF_PLACE } from "./funnels.js";
 import { machineClock } from "./sim.js";
 
-export const FUNNEL_ROOM_TYPE = { arcade: "arcade", "eb-shop": "recordshop", "campus-lounge": "union", "studio-row": "ebtv" };
-export const FUNNEL_LOOK = { arcade: ["#140c20", "#2a1a3a"], recordshop: ["#241a16", "#3e2c22"], union: ["#1c1a22", "#34303c"], ebtv: ["#12282a", "#2a2a30"] };
+export const FUNNEL_ROOM_TYPE = { arcade: "arcade", "eb-shop": "recordshop", "campus-lounge": "union", "studio-row": "ebtv", boardwalk: "boardwalk" };
+export const FUNNEL_LOOK = { boardwalk: ["#241c10", "#5a4630"], arcade: ["#140c20", "#2a1a3a"], recordshop: ["#241a16", "#3e2c22"], union: ["#1c1a22", "#34303c"], ebtv: ["#12282a", "#2a2a30"] };
 export const FUNNEL_ACTS = ["arcade", "browse"];
 export const HOSTS = ["carol", "dale", "asuka", "hector", "joan", "vern"];
 export const isCabinet = (prop) => typeof prop === "string" && prop.startsWith("cab:");
@@ -44,9 +44,11 @@ export function funnelPlans(PLANS, { A, M, P, SIDE }) {
     front: { unit: [M(A("station", "type", "staff", 1), "switcher", 1.75, SIDE), M(A("seat", "watch", "patron"), "theatreSeat", 1.08), M(A("seat", "watch", "patron"), "theatreSeat", 1.08), M(A("station", "film", "staff", 1), "camera", 1.7, SIDE)] },
     solo: { head: [M(A("stand", "present", "staff", 1), "hostDesk", 2.8, 0.18)], unit: [M(A("station", "film", "staff", 1), "camera", 1.7, SIDE), M(A("seat", "watch", "patron"), "theatreSeat", 1.08)] },
   };
+  // the Coast's boardwalk: its market stalls, and a JETSAM! cabinet among them
+  if (PLANS.market) PLANS.boardwalk = JSON.parse(JSON.stringify(PLANS.market));
   // a JETSAM! cabinet in the bars, the diner and a corner of the casino: first in its row
   const withCab = (row) => { if (row) row.head = [cab("jetsam"), ...(row.head || [])]; };
-  for (const t of ["bar", "diner"]) { withCab(PLANS[t]?.front); withCab(PLANS[t]?.solo); }
+  for (const t of ["bar", "diner", "boardwalk"]) { withCab(PLANS[t]?.front); withCab(PLANS[t]?.solo); }
   if (PLANS.casino) { withCab(PLANS.casino.front); if (PLANS.casino.solo) withCab(PLANS.casino.solo); }
 }
 
