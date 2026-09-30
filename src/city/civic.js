@@ -28,7 +28,10 @@ import { displayName } from "../figures.js";
 import { seatsOn } from "./councilCalendar.js";
 
 export const CIVIC_V = 1;
-const DIST = SIM.DISTRICTS.map(d => d.id);
+// The league is the Loop's ten districts (its season was drawn before the city grew outward);
+// every district, the expansion ones included, has a mood and a seat.
+const DIST = SIM.LOOP_DISTRICTS.map(d => d.id);
+const ALL = SIM.DISTRICTS.map(d => d.id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function fnv(str) {
   let h = 0x811c9dc5;
@@ -288,7 +291,7 @@ const GLASS = new Set(["penthouses"]), PROJECTS = new Set(["block-a", "block-b"]
 // excess (room person-hours over capacity per capacity-hour), homeOver}} from one day's plan.
 export function dayStats(plan, people) {
   const P = plan.places, load = new Map();
-  const st = Object.fromEntries(DIST.map(id => [id, { n: 0, tier: 0, workers: 0, glass: 0, proj: 0, commute: 0, residents: 0 }]));
+  const st = Object.fromEntries(ALL.map(id => [id, { n: 0, tier: 0, workers: 0, glass: 0, proj: 0, commute: 0, residents: 0 }]));
   const res = new Map();
   for (const [key, row] of Object.entries(plan.subjects || {})) {
     const s = people.get(key) || { slug: key, name: key };
@@ -315,7 +318,7 @@ export function dayStats(plan, people) {
     if (st[hd]) st[hd].residents++;
   }
   const out = {};
-  for (const id of DIST) {
+  for (const id of ALL) {
     const x = st[id];
     let over = 0, cap = 0, hOver = 0, hCap = 0;
     for (const pid of SIM.DISTRICT[id].places) {
@@ -411,16 +414,16 @@ export function civicFold(plan, people, prev = null) {
   const lot = assemblyOn(day);
   const held = seatsOn(day, SEATS);
   const districts = {};
-  for (const id of DIST) {
+  for (const id of ALL) {
     const pos = standing.indexOf(id), fm = form(id);
     const f = factors(stats[id], [...fm].reduce((n, r) => n + (r === "W" ? 3 : r === "L" ? -3 : 0), 0), pos, lot, id);
     const raw = clamp(sum(f), -100, 100);
     const was = prev?.v === CIVIC_V && Number.isFinite(prev.districts?.[id]?.mood?.raw) ? prev.districts[id].mood.raw : raw;
-    const s = Math.round(0.6 * raw + 0.4 * was);
-    const T = table[id];
+    const s = Math.round(0.6 * raw + 0.4 * was) || 0;   // no -0: the block is plain JSON
+    const T = table[id] || { p: 0, w: 0, d: 0, l: 0, f: 0, a: 0, pts: 0 };   // outside the league
     districts[id] = {
       mood: { s, raw, was, f },
-      team: { rating: rating[id], roster: rosters[id], pos: pos + 1, p: T.p, w: T.w, d: T.d, l: T.l, f: T.f, a: T.a, pts: T.pts, form: fm },
+      team: { rating: rating[id] ?? 20, roster: rosters[id] || [], pos: pos + 1 || null, p: T.p, w: T.w, d: T.d, l: T.l, f: T.f, a: T.a, pts: T.pts, form: fm },
       // the seat: nobody holds it until the first election. approval follows the mood.
       // the seat: nobody holds it until the first election is decided and sworn in (council.js).
       seat: held[id]

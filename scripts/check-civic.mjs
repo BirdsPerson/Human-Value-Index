@@ -43,7 +43,8 @@ const { synthRoster } = await import("./synth-roster.mjs");
 let checks = 0;
 const ok = (c, m) => { checks++; assert.ok(c, m); };
 const eq = (a, b, m) => { checks++; assert.deepEqual(a, b, m); };
-const DIST = SIM.DISTRICTS.map(d => d.id);
+const DIST = SIM.LOOP_DISTRICTS.map(d => d.id);   // the league's ten
+const ALL = SIM.DISTRICTS.map(d => d.id);          // every district has a mood and a seat
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const peopleOf = (roster) => new Map(roster.map(s => [SIM.keyOf(s), s]));
 
@@ -66,10 +67,11 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   const again = C.civicFold(clone(plans.get(D0 + 1)), peopleOf(clone(roster)), clone(chain.get(D0)));
   eq(again, b, "deterministic: the same plan, census and yesterday fold to the same block");
   eq(clone(b), b, "the block is plain JSON");
-  for (const id of DIST) {
+  ok(Object.keys(b.districts).length === ALL.length && SIM.DISTRICTS.filter(d => d.expansion).every(d => b.districts[d.id].mood && b.districts[d.id].seat && b.districts[d.id].team.pos === null && !b.league.table.includes(d.id)), "the Coast and the Heights have a mood and a seat, and sit outside the league (drawn before they were built)");
+  for (const id of ALL) {
     const m = b.districts[id].mood;
     ok(m.was === chain.get(D0).districts[id].mood.raw, `${id}: the mood's yesterday is yesterday's raw`);
-    ok(m.s === Math.round(0.6 * m.raw + 0.4 * m.was), `${id}: score = 0.6 today + 0.4 yesterday`);
+    ok(m.s === (Math.round(0.6 * m.raw + 0.4 * m.was) || 0), `${id}: score = 0.6 today + 0.4 yesterday`);
     ok(m.raw === Math.max(-100, Math.min(100, Object.values(m.f).reduce((a, x) => a + x, 0))), `${id}: raw is the sum of its factors`);
     ok(m.s >= -100 && m.s <= 100, `${id}: mood in range`);
     ok(b.districts[id].seat.status === "VACANT" && b.districts[id].seat.holder === null && b.districts[id].seat.approval === m.s, `${id}: the seat is vacant, approval is the mood`);

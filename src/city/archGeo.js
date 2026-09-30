@@ -18,6 +18,7 @@ import { BUILDINGS, ARCH, HOUSING_TIERS, OPEN_LOTS } from "./sim.js";
 import { rotRect } from "./iso.js";
 import { insetOf, PARK_LOTS } from "./parkGeo.js";
 import { funnelMass, FUNNEL_STYLES, FUNNEL_OUT_FRONT } from "./funnelGeo.js";
+import { COAST_LOTS, TERRAIN_MAX } from "./coastGeo.js";
 
 export const KERB = 0.4;    // props and bodies keep this far in from the lot edge (sim KERB)
 
@@ -34,6 +35,11 @@ export const STYLES = {
   shed: { family: "industry", name: "SAWTOOTH SHED" }, reactor: { family: "industry", name: "REACTOR" }, stacks: { family: "industry", name: "FOUNDRY" },
   datahall: { family: "industry", name: "DATA HALL" }, docks: { family: "industry", name: "DOCKS" }, tanks: { family: "industry", name: "TANK FARM" },
   bunker: { family: "state", name: "BARRACKS" }, prison: { family: "state", name: "PRISON" }, canteen: { family: "industry", name: "CANTEEN" },
+  // THE COAST and THE HEIGHTS (2026-09-30): seaside and alpine housing by tier, the base lodge
+  shacks: { family: "housing", name: "SURF SHACKS" }, seawall: { family: "housing", name: "SEAWALL ESTATE" }, bungalow: { family: "housing", name: "BEACH BUNGALOWS" },
+  seaview: { family: "housing", name: "SEAVIEW FLATS" }, condo: { family: "housing", name: "OCEANFRONT CONDOMINIUM" },
+  bunkhouse: { family: "housing", name: "BUNKHOUSE" }, alpine: { family: "housing", name: "ALPINE FLATS" }, chalet: { family: "housing", name: "CHALETS" },
+  lodge: { family: "leisure", name: "SKI LODGE" },
   // open ground: drawn by parkDraw (the fields, the Bowl) or as a lot (the Green, the Street)
   stadium: { family: "ground" }, field: { family: "ground" }, lot: { family: "ground" },
   ...FUNNEL_STYLES,   // the Arcade, the EB Shop, the EBTV station (funnelGeo.js)
@@ -268,6 +274,76 @@ const MASS = {
       cyl(4.9, 1.3, 0.16, 1.3, 2.9, "stack", { steam: true })],
     ground: [], yard: [pt("bins", 6.6, 2.1, 0.2)],
   }),
+
+  // ---- THE COAST ----
+  // Four huts in faded pastels, tin roofs, boards leaning at the front; palms between.
+  shacks: () => ({
+    rise: 1.8,
+    parts: ["pastel", "pastelpink", "pastelyellow", "pastel"].map((mat, i) => box(0.7 + i * 2.7, 1.2, 2.9 + i * 2.7, 3.6, 0, 1.1, mat, { win: "shack", roof: "gable", ax: "x", peak: 0.55, door: "s", house: i })),
+    ground: [gr("sand", 0.5, 3.7, 11.5, 6.5)],
+    yard: [pt("palm", 1.2, 5.6, 0.25), pt("palm", 10.8, 5.4, 0.25), pt("surfboard", 3.1, 4.4, 0.18), pt("surfboard", 3.8, 4.4, 0.18), pt("surfboard", 8.4, 4.4, 0.18), pt("bench", 6.2, 5.5, 0.15, { along: "x" })],
+  }),
+  // The overflow estate: a weathered slab by the seawall, balconies full of towels.
+  seawall: () => ({
+    rise: 7,
+    parts: [box(0.8, 0.9, 11.2, 4.4, 0, 7, "weathered", { win: "flats", balconies: true, door: "s", towels: true })],
+    ground: [gr("paving", 0.6, 4.6, 11.4, 6.5)],
+    yard: [pt("palm", 1.4, 5.7, 0.25), pt("bench", 6, 5.6, 0.15, { along: "x" }), pt("lamp", 10.4, 5.8, 0.08)],
+  }),
+  // Three bungalows on stilts of sand, verandas to the front, one storey and a loft.
+  bungalow: () => ({
+    rise: 2.8,
+    parts: ["stucco", "pastel", "stucco"].map((mat, i) => box(0.7 + i * 3.8, 1.0, 3.9 + i * 3.8, 4.0, 0, 2, mat, { win: "bungalow", roof: "gable", ax: "y", peak: 0.8, door: "s", veranda: true, house: i })),
+    ground: [gr("sand", 0.5, 4.5, 11.5, 6.5)],
+    yard: [pt("palm", 1.5, 5.8, 0.25), pt("palm", 10.5, 5.8, 0.25), pt("surfboard", 5.4, 5.6, 0.18), pt("lamp", 7.6, 5.9, 0.08)],
+  }),
+  // Stucco flats, five storeys, every window a balcony with a view of the balcony opposite.
+  seaview: () => ({
+    rise: 5.4,
+    parts: [box(0.8, 0.9, 11.2, 4.3, 0, 5, "stucco", { win: "flats", balconies: true, door: "s" }), box(4.2, 1.8, 7.6, 3.4, 5, 5.4, "stucco", { win: "none" })],
+    ground: [gr("paving", 0.6, 4.6, 11.4, 6.5)],
+    yard: [pt("palm", 1.2, 5.6, 0.25), pt("planter", 5.2, 5.6, 0.3), pt("planter", 7.2, 5.6, 0.3), pt("palm", 10.8, 5.6, 0.25)],
+  }),
+  // Oceanfront glass: a podium with the pool deck, a slim tower, the penthouse deck.
+  condo: () => ({
+    rise: 7.6,
+    parts: [box(0.8, 0.8, 12.2, 3.6, 0, 1.5, "glass", { win: "condo", door: "s", pool: [7.8, 1.1, 11.8, 3.3] }),
+      box(1.4, 1.1, 7.2, 3.3, 1.5, 7, "glass", { win: "condo", terrace: true }),
+      box(2.2, 1.5, 6.4, 2.9, 7, 7.6, "glass", { win: "crown", umbrellas: true })],
+    ground: [gr("sand", 0.6, 4.0, 12.4, 6.5)],
+    yard: [pt("doorman", 4.3, 4.2, 0.05), pt("palm", 1.2, 5.5, 0.25), pt("palm", 11.8, 5.5, 0.25), pt("umbrella", 7.2, 5.5, 0.35), pt("umbrella", 9.4, 5.5, 0.35)],
+  }),
+
+  // ---- THE HEIGHTS ----
+  // The lift crew's quarters: a long timber block, four storeys of bunks, skis at the door.
+  bunkhouse: () => ({
+    rise: 4.6,
+    parts: [box(0.8, 1.0, 12.2, 4.2, 0, 4, "timber", { win: "bunk", roof: "gable", ax: "x", peak: 0.9, door: "s", snow: true })],
+    ground: [gr("snow", 0.5, 4.4, 12.5, 6.5)],
+    yard: [pt("skis", 3.2, 4.9, 0.2), pt("skis", 9.8, 4.9, 0.2), pt("pine", 1.2, 5.8, 0.3), pt("pine", 11.8, 5.8, 0.3), pt("lamp", 6.5, 5.9, 0.08)],
+  }),
+  // Timber over stucco, four storeys under a steep roof, balconies of drying gloves.
+  alpine: () => ({
+    rise: 5.6,
+    parts: [box(0.8, 0.9, 13.2, 4.2, 0, 4, "stucco", { win: "alpine", balconies: true, roof: "gable", ax: "x", peak: 1.4, door: "s", snow: true, timberTop: true })],
+    ground: [gr("snow", 0.5, 4.4, 13.5, 6.5)],
+    yard: [pt("pine", 1.2, 5.7, 0.3), pt("skis", 6.8, 4.9, 0.2), pt("bench", 9.6, 5.6, 0.15, { along: "x" }), pt("pine", 12.8, 5.7, 0.3)],
+  }),
+  // The base lodge: logs, a great steep roof, the fire going, the chimney smoking.
+  lodge: () => ({
+    rise: 4.2,
+    parts: [box(0.8, 0.9, 13.2, 4.6, 0, 2, "logs", { win: "lodge", roof: "gable", ax: "x", peak: 1.8, door: "s", snow: true, sign: "BASE LODGE" }),
+      cyl(11.6, 2.2, 0.35, 2, 4.4, "stone", { smoke: true })],
+    ground: [gr("snow", 0.5, 4.8, 13.5, 6.5)],
+    yard: [pt("skis", 2.2, 5.3, 0.2), pt("skis", 3.0, 5.3, 0.2), pt("bench", 7, 5.8, 0.15, { along: "x" }), pt("lamp", 10.2, 5.9, 0.08), pt("pine", 12.8, 5.9, 0.3)],
+  }),
+  // Four chalets for the top of the ladder: A-frames, glass gable ends, a hot tub each.
+  chalet: () => ({
+    rise: 3.6,
+    parts: [0, 1, 2, 3].map(i => box(0.9 + i * 6.8, 1.0, 5.9 + i * 6.8, 4.2, 0, 1.6, "timber", { win: "chalet", roof: "gable", ax: "y", peak: 2.0, door: "s", snow: true, house: i })),
+    ground: [gr("snow", 0.5, 4.4, 27.5, 6.5)],
+    yard: [0, 1, 2, 3].flatMap(i => [pt("hottub", 3.4 + i * 6.8, 5.3, 0.45), pt("pine", 6.35 + i * 6.8, 5.8, 0.3)]),
+  }),
 };
 
 Object.assign(MASS, funnelMass({ box, cyl, pt, bx, run, gr }));
@@ -302,7 +378,7 @@ export function massingOf(b) {
   return m;
 }
 // How far the front (+y) dressing stands out from the body: stoops, canopies, awnings, a portico's steps.
-export const OUT_FRONT = { brownstone: 0.55, glass: 0.45, casino: 0.45, cafe: 0.45, market: 0.35, theatre: 0.4, neon: 0.3, diner: 0.3, classical: 0.25, projects: 0.3, gallery: 0.1, hospital: 0.25, school: 0.2, gothic: 0.2, clocktower: 0.2, shed: 0.35, lofts: 0.3, office: 0.2, chapel: 0.2, ...FUNNEL_OUT_FRONT };
+export const OUT_FRONT = { bungalow: 0.4, lodge: 0.1, brownstone: 0.55, glass: 0.45, casino: 0.45, cafe: 0.45, market: 0.35, theatre: 0.4, neon: 0.3, diner: 0.3, classical: 0.25, projects: 0.3, gallery: 0.1, hospital: 0.25, school: 0.2, gothic: 0.2, clocktower: 0.2, shed: 0.35, lofts: 0.3, office: 0.2, chapel: 0.2, ...FUNNEL_OUT_FRONT };
 
 export const MASSED = Object.keys(MASS);
 export const massingAll = () => BUILDINGS.map(b => [b, massingOf(b)]);
@@ -334,12 +410,14 @@ export function isoItems(r) {
   const items = [];
   for (const b of BUILDINGS) {
     const m = massingOf(b);
-    const open = OPEN_LOTS.has(b.id);
+    // the Coast's and the Heights' ground (coastGeo.js) is ground too: whoever is on it is drawn
+    // after it; the mountain's box stands as tall as the terrain, for the tap
+    const coast = COAST_LOTS[b.id], open = OPEN_LOTS.has(b.id) || Boolean(coast);
     let foot;
     if (m) foot = { x: m.box.x0, y: m.box.y0, w: m.box.x1 - m.box.x0, h: m.box.y1 - m.box.y0 };
     else { const [ix, iy] = insetOf(b); foot = { x: b.rect.x + ix, y: b.rect.y + iy, w: b.rect.w - 2 * ix, h: b.rect.h - 2 * iy }; }
     const R = rotRect(foot, r);
-    const h = open ? 0.05 : PARK_LOTS[b.id] ? 1 : m ? m.rise : 1;
+    const h = coast === "slopes" || coast === "summit-lot" ? TERRAIN_MAX : coast ? 0.4 : open ? 0.05 : PARK_LOTS[b.id] ? 1 : m ? m.rise : 1;
     items.push({ kind: "b", b, id: b.id, m, R, h, x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1, ...(open ? { deck: true, top: 0 } : {}) });
     if (m) for (const p of m.yard) {
       const Y = rotRect({ x: p.x0, y: p.y0, w: p.x1 - p.x0, h: p.y1 - p.y0 }, r);

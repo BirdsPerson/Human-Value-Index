@@ -2,10 +2,11 @@ import { memo, useEffect, useRef, useState } from "react";
 import TouchGate from "../ui/TouchGate.jsx";
 import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
 import { DISTRICTS, BUILDINGS, BUILDING, PLACES, LOOP_LINE, STATIONS, OPEN_LOTS, clockAt, whereOf, trainsAt, roomIn, gameAt } from "./simApi.js";
+import { SPURS as SPURS_BY_ID } from "./sim.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FONT } from "./cityUi.jsx";
-import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4, LOD_NEAR, LOD_MID } from "./iso.js";
+import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4, LOD_NEAR, LOD_MID, BOUNDS } from "./iso.js";
 import { wantSectors } from "./planClient.js";
 import { loopPieces, trainPoses, carCorners, carBox, stationGeo, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
@@ -24,6 +25,8 @@ import ControlLayer, { TakeControlButton } from "./ControlLayer.jsx";
 import { funnelRoomHits } from "./funnelProps.js";
 import { funnelButtons } from "./funnels.js";
 import { openFunnel } from "./FunnelOverlay.jsx";
+import { COAST_LOTS, COAST_PLACES, SPUR_STOPS, terrainH, onTerrain } from "./coastGeo.js";
+import { drawCoastLot, drawCoastGround, drawSpurTracks, drawSpurStop, drawPod, coastLabel, coastLine } from "./coastDraw.js";
 
 // THE SUBSTRATE, SimCity-style: every building drawn in its own architecture (archGeo.js
 // massing, archDraw.js drawing: the projects, brownstones, the glass tower, the monolith...),
@@ -38,7 +41,7 @@ import { openFunnel } from "./FunnelOverlay.jsx";
 // Labels go on top of the finished scene, nearest first, never over each other. A tap asks
 // the same order front to back, so what you see on top is what you get.
 
-const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316" };
+const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316", coast: "#3a3322", heights: "#2a3440" };
 const LOT_FILL = { "the-green": "#123a18", "the-allotment": "#1a2e12", "the-street": "#20241f", "the-plaza": "#24261f" };
 const OUTDOOR_PLACES = new Set(["park", "the-street", "the-plaza", "allotment"]);
 const PANEL_BG = "#060a06";
@@ -108,6 +111,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const items = isoItems(r);
       // the viaduct: straight deck pieces, curved corners, a station at every district
       items.push(...loopPieces(r));
+      // the spurs' shelters (the track itself is ground)
+      for (const st of SPUR_STOPS) { const R = rotRect({ x: st.box.x0, y: st.box.y0, w: st.box.x1 - st.box.x0, h: st.box.y1 - st.box.y0 }, r); items.push({ kind: "sp", st, x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1 }); }
       const order = depthOrder(items);
       const districts = DISTRICTS.map(d => ({ d, R: rotRect(d.rect, r) }));
       return { r, items, order, districts };
@@ -120,7 +125,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const c = censusRef.current;
       if (!c || c.v === V.censusV) return;
       V.censusV = c.v;
-      const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map([...PARK_PLACES, ...CIVIC_PLACES].map(id => [id, []])), doors = new Map();
+      const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map([...PARK_PLACES, ...CIVIC_PLACES, ...COAST_PLACES].map(id => [id, []])), doors = new Map();
       for (const { s, w } of c.list || []) {
         if (!w) continue;
         if (ctl.skipSelf(s)) continue;   // DRIVE YOURSELF: the scheduled self steps out while you drive it
@@ -332,6 +337,10 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         if (!onScreen(pts)) continue;
         poly(pts, GROUND[d.id] || "#101410", "rgba(74,222,128,0.18)");
       }
+      // the Coast's sea (the district's southern rows) and the spurs' rails
+      const hr = ((V.mt % 24) + 24) % 24;
+      drawCoastGround(coastG(), lodFor(V.cam.z), V.reduced ? 0 : performance.now() / 1000, nightAt(hr));
+      drawSpurTracks(coastG(), lodFor(V.cam.z), nightAt(hr));
       // the buildings' flat ground: the court slab, the quad, the monolith's plaza
       const hour = ((V.mt % 24) + 24) % 24, env = { lod: lodFor(V.cam.z), night: nightAt(hour) };
       for (const it of g.items) if (it.kind === "b" && it.m && it.m.ground.length) {
@@ -342,7 +351,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       // a faint street grid between the blocks
       if (lodFor(V.cam.z) !== "far") {
         ctx.strokeStyle = "rgba(74,222,128,0.05)"; ctx.lineWidth = 1;
-        const e = { x0: -4, y0: -4, x1: 116, y1: 64 };
+        const e = { x0: Math.floor(BOUNDS.x0 / 4) * 4, y0: Math.floor(BOUNDS.y0 / 4) * 4, x1: BOUNDS.x1, y1: BOUNDS.y1 };
         for (let x = e.x0; x <= e.x1; x += 4) { const [u0, v0] = rot(x, e.y0, g.r), [u1, v1] = rot(x, e.y1, g.r); const a = P(u0, v0, 0), b = P(u1, v1, 0); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
         for (let y = e.y0; y <= e.y1; y += 4) { const [u0, v0] = rot(e.x0, y, g.r), [u1, v1] = rot(e.x1, y, g.r); const a = P(u0, v0, 0), b = P(u1, v1, 0); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
       }
@@ -350,6 +359,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
 
     // The kit archDraw draws with: map cells in, turned and projected by the camera.
     let AG = null;
+    // ...and the one the Coast and the Heights draw with (coastDraw.js)
+    const coastG = () => ({ ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, t: V.reduced ? 0 : performance.now() / 1000, hits: V.hits, w: V.cssW, h: V.cssH });
     const archG = () => { AG ||= { ctx, Q, poly, facing, z: 0, r: 0 }; AG.z = V.cam.z; AG.r = V.cam.r; return AG; };
     function drawYard(it, lod) {
       const [x, y] = Q(it.p.x, it.p.y, 0);
@@ -377,6 +388,21 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
         if (top) drawLabel(L, 1); else V.labels.push(L);
       };
+      if (COAST_LOTS[b.id]) {
+        // THE COAST and THE HEIGHTS (coastDraw.js): the beach, the boardwalk, the pier, the break,
+        // the mountain and the resort parcels, with whoever is on them
+        const pid = COAST_LOTS[b.id];
+        const G = { ...coastG(), hits: top ? [] : V.hits };
+        V.parkSeats.set(pid, drawCoastLot(G, b.id, lod, V.mt, V.park.get(pid) || [], V.parkSeats.get(pid) || null));
+        if (selected) poly([P(R.x0, R.y0, 0.02), P(R.x1, R.y0, 0.02), P(R.x1, R.y1, 0.02), P(R.x0, R.y1, 0.02)], null, "#4ade80");
+        if (lod !== "far" || selected) {
+          const tall = it.h > 2, [x, y] = tall ? P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, it.h * 0.9) : P(R.x0 + 0.6, R.y0 + 0.6, 0.6);
+          const text = coastLabel(b.id) || b.name;
+          const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
+          if (top) drawLabel(L, 1); else V.labels.push(L);
+        }
+        return;
+      }
       if (CIVIC_LOTS[b.id]) {
         // THE ASSEMBLY and its lot (civicDraw.js): the lot's face follows the recorded vote
         const pid = CIVIC_LOTS[b.id];
@@ -610,7 +636,14 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         } else {
           const w = whereOf(o.s, mt);
           if (!w || w.activity !== "commute" || w.sub === "riding") continue;
+          if (w.leg === "pod") {
+            // a spur's pod (sim SPURS): one subject, one pod, heading along the track
+            const [u, v] = rot(w.x, w.y, r);
+            out.push({ kind: "pod", s: o.s, x: w.x, y: w.y, spur: w.spur, d: podHeading(w), u, v, h: 0, box: { x0: u - 0.4, y0: v - 0.4, x1: u + 0.4, y1: v + 0.4 } });
+            continue;
+          }
           [x, y, h] = streetSpot(w);
+          if (onTerrain(x, y)) h = terrainH(x, y);   // on the mountain's snow, not under it
         }
         const [u, v] = rot(x, y, r);
         out.push({ kind: "p", s: o.s, u, v, h, box: { x0: u, y0: v, x1: u, y1: v } });
@@ -746,7 +779,25 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       }
       if (!p.s.crowd) V.hits.push({ kind: "p", s: p.s, box: [x - hpx * 0.3, y - hpx, x + hpx * 0.3, y] });   // a stand-in (crowd.js) never opens
     }
-    function drawMover(m, lod) { if (m.kind === "p") drawPerson(m, lod); else if (m.kind === "ctl") ctl.drawMover(m, lod); else drawCar(m, lod); }
+    function drawMover(m, lod) {
+      if (m.kind === "p") drawPerson(m, lod);
+      else if (m.kind === "ctl") ctl.drawMover(m, lod);
+      else if (m.kind === "pod") drawPod(coastG(), m.s, m.x, m.y, m.d, m.spur, lod, nightAt(((V.mt % 24) + 24) % 24), V.hits);
+      else drawCar(m, lod);
+    }
+    // Which way a pod faces: along the spur's track at its position, the way it is going.
+    function podHeading(w) {
+      const sp = Object.values(SPURS_BY_ID).find(x => x.id === w.spur);
+      if (!sp) return [1, 0];
+      let best = null, bd = Infinity;
+      for (let i = 1; i < sp.pts.length; i++) {
+        const [ax, ay] = sp.pts[i - 1], [bx, by] = sp.pts[i], vx = bx - ax, vy = by - ay, t = Math.max(0, Math.min(1, ((w.x - ax) * vx + (w.y - ay) * vy) / (vx * vx + vy * vy)));
+        const d = Math.hypot(w.x - ax - vx * t, w.y - ay - vy * t);
+        if (d < bd) { bd = d; best = [vx, vy]; }
+      }
+      const n = Math.hypot(best[0], best[1]) || 1, k = w.podDir === "in" ? 1 : -1;
+      return [k * best[0] / n, k * best[1] / n];
+    }
 
     // ---- labels: one pass on top, nearest first, none over another --------------------------
     // They fade in over a zoom range instead of all switching on at once.
@@ -811,6 +862,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const game = PARK_LOTS[b.id] && gameAt(PARK_LOTS[b.id], mt);
       const sub = b.id === "hq" ? "CENSUS CLASSIFIED"
         : CIVIC_LOTS[b.id] ? civicLine(b.id, mt, V.occ[b.id] || 0)
+        : COAST_LOTS[b.id] ? coastLine(b.id, mt, V.occ[b.id] || 0)
         : PARK_LOTS[b.id] ? `${V.occ[b.id] || 0} ${b.id === "the-bowl" ? "IN THE BOWL" : "ON THE GROUND"} // ${game ? game.short : PARK_LOTS[b.id] === "rec-park" ? "LEISURE IN PROGRESS. IT IS BEING ENJOYED." : "NO FIXTURE. PRACTICE IS PERMITTED."}`
         : `${V.occ[b.id] || 0} INSIDE // ${nF} FLOOR${nF === 1 ? "" : "S"}`;
       ctx.fillText(fitText(sub, pr.w - 20 - closeW), x0 + 10, y0 + 24);
@@ -969,6 +1021,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         else if (it.kind === "y") drawYard(it, lod);
         else if (it.kind === "t") drawDeckPiece(it, lod);
         else if (it.kind === "k") drawCorner(it, lod);
+        else if (it.kind === "sp") drawSpurStop(coastG(), it.st, lod, nightAt(((mt % 24) + 24) % 24), V.labels);
         else drawStation(it, lod, k);
         for (const m of slots.get(k) || []) drawMover(m, lod);
       }

@@ -34,6 +34,10 @@ export const ROOM_TYPE = {
   "ball-field": "ballfield", "courts": "courts", "rec-park": "picnic", "pitch": "soccer",
   "forum": "assembly", "dev-lot": "street",
   ...FUNNEL_ROOM_TYPE,   // the Arcade, the EB Shop, the Union lounge, EBTV's stage (funnelProps.js)
+  // THE COAST and THE HEIGHTS (2026-09-30)
+  "beach": "picnic", "boardwalk": "market", "pier": "street", "surf": "park", "shore-lot": "street",
+  "surfside": "suite", "bungalows": "lofts", "seaview": "lofts", "shacks": "hab", "seawall": "hab",
+  "slopes": "park", "base-lodge": "cafe", "summit-lot": "street", "chalets": "suite", "alpine-flats": "lofts", "bunkhouse": "hab",
 };
 // LOT 0x6F07 changes with THE ASSEMBLY's decision (sim.lotPhase): scrub and a site read as
 // the street; the course as a park; the farm as an allotment.

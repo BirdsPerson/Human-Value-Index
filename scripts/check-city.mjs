@@ -10,7 +10,7 @@ import {
   DISTRICTS, PLACES, JOBS, JOB, assignJob, homeOf, schedule, whereAt, machineClock, occupancy,
   statusLine, SEED, toHours, BUS, V_WALK, V_BUS, SHIFT_HOURS, fieldsOf,
   LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, trainsAt, nextArrival, timetable, loopEvents, HEADWAY, DWELL, V_TRAIN, CAR_CAP,
-  BUILDINGS, BUILDING, isOwl, setRoster, clearRoster,
+  BUILDINGS, BUILDING, isOwl, setRoster, clearRoster, LOOP_DISTRICTS, SPURS, hubOf, V_POD, RESORT_PARCELS,
 } from "../src/city/sim.js";
 import { FLOORS as HQ_FLOORS } from "../src/building.js";
 import { shiftLabel } from "../src/city/cityKit.js";
@@ -64,8 +64,8 @@ console.log(`population: ${figures.length} figures, ${engine.length} engine, ${c
 
 // ---- catalogue ------------------------------------------------------------------------
 section("catalogue");
-ok(DISTRICTS.length === 10, `10 districts (got ${DISTRICTS.length})`);
-const ids = ["hq", "arts", "campus", "finance", "strip", "arena", "commons", "archive", "works", "sprawl"];
+ok(DISTRICTS.length === 12 && LOOP_DISTRICTS.length === 10, `10 districts on the Loop and 2 expansion districts (got ${DISTRICTS.length})`);
+const ids = ["hq", "arts", "campus", "finance", "strip", "arena", "commons", "archive", "works", "sprawl", "coast", "heights"];
 const DISTRICT_IDS = new Set(ids);
 ok(ids.every(id => DISTRICTS.some(d => d.id === id)), "district ids match the contract");
 ok(Object.keys(PLACES).length >= 30, `~35 places (got ${Object.keys(PLACES).length})`);
@@ -160,7 +160,8 @@ section("the loop");
 {
   const L = LOOP_LINE.length;
   ok(BUS === LOOP_LINE && V_BUS === V_TRAIN, "v1 names (BUS, V_BUS) still point at the Loop");
-  ok(STATION_ORDER.length === DISTRICTS.length && DISTRICTS.every(d => STATIONS[d.id]?.districtId === d.id), "one station per district");
+  ok(STATION_ORDER.length === LOOP_DISTRICTS.length && LOOP_DISTRICTS.every(d => STATIONS[d.id]?.districtId === d.id), "one station per Loop district");
+  ok(DISTRICTS.filter(d => d.expansion).every(d => SPURS[d.id] && STATIONS[d.hub] && hubOf(d.id) === d.hub && !STATIONS[d.id]), "every expansion district is served by a spur from its hub's station");
   for (const id of STATION_ORDER) {
     const st = STATIONS[id], p = LOOP_LINE.at(st.s);
     ok(st.s >= 0 && st.s < L && Math.hypot(p.x - st.x, p.y - st.y) < 1e-9, `${id} station sits on the ring`);
@@ -250,8 +251,8 @@ section("buildings");
 
 // ---- continuity -------------------------------------------------------------------------------
 section("continuity");
-const PHASE = (w) => w.sub === "waiting" ? 1 : w.sub === "riding" ? 2 : w.sub === "alighting" ? 3 : w.sub === "walking" ? (w.stationId && w.stationId === w.districtId && w.fromDistrictId !== w.districtId ? 4 : 0) : -1;
-let worst = { d: 0 }, worstWalk = { d: 0 }, bus = 0;
+const PHASE = (w) => w.sub === "waiting" ? 1 : w.sub === "riding" ? 2 : w.sub === "alighting" ? 3 : w.sub === "walking" ? (w.dir === "in" ? 4 : 0) : -1;
+let worst = { d: 0 }, worstWalk = { d: 0 }, worstPod = { d: 0 }, bus = 0, pods = 0;
 const cnt = { walking: 0, waiting: 0, riding: 0, alighting: 0 };
 const bad = { sub: 0, platform: 0, car: 0, order: 0, board: 0, alight: 0, floor: 0, floorHop: 0, bldg: 0, skip: 0 };
 const trainCache = new Map();
@@ -267,7 +268,8 @@ for (const s of ALL) {
     if (d > worst.d) worst = { d, s: s.slug, t, from: prev, to: w };
     // Off the train, everyone moves at walking pace or slower: the platform, the doors and
     // the walk either side included. Only a minute that touches a ride may go faster.
-    const onFoot = prev.leg !== "ride" && w.leg !== "ride";
+    const onFoot = prev.leg !== "ride" && w.leg !== "ride" && prev.leg !== "pod" && w.leg !== "pod";
+    if (w.leg === "pod" || prev.leg === "pod") { if (prev.leg !== "ride" && w.leg !== "ride" && d > worstPod.d) worstPod = { d, s: s.slug, t }; pods++; }
     if (onFoot && d > worstWalk.d) worstWalk = { d, s: s.slug, t, from: prev, to: w };
     if (w.activity === "commute") {
       if (!(w.sub in cnt)) bad.sub++; else cnt[w.sub]++;
@@ -283,7 +285,7 @@ for (const s of ALL) {
       }
       // The views sample once a machine minute: nobody may go from the car to the street between two samples.
       if (prev.sub === "riding" && w.sub === "walking") bad.skip++;
-      if (w.sub === "alighting") { const tr = trainsAtMin(t)[w.trainId]; if (!tr.dwell || tr.stationId !== w.stationId || w.stationId !== w.districtId) bad.alight++; }
+      if (w.sub === "alighting") { const tr = trainsAtMin(t)[w.trainId]; if (!tr.dwell || tr.stationId !== w.stationId || w.stationId !== hubOf(w.districtId)) bad.alight++; }
       // Within one trip the stages only go forward: walk, wait, ride, alight, walk.
       if (prev.activity === "commute" && prev.placeId === w.placeId && prev.fromPlaceId === w.fromPlaceId && w.progress >= prev.progress && PHASE(w) < PHASE(prev)) bad.order++;
     } else {
@@ -300,7 +302,9 @@ console.log(`  largest step off the train: ${worstWalk.d.toFixed(2)} cells (limi
 console.log(`  commuter-minutes: ${Object.entries(cnt).map(([k, v]) => `${k} ${v}`).join(", ")}`);
 // On foot nobody covers more than V_WALK/60 cells a machine minute; a minute that
 // touches the train may cover up to V_TRAIN/60. Anything more is a teleport.
-ok(worstWalk.d <= V_WALK / 60 + 0.01, "off the train, nobody moves faster than walking pace (platforms and doors included)");
+ok(worstWalk.d <= V_WALK / 60 + 0.01, "off the train and out of the pods, nobody moves faster than walking pace (platforms and doors included)");
+console.log(`  pod-minutes ${pods}; fastest pod step ${worstPod.d.toFixed(2)} cells (limit ${(V_POD / 60).toFixed(2)})`);
+ok(pods > 0 && worstPod.d <= V_POD / 60 + 0.01, "somebody rides a spur pod, never faster than the pods run");
 ok(worst.d <= V_TRAIN / 60 + 0.01, `nobody moves faster than the Loop (${(V_TRAIN / 60).toFixed(2)} cells/min)`);
 ok(bus > 0 && cnt.waiting > 0 && cnt.alighting > 0, "somebody walks, waits, rides and alights");
 ok(bad.sub === 0, `every commuter is walking, on a platform or on a train (${bad.sub} other)`);
@@ -389,7 +393,8 @@ for (const r of stress) ok(r.peak <= r.cap * 2, `${r.id} peak ${r.peak} within 2
   ok(flooredBad === 0, "occupancy by building and floor adds up to occupancy by room");
 }
 console.log(`  never visited: ${unused.join(", ") || "none"}`);
-ok(unused.length <= 3, "nearly every place gets used");
+ok(unused.filter(id => !RESORT_PARCELS.has(id)).length <= 3, "nearly every place gets used (the resort parcels wait for session 002)");
+ok(![...RESORT_PARCELS].some(id => !unused.includes(id)), "nobody visits a resort parcel before anything is built on it");
 
 // ---- status copy -------------------------------------------------------------------------------
 section("status lines");

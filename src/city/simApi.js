@@ -55,7 +55,7 @@ export const jobOf = (subject) => SIM.assignJob(subject);
 export function roomIn(w, s) {
   if (!w) return null;
   if (w.activity !== "commute") return w.buildingId ? { buildingId: w.buildingId, floor: w.floor, placeId: w.placeId, mode: "here" } : null;
-  if (w.sub !== "walking") return null;
+  if (w.sub !== "walking" || w.leg === "pod") return null;   // in a spur's pod: at no door
   const at = atDistrict(w);
   const to = PLACES[w.placeId], from = PLACES[w.fromPlaceId];
   if (to?.building && to.district === at) return { buildingId: to.building, floor: floorFor(s, w.placeId), placeId: w.placeId, mode: "arrive" };

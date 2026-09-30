@@ -23,7 +23,7 @@ for (const b of BUILDINGS) {
 }
 for (const pid in PLACES) ok(PLACE_HOME[pid] && BUILDING[PLACE_HOME[pid].buildingId], `place ${pid} belongs to a building`);
 ok(BUILDING["hq-tower"] ? BUILDING["hq-tower"].floors.length === 6 : BUILDINGS.some(b => b.districtId === "hq" && b.floors.length === 6), "HQ is the six-floor building");
-ok(STATIONS.length === DISTRICTS.length, `one station per district (${STATIONS.length})`);
+ok(STATIONS.length === DISTRICTS.filter(d => !d.expansion).length, `one station per Loop district (${STATIONS.length}); the Coast and the Heights ride a spur`);
 
 console.log("== subjects land on a floor of their building");
 const roster = FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name) }));

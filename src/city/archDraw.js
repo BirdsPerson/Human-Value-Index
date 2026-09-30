@@ -20,8 +20,9 @@ import { rot, STOREY } from "./iso.js";
 import { funnelDeco, drawFunnelYard, FUNNEL_MAT, FUNNEL_ROOF, FUNNEL_STYLES_DRAWN, FUNNEL_PROPS } from "./funnelDraw.js";
 import { partOrder } from "./archGeo.js";
 
-export const DRAWN_STYLES = new Set(["projects", "brownstone", "lofts", "glass", "office", "monolith", "gothic", "clocktower", "neon", "casino", "diner", "gallery", "theatre", "cafe", "studio", "hall", "classical", "vault", "hospital", "chapel", "market", "school", "shed", "reactor", "stacks", "datahall", "docks", "tanks", "bunker", "prison", "canteen"]);
-export const DRAWN_PROPS = new Set(["hoop", "fence", "bench", "tree", "lamp", "doorman", "planter", "fountain", "flag", "camera", "bollard", "statue", "hydrant", "poster", "table", "armoured", "booth", "ambulance", "grave", "stall", "conveyor", "containers", "sandbags", "watchtower", "bins"]);
+export const DRAWN_STYLES = new Set(["projects", "brownstone", "lofts", "glass", "office", "monolith", "gothic", "clocktower", "neon", "casino", "diner", "gallery", "theatre", "cafe", "studio", "hall", "classical", "vault", "hospital", "chapel", "market", "school", "shed", "reactor", "stacks", "datahall", "docks", "tanks", "bunker", "prison", "canteen",
+  "shacks", "seawall", "bungalow", "seaview", "condo", "bunkhouse", "alpine", "lodge", "chalet"]);
+export const DRAWN_PROPS = new Set(["hoop", "fence", "bench", "tree", "lamp", "doorman", "planter", "fountain", "flag", "camera", "bollard", "statue", "hydrant", "poster", "table", "armoured", "booth", "ambulance", "grave", "stall", "conveyor", "containers", "sandbags", "watchtower", "bins", "palm", "pine", "surfboard", "skis", "umbrella", "hottub"]);
 for (const k of FUNNEL_STYLES_DRAWN) DRAWN_STYLES.add(k);
 for (const k of FUNNEL_PROPS) DRAWN_PROPS.add(k);
 
@@ -30,10 +31,12 @@ const MAT = {
   plinth: "#2b322e", concrete: "#8b8f88", tank: "#7d848c", wood: "#6a4a30", sandstone: "#ad9468", darkbrick: "#4a3037",
   casino: "#5e1d45", white: "#cfd3cf", maroon: "#6a2a37", corrugated: "#5f5a6c", hall: "#6f808a", limestone: "#c2b89e",
   vaultcon: "#6a706b", market: "#8a6848", rust: "#83503a", stack: "#9c3c38", panel: "#687279", greenhouse: "#6fae8c", stone: "#b8b09c",
+  pastel: "#6fa9a4", pastelpink: "#c98f8a", pastelyellow: "#cdb672", stucco: "#d2c6ae", weathered: "#8c8a80", timber: "#7a5232", logs: "#6a4226",
 };
 const ROOF = { brick: "#3c3634", brownstone: "#35302c", redbrick: "#3a3230", glass: "#5d93b3", steel: "#3f4c58", obsidian: "#0c100e", plinth: "#39413c",
   concrete: "#7a7e78", sandstone: "#454b55", darkbrick: "#2c2628", casino: "#3a1830", white: "#a9aeab", maroon: "#3a2228", corrugated: "#4c4858",
-  hall: "#7f93a0", limestone: "#8c8674", vaultcon: "#5a605b", market: "#5a4a3a", rust: "#6a4a3a", panel: "#555e64", greenhouse: "#9ed2b4", stone: "#8f8878", tank: "#6a7178", wood: "#5a3e28", stack: "#6a6a6a" };
+  hall: "#7f93a0", limestone: "#8c8674", vaultcon: "#5a605b", market: "#5a4a3a", rust: "#6a4a3a", panel: "#555e64", greenhouse: "#9ed2b4", stone: "#8f8878", tank: "#6a7178", wood: "#5a3e28", stack: "#6a6a6a",
+  pastel: "#8a9a9c", pastelpink: "#8a9a9c", pastelyellow: "#8a9a9c", stucco: "#b0564a", weathered: "#55534c", timber: "#e8eef2", logs: "#e8eef2" };   // tin at the sea, terracotta on the flats, snow on the mountain
 Object.assign(MAT, FUNNEL_MAT); Object.assign(ROOF, FUNNEL_ROOF);
 
 const cache = new Map();
@@ -1267,6 +1270,91 @@ function worksRoof(K, p, faces) {
 }
 
 // Far away, each type keeps the one thing that says what it is.
+// ---- THE COAST and THE HEIGHTS (2026-09-30) ---------------------------------------------------
+// One facade for the seaside and alpine buildings: shack windows and a screen door; stucco flats
+// with balconies (and towels); the condo's glass bands; timber bunks; the chalets' glass gable
+// ends; the lodge's big warm windows and its sign. Snow sits on every alpine roof.
+function resortFace(K, p, faces) {
+  const { ctx, G } = K, near = K.lod === "near";
+  for (const f of faces) {
+    const front = f.s === (p.door || "s");
+    if (p.win === "shack") {
+      if (front) { door(K, f, 0.3, 0.35, 0.8, "#3a2a1c"); windowGrid(K, f, p, { bay: f.len, w: 0.5, y0: 0.35, y1: 0.75, glass: "#3a5a64", skip: () => false }); }
+      else windowGrid(K, f, p, { bay: 1.2, w: 0.45, y0: 0.35, y1: 0.7, glass: "#3a5a64" });
+      if (near && front) { ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1; ctx.beginPath(); for (let k = 1; k < 6; k++) { const A = f.F(0, k * 0.18), B = f.F(1, k * 0.18); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); } ctx.stroke(); }   // clapboard
+      continue;
+    }
+    if (p.win === "flats" || p.win === "alpine" || p.win === "bunk") {
+      windowGrid(K, f, p, { bay: p.win === "bunk" ? 0.8 : 1.2, w: p.win === "bunk" ? 0.35 : 0.55, y0: 0.3, y1: 0.75, glass: p.win === "alpine" ? "#3a4c5a" : "#40596a", warm: true });
+      K.flush();
+      if (p.balconies && K.lod !== "far" && f.len > 3) {
+        const cols = Math.max(1, Math.floor(f.len / 1.2));
+        for (let st = Math.floor(p.h0) + 1; st < p.h1; st++) for (let k = 0; k < cols; k += 2) {
+          const t0 = k / cols + 0.02, t1 = (k + 1) / cols - 0.02;
+          G.poly([f.F(t0, st, 0), f.F(t1, st, 0), f.F(t1, st, 0.3), f.F(t0, st, 0.3)], shade(p.win === "alpine" ? "#6a4428" : "#e8e2d4", 1.1 * K.nf));
+          if (near) { ctx.strokeStyle = p.win === "alpine" ? "#4a2e18" : "rgba(240,240,240,0.8)"; ctx.lineWidth = 1; ctx.beginPath(); const A = f.F(t0, st + 0.3, 0.3), B = f.F(t1, st + 0.3, 0.3); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); }
+          if (p.towels && near && hi(K.env.bid, st, k) < 0.5) G.poly(f.q(t0 + 0.01, t0 + 0.04, st + 0.05, st + 0.28, 0.31), ["#ef4444", "#3b82f6", "#facc15", "#f472b6"][Math.floor(hi(K.env.bid, k, st) * 4)]);
+        }
+      }
+      if (p.timberTop && K.lod !== "far") G.poly(f.q(0, 1, p.h1 - 1, p.h1, 0.01), shade("#6a4428", f.sh * K.nf));
+      if (front) door(K, f, 0.5, 0.5, 0.85, p.win === "bunk" ? "#3a2616" : "#2a3a44");
+      continue;
+    }
+    if (p.win === "bungalow") {
+      windowGrid(K, f, p, { bay: 1.1, w: 0.55, y0: 0.35, y1: 0.75, glass: "#3a5a64", warm: true });
+      K.flush();
+      if (front) {
+        door(K, f, 0.5, 0.45, 0.8, "#5a3a24");
+        if (p.veranda && K.lod !== "far") {   // a veranda on posts, the roof of it
+          G.poly([f.F(0.05, 0.25, 0), f.F(0.95, 0.25, 0), f.F(0.95, 0.25, 0.4), f.F(0.05, 0.25, 0.4)], shade("#a07850", 1.2 * K.nf));
+          for (const t of [0.07, 0.5, 0.93]) K.line(f.F(t, 0, 0.38), f.F(t, 1.05, 0.38), "#e8e0d0", Math.max(1, K.z * 0.05));
+          G.poly([f.F(0.03, 1.05, 0), f.F(0.97, 1.05, 0), f.F(0.97, 0.95, 0.45), f.F(0.03, 0.95, 0.45)], shade("#8a9a9c", 1.1 * K.nf));
+        }
+      }
+      continue;
+    }
+    if (p.win === "condo") {
+      // bands of blue glass and white slab edges; lit apartments at night
+      for (let st = Math.floor(p.h0); st < p.h1 - 0.2; st++) {
+        K.bq(shade("#e8ecee", f.sh * K.nf), f.q(0, 1, st, st + 0.12, 0.01));
+        const lit = hi(K.env.bid, f.i, st) < K.env.lit;
+        K.bq(K.night ? (lit ? "#fcd9a0" : "#12202c") : shade("#4f8cb0", f.sh), f.q(0.02, 0.98, st + 0.14, st + 0.95, 0.005));
+      }
+      K.flush();
+      if (front && p.h0 === 0) door(K, f, 0.25, 0.6, 0.9, "#1a2a34", { lit: true });
+      continue;
+    }
+    if (p.win === "crown") { K.bq(K.night ? "#67e8f9" : "#cfeefa", f.q(0, 1, p.h1 - 0.15, p.h1 - 0.05, 0.01)); K.flush(); continue; }
+    if (p.win === "lodge") {
+      // big warm windows, the fire behind them, the sign over the door
+      const n = Math.max(2, Math.floor(f.len / 1.6));
+      for (let k = 0; k < n; k++) { const tc = (k + 0.5) / n, hw = 0.5 / f.len; G.poly(f.q(tc - hw, tc + hw, 0.3, 1.5, 0.01), K.night ? "#fdba74" : shade("#4a5a64", f.sh)); }
+      if (K.night && front) { const c = f.F(0.5, 0.8, 0.2); glow(K, c[0], c[1], K.z * 3, "rgba(253,186,116,0.35)"); }
+      if (front) { door(K, f, 0.5, 0.7, 1.2, "#3a2414"); if (p.sign && K.lod !== "far") faceText(K, f, 0.5, 1.75, p.sign, 0.2, K.night ? "#fde68a" : "#f5ead8", { glow: K.night ? "rgba(253,230,138,0.35)" : null }); }
+      if (near) { ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.lineWidth = 1; ctx.beginPath(); for (let k = 1; k < 10; k++) { const A = f.F(0, k * 0.2), B = f.F(1, k * 0.2); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); } ctx.stroke(); }   // the logs
+      continue;
+    }
+    if (p.win === "chalet") {
+      if (front) {
+        // the glass gable end: the great room's window up into the roof
+        G.poly([f.F(0.12, 0.2, 0.01), f.F(0.88, 0.2, 0.01), f.F(0.88, p.h1, 0.01), f.F(0.5, p.h1 + (p.peak || 0) * 0.85, 0.01), f.F(0.12, p.h1, 0.01)], K.night ? (hi(K.env.bid, p.house || 0) < K.env.lit + 0.2 ? "#fcd34d" : "#1c2630") : shade("#5b87a0", f.sh));
+        if (K.lod !== "far") { K.line(f.F(0.5, 0.2, 0.012), f.F(0.5, p.h1 + (p.peak || 0) * 0.8, 0.012), "#4a2e18", Math.max(1, K.z * 0.06)); K.line(f.F(0.12, 1, 0.012), f.F(0.88, 1, 0.012), "#4a2e18", Math.max(1, K.z * 0.06)); }
+      } else windowGrid(K, f, p, { bay: 1.3, w: 0.5, y0: 0.35, y1: 0.75, glass: "#3a4c5a", warm: true });
+      continue;
+    }
+  }
+}
+// Snow on a pitched roof: a white skin over the roof planes (the roof colour is already snow).
+function resortRoof(K, p) {
+  if (p.snow && K.lod === "near" && p.roof === "gable") {
+    const { Q } = K, ridge = p.h1 + (p.peak || 0);
+    const pts = p.ax === "x" ? [[p.x0, (p.y0 + p.y1) / 2], [p.x1, (p.y0 + p.y1) / 2]] : [[(p.x0 + p.x1) / 2, p.y0], [(p.x0 + p.x1) / 2, p.y1]];
+    K.line(Q(pts[0][0], pts[0][1], ridge + 0.02), Q(pts[1][0], pts[1][1], ridge + 0.02), "rgba(255,255,255,0.9)", Math.max(1, K.z * 0.08));
+  }
+  if (p.pool && K.lod !== "far") { const [a, b, c, d] = p.pool; K.G.poly([K.Q(a, b, p.h1 + 0.01), K.Q(c, b, p.h1 + 0.01), K.Q(c, d, p.h1 + 0.01), K.Q(a, d, p.h1 + 0.01)], "#38bdf8", "rgba(255,255,255,0.6)"); }
+  if (p.umbrellas && K.lod !== "far") for (let k = 0; k < 3; k++) { const x = p.x0 + (k + 0.5) * (p.x1 - p.x0) / 3, y = (p.y0 + p.y1) / 2, [sx, sy] = K.Q(x, y, p.h1 + 0.45); K.ctx.fillStyle = ["#f97316", "#f5f5f4", "#0ea5e9"][k]; K.ctx.beginPath(); K.ctx.ellipse(sx, sy, K.z * 0.35, K.z * 0.15, 0, 0, Math.PI * 2); K.ctx.fill(); }
+}
+
 const FAR = {
   monolith: (K, p, faces) => { if (p.eye) for (const f of faces) K.G.poly(f.q(0, 1, p.eye + 0.1, p.eye + 0.4, 0.01), "#4ade80"); },
   casino: (K, p, faces) => { for (const f of faces) for (let k = 0; k < 6; k++) K.G.poly(f.q(k / 6 + 0.05, k / 6 + 0.09, 1.3, p.h1 - 0.3, 0.01), K.night ? ["#f472b6", "#a78bfa", "#fbbf24"][k % 3] : "#c9a043"); },
@@ -1289,6 +1377,8 @@ const DECO = {
   hospital: { face: civicFace, roof: civicRoof }, chapel: { face: civicFace, roof: chapelSpire }, market: { face: civicFace }, school: { face: civicFace, roof: civicRoof },
   shed: { face: worksFace, roof: worksRoof }, stacks: { face: worksFace }, datahall: { face: worksFace, roof: worksRoof }, docks: { face: worksFace }, tanks: { face: worksFace },
   bunker: { face: worksFace, roof: worksRoof }, prison: { face: worksFace, roof: worksRoof }, canteen: { face: worksFace }, reactor: {},
+  shacks: { face: resortFace, roof: resortRoof }, seawall: { face: resortFace, roof: resortRoof }, bungalow: { face: resortFace, roof: resortRoof }, seaview: { face: resortFace, roof: resortRoof },
+  condo: { face: resortFace, roof: resortRoof }, bunkhouse: { face: resortFace, roof: resortRoof }, alpine: { face: resortFace, roof: resortRoof }, lodge: { face: resortFace, roof: resortRoof }, chalet: { face: resortFace, roof: resortRoof },
 };
 // the Arcade, the EB Shop, the EBTV station (funnelDraw.js), drawn with this file's kit
 const FUNNEL_KIT = { shade, faceText, neonOn, windowGrid, door, bladeSign, glow, facesOf };
@@ -1378,6 +1468,9 @@ export function drawArchGround(G, m, env) {
     } else if (g.k === "paving" || g.k === "pavement" || g.k === "apron" || g.k === "bay") {
       rect(g, shade(g.k === "bay" ? "#3a3e44" : g.k === "apron" ? "#3e3a34" : "#4a4944", nf), null);
       if (g.k === "bay" && !far) { ctx.strokeStyle = "rgba(250,204,21,0.6)"; ctx.lineWidth = 1; ctx.beginPath(); for (let i = 0; i < 5; i++) { const A = Q(g.x0 + 0.2, g.y0 + 0.4 + i * 0.6, 0.012), B = Q(g.x1 - 0.2, g.y0 + 0.7 + i * 0.6, 0.012); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); } ctx.stroke(); }
+    } else if (g.k === "sand" || g.k === "snow") {
+      rect(g, shade(g.k === "sand" ? "#c9b27e" : "#dfe8ee", nf), null);
+      if (!far) { ctx.fillStyle = g.k === "sand" ? "rgba(120,90,50,0.25)" : "rgba(150,170,190,0.3)"; for (let i = 0; i < 10; i++) { const [x, y] = Q(g.x0 + (g.x1 - g.x0) * frac(i * 0.618 + 0.1), g.y0 + (g.y1 - g.y0) * frac(i * 0.382 + 0.3), 0.012); ctx.fillRect(x, y, Math.max(1, G.z * 0.12), 1); } }
     } else if (g.k === "carpet") {
       rect(g, shade("#9b1c2c", nf), null);
     } else if (g.k === "playground") {
@@ -1404,6 +1497,43 @@ export function drawYardProp(G, p, env) {
   const K = kit(G, env), { ctx, Q } = K, near = env.lod === "near", far = env.lod === "far", nf = K.nf;
   const vline = (x, y, h0, h1, col, w) => K.line(Q(x, y, h0), Q(x, y, h1), col, w);
   switch (p.k) {
+    case "palm": {
+      // a leaning trunk, fronds that sway a little
+      const sway = env.t ? Math.sin(env.t * 0.8 + p.x) * 0.06 : 0;
+      K.line(Q(p.x, p.y, 0), Q(p.x + 0.15 + sway, p.y - 0.1, 1.5), shade("#7a5a3a", nf), Math.max(1.5, K.z * 0.12));
+      const [sx, sy] = Q(p.x + 0.15 + sway, p.y - 0.1, 1.5), r = K.z * 0.7;
+      ctx.strokeStyle = shade("#2f8a3a", nf); ctx.lineWidth = Math.max(1.5, K.z * 0.14); ctx.beginPath();
+      for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2 + sway; ctx.moveTo(sx, sy); ctx.quadraticCurveTo(sx + Math.cos(a) * r * 0.6, sy + Math.sin(a) * r * 0.3 - r * 0.3, sx + Math.cos(a) * r, sy + Math.sin(a) * r * 0.5 + r * 0.2); }
+      ctx.stroke();
+      break;
+    }
+    case "pine": {
+      vline(p.x, p.y, 0, 0.3, shade("#4a3222", nf), Math.max(1, K.z * 0.1));
+      for (let k = 0; k < 3; k++) {
+        const h0 = 0.25 + k * 0.45, w = 0.42 - k * 0.1, [ax, ay] = Q(p.x, p.y, h0 + 0.7), [bx, by] = Q(p.x - w, p.y + w, h0), [cx, cy] = Q(p.x + w, p.y - w, h0);
+        ctx.fillStyle = shade(k === 2 ? "#e8eef2" : "#1f4d2e", nf); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(cx, cy); ctx.closePath(); ctx.fill();
+      }
+      break;
+    }
+    case "surfboard": case "skis": {
+      const cols = p.k === "skis" ? ["#ef4444", "#1d4ed8"] : ["#f97316", "#22d3ee"];
+      if (far) break;
+      for (let k = 0; k < 2; k++) K.line(Q(p.x - 0.08 + k * 0.16, p.y, 0), Q(p.x - 0.05 + k * 0.16, p.y - 0.05, p.k === "skis" ? 0.8 : 1.0), cols[k], Math.max(1.5, K.z * (p.k === "skis" ? 0.06 : 0.14)));
+      break;
+    }
+    case "umbrella": {
+      vline(p.x, p.y, 0, 0.75, "#e5e5e5", Math.max(1, K.z * 0.04));
+      const [sx, sy] = Q(p.x, p.y, 0.8);
+      ctx.fillStyle = hi(Math.round(p.x * 10), Math.round(p.y * 10)) < 0.5 ? "#f97316" : "#0ea5e9"; ctx.beginPath(); ctx.ellipse(sx, sy, K.z * 0.4, K.z * 0.18, 0, Math.PI, 0); ctx.fill();
+      break;
+    }
+    case "hottub": {
+      const c = { x0: p.x - 0.4, y0: p.y - 0.4, x1: p.x + 0.4, y1: p.y + 0.4, h0: 0, h1: 0.3 };
+      for (const f of facesOf(c, G)) G.poly(f.q(0, 1, 0, 0.3), shade("#6a4a30", f.sh * nf));
+      G.poly([Q(c.x0 + 0.06, c.y0 + 0.06, 0.28), Q(c.x1 - 0.06, c.y0 + 0.06, 0.28), Q(c.x1 - 0.06, c.y1 - 0.06, 0.28), Q(c.x0 + 0.06, c.y1 - 0.06, 0.28)], env.night ? "#22d3ee" : "#38bdf8");
+      if (!far) smoke(K, [p.x, p.y], 0.35, Math.round(p.x * 100), { steam: true, r: 0.12, n: 3 });
+      break;
+    }
     case "tree": {
       vline(p.x, p.y, 0, 0.5, shade("#4a3222", nf), Math.max(1, K.z * 0.12));
       const [sx, sy] = Q(p.x, p.y, 0.75), r = K.z * 0.75;

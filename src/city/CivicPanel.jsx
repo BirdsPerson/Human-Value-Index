@@ -66,9 +66,11 @@ export function DistrictCivic({ districtId, onLeague }) {
       <div className="hvi-civic-factors" aria-label="Mood factors">{Object.entries(m.f).map(([k, v]) => <span key={k}>{FACTOR[k]} {sign(v)}</span>)}</div>
       <div className="hvi-civic-kv">
         <span className="k">TEAM</span>
+        {!row && !t.pos ? <span className="v dim">NOT IN THE LEAGUE. THE DISTRICT WAS BUILT AFTER THE DRAFT. IT WATCHES.</span> : <>
         <span className="v"><b>{teamName(districtId)}</b> // {row ? `${ord(row.pos)} OF ${lg.table.length}` : "UNRANKED"} // {row?.pts ?? t.pts} PTS // {row ? `${row.w}-${row.d}-${row.l}` : ""}{row?.form ? ` // FORM ${row.form}` : ""}{onLeague && <> // <a href="#city/league" onClick={onLeague}>TABLE</a></>}</span>
         <span className="k">ROSTER</span>
         <span className="v dim">{t.roster.length ? t.roster.map(p => p[1]).join(", ") : "NOBODY FIT TO FIELD. THE DEPARTMENT FIELDS A CONE."} (RATING {t.rating})</span>
+        </>}
         <span className="k">COUNCIL</span>
         <span className="v"><CouncilLine id={districtId} seat={x.seat} /></span>
         {x.seat.acts.length > 0 && <>
@@ -220,7 +222,7 @@ export function civicPaLines(block, here) {
   if (here && block.districts[here]) {
     out.push(say(here));
     const t = block.districts[here].team;
-    out.push(`${teamName(here)} STAND ${ord(t.pos)} IN THE DEPARTMENTAL LEAGUE ON ${t.pts} POINTS. ${seatLine(here)}`);
+    if (t?.pos) out.push(`${teamName(here)} STAND ${ord(t.pos)} IN THE DEPARTMENTAL LEAGUE ON ${t.pts} POINTS. ${seatLine(here)}`);
     return out;
   }
   const ids = Object.keys(block.districts);

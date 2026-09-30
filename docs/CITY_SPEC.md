@@ -1101,3 +1101,55 @@ one-line hooks.
   arcade floor at cutaway widths, the cabinets in their rooms, the standees, utm on every link
   and the frame, no third-party stream, the proxy's cache / stale / closed paths, the counter's
   sums and refusals, nothing personal stored. Screens: docs/screens/funnels/.
+
+## The city built outward: THE COAST and THE HEIGHTS (2026-09-30)
+
+Scott: "keep building the city outward... mountain and ski resort type stuff, maybe a resort
+area like a beach area." Two expansion districts at the edges, appended to `DISTRICTS` (so to
+the sectors, the summary, the find index and the civic fold) with `expansion: true`:
+
+- **THE COAST** (0xAD00, south, rows 68-90): the beach (towels, umbrellas, three lifeguard
+  towers, a volleyball net, the shallows), the boardwalk (stalls, benches, lamps, THE WHEEL),
+  the pier on piles into the sea, THE BREAK (surf), and housing by tier: THE SURFSIDE
+  (oceanfront condominiums, the top tier), BUNGALOW ROW and SEAVIEW FLATS (the middle), THE
+  SURF SHACKS and THE SEAWALL ESTATE (the bottom). PARCEL 0xAD06 is the resort lot.
+- **THE HEIGHTS** (0xBE00, north, rows -31 to -3): the mountain (one terrain, `coastGeo.js
+  terrainH`, flat at the village, rising to a ridge with two peaks, falling away behind),
+  THE SLOPES (three pistes, a chairlift with its chairs climbing one side, pines, the patrol
+  hut), THE BASE LODGE (the hearth and the apres bar), and housing by tier: THE CHALETS (top),
+  ALPINE FLATS (middle), THE BUNKHOUSE (the lift crews: the bottom). PARCEL 0xBE06, the upper
+  slopes, is the resort lot.
+- **Jobs**: lifeguards, boardwalk vendors, pier wardens, surf instructors; ski patrol, lift
+  operators, ski instructors, lodge cooks. Their fields put care, labour, coaching and
+  medicine first and sport after, so the athletes on file stay athletes (the quests' meetings
+  hold). The PROCESSING grades stay at the Works.
+- **Homes**: each tier band's homes (`HOMES_BY_BAND`) gained a seaside and an alpine block, and
+  a subject's block is now drawn in proportion to capacity, not one-in-n.
+- **Transit: the spurs.** Not on the Loop, whose timetable (and so every published plan's
+  trains) is untouched. THE SHORE LINE (from the Works station) and THE ALPINE LINE (from
+  Campus): surface tramways of personal pods ("ONE SUBJECT, ONE POD. SHARING IS
+  UNMONITORABLE."), stop by the hub station, along the street and down the gutter, to a
+  terminal in the district. A pod leaves when its rider boards, so the ride is a fixed leg of
+  the route (`sim.SPURS`, `V_POD` 360 cells an hour, 4-5 machine minutes): the plan format is
+  unchanged. `hubOf(district)` is the station a district uses; `segDistricts` counts a hub
+  among a trip's districts (the window files hold everyone who passes through). whereAt
+  reports a pod ride as `sub: "walking"` with `leg: "pod"`, `spur`, `podDir` (views that do
+  not know pods draw a walker), and every commute leg a `dir` (out before the Loop, in after).
+  The subway is a later project (ROADMAP b5).
+- **Plans at the day boundary.** Days already published keep their city (nobody lives on the
+  Coast in them); the first day the builder builds after a deploy is the first with the new
+  districts in it (today + 4 at the latest). Old days' windows have no coast or heights files;
+  the browser marks them missing and draws nobody there, which is what those plans say.
+- **The civic fold**: the Coast and the Heights have a MOOD and a council SEAT like every
+  district; the league stays the ten it was drawn with (`team.pos: null` outside it).
+- **Crowding** (`scripts/bench-crowding.mjs`, day 289; the ten old districts' crowding
+  factors summed): live census (725) -7 before, -2 after; 2,000 subjects -95 -> -59; 5,000
+  -230 -> -187. At 2,000 about half the city lives on the Coast or in the Heights.
+  `scripts/check-coast.mjs` holds the 2,000 figure below -80.
+- **Drawn** (`coastGeo.js`, `coastDraw.js`, archGeo/archDraw styles shacks, seawall,
+  bungalow, seaview, condo, bunkhouse, alpine, lodge, chalet): the sea rolls in, the wheel
+  turns, the chairs climb, skiers come down the pistes and surfers ride in; the snow goes blue
+  at night and the boardwalk's lamps come on. Far: shapes, colours, dots; mid and near: props,
+  people at their business (sunbathers on towels, swimmers to the waist, rods over the pier's
+  rails, riders on the chairs). The mountain is painted in cells back to front with everything
+  on it, so at every quarter turn a ridge hides what is behind it.

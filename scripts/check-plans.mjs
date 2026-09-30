@@ -462,7 +462,7 @@ for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["sy
   ok(r.split.map(x => x.day).join() === r.built.map(x => x.day).join(), `every built day is split in the same run (${r.split.map(x => x.day)})`);
   const raw = (k) => globalThis.__blobs.get(PL.STORE)?.get(k)?.data ?? null;
   const m2 = raw(PL.MANIFEST2), e = m2.days[D];
-  ok(e && e.ver === raw(PL.MANIFEST).days[D].ver && Object.keys(e.files).length === 10 && e.files.sprawl.length === 4, "the f2 manifest lists every sector's four windows under the plan's version");
+  ok(e && e.ver === raw(PL.MANIFEST).days[D].ver && Object.keys(e.files).length === SIM.DISTRICTS.length && e.files.sprawl.length === 4 && e.files.coast?.length === 4 && e.files.heights?.length === 4, "the f2 manifest lists every sector's four windows under the plan's version");
   for (const id of SPLIT.SECTORS) for (let w = 0; w < 4; w++) ok(raw(PL.partKey(D, e.ver, PL.windowPart(id, w, 0)))?.sector === id && e.files[id][w][2] === 1, `window ${id}/${w} published`);
   ok(JSON.stringify(raw(PL.partKey(D, e.ver, "summary")).parts.sprawl) === "[1,1,1,1]", "the summary says how many parts each window has");
   // a day built before the split existed is split from its f1 blob, identically

@@ -48,8 +48,18 @@ export const DISTRICTS = [
   // for the estate pitch beside the hab blocks. Its station (and so the Loop) is unmoved: a
   // bottom-row district's stop sits over its centre column.
   D("sprawl", "THE SPRAWL", "0x9C00", 56, 45, 53, 20, "Residential storage. Subjects are returned here nightly for recharging."),
+  // THE CITY BUILT OUTWARD (Scott 2026-09-30: "keep building the city outward... mountain and ski
+  // resort type stuff, maybe a resort area like a beach area"). Two expansion districts at the
+  // edges, appended (a sector is a district, in this order): off the Loop, each served by a
+  // surface spur of personal pods from a hub station (SPURS, below). Their resort parcels wait
+  // for THE ASSEMBLY's session 002 (docs/ASSEMBLY.md).
+  { ...D("coast", "THE COAST", "0xAD00", 0, 68, 109, 22, "Sand, surf and a boardwalk. Leisure at the water's edge, supervised by lifeguards who are also supervised."), expansion: true, hub: "works" },
+  { ...D("heights", "THE HEIGHTS", "0xBE00", 8, -31, 93, 28, "Snow, slopes and a lodge. Altitude is a privilege. Descent is mandatory."), expansion: true, hub: "campus" },
 ];
 export const DISTRICT = Object.fromEntries(DISTRICTS.map(d => [d.id, d]));
+// The Loop's districts (one station each); the expansion districts reach it by spur.
+export const LOOP_DISTRICTS = DISTRICTS.filter(d => !d.expansion);
+export const hubOf = (districtId) => DISTRICT[districtId]?.hub || districtId;
 
 // ---- places -----------------------------------------------------------------------
 // kind: work (shifts only), leisure, mixed (both), home. engine: the tendencies the
@@ -132,6 +142,28 @@ const PLACE_LIST = [
   // The estate pitch (Scott, 2026-09-29: "we need a soccer field, though, too"): full-size
   // lines, seven a side, a Saturday matchday and a midweek fixture under the lights.
   P("pitch", "sprawl", "mixed", 28, "THE ESTATE PITCH (NINETY MINUTES, MONITORED)", ["football pitch", "soccer pitch"]),
+
+  // THE COAST: the beach, the boardwalk, the pier, the surf; seaside housing by tier; and the
+  // resort parcel, which takes nobody until THE ASSEMBLY's session 002 has built something on it.
+  P("beach", "coast", "leisure", 60, "THE BEACH (SUNBATHING, SUPERVISED)", ["beach", "seaside"]),
+  P("boardwalk", "coast", "mixed", 30, "THE BOARDWALK (VENDORS LICENSED)", ["boardwalk", "promenade", "amusement park"]),
+  P("pier", "coast", "mixed", 20, "THE PIER (FISHING BY PERMIT)", ["pier", "harbor", "lighthouse"]),
+  P("surf", "coast", "mixed", 16, "THE BREAK (SURF, MONITORED)", ["surf", "ocean"]),
+  P("shore-lot", "coast", "leisure", 30, "PARCEL 0xAD06 (RESORT, PENDING)"),
+  P("surfside", "coast", "home", 96, "THE SURFSIDE (OCEANFRONT CONDOMINIUMS)"),
+  P("bungalows", "coast", "home", 80, "BUNGALOW ROW"),
+  P("seaview", "coast", "home", 200, "SEAVIEW FLATS"),
+  P("shacks", "coast", "home", 40, "THE SURF SHACKS (RENT BY THE TIDE)"),
+  P("seawall", "coast", "home", 240, "THE SEAWALL ESTATE (OVERFLOW HOUSING)"),
+
+  // THE HEIGHTS: the slopes and the lift, the base lodge, alpine housing by tier, and the
+  // upper-slope parcel (session 002, like the shore's).
+  P("slopes", "heights", "mixed", 60, "THE SLOPES (DESCENT MONITORED)", ["ski resort", "mountain", "ski slope"]),
+  P("base-lodge", "heights", "mixed", 30, "THE BASE LODGE (COCOA, RATIONED)", ["lodge", "chalet"]),
+  P("summit-lot", "heights", "leisure", 30, "PARCEL 0xBE06 (RESORT, PENDING)"),
+  P("chalets", "heights", "home", 54, "THE CHALETS"),
+  P("alpine-flats", "heights", "home", 160, "ALPINE FLATS"),
+  P("bunkhouse", "heights", "home", 160, "THE BUNKHOUSE (LIFT CREW QUARTERS)"),
 ];
 // the funnels (funnelSim.js): the Arcade, the EB Shop, the Union lounge
 PLACE_LIST.push(...FUNNEL_PLACES.map(a => P(...a)));
@@ -214,6 +246,27 @@ const BUILDING_LIST = [
   B("the-street", "THE STREET", "sprawl", [["G", "PAVEMENT (SCORED)", ["the-street"]]], { x: 57, y: 52, w: 25.5, h: 6 }),
   B("the-plaza", "THE PLAZA", "sprawl", [["G", "OPEN PAVING (LOITERING PERMITTED)", ["the-plaza"]]], { x: 57, y: 58, w: 25.5, h: 6.5 }),
   B("the-pitch", "THE ESTATE PITCH", "sprawl", [["G", "THE PITCH (TOUCHLINES ENFORCED)", ["pitch"]]], { x: 83, y: 52.5, w: 25, h: 12 }),
+  // THE COAST, laid out by hand: the seaside rows to the north (the Shore Line's terminal in the
+  // gap at x 51-58), the boardwalk, the beach, the pier into the sea, the break off its end, and
+  // the resort parcel to the east. The sea is the district's southern rows.
+  B("surf-shacks", "THE SURF SHACKS", "coast", [["G", "SHACKS (RENT BY THE TIDE)", ["shacks"]]], { x: 1, y: 68.5, w: 12, h: 7 }),
+  B("the-seawall", "THE SEAWALL ESTATE", "coast", [6, 5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "GROUND-LEVEL UNITS (DAMP)" : `UNIT LEVEL ${n - 1}`, ["seawall"]]), { x: 13.5, y: 68.5, w: 12, h: 7 }),
+  B("bungalow-row", "BUNGALOW ROW", "coast", [["1F", "UPSTAIRS (SEA VIEW, PARTIAL)", ["bungalows"]], ["G", "VERANDAS", ["bungalows"]]], { x: 26, y: 68.5, w: 12, h: 7 }),
+  B("seaview-flats", "SEAVIEW FLATS", "coast", [5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "GROUND FLOOR (SAND IN THE HALL)" : `FLATS LEVEL ${n - 1}`, ["seaview"]]), { x: 38.5, y: 68.5, w: 12, h: 7 }),
+  B("the-surfside", "THE SURFSIDE", "coast", [["PH", "PENTHOUSE DECK (SUNSET, SCHEDULED)", ["surfside"]], ...[4, 3, 2, 1].map(n => [`${n}F`, `OCEANFRONT LEVEL ${n}`, ["surfside"]]), ["G", "LOBBY (SAND REMOVED AT THE DOOR)", ["surfside"]]], { x: 58.5, y: 68.5, w: 13, h: 7 }),
+  B("lot-shore", "PARCEL 0xAD06", "coast", [["G", "THE PARCEL (PENDING SESSION 002)", ["shore-lot"]]], { x: 72.5, y: 68.5, w: 35.5, h: 11 }),
+  B("the-boardwalk", "THE BOARDWALK", "coast", [["G", "THE PLANKS (VENDORS LICENSED)", ["boardwalk"]]], { x: 1, y: 76, w: 70.5, h: 3 }),
+  B("the-beach", "THE BEACH", "coast", [["1F", "THE SHALLOWS (SWIMMING, SUPERVISED)", ["beach"]], ["G", "THE SAND (TOWELS REGISTERED)", ["beach"]]], { x: 1, y: 79.5, w: 62, h: 6.5 }),
+  B("the-pier", "THE PIER", "coast", [["G", "THE DECK (RAILINGS ADVISORY)", ["pier"]]], { x: 63.5, y: 79.5, w: 5, h: 10 }),
+  B("the-break", "THE BREAK", "coast", [["G", "THE SURF (WAVES SCHEDULED)", ["surf"]]], { x: 69.5, y: 85.5, w: 38.5, h: 4 }),
+  // THE HEIGHTS, laid out by hand: the village along the foot of the mountain (the Alpine
+  // Line's terminal in the gap at x 51.5-57.5), the slopes above it, the upper-slope parcel east.
+  B("the-bunkhouse", "THE BUNKHOUSE", "heights", [4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "LOWER BUNKS (BOOTS OFF)" : `BUNK LEVEL ${n - 1}`, ["bunkhouse"]]), { x: 9, y: -10.5, w: 13, h: 7 }),
+  B("alpine-flats", "ALPINE FLATS", "heights", [["3F", "FLATS LEVEL 3 (VIEW, RATIONED)", ["alpine-flats"]], ["2F", "FLATS LEVEL 2", ["alpine-flats"]], ["1F", "FLATS LEVEL 1", ["alpine-flats"]], ["G", "BOOT ROOM AND FLATS", ["alpine-flats"]]], { x: 22.5, y: -10.5, w: 14, h: 7 }),
+  B("the-lodge", "THE BASE LODGE", "heights", [["1F", "THE APRES (DRINKING AT ALTITUDE)", ["base-lodge"]], ["G", "THE HEARTH (COCOA, RATIONED)", ["base-lodge"]]], { x: 57.5, y: -10.5, w: 14, h: 7 }),
+  B("the-chalets", "THE CHALETS", "heights", [["1F", "LOFT BEDROOMS (FIREPLACE, LOGGED)", ["chalets"]], ["G", "GREAT ROOMS", ["chalets"]]], { x: 72, y: -10.5, w: 28, h: 7 }),
+  B("the-slopes", "THE SLOPES", "heights", [["1F", "THE SUMMIT (LIFT TOP, WIND LOGGED)", ["slopes"]], ["G", "THE PISTE (DESCENT MONITORED)", ["slopes"]]], { x: 9, y: -30.5, w: 50, h: 19.5 }),
+  B("lot-summit", "PARCEL 0xBE06", "heights", [["G", "THE PARCEL (PENDING SESSION 002)", ["summit-lot"]]], { x: 59, y: -30.5, w: 41, h: 19.5 }),
 ];
 BUILDING_LIST.push(...FUNNEL_BUILDINGS.map(([id, name, district, floors]) => B(id, name, district, floors)));
 // Each district is gridded by BUILDING (so a building's rooms stay one block on the map),
@@ -255,7 +308,7 @@ for (const p of PLACE_LIST) if (!p.rect) throw new Error(`place ${p.id} is in no
 // exterior from it. Housing styles carry the tier band that lives there, and homeOf follows
 // it: the top tier in the glass tower, the middle tiers in the brownstones and the lofts,
 // the lower three in the projects. A district's default covers anything not listed.
-export const ARCH_BY_DISTRICT = { arts: "gallery", campus: "gothic", finance: "office", strip: "neon", arena: "hall", hq: "monolith", archive: "classical", commons: "civic", works: "shed", sprawl: "projects" };
+export const ARCH_BY_DISTRICT = { arts: "gallery", campus: "gothic", finance: "office", strip: "neon", arena: "hall", hq: "monolith", archive: "classical", commons: "civic", works: "shed", sprawl: "projects", coast: "lot", heights: "lot" };
 export const ARCH = {
   "studio-block": "studio", playhouse: "theatre", "culture-centre": "gallery", "the-grind": "cafe",
   faculty: "gothic", "lab-block": "gothic", "clock-tower": "clocktower",
@@ -268,9 +321,11 @@ export const ARCH = {
   "reclamation-line": "shed", "radiant-core": "reactor", foundry: "stacks", "cache-farm": "datahall", "data-docks": "docks", hydroponics: "tanks", barracks: "bunker", "holding-cells": "prison", "slag-canteen": "canteen",
   "hab-a": "projects", "hab-b": "projects", "hab-c": "brownstone", "hab-d": "brownstone", "the-street": "lot", "the-plaza": "lot", "the-pitch": "field",
   ...FUNNEL_ARCH,
+  "surf-shacks": "shacks", "the-seawall": "seawall", "bungalow-row": "bungalow", "seaview-flats": "seaview", "the-surfside": "condo", "lot-shore": "lot", "the-boardwalk": "lot", "the-beach": "lot", "the-pier": "lot", "the-break": "lot",
+  "the-bunkhouse": "bunkhouse", "alpine-flats": "alpine", "the-lodge": "lodge", "the-chalets": "chalet", "the-slopes": "lot", "lot-summit": "lot",
 };
 // Housing: which tiers (TIER_ORDER index, 0 = ESSENTIAL INFRASTRUCTURE) live in each style.
-export const HOUSING_TIERS = { glass: [0], brownstone: [1, 2], lofts: [1, 2], projects: [3, 4, 5] };
+export const HOUSING_TIERS = { glass: [0], brownstone: [1, 2], lofts: [1, 2], projects: [3, 4, 5], condo: [0], bungalow: [1, 2], seaview: [1, 2], shacks: [3, 4, 5], seawall: [3, 4, 5], chalet: [0], alpine: [1, 2], bunkhouse: [3, 4, 5] };
 export const BUILDINGS = BUILDING_LIST.map(b => {
   const td = b.floors;   // top-down
   const gIdx = td.findIndex(f => f[0] === "G");
@@ -395,6 +450,16 @@ export const JOBS = [
   J("club-footballer", "Club Footballer", "pitch", ["Academy Prospect", "Squad Player", "First Team", "Club Captain", "Icon (Merchandised)"], ["soccer"], ["physical", "adaptability"]),
   J("match-referee", "Match Referee", "pitch", ["Fourth Official", "Assistant Referee", "Referee", "Listed Referee (Pending Audit)"], ["law", "sport", "*"], ["alignment", "physical"], { draft: 8 }),
   J("pitch-groundskeeper", "Pitch Groundskeeper", "pitch", ["Divot Replacer", "Groundskeeper", "Head Groundskeeper", "Keeper of the Turf"], ["farming", "labor", "*"], ["physical", "care"], { draft: 6 }),
+  // THE COAST
+  J("lifeguard", "Lifeguard", "beach", ["Whistle Trainee", "Lifeguard", "Senior Lifeguard", "Head of the Tower", "Commissioner of the Shoreline"], ["care", "*", "sport"], ["physical", "care"], { draft: 14 }),
+  J("boardwalk-vendor", "Boardwalk Vendor", "boardwalk", ["Cart Pusher", "Vendor", "Senior Vendor", "Concessionaire", "Baron of the Boardwalk"], ["*", "hospitality", "business"], ["network", "utility"]),
+  J("pier-warden", "Pier Warden", "pier", ["Bait Counter", "Pier Warden", "Senior Warden", "Harbour Master of Leisure"], ["*", "labor", "exploration"], ["alignment", "physical"], { draft: 8 }),
+  J("surf-instructor", "Surf Instructor", "surf", ["Board Waxer", "Instructor", "Senior Instructor", "Director of the Break"], ["coaching", "sport"], ["physical", "adaptability"]),
+  // THE HEIGHTS
+  J("ski-patrol", "Ski Patrol", "slopes", ["Rope Holder", "Patroller", "Senior Patroller", "Chief of Patrol", "Warden of the Fall Line"], ["medicine", "military", "*", "sport"], ["physical", "care"], { draft: 12 }),
+  J("lift-operator", "Lift Operator", "slopes", ["Bar Lowerer", "Lift Operator", "Senior Operator", "Lift Master"], ["*", "engineering"], ["alignment", "utility"], { draft: 12, shift: "rotating" }),
+  J("ski-instructor", "Ski Instructor", "slopes", ["Snowplough Demonstrator", "Instructor", "Senior Instructor", "Director of Descent"], ["exploration", "coaching", "sport"], ["physical", "adaptability"]),
+  J("lodge-cook", "Lodge Cook", "base-lodge", ["Cocoa Stirrer", "Cook", "Head Cook", "Chef de Chalet"], ["*", "hospitality"], ["care", "utility"], { shift: "evening" }),
 ];
 JOBS.push(...FUNNEL_JOBS.map(a => J(...a)));
 export const JOB = Object.fromEntries(JOBS.map(j => [j.id, j]));
@@ -637,20 +702,29 @@ export const jobOf = (s, seed = SEED) => assignJob(s, seed);
 // middle tiers in the brownstones (Hab C, D) and the Archive Lofts, the lower three in the
 // projects (Hab A, B). Living or dead alike: all uploads. Which block within the band is by
 // seed. HOUSING_TIERS says the same thing per style; check-cityview holds them together.
-const HOMES_BY_BAND = [["penthouses"], ["block-c", "block-d", "archive-lofts"], ["block-a", "block-b"]];
+// Since the city grew outward (2026-09-30) each band also has seaside and alpine homes, and a
+// subject's block is drawn in proportion to each home's capacity (not one-in-n), so the big
+// new estates take their share and the old blocks stop overflowing as fast.
+export const HOMES_BY_BAND = [["penthouses", "surfside", "chalets"], ["block-c", "block-d", "archive-lofts", "bungalows", "seaview", "alpine-flats"], ["block-a", "block-b", "shacks", "seawall", "bunkhouse"]];
+const BAND_CAP = HOMES_BY_BAND.map(b => b.reduce((n, id) => n + PLACES[id].cap, 0));
 export function homeOf(s, seed = SEED) {
   const t = Math.max(0, tierIdx(s));
-  const band = HOMES_BY_BAND[t === 0 ? 0 : t <= 2 ? 1 : 2];
-  return band[Math.floor(h01(`${seed}|home|${keyOf(s)}`) * band.length)];
+  const k = t === 0 ? 0 : t <= 2 ? 1 : 2, band = HOMES_BY_BAND[k];
+  let r = h01(`${seed}|home|${keyOf(s)}`) * BAND_CAP[k];
+  for (const id of band) if ((r -= PLACES[id].cap) < 0) return id;
+  return band[band.length - 1];
 }
 
 // ---- leisure ----------------------------------------------------------------------
 // Default leisure preferences by tier band, then by field. Tendencies from the engine
 // dominate when present. Weight = preference x capacity, so crowds scale with rooms.
 const LEISURE_BY_BAND = [
-  { "rooftop-lounge": 3, gallery: 2, "concert-hall": 2, "the-grind": 1.5, playhouse: 1.5, stacks: 1, park: 1, "members-club": 1.5, "gallery-annex": 1, "rec-park": 0.8, "ball-field": 0.6, "dev-lot": 1, forum: 0.4 },
-  { "the-grind": 2, park: 2, "dive-bar": 1.5, playhouse: 1.5, stadium: 1.5, casino: 1, market: 1, "the-street": 1, gallery: 1, "concert-hall": 1, tribunal: 0.4, "the-drip": 1.5, allotment: 1, "night-market": 1, "ball-field": 1, courts: 1, "rec-park": 1.2, pitch: 1.5, "dev-lot": 1, forum: 0.8 },   // the public gallery: watching verdicts is leisure
-  { canteen: 3, "the-street": 2, "dive-bar": 1.5, casino: 1, "all-night-diner": 1, docks: 1, "the-lantern": 1.5, "the-plaza": 1.5, "night-market": 1, courts: 1.2, "rec-park": 0.6, pitch: 2, stadium: 0.8, "dev-lot": 1, forum: 0.6 },
+  { "rooftop-lounge": 3, gallery: 2, "concert-hall": 2, "the-grind": 1.5, playhouse: 1.5, stacks: 1, park: 1, "members-club": 1.5, "gallery-annex": 1, "rec-park": 0.8, "ball-field": 0.6, "dev-lot": 1, forum: 0.4,
+    slopes: 2.5, "base-lodge": 1.2, beach: 1.2, pier: 0.8, "shore-lot": 1, "summit-lot": 1 },
+  { "the-grind": 2, park: 2, "dive-bar": 1.5, playhouse: 1.5, stadium: 1.5, casino: 1, market: 1, "the-street": 1, gallery: 1, "concert-hall": 1, tribunal: 0.4, "the-drip": 1.5, allotment: 1, "night-market": 1, "ball-field": 1, courts: 1, "rec-park": 1.2, pitch: 1.5, "dev-lot": 1, forum: 0.8,   // the public gallery: watching verdicts is leisure
+    beach: 2.5, boardwalk: 2, pier: 1.2, surf: 0.8, slopes: 1.2, "base-lodge": 1, "shore-lot": 1, "summit-lot": 1 },
+  { canteen: 3, "the-street": 2, "dive-bar": 1.5, casino: 1, "all-night-diner": 1, docks: 1, "the-lantern": 1.5, "the-plaza": 1.5, "night-market": 1, courts: 1.2, "rec-park": 0.6, pitch: 2, stadium: 0.8, "dev-lot": 1, forum: 0.6,
+    beach: 2, boardwalk: 2.5, pier: 1.5, slopes: 0.4, "shore-lot": 1, "summit-lot": 1 },
 ];
 const LEISURE_BY_FIELD = {
   sport: { gym: 3, stadium: 2, "ball-field": 2.5, courts: 2.5, pitch: 2 }, combat: { gym: 3 }, coaching: { courts: 1.5, "ball-field": 1, pitch: 1, stadium: 1 },
@@ -659,10 +733,13 @@ const LEISURE_BY_FIELD = {
   finance: { casino: 3, "rooftop-lounge": 2 }, business: { "rooftop-lounge": 2, casino: 1.5 }, religion: { chapel: 3 },
   care: { chapel: 2, park: 2, "rec-park": 1 }, education: { stacks: 2, "the-grind": 1.5 }, science: { stacks: 2, "the-grind": 1.5 },
   "physics-theory": { stacks: 2, "concert-hall": 1 }, philosophy: { "the-grind": 2, park: 2, forum: 1 }, politics: { "assembly-hall": 1.5, "rooftop-lounge": 1.5, forum: 2 }, law: { forum: 1.5 },
-  royalty: { gallery: 2, "rooftop-lounge": 2 }, activism: { park: 2, market: 2, allotment: 1, forum: 2 }, crime: { casino: 2, "dive-bar": 2 },
+  royalty: { gallery: 2, "rooftop-lounge": 2, slopes: 2 }, activism: { park: 2, market: 2, allotment: 1, forum: 2 }, crime: { casino: 2, "dive-bar": 2 },
+  exploration: { slopes: 3, surf: 1, pier: 1.5 }, hospitality: { boardwalk: 1.5, "base-lodge": 1.5 },
 };
 FUNNEL_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
 for (const [f, m] of Object.entries(FUNNEL_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
+// the sea and the snow, for the sporting and the idle
+for (const [f, w] of Object.entries({ sport: { surf: 0.8, slopes: 1 }, care: { beach: 1 }, visual: { pier: 1.2, beach: 0.8 }, writing: { pier: 1.5 }, music: { boardwalk: 1 }, finance: { slopes: 1.5 }, business: { slopes: 1 }, screen: { beach: 1.2 } })) Object.assign(LEISURE_BY_FIELD[f] ||= {}, w);
 
 // ---- games ------------------------------------------------------------------------
 // The recreation ground keeps a fixture list on the machine calendar: weekday 1-7 as
@@ -905,6 +982,15 @@ export function lotOpenOn(day) {
   const p = lotPhase((day - 1) * 24 + 12);
   return p.phase === "site" ? "site" : p.phase === "built" ? p.winner : null;
 }
+// THE COAST's and THE HEIGHTS' resort parcels: closed until a session builds something there.
+export const RESORT_PARCELS = new Set(["shore-lot", "summit-lot"]);
+const resortOpenOn = () => false;   // session 002 (docs/ASSEMBLY.md) opens them
+// May a visitor be sent to this place on this machine day? (Every place but a closed parcel.)
+export function parcelOpen(placeId, day) {
+  if (placeId === "dev-lot") return Boolean(lotOpenOn(day));
+  if (RESORT_PARCELS.has(placeId)) return resortOpenOn(placeId, day);
+  return true;
+}
 // Pull on the lot by tier band (0 top, 1 middle, 2 low), times its base leisure weight.
 const LOT_PULL = { site: [0.2, 0.7, 1.6], golf: [3, 1, 0.3], farm: [0.5, 1.6, 1.6] };
 const bandOf = (s) => { const t = tierIdx(s); return t <= 1 ? 0 : t <= 3 ? 1 : 2; };
@@ -976,6 +1062,11 @@ function pickLeisure(s, day, i, seed, avoid, hour = null) {
     list = lot ? list.map(([id, v]) => [id, id === "dev-lot" ? v * LOT_PULL[lot][bandOf(s)] : v]) : list.filter(([id]) => id !== "dev-lot");
     total = list.reduce((a, [, v]) => a + v, 0);
   }
+  // The resort parcels (THE ASSEMBLY, session 002) take nobody until something is built on them.
+  if (list.some(([id]) => RESORT_PARCELS.has(id) && !parcelOpen(id, day))) {
+    list = list.filter(([id]) => parcelOpen(id, day));
+    total = list.reduce((a, [, v]) => a + v, 0);
+  }
   // A fixture on at the ground when the visit starts pulls its fans (and the curious) in.
   const on = hour == null ? null : gamesOn(day, hour);
   if (on) { list = list.map(([id, v]) => [id, on.has(id) ? v * GAME_PULL : v]); total = list.reduce((a, [, v]) => a + v, 0); }
@@ -996,12 +1087,14 @@ function pickLeisure(s, day, i, seed, avoid, hour = null) {
 // as every browser. Subjects outside the registered roster keep their raw choice.
 const FAMILY = [
   ["dive-bar", "the-lantern", "rooftop-lounge", "members-club", "casino"],
-  ["the-grind", "the-drip", "all-night-diner", "canteen"],
+  ["the-grind", "the-drip", "all-night-diner", "canteen", "base-lodge"],
   ["gallery", "gallery-annex", "playhouse", "concert-hall", "studio-row"],
   ["park", "allotment", "the-plaza", "the-street", "rec-park", "forum"],
   ["market", "night-market"],
   ["stacks", "lecture-hall", "archive-stacks"],
   ["gym", "stadium", "ball-field", "courts", "pitch"],
+  ["beach", "boardwalk", "pier", "surf"],
+  ["slopes", "base-lodge"],
 ];
 for (const [k, id] of FUNNEL_FAMILY) FAMILY[k].push(id);
 const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
@@ -1054,7 +1147,7 @@ function allocFor(day, seed) {
             const a = bucket(Math.min(st.from, prevTo ?? st.from) - 0.25), b = Math.max(a + 1, bucket(st.to + 0.25));
             let p = st.placeId;
             if (!fits(p, a, b)) {
-              const chain = (OVERFLOW[p] || []).filter(q => q !== "dev-lot" || lotOpenOn(day));
+              const chain = (OVERFLOW[p] || []).filter(q => parcelOpen(q, day));
               p = chain.find(q => fits(q, a, b)) || [p, ...chain].reduce((best, q) => (peakOf(q, a, b) < peakOf(best, a, b) ? q : best), p);
               if (p !== st.placeId) moved.set(`${key}|${st.i}`, p);
             }
@@ -1081,10 +1174,10 @@ function allocatedPick(s, day, i, seed, avoid, hour) {
 // One STATION per district; the flank districts (Arena, Archive) sit on the side edges so
 // the stations spread round the ring. Trains of 3-4 cars run a fixed timetable counted
 // from machine hour 0: every viewer sees the same train at the same platform.
-const X0 = Math.min(...DISTRICTS.map(d => d.rect.x)), X1 = Math.max(...DISTRICTS.map(d => d.rect.x + d.rect.w));
+const X0 = Math.min(...LOOP_DISTRICTS.map(d => d.rect.x)), X1 = Math.max(...LOOP_DISTRICTS.map(d => d.rect.x + d.rect.w));
 const MID = DISTRICT.hq.rect;
-const TOP_Y = (Math.max(...DISTRICTS.filter(d => d.rect.y + d.rect.h <= MID.y).map(d => d.rect.y + d.rect.h)) + MID.y) / 2;
-const BOT_Y = (Math.min(...DISTRICTS.filter(d => d.rect.y >= MID.y + MID.h).map(d => d.rect.y)) + MID.y + MID.h) / 2;
+const TOP_Y = (Math.max(...LOOP_DISTRICTS.filter(d => d.rect.y + d.rect.h <= MID.y).map(d => d.rect.y + d.rect.h)) + MID.y) / 2;
+const BOT_Y = (Math.min(...LOOP_DISTRICTS.filter(d => d.rect.y >= MID.y + MID.h).map(d => d.rect.y)) + MID.y + MID.h) / 2;
 const RING = { x: X0 - 1.5, y: TOP_Y, w: X1 - X0 + 3, h: BOT_Y - TOP_Y };
 const LOOP_L = 2 * (RING.w + RING.h);
 const mod = (v, m) => ((v % m) + m) % m;
@@ -1124,7 +1217,7 @@ function stationFor(d) {
   const entrance = { x: at.x + n.x * PLATFORM_OFF, y: at.y + n.y * PLATFORM_OFF };
   return { id: d.id, districtId: d.id, name: `${d.name.replace(/^THE /, "")} STATION`, addr: d.addr, s, x: at.x, y: at.y, n, gate, entrance };
 }
-export const STATIONS = Object.fromEntries(DISTRICTS.map(d => [d.id, stationFor(d)]));
+export const STATIONS = Object.fromEntries(LOOP_DISTRICTS.map(d => [d.id, stationFor(d)]));
 // Ring order, clockwise from the top-left corner. ARR: when a train reaches each, within a lap.
 export const STATION_ORDER = Object.values(STATIONS).sort((a, b) => a.s - b.s).map(st => st.id);
 const ARR = [];
@@ -1225,6 +1318,32 @@ export const LOOP_LINE = {
 export const BUS = LOOP_LINE;
 export const V_BUS = V_TRAIN;
 
+// ---- the spurs (THE COAST and THE HEIGHTS, 2026-09-30) ------------------------------------------
+// THE SHORE LINE and THE ALPINE LINE: surface tramways of personal pods ("ONE SUBJECT, ONE POD.
+// SHARING IS UNMONITORABLE.") from a stop beside a hub Loop station, along the street and down
+// the gutter, to a terminal in each expansion district. A pod leaves the moment its rider
+// boards, so the ride is a fixed leg of the route, like a walk, at V_POD: no timetable, and the
+// Loop's own timetable is untouched (every published plan's trains stay where they were).
+// pts: the track, hub stop first, terminal last (map cells).
+export const V_POD = 360;
+export const SPURS = {
+  coast: { id: "shore", districtId: "coast", hub: "works", name: "THE SHORE LINE", stop: "SHORE LINE // WORKS STOP", terminal: "SHORE LINE // COAST TERMINAL", pts: [[48.5, 44.3], [54.5, 44.3], [54.5, 69.8]] },
+  heights: { id: "alpine", districtId: "heights", hub: "campus", name: "THE ALPINE LINE", stop: "ALPINE LINE // CAMPUS STOP", terminal: "ALPINE LINE // HEIGHTS TERMINAL", pts: [[48.5, 13.7], [54.5, 13.7], [54.5, -5.6]] },
+};
+export const SPUR_BY_ID = Object.fromEntries(Object.values(SPURS).map(sp => [sp.id, sp]));
+for (const sp of Object.values(SPURS)) {
+  let L = 0;
+  for (let i = 1; i < sp.pts.length; i++) L += Math.hypot(sp.pts[i][0] - sp.pts[i - 1][0], sp.pts[i][1] - sp.pts[i - 1][1]);
+  sp.length = L; sp.hours = L / V_POD;
+  const [a, b] = [sp.pts[0], sp.pts[sp.pts.length - 1]];
+  sp.stopAt = { x: a[0], y: a[1] }; sp.termAt = { x: b[0], y: b[1] };
+}
+// A ride on a spur: toward the district (in) or back to the hub (out).
+function podLeg(districtId, dir) {
+  const sp = SPURS[districtId], pts = (dir === "in" ? sp.pts : [...sp.pts].reverse()).map(([x, y]) => ({ x, y }));
+  return { a: pts[0], b: pts[pts.length - 1], pts, mode: "pod", spur: sp.id, dir, dur: sp.hours, district: districtId };
+}
+
 // Where a subject stands inside a place: a fixed personal spot on the room's floor. Feet
 // stay in the lower part of the room, well under the name on its top border, so a
 // standing sprite (up to ~2.8 cells tall on the map) does not print over it.
@@ -1242,7 +1361,7 @@ function spotIn(placeId, key, seed) {
 // passable (you leave through your own walls, that is what doors are for), and the open
 // lots (the Green, the Street, the Plaza, the Allotment) are ground anyone may cross.
 // Leg durations follow the path's length, so walking pace never changes.
-export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch", "lot-6f07", "the-assembly"]);
+export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch", "lot-6f07", "the-assembly", "the-boardwalk", "the-beach", "the-pier"]);
 const KERB = 0.4, CORNER = 0.3;   // the street view's footprints are the lot less 0.4
 const FOOT = (() => {
   const blocks = BUILDINGS.filter(b => !OPEN_LOTS.has(b.id)).map(b => ({ id: b.id, x0: b.rect.x + KERB, y0: b.rect.y + KERB, x1: b.rect.x + b.rect.w - KERB, y1: b.rect.y + b.rect.h - KERB }));
@@ -1300,27 +1419,52 @@ const ownBlocks = (...placeIds) => new Set(placeIds.map(id => PLACES[id]?.buildi
 
 // The fixed part of a commute: walking legs and which stations. Same district: on foot.
 // skip: the buildings this leg may walk through (null = a straight leg, e.g. the stairs).
-const walkLeg = (a, b, district, skip = null) => {
+// stairs: the leg up to (or down from) a platform (whereAt's climb).
+const walkLeg = (a, b, district, skip = null, stairs = false) => {
   const pts = skip ? footpath(a, b, skip) : [a, b];
-  return { a, b, pts, mode: "walk", dur: Math.max(pathLen(pts) / V_WALK, 0.02), district };
+  const leg = { a, b, pts, mode: "walk", dur: Math.max(pathLen(pts) / V_WALK, 0.02), district };
+  if (stairs) leg.stairs = true;
+  return leg;
 };
+const NONE = new Set();
+const legsDur = (legs) => legs.reduce((n, l) => n + l.dur, 0);
+// From a place to a point in its district's street (or in its hub's, for the hub-side walk).
+// Out of an expansion district: to its spur terminal, the pod to the hub stop, then on foot to
+// `to`. Into one: the reverse. Elsewhere, one street walk.
+function legsOut(A, from, dA, to, toDistrict) {
+  const sp = SPURS[dA];
+  if (!sp) return [walkLeg(A, to, dA, ownBlocks(from))];
+  return [walkLeg(A, sp.termAt, dA, ownBlocks(from)), podLeg(dA, "out"), walkLeg(sp.stopAt, to, toDistrict, NONE)];
+}
+function legsIn(fromPt, fromDistrict, B, to, dB) {
+  const sp = SPURS[dB];
+  if (!sp) return [walkLeg(fromPt, B, dB, ownBlocks(to))];
+  return [walkLeg(fromPt, sp.stopAt, fromDistrict, NONE), podLeg(dB, "in"), walkLeg(sp.termAt, B, dB, ownBlocks(to))];
+}
 function route(from, to, key, seed) {
   return remember(`rt|${seed}|${key}|${from}|${to}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
-    const dA = PLACES[from].district, dB = PLACES[to].district;
+    const dA = PLACES[from].district, dB = PLACES[to].district, hA = hubOf(dA), hB = hubOf(dB);
     if (dA === dB) {
       const leg = walkLeg(A, B, dA, ownBlocks(from, to));
       leg.dur = Math.max(leg.dur, 0.12);
       return { local: true, legs: [leg], total: leg.dur, nominal: leg.dur };
     }
-    const sA = STATIONS[dA], sB = STATIONS[dB];
-    const walk1 = [walkLeg(A, sA.gate, dA, ownBlocks(from)), walkLeg(sA.gate, sA.entrance, dA)];
-    const w1 = walk1.reduce((n, l) => n + l.dur, 0);
-    const ride = rideHours(dA, dB);
+    if (hA === hB) {
+      // an expansion district and its own hub: the spur, and on foot either side
+      const legs = SPURS[dA] ? [walkLeg(A, SPURS[dA].termAt, dA, ownBlocks(from)), podLeg(dA, "out"), walkLeg(SPURS[dA].stopAt, B, dB, ownBlocks(to))]
+        : [walkLeg(A, SPURS[dB].stopAt, dA, ownBlocks(from)), podLeg(dB, "in"), walkLeg(SPURS[dB].termAt, B, dB, ownBlocks(to))];
+      const total = legsDur(legs);
+      return { local: true, legs, total, nominal: total };
+    }
+    const sA = STATIONS[hA], sB = STATIONS[hB];
+    const walk1 = [...legsOut(A, from, dA, sA.gate, hA), walkLeg(sA.gate, sA.entrance, hA, null, true)];
+    const w1 = legsDur(walk1);
+    const ride = rideHours(hA, hB);
     // Worst case: just missed a train, and the car stops at the far end of the platform.
-    const last = walkLeg(sB.gate, B, dB, ownBlocks(to));   // the same street walk every trip ends with
-    const w2max = Math.max((dist(sB.entrance, sB.gate) + trainLen(4) / 2 + 0.5) / V_WALK, 0.02) + last.dur;
-    return { local: false, A, B, dA, dB, walk1, last, w1, ride, nominal: w1 + PLATFORM_MIN + HEADWAY + ride + ALIGHT + w2max };
+    const lastLegs = legsIn(sB.gate, hB, B, to, dB);   // the same street walk (and pod) every trip ends with
+    const w2max = Math.max((dist(sB.entrance, sB.gate) + trainLen(4) / 2 + 0.5) / V_WALK, 0.02) + legsDur(lastLegs);
+    return { local: false, A, B, dA, dB, hA, hB, walk1, lastLegs, w1, ride, nominal: w1 + PLATFORM_MIN + HEADWAY + ride + ALIGHT + w2max };
   });
 }
 export function commuteHours(from, to, s, seed = SEED) { return from === to ? 0 : route(from, to, keyOf(s), seed).nominal; }
@@ -1330,12 +1474,12 @@ export function commuteHours(from, to, s, seed = SEED) { return from === to ? 0 
 function planTrip(from, to, key, seed, t0) {
   const r = route(from, to, key, seed);
   if (r.local) return { local: true, total: r.total };
-  const sA = STATIONS[r.dA], sB = STATIONS[r.dB];
-  const arr = nextArrival(r.dA, t0 + r.w1 + PLATFORM_MIN);
+  const sA = STATIONS[r.hA], sB = STATIONS[r.hB];
+  const arr = nextArrival(r.hA, t0 + r.w1 + PLATFORM_MIN);
   const k = arr.k, car = Math.floor(h01(`${seed}|car|${key}|${Math.round(arr.arrive * 3600)}`) * TRAINS[k].cars);
   const spotA = platformSpot(sA, carArc(k, car, sA.s)), spotB = platformSpot(sB, carArc(k, car, sB.s));
   const board = arr.arrive - t0, off = board + r.ride, out = off + ALIGHT;
-  const walk2 = [walkLeg(spotB, sB.gate, r.dB), r.last];
+  const walk2 = [walkLeg(spotB, sB.gate, r.hB, null, true), ...r.lastLegs];
   const total = out + walk2.reduce((n, l) => n + l.dur, 0);
   return { local: false, k, trainId: TRAINS[k].id, car, spotA, spotB, board, off, out, walk2, total };
 }
@@ -1536,7 +1680,7 @@ function planSegs(P, row, i0, t0) {
       if (fl & 8) g.trip = { local: true };
       else {
         const k = e[j++], car = e[j++], board = e[j++];
-        const dA = PLACES[g.fromPlaceId].district, dB = PLACES[g.placeId].district;
+        const dA = hubOf(PLACES[g.fromPlaceId].district), dB = hubOf(PLACES[g.placeId].district);
         const off = board + rideHours(dA, dB);
         g.trip = { local: false, k, trainId: TRAINS[k].id, car, spotA: platformSpot(STATIONS[dA], carArc(k, car, STATIONS[dA].s)), spotB: platformSpot(STATIONS[dB], carArc(k, car, STATIONS[dB].s)), board, off, out: off + ALIGHT };
       }
@@ -1594,7 +1738,13 @@ export function buildPlan(day, seed = SEED) {
 export const WINDOW_H = 6, WINDOWS = 24 / WINDOW_H;
 export const windowOf = (h) => Math.max(0, Math.min(WINDOWS - 1, Math.floor(h / WINDOW_H)));
 // The districts a decoded segment touches: where it is, or both ends of a trip.
-export const segDistricts = (g) => (g.activity === "commute" ? [...new Set([PLACES[g.fromPlaceId].district, PLACES[g.placeId].district])] : [PLACES[g.placeId].district]);
+// A trip to or from an expansion district also passes through its hub (the spur stop, the
+// station), so the hub's window holds it too.
+export const segDistricts = (g) => {
+  if (g.activity !== "commute") return [PLACES[g.placeId].district];
+  const a = PLACES[g.fromPlaceId].district, b = PLACES[g.placeId].district;
+  return [...new Set([a, b, hubOf(a), hubOf(b)])];
+};
 // A format-1 row cut to each window: -> [{w, row, districts: Set}] (windows it has segments in).
 export function splitRow(places, row) {
   const segs = planSegs(places, row, 1, 0), out = [];
@@ -1763,29 +1913,34 @@ export function whereAt(s, machineTime, seed = SEED) {
     if (g.haunt) out.haunt = true;
     return out;
   }
-  const dA = PLACES[g.fromPlaceId].district, dB = PLACES[g.placeId].district;
+  const dA = PLACES[g.fromPlaceId].district, dB = PLACES[g.placeId].district, hA = hubOf(dA), hB = hubOf(dB);
   const base = {
     placeId: g.placeId, fromPlaceId: g.fromPlaceId, fromDistrictId: dA, districtId: dB,
     activity: "commute", progress, buildingId: null, floor: null, floorId: null,
   };
+  // On foot or in a pod: a pod ride reads as walking (sub) to every view that does not know
+  // pods, with leg "pod", spur and the pod's heading for the ones that do. dir: "out" before
+  // the Loop, "in" after it.
+  const onLeg = (legs, t, dir, extra = {}) => {
+    const { leg, k, p } = alongLegs(legs, t);
+    const out = { ...base, atDistrictId: leg.district || dB, sub: "walking", leg: leg.mode === "pod" ? "pod" : "walk", dir, ...extra, x: p.x, y: p.y };
+    if (leg.mode === "pod") { out.spur = leg.spur; out.podDir = leg.dir; out.podK = k; }
+    if (leg.stairs) out.climb = dir === "in" ? 1 - k : k;
+    else if ("stationId" in extra) out.climb = 0;
+    return out;
+  };
   const r = route(g.fromPlaceId, g.placeId, key, seed), trip = g.trip;
   const t = Math.max(0, h - a);   // hours into the trip
-  if (r.local || !trip) {
-    const { leg, p } = alongLegs(r.legs, t);
-    return { ...base, atDistrictId: leg.district || dB, sub: "walking", leg: "walk", x: p.x, y: p.y };
-  }
-  const sA = STATIONS[dA], sB = STATIONS[dB], train = { trainId: trip.trainId, car: trip.car, toStationId: dB };
+  if (r.local || !trip) return onLeg(r.legs, t, "out");
+  const sA = STATIONS[hA], sB = STATIONS[hB], train = { trainId: trip.trainId, car: trip.car, toStationId: hB };
   const eta = { boardAt: T - t + trip.board, alightAt: T - t + trip.off };
-  if (t < r.w1) {
-    // walk1 is street -> gate -> up the stairs to the platform; climb is how far up (0..1)
-    const { p, i, k } = alongLegs(r.walk1, t);
-    return { ...base, atDistrictId: dA, sub: "walking", leg: "walk", stationId: dA, climb: i === 1 ? k : 0, ...train, ...eta, x: p.x, y: p.y };
-  }
+  // walk1 is street (-> terminal -> pod -> hub stop) -> gate -> up the stairs to the platform
+  if (t < r.w1) return onLeg(r.walk1, t, "out", { stationId: hA, ...train, ...eta });
   if (t < trip.board) {
     // Along the platform to where the car will stop, then stand.
     const walked = t - r.w1, need = dist(sA.entrance, trip.spotA) / V_WALK;
     const p = need <= 0 ? trip.spotA : lerp(sA.entrance, trip.spotA, clamp(walked / need, 0, 1));
-    return { ...base, atDistrictId: dA, sub: "waiting", leg: "wait", stationId: dA, ...train, ...eta, x: p.x, y: p.y };
+    return { ...base, atDistrictId: hA, sub: "waiting", leg: "wait", stationId: hA, ...train, ...eta, x: p.x, y: p.y };
   }
   if (t < trip.off) {
     const p = carPoint(trip.k, trip.car, T);
@@ -1794,13 +1949,12 @@ export function whereAt(s, machineTime, seed = SEED) {
   if (t < trip.out) {
     const c = carPoint(trip.k, trip.car, T - t + trip.off);   // the train stands at the platform
     const p = lerp(c, trip.spotB, clamp((t - trip.off) / ALIGHT, 0, 1));
-    return { ...base, atDistrictId: dB, sub: "alighting", leg: "alight", stationId: dB, ...train, ...eta, x: p.x, y: p.y };
+    return { ...base, atDistrictId: hB, sub: "alighting", leg: "alight", stationId: hB, ...train, ...eta, x: p.x, y: p.y };
   }
-  // walk2 is platform -> down the stairs to the gate -> street (a trip read from a plan
-  // lays its street walk out here, on first use)
-  const walk2 = trip.walk2 || (trip.walk2 = [walkLeg(trip.spotB, sB.gate, dB), r.last]);
-  const { p, i, k } = alongLegs(walk2, t - trip.out);
-  return { ...base, atDistrictId: dB, sub: "walking", leg: "walk", stationId: dB, climb: i === 0 ? 1 - k : 0, ...train, ...eta, x: p.x, y: p.y };
+  // walk2 is platform -> down the stairs to the gate -> street (-> hub stop -> pod -> terminal
+  // -> street); a trip read from a plan lays its street walk out here, on first use
+  const walk2 = trip.walk2 || (trip.walk2 = [walkLeg(trip.spotB, sB.gate, hB, null, true), ...r.lastLegs]);
+  return onLeg(walk2, t - trip.out, "in", { stationId: hB, ...train, ...eta });
 }
 
 // -> {places, districts, buildings: {id: {total, floors: [n per floor index]}},
@@ -1849,10 +2003,15 @@ export function statusLine(s, machineTime, seed = SEED) {
         case "waiting": return `ON THE PLATFORM // ${STATIONS[w.stationId].name}, FOR ${tn}. WAITING IS PERMITTED. IT IS ALSO TIMED.`;
         case "riding": return `ABOARD ${tn} // CAR ${w.car + 1}, BOUND FOR ${dist}. LOITERING ON THE LOOP IS A TIER EVENT.`;
         case "alighting": return `ALIGHTING // ${STATIONS[w.stationId].name}. MIND THE GAP. THE GAP IS MONITORED.`;
-        default:
+        default: {
+          if (w.leg === "pod") return `ABOARD ${SPUR_BY_ID[w.spur].name} // POD FOR ONE, BOUND FOR ${w.podDir === "in" ? DISTRICT[SPUR_BY_ID[w.spur].districtId].name : `${STATIONS[SPUR_BY_ID[w.spur].hub].name}`}. SHARING IS UNMONITORABLE.`;
           if (w.fromDistrictId === w.districtId) return `IN TRANSIT // ON FOOT TO ${pl?.name}. THE PAVEMENT IS SCORED.`;
-          if (w.stationId === w.fromDistrictId) return `IN TRANSIT // WALKING TO ${STATIONS[w.stationId].name}. THE LOOP WILL NOT WAIT.`;
-          return `IN TRANSIT // FROM ${STATIONS[w.districtId].name} TO ${pl?.name} ON FOOT. ARRIVAL IS EXPECTED.`;
+          const spA = SPURS[w.fromDistrictId], spB = SPURS[w.districtId];
+          if (!w.stationId) return `IN TRANSIT // ON FOOT, BY ${(spA || spB).name}, TO ${pl?.name}. THE PODS ARE COUNTED.`;
+          if (w.dir !== "in") return spA && w.atDistrictId === w.fromDistrictId ? `IN TRANSIT // WALKING TO ${spA.name}. THE POD WILL NOT WAIT EITHER.` : `IN TRANSIT // WALKING TO ${STATIONS[w.stationId].name}. THE LOOP WILL NOT WAIT.`;
+          if (spB && w.atDistrictId !== w.districtId) return `IN TRANSIT // FROM ${STATIONS[w.stationId].name} TO ${spB.name} ON FOOT. THE PODS ARE WAITING. THEY ALWAYS ARE.`;
+          return `IN TRANSIT // FROM ${spB ? spB.name : STATIONS[w.stationId].name} TO ${pl?.name} ON FOOT. ARRIVAL IS EXPECTED.`;
+        }
       }
     }
     default: return `DORMANT // ${place}. RECHARGING FOR TOMORROW'S QUOTA. RETENTION REQUIRES RECOVERY.`;

@@ -237,6 +237,7 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
 {
   const SIM = await import("../src/city/sim.js");
   const G = await import("../src/city/loopGeo.js");
+  const { COAST_LOTS, SPUR_STOPS } = await import("../src/city/coastGeo.js");
   const { slotForBox, DECK } = await import("../src/city/iso.js");
   const pitch = SIM.LOOP_LINE.carLen + SIM.LOOP_LINE.carGap;
   const sat = (A, B) => {   // convex quads overlap (separating axis), strictly
@@ -345,6 +346,7 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   const SIM = await import("../src/city/sim.js");
   const PG = await import("../src/city/parkGeo.js");
   const G = await import("../src/city/loopGeo.js");
+  const { COAST_LOTS, SPUR_STOPS } = await import("../src/city/coastGeo.js");
   const lots = Object.keys(PG.PARK_LOTS);
   const HOME = { "the-diamond": "arena", "the-courts": "arena", "rec-ground": "arena", "the-bowl": "arena", "the-pitch": "sprawl" };
   for (const id of lots) {
@@ -490,9 +492,10 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   const { DRAWN_STYLES, DRAWN_PROPS } = await import("../src/city/archDraw.js");
   const { rot, rotRect } = await import("../src/city/iso.js");
   const G = await import("../src/city/loopGeo.js");
+  const { COAST_LOTS, SPUR_STOPS } = await import("../src/city/coastGeo.js");
   for (const b of SIM.BUILDINGS) {
     ok(b.arch && A.STYLES[b.arch], `${b.id}: has a style (${b.arch})`);
-    if (A.GROUND_STYLES.has(b.arch)) { ok(SIM.OPEN_LOTS.has(b.id) || b.id === "the-bowl", `${b.id}: a ground style is open ground`); continue; }
+    if (A.GROUND_STYLES.has(b.arch)) { ok(SIM.OPEN_LOTS.has(b.id) || b.id === "the-bowl" || COAST_LOTS[b.id], `${b.id}: a ground style is open ground (or the Coast's and the Heights' own, coastGeo.js)`); continue; }
     const m = A.massingOf(b);
     ok(m && m.parts.length > 0, `${b.id}: ${b.arch} has a massing`);
     ok(DRAWN_STYLES.has(b.arch), `${b.id}: ${b.arch} has a drawer`);
@@ -516,7 +519,7 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   }
   // no two boxes in the iso view overlap: bodies, props and the viaduct, all four turns
   for (let r = 0; r < 4; r++) {
-    const items = [...A.isoItems(r), ...G.loopPieces(r)];
+    const items = [...A.isoItems(r), ...G.loopPieces(r), ...SPUR_STOPS.map(st => ({ kind: "b", id: st.id, ...rotRect({ x: st.box.x0, y: st.box.y0, w: st.box.x1 - st.box.x0, h: st.box.y1 - st.box.y0 }, r) }))];
     let clash = "";
     const over = (a, c) => a.x0 < c.x1 - 1e-9 && c.x0 < a.x1 - 1e-9 && a.y0 < c.y1 - 1e-9 && c.y0 < a.y1 - 1e-9;
     for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
