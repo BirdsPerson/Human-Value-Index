@@ -34,9 +34,13 @@ export function loadAssembly({ force = false, caseId = null } = {}) {
 }
 
 export async function castBallot(caseId, choice, reasons) {
+  return castBallotFor(caseId, { session: "001", choice, reasons });
+}
+// Any session's ballot: body {session, choice | choices, reasons}.
+export async function castBallotFor(caseId, body) {
   const r = await fetch("/api/assembly", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ caseId, choice, reasons, device: deviceId() }),
+    body: JSON.stringify({ caseId, ...body, device: deviceId() }),
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.error || "The Assembly refused your ballot. It gave no reason. It does not owe you one.");

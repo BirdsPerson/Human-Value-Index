@@ -4,6 +4,7 @@ import { Bar, padL } from "../term.jsx";
 import { readCaseId, CaseLogon } from "../caseFile.jsx";
 import { SESSION, APPLICATIONS, ADVOCATES, REASONS, REASON_NOTE, MAX_REASONS, REACTIONS, CHAIR, OUTCOME, NOTICE, SUBSTRATE_NOTE, ADOPTED } from "./content.js";
 import { loadAssembly, castBallot } from "./client.js";
+import Session002 from "./Session002.jsx";
 import { ProposalPanel } from "./Docket.jsx";   // citizen proposals (docs/PROPOSALS.md)
 
 // #assembly: THE ASSEMBLY, session 001 (docs/ASSEMBLY.md). The applications (filings), the
@@ -102,6 +103,8 @@ export default function Assembly() {
   const chairLine = state === "closed" ? (result?.decidedBy === "substrate" ? ADOPTED : result?.tie ? CHAIR.coin : CHAIR.closed)
     : !g && !f ? CHAIR.none : g === f ? CHAIR.tie : g > f ? CHAIR.lead(APPLICATIONS.golf.no, g - f) : CHAIR.lead(APPLICATIONS.farm.no, f - g);
 
+  // Session 002 (THE RESORT PARCELS) has its own page; 001 stays on its record there.
+  if (s?.id === "002") return <Session002 view={view} now={now} caseId={caseId} onView={setView} err={err}><ProposalPanel /></Session002>;
   return (
     <div className="asm">
       <ScreenHead title={SESSION.title} meta={SESSION.blurb} />

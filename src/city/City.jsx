@@ -5,10 +5,11 @@ import { SubjectCard, injectPenStyles } from "../Pen.jsx";
 import { DISTRICTS, DISTRICT, BUILDING, TRAIN, STATIONS, PLACES, GAMES, GAME_VENUE, districtCap, clockAt, whereOf, atDistrict, isOnLoop, setClockOffset, offsetFor, jobLine, loopEvents, roomIn, gameAt, gameEvents, civicOf } from "./simApi.js";
 import { DistrictCivic, LeaguePanel, civicPaLines, useCivic } from "./CivicPanel.jsx";
 import { moodWord } from "./civic.js";
-import { covers, setCivic, lotPhase } from "./sim.js";
+import { covers, setCivic, lotPhase, resortPhase } from "./sim.js";
 import { loadAssembly, assemblyNow } from "../assembly/client.js";
 import { loadActs, actPaLines } from "./acts.js";   // citizen proposals' acts (docs/PROPOSALS.md)
 import { paLines as assemblyPa, SESSION as ASM, APPLICATIONS as ASM_APPS, OUTCOME as ASM_OUT } from "../assembly/content.js";
+import { paLines2 as assemblyPa2, APPLICATIONS2 as ASM2_APPS, OUTCOME2 as ASM2_OUT, MOTIONS as ASM2_MOTIONS } from "../assembly/content002.js";
 import { crowdAt, summaryCounts } from "./crowd.js";
 import { clockLine, paLine } from "./cityKit.js";
 import { useRoster } from "./useRoster.js";
@@ -386,18 +387,28 @@ function civicReady() {
 }
 // The Assembly's PA lines: the running tally while the polls are open, then the lot's news.
 function civicPa(view, mt) {
-  const lines = [...assemblyPa(view), ...actPaLines()];
+  const s2 = view?.session?.id === "002";
+  const lines = [...(s2 ? assemblyPa2(view) : assemblyPa(view)), ...actPaLines()];
   const p = lotPhase(mt);
   if (p.phase === "approved") lines.push(`LOT ${ASM.lotAddr}: ${ASM_OUT.groundbreak(p.breakDay)}`);
   if (p.phase === "site") lines.push(`LOT ${ASM.lotAddr}, ${ASM_APPS[p.winner].proposal}: ${ASM_OUT.site(Math.round(p.progress * 100))}`);
   if (p.phase === "built") lines.push(ASM_OUT.open[p.winner]);
+  // the resort parcels (session 002), once decided
+  for (const m of ASM2_MOTIONS) {
+    const q = resortPhase(m.place, mt);
+    if (q.phase === "approved") lines.push(`${m.parcel}: ${ASM_OUT.groundbreak(q.breakDay)}`);
+    if (q.phase === "site") lines.push(`${m.parcel}, ${ASM2_APPS[q.winner].proposal}: ${ASM_OUT.site(Math.round(q.progress * 100))}`);
+    if (q.phase === "built") lines.push(ASM2_OUT.open[q.winner]);
+  }
   return lines;
 }
 function AssemblyRow({ asm }) {
   const st = asm?.session?.state;
   if (!st) return null;
   const g = asm.tally?.votes?.golf || 0, f = asm.tally?.votes?.farm || 0;
-  const label = st === "open" ? `THE ASSEMBLY IS IN SESSION // GOLF ${g} // FARM ${f}` : asm.result ? `THE ASSEMBLY HAS DECIDED: ${ASM_APPS[asm.result.winner].proposal}` : "THE ASSEMBLY";
+  const label = asm.session.id === "002"
+    ? (st === "open" ? `THE ASSEMBLY IS IN SESSION // 002: THE RESORT PARCELS // ${asm.tally?.voters || 0} BALLOTS` : asm.result?.winners ? `THE ASSEMBLY HAS ALLOCATED THE PARCELS: ${ASM2_MOTIONS.map(m => ASM2_APPS[asm.result.winners[m.id]].short).join(", ")}` : "THE ASSEMBLY")
+    : st === "open" ? `THE ASSEMBLY IS IN SESSION // GOLF ${g} // FARM ${f}` : asm.result ? `THE ASSEMBLY HAS DECIDED: ${ASM_APPS[asm.result.winner].proposal}` : "THE ASSEMBLY";
   return (
     <div className="hvi-city-asm" style={{ margin: "0 0 var(--s4)" }}>
       <ListRow lead="0x6F08" label={label} tag={st === "open" ? "VOTE" : "RESULT"} href="#assembly"

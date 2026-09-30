@@ -112,10 +112,56 @@ second (CAS retries on the one tally blob), or the second concurrent session. Th
 ballots as rows with a unique (session, voter) key, the tally as a GROUP BY or a counter
 table updated in the same transaction.
 
+## Session 002: THE RESORT PARCELS (2026-09-30)
+
+Scott: "keep building the city outward... mountain and ski resort type stuff, maybe a resort
+area like a beach area. You should ask the developers about that." The city grew two
+expansion districts (docs/CITY_SPEC.md "The city built outward"), each with a vacant resort
+parcel; the developers on file bid for them.
+
+- **Opens when 001 closes, not before** (one open session at a time): the first reader after
+  001's close (a GET, or the plan builder's `civicOf`) writes `s002/meta` once (onlyIfNew) with
+  `openAt` = 001's `closeAt` and `closeAt` three days on, so every reader writes the same times.
+  001 closes 2026-10-03 09:48:53 UTC; 002 then runs to 2026-10-06 09:48:53 UTC.
+- **Two motions, four bids** (`src/assembly/content002.js`, reviewed; no model at runtime):
+  - PARCEL 0xAD06, THE COAST: APPLICATION 003, A BEACH RESORT (JIMMY BUFFETT, 1946-2023: he
+    built restaurants, hotels and retirement communities on one song) or APPLICATION 004,
+    OCEANFRONT APARTMENT TOWERS (FRED TRUMP, 1905-1999: some 27,000 apartments and row houses
+    in Brooklyn and Queens; the chair reads the 1973 federal rental-discrimination suit,
+    settled in 1975 without an admission, and the 1966 demolition party at Steeplechase
+    Park into the minutes).
+  - PARCEL 0xBE06, THE HEIGHTS: APPLICATION 005, A SKI RESORT (RICHARD BRANSON, living: a
+    filing only; his group keeps a ski lodge in Verbier) or APPLICATION 006, A MOUNTAIN LODGE
+    AND PRESERVE (JOHN D. ROCKEFELLER JR., 1874-1960: the Jackson Hole land he gave for Grand
+    Teton National Park; the chair reads Ludlow, 1914, into the minutes).
+  The dead applicants pitch their own bids, in their manner; the living applicant's bid has a
+  dead advocate, TENZING NORGAY (1914-1986: Everest in 1953; the chair notes that Hillary was
+  knighted and he was given a medal). Four speeches each, reconstructions, no quotation marks;
+  a reaction per reason per bid. The living applicant never speaks (checked, as in 001).
+- **The same rules**: one ballot per assessed file (a bid for EACH parcel, one set of 1-3
+  reasons counted for both), the same limits, changeable until the close. THE SUBSTRATE
+  advises on each parcel (`SUBSTRATE2`: leans for each bid; the applicants recused); with zero
+  player ballots each parcel adopts the substrate's preference (THE CITIZENRY ABSTAINED...),
+  otherwise players decide each parcel, a tie to that parcel's own coin.
+- **Storage**: `s002/...` exactly as 001's; a ballot's `c` is `{coast, heights}` and the tally
+  folds it as one number (motion i's choice index times 2^i); the result holds `winners`,
+  `ties`, `decidedBy` and `substrate` per motion. `civicOf` gives the city `resorts:
+  {closeAt, winners}` beside 001's `{closeAt, winner}`.
+- **Built**: `sim.resortPhase(parcel, t)`, 001's timings from 002's close: approved, a site for
+  LOT_BUILD machine days from closeDay + LOT_BREAK (hoarding, a crane, foundations rising, a
+  crew in hard hats), then what won: THE LOW TIDE RESORT (a low hotel, a pool, a thatched bar,
+  cabanas), THE OCEANFRONT TOWERS (two towers on a podium with a pool deck), THE SUMMIT RESORT
+  (two more chairlifts, four groomed runs, snow cannons, the lodge) or THE HEIGHTS PRESERVE (a
+  timber lodge, trails through the pines, a lookout on the ridge). The parcels take no
+  visitors before the ground breaks; then the crew, then whoever the winner draws by tier.
+- **Where**: #assembly shows 002 once it opens (001's result stays on the record at the foot);
+  the forum's board, banner and projections follow the session (the parcels' speakers a pair
+  at a time); the city's row and PA name the parcels; proposals may not build on them.
+
 ## Next sessions
 
-The machinery takes a session id; a second session needs its own lot, content and a
-`SESSION` bump. ROADMAP b5 continues: councils, a legitimacy meter, elections. Since the
+The machinery takes a session id (`SESSIONS` in netlify/lib/assembly.js): a session names the
+one before it (`after`) and its motions; content, leans and a lot per motion go beside it. ROADMAP b5 continues: councils, a legitimacy meter, elections. Since the
 civic fold (docs/CITY_SPEC.md "The civic fold") each district has a vacant COUNCIL seat, and
 this session's result is recorded as the Council's first act in every district's record
 (from the day the ground breaks); the outcome also moves the districts' moods.

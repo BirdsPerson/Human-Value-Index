@@ -398,7 +398,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         if (selected) poly([P(R.x0, R.y0, 0.02), P(R.x1, R.y0, 0.02), P(R.x1, R.y1, 0.02), P(R.x0, R.y1, 0.02)], null, "#4ade80");
         if (lod !== "far" || selected) {
           const tall = it.h > 2, [x, y] = tall ? P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, it.h * 0.9) : P(R.x0 + 0.6, R.y0 + 0.6, 0.6);
-          const text = coastLabel(b.id) || b.name;
+          const text = coastLabel(b.id, V.mt) || b.name;
           const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
           if (top) drawLabel(L, 1); else V.labels.push(L);
         }

@@ -166,7 +166,7 @@ for (const failTally of [0, 0.35]) {
   const civic = await ASM.civicOf(st, meta.closeAt + 20);
   ok(civic.closeAt === meta.closeAt && civic.winner === r1.winner, "the city reads the recorded outcome");
   const pv = await ASM.publicView(st, meta.closeAt + 30);
-  ok(pv.session.state === "closed" && pv.result.winner === r1.winner && pv.tally.votes.golf === r1.votes.golf, "the public view shows the result once closed");
+  ok(pv.session.id === "002" && pv.session.state === "open" && pv.earlier?.[0]?.result?.winner === r1.winner && pv.earlier[0].result.votes.golf === r1.votes.golf && pv.civic.winner === r1.winner, "once closed, the public view moves on to session 002 and keeps 001's result on the record");
 }
 ok(ASM.decide({ votes: { golf: 3, farm: 3 } }).tie && ASM.decide({ votes: { golf: 3, farm: 3 } }).winner === ASM.chairCoin(), "a tie goes to the chair's coin, the same every time");
 
@@ -230,6 +230,87 @@ ok(ASM.decide({ votes: { golf: 3, farm: 3 } }).tie && ASM.decide({ votes: { golf
   ok(r3.winner === ASM.chairCoin() && r3.decidedBy === "coin", "no players, no substrate on record: the chair's coin");
 }
 
+// ---- SESSION 002: THE RESORT PARCELS, opened by 001's close -------------------------------------------
+{
+  const C2 = await import("../src/assembly/content002.js");
+  const st = memStore(), io = makeIo(st);
+  const m1 = await ASM.ensureSession(st, T0);
+  ok((await ASM.ensureSession(st, m1.closeAt - 1, "002")) === null, "session 002 does not open while 001 is open");
+  let pv = await ASM.publicView(st, m1.closeAt - 1);
+  ok(pv.session.id === "001" && pv.session.state === "open" && !pv.earlier, "before 001's close the Assembly is on 001, alone");
+  const bad = await ASM.castBallot(io, { caseId: ids[1], choice: { coast: "beach-resort", heights: "ski-resort" }, reasons: ["JOBS"], ip: "e1", device: dev(1), now: m1.closeAt - 1, sid: "002" });
+  ok(bad.status === 403, "no ballot for 002 before it opens");
+  const opens = await Promise.all([1, 2, 3, 4].map(k => ASM.ensureSession(st, m1.closeAt + k * 997, "002")));
+  const m2 = opens[0];
+  ok(opens.every(m => m && m.openAt === m1.closeAt && m.closeAt === m1.closeAt + ASM.DURATION_MS), "002 opens the moment 001 closes, for three days, whoever reads first");
+  pv = await ASM.publicView(st, m1.closeAt + 5000);
+  ok(pv.session.id === "002" && pv.session.state === "open" && pv.rules.motions.length === 2 && pv.earlier?.[0]?.session?.id === "001", "after 001's close the Assembly is on 002, with 001 on the record");
+  const now = m1.closeAt + 60000;
+  ok(ASM.parseBallot({ choices: { coast: "beach-resort" }, reasons: ["JOBS"] }, "002").error, "002: a bid for each parcel, or no ballot");
+  ok(ASM.parseBallot({ choices: { coast: "ski-resort", heights: "beach-resort" }, reasons: ["JOBS"] }, "002").error, "002: a parcel's bids only");
+  ok(ASM.parseBallot({ choice: "golf", reasons: ["JOBS"] }, "002").error, "002: not 001's ballot");
+  const ok2 = ASM.parseBallot({ choices: { coast: "SEASIDE-TOWERS", heights: "mountain-lodge" }, reasons: ["land", "beauty"] }, "002");
+  ok(!ok2.error && ok2.choice.coast === "seaside-towers" && ok2.choice.heights === "mountain-lodge", "002: case-insensitive, both parcels");
+  const cast = (i, coast, heights, reasons = ["JOBS"]) => ASM.castBallot(io, { caseId: ids[i], choice: { coast, heights }, reasons, ip: `f${i}`, device: dev(i), now, sid: "002" });
+  ok((await cast(1, "beach-resort", "ski-resort", ["LEISURE"])).status === 200, "a 002 ballot is cast");
+  await cast(2, "beach-resort", "mountain-lodge", ["BEAUTY", "LAND"]);
+  await cast(3, "seaside-towers", "mountain-lodge", ["LAND"]);
+  const ch = await cast(1, "seaside-towers", "ski-resort", ["JOBS"]);
+  ok(ch.status === 200 && ch.body.changed, "a 002 ballot is changed");
+  const c = ASM.countsOf((await ASM.readTally(st, "002")).seen, "002");
+  ok(c.voters === 3 && c.votes["beach-resort"] === 1 && c.votes["seaside-towers"] === 2 && c.votes["ski-resort"] === 1 && c.votes["mountain-lodge"] === 2, `002 counts each parcel (${JSON.stringify(c.votes)})`);
+  ok(c.reasons["mountain-lodge"].LAND === 2 && c.reasons["seaside-towers"].JOBS === 1 && c.all.LAND === 2, "a ballot's reasons count for both its bids, once in all");
+  ok((await ASM.myBallot(st, ids[1], "002")).choices.coast === "seaside-towers" && (await ASM.myBallot(st, ids[1])) === null, "a file reads its 002 ballot, and not in 001");
+  ok(!JSON.stringify([...st.m.entries()]).includes(ids[1]), "the store never holds a case number");
+  for (let i = 0; i < 16; i++) ok(JSON.stringify(ASM.decode("002", ASM.encode("002", ASM.decode("002", i % 4)))) === JSON.stringify(ASM.decode("002", i % 4)), "002: choices encode and decode");
+  ok(ASM.encode("001", "farm") === 1 && ASM.encode("001", "golf") === 0, "001's tally encoding is unchanged");
+  // the close: players decide each parcel
+  const r2 = await ASM.finalize(st, m2.closeAt + 1, null, "002");
+  ok(r2 && r2.winners.coast === "seaside-towers" && r2.winners.heights === "mountain-lodge" && r2.decidedBy.coast === "citizens", `players decide each parcel (${JSON.stringify(r2?.winners)})`);
+  const late = await ASM.castBallot(io, { caseId: ids[4], choice: { coast: "beach-resort", heights: "ski-resort" }, reasons: ["JOBS"], ip: "f4", device: dev(4), now: m2.closeAt + 10, sid: "002" });
+  ok(late.status === 403, "002 closed after its deadline");
+  const civ = await ASM.civicOf(st, m2.closeAt + 5);
+  ok(civ.resorts && civ.resorts.closeAt === m2.closeAt && civ.resorts.winners.coast === "seaside-towers", "the city reads the parcels' outcome");
+  // a tie on a parcel goes to that parcel's coin
+  const st3 = memStore(), io3 = makeIo(st3);
+  const n1 = await ASM.ensureSession(st3, T0); await ASM.finalize(st3, n1.closeAt + 1);
+  const n2 = await ASM.ensureSession(st3, n1.closeAt + 2, "002");
+  await ASM.castBallot(io3, { caseId: ids[7], choice: { coast: "beach-resort", heights: "ski-resort" }, reasons: ["JOBS"], ip: "t1", device: dev(7), now: n1.closeAt + 10, sid: "002" });
+  await ASM.castBallot(io3, { caseId: ids[8], choice: { coast: "seaside-towers", heights: "ski-resort" }, reasons: ["JOBS"], ip: "t2", device: dev(8), now: n1.closeAt + 10, sid: "002" });
+  const r3 = await ASM.finalize(st3, n2.closeAt + 1, null, "002");
+  ok(r3.ties.coast && r3.winners.coast === ASM.chairCoin("002:coast", ["beach-resort", "seaside-towers"]) && r3.decidedBy.coast === "coin" && !r3.ties.heights && r3.winners.heights === "ski-resort", "a level parcel goes to its coin; the other is decided");
+  // zero players: the substrate's preference per parcel
+  const st4 = memStore();
+  const q1 = await ASM.ensureSession(st4, T0); await ASM.finalize(st4, q1.closeAt + 1);
+  const q2 = await ASM.ensureSession(st4, q1.closeAt + 2, "002");
+  const { fullRoster: fr } = await import("../src/city/roster.js");
+  const roster = fr(Array.from({ length: 300 }, (_, i) => ({ name: `C ${i}`, slug: `c-${i}`, score: 100 + (i * 37) % 850, kind: "citizen", warmth: (i * 13) % 100, competence: (i * 7) % 100 })));
+  const sub = await ASM.refreshSubstrate(st4, async () => ({ subjects: roster, moods: null }), { now: q2.openAt + 1000, sid: "002" });
+  ok(sub?.motions?.coast?.n === roster.length && sub.motions.heights.voters > 0, "the substrate advises on both parcels");
+  const want = { coast: sub.motions.coast.winner, heights: sub.motions.heights.winner };
+  const r4 = await ASM.finalize(st4, q2.closeAt + 1, null, "002");
+  ok(r4.voters === 0 && ["coast", "heights"].every(m => !want[m] || (r4.winners[m] === want[m] && r4.decidedBy[m] === "substrate")), `no player voted: the substrate's preference is adopted on each parcel (${JSON.stringify(r4.winners)})`);
+  ok(C2.paLines2({ session: { id: "002", state: "closed" }, result: r4 }).every(l => l.includes("THE SUBSTRATE'S PREFERENCE IS ADOPTED") || !want.coast), "and the PA says so");
+  const pv4 = await ASM.publicView(st4, q2.closeAt + 10);
+  ok(pv4.session.id === "002" && pv4.session.state === "closed" && pv4.result.winners && pv4.civic.resorts.winners, "the public view shows 002's result once closed");
+  // the content: the living applicant files and never speaks
+  const living = Object.values(C2.APPLICATIONS2).filter(a => a.living).map(a => a.applicant);
+  ok(living.length === 1 && living[0] === "RICHARD BRANSON", "one living applicant in 002");
+  const QUOTE = /["“”«»]|\bQUOTE/i;
+  const SPEECH = /\b(said|says|saying|told|tells|stated|states|claim(s|ed)?|argue(s|d)?|insist(s|ed)?|promise(s|d)?|vow(s|ed)?|declare(s|d)?|tweet(s|ed)?|posted|wrote|writes|announce(s|d)?|added|replied|responded|spoke|speaks|remarked|called it)\b/i;
+  const strings = [];
+  const walk = (v) => { if (typeof v === "string") strings.push(v); else if (typeof v === "function") { for (const args of [[C2.MOTIONS[0], "003", 2], [C2.SPEAKERS2["ski-resort"], C2.APPLICATIONS2["ski-resort"]], [C2.APPLICATIONS2["ski-resort"]]]) { try { const r = v(...args); if (typeof r === "string") strings.push(r); } catch { /* not that shape */ } } } else if (v && typeof v === "object") Object.values(v).forEach(walk); };
+  walk(C2);
+  const names = living.flatMap(n => [n, n.split(" ").slice(-1)[0]]);
+  const hits = strings.flatMap(x => x.split(/(?<=[.!?])\s+/)).filter(x => names.some(n => x.toUpperCase().includes(n)) && (QUOTE.test(x) || SPEECH.test(x)));
+  ok(hits.length === 0, `no living applicant is quoted or reported speaking in 002 (${hits.slice(0, 2).join(" | ")})`);
+  ok(Object.values(C2.SPEAKERS2).every(sp => /^\d{4}-\d{2}-\d{2}$/.test(sp.died) && sp.died < "2026" && !living.includes(sp.name)), "every speaker in 002 is dead and on the record");
+  ok(Object.entries(C2.SPEAKERS2).every(([k, sp]) => C2.APPLICATIONS2[k] && sp.speeches.length >= 3 && sp.speeches.every(x => !QUOTE.test(x)) && !QUOTE.test(sp.record)), "a speaker per bid; three or four speeches; no quotation marks");
+  ok(Object.values(C2.APPLICATIONS2).every(a => !a.living || /NONE ON FILE/.test(a.statement)), "the living applicant's statement: none on file");
+  ok(Object.keys(C2.REACTIONS2).every(k => C2.APPLICATIONS2[k]) && Object.values(C2.REACTIONS2).every(r => ASM.REASONS.every(x => typeof r[x] === "string")), "reactions: one per reason per bid");
+  ok(C2.MOTIONS.every(m => m.choices.every(c => C2.APPLICATIONS2[c].motion === m.id)) && JSON.stringify(ASM.SESSIONS["002"].motions.map(m => m.choices)) === JSON.stringify(C2.MOTIONS.map(m => m.choices)), "the page, the server and the substrate read the same bids");
+}
+
 // ---- the winner, built in the city ---------------------------------------------------------------------
 {
   ok(ASM.KEYS && SIM.LOT_BREAK > LOOKAHEAD, `the ground breaks after the plan builder's look-ahead (${SIM.LOT_BREAK} > ${LOOKAHEAD}): every site day is built after the result`);
@@ -279,7 +360,7 @@ ok(ASM.decide({ votes: { golf: 3, farm: 3 } }).tie && ASM.decide({ votes: { golf
       const r = await buildPlans(atDay(d), io, { lookahead: 3 });
       ok(r.built.length > 0, `${winner}: the builder built days around ${d}`);
     }
-    ok(JSON.stringify(SIM.civicState()) === JSON.stringify({ closeAt, winner }), `${winner}: the builder set the recorded outcome`);
+    ok(SIM.civicState()?.closeAt === closeAt && SIM.civicState()?.winner === winner, `${winner}: the builder set the recorded outcome`);
     for (const [k, json] of io.blobs) {
       const p = SIM.lotPhase((json.day - 1) * 24 + 12);
       const v = visitsOn(json);

@@ -184,36 +184,136 @@ function slopesAnchors() {
   for (let k = 0; out.length < PLACES.slopes.cap; k++) out.push(A(`queue${k}`, LIFT.x - 1.3 - (k % 3) * 0.6, LIFT.y0 + 0.2 - Math.floor(k / 3) * 0.55, "stand", k % 2 ? "cheer" : "view", "patron", { look: [LIFT.x, LIFT.y0 - 2] }));
   return out;
 }
-// The lift's loop: chairs spaced along the cable, up the west side, down the east.
-export function liftChair(slot, t) {
-  const L = LIFT, len = L.y0 - L.y1, lap = 2 * len, n = Math.floor(lap / L.spacing);
+// A chairlift's loop: chairs spaced along the cable, up the west side, down the east.
+export function liftChair(slot, t, L = LIFT) {
+  const len = L.y0 - L.y1, lap = 2 * len, n = Math.floor(lap / L.spacing);
   const s = ((slot / n) * lap + t * L.speed) % lap;
   return s < len ? { x: L.x - L.gap, y: L.y0 - s, up: true } : { x: L.x + L.gap, y: L.y1 + (s - len), up: false };
 }
-export const liftChairs = () => Math.floor((2 * (LIFT.y0 - LIFT.y1)) / LIFT.spacing);
-// Where a moving anchor is at time t (real seconds; 0 = at rest). -> [x, y, h, dx, dy]
+export const liftChairs = (L = LIFT) => Math.floor((2 * (L.y0 - L.y1)) / L.spacing);
+// Where a moving anchor is at time t (real seconds; 0 = at rest). -> [x, y, h, dx, dy, riding]
 export function pathAt(a, t) {
   const p = a.path;
   if (!p) return [a.x, a.y, a.h || 0, 0, 1];
-  if (p.kind === "piste") {
-    const k = frac(t / p.period + p.phase), pts = PISTES[p.piste].pts;
-    const [x, y, dx, dy] = alongPts(pts, k), wig = Math.sin(k * 40 + p.phase * 9) * 0.45;
+  if (p.kind === "piste" || p.kind === "line") {
+    const k = frac(t / p.period + p.phase), pts = p.kind === "piste" ? PISTES[p.piste].pts : p.pts;
+    const [x, y, dx, dy] = alongPts(pts, k), wig = Math.sin(k * 40 + p.phase * 9) * (p.wig ?? 0.45);
     const X = x - dy * wig, Y = y + dx * wig;
-    return [X, Y, terrainH(X, Y), dx, dy];
+    return [X, Y, terrainH(X, Y) + (p.h || 0), dx, dy];
   }
-  if (p.kind === "lift") { const c = liftChair(p.slot, t); return [c.x, c.y, terrainH(c.x, c.y) + 1.05, 0, c.up ? -1 : 1]; }
+  if (p.kind === "lift") { const c = liftChair(p.slot, t, p.lift || LIFT); return [c.x, c.y, terrainH(c.x, c.y) + 1.05, 0, c.up ? -1 : 1]; }
   if (p.kind === "wave") {
     const k = frac(t / p.period + p.phase), ride = k < 0.6, f = ride ? k / 0.6 : (k - 0.6) / 0.4;
     const y = ride ? p.y0 + (p.y1 - p.y0) * f : p.y1 + (p.y0 - p.y1) * f, x = p.x + (ride ? f : 1 - f) * p.drift;
     return [x, y, 0, ride ? 1 : -1, 0, ride];
   }
+  if (p.kind === "bob") return [a.x, a.y, a.h || 0, 0, 1];
   return [a.x, a.y, 0, 0, 1];
 }
 
 // ---- the resort parcels (THE ASSEMBLY, session 002) ------------------------------------------------------
+// Each parcel has a face per phase (sim.resortPhase): vacant (and approved: the sign changes), the
+// site (hoarding, a crane, a pit, a crew), and what won. Anchors per face, in fill order.
 const Sh = rect("shore-lot"), Su = rect("summit-lot");
 export const SHORE = { lot: Sh, sign: { a: [Sh.x + 0.8, Sh.y + Sh.h - 0.5], b: [Sh.x + 4.6, Sh.y + Sh.h - 0.5], h0: 0.45, h1: 1.5 }, grass: Array.from({ length: 30 }, (_, i) => [Sh.x + 0.6 + frac(i * 0.618 + 0.1) * (Sh.w - 1.2), Sh.y + 0.6 + frac(i * 0.382 + 0.7) * (Sh.h - 1.2)]) };
 export const SUMMIT = { lot: Su, sign: { a: [Su.x + 3, Su.y + Su.h - 0.6], b: [Su.x + 7, Su.y + Su.h - 0.6], h0: 0.45, h1: 1.5 } };
+const sx0 = Sh.x, sy0 = Sh.y, sx1 = Sh.x + Sh.w, sy1 = Sh.y + Sh.h;
+const ux0 = Su.x, ux1 = Su.x + Su.w, uy1 = Su.y + Su.h;
+// the site on either parcel: a pit, a crane, the site office, the gate
+export const PARCEL_SITE = {
+  "shore-lot": { lot: Sh, pit: { x0: sx0 + 5, y0: sy0 + 2, x1: sx1 - 8, y1: sy1 - 3.5 }, crane: { x: sx1 - 4, y: sy0 + 1.8, mast: 5, jib: 9, counter: 2 }, cabin: { x0: sx0 + 0.8, y0: sy0 + 0.7, x1: sx0 + 3, y1: sy0 + 1.8, h: 0.75 }, gate: [sx0 + 3.5, sy1 - 0.15] },
+  "summit-lot": { lot: Su, pit: { x0: ux0 + 11, y0: uy1 - 5, x1: ux1 - 10, y1: uy1 - 1.2 }, crane: { x: ux1 - 7, y: uy1 - 3.5, mast: 5, jib: 9, counter: 2 }, cabin: { x0: ux0 + 1.5, y0: uy1 - 2.2, x1: ux0 + 3.7, y1: uy1 - 1.1, h: 0.75 }, gate: [ux0 + 5, uy1 - 0.15] },
+};
+function siteAnchors(pid) {
+  const S0 = PARCEL_SITE[pid], P = S0.pit, out = [], hOf = (x, y) => terrainH(x, y);
+  const at = (id, x, y, act, extra = {}) => out.push(A(id, x, y, "stand", act, "patron", { h: hOf(x, y), hat: true, ...extra }));
+  at("foreman", P.x0 - 1, P.y1 + 0.6, "inspect", { look: [P.x0 + 3, P.y0 + 1] });
+  for (let r = 0; r < 3; r++) for (let k = 0; k < 6; k++) at(`dig${r}${k}`, P.x0 + 1 + k * ((P.x1 - P.x0 - 2) / 5), P.y0 + 0.7 + r * ((P.y1 - P.y0 - 1.4) / 2), r === 1 ? "hammer" : "dig");
+  at("craneop", S0.crane.x - 0.7, S0.crane.y + 0.6, "crane");
+  const ly1 = S0.lot.y + S0.lot.h;
+  for (let k = 0; out.length < 30; k++) at(`haul${k}`, P.x0 + 0.5 + k * 2.2, Math.min(P.y1 + 1.4, ly1 - 0.35) - (k % 2) * 0.45, "haul");
+  return out;
+}
+// THE LOW TIDE RESORT (003): a low hotel in an L, a pool with loungers, a thatched bar, cabanas.
+export const BEACH_RESORT = {
+  wings: [{ x0: sx0 + 1, y0: sy0 + 0.8, x1: sx0 + 15.5, y1: sy0 + 3.8, h: 3 }, { x0: sx0 + 1, y0: sy0 + 3.8, x1: sx0 + 4.5, y1: sy0 + 7.5, h: 3 }],
+  pool: { x0: sx0 + 18.5, y0: sy0 + 1.7, x1: sx0 + 32.5, y1: sy0 + 5.7 },
+  bar: { x: sx0 + 10.5, y: sy0 + 7.7, r: 1.2 },
+  cabanas: Array.from({ length: 6 }, (_, i) => ({ x: sx0 + 17.5 + i * 3, y: sy1 - 1.2 })),
+  palms: [[sx0 + 6.5, sy0 + 5.2], [sx0 + 16.8, sy0 + 2], [sx0 + 34, sy0 + 6.8], [sx0 + 7, sy1 - 1]],
+};
+function beachResortAnchors() {
+  const R = BEACH_RESORT, out = [], P = R.pool;
+  out.push(A("bartender0", R.bar.x - 0.35, R.bar.y - 0.1, "stand", "pour", "staff", { look: [R.bar.x, R.bar.y + 2] }));
+  out.push(A("bartender1", R.bar.x + 0.35, R.bar.y + 0.1, "stand", "serve", "staff", { look: [R.bar.x, R.bar.y + 2] }));
+  for (let k = 0; k < 8; k++) { const a = Math.PI * (0.05 + 0.9 * k / 7); out.push(A(`stool${k}`, R.bar.x + Math.cos(a) * 1.65, R.bar.y + Math.sin(a) * 1.65 * 0.9, "seat", k % 2 ? "drink" : "talk", "patron", { look: [R.bar.x, R.bar.y] })); }
+  for (let k = 0; k < 10; k++) out.push(A(`lounger${k}`, P.x0 + 0.7 + k * 1.4, P.y1 + 0.8, "stand", k % 3 === 2 ? "read" : "sleep", "patron", { towel: ["#f97316", "#0ea5e9", "#facc15"][k % 3] }));
+  for (let k = 0; k < 6; k++) out.push(A(`pool${k}`, P.x0 + 1.5 + k * 2.1, P.y0 + 1.2 + (k % 2) * 1.5, "stand", "view", "patron", { swim: true, poolH: 0 }));
+  for (const [i, c] of R.cabanas.entries()) out.push(A(`cabana${i}`, c.x, c.y, "stand", "sleep", "patron", { towel: "#f5f5f4" }));
+  return out;
+}
+// THE OCEANFRONT TOWERS (004): two towers on a podium, the pool deck between, the promenade.
+export const TOWERS = {
+  towers: [{ x0: sx0 + 1.5, y0: sy0 + 0.8, x1: sx0 + 8, y1: sy0 + 6, h: 9 }, { x0: sx1 - 8.5, y0: sy0 + 0.8, x1: sx1 - 2, y1: sy0 + 6, h: 9 }],
+  podium: { x0: sx0 + 8.5, y0: sy0 + 0.8, x1: sx1 - 9, y1: sy0 + 8, h: 0.8 },
+  pool: { x0: sx0 + 11.5, y0: sy0 + 2, x1: sx1 - 12, y1: sy0 + 5.5 },
+};
+function towersAnchors() {
+  const T = TOWERS, P = T.pool, D = T.podium, out = [];
+  for (const [i, t] of T.towers.entries()) out.push(A(`doorman${i}`, (t.x0 + t.x1) / 2 + 1.2, t.y1 + 0.5, "stand", "guard", "staff", { look: [(t.x0 + t.x1) / 2, t.y1 + 3] }));
+  for (let k = 0; k < 12; k++) out.push(A(`deck${k}`, D.x0 + 0.8 + k * ((D.x1 - D.x0 - 1.6) / 11), P.y1 + 1.3, "stand", k % 4 === 3 ? "read" : "sleep", "patron", { h: D.h, towel: "#e5e7eb" }));
+  for (let k = 0; k < 6; k++) out.push(A(`pool${k}`, P.x0 + 1.2 + k * ((P.x1 - P.x0 - 2.4) / 5), P.y0 + 1 + (k % 2) * 1.4, "stand", "view", "patron", { h: D.h, swim: true }));
+  for (let k = 0; out.length < 30; k++) out.push(A(`prom${k}`, sx0 + 1.5 + k * 3.3, sy1 - 1.1 - (k % 2) * 0.5, "stand", ["view", "talk", "drink"][k % 3], "patron", { look: [sx0 + 1.5 + k * 3.3, sy1 + 4] }));
+  return out;
+}
+// THE SUMMIT RESORT (005): two more chairlifts, four groomed runs, the luxury lodge at the foot.
+const TOP2 = RIDGE_Y + 0.5;
+export const LIFTS2 = [
+  { x: ux0 + 7, y0: uy1 - 0.8, y1: TOP2, gap: 0.3, spacing: 1.6, speed: 0.6 },
+  { x: ux1 - 6, y0: uy1 - 0.8, y1: TOP2, gap: 0.3, spacing: 1.6, speed: 0.6 },
+];
+export const RUNS2 = [
+  [[ux0 + 10, TOP2 + 0.2], [ux0 + 14, TOP2 + 5], [ux0 + 11, TOP2 + 10], [ux0 + 15, uy1 - 1.5]],
+  [[ux0 + 19, TOP2 + 0.2], [ux0 + 23, TOP2 + 6], [ux0 + 19, TOP2 + 11], [ux0 + 22, uy1 - 1.5]],
+  [[ux0 + 27, TOP2 + 0.2], [ux0 + 25, TOP2 + 5], [ux0 + 29, TOP2 + 10], [ux0 + 27, uy1 - 1.5]],
+  [[ux1 - 9, TOP2 + 0.2], [ux1 - 12, TOP2 + 7], [ux1 - 9, TOP2 + 12], [ux1 - 11, uy1 - 1.5]],
+];
+export const SKI_LODGE = { x0: ux0 + 13, y0: uy1 - 4.3, x1: ux0 + 26, y1: uy1 - 1.6, h: 3.4 };
+export const CANNONS = [[ux0 + 12, TOP2 + 4], [ux0 + 24, TOP2 + 3], [ux1 - 14, TOP2 + 5]];
+function skiResortAnchors() {
+  const L = SKI_LODGE, out = [];
+  out.push(A("concierge0", L.x0 + 1, L.y1 + 0.5, "stand", "guard", "staff", { look: [L.x0 + 1, L.y1 + 3] }));
+  out.push(A("concierge1", L.x1 - 1, L.y1 + 0.5, "stand", "serve", "staff", { look: [L.x1 - 1, L.y1 + 3] }));
+  RUNS2.forEach((pts, ri) => { for (let k = 0; k < 4; k++) out.push(A(`ski${ri}${k}`, pts[0][0], pts[0][1], "stand", "view", "patron", { ski: true, path: { kind: "line", pts, period: 24 + ri * 3 + k * 2, phase: frac(k / 4 + ri * 0.17) } })); });
+  LIFTS2.forEach((lift, li) => { for (let k = 0; k < 4; k++) out.push(A(`chair${li}${k}`, lift.x - lift.gap, lift.y0, "seat", "sit", "patron", { path: { kind: "lift", lift, slot: k * 3 + li } })); });
+  for (let k = 0; out.length < 32; k++) out.push(A(`terrace${k}`, L.x0 + 3 + k * 1.6, L.y1 + 0.9, "seat", k % 2 ? "drink" : "eat", "patron", { look: [L.x0 + 3 + k * 1.6, L.y0] }));
+  return out;
+}
+// THE HEIGHTS PRESERVE (006): the timber lodge, three trails up through the pines, the lookout.
+export const PRESERVE = {
+  lodge: { x0: ux0 + 12, y0: uy1 - 3.9, x1: ux0 + 22, y1: uy1 - 1.6, h: 2.2 },
+  lookout: { x: ux0 + 21, y: RIDGE_Y + 0.6, h: 2.4 },
+  trails: [
+    [[ux0 + 13, uy1 - 1.2], [ux0 + 9, uy1 - 6], [ux0 + 15, uy1 - 10], [ux0 + 12, uy1 - 14], [ux0 + 20, RIDGE_Y + 1.4]],
+    [[ux0 + 21, uy1 - 1.2], [ux0 + 27, uy1 - 5], [ux0 + 23, uy1 - 11], [ux0 + 22, RIDGE_Y + 1.4]],
+    [[ux0 + 22, uy1 - 1.2], [ux1 - 8, uy1 - 7], [ux1 - 12, uy1 - 13], [ux0 + 23, RIDGE_Y + 1.2]],
+  ],
+};
+function preserveAnchors() {
+  const P = PRESERVE, L = P.lodge, out = [];
+  out.push(A("warden0", L.x0 + 0.8, L.y1 + 0.5, "stand", "guard", "staff", { look: [L.x0, L.y1 + 3] }));
+  out.push(A("warden1", P.lookout.x + 0.8, P.lookout.y + 0.3, "stand", "view", "staff", { h: terrainH(P.lookout.x + 0.8, P.lookout.y + 0.3), look: [P.lookout.x, P.lookout.y + 5] }));
+  P.trails.forEach((pts, ti) => { for (let k = 0; k < 7; k++) out.push(A(`hike${ti}${k}`, pts[0][0], pts[0][1], "stand", "view", "patron", { hike: true, path: { kind: "line", pts: k % 2 ? pts : [...pts].reverse(), period: 150 + ti * 20 + k * 9, phase: frac(k / 7 + ti * 0.13), wig: 0.08 } })); });
+  for (let k = 0; k < 4; k++) { const x = P.lookout.x - 1.6 + k * 1.05, y = P.lookout.y + 1.2; out.push(A(`lookout${k}`, x, y, "stand", k % 2 ? "view" : "talk", "patron", { h: terrainH(x, y), look: [x, y + 6] })); }
+  for (let k = 0; out.length < 30; k++) out.push(A(`porch${k}`, L.x0 + 2.4 + k * 1.3, L.y1 + 0.8, "seat", k % 2 ? "drink" : "read", "patron", { look: [L.x0 + 2.4 + k * 1.3, L.y1 + 4] }));
+  return out;
+}
+export const PARCEL_ANCHORS = {
+  "shore-lot": { vacant: [], site: siteAnchors("shore-lot"), "beach-resort": beachResortAnchors(), "seaside-towers": towersAnchors() },
+  "summit-lot": { vacant: [], site: siteAnchors("summit-lot"), "ski-resort": skiResortAnchors(), "mountain-lodge": preserveAnchors() },
+};
+// Which face a parcel shows for a resortPhase(): "vacant" | "site" | the winning bid.
+export const parcelFace = (p) => (p.phase === "site" ? "site" : p.phase === "built" ? p.winner : "vacant");
 
 export const COAST_ANCHORS = { beach: beachAnchors(), boardwalk: boardwalkAnchors(), pier: pierAnchors(), surf: surfAnchors(), slopes: slopesAnchors(), "shore-lot": [], "summit-lot": [] };
 

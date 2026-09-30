@@ -956,10 +956,20 @@ export function gameEvents(from, to) {
 // the result is on record. The build takes LOT_BUILD days.
 export const LOT_BREAK = 4, LOT_BUILD = 5;
 export const LOT_WINNERS = ["golf", "farm"];
-let CIVIC = null;   // {closeAt: real ms, winner: "golf" | "farm" | null}
+// Session 002 (THE RESORT PARCELS) decides the Coast's and the Heights' parcels the same way:
+// resorts {closeAt, winners: {coast, heights} | null}, the same clock math per parcel.
+export const RESORT_MOTIONS = { coast: ["beach-resort", "seaside-towers"], heights: ["ski-resort", "mountain-lodge"] };
+export const PARCEL_MOTION = { "shore-lot": "coast", "summit-lot": "heights" };
+let CIVIC = null;   // {closeAt: real ms, winner: "golf" | "farm" | null, resorts: {closeAt, winners} | null}
 export function setCivic(c) {
-  const next = c && Number.isFinite(c.closeAt) ? { closeAt: c.closeAt, winner: LOT_WINNERS.includes(c.winner) ? c.winner : null } : null;
-  if ((CIVIC?.closeAt ?? null) === (next?.closeAt ?? null) && (CIVIC?.winner ?? null) === (next?.winner ?? null)) return false;
+  let resorts = null;
+  if (c?.resorts && Number.isFinite(c.resorts.closeAt)) {
+    const w = c.resorts.winners;
+    const winners = w && Object.entries(RESORT_MOTIONS).every(([m, cs]) => cs.includes(w[m])) ? Object.fromEntries(Object.keys(RESORT_MOTIONS).map(m => [m, w[m]])) : null;
+    resorts = { closeAt: c.resorts.closeAt, winners };
+  }
+  const next = c && Number.isFinite(c.closeAt) ? { closeAt: c.closeAt, winner: LOT_WINNERS.includes(c.winner) ? c.winner : null, resorts } : null;
+  if (JSON.stringify(CIVIC) === JSON.stringify(next)) return false;
   CIVIC = next;
   memo.clear();
   return true;
@@ -982,13 +992,30 @@ export function lotOpenOn(day) {
   const p = lotPhase((day - 1) * 24 + 12);
   return p.phase === "site" ? "site" : p.phase === "built" ? p.winner : null;
 }
-// THE COAST's and THE HEIGHTS' resort parcels: closed until a session builds something there.
+// THE COAST's and THE HEIGHTS' resort parcels: closed until session 002 has decided and the
+// ground has broken; then a site, then what won. Same timing as LOT 0x6F07, from 002's close.
 export const RESORT_PARCELS = new Set(["shore-lot", "summit-lot"]);
-const resortOpenOn = () => false;   // session 002 (docs/ASSEMBLY.md) opens them
+export function resortPhase(placeId, machineTime) {
+  const R = CIVIC?.resorts, m = PARCEL_MOTION[placeId];
+  if (!R?.winners || !m) return { phase: "vacant", winner: null };
+  const breakDay = machineClock(R.closeAt).day + LOT_BREAK, openDay = breakDay + LOT_BUILD;
+  const day = Math.floor(machineTime / 24) + 1;
+  const base = { winner: R.winners[m], breakDay, openDay };
+  if (day < breakDay) return { ...base, phase: "approved" };
+  if (day < openDay) return { ...base, phase: "site", progress: Math.min(1, Math.max(0, (machineTime - (breakDay - 1) * 24) / (LOT_BUILD * 24))) };
+  return { ...base, phase: "built" };
+}
+// Which crowd a parcel draws on a machine day: "site", the winning bid, or null (closed).
+export function resortOpenOn(placeId, day) {
+  const p = resortPhase(placeId, (day - 1) * 24 + 12);
+  return p.phase === "site" ? "site" : p.phase === "built" ? p.winner : null;
+}
+// Pull on a parcel by tier band, as the lot's.
+const RESORT_PULL = { site: [0.2, 0.7, 1.6], "beach-resort": [1.2, 1.6, 1.0], "seaside-towers": [1.6, 1.0, 0.3], "ski-resort": [2.2, 1.2, 0.4], "mountain-lodge": [1.0, 1.4, 1.1] };
 // May a visitor be sent to this place on this machine day? (Every place but a closed parcel.)
 export function parcelOpen(placeId, day) {
   if (placeId === "dev-lot") return Boolean(lotOpenOn(day));
-  if (RESORT_PARCELS.has(placeId)) return resortOpenOn(placeId, day);
+  if (RESORT_PARCELS.has(placeId)) return Boolean(resortOpenOn(placeId, day));
   return true;
 }
 // Pull on the lot by tier band (0 top, 1 middle, 2 low), times its base leisure weight.
@@ -1062,9 +1089,10 @@ function pickLeisure(s, day, i, seed, avoid, hour = null) {
     list = lot ? list.map(([id, v]) => [id, id === "dev-lot" ? v * LOT_PULL[lot][bandOf(s)] : v]) : list.filter(([id]) => id !== "dev-lot");
     total = list.reduce((a, [, v]) => a + v, 0);
   }
-  // The resort parcels (THE ASSEMBLY, session 002) take nobody until something is built on them.
-  if (list.some(([id]) => RESORT_PARCELS.has(id) && !parcelOpen(id, day))) {
-    list = list.filter(([id]) => parcelOpen(id, day));
+  // The resort parcels (THE ASSEMBLY, session 002) take nobody until something is being built on
+  // them; then the crew, then whoever the winning bid draws.
+  if (list.some(([id]) => RESORT_PARCELS.has(id))) {
+    list = list.flatMap(([id, v]) => { if (!RESORT_PARCELS.has(id)) return [[id, v]]; const o = resortOpenOn(id, day); return o ? [[id, v * RESORT_PULL[o][bandOf(s)]]] : []; });
     total = list.reduce((a, [, v]) => a + v, 0);
   }
   // A fixture on at the ground when the visit starts pulls its fans (and the curious) in.

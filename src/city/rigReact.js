@@ -123,7 +123,7 @@ export function assemblyCrowd(v, act, t, ph, now = Date.now()) {
     return frac(t / 11 + ph * 0.25) < 0.4 ? (act === "cheer" ? "cheer" : "clap") : null;
   }
   if (s.state === "open" && v.tally && v.tally.votes) {
-    const n = (v.tally.votes.golf || 0) + (v.tally.votes.farm || 0);
+    const n = v.tally.voters ?? ((v.tally.votes.golf || 0) + (v.tally.votes.farm || 0));   // any session: ballots cast
     if (tallies.n == null) tallies.n = n;
     else if (n > tallies.n) { tallies.n = n; tallies.at = t; }
     return t - tallies.at < 3 ? "clap" : null;

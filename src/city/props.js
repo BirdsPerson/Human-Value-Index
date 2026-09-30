@@ -13,7 +13,7 @@
 // residents the bunks. Plans, roles and assignment are pure (node-testable); the drawing
 // takes a 2D context. Poses (sitting, typing, sleeping...) live in poses.js.
 
-import { lotPhase, machineClock } from "./sim.js";
+import { lotPhase, resortPhase, machineClock } from "./sim.js";
 import { FUNNEL_ROOM_TYPE, FUNNEL_LOOK, FUNNEL_ACTS, funnelPlans, funnelPropDrawers, funnelRooms, withTv } from "./funnelProps.js";
 import { floorRoomType, casinoPlans, casinoLook, casinoDraw, casinoLive, casinoProps } from "../casino/cityRooms.js";
 
@@ -43,12 +43,15 @@ export const ROOM_TYPE = {
 // LOT 0x6F07 changes with THE ASSEMBLY's decision (sim.lotPhase): scrub and a site read as
 // the street; the course as a park; the farm as an allotment.
 const LOT_TYPE = { golf: "park", farm: "allotment" };
+// The resort parcels (session 002): the street until built, then what was built.
+const RESORT_TYPE = { "beach-resort": "lounge", "seaside-towers": "lounge", "ski-resort": "lounge", "mountain-lodge": "cafe" };
 // floor (optional): the floor's code; a building can furnish its floors differently (the
 // casino's tables and high limit room, src/casino/cityRooms.js).
 export const typeOf = (placeId, floor = null) => {
   const ft = floorRoomType(placeId, floor);
   if (ft) return ft;
   if (placeId === "dev-lot") { const p = lotPhase(machineClock().mt); return (p.phase === "built" && LOT_TYPE[p.winner]) || "street"; }
+  if (placeId === "shore-lot" || placeId === "summit-lot") { const p = resortPhase(placeId, machineClock().mt); return (p.phase === "built" && RESORT_TYPE[p.winner]) || "street"; }
   return ROOM_TYPE[placeId] || "office";
 };
 

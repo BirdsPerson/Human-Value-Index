@@ -84,7 +84,9 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       files vote with fixed reasons for 3 days, the winner is built in the Commons; 2026-09-30
       the civic fold (docs/CITY_SPEC.md): per-district MOOD in every day summary, one COUNCIL
       seat per district (vacant; holder/term/approval shape; the Assembly's result recorded as
-      its first act). Next: elections fill the seats] **THE CIVIC MACHINE** (Scott 2026-09-29 "how is it all going to work?"; Claude's design,
+      its first act). Next: elections fill the seats; 2026-09-30 THE SUBSTRATE votes (advisory) and session 002, THE RESORT PARCELS, opens
+      when 001 closes: developers on file bid for the Coast's and the Heights' parcels, the
+      city having grown outward (CITY_SPEC "The city built outward")] **THE CIVIC MACHINE** (Scott 2026-09-29 "how is it all going to work?"; Claude's design,
       review with the scale redesign since SECTORS are the natural data shards):
       DEMAND (census growth, crowding, district mood, incidents) -> PROPOSAL (Dept of Planning
       at HQ, or DEVELOPER figures bid: Trump, Robert Moses, Haussmann, Disney; Jane Jacobs

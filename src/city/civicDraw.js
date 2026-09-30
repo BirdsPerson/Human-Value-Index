@@ -24,6 +24,7 @@ import { lotPhase } from "./sim.js";
 import { CIVIC_LOTS, CIVIC_ANCHORS, FORUM, SIGN, VACANT, SITE, GOLF, FARM, faceOf } from "./civicGeo.js";
 import { assemblyNow } from "../assembly/client.js";
 import { ADVOCATES, APPLICATIONS } from "../assembly/content.js";
+import { SPEAKERS2, MOTIONS as MOTIONS2, APPLICATIONS2 } from "../assembly/content002.js";
 import { drawChamber } from "./councilDraw.js";
 
 const who = (s) => s.slug || s.name;
@@ -35,6 +36,9 @@ const ROUGH = "#2c6a2a", FAIRWAY = "#3a8a36", GREEN = "#4fae4a", SAND = "#d8c48a
 const HAT = "#facc15", CYAN = "#22d3ee";
 // The advocates as the city projects them: their files' likenesses (never tappable: nobody).
 const ADV = Object.fromEntries(Object.entries(ADVOCATES).map(([k, a]) => [k, { name: a.name.replace(/\b(\w)(\w*)/g, (_, x, y) => x + y.toLowerCase()), slug: a.slug, sprite: a.sprite, score: a.score, kind: "figure" }]));
+// Session 002's speakers (content002.js): the dead developers and the advocate, the same way.
+const ADV2 = Object.fromEntries(Object.entries(SPEAKERS2).map(([k, a]) => [k, { name: a.name.replace(/\b(\w)(\w*)/g, (_, x, y) => x + y.toLowerCase()), slug: a.slug, sprite: a.sprite || null, kind: "figure" }]));
+const tally2 = (v, m) => m.choices.map(c => v?.tally?.votes?.[c] ?? 0).join("-");
 
 // prev: what the last frame returned ({at, face}): seats are kept while the face holds.
 // -> {at, face}
@@ -75,6 +79,7 @@ export function drawCivicLot(G, lotId, lod, mt, people, prev) {
 export function civicLabel(lotId, mt) {
   if (CIVIC_LOTS[lotId] === "forum") {
     const v = assemblyNow();
+    if (v?.session?.id === "002") return v.session.state === "open" ? `THE ASSEMBLY // 002 // ${MOTIONS2.map(m => tally2(v, m)).join(", ")}` : "THE ASSEMBLY";
     if (v?.session?.state === "open") return `THE ASSEMBLY // ${v.tally.votes.golf}-${v.tally.votes.farm}`;
     return "THE ASSEMBLY";
   }
@@ -88,6 +93,7 @@ export function civicLabel(lotId, mt) {
 export function civicLine(lotId, mt, n) {
   if (CIVIC_LOTS[lotId] === "forum") {
     const v = assemblyNow();
+    if (v?.session?.id === "002") return v.session.state === "open" ? `${n} WATCHING // SESSION 002, THE RESORT PARCELS: ${MOTIONS2.map(m => `${m.parcel} ${tally2(v, m)}`).join(", ")}. VOTE AT #ASSEMBLY.` : `${n} ON THE FLOOR // ADJOURNED. THE PARCELS ARE ALLOCATED.`;
     const sub = v?.substrate ? ` (SUBSTRATE ${v.substrate.votes.golf}-${v.substrate.votes.farm}, ADVISORY)` : "";
     return v?.session?.state === "open" ? `${n} WATCHING // IN SESSION: GOLF ${v.tally.votes.golf}, FARM ${v.tally.votes.farm}${sub}. VOTE AT #ASSEMBLY.` : `${n} ON THE FLOOR // ADJOURNED. THE BENCHES REMAIN.`;
   }
@@ -132,7 +138,7 @@ function hardHat(c, box) {
 }
 // An advocate at the lectern, by projection: a disc of light, the likeness a little
 // translucent and flickering, scan lines through it. Speaking in turn.
-function projected(K, side, x, y) {
+function projected(K, side, x, y, fig = ADV[side], left = side === "golf") {
   const { G, lod } = K;
   K.put(x, y, () => {
     const [sx, sy] = G.Q(x, y, FORUM.dais.h);
@@ -140,16 +146,16 @@ function projected(K, side, x, y) {
     c.fillStyle = "rgba(34,211,238,0.35)"; c.beginPath(); c.ellipse(sx, sy, r, r * 0.5, 0, 0, Math.PI * 2); c.fill();
     if (lod === "far") { c.fillStyle = CYAN; c.fillRect(Math.round(sx) - 1, Math.round(sy) - 3, 2, 3); return; }
     const hh0 = G.z * STOREY * 0.95;
-    const speaking = Math.floor((K.t || 0) / 7) % 2 === (side === "golf" ? 0 : 1);
-    const flick = K.t > 0 && frac(K.t * 0.37 + (side === "golf" ? 0 : 0.5)) < 0.04;
+    const speaking = Math.floor((K.t || 0) / 7) % 2 === (left ? 0 : 1);
+    const flick = K.t > 0 && frac(K.t * 0.37 + (left ? 0 : 0.5)) < 0.04;
     c.globalAlpha = flick ? 0.35 : 0.78;
     let box;
     if (lod === "mid" || hh0 < 18) {
-      const m = miniFor(ADV[side]), sc = hh0 / (SPRITE_H / 2);
+      const m = miniFor(fig), sc = hh0 / (SPRITE_H / 2);
       try { c.drawImage(m, Math.round(sx - (SPRITE_W / 4) * sc), Math.round(sy - hh0), Math.round((SPRITE_W / 2) * sc), Math.round(hh0)); } catch { /* not decoded yet */ }
       box = [sx - hh0 * 0.3, sy - hh0, sx + hh0 * 0.3, sy];
     } else {
-      box = drawPose(c, sheetFor(ADV[side]), { kind: "stand", act: speaking ? "speak" : "view", face: side === "golf" ? 1 : -1, walk: null }, speaking ? "speak" : "view", sx, sy, hh0, K.t, side === "golf" ? 0.1 : 0.6, 1);
+      box = drawPose(c, sheetFor(fig), { kind: "stand", act: speaking ? "speak" : "view", face: left ? 1 : -1, walk: null }, speaking ? "speak" : "view", sx, sy, hh0, K.t, left ? 0.1 : 0.6, 1);
     }
     c.globalAlpha = 1;
     if (lod === "near") {
@@ -211,19 +217,23 @@ function forum(K) {
     if (lod === "near") { const [sx, sy] = G.Q(lx, ly + 0.14, D.h + 0.4); G.ctx.fillStyle = "#4ade80"; G.ctx.fillRect(Math.round(sx - G.z * 0.06), Math.round(sy - G.z * 0.06), Math.max(1, Math.round(G.z * 0.12)), Math.max(1, Math.round(G.z * 0.12))); }
   }, 0.05);
   const [ba, bb] = FORUM.banner;
-  panel(K, ba, bb, 1.35, 1.8, "#14261a", ["THE ASSEMBLY // SESSION 001 // NON-BINDING"], ["#4ade80"]);
+  const v = assemblyNow(), open = v?.session?.state === "open", s2 = v?.session?.id === "002";
+  panel(K, ba, bb, 1.35, 1.8, "#14261a", [`THE ASSEMBLY // SESSION ${s2 ? "002" : "001"} // NON-BINDING`], ["#4ade80"]);
   // the board: the running tally while the polls are open, the result after
-  const v = assemblyNow(), open = v?.session?.state === "open";
   const g = v?.tally?.votes?.golf ?? 0, f = v?.tally?.votes?.farm ?? 0;
   // THE SUBSTRATE (ADVISORY): the census's own count, under the players'
   const sub = v?.result ? v.result.substrate : v?.substrate;
-  const subRow = sub ? `SUBSTRATE ${sub.votes.golf}-${sub.votes.farm}` : "SUBSTRATE …";
-  const rows = v?.result ? ["THE RESULT", `001 GOLF ${String(v.result.votes.golf).padStart(4)}`, `002 FARM ${String(v.result.votes.farm).padStart(4)}`, subRow, v.result.decidedBy === "substrate" ? `ADOPTED: ${APPLICATIONS[v.result.winner].no}` : `APPROVED: ${APPLICATIONS[v.result.winner].no}`]
+  const subRow = sub?.votes ? `SUBSTRATE ${sub.votes.golf}-${sub.votes.farm}` : "SUBSTRATE …";
+  const rows = s2 ? (v.result?.winners ? ["THE PARCELS", ...MOTIONS2.map(m => `${m.id.toUpperCase()}: ${APPLICATIONS2[v.result.winners[m.id]].no} ${APPLICATIONS2[v.result.winners[m.id]].short}`), "BY ORDER OF", "THE ASSEMBLY"]
+    : ["SESSION 002", ...MOTIONS2.map(m => `${m.id.toUpperCase()} ${m.choices.map(c => APPLICATIONS2[c].no).join("/")} ${tally2(v, m)}`), v.substrate ? `SUBSTRATE ${MOTIONS2.map(m => v.substrate[m.id] ? tally2({ tally: v.substrate[m.id] }, m) : "…").join(" ")}` : "SUBSTRATE …", open ? "VOTE: #ASSEMBLY" : "…"])
+    : v?.result ? ["THE RESULT", `001 GOLF ${String(v.result.votes.golf).padStart(4)}`, `002 FARM ${String(v.result.votes.farm).padStart(4)}`, subRow, v.result.decidedBy === "substrate" ? `ADOPTED: ${APPLICATIONS[v.result.winner].no}` : `APPROVED: ${APPLICATIONS[v.result.winner].no}`]
     : ["DEBATE BOARD", `001 GOLF ${String(g).padStart(4)}`, `002 FARM ${String(f).padStart(4)}`, subRow, open ? "VOTE: #ASSEMBLY" : "…"];
   panel(K, FORUM.board.a, FORUM.board.b, 0.55, 1.45, "#0b120c", rows, ["#86c9a0", "#fbbf24", "#4ade80", "#67e8f9", "#86c9a0"]);
   drawChamber(K, D, K.mt);   // the Council's bench on the dais (councilDraw.js)
   // the advocates, by projection, while the polls are open
-  if (open) for (const side of ["golf", "farm"]) projected(K, side, ...FORUM.podium[side]);
+  // (session 002: the parcels' speakers, a parcel's pair at a time, turn and turn about)
+  if (open && s2) { const m = MOTIONS2[Math.floor((K.t || 0) / 28) % 2]; m.choices.forEach((k, i) => projected(K, k, ...FORUM.podium[i ? "farm" : "golf"], ADV2[k], i === 0)); }
+  else if (open) for (const side of ["golf", "farm"]) projected(K, side, ...FORUM.podium[side]);
   // benches carry their sitters
   for (const b of FORUM.benches) {
     const ids = CIVIC_ANCHORS.forum.filter(a => a.seat === b).map(a => a.id);

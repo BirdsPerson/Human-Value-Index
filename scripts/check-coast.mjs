@@ -140,5 +140,41 @@ ok(["lifeguard", "boardwalk-vendor", "pier-warden", "surf-instructor", "ski-patr
   SIM.clearRoster();
 }
 
+// ---- the resort parcels: session 002 builds them, on the clock --------------------------------------
+{
+  const G2 = await import("../src/city/coastGeo.js");
+  for (const [pid, faces] of Object.entries(G2.PARCEL_ANCHORS)) {
+    const R = SIM.PLACES[pid].rect;
+    for (const [face, as] of Object.entries(faces)) {
+      if (face === "vacant") { ok(as.length === 0, `${pid}: nobody on the vacant parcel`); continue; }
+      ok(as.length >= SIM.PLACES[pid].cap, `${pid} ${face}: ${as.length} places for ${SIM.PLACES[pid].cap}`);
+      let off = 0, close = 0;
+      for (const t of [0, 7.3, 21.9]) {
+        const at = as.map(a => G2.pathAt(a, t));
+        at.forEach(([x, y]) => { if (!(x > R.x && x < R.x + R.w && y > R.y && y < R.y + R.h)) off++; });
+        for (let i = 0; i < at.length; i++) for (let j = i + 1; j < at.length; j++) if (Math.hypot(at[i][0] - at[j][0], at[i][1] - at[j][1]) < 0.25 && !(as[i].path && as[j].path)) close++;
+      }
+      ok(off === 0, `${pid} ${face}: everyone on the parcel (${off} off)`);
+      ok(close === 0, `${pid} ${face}: nobody on anybody (${close})`);
+      ok(as.some(a => a.role === "staff") || face === "site", `${pid} ${face}: a post for its staff`);
+    }
+  }
+  // the phases, from session 002's recorded close
+  const closeAt = Date.UTC(2026, 9, 6, 9, 48, 53), cd = SIM.machineClock(closeAt).day;
+  SIM.setCivic({ closeAt: closeAt - 3 * 86400000, winner: "farm", resorts: { closeAt, winners: { coast: "beach-resort", heights: "mountain-lodge" } } });
+  const phases = [];
+  for (let d = cd - 1; d <= cd + SIM.LOT_BREAK + SIM.LOT_BUILD + 1; d++) phases.push([d, SIM.resortPhase("shore-lot", (d - 1) * 24 + 12), SIM.resortPhase("summit-lot", (d - 1) * 24 + 12)]);
+  ok(phases.every(([d, a, b]) => a.phase === b.phase && (d < cd + SIM.LOT_BREAK ? a.phase === "approved" : d < cd + SIM.LOT_BREAK + SIM.LOT_BUILD ? a.phase === "site" : a.phase === "built")), "both parcels: approved, then a site, then built, on 001's timings from 002's close");
+  ok(SIM.resortPhase("shore-lot", (cd + 12) * 24).winner === "beach-resort" && SIM.resortPhase("summit-lot", (cd + 12) * 24).winner === "mountain-lodge", "what is built is what won");
+  ok(!SIM.parcelOpen("shore-lot", cd + 1) && SIM.parcelOpen("shore-lot", cd + SIM.LOT_BREAK + 1) && SIM.resortOpenOn("summit-lot", cd + 30) === "mountain-lodge", "nobody visits before the ground breaks; the crew, then the visitors");
+  const roster = synthRoster(900);
+  SIM.setMemoCap(1e7); SIM.setRoster(roster);
+  const visits = (day) => { const plan = SIM.buildPlan(day); return Object.values(plan.subjects).reduce((n, row) => n + row.slice(1).filter(e => e.length > 1 && SIM.RESORT_PARCELS.has(plan.places[e[1]]) && e[2] === 2).length, 0); };
+  const before = visits(cd + 1), site = visits(cd + SIM.LOT_BREAK + 1), built = visits(cd + SIM.LOT_BREAK + SIM.LOT_BUILD + 2);
+  ok(before === 0 && site > 0 && built > 0, `the parcels take visitors only once the ground breaks (${before}, site ${site}, built ${built})`);
+  SIM.clearRoster(); SIM.setCivic(null);
+  ok(SIM.resortPhase("shore-lot", 5000).phase === "vacant", "no outcome on record: the parcels stay vacant");
+}
+
 console.log(fails ? `check-coast: ${fails} of ${checks} FAILED` : `check-coast: ${checks} checks passed`);
 process.exit(fails ? 1 : 0);

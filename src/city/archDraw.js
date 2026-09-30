@@ -1510,8 +1510,8 @@ export function drawYardProp(G, p, env) {
     case "pine": {
       vline(p.x, p.y, 0, 0.3, shade("#4a3222", nf), Math.max(1, K.z * 0.1));
       for (let k = 0; k < 3; k++) {
-        const h0 = 0.25 + k * 0.45, w = 0.42 - k * 0.1, [ax, ay] = Q(p.x, p.y, h0 + 0.7), [bx, by] = Q(p.x - w, p.y + w, h0), [cx, cy] = Q(p.x + w, p.y - w, h0);
-        ctx.fillStyle = shade(k === 2 ? "#e8eef2" : "#1f4d2e", nf); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.lineTo(cx, cy); ctx.closePath(); ctx.fill();
+        const h0 = 0.25 + k * 0.45, w = (0.42 - k * 0.1) * K.z * 1.4, [ax, ay] = Q(p.x, p.y, h0 + 0.7), [mx, my] = Q(p.x, p.y, h0);   // level on screen at every turn
+        ctx.fillStyle = shade(k === 2 ? "#e8eef2" : "#1f4d2e", nf); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(mx - w, my); ctx.lineTo(mx + w, my); ctx.closePath(); ctx.fill();
       }
       break;
     }

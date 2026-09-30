@@ -43,7 +43,7 @@ export const MAX_REASONS = 3;
 // id: "city" | "d:<districtId>" | "b:<buildingId>". The Department's own headquarters is not
 // renamed by its subjects. THE ASSEMBLY's forum and a lot under a session's decision are not
 // built on.
-const RESERVED_BUILD = new Set(["the-assembly", "lot-6f07"]);
+const RESERVED_BUILD = new Set(["the-assembly", "lot-6f07", "lot-shore", "lot-summit"]);   // + the resort parcels (session 002)
 export function targets() {
   const out = [{ id: "city", kind: "city", name: "THE WHOLE CITY", district: null }];
   for (const d of DISTRICTS) {
