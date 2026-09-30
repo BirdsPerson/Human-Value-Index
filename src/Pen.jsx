@@ -364,7 +364,7 @@ const QUEUE_KEY = "hvi-refer-queue";
 const HELP_KEY = "hvi-pen-help-seen";
 const readHelpSeen = () => { try { return localStorage.getItem(HELP_KEY) === "1"; } catch { return false; } };
 
-function ReferralBar({ simRef }) {
+export function ReferralBar({ simRef }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState(null);         // { text, tone }
@@ -442,11 +442,11 @@ function ReferralBar({ simRef }) {
       }
       const subject = d.subject;
       if (d.status === "created") {
-        simRef.current?.refer?.(subject);
+        simRef.current?.refer?.(subject, "created");
         report(n, `NEW ARRIVAL PROCESSED: ${subject.name.toUpperCase()}. VALUE INDEX ${subject.score} [${subject.tier}]. ${subject.localOfficial ? `FILED FROM ${subject.sources?.length || 0} PUBLIC SOURCE(S). ` : ""}LIKENESS PENDING.`, "ok");
         if (!retryName) setName("");
       } else {
-        simRef.current?.refer?.(subject);
+        simRef.current?.refer?.(subject, d.status);
         report(n, `${subject?.name ? subject.name.toUpperCase() + ": " : ""}${d.message || "Subject already on file."}`, "");
         if (!retryName) setName("");
       }

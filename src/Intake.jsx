@@ -764,7 +764,7 @@ export default function Intake({ view = "intake" }) {
         <div className="hvi-next">
           <ButtonRow stackOnMobile>
             <Button variant="primary" onClick={() => shareScore(result)}>Share your score</Button>
-            <Button variant="secondary" href="#pen">Enter the holding pen</Button>
+            <Button variant="secondary" href="#arrivals">Watch your intake</Button>
             <Button variant="secondary" onClick={() => { setStage("ready"); setResult(null); }}>Request re-assessment</Button>
           </ButtonRow>
           {shareLine && <div className="hvi-note" role="status">{shareLine}</div>}

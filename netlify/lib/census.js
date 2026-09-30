@@ -24,8 +24,9 @@ function withCrowd(c, crowd) {
 }
 
 // strict: a failed figure read throws instead of returning no figures. The social tick
-// needs that, because it forgets anyone missing from the census.
-export async function censusSubjects({ strict = false } = {}) {
+// needs that, because it forgets anyone missing from the census. withTimes: each record
+// also carries filedAt (a figure's filing, a citizen's latest assessment) for INTAKE.
+export async function censusSubjects({ strict = false, withTimes = false } = {}) {
   const [cards, figures, crowd] = await Promise.all([listPenCards(), strict ? listFigures() : listFigures().catch(() => []), crowdSummary()]);
   return [
     ...cards.map(c => ({
@@ -33,9 +34,10 @@ export async function censusSubjects({ strict = false } = {}) {
       // or breakdown; they are dropped here.
       slug: c.slug, name: c.name, score: c.score, tier: c.tier, sprite: c.sprite ?? null, avatar: sanitizeAvatar(c.avatar), kind: "citizen",
       quadrant: c.quadrant ?? null, warmth: c.warmth ?? null, competence: c.competence ?? null, judge: "UNRATIFIED", realityIndex: REALITY_INDEX,
+      ...(withTimes ? { filedAt: c.updated ?? null } : {}),
     })),
     // Referred figures: breakdown once fact-checked (see publicFigure); the verdict and
     // the file's history come from /api/figure/<slug> when the file is opened.
-    ...figures.map(c => withCrowd(c, crowd)),
+    ...figures.map(c => (withTimes ? { ...withCrowd(c, crowd), filedAt: c.at ?? null } : withCrowd(c, crowd))),
   ];
 }

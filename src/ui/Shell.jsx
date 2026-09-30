@@ -15,13 +15,13 @@ export const NAV = [
   { key: "file", label: "MY FILE", glyph: "▤", href: "#file" },
 ];
 
-// Which tab a location belongs to. The pen has no tab of its own.
+// Which tab a location belongs to. INTAKE (#arrivals, once #pen) has no tab of its own.
 export function navKeyFor(route = "") {
   const path = route.split("?")[0];
   if (path === "#city" || path.startsWith("#city/")) return "city";
   if (path === "#cube") return "cube";
   if (path === "#file" || path === "#intake") return "file";
-  if (path === "#pen") return null;
+  if (path === "#pen" || path === "#arrivals") return null;
   return "menu";
 }
 

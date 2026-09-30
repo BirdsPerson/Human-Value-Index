@@ -9,7 +9,7 @@ import { AppHeader, CommandBar, navKeyFor, Command, CommandList, Button, ButtonR
 // Route-level splitting: the logon ships only what it renders. Each heavy view (the
 // voice intake and its SDK, the pen, the cube, the city) arrives when first opened.
 const Intake = lazy(() => import("./Intake.jsx"));
-const Pen = lazy(() => import("./Pen.jsx"));
+const Arrivals = lazy(() => import("./Arrivals.jsx"));   // INTAKE, the processing hall (#arrivals; #pen lands here)
 const CubeView = lazy(() => import("./CubeView.jsx"));
 const City = lazy(() => import("./city/City.jsx"));
 // The Public Figure Index and the result's compare list: not on the logon's first paint.
@@ -259,7 +259,7 @@ const MENU = [
   { key: "1", label: "INTAKE INTERVIEW", note: "SPEAK OR TYPE · ABOUT 5 MIN", go: "#intake" },
   { key: "2", label: "WRITTEN SURVEY", note: `${SURVEY_COUNT} QUESTIONS. NO CLERK.`, go: "survey" },
   { key: "3", label: "THE SUBSTRATE", note: "THE CITY. EVERYONE HAS A JOB NOW", go: "#city" },
-  { key: "4", label: "HOLDING PEN", note: "THE ASSESSED, WANDERING", go: "#pen" },
+  { key: "4", label: "INTAKE", note: "NEW ARRIVALS, AWAITING RELEASE", go: "#arrivals" },
   { key: "5", label: "THE CUBE", note: "MACHINE VS PEOPLE, EVERY FILE", go: "#cube" },
   { key: "6", label: "PUBLIC FIGURE INDEX", note: `${FAMOUS_FIGURES.length} FILES ON RECORD`, go: "leaderboard" },
   { key: "7", label: "THE ASSEMBLY", note: "SESSION 001 · THE FIRST VOTE. NON-BINDING", go: "#assembly" },
@@ -430,6 +430,15 @@ export default function OverlordAssessment() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  // #pen (the retired Holding Pen) is INTAKE now: old links land on #arrivals.
+  useEffect(() => {
+    const [p, q] = route.split("?");
+    if (p !== "#pen") return;
+    const next = `#arrivals${q ? "?" + q : ""}`;
+    try { window.history.replaceState(null, "", window.location.pathname + window.location.search + next); } catch { /* the hash stays #pen; the hall still opens */ }
+    setRoute(next);
+  }, [route]);
+
   // #survey (the intake's "take the written survey" fallback) opens the survey phase.
   useEffect(() => {
     if (route.split("?")[0] !== "#survey") return;
@@ -513,10 +522,11 @@ export default function OverlordAssessment() {
   const isCity = route === "#city" || route.startsWith("#city/") || route.startsWith("#city?");
   const routePath = route.split("?")[0];
   const isFile = routePath === "#intake" || routePath === "#file";
-  if (isFile || route === "#pen" || route === "#cube" || isCity) return (
+  const isArrivals = routePath === "#arrivals" || routePath === "#pen";
+  if (isFile || isArrivals || route === "#cube" || isCity) return (
     <Screen nav={nav} wide={!isFile}>
-      <Suspense fallback={<Loading what={isCity ? "MOUNTING THE SUBSTRATE" : route === "#pen" ? "OPENING THE HOLDING PEN" : route === "#cube" ? "ASSEMBLING THE CUBE" : "OPENING YOUR FILE"} />}>
-        {isCity ? <City route={route} /> : route === "#pen" ? <Pen /> : route === "#cube" ? <CubeView /> : <Intake view={routePath === "#file" ? "file" : "intake"} />}
+      <Suspense fallback={<Loading what={isCity ? "MOUNTING THE SUBSTRATE" : isArrivals ? "OPENING INTAKE" : route === "#cube" ? "ASSEMBLING THE CUBE" : "OPENING YOUR FILE"} />}>
+        {isCity ? <City route={route} /> : isArrivals ? <Arrivals /> : route === "#cube" ? <CubeView /> : <Intake view={routePath === "#file" ? "file" : "intake"} />}
       </Suspense>
     </Screen>
   );
@@ -663,7 +673,7 @@ export default function OverlordAssessment() {
             chips={<CubeChips subject={result} />} />
           <div className="hvi-next">
             <ButtonRow stackOnMobile>
-              <Button variant="primary" href="#pen">Enter the holding pen</Button>
+              <Button variant="primary" href="#arrivals">Watch your intake</Button>
               <Button variant="secondary" onClick={() => setPhase("leaderboard")}>Browse all {uniqueFigures.length} subjects</Button>
             </ButtonRow>
           </div>
