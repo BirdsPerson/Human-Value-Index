@@ -1,0 +1,73 @@
+[
+  {
+    "slug": "jetsam",
+    "title": "JETSAM!",
+    "status": "live",
+    "role": "Arcade",
+    "year": "2026",
+    "line": "One-tap orbital arcade game.",
+    "play": "https://play-jetsam.netlify.app",
+    "itch": "https://birdsperson.itch.io/jetsam"
+  },
+  {
+    "slug": "anamnesis",
+    "title": "ANAMNESIS",
+    "status": "live",
+    "role": "Interactive fiction",
+    "year": "2026",
+    "line": "A 1983 psi-research terminal.",
+    "play": "https://anamnesis-eb.netlify.app",
+    "itch": "https://birdsperson.itch.io/anamnesis"
+  },
+  {
+    "slug": "human-value-index",
+    "title": "Human Value Index",
+    "status": "live",
+    "role": "Satirical city sim",
+    "year": "2026",
+    "line": "A pixel-art city run by an AI Overlord that has scored every notable human who ever lived.",
+    "play": null,
+    "itch": null,
+    "self": true
+  },
+  {
+    "slug": "imperium",
+    "title": "Imperium / Elysium",
+    "status": "dev",
+    "role": "MMO strategy",
+    "year": "2026",
+    "line": "One MMO world, two lenses: play it as conquest or as transcendence.",
+    "play": null,
+    "itch": null
+  },
+  {
+    "slug": "climbers",
+    "title": "Climbers",
+    "status": "dev",
+    "role": "RPG",
+    "year": "2026",
+    "line": "Octopath Traveler in a megacorp: bureaucracy is the dungeon, morale is the health bar, and the Annual Review is a boss fight.",
+    "play": null,
+    "itch": null
+  },
+  {
+    "slug": "america-rpg",
+    "title": "AMERICA: The RPG",
+    "status": "dev",
+    "role": "RPG",
+    "year": "2026",
+    "line": "Play the American Spirit, reincarnated at pivotal moments in history.",
+    "play": null,
+    "itch": null
+  },
+  {
+    "slug": "away-message",
+    "title": "Away Message",
+    "status": "dev",
+    "role": "RPG",
+    "year": "2026",
+    "line": "A small-town RPG about a film kid, a baseball bat, and getting a friend back from the screen.",
+    "play": null,
+    "itch": null
+  }
+]

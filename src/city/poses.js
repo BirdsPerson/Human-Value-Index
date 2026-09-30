@@ -166,12 +166,15 @@ export function drawPose(c, sheet, a, act, x, y, hh0, t, ph, k = 1) {
         case "chase": fi = frames > 1 ? Math.floor(t * 8 + ph * 8) % 2 : 0; dy = fi ? -px : 0; dx += Math.round(Math.sin((t * 0.45 + ph) * Math.PI * 2) * 2) * px; break;
         case "amble": fi = frames > 1 ? Math.floor(t * 4 + ph * 8) % 2 : 0; dy = fi ? -px : 0; break;
         case "lift": dy = every(t, 2, 0.5, ph) ? 2 * px : 0; break;
+        // the funnels: hands on the stick (and a hop on a good run); flicking through the crates
+        case "arcade": dx += every(t, 0.3, 0.5, ph) ? px : 0; dy = every(t, 9, 0.06, ph) ? -2 * px : 0; break;
+        case "browse": dy = every(t, 2.6, 0.4, ph) ? px : 0; break;
         case "run": fi = frames > 1 ? Math.floor(t * 8 + ph * 8) % 2 : 0; dy = fi ? -px : 0; break;
         case "punch": dx += every(t, 1.1, 0.2, ph) ? 2 * px * (flip ? 1 : -1) : 0; break;
         case "hammer": case "haul": case "sort": case "rake": case "dig": dy = every(t, 1, 0.35, ph) ? px : 0; break;
         case "pick": dy = every(t, 2.2, 0.45, ph) ? 3 * px : 0; break;   // stoop to the row, up with the basket
         case "perform": case "sing": dx += Math.round(Math.sin((t * 0.8 + ph) * Math.PI * 2)) * px; break;
-        case "view": case "guide": case "confer": case "shout": case "coach": case "lecture": case "preach": case "speak":
+        case "present": case "view": case "guide": case "confer": case "shout": case "coach": case "lecture": case "preach": case "speak":
           if (every(t, 7, 0.45, ph)) flip = !flip;
           dy = every(t, 2.4, 0.3, ph) ? -px : 0; break;
         default: dy = every(t, 3.5, 0.2, ph) ? -px : 0;

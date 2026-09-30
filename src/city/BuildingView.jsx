@@ -4,6 +4,8 @@ import { DISTRICT, PLACES, BUILDING, placeName, placeKind, jobLine, roomIn } fro
 import RoomStage, { ROOM_H } from "./RoomStage.jsx";
 import { Occupant } from "./cityUi.jsx";
 import { ListRow } from "../ui/index.js";
+import { funnelButtons } from "./funnels.js";
+import { openFunnel } from "./FunnelOverlay.jsx";
 
 // #city/<district>/<building>[?floor=N]: one building in cross-section, SimTower-style.
 // Floors stacked top to bottom with the lift shaft down the left; each floor's rooms
@@ -93,6 +95,11 @@ function Floors({ b, floor, censusRef, onOpen, onFloor }) {
       <div className="hvi-city-note hvi-city-in">
         {b.floors.length} FLOOR{b.floors.length === 1 ? "" : "S"}{below ? ` (${below} BELOW THE STREET)` : ""} // {total} PRESENT // {d?.name}. EVERY FLOOR IS OBSERVED. THE LIFT IS OBSERVED MOST OF ALL.
       </div>
+      {funnelButtons(b.id).length > 0 && (
+        <div className="hvi-city-zoom" style={{ position: "static", justifyContent: "flex-start", flexWrap: "wrap", margin: "0 0 var(--s3)" }} role="toolbar" aria-label="What this building offers">
+          {funnelButtons(b.id).map(f => <button key={f.label} type="button" className="hvi-city-zb txt" aria-label={f.aria} onClick={() => openFunnel(f.spec)}>{f.label}</button>)}
+        </div>
+      )}
       <RoomStage key={b.id} cells={cells} layout={layout} assign={assign} censusRef={censusRef} onOpen={onOpen} onPresent={setPresent} onCell={onCell} focusId={focusCell} focusScroll={focusScroll}
         ariaLabel={`${b.name}, in cross-section: ${b.floors.length} floors, ${total} subjects present. The floor directory below lists everyone by floor.`} />
       <div className="hvi-city-floors hvi-city-in" role="list" aria-label="Floor directory">

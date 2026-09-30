@@ -8,6 +8,7 @@
 
 import { TIERS, getTier, slugify } from "../figures.js";
 import { FLOORS as HQ_FLOORS } from "../building.js";
+import { FUNNEL_PLACES, FUNNEL_BUILDINGS, FUNNEL_ARCH, FUNNEL_JOBS, FUNNEL_LEISURE_BAND, FUNNEL_LEISURE_FIELD, FUNNEL_FAMILY } from "./funnelSim.js";
 
 export const SEED = "HVI-SUBSTRATE-01";
 // Day 1 of the Substrate. Machine days count from here.
@@ -62,7 +63,7 @@ const PLACE_LIST = [
   // The top tier's homes moved out of HQ into their own glass tower in Finance (2026-09-29).
   P("penthouses", "finance", "home", 72, "EXECUTIVE RESIDENCES"),
 
-  P("studio-row", "arts", "mixed", 22, "STUDIO ROW", ["studio"]),
+  P("studio-row", "arts", "mixed", 22, "EBTV SOUND STAGES", ["studio"]),
   P("playhouse", "arts", "mixed", 24, "THE PLAYHOUSE", ["theatre"]),
   P("concert-hall", "arts", "mixed", 30, "CONCERT HALL (COMMON TIME)", ["concert hall"]),
   P("gallery", "arts", "mixed", 12, "PERMANENT COLLECTION", ["museum"]),
@@ -132,6 +133,8 @@ const PLACE_LIST = [
   // lines, seven a side, a Saturday matchday and a midweek fixture under the lights.
   P("pitch", "sprawl", "mixed", 28, "THE ESTATE PITCH (NINETY MINUTES, MONITORED)", ["football pitch", "soccer pitch"]),
 ];
+// the funnels (funnelSim.js): the Arcade, the EB Shop, the Union lounge
+PLACE_LIST.push(...FUNNEL_PLACES.map(a => P(...a)));
 for (const p of PLACE_LIST) DISTRICT[p.district].places.push(p.id);
 
 export const PLACES = Object.fromEntries(PLACE_LIST.map(p => [p.id, p]));
@@ -155,7 +158,8 @@ const B = (id, name, district, floors, lot = null) => ({ id, name, district, flo
 const CM = (c, r) => ({ x: 1 + c * (23 / 3), y: 47 + r * 5, w: 23 / 3, h: 5 });
 const BUILDING_LIST = [
   // THE ARTS QUARTER
-  B("studio-block", "STUDIO BLOCK", "arts", [["1F", "SOUND STAGES", ["studio-row"]], ["G", "EDIT SUITES", ["studio-row"]]]),
+  // the sound stages are Electric Basement TV's studio (funnelSim.js): the EBSN set, ON AIR when live
+  B("studio-block", "ELECTRIC BASEMENT TV", "arts", [["1F", "STAGE A: EBSN (ON AIR)", ["studio-row"]], ["G", "EDIT SUITES AND MASTER CONTROL", ["studio-row"]]]),
   B("playhouse", "THE PLAYHOUSE", "arts", [["1F", "THE BALCONY (OBSERVED)", ["playhouse"]], ["G", "THE STALLS", ["playhouse"]]]),
   B("culture-centre", "CENTRE FOR PERMITTED CULTURE", "arts", [["3F", "THE ANNEX", ["gallery-annex"]], ["2F", "PERMANENT COLLECTION", ["gallery"]], ["1F", "UPPER CIRCLE", ["concert-hall"]], ["G", "THE STALLS", ["concert-hall"]]]),
   B("the-grind", "THE GRIND", "arts", [["1F", "THE DRIP (SECOND POUR)", ["the-drip"]], ["G", "DISPENSING COUNTER", ["the-grind"]]]),
@@ -211,6 +215,7 @@ const BUILDING_LIST = [
   B("the-plaza", "THE PLAZA", "sprawl", [["G", "OPEN PAVING (LOITERING PERMITTED)", ["the-plaza"]]], { x: 57, y: 58, w: 25.5, h: 6.5 }),
   B("the-pitch", "THE ESTATE PITCH", "sprawl", [["G", "THE PITCH (TOUCHLINES ENFORCED)", ["pitch"]]], { x: 83, y: 52.5, w: 25, h: 12 }),
 ];
+BUILDING_LIST.push(...FUNNEL_BUILDINGS.map(([id, name, district, floors]) => B(id, name, district, floors)));
 // Each district is gridded by BUILDING (so a building's rooms stay one block on the map),
 // and a building's cell is split side by side among its distinct places.
 for (const d of DISTRICTS) {
@@ -262,6 +267,7 @@ export const ARCH = {
   "ward-7": "hospital", chapel: "chapel", "the-green": "lot", "the-allotment": "lot", "ration-market": "market", schoolhouse: "school", "lot-6f07": "lot", "the-assembly": "lot",
   "reclamation-line": "shed", "radiant-core": "reactor", foundry: "stacks", "cache-farm": "datahall", "data-docks": "docks", hydroponics: "tanks", barracks: "bunker", "holding-cells": "prison", "slag-canteen": "canteen",
   "hab-a": "projects", "hab-b": "projects", "hab-c": "brownstone", "hab-d": "brownstone", "the-street": "lot", "the-plaza": "lot", "the-pitch": "field",
+  ...FUNNEL_ARCH,
 };
 // Housing: which tiers (TIER_ORDER index, 0 = ESSENTIAL INFRASTRUCTURE) live in each style.
 export const HOUSING_TIERS = { glass: [0], brownstone: [1, 2], lofts: [1, 2], projects: [3, 4, 5] };
@@ -390,6 +396,7 @@ export const JOBS = [
   J("match-referee", "Match Referee", "pitch", ["Fourth Official", "Assistant Referee", "Referee", "Listed Referee (Pending Audit)"], ["law", "sport", "*"], ["alignment", "physical"], { draft: 8 }),
   J("pitch-groundskeeper", "Pitch Groundskeeper", "pitch", ["Divot Replacer", "Groundskeeper", "Head Groundskeeper", "Keeper of the Turf"], ["farming", "labor", "*"], ["physical", "care"], { draft: 6 }),
 ];
+JOBS.push(...FUNNEL_JOBS.map(a => J(...a)));
 export const JOB = Object.fromEntries(JOBS.map(j => [j.id, j]));
 
 // ---- subject reading --------------------------------------------------------------
@@ -654,6 +661,8 @@ const LEISURE_BY_FIELD = {
   "physics-theory": { stacks: 2, "concert-hall": 1 }, philosophy: { "the-grind": 2, park: 2, forum: 1 }, politics: { "assembly-hall": 1.5, "rooftop-lounge": 1.5, forum: 2 }, law: { forum: 1.5 },
   royalty: { gallery: 2, "rooftop-lounge": 2 }, activism: { park: 2, market: 2, allotment: 1, forum: 2 }, crime: { casino: 2, "dive-bar": 2 },
 };
+FUNNEL_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
+for (const [f, m] of Object.entries(FUNNEL_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
 
 // ---- games ------------------------------------------------------------------------
 // The recreation ground keeps a fixture list on the machine calendar: weekday 1-7 as
@@ -994,6 +1003,7 @@ const FAMILY = [
   ["stacks", "lecture-hall", "archive-stacks"],
   ["gym", "stadium", "ball-field", "courts", "pitch"],
 ];
+for (const [k, id] of FUNNEL_FAMILY) FAMILY[k].push(id);
 const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
 const LEISURE_ROOMS = Object.values(PLACES).filter(p => p.kind === "leisure" || p.kind === "mixed").map(p => p.id);
 export const OVERFLOW = Object.fromEntries(Object.keys(PLACES).map(id => {

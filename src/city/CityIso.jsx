@@ -21,6 +21,9 @@ import { findTarget, findLine } from "./find.js";
 // DRIVE YOURSELF (controlIso.js, ControlLayer.jsx): the viewer's own citizen, steered
 import { makeIsoControl } from "./controlIso.js";
 import ControlLayer, { TakeControlButton } from "./ControlLayer.jsx";
+import { funnelRoomHits } from "./funnelProps.js";
+import { funnelButtons } from "./funnels.js";
+import { openFunnel } from "./FunnelOverlay.jsx";
 
 // THE SUBSTRATE, SimCity-style: every building drawn in its own architecture (archGeo.js
 // massing, archDraw.js drawing: the projects, brownstones, the glass tower, the monolith...),
@@ -879,6 +882,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const byAnchor = new Array(plan.anchors.length);
       for (const p of people) { const i = at.get(p.key); if (i != null) byAnchor[i] = p; }
       if (live && byAnchor.length > 1) greet(rk, byAnchor.filter(Boolean).map(p => ({ s: p.s, sheet: sheetFor(p.s) })), now);   // friends who just met wave (rigReact)
+      // the funnels (funnelProps.js): a cabinet opens its game, the shop floor the shop, the stage EBTV
+      if (live) for (const h of funnelRoomHits(pid, plan)) V.hits.push({ kind: "funnel", panel: true, spec: h.spec, box: [rx + h.box[0], ry + h.box[1], rx + h.box[2], ry + h.box[3]] });
       drawRoom(ctx, pid, rx, ry, rw, rh, u, {
         t: now, hour, plan, lit: true,
         people: (row) => {
@@ -1126,7 +1131,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         for (let i = V.hits.length - 1; i >= 0; i--) {
           const h = V.hits[i];
           if (!h.panel || !inBox(h)) continue;
-          if (h.kind === "close") { unfollow(); select(null); } else onOpenRef.current?.(h.s);
+          if (h.kind === "close") { unfollow(); select(null); } else if (h.kind === "funnel") openFunnel(h.spec); else onOpenRef.current?.(h.s);
           return;
         }
         return;
@@ -1258,6 +1263,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         <button type="button" className="hvi-city-zb" aria-label="Zoom out" onClick={() => apiRef.current.zoom?.(1 / 1.4)}>−</button>
         {b
           ? <>
+              {funnelButtons(b.id).map(f => <button key={f.label} type="button" className="hvi-city-zb txt" aria-label={f.aria} onClick={() => openFunnel(f.spec)}>{f.label}</button>)}
               <button type="button" className="hvi-city-zb txt" onClick={() => apiRef.current.enter?.()}>ENTER</button>
               <button type="button" className="hvi-city-zb txt" aria-label="Close the cutaway" onClick={() => apiRef.current.close?.()}>CLOSE</button>
             </>

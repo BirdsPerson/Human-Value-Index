@@ -14,6 +14,7 @@
 // takes a 2D context. Poses (sitting, typing, sleeping...) live in poses.js.
 
 import { lotPhase, machineClock } from "./sim.js";
+import { FUNNEL_ROOM_TYPE, FUNNEL_LOOK, FUNNEL_ACTS, funnelPlans, funnelPropDrawers, funnelRooms, withTv } from "./funnelProps.js";
 
 // place id -> interior type
 export const ROOM_TYPE = {
@@ -32,6 +33,7 @@ export const ROOM_TYPE = {
   "allotment": "allotment", "night-market": "market", "the-plaza": "street",
   "ball-field": "ballfield", "courts": "courts", "rec-park": "picnic", "pitch": "soccer",
   "forum": "assembly", "dev-lot": "street",
+  ...FUNNEL_ROOM_TYPE,   // the Arcade, the EB Shop, the Union lounge, EBTV's stage (funnelProps.js)
 };
 // LOT 0x6F07 changes with THE ASSEMBLY's decision (sim.lotPhase): scrub and a site read as
 // the street; the course as a park; the farm as an allotment.
@@ -55,6 +57,7 @@ const LOOK = {
   cells: ["#181818", "#2a2a2a"], canteen: ["#221a12", "#3a2c1e"], hab: ["#18181a", "#2c2c30"], street: ["#101410", "#222822"],
   ballfield: ["#10202a", "#2f6b2a"], courts: ["#141c24", "#3a4250"], picnic: ["#10202a", "#2a5a24"], soccer: ["#10202a", "#2e7a30"],
 };
+Object.assign(LOOK, FUNNEL_LOOK);
 
 // ---- plans ----------------------------------------------------------------------------
 // A module is {w (in sprite widths), ax (where the person stands in it, 0..1), prop, a}.
@@ -269,6 +272,7 @@ const PLANS = {
     front: { unit: [M(A("stand", "sweep", "staff", 0, true), null, 2.2), M(A("seat", "rest", "patron"), "streetBench", 1.25), M(A("stand", "loiter", "patron"), null, 1.2)] },
   },
 };
+funnelPlans(PLANS, { A, M, P, SIDE });   // new rooms, and a JETSAM! cabinet in the bars, the diner, the casino
 export const PLANNED_TYPES = Object.keys(PLANS);
 
 // Rooms deep enough for two rows get a back row, smaller and set up the wall.
@@ -416,7 +420,7 @@ export function assignAnchors(anchors, people, prev = null, hour = null, ordered
 // table, a vendor among the crates, a warden by the cots.
 export const LEISURE_ACTS = new Set(["drink", "eat", "talk", "read", "write", "listen", "pray", "watch", "gamble", "rest", "sleep", "sit", "wait", "shop", "stroll", "loiter", "cheer", "view",
   "pitch", "bat", "ready", "catch", "shoot", "dribble", "defend", "feed",
-  "snap", "stance", "throw", "receive", "wrap", "carry", "kick", "footwork", "kickball", "header", "keeper", "mark", "chase"]);
+  "snap", "stance", "throw", "receive", "wrap", "carry", "kick", "footwork", "kickball", "header", "keeper", "mark", "chase", ...FUNNEL_ACTS]);
 // Rooms whose people take their places in order (a game needs its battery first).
 export const ORDERED_TYPES = new Set(["ballfield", "courts", "picnic", "gridiron", "soccer"]);
 const STAFF_ACT = {
@@ -736,6 +740,8 @@ const DRAW = {
     R(c, "#1a1f1a", x, y + h - 6 * u, w, 3 * u);   // kerb
   },
 };
+const FUNNEL_ROOMS = funnelRooms();
+Object.assign(DRAW, FUNNEL_ROOMS.DRAW);
 export const DRAWN_TYPES = Object.keys(DRAW);
 
 // ---- ambient life: subtle, in the terminal palette; still when motion is reduced --------
@@ -828,6 +834,7 @@ const LIVE = {
     across(x + 3 * u, w * 0.6, 12 * u, (gx, i) => { const a = t * (i % 2 ? 0.6 : -0.6); R(c, "#8a7a4a", gx + Math.cos(a) * 3 * u, y + h * 0.3 + Math.sin(a) * 3 * u, u, u); });
   },
 };
+Object.assign(LIVE, FUNNEL_ROOMS.LIVE); withTv(LIVE);   // EBTV on the telly in the bars and the diner
 
 // ---- furniture ---------------------------------------------------------------------------
 // PROP[name] = {back, front}: back is drawn before the row's people, front after them.
@@ -1066,3 +1073,4 @@ export const PROP = {
   lamppost: { back(c, X, Y, W, p) { const x = X + W / 2; R(c, "#374151", x - p, Y - 50 * p, 2 * p, 50 * p); R(c, "#fbbf24", x - 3 * p, Y - 52 * p, 6 * p, 3 * p); } },
   streetBench: { back(c, X, Y, W, p, t, a) { PROP.parkBench.back(c, X, Y, W, p, t, a); } },
 };
+Object.assign(PROP, funnelPropDrawers({ SIDE }));   // cabinets, standees, the shop counter, the EBSN desk

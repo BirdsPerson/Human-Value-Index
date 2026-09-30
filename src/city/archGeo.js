@@ -17,6 +17,7 @@
 import { BUILDINGS, ARCH, HOUSING_TIERS, OPEN_LOTS } from "./sim.js";
 import { rotRect } from "./iso.js";
 import { insetOf, PARK_LOTS } from "./parkGeo.js";
+import { funnelMass, FUNNEL_STYLES, FUNNEL_OUT_FRONT } from "./funnelGeo.js";
 
 export const KERB = 0.4;    // props and bodies keep this far in from the lot edge (sim KERB)
 
@@ -35,6 +36,7 @@ export const STYLES = {
   bunker: { family: "state", name: "BARRACKS" }, prison: { family: "state", name: "PRISON" }, canteen: { family: "industry", name: "CANTEEN" },
   // open ground: drawn by parkDraw (the fields, the Bowl) or as a lot (the Green, the Street)
   stadium: { family: "ground" }, field: { family: "ground" }, lot: { family: "ground" },
+  ...FUNNEL_STYLES,   // the Arcade, the EB Shop, the EBTV station (funnelGeo.js)
 };
 export const GROUND_STYLES = new Set(["stadium", "field", "lot"]);
 export { HOUSING_TIERS };
@@ -268,6 +270,8 @@ const MASS = {
   }),
 };
 
+Object.assign(MASS, funnelMass({ box, cyl, pt, bx, run, gr }));
+
 // -> {style, parts, yard, ground, rise, box} in map cells, or null for open ground.
 const CACHE = new Map();
 export function massingOf(b) {
@@ -298,7 +302,7 @@ export function massingOf(b) {
   return m;
 }
 // How far the front (+y) dressing stands out from the body: stoops, canopies, awnings, a portico's steps.
-export const OUT_FRONT = { brownstone: 0.55, glass: 0.45, casino: 0.45, cafe: 0.45, market: 0.35, theatre: 0.4, neon: 0.3, diner: 0.3, classical: 0.25, projects: 0.3, gallery: 0.1, hospital: 0.25, school: 0.2, gothic: 0.2, clocktower: 0.2, shed: 0.35, lofts: 0.3, office: 0.2, chapel: 0.2 };
+export const OUT_FRONT = { brownstone: 0.55, glass: 0.45, casino: 0.45, cafe: 0.45, market: 0.35, theatre: 0.4, neon: 0.3, diner: 0.3, classical: 0.25, projects: 0.3, gallery: 0.1, hospital: 0.25, school: 0.2, gothic: 0.2, clocktower: 0.2, shed: 0.35, lofts: 0.3, office: 0.2, chapel: 0.2, ...FUNNEL_OUT_FRONT };
 
 export const MASSED = Object.keys(MASS);
 export const massingAll = () => BUILDINGS.map(b => [b, massingOf(b)]);

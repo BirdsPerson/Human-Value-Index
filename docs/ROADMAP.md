@@ -42,7 +42,10 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       whether it thrives or closes; vacancies get re-let. Players open one later with CYCLES
       (needs the economy, item 5). The EB Shop gets a storefront (lore). Shops feed the
       district mood and the civic machine (a developer can build a second mall).
-   b2. **The Arcade** (Scott 2026-09-29; built with b; NOT named "Iridescent" yet, later).
+   b2. [cabinet floor shipped 2026-09-30 with the funnels, docs/CITY_SPEC.md "The funnels": THE ARCADE on the
+      Strip, cabinets synced from works.json (live / BETA / OUT OF ORDER), CRT overlay plays JETSAM! and ANAMNESIS,
+      JETSAM! cabinets in the Dive, diner, casino, Union lounge. Next: the game room (chess, pool, cards)]
+      **The Arcade** (Scott 2026-09-29; built with b; NOT named "Iridescent" yet, later).
       A building on the Strip: a cabinet floor and a game room. Cabinets = every live game in
       ../iridescent-site/works.json (division games; JETSAM! play-jetsam.netlify.app and
       ANAMNESIS anamnesis-eb.netlify.app are live and embeddable), synced by a script so each
@@ -51,7 +54,10 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       visiting play each other (deterministic results from the sim, rivalries and friendships
       feed social.js, results on the Ledger/PA). Player vs a figure at chess (chess.js rules +
       a small engine whose strength follows the figure's competence), result on the file.
-   b3. **Our lore, built into the world** (Scott 2026-09-29: "let's build all of our lore into
+   b3. [first step shipped 2026-09-30 with the funnels: EB SHOP (a real storefront on Campus, live Shopify stock
+      with turntable videos, EBSN host standees), ELECTRIC BASEMENT TV (the Arts sound stages: EBSN set, the live
+      stream in an overlay, ON AIR from now.json, EBTV on the bar TVs). Next: AUCTION HALL, CINEMA]
+      **Our lore, built into the world** (Scott 2026-09-29: "let's build all of our lore into
       this world"). Buildings that show the real work, each with people doing jobs and an
       audience, tap a screen to watch in an overlay:
       - AUCTION HALL: bidders watching Electric Basement shop turntable product videos

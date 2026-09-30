@@ -55,6 +55,7 @@ then wait for the Netlify deploy (netlify api listSiteDeploys site 3ac3fcb8-cab4
 If anything fails and you cannot fix it within budget: do NOT push; leave work on a branch nightly/<date> and say so.
 Update docs/ROADMAP.md (move to Done with commit, or mark progress/blocked). Write MORNING_REPORT.md: a '## Shipped' bullet
 (what, commit, how to see it) and '## Needs you' only for real decisions (one bullet each, Options: when a pick).
+Also run node scripts/funnel-clicks.mjs --line and put its one line under '## Funnels' in MORNING_REPORT.md (replace the section).
 Run ~/projects/organize/collect_reports.py. Stay within the ROADMAP guardrail budgets."
 fi
 

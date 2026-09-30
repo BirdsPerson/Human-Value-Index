@@ -17,10 +17,13 @@
 // it. What hangs off the front (a stoop, a canopy) is drawn after the wall it hangs off.
 
 import { rot, STOREY } from "./iso.js";
+import { funnelDeco, drawFunnelYard, FUNNEL_MAT, FUNNEL_ROOF, FUNNEL_STYLES_DRAWN, FUNNEL_PROPS } from "./funnelDraw.js";
 import { partOrder } from "./archGeo.js";
 
 export const DRAWN_STYLES = new Set(["projects", "brownstone", "lofts", "glass", "office", "monolith", "gothic", "clocktower", "neon", "casino", "diner", "gallery", "theatre", "cafe", "studio", "hall", "classical", "vault", "hospital", "chapel", "market", "school", "shed", "reactor", "stacks", "datahall", "docks", "tanks", "bunker", "prison", "canteen"]);
 export const DRAWN_PROPS = new Set(["hoop", "fence", "bench", "tree", "lamp", "doorman", "planter", "fountain", "flag", "camera", "bollard", "statue", "hydrant", "poster", "table", "armoured", "booth", "ambulance", "grave", "stall", "conveyor", "containers", "sandbags", "watchtower", "bins"]);
+for (const k of FUNNEL_STYLES_DRAWN) DRAWN_STYLES.add(k);
+for (const k of FUNNEL_PROPS) DRAWN_PROPS.add(k);
 
 const MAT = {
   brick: "#8a4a3a", brownstone: "#6d4a36", redbrick: "#94503b", glass: "#3f7598", steel: "#58718a", obsidian: "#141917",
@@ -31,6 +34,7 @@ const MAT = {
 const ROOF = { brick: "#3c3634", brownstone: "#35302c", redbrick: "#3a3230", glass: "#5d93b3", steel: "#3f4c58", obsidian: "#0c100e", plinth: "#39413c",
   concrete: "#7a7e78", sandstone: "#454b55", darkbrick: "#2c2628", casino: "#3a1830", white: "#a9aeab", maroon: "#3a2228", corrugated: "#4c4858",
   hall: "#7f93a0", limestone: "#8c8674", vaultcon: "#5a605b", market: "#5a4a3a", rust: "#6a4a3a", panel: "#555e64", greenhouse: "#9ed2b4", stone: "#8f8878", tank: "#6a7178", wood: "#5a3e28", stack: "#6a6a6a" };
+Object.assign(MAT, FUNNEL_MAT); Object.assign(ROOF, FUNNEL_ROOF);
 
 const cache = new Map();
 function shade(hex, f) {
@@ -1286,6 +1290,10 @@ const DECO = {
   shed: { face: worksFace, roof: worksRoof }, stacks: { face: worksFace }, datahall: { face: worksFace, roof: worksRoof }, docks: { face: worksFace }, tanks: { face: worksFace },
   bunker: { face: worksFace, roof: worksRoof }, prison: { face: worksFace, roof: worksRoof }, canteen: { face: worksFace }, reactor: {},
 };
+// the Arcade, the EB Shop, the EBTV station (funnelDraw.js), drawn with this file's kit
+const FUNNEL_KIT = { shade, faceText, neonOn, windowGrid, door, bladeSign, glow, facesOf };
+const FUNNEL = funnelDeco(FUNNEL_KIT);
+Object.assign(DECO, FUNNEL.deco); Object.assign(FAR, FUNNEL.far);
 
 const ORDERS = new Map();
 // G: {ctx, Q, poly, facing, z, r}; env: {lod, night, hour, t, lit, bid (int), name, style}
@@ -1582,7 +1590,7 @@ export function drawYardProp(G, p, env) {
       for (let i = 0; i < 2; i++) { const c = { x0: p.x - 0.18 + i * 0.2, y0: p.y - 0.1, x1: p.x + i * 0.2, y1: p.y + 0.1, h0: 0, h1: 0.3 }; for (const f of facesOf(c, G)) G.poly(f.q(0, 1, 0, 0.3), shade(i ? "#2f5a3a" : "#3a3f44", f.sh * nf)); }
       break;
     }
-    default: break;
+    default: drawFunnelYard(K, p, env, FUNNEL_KIT); break;
   }
   K.flush();
 }

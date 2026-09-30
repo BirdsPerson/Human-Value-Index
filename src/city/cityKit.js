@@ -113,7 +113,7 @@ export function roomGrid(n, cssW, minW = 300) {
 // otherwise this: short enough to read, still in the Department's voice.
 const SHORT = {
   "exec-suite": "EXEC", "ops-floor": "OPS", "assembly-hall": "ASSEMBLY", tribunal: "TRIB 9", penthouses: "EXEC RES",
-  "studio-row": "STUDIOS", playhouse: "THEATRE", "concert-hall": "CONCERT", gallery: "GALLERY", "the-grind": "GRIND",
+  "studio-row": "EBTV", playhouse: "THEATRE", "concert-hall": "CONCERT", gallery: "GALLERY", "the-grind": "GRIND",
   "lecture-hall": "LECTURES", "lab-block": "LABS", stacks: "STACKS", "clock-tower": "CLOCK",
   "exchange-floor": "EXCHANGE", "vault-bank": "VAULT", "rooftop-lounge": "ROOFTOP",
   "dive-bar": "THE DIVE", casino: "CASINO", "press-room": "PRESS", "all-night-diner": "DINER",
@@ -123,6 +123,7 @@ const SHORT = {
   reclamation: "RECLAIM", reactor: "CORE", foundry: "FOUNDRY", "cache-farm": "CACHE", docks: "DOCKS",
   hydroponics: "VATS", barracks: "BARRACKS", "holding-cells": "CELLS", canteen: "CANTEEN",
   "block-a": "HAB A", "block-b": "HAB B", "block-c": "HAB C", "the-street": "STREET",
+  arcade: "ARCADE", "eb-shop": "EB SHOP", "campus-lounge": "UNION",
 };
 // The label drawn on a room's top border, given its width in cells: " NAME " when it
 // fits with padding, "NAME" flush against the corners when tight, clipped as a last resort.

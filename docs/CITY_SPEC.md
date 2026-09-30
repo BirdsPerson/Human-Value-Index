@@ -1047,3 +1047,57 @@ introduce a controller function". v1 is solo: you drive your own citizen, nobody
 - Measured (headless Chromium, dev build): 1440 walking 16.6 ms average frame, p95 17.2; 390
   touch emulation 16.6 / 18.0. Screens: docs/screens/control/.
 
+
+## The funnels (2026-09-30)
+
+Scott: "we should always be putting our funnels to everything else": the city's doors out to
+the real work, built into the world. Everything lives in its own modules; the shared files carry
+one-line hooks.
+
+- **Where.** THE ARCADE (the Strip's free lot, 0x4D04, two floors of cabinets and a prize
+  counter; not named Iridescent). EB SHOP (Campus's free lot, 0x2B04: the shop floor, THE UNION
+  LOUNGE upstairs). The Arts sound stages are now ELECTRIC BASEMENT TV (same building id
+  `studio-block`, style `station`: mast, dish, ON AIR). JETSAM! cabinets also stand in the Dive,
+  the Lantern, the all-night diner and a corner of the casino; JETSAM! and ANAMNESIS in the Union.
+  Data: `funnelSim.js` (places, buildings, the prize clerk's job, who visits), spread into
+  `sim.js` after everything else, so each took its district's next free grid cell and nothing
+  moved.
+- **The cabinets** follow `src/city/arcade.json`, written from the Iridescent works list by
+  `scripts/sync-arcade.mjs` before every build (sibling checkout, or `$ARCADE_WORKS`, or the
+  studio site's `/works.json` if it is ever published; else the committed file stands). Status
+  `live` is a playable cabinet; `beta` (or a `beta`/`play` URL on a work not yet live) is a
+  playable cabinet marked BETA; anything else is OUT OF ORDER. Human Value Index's own cabinet
+  says you are already inside it. The marquee's high score is per game per machine day, held by
+  a dead figure on file (`funnels.highScore`).
+- **Drawing.** Outside: `funnelGeo.js` (massing) and `funnelDraw.js` (facades, the invader on the
+  roof, the shop windows, the mast), merged into archGeo/archDraw with their kit. Inside:
+  `funnelProps.js` plans (`arcade`, `recordshop`, `union`, `ebtv`), the cabinets (screen and
+  marquee per game, taped and dark when out of order), EBSN host standees (cardboard: props,
+  never subjects; faces from `public/funnels/hosts.png`, keyed from eb-command-center/hosts), the
+  EBSN desk, and a TV showing EBTV's now-playing in the bars, the diner and the Union. Poses:
+  `arcade`, `browse`, `present`.
+- **Taps.** In the cutaway a cabinet opens its game, the shop floor the shop, the stage EBTV, the
+  arcade floor its cabinet list (`funnelRoomHits`); the toolbar and the building page offer
+  PLAY / SHOP / WATCH / JETSAM! (`funnelButtons`). Overlays: `FunnelOverlay.jsx` (portal on the
+  body, mounted once by City.jsx): the game in a CRT (iframe; both live games send no
+  X-Frame-Options, and OPEN IN A NEW TAB is always there), "AN IRIDESCENT PRODUCTION. ALSO ON
+  ITCH.IO"; the shop's live stock with each item's turntable video and BUY AT THE EB SHOP; EBTV's
+  own stream (native HLS, else hls.js 1.6.15 from cdnjs with SRI) and now.json's NOW PLAYING.
+- **The shop proxy.** `/api/funnel?shop=1` (`netlify/lib/funnels.js`): Shopify's public
+  `products.json` (up to 3 pages) and the newest 36 in-stock products' `.js` pages for their
+  video, the shop's own listings (vendor EBShop) first, 24 shown, videos first. Blobs keeps the
+  answer 15 minutes; the CDN holds it as long (`Netlify-CDN-Cache-Control: durable, s-maxage=900`).
+  Shopify down: the last copy (under 24 h) marked stale, else CLOSED FOR INVENTORY (cached 1 min).
+- **Tags and counts.** Every link out goes through `utm()`: `utm_source=humanvalueindex&
+  utm_medium=city&utm_campaign=<building>` (+ `utm_content=<product>` in the shop). Opens, plays
+  and links followed are counted per real day, per building, per destination host
+  (`POST /api/funnel`, sendBeacon; no IP, no id, no path). Read: `node scripts/funnel-clicks.mjs`
+  (the nightly loop puts its `--line` under `## Funnels` in MORNING_REPORT.md), or
+  `GET /api/funnel?stats=1&days=N`.
+- **No re-hosting.** The only stream in the code is live.electricbasement.tv's own, played
+  straight from there; the function never touches it.
+- `scripts/check-funnels.mjs`: arcade.json current with works.json and every live game a
+  cabinet (the sync's beta/dev rules on a made-up list too), every playable cabinet on the
+  arcade floor at cutaway widths, the cabinets in their rooms, the standees, utm on every link
+  and the frame, no third-party stream, the proxy's cache / stale / closed paths, the counter's
+  sums and refusals, nothing personal stored. Screens: docs/screens/funnels/.

@@ -24,6 +24,7 @@ import { buildingHref, parseCityRoute } from "./city3d.js";
 import { readCaseId } from "../caseFile.jsx";
 import CityFind from "./CityFind.jsx";
 import { CTL, controlBuildingId } from "./control.js";   // DRIVE YOURSELF
+import FunnelHost from "./FunnelOverlay.jsx";
 import { buildIndex, bySlug, findHref } from "./find.js";
 import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
@@ -373,6 +374,7 @@ export default function City({ route }) {
         <Button variant="secondary" href="#pen">Holding pen</Button>
       </ButtonRow>
       {cardEl}
+      <FunnelHost />
     </div>
   );
 }
