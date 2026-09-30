@@ -69,7 +69,9 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       (content rule: the living never speak) or the Overlord itself. Results feed a debate
       rating on the file. Stage 2 PvP: live player-vs-player debates, audience = players,
       judge reliability weighting per ARENA.md. That stage is the CivicGate rehearsal.
-   b5. **THE CIVIC MACHINE** (Scott 2026-09-29 "how is it all going to work?"; Claude's design,
+   b5. [first step shipped 2026-09-30: THE ASSEMBLY, session 001, docs/ASSEMBLY.md: two
+      applications for LOT 0x6F07 (golf course / community farm), dead advocates debate, assessed
+      files vote with fixed reasons for 3 days, the winner is built in the Commons] **THE CIVIC MACHINE** (Scott 2026-09-29 "how is it all going to work?"; Claude's design,
       review with the scale redesign since SECTORS are the natural data shards):
       DEMAND (census growth, crowding, district mood, incidents) -> PROPOSAL (Dept of Planning
       at HQ, or DEVELOPER figures bid: Trump, Robert Moses, Haussmann, Disney; Jane Jacobs

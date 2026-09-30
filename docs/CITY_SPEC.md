@@ -713,3 +713,13 @@ measured (synthetic, 30 machine days) 0.116 friends per subject at 430, 0.036 at
   are swept, a missing bucket writes nothing, lease, CAS on the header, create-only first
   write; `/api/social/<slug>` and `?subject=` serve the shard. `check-plans`: the tick
   records its sources; quest figures from the summary == from the one-file plan.
+
+## THE ASSEMBLY and LOT 0x6F07 (2026-09-30)
+
+The Commons is laid out by hand (the six buildings exactly where the grid had them) and runs
+7 rows further south (h 13 -> 20), like the Sprawl; its station did not move. The new row:
+THE ASSEMBLY (`forum`, leisure, cap 18: an open-air forum with the lectern) and LOT 0x6F07
+(`dev-lot`, leisure, cap 24). Both are open ground drawn by `civicGeo.js` / `civicDraw.js`.
+The lot's face follows the Assembly's recorded vote (`sim.setCivic`, `sim.lotPhase`):
+vacant, approved, a construction site, then the golf course or the farm; it takes no
+visitors until the site opens. Design, storage and the rules: docs/ASSEMBLY.md.

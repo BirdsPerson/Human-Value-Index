@@ -13,6 +13,8 @@
 // residents the bunks. Plans, roles and assignment are pure (node-testable); the drawing
 // takes a 2D context. Poses (sitting, typing, sleeping...) live in poses.js.
 
+import { lotPhase, machineClock } from "./sim.js";
+
 // place id -> interior type
 export const ROOM_TYPE = {
   "exec-suite": "exec", "ops-floor": "office", "assembly-hall": "assembly", "tribunal": "tribunal", "penthouses": "suite",
@@ -29,8 +31,15 @@ export const ROOM_TYPE = {
   "the-drip": "cafe", "gallery-annex": "gallery", "members-club": "lounge", "the-lantern": "bar",
   "allotment": "allotment", "night-market": "market", "the-plaza": "street",
   "ball-field": "ballfield", "courts": "courts", "rec-park": "picnic", "pitch": "soccer",
+  "forum": "assembly", "dev-lot": "street",
 };
-export const typeOf = (placeId) => ROOM_TYPE[placeId] || "office";
+// LOT 0x6F07 changes with THE ASSEMBLY's decision (sim.lotPhase): scrub and a site read as
+// the street; the course as a park; the farm as an allotment.
+const LOT_TYPE = { golf: "park", farm: "allotment" };
+export const typeOf = (placeId) => {
+  if (placeId === "dev-lot") { const p = lotPhase(machineClock().mt); return (p.phase === "built" && LOT_TYPE[p.winner]) || "street"; }
+  return ROOM_TYPE[placeId] || "office";
+};
 
 // Wall and floor per type: warm lighting for the lived-in, cold for the machine.
 const LOOK = {

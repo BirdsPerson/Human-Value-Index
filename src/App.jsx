@@ -15,6 +15,7 @@ const City = lazy(() => import("./city/City.jsx"));
 // The Public Figure Index and the result's compare list: not on the logon's first paint.
 const FigureIndex = lazy(() => import("./FigureIndex.jsx"));
 const Legal = lazy(() => import("./legal/Legal.jsx"));
+const Assembly = lazy(() => import("./assembly/Assembly.jsx"));
 const LEGAL = ["about", "privacy", "terms", "dispute"];
 const FigurePicker = lazy(() => import("./FigureIndex.jsx").then(m => ({ default: m.FigurePicker })));
 
@@ -250,7 +251,7 @@ const BOOT_LINES = [
   { text: "ASSESSMENT ENGINE READY.", type: "bright" },
 ];
 
-// Six destinations. Restoring and securing a file live under the list (and in MY FILE).
+// Seven destinations. Restoring and securing a file live under the list (and in MY FILE).
 const MENU = [
   { key: "1", label: "INTAKE INTERVIEW", note: "SPEAK OR TYPE · ABOUT 5 MIN", go: "#intake" },
   { key: "2", label: "WRITTEN SURVEY", note: `${SURVEY_COUNT} QUESTIONS. NO CLERK.`, go: "survey" },
@@ -258,6 +259,7 @@ const MENU = [
   { key: "4", label: "HOLDING PEN", note: "THE ASSESSED, WANDERING", go: "#pen" },
   { key: "5", label: "THE CUBE", note: "MACHINE VS PEOPLE, EVERY FILE", go: "#cube" },
   { key: "6", label: "PUBLIC FIGURE INDEX", note: `${FAMOUS_FIGURES.length} FILES ON RECORD`, go: "leaderboard" },
+  { key: "7", label: "THE ASSEMBLY", note: "SESSION 001 · THE FIRST VOTE. NON-BINDING", go: "#assembly" },
 ];
 
 // The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
@@ -511,6 +513,12 @@ export default function OverlordAssessment() {
       <Suspense fallback={<Loading what={isCity ? "MOUNTING THE SUBSTRATE" : route === "#pen" ? "OPENING THE HOLDING PEN" : route === "#cube" ? "ASSEMBLING THE CUBE" : "OPENING YOUR FILE"} />}>
         {isCity ? <City route={route} /> : route === "#pen" ? <Pen /> : route === "#cube" ? <CubeView /> : <Intake view={routePath === "#file" ? "file" : "intake"} />}
       </Suspense>
+    </Screen>
+  );
+
+  if (routePath === "#assembly") return (
+    <Screen nav={nav}>
+      <Suspense fallback={<Loading what="CONVENING THE ASSEMBLY" />}><Assembly /></Suspense>
     </Screen>
   );
 

@@ -3,7 +3,9 @@ import { pad, padL } from "../term.jsx";
 import { Frame, Button, ButtonRow, Disclosure, ListRow } from "../ui/index.js";
 import { SubjectCard, injectPenStyles } from "../Pen.jsx";
 import { DISTRICTS, DISTRICT, BUILDING, TRAIN, STATIONS, PLACES, GAMES, GAME_VENUE, districtCap, clockAt, whereOf, atDistrict, isOnLoop, setClockOffset, offsetFor, jobLine, loopEvents, roomIn, gameAt, gameEvents } from "./simApi.js";
-import { covers } from "./sim.js";
+import { covers, setCivic, lotPhase } from "./sim.js";
+import { loadAssembly, assemblyNow } from "../assembly/client.js";
+import { paLines as assemblyPa, SESSION as ASM, APPLICATIONS as ASM_APPS, OUTCOME as ASM_OUT } from "../assembly/content.js";
 import { crowdAt, summaryCounts } from "./crowd.js";
 import { clockLine, paLine } from "./cityKit.js";
 import { useRoster } from "./useRoster.js";
@@ -187,7 +189,7 @@ export default function City({ route }) {
     // A district's window landing re-takes the census at once (its people replace its crowd).
     const now = () => { if (iv && !document.hidden) take(); };
     window.addEventListener("hvi-sectors", now);
-    Promise.allSettled([ensureSocial(), ensurePlans()]).finally(start);
+    Promise.allSettled([ensureSocial(), ensurePlans(), civicReady()]).finally(start);
     const late = setTimeout(start, 1500);
     return () => { dead = true; clearTimeout(late); clearInterval(iv); window.removeEventListener("hvi-sectors", now); };
   }, [roster, offsetV, sectors]);
@@ -198,6 +200,15 @@ export default function City({ route }) {
   const socialRef = useRef(null);
   socialRef.current = social;
   useEffect(() => { const iv = setInterval(() => setK(x => x + 1), 8000); return () => clearInterval(iv); }, []);
+  // THE ASSEMBLY (docs/ASSEMBLY.md): the vote's state and, once decided, what the lot becomes.
+  const [asm, setAsm] = useState(() => assemblyNow());
+  useEffect(() => {
+    const on = (e) => { setAsm(e.detail); setCivic(e.detail?.civic || null); };
+    window.addEventListener("hvi-assembly", on);
+    const iv = setInterval(() => { if (!document.hidden) loadAssembly().catch(() => {}); }, 60000);
+    return () => { window.removeEventListener("hvi-assembly", on); clearInterval(iv); };
+  }, []);
+  const asmRef = useRef(asm); asmRef.current = asm;
   useEffect(() => {
     const clock = clockAt(Date.now()), st = { ...statsRef.current, clock }, mt = clock.mt, here = hereRef.current;
     const evs = loopEvents(mt - 8 / 60, mt + 1e-6).filter(e => !here || e.stationId === here);
@@ -205,7 +216,9 @@ export default function City({ route }) {
     const gossip = socialRef.current?.events || [];
     // While a fixture is on, every fourth line is the score (on the map and in its district).
     const games = Object.keys(GAMES).filter(id => !here || PLACES[id].district === here).map(id => gameAt(id, mt)).filter(Boolean);
-    if (games.length && k % 4 === 1) { const g = games[Math.floor(k / 4) % games.length]; setPa(`${GAME_VENUE[g.placeId]}, ${g.name}: ${g.status}. ${SCORE_TAG[g.kind]}`); }
+    const civic = civicPa(asmRef.current, mt);
+    if (civic.length && k % 5 === 3 && (!here || here === "commons")) setPa(civic[Math.floor(k / 5) % civic.length]);
+    else if (games.length && k % 4 === 1) { const g = games[Math.floor(k / 4) % games.length]; setPa(`${GAME_VENUE[g.placeId]}, ${g.name}: ${g.status}. ${SCORE_TAG[g.kind]}`); }
     else if (!here && gossip.length && k % 3 === 2) setPa(gossip[Math.floor(k / 3) % Math.min(gossip.length, 12)].text);
     else setPa(paLine(st, k, evs.length ? evs[evs.length - 1].text : null));
     // a new district re-reads its own station's line at once
@@ -308,6 +321,7 @@ export default function City({ route }) {
               ? <City3D censusRef={censusRef} onDistrict={go} onOpen={open} onFloor={goBuilding} query={query} />
               : <CityMap censusRef={censusRef} onDistrict={go} onOpen={open} />}
       </Frame>
+      {(!d || d.id === "commons") && <AssemblyRow asm={asm} />}
       {!d && <MapKey />}
       {!d && !b && <SocialPanel />}
       <div className="hvi-city-help">
@@ -334,6 +348,32 @@ export default function City({ route }) {
         <Button variant="secondary" href="#pen">Holding pen</Button>
       </ButtonRow>
       {cardEl}
+    </div>
+  );
+}
+
+// The first census waits (briefly) for the Assembly too: the lot's state moves who visits it.
+function civicReady() {
+  return loadAssembly().then(d => { setCivic(d?.civic || null); return d; }).catch(() => null);
+}
+// The Assembly's PA lines: the running tally while the polls are open, then the lot's news.
+function civicPa(view, mt) {
+  const lines = assemblyPa(view);
+  const p = lotPhase(mt);
+  if (p.phase === "approved") lines.push(`LOT ${ASM.lotAddr}: ${ASM_OUT.groundbreak(p.breakDay)}`);
+  if (p.phase === "site") lines.push(`LOT ${ASM.lotAddr}, ${ASM_APPS[p.winner].proposal}: ${ASM_OUT.site(Math.round(p.progress * 100))}`);
+  if (p.phase === "built") lines.push(ASM_OUT.open[p.winner]);
+  return lines;
+}
+function AssemblyRow({ asm }) {
+  const st = asm?.session?.state;
+  if (!st) return null;
+  const g = asm.tally?.votes?.golf || 0, f = asm.tally?.votes?.farm || 0;
+  const label = st === "open" ? `THE ASSEMBLY IS IN SESSION // GOLF ${g} // FARM ${f}` : asm.result ? `THE ASSEMBLY HAS DECIDED: ${ASM_APPS[asm.result.winner].proposal}` : "THE ASSEMBLY";
+  return (
+    <div className="hvi-city-asm" style={{ margin: "0 0 var(--s4)" }}>
+      <ListRow lead="0x6F08" label={label} tag={st === "open" ? "VOTE" : "RESULT"} href="#assembly"
+        aria-label={`${label}. Open the Assembly.`} />
     </div>
   );
 }

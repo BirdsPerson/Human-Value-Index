@@ -167,6 +167,7 @@ export function drawPose(c, sheet, a, act, x, y, hh0, t, ph, k = 1) {
         case "run": fi = frames > 1 ? Math.floor(t * 8 + ph * 8) % 2 : 0; dy = fi ? -px : 0; break;
         case "punch": dx += every(t, 1.1, 0.2, ph) ? 2 * px * (flip ? 1 : -1) : 0; break;
         case "hammer": case "haul": case "sort": case "rake": case "dig": dy = every(t, 1, 0.35, ph) ? px : 0; break;
+        case "pick": dy = every(t, 2.2, 0.45, ph) ? 3 * px : 0; break;   // stoop to the row, up with the basket
         case "perform": case "sing": dx += Math.round(Math.sin((t * 0.8 + ph) * Math.PI * 2)) * px; break;
         case "view": case "guide": case "confer": case "shout": case "coach": case "lecture": case "preach": case "speak":
           if (every(t, 7, 0.45, ph)) flip = !flip;
@@ -315,6 +316,32 @@ function tool(c, act, x, top, p, flip, t, ph, seated) {
       }
       if (t > 0 && every(t, 2.5, 0.2, ph)) R(c, "#d6c9a0", hx + side * 3 * p, top + 30 * p, p, p);
       break;
+    // THE ASSEMBLY's lot (civicDraw.js): the course and the farm
+    case "golf": {   // address the ball, swing (up over the shoulder, through), watch it go
+      const f = t > 0 ? frac(t / 6 + ph) : 0.2, col = "#d1d5db";
+      if (f < 0.6) { R(c, col, x - side * 2 * p, top + 24 * p, p, 20 * p); R(c, "#374151", x - side * 2 * p - p, top + 43 * p, 3 * p, 2 * p); }
+      else if (f < 0.72) R(c, col, x - side * 8 * p, top + 2 * p, p, 18 * p);
+      else if (f < 0.78) R(c, col, x - (side > 0 ? 14 : 0) * p, top + 30 * p, 14 * p, p);
+      else R(c, col, x + side * 6 * p, top + 4 * p, p, 16 * p);
+      if (f < 0.72) R(c, "#f5f5f5", x + side * 2 * p, top + 45 * p, 2 * p, 2 * p);
+      break;
+    }
+    case "putt": {
+      const f = t > 0 ? frac(t / 5 + ph) : 0.2;
+      R(c, "#d1d5db", x + side * 2 * p, top + 24 * p, p, 20 * p);
+      R(c, "#f5f5f5", x + side * (5 + (f > 0.5 ? (f - 0.5) * 30 : 0)) * p, top + 45 * p, 2 * p, 2 * p);
+      break;
+    }
+    case "caddie": {   // the bag on the shoulder, the clubs out of the top
+      R(c, "#7c2d12", x + side * 6 * p, top + 14 * p, 4 * p, 22 * p);
+      R(c, "#d1d5db", x + side * 6 * p, top + 10 * p, p, 5 * p); R(c, "#d1d5db", x + side * 8 * p, top + 9 * p, p, 6 * p);
+      break;
+    }
+    case "pick": {   // a basket at the hip, filling
+      R(c, "#a16207", hx - 3 * p, hy + 2 * p, 7 * p, 5 * p);
+      R(c, ["#dc2626", "#84cc16", "#f97316"][Math.floor(ph * 3)], hx - 2 * p, hy + p, 5 * p, 2 * p);
+      break;
+    }
     case "tend": case "patch":
       R(c, act === "tend" ? "#e5e5e5" : "#22d3ee", hx - p, hy - 4 * p, 3 * p, 4 * p);
       break;

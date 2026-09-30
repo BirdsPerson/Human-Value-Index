@@ -12,6 +12,8 @@ import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES
 import { drawPose, phaseOf, fitStature } from "./poses.js";
 import { PARK_LOTS, PARK_PLACES, fieldRole } from "./parkGeo.js";
 import { drawParkLot } from "./parkDraw.js";
+import { CIVIC_LOTS, CIVIC_PLACES } from "./civicGeo.js";
+import { drawCivicLot, civicLabel, civicLine } from "./civicDraw.js";
 import { isoItems } from "./archGeo.js";
 import { drawBody, drawYardProp, drawArchGround, doorAt } from "./archDraw.js";
 import { findTarget, findLine } from "./find.js";
@@ -110,7 +112,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       const c = censusRef.current;
       if (!c || c.v === V.censusV) return;
       V.censusV = c.v;
-      const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map(PARK_PLACES.map(id => [id, []])), doors = new Map();
+      const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map([...PARK_PLACES, ...CIVIC_PLACES].map(id => [id, []])), doors = new Map();
       for (const { s, w } of c.list || []) {
         if (!w) continue;
         if (w.sub === "riding" && w.trainId) { const k = `${w.trainId}|${w.car}`; riders.set(k, (riders.get(k) || 0) + 1); }
@@ -356,10 +358,21 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
         const [x, y] = PARK_LOTS[b.id] ? P(R.x0 + 0.6, R.y0 + 0.6, 0.4) : P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, h + 0.5);
         // the grounds' labels carry the fixture: "THE DIAMOND // BOT 5 3-2", "THE BOWL // Q3 14-10"
         const g = PARK_LOTS[b.id] && gameAt(PARK_LOTS[b.id], V.mt);
-        const text = g ? `${b.name} // ${g.label}` : b.name;
+        const text = CIVIC_LOTS[b.id] ? civicLabel(b.id, V.mt) : g ? `${b.name} // ${g.label}` : b.name;
         const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
         if (top) drawLabel(L, 1); else V.labels.push(L);
       };
+      if (CIVIC_LOTS[b.id]) {
+        // THE ASSEMBLY and its lot (civicDraw.js): the lot's face follows the recorded vote
+        const pid = CIVIC_LOTS[b.id];
+        const G = { ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, t: V.reduced ? 0 : performance.now() / 1000, hits: top ? [] : V.hits, w: V.cssW, h: V.cssH };
+        const prevSeats = V.parkSeats.get(pid);
+        const res = drawCivicLot(G, b.id, lod, V.mt, V.park.get(pid) || [], prevSeats || null);
+        V.parkSeats.set(pid, res);
+        if (selected) poly([P(R.x0, R.y0, 0.02), P(R.x1, R.y0, 0.02), P(R.x1, R.y1, 0.02), P(R.x0, R.y1, 0.02)], null, "#4ade80");
+        label();
+        return;
+      }
       if (PARK_LOTS[b.id]) {
         const pid = PARK_LOTS[b.id];
         const G = { ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, t: V.reduced ? 0 : performance.now() / 1000, hits: top ? [] : V.hits, w: V.cssW, h: V.cssH };
@@ -781,6 +794,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       const nF = b.floors.length;
       const game = PARK_LOTS[b.id] && gameAt(PARK_LOTS[b.id], mt);
       const sub = b.id === "hq" ? "CENSUS CLASSIFIED"
+        : CIVIC_LOTS[b.id] ? civicLine(b.id, mt, V.occ[b.id] || 0)
         : PARK_LOTS[b.id] ? `${V.occ[b.id] || 0} ${b.id === "the-bowl" ? "IN THE BOWL" : "ON THE GROUND"} // ${game ? game.short : PARK_LOTS[b.id] === "rec-park" ? "LEISURE IN PROGRESS. IT IS BEING ENJOYED." : "NO FIXTURE. PRACTICE IS PERMITTED."}`
         : `${V.occ[b.id] || 0} INSIDE // ${nF} FLOOR${nF === 1 ? "" : "S"}`;
       ctx.fillText(fitText(sub, pr.w - 20 - closeW), x0 + 10, y0 + 24);
@@ -832,7 +846,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
     function drawRoomCut(b, f, pid, rx, ry, rw, rh, many, mt, now, live) {
       const u = Math.max(1, Math.round(rh / 40));
       const sh = clampN(Math.round(rh * 0.42), 16, 64), sw = sh * (SPRITE_W / SPRITE_H);
-      const pk = `${pid}|${Math.round(rw)}|${rh}|${sh}`;
+      const pk = `${pid}|${typeOf(pid)}|${Math.round(rw)}|${rh}|${sh}`;
       let plan = V.plans.get(pk);
       if (!plan) { plan = roomPlan(typeOf(pid), rw, rh, sw, Math.round(PLACES[pid].cap / PLACES[pid].floors.length)); V.plans.set(pk, plan); }
       const hour = ((mt % 24) + 24) % 24;

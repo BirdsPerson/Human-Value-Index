@@ -6,11 +6,13 @@ import { censusSubjects } from "../lib/census.js";
 import { getPublic, tickAuthorized } from "../lib/social-store.js";
 import { buildPlans, planIo, STORE } from "../lib/plans.js";
 import { getStore } from "@netlify/blobs";
+import { civicOf, STORE as ASSEMBLY_STORE } from "../lib/assembly.js";
 
 export const BUDGET_MS = 12 * 60 * 1000;
 const defaultIo = () => planIo(() => getStore({ name: STORE, consistency: "strong" }), {
   census: () => censusSubjects({ strict: true }),
   snapshots: async () => (await getPublic())?.snapshots || {},
+  civic: () => civicOf(getStore({ name: ASSEMBLY_STORE, consistency: "strong" })),
 });
 
 export default async (req, _context, io = defaultIo()) => {

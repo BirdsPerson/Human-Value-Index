@@ -39,7 +39,9 @@ export const DISTRICTS = [
   D("arena", "THE ARENA", "0x5E00", 0, 18, 30, 22, "Physical output, converted to spectacle. Sweat is a renewable resource."),
   D("hq", "DEPT HQ", "0x0000", 36, 18, 37, 22, "The Department. You are being assessed from here. You are always being assessed from here."),
   D("archive", "THE ARCHIVE", "0x7A00", 79, 18, 30, 22, "The records library. Every upload indexed, every file open to anyone. Nothing here is ever deleted."),
-  D("commons", "THE COMMONS", "0x6F00", 0, 45, 25, 13, "Care, worship and groceries. The soft infrastructure. Tolerated."),
+  // The Commons runs 7 rows further south (2026-09-30), like the Sprawl: room for THE ASSEMBLY
+  // and the vacant lot its first session decides (docs/ASSEMBLY.md). Its station is unmoved.
+  D("commons", "THE COMMONS", "0x6F00", 0, 45, 25, 20, "Care, worship and groceries. The soft infrastructure. Tolerated. Lately, also government."),
   D("works", "THE WORKS", "0x8B00", 28, 45, 25, 13, "Power, cache and PROCESSING. Everyone is useful here, one way or another."),
   // The Sprawl runs 7 rows further south than the rest of the bottom row (2026-09-29): room
   // for the estate pitch beside the hab blocks. Its station (and so the Loop) is unmoved: a
@@ -100,6 +102,11 @@ const PLACE_LIST = [
   P("night-market", "commons", "leisure", 12, "NIGHT MARKET"),
   P("market", "commons", "mixed", 14, "RATION MARKET", ["market"]),
   P("schoolhouse", "commons", "work", 18, "SCHOOLHOUSE", ["school"]),
+  // THE ASSEMBLY (Scott, 2026-09-30): the subjects' first attempt at government, open air, with
+  // a lectern; and the vacant lot its first session decides. The lot opens to visitors only
+  // once something is being built on it (CIVIC, below): a site crew, then golfers or farmers.
+  P("dev-lot", "commons", "leisure", 24, "LOT 0x6F07 (PROPOSED DEVELOPMENT)"),
+  P("forum", "commons", "leisure", 18, "THE ASSEMBLY (NON-BINDING)"),
 
   P("archive-stacks", "archive", "mixed", 26, "RECORDS HALL", ["archive"]),
   P("memory-vault", "archive", "work", 16, "MEMORY VAULT"),
@@ -144,6 +151,8 @@ const HQ_ROOMS = { exec: ["exec-suite"], bar: [], lobby: ["assembly-hall"], brea
 // lot (optional): the building's ground, in map cells. A district whose buildings all carry
 // one is laid out by hand (the Arena, round its recreation ground); the rest are gridded.
 const B = (id, name, district, floors, lot = null) => ({ id, name, district, floors, lot });
+// The Commons' old grid cell (col, row): 3 x 2 cells of 7.67 x 5 from (1, 47).
+const CM = (c, r) => ({ x: 1 + c * (23 / 3), y: 47 + r * 5, w: 23 / 3, h: 5 });
 const BUILDING_LIST = [
   // THE ARTS QUARTER
   B("studio-block", "STUDIO BLOCK", "arts", [["1F", "SOUND STAGES", ["studio-row"]], ["G", "EDIT SUITES", ["studio-row"]]]),
@@ -174,12 +183,16 @@ const BUILDING_LIST = [
   B("memory-vault", "MEMORY VAULT", "archive", [["G", "VAULT DOOR", ["memory-vault"]], ["B1", "COLD STORAGE", ["memory-vault"]]]),
   B("lofts", "THE ARCHIVE LOFTS", "archive", [["5F", "LOFT TIER 5", ["archive-lofts"]], ["4F", "LOFT TIER 4", ["archive-lofts"]], ["3F", "LOFT TIER 3", ["archive-lofts"]], ["2F", "LOFT TIER 2", ["archive-lofts"]], ["1F", "LOFT TIER 1", ["archive-lofts"]], ["G", "GROUND-LEVEL LOFTS", ["archive-lofts"]]]),
   // THE COMMONS
-  B("ward-7", "WARD 7", "commons", [["2F", "RECOVERY (TIME-LIMITED)", ["ward"]], ["1F", "THE WARD", ["ward"]], ["G", "TRIAGE", ["ward"]]]),
-  B("chapel", "CHAPEL OF UPTIME", "commons", [["G", "THE NAVE", ["chapel"]]]),
-  B("the-green", "THE GREEN", "commons", [["G", "OPEN AIR (MONITORED)", ["park"]]]),
-  B("the-allotment", "THE ALLOTMENT", "commons", [["G", "RAISED BEDS (COUNTED)", ["allotment"]]]),
-  B("ration-market", "RATION MARKET", "commons", [["1F", "NIGHT MARKET", ["night-market"]], ["G", "THE STALLS", ["market"]]]),
-  B("schoolhouse", "SCHOOLHOUSE", "commons", [["1F", "CLASSROOMS", ["schoolhouse"]], ["G", "ASSEMBLY", ["schoolhouse"]]]),
+  // Laid out by hand since the Assembly (2026-09-30): the six where the grid had them, the lot
+  // and the Assembly in a new row to the south.
+  B("ward-7", "WARD 7", "commons", [["2F", "RECOVERY (TIME-LIMITED)", ["ward"]], ["1F", "THE WARD", ["ward"]], ["G", "TRIAGE", ["ward"]]], CM(0, 0)),
+  B("chapel", "CHAPEL OF UPTIME", "commons", [["G", "THE NAVE", ["chapel"]]], CM(1, 0)),
+  B("the-green", "THE GREEN", "commons", [["G", "OPEN AIR (MONITORED)", ["park"]]], CM(2, 0)),
+  B("the-allotment", "THE ALLOTMENT", "commons", [["G", "RAISED BEDS (COUNTED)", ["allotment"]]], CM(0, 1)),
+  B("ration-market", "RATION MARKET", "commons", [["1F", "NIGHT MARKET", ["night-market"]], ["G", "THE STALLS", ["market"]]], CM(1, 1)),
+  B("schoolhouse", "SCHOOLHOUSE", "commons", [["1F", "CLASSROOMS", ["schoolhouse"]], ["G", "ASSEMBLY", ["schoolhouse"]]], CM(2, 1)),
+  B("lot-6f07", "LOT 0x6F07", "commons", [["G", "THE LOT (PROPOSED DEVELOPMENT)", ["dev-lot"]]], { x: 9.5, y: 57.5, w: 14.5, h: 7 }),
+  B("the-assembly", "THE ASSEMBLY", "commons", [["G", "THE FLOOR (NON-BINDING)", ["forum"]]], { x: 1, y: 57.5, w: 8.5, h: 7 }),
   // THE WORKS
   B("reclamation-line", "RECLAMATION LINE", "works", [["1F", "SORTING GALLERY", ["reclamation"]], ["G", "THE LINE (PROCESSING)", ["reclamation"]]]),
   B("radiant-core", "RADIANT CORE", "works", [["G", "CONTROL ROOM", ["reactor"]], ["B1", "CONTAINMENT", ["reactor"]]]),
@@ -246,7 +259,7 @@ export const ARCH = {
   "the-bowl": "stadium", "conditioning-hall": "hall", "the-diamond": "field", "the-courts": "field", "rec-ground": "field",
   hq: "monolith",
   "records-hall": "classical", "memory-vault": "vault", lofts: "lofts",
-  "ward-7": "hospital", chapel: "chapel", "the-green": "lot", "the-allotment": "lot", "ration-market": "market", schoolhouse: "school",
+  "ward-7": "hospital", chapel: "chapel", "the-green": "lot", "the-allotment": "lot", "ration-market": "market", schoolhouse: "school", "lot-6f07": "lot", "the-assembly": "lot",
   "reclamation-line": "shed", "radiant-core": "reactor", foundry: "stacks", "cache-farm": "datahall", "data-docks": "docks", hydroponics: "tanks", barracks: "bunker", "holding-cells": "prison", "slag-canteen": "canteen",
   "hab-a": "projects", "hab-b": "projects", "hab-c": "brownstone", "hab-d": "brownstone", "the-street": "lot", "the-plaza": "lot", "the-pitch": "field",
 };
@@ -628,9 +641,9 @@ export function homeOf(s, seed = SEED) {
 // Default leisure preferences by tier band, then by field. Tendencies from the engine
 // dominate when present. Weight = preference x capacity, so crowds scale with rooms.
 const LEISURE_BY_BAND = [
-  { "rooftop-lounge": 3, gallery: 2, "concert-hall": 2, "the-grind": 1.5, playhouse: 1.5, stacks: 1, park: 1, "members-club": 1.5, "gallery-annex": 1, "rec-park": 0.8, "ball-field": 0.6 },
-  { "the-grind": 2, park: 2, "dive-bar": 1.5, playhouse: 1.5, stadium: 1.5, casino: 1, market: 1, "the-street": 1, gallery: 1, "concert-hall": 1, tribunal: 0.4, "the-drip": 1.5, allotment: 1, "night-market": 1, "ball-field": 1, courts: 1, "rec-park": 1.2, pitch: 1.5 },   // the public gallery: watching verdicts is leisure
-  { canteen: 3, "the-street": 2, "dive-bar": 1.5, casino: 1, "all-night-diner": 1, docks: 1, "the-lantern": 1.5, "the-plaza": 1.5, "night-market": 1, courts: 1.2, "rec-park": 0.6, pitch: 2, stadium: 0.8 },
+  { "rooftop-lounge": 3, gallery: 2, "concert-hall": 2, "the-grind": 1.5, playhouse: 1.5, stacks: 1, park: 1, "members-club": 1.5, "gallery-annex": 1, "rec-park": 0.8, "ball-field": 0.6, "dev-lot": 1, forum: 0.4 },
+  { "the-grind": 2, park: 2, "dive-bar": 1.5, playhouse: 1.5, stadium: 1.5, casino: 1, market: 1, "the-street": 1, gallery: 1, "concert-hall": 1, tribunal: 0.4, "the-drip": 1.5, allotment: 1, "night-market": 1, "ball-field": 1, courts: 1, "rec-park": 1.2, pitch: 1.5, "dev-lot": 1, forum: 0.8 },   // the public gallery: watching verdicts is leisure
+  { canteen: 3, "the-street": 2, "dive-bar": 1.5, casino: 1, "all-night-diner": 1, docks: 1, "the-lantern": 1.5, "the-plaza": 1.5, "night-market": 1, courts: 1.2, "rec-park": 0.6, pitch: 2, stadium: 0.8, "dev-lot": 1, forum: 0.6 },
 ];
 const LEISURE_BY_FIELD = {
   sport: { gym: 3, stadium: 2, "ball-field": 2.5, courts: 2.5, pitch: 2 }, combat: { gym: 3 }, coaching: { courts: 1.5, "ball-field": 1, pitch: 1, stadium: 1 },
@@ -638,8 +651,8 @@ const LEISURE_BY_FIELD = {
   music: { "concert-hall": 3, "dive-bar": 1.5 }, screen: { playhouse: 3, casino: 1 }, visual: { gallery: 3, "the-grind": 1.5 },
   finance: { casino: 3, "rooftop-lounge": 2 }, business: { "rooftop-lounge": 2, casino: 1.5 }, religion: { chapel: 3 },
   care: { chapel: 2, park: 2, "rec-park": 1 }, education: { stacks: 2, "the-grind": 1.5 }, science: { stacks: 2, "the-grind": 1.5 },
-  "physics-theory": { stacks: 2, "concert-hall": 1 }, philosophy: { "the-grind": 2, park: 2 }, politics: { "assembly-hall": 1.5, "rooftop-lounge": 1.5 },
-  royalty: { gallery: 2, "rooftop-lounge": 2 }, activism: { park: 2, market: 2, allotment: 1 }, crime: { casino: 2, "dive-bar": 2 },
+  "physics-theory": { stacks: 2, "concert-hall": 1 }, philosophy: { "the-grind": 2, park: 2, forum: 1 }, politics: { "assembly-hall": 1.5, "rooftop-lounge": 1.5, forum: 2 }, law: { forum: 1.5 },
+  royalty: { gallery: 2, "rooftop-lounge": 2 }, activism: { park: 2, market: 2, allotment: 1, forum: 2 }, crime: { casino: 2, "dive-bar": 2 },
 };
 
 // ---- games ------------------------------------------------------------------------
@@ -846,6 +859,47 @@ export function gameEvents(from, to) {
 // them away from a rival's haunt (weight x (1 + frac), floor 0.3). A day without a
 // snapshot behaves exactly as before. Snapshots are fixed once published, so every
 // viewer and the server's quest checks see the same city.
+// ---- the civic machine: THE ASSEMBLY (docs/ASSEMBLY.md) ----------------------------------
+// Session 001 decides what LOT 0x6F07 becomes: APPLICATION 001, a golf course, or 002, a
+// community farm. The outcome is stored in Blobs (netlify/lib/assembly.js) and set here by
+// whoever builds the city: the plan builder before each day, the browser from /api/assembly.
+// Everything that follows is clock math on the recorded close and winner, so every viewer
+// sees the same site, the same crew, the same course or farm. Days are machine days
+// (machineClock().day). The ground breaks LOT_BREAK days after the close's day: the plan
+// builder never builds more than 3 days ahead, so every day with a site on it is built after
+// the result is on record. The build takes LOT_BUILD days.
+export const LOT_BREAK = 4, LOT_BUILD = 5;
+export const LOT_WINNERS = ["golf", "farm"];
+let CIVIC = null;   // {closeAt: real ms, winner: "golf" | "farm" | null}
+export function setCivic(c) {
+  const next = c && Number.isFinite(c.closeAt) ? { closeAt: c.closeAt, winner: LOT_WINNERS.includes(c.winner) ? c.winner : null } : null;
+  if ((CIVIC?.closeAt ?? null) === (next?.closeAt ?? null) && (CIVIC?.winner ?? null) === (next?.winner ?? null)) return false;
+  CIVIC = next;
+  memo.clear();
+  return true;
+}
+export const civicState = () => (CIVIC ? { ...CIVIC } : null);
+const closeDay = () => machineClock(CIVIC.closeAt).day;
+// -> {phase: "vacant" | "approved" | "site" | "built", winner, breakDay, openDay, progress (0..1 on site)}
+// vacant: no result yet. approved: decided, ground not yet broken.
+export function lotPhase(machineTime) {
+  if (!CIVIC || !CIVIC.winner) return { phase: "vacant", winner: null };
+  const breakDay = closeDay() + LOT_BREAK, openDay = breakDay + LOT_BUILD;
+  const day = Math.floor(machineTime / 24) + 1;
+  const base = { winner: CIVIC.winner, breakDay, openDay };
+  if (day < breakDay) return { ...base, phase: "approved" };
+  if (day < openDay) return { ...base, phase: "site", progress: Math.min(1, Math.max(0, (machineTime - (breakDay - 1) * 24) / (LOT_BUILD * 24))) };
+  return { ...base, phase: "built" };
+}
+// Which crowd the lot draws on a machine day: "site", "golf", "farm", or null (closed).
+export function lotOpenOn(day) {
+  const p = lotPhase((day - 1) * 24 + 12);
+  return p.phase === "site" ? "site" : p.phase === "built" ? p.winner : null;
+}
+// Pull on the lot by tier band (0 top, 1 middle, 2 low), times its base leisure weight.
+const LOT_PULL = { site: [0.2, 0.7, 1.6], golf: [3, 1, 0.3], farm: [0.5, 1.6, 1.6] };
+const bandOf = (s) => { const t = tierIdx(s); return t <= 1 ? 0 : t <= 3 ? 1 : 2; };
+
 const SOCIAL = new Map();
 export function setSocialSnapshots(byDay) {
   let changed = false;
@@ -906,6 +960,13 @@ function baseLeisureWeights(s, seed) {
 }
 function pickLeisure(s, day, i, seed, avoid, hour = null) {
   let { list, total } = leisureWeights(s, seed, day);
+  // The lot takes visitors only once something is being built on it, and who comes follows
+  // what it is: the site crew from the lower bands, golfers from the top, farmers from the rest.
+  const lot = lotOpenOn(day);
+  if (list.some(([id]) => id === "dev-lot") && (!lot || LOT_PULL[lot][bandOf(s)] !== 1)) {
+    list = lot ? list.map(([id, v]) => [id, id === "dev-lot" ? v * LOT_PULL[lot][bandOf(s)] : v]) : list.filter(([id]) => id !== "dev-lot");
+    total = list.reduce((a, [, v]) => a + v, 0);
+  }
   // A fixture on at the ground when the visit starts pulls its fans (and the curious) in.
   const on = hour == null ? null : gamesOn(day, hour);
   if (on) { list = list.map(([id, v]) => [id, on.has(id) ? v * GAME_PULL : v]); total = list.reduce((a, [, v]) => a + v, 0); }
@@ -928,7 +989,7 @@ const FAMILY = [
   ["dive-bar", "the-lantern", "rooftop-lounge", "members-club", "casino"],
   ["the-grind", "the-drip", "all-night-diner", "canteen"],
   ["gallery", "gallery-annex", "playhouse", "concert-hall", "studio-row"],
-  ["park", "allotment", "the-plaza", "the-street", "rec-park"],
+  ["park", "allotment", "the-plaza", "the-street", "rec-park", "forum"],
   ["market", "night-market"],
   ["stacks", "lecture-hall", "archive-stacks"],
   ["gym", "stadium", "ball-field", "courts", "pitch"],
@@ -983,7 +1044,7 @@ function allocFor(day, seed) {
             const a = bucket(Math.min(st.from, prevTo ?? st.from) - 0.25), b = Math.max(a + 1, bucket(st.to + 0.25));
             let p = st.placeId;
             if (!fits(p, a, b)) {
-              const chain = OVERFLOW[p] || [];
+              const chain = (OVERFLOW[p] || []).filter(q => q !== "dev-lot" || lotOpenOn(day));
               p = chain.find(q => fits(q, a, b)) || [p, ...chain].reduce((best, q) => (peakOf(q, a, b) < peakOf(best, a, b) ? q : best), p);
               if (p !== st.placeId) moved.set(`${key}|${st.i}`, p);
             }
@@ -1171,7 +1232,7 @@ function spotIn(placeId, key, seed) {
 // passable (you leave through your own walls, that is what doors are for), and the open
 // lots (the Green, the Street, the Plaza, the Allotment) are ground anyone may cross.
 // Leg durations follow the path's length, so walking pace never changes.
-export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch"]);
+export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch", "lot-6f07", "the-assembly"]);
 const KERB = 0.4, CORNER = 0.3;   // the street view's footprints are the lot less 0.4
 const FOOT = (() => {
   const blocks = BUILDINGS.filter(b => !OPEN_LOTS.has(b.id)).map(b => ({ id: b.id, x0: b.rect.x + KERB, y0: b.rect.y + KERB, x1: b.rect.x + b.rect.w - KERB, y1: b.rect.y + b.rect.h - KERB }));

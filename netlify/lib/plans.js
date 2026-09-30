@@ -137,9 +137,13 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
       // Read everything first: a failed census or ledger read builds nothing.
       roster = fullRoster(await io.census());
       const snaps = (await io.snapshots()) || {};
+      // THE ASSEMBLY's outcome (netlify/lib/assembly.js): what the vacant lot is becoming. Read
+      // like the census: a failed read builds nothing (a listed day never changes).
+      const civic = io.civic ? await io.civic() : null;
       SIM.clearPlans();   // the builder reads the sim, never a plan
       SIM.clearSocialSnapshots();
       SIM.setSocialSnapshots(snaps);
+      SIM.setCivic(civic);
       if (opts.memoCap !== 0) SIM.setMemoCap(opts.memoCap ?? Math.max(200000, roster.length * 60));
       SIM.setRoster(roster);
       for (const day of missing) {
