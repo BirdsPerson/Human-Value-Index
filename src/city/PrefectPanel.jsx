@@ -100,7 +100,7 @@ export function PrefectCard({ id, onClose }) {
           </div>
           <div className="hvi-civic-line">{P.why}</div>
           {pf ? <>
-            <div className="hvi-civic-kv" style={{ margin: "var(--s3) 0" }}>
+            <div className="hvi-civic-kv" style={{ margin: "var(--s3) 0", gridTemplateColumns: "10ch minmax(0, 1fr)" }}>
               <span className="k">DIRECTIVE</span>
               <span className="v"><b>{directiveLine(pf)}</b>. {DIRECTIVES[pf.directive].desc}</span>
               <span className="k">DECREE</span>
