@@ -950,6 +950,21 @@ sittings), `netlify/lib/elections.js` + `netlify/functions/elections.js` (`/api/
   SUBJECT <TAG>, never the case number) can DECLINE or RESIGN from MY FILE
   (`src/elections/MySeat.jsx`, `c<NNN>/resign`), and the runner-up serves the rest of the term.
   Checks: check-civic section 3d.
+- **Candidacy (2026-09-30).** Scott wants players to be able to run: with other players' citizens
+  closed, a player could only vote for itself. A player whose citizen is on the census and lives
+  or works in a district may DECLARE there (the race's write-in panel, writing yourself in, or
+  MY FILE's council panel; `POST /api/elections {caseId, declare: {district, withdraw?}}`),
+  and WITHDRAW until the close. A declared citizen joins that race's write-in picker for every
+  file, as SUBJECT and its tag, marked DECLARED, STATEMENT NONE ON FILE (no free text).
+  Undeclared citizens stay closed. Refused, with one neutral line: unassessed, a harm finding
+  (made or pending), not on the census, not living or working there. A later harm finding
+  withdraws every candidacy (`intake-score.js` -> `dropCandidacy`). Limits as ballots: 4 files
+  per address and 2 per device (their own lists, `c<NNN>/dip`, `ddev`), 60 POSTs per
+  address-hour (shared), 10 declares-or-withdraws per file per cycle. Stored as
+  `c<NNN>/decl/<voterKey>` and `c<NNN>/cands` (voter key -> citizen key; never served); the
+  public view adds `declared` (a count per race, and a flag on the board's write-ins). The board
+  threshold and every winner rule are unchanged; ballots cast before a withdrawal still count.
+  `GET /api/elections?candidacy=1&caseId=` feeds MY FILE. Checks: check-civic section 3d.
 - **Calendar.** The first request anchors it (`hvi-elections` `anchor`): cycle 1's polls are
   open 3 real days from then. A term is 15 seasons = 420 machine days = exactly 7 real days;
   cycle k opens 7 real days after cycle k-1 (so re-election opens 4 real days into a term and

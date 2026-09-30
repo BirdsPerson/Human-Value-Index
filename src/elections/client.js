@@ -52,3 +52,23 @@ export async function resignSeat(caseId, cycle, district) {
   if (!r.ok) throw new Error(d.error || "The Council did not accept the resignation. It gave no reason.");
   return d;
 }
+
+// A player declares its citizen a candidate in a race (or withdraws). -> {declared: [district], key, name}
+export async function declareCandidacy(caseId, district, withdraw = false) {
+  const r = await fetch("/api/elections", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ caseId, declare: { district, withdraw }, device: deviceId() }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || "The Council did not accept the filing. It gave no reason.");
+  loadElections({ force: true }).catch(() => {});
+  return d;
+}
+
+// MY FILE's candidacy panel. -> {open, key, name, districts: [{id, name, declared, may}]}
+export async function loadCandidacy(caseId) {
+  const r = await fetch(`/api/elections?candidacy=1&caseId=${encodeURIComponent(caseId)}`, { cache: "no-store" });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || "The Council is unreachable.");
+  return d;
+}

@@ -534,6 +534,126 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   ok(vd.races[home].result.declined && vd.races[home].result.key === rr.order[1][0], "the page says the seat was declined");
   ok((await EL.mySeats(store, SELF, v0.closeAt + 30)).length === 0, "the seat leaves MY FILE");
   C.setSeats([]);
+
+  // CANDIDACY: a player declares where its citizen lives or works; other files may then write it
+  // in (as SUBJECT and its tag, no statement); undeclared citizens stay closed; limits; no ids.
+  {
+    const tags = Array.from({ length: 24 }, (_, i) => `q${String(i).padStart(3, "0")}`);
+    const cz = tags.map(t => ({ slug: `citizen-${t}`, name: `Subject ${t.toUpperCase()}`, kind: "citizen", score: 500, tier: "ORDINARY" }));
+    const roster3 = [...roster2, ...cz];
+    const pool3 = EL.writeinPool(roster3, meta, closed);
+    const caseOf = (t) => `HVI-D000${t.toUpperCase()}`;
+    const ok1 = { history: [{ score: 500, tier: "ORDINARY", breakdown: base[0].breakdown }] };
+    for (const t of tags) cases.set(caseOf(t), ok1);
+    // two citizens sharing a race
+    const dOf = new Map(cz.map(s => [s.slug, EL.districtsOf(s)]));
+    let A = null, B = null, D = null;
+    for (const a of cz) {
+      for (const b of cz) if (a !== b) { const d = dOf.get(a.slug).find(x => dOf.get(b.slug).includes(x) && sl[x]?.length); if (d) { A = a; B = b; D = d; break; } }
+      if (A) break;
+    }
+    ok(A && B && D, `two citizens share a race (${D})`);
+    const U = cz.find(s => s !== A && s !== B && dOf.get(s.slug).includes(D));
+    const tagOf = (s) => s.slug.slice(8);
+    const cA = caseOf(tagOf(A)), cB = caseOf(tagOf(B));
+    globalThis.__blobs = new Map();
+    const st = getStore({ name: EL.STORE });
+    lim.clear();
+    const io3 = { ...io, store: st, census: async () => roster3, writeins: async () => pool3 };
+    const T = t0 + 1000;
+    await EL.publicView(io3, t0);
+    const decl = (caseId, district, o = {}) => EL.declareCandidacy(io3, { caseId, district, ip: "dip-a", device: null, now: T, ...o });
+    const ballot = (caseId, writein, o = {}) => EL.castBallot(io3, { caseId, district: D, writein, candidate: null, ip: `b-${caseId}`, device: null, now: T, ...o });
+    // the live cycle: a few ballots first, then a snapshot of everything but the candidacy keys
+    await ballot(caseOf(tags[20]), null, { candidate: sl[D][0].key, writein: null });
+    const liveKeys = () => JSON.stringify([...globalThis.__blobs.get(EL.STORE)].filter(([k]) => !/\/(decl|cands|dip|ddev)/.test(k)).map(([k, v]) => [k, v.data]));
+    const snap = liveKeys();
+    // not yet declared: nobody else can pick A
+    let r = await ballot(cB, A.slug);
+    ok(r.status === 400 && r.body.error === EL.WRITEIN_REFUSED, "an undeclared citizen: refused, neutrally");
+    ok(!EL.writeinSearch(pool3, D, A.name, EL.selfWriteIn(pool3, cB, ok1), { declared: [] }).some(h => h.key === A.slug), "an undeclared citizen: never offered to others");
+    // declare
+    r = await decl(cA, D);
+    ok(r.status === 200 && r.body.declared.includes(D) && r.body.key === A.slug && r.body.name === `Subject ${tagOf(A).toUpperCase()}`, "a player declares in a race where its citizen lives or works");
+    r = await decl(cA, D);
+    ok(r.status === 200 && r.body.unchanged, "declaring twice changes nothing");
+    const awayA = DIST.find(x => sl[x]?.length && !dOf.get(A.slug).includes(x));
+    r = await decl(cA, awayA);
+    ok(r.status === 403 && r.body.error === EL.DECLARE_REFUSED, "not where it neither lives nor works: refused, neutrally");
+    ok(liveKeys() === snap, "declaring touches no ballot, tally or cycle record");
+    let cands = await EL.readCands(st, 1);
+    ok(Object.values(cands[D]).includes(A.slug) && Object.keys(cands[D]).every(k => k === EL.voterKey(cA)), "the list of the declared, keyed by voter key");
+    // others can find and pick it
+    const declared = Object.values(cands[D]);
+    const hits = EL.writeinSearch(pool3, D, `subject ${tagOf(A)}`, EL.selfWriteIn(pool3, cB, ok1), { declared });
+    ok(hits[0]?.key === A.slug && hits[0].declared && !hits[0].self && hits[0].name === `Subject ${tagOf(A).toUpperCase()}`, "another file finds the declared citizen by tag");
+    ok(!EL.writeinSearch(pool3, D, U.name, null, { declared }).some(h => h.key === U.slug), "undeclared citizens stay out of the picker");
+    ok(EL.writeinFor(pool3, awayA, A.slug, null, declared) === null, "declared in one race is not a write-in in another");
+    r = await ballot(cB, A.slug);
+    ok(r.status === 200 && r.body.mine[D] === A.slug && r.body.mineWrite[D].name === `Subject ${tagOf(A).toUpperCase()}`, "another player writes the declared citizen in");
+    r = await ballot(cB, U.slug);
+    ok(r.status === 400 && r.body.error === EL.WRITEIN_REFUSED, "an undeclared citizen in the same race: still refused");
+    // the board: declared shown at the same threshold
+    let v = await EL.publicView(io3, T + 10);
+    ok(v.races[D].declared === 1 && v.races[D].writeins.length === 0 && v.races[D].writeinOther === 1, "declared: counted; below the threshold the write-in is only a number");
+    await ballot(caseOf(tags[21]), A.slug); await ballot(caseOf(tags[22]), A.slug);
+    v = await EL.publicView(io3, T + 20);
+    const wa = v.races[D].writeins.find(w => w.key === A.slug);
+    ok(wa && wa.votes === 3 && wa.declared && wa.living && wa.platform === null, `at ${EL.WRITEIN_SHOW} ballots the declared citizen joins the board, no statement`);
+    const my = await EL.myCandidacy(io3, cA, T + 20);
+    ok(my.open && my.districts.find(x => x.id === D)?.declared && my.districts.every(x => dOf.get(A.slug).includes(x.id)), "MY FILE lists where it may stand and where it has declared");
+    const pub = JSON.stringify(v) + JSON.stringify(my) + JSON.stringify(hits) + JSON.stringify(r.body);
+    for (const c of [cA, cB]) ok(!pub.includes(c) && !pub.includes(c.slice(4)) && !pub.includes(EL.voterKey(c)), "no case number or voter key in any response");
+    ok(!pub.includes('"by"') || !JSON.stringify(v).includes(EL.voterKey(cA)), "the list of the declared is never served");
+    // the harm-found, the unassessed and the off-census cannot declare
+    cases.set("HVI-D000HARM", { history: [{ score: 300, breakdown: bad.serious.breakdown }] });
+    ok((await decl("HVI-D000HARM", D)).body.error === EL.DECLARE_REFUSED, "a file with a harm finding cannot declare, the same words");
+    cases.set("HVI-D000PEND", { history: [{ score: 300, breakdown: base[0].breakdown }], harmReviewPending: true });
+    ok((await decl("HVI-D000PEND", D)).body.error === EL.DECLARE_REFUSED, "a harm review pending: refused");
+    cases.set("HVI-D000NONE", { history: [] });
+    ok((await decl("HVI-D000NONE", D)).status === 403, "an unassessed file cannot declare");
+    cases.set("HVI-D000ZZZZ", ok1);
+    ok((await decl("HVI-D000ZZZZ", D)).body.error === EL.DECLARE_REFUSED, "a citizen not on the census cannot declare");
+    ok((await decl("HVI-D000MISS", D)).status === 404, "no file, no filing");
+    // limits: per device, per address, per case per cycle
+    const dev = "ab".repeat(16);
+    const onDev = cz.filter(s => s !== A).slice(0, 3);
+    const rd = [];
+    for (const s of onDev) rd.push(await decl(caseOf(tagOf(s)), dOf.get(s.slug).find(x => sl[x]?.length), { ip: "dip-dev", device: dev }));
+    ok(rd[0].status === 200 && rd[1].status === 200 && rd[2].status === 429, `${EL.LIMITS.casesPerDevice} files declare from one device, no more`);
+    const onIp = cz.filter(s => s !== A && !onDev.includes(s)).slice(0, EL.LIMITS.casesPerIp + 1);
+    const ri = [];
+    for (const s of onIp) ri.push(await decl(caseOf(tagOf(s)), dOf.get(s.slug).find(x => sl[x]?.length), { ip: "dip-ip" }));
+    ok(ri.slice(0, -1).every(x => x.status === 200) && ri.at(-1).status === 429, `${EL.LIMITS.casesPerIp} files declare from one address, no more`);
+    const tog = onIp[0], tc = caseOf(tagOf(tog)), td = dOf.get(tog.slug).find(x => sl[x]?.length);
+    let last;
+    for (let i = 0; i < EL.LIMITS.declarations; i++) last = await decl(tc, td, { ip: "dip-ip", withdraw: i % 2 === 0 });
+    ok(last.status === 429, `${EL.LIMITS.declarations} filings per file per cycle, then no more`);
+    ok((await EL.declareCandidacy(io3, { caseId: cA, district: D, ip: "dip-a", device: null, now: v0.closeAt + 1 })).status === 403, "no filings after the close");
+    // withdraw: others can no longer pick it; ballots already cast still count; places given back
+    r = await decl(cA, D, { withdraw: true });
+    ok(r.status === 200 && r.body.withdrawn && !r.body.declared.length, "a candidacy is withdrawn");
+    cands = await EL.readCands(st, 1);
+    ok(!Object.values(cands[D] || {}).includes(A.slug), "off the list of the declared");
+    ok(!(await st.get(EL.KEYS.dip(1, "dip-a"), { type: "json" })).keys.includes(EL.voterKey(cA)), "the address's place is given back");
+    r = await ballot(caseOf(tags[23]), A.slug);
+    ok(r.status === 400 && r.body.error === EL.WRITEIN_REFUSED, "withdrawn: no new write-ins");
+    v = await EL.publicView(io3, T + 30);
+    ok(v.races[D].writeins.find(w => w.key === A.slug)?.votes === 3 && !v.races[D].writeins.find(w => w.key === A.slug).declared, "ballots already cast still count");
+    // a harm finding withdraws it (intake-score.js)
+    await decl(cB, D, { ip: "dip-b" });
+    ok(Object.values((await EL.readCands(st, 1))[D]).includes(B.slug), "B declared");
+    eq(await EL.dropCandidacy(st, cB, T + 40), [D], "a harm finding drops every candidacy the file holds");
+    ok(!Object.values((await EL.readCands(st, 1))[D] || {}).includes(B.slug), "dropped from the list");
+    // the live cycle's records: untouched by any of it (the ballots aside)
+    await ballot(cB, null, { writein: null }); await ballot(caseOf(tags[21]), null, { writein: null }); await ballot(caseOf(tags[22]), null, { writein: null });
+    const t2 = await EL.readTally(st, 1, D);
+    ok(EL.countsOf(t2.seen, sl[D].length).writeins[A.slug] === undefined, "the test ballots withdrawn");
+    const liveNow = JSON.parse(liveKeys()).filter(([k]) => !/\/(v|t|ip)\//.test(k) && !/\/t\//.test(k));
+    const liveThen = JSON.parse(snap).filter(([k]) => !/\/(v|t|ip)\//.test(k) && !/\/t\//.test(k));
+    eq(liveNow, liveThen, "declaring and withdrawing leave the cycle's meta, anchor and result as they were");
+    SIM.setRoster(roster);
+  }
 }
 
 // ---- 4. the size: per district, not per subject ---------------------------------------------------

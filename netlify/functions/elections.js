@@ -10,6 +10,10 @@
 //        subjects on file who live or work there and may be written in, and with a case number
 //        the file's own citizen. -> {hits: [{key, name, living, self}], self: {key, name} | null}
 // POST   {caseId, resign: {cycle, district}}   a player citizen elected declines or resigns.
+// POST   {caseId, declare: {district, withdraw?}, device}   a player declares (or withdraws) its
+//        citizen's candidacy in a race where it lives or works; others may then write it in.
+// GET    /api/elections?candidacy=1&caseId=   MY FILE's candidacy panel: where the file's citizen
+//        may stand and where it has declared.
 import { getStore } from "@netlify/blobs";
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit, listFigures } from "../lib/store.js";
@@ -18,7 +22,7 @@ import { FAMOUS_FIGURES, slugify } from "../../src/figures.js";
 import { censusSubjects } from "../lib/census.js";
 import { fullRoster } from "../../src/city/roster.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE } from "../lib/http.js";
-import { STORE, publicView, castBallot, myBallots, mySeats, resignSeat, writeinPool, writeinSearch, selfWriteIn, isOpen, KEYS } from "../lib/elections.js";
+import { STORE, publicView, castBallot, myBallots, mySeats, resignSeat, writeinPool, writeinSearch, selfWriteIn, isOpen, KEYS, declareCandidacy, myCandidacy, readCands } from "../lib/elections.js";
 import { cycleAt } from "../../src/city/councilCalendar.js";
 
 const store = () => getStore({ name: STORE, consistency: "strong" });
@@ -50,6 +54,7 @@ export default async (req, context) => {
     if (req.method === "GET") {
       const u = new URL(req.url);
       const caseId = String(u.searchParams.get("caseId") || "").trim().toUpperCase();
+      if (u.searchParams.has("candidacy")) return json(200, isCaseId(caseId) ? await myCandidacy(io, caseId) : { open: false, districts: [] }, noStore);
       if (u.searchParams.has("writein")) return json(200, await pickerOf(io, String(u.searchParams.get("writein")).toLowerCase(), u.searchParams.get("q") || "", isCaseId(caseId) ? caseId : null), noStore);
       const view = await publicView(io);
       if (isCaseId(caseId)) {
@@ -67,6 +72,11 @@ export default async (req, context) => {
       const cycle = Number(body.resign.cycle), district = String(body.resign.district || "").toLowerCase();
       if (!Number.isInteger(cycle) || cycle < 1) return json(400, { error: "No such term." });
       const r = await resignSeat(io, { caseId, cycle, district, ip: clientIp(req, context) });
+      const extra = r.retry ? { ...noStore, "Retry-After": String(r.retry) } : noStore;
+      return json(r.status, r.body, extra);
+    }
+    if (body?.declare) {
+      const r = await declareCandidacy(io, { caseId, district: String(body.declare.district || "").toLowerCase(), withdraw: body.declare.withdraw === true, ip: clientIp(req, context), device: body?.device });
       const extra = r.retry ? { ...noStore, "Retry-After": String(r.retry) } : noStore;
       return json(r.status, r.body, extra);
     }
@@ -90,11 +100,14 @@ async function pickerOf(io, district, q, caseId) {
   const anchor = await io.store.get(KEYS.anchor, { type: "json" });
   const meta = anchor ? await io.store.get(KEYS.meta(cycleAt(anchor.openAt, now)), { type: "json" }) : null;
   if (!isOpen(meta, now) || !meta.slate?.[district]?.length) return { hits: [], self: null, open: false };
-  const p = await writeins(meta);
+  const [p, cands] = await Promise.all([writeins(meta), readCands(io.store, meta.cycle)]);
+  const declared = Object.values(cands[district] || {});
   const rec = caseId ? await getCase(caseId).catch(() => null) : null;
   const self = rec ? selfWriteIn(p, caseId, rec) : null;
-  const mine = self && self.districts.includes(district) ? { key: self.key, name: self.name } : null;
-  return { hits: String(q).trim() ? writeinSearch(p, district, q, self) : [], self: mine, open: true };
+  // may: the file may declare here (its citizen is on the census); declared: it has
+  const mine = self && self.districts.includes(district)
+    ? { key: self.key, name: self.name, declared: declared.includes(self.key), may: p.citizens.has(self.key) && !p.closed.has(self.key) } : null;
+  return { hits: String(q).trim() ? writeinSearch(p, district, q, self, { declared }) : [], self: mine, open: true };
 }
 
 export const config = { path: "/api/elections" };

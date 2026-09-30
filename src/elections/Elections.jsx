@@ -47,6 +47,10 @@ const CSS = `
 .el-wi-list li.act { background: var(--line); color: var(--accent); }
 .el-wi-list li.none { cursor: default; color: var(--fg-mute); font-size: var(--t-xs); }
 .el-wi .ui-btn { margin-top: var(--s2); }
+.el-wi-sub { display: block; color: var(--fg-mute); font-size: var(--t-xs); margin-top: 2px; }
+.el-wi-list li.act .el-wi-sub { color: var(--fg-dim); }
+.el-cy { margin-top: var(--s2); }
+.el-cy .el-fine { margin: 0; }
 `;
 function injectStyles() {
   let el = document.getElementById("el-styles");
@@ -197,9 +201,9 @@ function Race({ id, race, seatDay, adopted, state, caseId, mine, mineWrite, onVi
         <div className="el-cand" key={`w-${w.key}`}>
           <CandidateSprite c={w} />
           <div>
-            <div className="el-who">{w.name.toUpperCase()} <Chip>{WRITEIN.chip}</Chip></div>
+            <div className="el-who">{w.name.toUpperCase()} <Chip>{WRITEIN.chip}</Chip>{w.declared && <> <Chip tone="accent">{WRITEIN.declaredChip}</Chip></>}</div>
             {w.living || !w.platform
-              ? <div className="el-plat">{w.living ? WRITEIN.living : WRITEIN.dead}</div>
+              ? <div className="el-plat">{w.declared ? WRITEIN.declared : w.living ? WRITEIN.living : WRITEIN.dead}</div>
               : <div className="el-plat">PLATFORM (RECONSTRUCTED BY THE DEPARTMENT, NOT A QUOTATION):<span className="tx">{w.platform}</span></div>}
             <div className="el-row" style={{ marginTop: "var(--s1)" }}><span className="l">BALLOTS</span><span className="b"><Bar value={w.votes} max={max} width={14} tone="var(--accent)" /></span><span className="n">{w.votes}</span></div>
             <div className="el-row"><span className="l">SUBSTRATE</span><span className="b">{WRITEIN.substrate}</span><span className="n">0</span></div>
@@ -212,6 +216,7 @@ function Race({ id, race, seatDay, adopted, state, caseId, mine, mineWrite, onVi
         </div>
       ))}
       {race.writeinOther > 0 && <div className="el-note">{WRITEIN.other(race.writeinOther)}</div>}
+      {state === "open" && race.declared > 0 && <div className="el-note">{WRITEIN.count(race.declared)}</div>}
       <div className="el-note">THE SUBSTRATE (ADVISORY): {race.npc?.voters || 0} FIGURES REGISTERED HERE BY WORKPLACE; {race.npc?.abstain || 0} ABSTAINED.{lean != null && race.npc?.votes?.[lean] ? ` IT LEANS TOWARD ${race.candidates[lean].name.toUpperCase()}.` : ""}</div>
       {caseId && state === "open" && <WriteIn district={id} caseId={caseId} busy={busy} mineKey={mineKey} onPick={(key) => vote(null, key)} />}
       {caseId && state === "open" && voted && (

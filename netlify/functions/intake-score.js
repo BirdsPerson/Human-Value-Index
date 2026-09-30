@@ -2,13 +2,14 @@ import { createHash } from "node:crypto";
 import { visitCount, visitNumberOf, publicHistory } from "../../src/movement.js";
 import { SYSTEM_PROMPT, TRANSCRIPT_ADDENDUM } from "../lib/systemPrompt.js";
 import { callClaude, ScoreError } from "../lib/score.js";
-import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP, restrictToDims, appealOutcome, appealRulings, appealStamp, cube, medianAssessment, SCORE_RUNS } from "../lib/intake.js";
+import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP, restrictToDims, appealOutcome, effectivelyGated, seriousHarm, appealRulings, appealStamp, cube, medianAssessment, SCORE_RUNS } from "../lib/intake.js";
 import { getCase, updateCase, putPenCard, hitLimit, refundLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { splitPhotoExchange, extractSpec } from "../lib/avatar.js";
 import { sanitizeAvatar } from "../../src/avatar.js";
 
 const PER_CASE_DAILY = 5;
+const IN_HARM = (b) => Boolean(b && (effectivelyGated(b) || seriousHarm(b)));
 // Not in the spec's list, but case numbers are free to mint; this caps Anthropic spend per IP.
 const PER_IP_DAILY = 25;
 
@@ -159,6 +160,14 @@ export default async (req, context) => {
     });
     if (!saved || !entry) return json(404, { error: `Case ${caseId} vanished during assessment. The Department is investigating itself. It expects to be cleared.` });
 
+    // A harm finding withdraws the citizen's council candidacies (netlify/lib/elections.js).
+    if (IN_HARM(entry.breakdown)) {
+      try {
+        const { dropCandidacy, STORE } = await import("../lib/elections.js");
+        const { getStore } = await import("@netlify/blobs");
+        await dropCandidacy(getStore({ name: STORE, consistency: "strong" }), caseId);
+      } catch (e) { console.error("candidacy drop failed", e?.message); }
+    }
     const last4 = caseId.slice(-4);
     await putPenCard(caseId, {
       slug: `citizen-${last4.toLowerCase()}`,

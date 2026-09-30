@@ -20,6 +20,11 @@
 //                            ranking [[key, name]], so a seat declined goes to the runner-up.
 //   c<NNN>/resign            {district: [key]}: a player citizen elected who declined or resigned
 //                            the seat (from MY FILE). CAS.
+//   c<NNN>/decl/<voterKey>   a file's candidacy: {d: {district: at}, key (its citizen), rev, ip,
+//                            dev}. CAS. rev counts every declare and withdraw (LIMITS.declarations).
+//   c<NNN>/cands             {by: {district: {voterKey: citizen key}}}: who has declared where. CAS.
+//                            Never served: the public view carries counts and citizen keys only.
+//   c<NNN>/dip/<h>, ddev/<h> {keys: [voterKey]}   the files that have declared from an address / device
 //
 // WRITE-INS (docs/CITY_SPEC.md "Council elections"): a ballot may name any subject on file who
 // lives or works in the district, or the voter's own citizen, never free text. Excluded: every
@@ -27,6 +32,11 @@
 // withheld verdicts, real-world candidates, local officials), other players' citizens, and
 // whoever is already on a slate. The refusal is neutral. A write-in with WRITEIN_SHOW ballots
 // joins the board; below that it is counted as a number.
+//
+// CANDIDACY: a player whose citizen lives or works in a district may DECLARE there (assessed, no
+// harm finding, on the census). A declared citizen may then be written in by any file, shown only
+// as SUBJECT and its tag with no statement. Withdrawable until the close; a later harm finding
+// withdraws it (intake-score.js). Ballots already cast for a citizen who withdraws still count.
 //
 // Players decide; the Substrate's lean is advisory, adopted only in a race no player voted in
 // (council.js decideRace). A ballot withdrawn is a new revision with no candidate; a file with no
@@ -42,7 +52,7 @@ import { displayName } from "../../src/figures.js";
 import { effectivelyGated, seriousHarm } from "./intake.js";
 
 export const STORE = "hvi-elections";
-export const LIMITS = { casesPerIp: 4, casesPerDevice: 2, revisions: 10, ballotsPerIpHour: 60 };
+export const LIMITS = { casesPerIp: 4, casesPerDevice: 2, revisions: 10, ballotsPerIpHour: 60, declarations: 10 };
 export const HEAL_EVERY_MS = 10 * 60 * 1000;
 export const HEAL_MAX_VOTERS = 2000;
 export { WRITEIN_SHOW };
@@ -56,6 +66,7 @@ export const KEYS = {
   meta: (c) => `c${pad(c)}/meta`, result: (c) => `c${pad(c)}/result`,
   voter: (c, vk) => `c${pad(c)}/v/${vk}`, voters: (c) => `c${pad(c)}/v/`,
   tally: (c, d) => `c${pad(c)}/t/${d}`, resign: (c) => `c${pad(c)}/resign`, ip: (c, h) => `c${pad(c)}/ip/${h}`, dev: (c, h) => `c${pad(c)}/dev/${h}`,
+  decl: (c, vk) => `c${pad(c)}/decl/${vk}`, cands: (c) => `c${pad(c)}/cands`, dip: (c, h) => `c${pad(c)}/dip/${h}`, ddev: (c, h) => `c${pad(c)}/ddev/${h}`,
 };
 const salt = () => process.env.HVI_IP_SALT || "hvi-limits-v1";
 const sha = (s) => createHash("sha256").update(s).digest("hex");
@@ -255,7 +266,7 @@ export function writeinPool(subjects, meta, closed) {
     if (listed.has(key) || !mayWriteIn(s, closed)) continue;
     for (const d of districtsOf(s)) byDistrict[d]?.push(s);
   }
-  return { cycle: meta?.cycle ?? null, byDistrict, citizens, idx: {}, keys: {} };
+  return { cycle: meta?.cycle ?? null, byDistrict, citizens, closed: closed || new Set(), idx: {}, keys: {} };
 }
 // The voter's own citizen as a write-in: assessed, never harm-flagged, standing where it lives
 // or works. -> {key, name, districts, s} | null
@@ -266,20 +277,41 @@ export function selfWriteIn(pool, caseId, rec) {
   const s = { ...(pool.citizens.get(key) || { slug: key, kind: "citizen", score: last.score, tier: last.tier }), name, you: true };
   return { key, name, s, districts: districtsOf(s) };
 }
-// Type-ahead over a race's pool (find.js: accents off, whole name, then starts, then words).
-// -> [{key, name, living, self}]
-export function writeinSearch(pool, district, q, self = null, n = WRITEIN_HITS) {
+// The citizens declared in a race who may be written in by anyone: on the census, living or
+// working there, not closed. keys: the citizen keys declared there (readCands). -> [{key, name, s}]
+export function declaredIn(pool, district, keys = []) {
+  const out = [];
+  for (const key of new Set(keys)) {
+    const s = pool.citizens.get(key);
+    if (!s || pool.closed?.has(key) || !districtsOf(s).includes(district)) continue;
+    const name = citizenName(key);
+    out.push({ key, name, s: { ...s, name, declared: true } });
+  }
+  return out;
+}
+// Type-ahead over a race's pool (find.js: accents off, whole name, then starts, then words), the
+// citizens declared there and the voter's own. -> [{key, name, living, self, declared}]
+export function writeinSearch(pool, district, q, self = null, { n = WRITEIN_HITS, declared = [] } = {}) {
   if (!pool.byDistrict[district]) return [];
   pool.idx[district] = pool.idx[district] || buildIndex(pool.byDistrict[district]);
   const mine = self && self.districts.includes(district) ? buildIndex([self.s]) : [];
-  return searchIndex([...mine, ...pool.idx[district]], String(q || "").slice(0, 80), n)
-    .map(e => ({ key: e.key, name: e.s.you ? self.name : e.name, living: e.s.you ? true : !SIM.isDead(e.s), self: Boolean(e.s.you) }));
+  const others = declaredIn(pool, district, declared).filter(x => x.key !== self?.key);
+  const decl = new Set(declared);
+  return searchIndex([...mine, ...buildIndex(others.map(x => x.s)), ...pool.idx[district]], String(q || "").slice(0, 80), n)
+    .map(e => (isCitizenKey(e.key)
+      ? { key: e.key, name: citizenName(e.key), living: true, self: Boolean(e.s.you), declared: decl.has(e.key) }
+      : { key: e.key, name: e.name, living: !SIM.isDead(e.s), self: false, declared: false }));
 }
-// A write-in checked against the pool: -> {key, name, living} | null (the refusal is neutral)
-export function writeinFor(pool, district, key, self = null) {
+// A write-in checked against the pool: -> {key, name, living} | null (the refusal is neutral).
+// declared: the citizen keys declared in this race (readCands); only those, or yourself.
+export function writeinFor(pool, district, key, self = null, declared = []) {
   if (typeof key !== "string" || !key) return null;
   if (self && key === self.key) return self.districts.includes(district) ? { key, name: self.name, living: true } : null;
-  if (isCitizenKey(key) || !pool.byDistrict[district]) return null;
+  if (isCitizenKey(key)) {
+    const x = declaredIn(pool, district, declared.filter(k => k === key))[0];
+    return x ? { key, name: x.name, living: true } : null;
+  }
+  if (!pool.byDistrict[district]) return null;
   if (!pool.keys[district]) pool.keys[district] = new Map(pool.byDistrict[district].map(s => [SIM.keyOf(s), s]));
   const s = pool.keys[district].get(key);
   return s ? { key, name: displayName(s), living: !SIM.isDead(s) } : null;
@@ -342,7 +374,8 @@ export async function castBallot(io, { caseId, district, candidate, writein = nu
     try { pool = await io.writeins(meta); } catch {
       return { status: 503, body: { error: "The census is briefly unavailable, and the Department does not take write-ins on trust. Try again shortly." }, retry: 60 };
     }
-    wi = writeinFor(pool, district, String(writein), selfWriteIn(pool, caseId, rec));
+    const declared = isCitizenKey(writein) ? Object.values((await readCands(store, cycle))[district] || {}) : [];
+    wi = writeinFor(pool, district, String(writein), selfWriteIn(pool, caseId, rec), declared);
     if (!wi) return { status: 400, body: { error: WRITEIN_REFUSED } };
   }
   const vk = voterKey(caseId), dh = deviceHash(device);
@@ -428,6 +461,119 @@ export async function resignSeat(io, { caseId, cycle, district, ip, now = Date.n
   return { status: 409, body: { error: "Your resignation collided with itself. Submit it once." } };
 }
 
+// ---- candidacy ------------------------------------------------------------------------------------------------
+export const DECLARE_REFUSED = "The Department cannot accept this filing here. It does not say why.";
+export const readCands = async (store, cycle) => (await store.get(KEYS.cands(cycle), { type: "json" }))?.by || {};
+const declaredOf = (v) => Object.keys(v?.d || {});
+// Add (key) or drop (key null) a file's entry in a race's list of the declared.
+async function setCand(store, cycle, d, vk, key) {
+  for (let i = 0; i < 10; i++) {
+    const cur = await store.getWithMetadata(KEYS.cands(cycle), { type: "json" });
+    const by = structuredClone(cur?.data?.by || {});
+    const race = by[d] || {};
+    if (key ? race[vk] === key : !(vk in race)) return true;
+    if (key) race[vk] = key; else delete race[vk];
+    by[d] = race;
+    if (!Object.keys(race).length) delete by[d];
+    const r = await store.setJSON(KEYS.cands(cycle), { by }, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
+    if (r.modified) return true;
+    await sleep(3 + Math.random() * 15);
+  }
+  return false;
+}
+// The file's own citizen, if it may declare: assessed, no harm finding, on the census.
+// -> {key, name, districts} | null
+function mayDeclare(pool, caseId, rec) {
+  const self = selfWriteIn(pool, caseId, rec);
+  if (!self || !pool.citizens.has(self.key) || pool.closed?.has(self.key)) return null;
+  return { key: self.key, name: self.name, districts: districtsOf(pool.citizens.get(self.key)) };
+}
+// io as castBallot. withdraw: true to take the candidacy back. -> {status, body}
+export async function declareCandidacy(io, { caseId, district, withdraw = false, ip, device, now = Date.now() }) {
+  const { store } = io;
+  const anchor = await ensureAnchor(store, now);
+  const cycle = cycleAt(anchor.openAt, now);
+  const meta = await ensureCycle(store, anchor, cycle, io.census, now);
+  if (!meta || now < meta.openAt) return { status: 403, body: { error: "No election is open. There is nothing to stand in. Wait for the next cycle." } };
+  if (now >= meta.closeAt) return { status: 403, body: { error: "The polls are closed. Candidacies are closed with them.", closed: true } };
+  if (!meta.slate[district]?.length) return { status: 400, body: { error: "No such race. The Department has ten districts and knows them all." } };
+  let lim;
+  try { lim = await io.hitLimit(`elections-ip:${ip}`, LIMITS.ballotsPerIpHour, "hour"); } catch {
+    return { status: 503, body: { error: "The Department's queue ledger is unavailable, and candidacies are not filed off the books. Try again shortly." }, retry: 60 };
+  }
+  if (!lim.ok) return { status: 429, body: { error: "Too many filings from your location this hour. Return in an hour." }, retry: 3600 };
+  const rec = await io.getCase(caseId);
+  if (!rec) return { status: 404, body: { error: "No such file. The Department does not lose files. You have mistyped." } };
+  if (!Array.isArray(rec.history) || !rec.history.length) return { status: 403, body: { error: "Only assessed subjects stand. Your file has no assessment on it. Be assessed first." } };
+  let me = null;
+  if (!withdraw) {
+    let pool;
+    try { pool = await io.writeins(meta); } catch {
+      return { status: 503, body: { error: "The census is briefly unavailable, and the Department does not take candidacies on trust. Try again shortly." }, retry: 60 };
+    }
+    me = mayDeclare(pool, caseId, rec);
+    if (!me || !me.districts.includes(district)) return { status: 403, body: { error: DECLARE_REFUSED } };
+  }
+  const vk = voterKey(caseId), dh = deviceHash(device), key = citizenKeyOf(caseId);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const cur = await store.getWithMetadata(KEYS.decl(cycle, vk), { type: "json" });
+    const prev = cur?.data || null, has = Boolean(prev?.d?.[district]);
+    if (has === !withdraw) return { status: 200, body: { declared: declaredOf(prev), key, name: citizenName(key), unchanged: true } };
+    if ((prev?.rev || 0) >= LIMITS.declarations) return { status: 429, body: { error: `This file has filed and withdrawn ${LIMITS.declarations} times this cycle. The Department has stopped taking its paperwork.` } };
+    if (!withdraw && !declaredOf(prev).length) {
+      if (!(await claim(store, KEYS.dip(cycle, ip), vk, LIMITS.casesPerIp))) return { status: 429, body: { error: `${LIMITS.casesPerIp} files have already declared from your location. The Department counts people, not paperwork.` } };
+      if (dh && !(await claim(store, KEYS.ddev(cycle, dh), vk, LIMITS.casesPerDevice))) return { status: 429, body: { error: `${LIMITS.casesPerDevice} files have already declared from this device. One terminal, one or two candidates.` } };
+    }
+    const d = { ...(prev?.d || {}) };
+    if (withdraw) delete d[district]; else d[district] = new Date(now).toISOString();
+    const next = { d, key, rev: (prev?.rev || 0) + 1, ip: prev?.ip || ip, dev: prev?.dev || dh };
+    const r = await store.setJSON(KEYS.decl(cycle, vk), next, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
+    if (!r.modified) { await sleep(3 + Math.random() * 15); continue; }
+    await setCand(store, cycle, district, vk, withdraw ? null : key);
+    if (!Object.keys(d).length) {
+      await release(store, KEYS.dip(cycle, next.ip), vk);
+      if (next.dev) await release(store, KEYS.ddev(cycle, next.dev), vk);
+    }
+    return { status: 200, body: { declared: Object.keys(d), key, name: citizenName(key), withdrawn: withdraw } };
+  }
+  return { status: 409, body: { error: "Your filing collided with itself. Submit it once." } };
+}
+// A harm finding on a file withdraws every candidacy it holds this cycle (intake-score.js).
+// Costs no revision. -> the districts withdrawn
+export async function dropCandidacy(store, caseId, now = Date.now()) {
+  const anchor = await store.get(KEYS.anchor, { type: "json" });
+  if (!anchor) return [];
+  const cycle = cycleAt(anchor.openAt, now), vk = voterKey(caseId);
+  for (let i = 0; i < 6; i++) {
+    const cur = await store.getWithMetadata(KEYS.decl(cycle, vk), { type: "json" });
+    const gone = declaredOf(cur?.data);
+    if (!gone.length) return [];
+    const r = await store.setJSON(KEYS.decl(cycle, vk), { ...cur.data, d: {} }, { onlyIfMatch: cur.etag });
+    if (!r.modified) { await sleep(3 + Math.random() * 15); continue; }
+    for (const d of gone) await setCand(store, cycle, d, vk, null);
+    await release(store, KEYS.dip(cycle, cur.data.ip), vk);
+    if (cur.data.dev) await release(store, KEYS.ddev(cycle, cur.data.dev), vk);
+    return gone;
+  }
+  return [];
+}
+// MY FILE's candidacy panel: where this file's citizen may stand and where it has declared.
+// -> {open, key, name, districts: [{id, name, declared, may}]}
+export async function myCandidacy(io, caseId, now = Date.now()) {
+  const { store } = io;
+  const anchor = await store.get(KEYS.anchor, { type: "json" });
+  const meta = anchor ? await store.get(KEYS.meta(cycleAt(anchor.openAt, now)), { type: "json" }) : null;
+  if (!isOpen(meta, now)) return { open: false, districts: [] };
+  const rec = await io.getCase(caseId);
+  if (!rec) return { open: true, districts: [] };
+  const key = citizenKeyOf(caseId);
+  const [pool, v] = await Promise.all([io.writeins(meta), store.get(KEYS.decl(meta.cycle, voterKey(caseId)), { type: "json" })]);
+  const me = mayDeclare(pool, caseId, rec), have = new Set(declaredOf(v));
+  const ids = DIST.filter(d => meta.slate[d]?.length && (have.has(d) || me?.districts.includes(d)));
+  return { open: true, cycle: meta.cycle, closeAt: meta.closeAt, key, name: citizenName(key),
+    districts: ids.map(d => ({ id: d, name: SIM.DISTRICT[d]?.name || d, declared: have.has(d), may: Boolean(me?.districts.includes(d)) })) };
+}
+
 // ---- the public view --------------------------------------------------------------------------------------
 // GET: anchors the calendar on the first run, opens a cycle when due (drawing its slate), closes
 // it when due, recounts now and then. -> the page's whole view
@@ -442,6 +588,7 @@ export async function publicView(io, now = Date.now()) {
   const seated = result ? seatedOf(result, await readResigned(store, meta.cycle)) : {};
   const races = {};
   let healed = false;
+  const declared = await readCands(store, meta.cycle);
   for (const d of DIST) {
     const cands = meta.slate[d] || [];
     let t = await readTally(store, meta.cycle, d);
@@ -452,6 +599,9 @@ export async function publicView(io, now = Date.now()) {
     const rr = result?.races?.[d] || null;
     const c = rr ? { votes: rr.votes, voters: rr.voters, writeins: rr.writeins || [], writeinOther: rr.writeinOther || 0 } : { ...countsOf(t.seen, cands.length) };
     const board = rr ? { writeins: c.writeins, writeinOther: c.writeinOther } : writeinBoard(c.writeins, t.w);
+    // declared: how many citizens have declared here, and which of the board's write-ins did
+    const here = new Set(Object.values(declared[d] || {}));
+    if (!rr) board.writeins = board.writeins.map(w => ({ ...w, declared: here.has(w.key) }));
     // the ranking stays in the store: below the board's threshold a write-in is only a number
     let res = null;
     if (rr) {
@@ -459,7 +609,7 @@ export async function publicView(io, now = Date.now()) {
       const s = seated[d];
       res = s && s.declined ? { ...pub, key: s.key, name: s.name, declined: true, notice: DECLINED } : pub;
     }
-    races[d] = { candidates: cands, votes: c.votes, voters: c.voters, ...board, npc: meta.npc[d], result: res };
+    races[d] = { candidates: cands, votes: c.votes, voters: c.voters, ...board, declared: rr ? 0 : here.size, npc: meta.npc[d], result: res };
   }
   const next = cycleWindow(anchor.openAt, meta.cycle + 1);
   return {
