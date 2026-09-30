@@ -21,8 +21,17 @@ MODE="${1:-build}"
 say() { printf '%s [%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$MODE" "$*" | tee -a "$LOG"; }
 [ -x "$CLAUDE" ] || { say "no claude CLI at $CLAUDE"; exit 1; }
 cd "$REPO" || { say "no repo"; exit 1; }
+# Work in a disposable worktree of origin/main, never in the shared main tree: other sessions
+# edit and push concurrently, and a run killed mid-rebase (2026-09-30 03:04) left the main tree
+# stuck in a rebase with an autostash. MORNING_REPORT.md / DESK_ANSWERS.md stay in $REPO.
+WT="$HOME/projects/hvi-nightly-wt"
+git worktree remove --force "$WT" >/dev/null 2>&1; rm -rf "$WT"
+git fetch -q origin && git worktree add -q --detach "$WT" origin/main || { say "worktree failed"; exit 1; }
+ln -s "$REPO/node_modules" "$WT/node_modules"
+cp "$REPO/.netlify/state.json" "$WT/.netlify-state.json" 2>/dev/null; mkdir -p "$WT/.netlify" && cp "$REPO/.netlify/state.json" "$WT/.netlify/" 2>/dev/null
+cd "$WT" || { say "no worktree"; exit 1; }
 
-COMMON='You are the HVI improvement loop, running unattended on Scott'"'"'s Mac. Work only in this repo.
+COMMON='You are the HVI improvement loop, running unattended on Scott'"'"'s Mac. Work only in this worktree (a disposable checkout of origin/main on a detached HEAD). MORNING_REPORT.md and DESK_ANSWERS.md live in /Users/birdsperson/projects/human-value-index (read/write them there by absolute path).
 First read: CLAUDE.md rules in ~/projects/CLAUDE.md (MORNING_REPORT parser rules), DESK_ANSWERS.md (Scott'"'"'s answers; settled),
 MORNING_REPORT.md, docs/ROADMAP.md (backlog + GUARDRAILS, obey them), docs/SPEC.md, docs/CITY_SPEC.md, docs/design-system.md.
 Tone: every user-facing string in the cold Overlord voice. Terminal aesthetic. Mobile-first (44px targets, 16px inputs).
@@ -40,7 +49,7 @@ logon, an interview (text; you may answer as a plausible persona; do not submit 
 result, appeal UI (do not file), pen, cube, city 2D/3D/district/building, index, referral pick list (do not file).
 Note every bug, confusion, dead end, slow moment, ugly screen, joke that falls flat, and every missing thing a player
 would want to do. Add them to docs/ROADMAP.md as concise backlog items (bugs near the top), dedupe against existing items.
-Save screenshots to docs/screens/playtest/<date>/. Commit docs changes (git add docs; commit; pull --rebase --autostash; push).
+Save screenshots to docs/screens/playtest/<date>/. Commit docs changes (git add docs; commit; git fetch origin; git rebase origin/main; git push origin HEAD:main).
 Add a short '## Playtest' section to MORNING_REPORT.md (top 5 findings), run ~/projects/organize/collect_reports.py."
 else
   BUDGET=5400
@@ -50,7 +59,7 @@ TASK (build): take the TOP backlog item in docs/ROADMAP.md that is not [blocked]
 do the first slice). Build it well: read the relevant code first, keep the design system, write/extend checks in scripts/.
 Before shipping: npm run build clean; every node scripts/check-*.mjs passes; python3 scripts/check_sprite_qa.py passes;
 run it locally (npx vite + netlify functions:serve) and look at screenshots (agent-browser) at 390x844 and 1440.
-Ship: git add the files you changed (never unrelated working-tree changes), commit, git pull --rebase --autostash, git push,
+Ship: git add the files you changed (never unrelated working-tree changes), commit, git fetch origin, git rebase origin/main, git push origin HEAD:main,
 then wait for the Netlify deploy (netlify api listSiteDeploys site 3ac3fcb8-cab4-489b-8ea9-1e4153b87941) to reach ready.
 If anything fails and you cannot fix it within budget: do NOT push; leave work on a branch nightly/<date> and say so.
 Update docs/ROADMAP.md (move to Done with commit, or mark progress/blocked). Write MORNING_REPORT.md: a '## Shipped' bullet
@@ -63,7 +72,7 @@ TOOLS=(Read Grep Glob Edit Write
   "Bash(npm run build:*)" "Bash(npm ci:*)" "Bash(node scripts/*)" "Bash(node --input-type=module:*)"
   "Bash(python3 scripts/*)" "Bash(/opt/homebrew/bin/python3 scripts/*)" "Bash(python3 -c:*)"
   "Bash(git status:*)" "Bash(git diff:*)" "Bash(git log:*)" "Bash(git add:*)" "Bash(git commit:*)"
-  "Bash(git pull:*)" "Bash(git push:*)" "Bash(git checkout:*)" "Bash(git branch:*)" "Bash(git stash:*)"
+  "Bash(git pull:*)" "Bash(git push:*)" "Bash(git fetch:*)" "Bash(git rebase:*)" "Bash(git checkout:*)" "Bash(git branch:*)" "Bash(git stash:*)"
   "Bash(npx vite:*)" "Bash(netlify functions:serve:*)" "Bash(netlify api listSiteDeploys:*)"
   "Bash(netlify blobs:get:*)" "Bash(netlify blobs:list:*)" "Bash(agent-browser:*)"
   "Bash(higgsfield account status:*)" "Bash(curl -s:*)" "Bash(ls:*)" "Bash(sleep:*)" "Bash(kill:*)" "Bash(lsof:*)"
