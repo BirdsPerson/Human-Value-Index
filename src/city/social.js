@@ -14,6 +14,7 @@
 // published well before day D begins and never changes after.
 
 import * as SIM from "./sim.js";
+import { RECORD_TIES } from "./ties.js";
 
 export const LAG = 4;                 // machine days between a state and the snapshot it produces
 export const DECAY = 0.985;           // affinity kept per machine day
@@ -89,7 +90,8 @@ export function compat(a, b) {
 
 // ---- state ----------------------------------------------------------------------------
 // {v: 2, seed, hour (next hour to process), names: {key: display} (rebuilt from the census
-//  every advance; never stored), snapshots: {day: {ver, boosts}},
+//  every advance; never stored), snapshots: {day: {ver, boosts}}, tied: {"a|b": 1} (ties
+//  from the record already applied, seedTies),
 //  buckets: [BUCKETS x {pairs: {"a|b": [aff, meetings, lastHour, lastPlace, recent, lastEvent?]},
 //                        events: [...]}]}
 // A pair lives in bucket bucketOf("a|b"); so do its events. Everything that changes a pair
@@ -122,7 +124,7 @@ export function allEvents(state) {
 export function fromV1(v1) {
   if (!v1 || v1.v === 2) return v1;
   const st = emptyState(v1.hour, v1.seed);
-  for (const k of ["snapshots", "rosters", "plans", "tick"]) if (v1[k]) st[k] = v1[k];
+  for (const k of ["snapshots", "rosters", "plans", "tick", "tied"]) if (v1[k]) st[k] = v1[k];
   st.names = { ...(v1.names || {}) };
   const lastEv = new Map();
   for (const e of v1.events || []) { const pk = pairKey(e.a, e.b); lastEv.set(pk, Math.max(lastEv.get(pk) ?? -Infinity, e.h)); }
@@ -143,7 +145,7 @@ export function toV1(st) {
   const pairs = {};
   for (const [pk, rec] of allPairs(st).sort((x, y) => cmpStr(x[0], y[0]))) pairs[pk] = rec;
   const out = { v: 1, seed: st.seed, hour: st.hour, pairs, names: st.names || {}, events: allEvents(st).slice(-MAX_EVENTS), snapshots: st.snapshots || {} };
-  for (const k of ["rosters", "plans", "tick"]) if (st[k]) out[k] = st[k];
+  for (const k of ["rosters", "plans", "tick", "tied"]) if (st[k]) out[k] = st[k];
   return out;
 }
 
@@ -186,23 +188,32 @@ export const TEMPLATE_LINES = LINES;   // checks read these
 
 // ---- ties from the record ---------------------------------------------------------------
 // People who knew each other before the Substrate start from where the record leaves them,
-// then the sim takes over (Scott 2026-09-29). Hand-curated for ties Wikidata doesn't hold;
-// the community pass adds Wikidata relations (spouse, sibling, bandmates) on the same path.
+// then the sim takes over (Scott 2026-09-29). KNOWN_TIES are hand-curated, for ties Wikidata
+// doesn't hold or gets the sign of; RECORD_TIES come from Wikidata (scripts/fetch-ties.mjs:
+// spouses, partners, family, teachers, bandmates, teammates; a divorce runs cold).
 // [slugA, slugB, starting affinity, the record, in the Overlord's words]
 export const KNOWN_TIES = [
   ["samuel-beckett", "andre-the-giant", 45, "A TRUCK, A SCHOOL RUN, A BOY TOO LARGE FOR THE BUS, AND CRICKET"],
+  ["donald-trump", "mary-l-trump", -35, "UNCLE AND NIECE. A BOOK, A LAWSUIT OVER THE FAMILY MONEY"],
 ];
-// Seeds a tie once, when both files are present and the pair has no history; idempotent,
-// so any chunking of the tick gives the same city.
-export function seedTies(state, live, ties = KNOWN_TIES) {
+export const TIES = [...KNOWN_TIES, ...RECORD_TIES];   // first listing of a pair wins
+// Seeds each tie once (state.tied), when both files are present; idempotent, so any
+// chunking of the tick gives the same city. A pair the sim already knows is moved to the
+// record's side (warmer for a warm tie, colder for a cold one), once; after that the sim
+// owns it.
+export function seedTies(state, live, ties = TIES) {
+  state.tied ||= {};
   for (const [a, b, aff, why] of ties) {
     if (!live.has(a) || !live.has(b)) continue;
     const pk = pairKey(a, b), bucket = state.buckets[bucketOf(pk)];
-    if (bucket.pairs[pk]) continue;
-    const rec = bucket.pairs[pk] = [aff, 0, state.hour, null, 0];
+    if (state.tied[pk]) continue;
+    state.tied[pk] = 1;
+    let rec = bucket.pairs[pk];
+    if (rec) rec[0] = aff > 0 ? Math.max(rec[0], aff) : Math.min(rec[0], aff);
+    else rec = bucket.pairs[pk] = [aff, 0, state.hour, null, 0];
     const [ka, kb] = a < b ? [a, b] : [b, a];
     pushEvent(bucket, rec, { h: state.hour, kind: "record", a: ka, b: kb, placeId: null,
-      text: `${(state.names[a] || a).toUpperCase()} AND ${(state.names[b] || b).toUpperCase()}: KNOWN TO EACH OTHER BEFORE INTAKE. ${why}. THE DEPARTMENT HAS RESTORED THE LINK.` });
+      text: `${(state.names[a] || a).toUpperCase()} AND ${(state.names[b] || b).toUpperCase()}: KNOWN TO EACH OTHER BEFORE INTAKE. ${why}. THE DEPARTMENT HAS RESTORED THE ${aff > 0 ? "LINK" : "DISTANCE"}.` });
   }
   return state;
 }
@@ -381,6 +392,10 @@ export function forget(state, live) {
     b.events = b.events.filter(e => live.has(e.a) && live.has(e.b));
   }
   for (const k of Object.keys(state.names)) if (!live.has(k)) delete state.names[k];
+  for (const pk of Object.keys(state.tied || {})) {   // a file that returns gets its tie again
+    const [a, b] = pk.split("|");
+    if (!live.has(a) || !live.has(b)) delete state.tied[pk];
+  }
   for (const snap of Object.values(state.snapshots)) {
     let changed = false;
     for (const k of Object.keys(snap.boosts || {})) if (!live.has(k)) { delete snap.boosts[k]; changed = true; }

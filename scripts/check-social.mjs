@@ -234,6 +234,64 @@ BUILDING;   // (imported for parity with check-quests' view of the city)
   SOC.pairOf(st, pk)[0] = -20;   // the sim moved them; a later tick must not reset it
   SOC.seedTies(st, new Set(["samuel-beckett", "andre-the-giant"]));
   assert.equal(SOC.pairOf(st, pk)[0], -20); assert.equal(SOC.allEvents(st).length, 1);
+
+  // A pair the sim already met is moved to the record's side once, in the record's sign.
+  const t2 = SOC.emptyState(100);
+  const warm = SOC.pairKey("a-one", "b-two"), cold = SOC.pairKey("c-three", "d-four");
+  t2.buckets[SOC.bucketOf(warm)].pairs[warm] = [-10, 4, 90, null, 1];
+  t2.buckets[SOC.bucketOf(cold)].pairs[cold] = [20, 4, 90, null, 1];
+  const both = new Set(["a-one", "b-two", "c-three", "d-four"]);
+  const ties = [["a-one", "b-two", 40, "SIBLINGS"], ["c-three", "d-four", -25, "MARRIED, THEN DIVORCED"], ["b-two", "a-one", -99, "DUPLICATE"]];
+  SOC.seedTies(t2, both, ties);
+  assert.equal(SOC.pairOf(t2, warm)[0], 40, "warm tie lifts a cold pair"); assert.equal(SOC.pairOf(t2, warm)[1], 4, "history kept");
+  assert.equal(SOC.pairOf(t2, cold)[0], -25, "cold tie cools a warm pair");
+  assert.equal(SOC.allEvents(t2).length, 2, "first listing of a pair wins");
+  assert.ok(SOC.allEvents(t2).some(e => /RESTORED THE DISTANCE/.test(e.text)));
+  SOC.pairOf(t2, warm)[0] = 5; SOC.seedTies(t2, both, ties);
+  assert.equal(SOC.pairOf(t2, warm)[0], 5, "applied once");
+  assert.deepEqual(SOC.fromV1(SOC.toV1(t2)).tied, t2.tied, "the rollback copy keeps the markers");
+  SOC.forget(t2, new Set(["a-one", "c-three", "d-four"]));
+  assert.ok(!t2.tied[warm] && t2.tied[cold], "a withdrawn file's tie is forgotten with it");
+
+  // The shipped tie list: well-formed, one row per pair, every living-person tie is a fact
+  // of the record (no words), and the hand-curated ones win over Wikidata.
+  const seen = new Set();
+  for (const [a, b, aff, why] of SOC.TIES) {
+    assert.ok(/^[a-z0-9-]+$/.test(a) && /^[a-z0-9-]+$/.test(b) && a !== b, `tie keys ${a} ${b}`);
+    assert.ok(Number.isFinite(aff) && Math.abs(aff) <= 60, `tie affinity ${a} ${b}`);
+    assert.ok(why === why.toUpperCase() && !/["“”]/.test(why), `tie text is Overlord caps, no quotes: ${why}`);
+    seen.add(SOC.pairKey(a, b));
+  }
+  assert.ok(SOC.TIES.length > 50, "Wikidata ties are wired in");
+  const trump = SOC.TIES.find(t => SOC.pairKey(t[0], t[1]) === SOC.pairKey("donald-trump", "mary-l-trump"));
+  assert.ok(trump && trump[2] < 0, "the hand-curated estrangement comes first");
+  assert.ok(!SOC.TIES.some(t => SOC.pairKey(t[0], t[1]) === SOC.pairKey("adolf-hitler", "joseph-stalin")), "no P1327 partners");
+}
+
+// Wikidata rows -> ties (scripts/fetch-ties.mjs, pure part)
+{
+  const { tiesFrom } = await import("./fetch-ties.mjs");
+  const k = new Map([["Q1", "ann"], ["Q2", "bob"], ["Q3", "cat"], ["Q4", "dan"], ["Q5", "eve"]]);
+  const rows = [
+    { a: "Q1", prop: "P26", b: "Q2", endCause: "Q93190" },            // divorced
+    { a: "Q2", prop: "P3373", b: "Q1" },                               // also siblings: divorce listed first wins
+    { a: "Q3", prop: "P451", b: "Q4", ended: true },                   // former partners
+    { a: "Q3", prop: "P3342", b: "Q5", role: "rival" },
+    { a: "Q4", prop: "P26", b: "Q99" },                                // not on file
+    { a: "Q1", group: "G1", groupLabel: "The Band", groupKind: "band" },
+    { a: "Q5", group: "G1", groupLabel: "The Band", groupKind: "band" },
+    { a: "Q2", group: "T1", groupLabel: "Club", groupKind: "team", start: 1990, end: 1995 },
+    { a: "Q4", group: "T1", groupLabel: "Club", groupKind: "team", start: 1996, end: 2000 },  // no overlap
+    { a: "Q5", group: "T1", groupLabel: "Club", groupKind: "team", start: 1994, end: null },  // overlaps bob
+  ];
+  const got = Object.fromEntries(tiesFrom(rows, k).map(t => [`${t[0]}|${t[1]}`, [t[2], t[3]]]));
+  assert.deepEqual(got, {
+    "ann|bob": [-25, "MARRIED, THEN DIVORCED"],
+    "cat|dan": [10, "FORMERLY PARTNERS"],
+    "cat|eve": [-35, "RIVALS ON THE RECORD"],
+    "ann|eve": [35, "BANDMATES AT THE BAND"],
+    "bob|eve": [25, "TEAMMATES AT CLUB"],
+  });
 }
 
 // ---- chunking stays exact past the per-subject bound --------------------------------------------
