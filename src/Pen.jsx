@@ -195,6 +195,11 @@ const penStyles = `
   .hvi-refer-log { list-style: none; margin: var(--s1) 0 0; padding: 0; font-size: var(--t-xs); color: var(--fg-mute); }
   .hvi-refer-log .err { color: var(--harm); } .hvi-refer-log .ok { color: var(--warn); }
   .hvi-refer-choices { margin: var(--s2) 0; }
+  .hvi-refer-src { margin: var(--s2) 0; display: grid; gap: var(--s1); }
+  .hvi-refer-src .ui-field { margin: 0; }
+  .hvi-card-sources { color: var(--fg-dim); font-size: var(--t-xs); margin: var(--s2) 0; overflow-wrap: anywhere; }
+  .hvi-card-sources ol { list-style: none; margin: var(--s1) 0 0; padding: 0; }
+  .hvi-card-sources a { color: var(--fg-dim); text-transform: none; display: inline-block; padding: 4px 0; }
   .hvi-refer-choices .ui-cmd .s { text-transform: uppercase; }
   .hvi-refer-choices .ui-cmd.sealed:not([aria-current="true"]) .l { color: var(--fg-mute); }
   .hvi-refer-choices .ui-cmd .onfile { color: var(--accent); }
@@ -241,6 +246,7 @@ export function SubjectCard({ subject: listed, onClose, where = "PEN B", back = 
   }, []);
   const kind = subject.you ? "CITIZEN // THIS IS YOU. THE RESEMBLANCE IS CLINICAL."
     : subject.kind === "citizen" ? "CITIZEN // SELF-SUBMITTED FILE"
+    : subject.localOfficial ? `LOCAL PUBLIC OFFICIAL // ADDED BY THE DEPARTMENT FROM PUBLIC SOURCES${subject.sprite ? " // LIKENESS GENERIC" : " // LIKENESS PENDING"}`
     : subject.referred ? `PUBLIC FIGURE // REFERRED BY A CITIZEN${subject.sprite ? "" : " // LIKENESS PENDING"}`
     : "PUBLIC FIGURE // FILE ON RECORD";
   const narrow = typeof window !== "undefined" && window.innerWidth <= 560;
@@ -287,6 +293,17 @@ export function SubjectCard({ subject: listed, onClose, where = "PEN B", back = 
           {subject.harmReview?.note && (
             // Scott's case-by-case harm finding on this subject (harmReview on the card).
             <div className="hvi-card-note">HARM FINDING REVIEWED BY THE DEPARTMENT: {subject.harmReview.note}</div>
+          )}
+          {subject.candidate && <div className="hvi-card-note">CANDIDATE IN A PENDING ELECTION. THE DEPARTMENT DOES NOT VOTE.</div>}
+          {subject.localOfficial && (
+            // Owner-added officials with no Wikipedia article: the listed pages are the whole record.
+            <div className="hvi-card-sources">
+              LOCAL PUBLIC OFFICIAL // SOURCES:
+              {Array.isArray(subject.sources) && subject.sources.length > 0 && (
+                <ol>{subject.sources.map((u, i) => <li key={u}>[{i + 1}] <a href={u} target="_blank" rel="noopener noreferrer nofollow">{u.replace(/^https?:\/\/(www\.)?/, "")}</a></li>)}</ol>
+              )}
+              <div>THIN PUBLIC RECORD. SCORED FROM THESE SOURCES ONLY; SECTIONS THEY DO NOT COVER ARE UNASSESSED.</div>
+            </div>
           )}
           {subject.you && subject.rubric < 3 && <div className="hvi-card-note">SCORED UNDER A RETIRED RUBRIC. RE-ASSESSMENT RECOMMENDED.</div>}
           <Associates slug={subject.slug || slugify(subject.baseName || subject.name)} />
@@ -353,6 +370,9 @@ function ReferralBar({ simRef }) {
   const [needRestore, setNeedRestore] = useState(null);   // the name to retry once a file is restored
   const [choices, setChoices] = useState(null);           // { name, candidates } when namesakes answer
   const [pick, setPick] = useState(0);
+  const [owner, setOwner] = useState(false);              // the owner case (HVI_OWNER_CASES): may add officials from sources
+  const [srcFor, setSrcFor] = useState(null);             // the name the desk found no public record for (owner only)
+  const [srcUrls, setSrcUrls] = useState(["", "", ""]);
   // Names typed while the desk is busy wait here (kept across reloads) and are filed one at a
   // time; a namesake list pauses the line until it is answered. The log keeps each outcome.
   const [queue, setQueue] = useState(() => { try { const q = JSON.parse(localStorage.getItem(QUEUE_KEY)); return Array.isArray(q) ? q.filter(x => typeof x === "string").slice(0, 30) : []; } catch { return []; } });
@@ -371,12 +391,12 @@ function ReferralBar({ simRef }) {
     const id = readCaseId();
     let dead = false;
     fetch(`/api/refer${id ? `?caseId=${encodeURIComponent(id)}` : ""}`)
-      .then(r => (r.ok ? r.json() : null)).then(d => { if (!dead && d && typeof d.remaining === "number") setRemaining(d.remaining); })
+      .then(r => (r.ok ? r.json() : null)).then(d => { if (!dead && d && typeof d.remaining === "number") setRemaining(d.remaining); if (!dead && d?.owner) setOwner(true); })
       .catch(() => {});
     return () => { dead = true; };
   }, []);
 
-  async function submit(e, retryName, title) {
+  async function submit(e, retryName, title, sources) {
     e?.preventDefault();
     const n = (retryName ?? name).trim();
     if (!n) return;
@@ -389,14 +409,15 @@ function ReferralBar({ simRef }) {
     }
     setNeedRestore(null);
     setChoices(null);
+    setSrcFor(null);
     setBusy(true);
     setOut({ text: "PROCESSING REFERRAL...", tone: "" });
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 60000);
+    const timer = setTimeout(() => ctl.abort(), sources ? 120000 : 60000);
     try {
       const r = await fetch("/api/refer", {
         method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal,
-        body: JSON.stringify({ name: n, title: title || undefined, caseId: readCaseId() || undefined }),
+        body: JSON.stringify({ name: n, title: title || undefined, caseId: readCaseId() || undefined, sources: sources || undefined }),
       });
       const d = await r.json().catch(() => ({}));
       if (d.caseId) writeCaseId(d.caseId);
@@ -405,6 +426,8 @@ function ReferralBar({ simRef }) {
         report(n, d.error || "The referral desk is closed. The Department does not say why.", "err");
         // Not assessed usually means this browser lost the case number: offer the restore here.
         if (d.reason === "unassessed") setNeedRestore(n);
+        // The owner may file a public official with no article from public source links.
+        if (d.reason === "none" && owner) { setSrcFor(n); setSrcUrls(["", "", ""]); }
         return;
       }
       if (d.status === "choose" && Array.isArray(d.candidates) && d.candidates.length) {
@@ -418,7 +441,7 @@ function ReferralBar({ simRef }) {
       const subject = d.subject;
       if (d.status === "created") {
         simRef.current?.refer?.(subject);
-        report(n, `NEW ARRIVAL PROCESSED: ${subject.name.toUpperCase()}. VALUE INDEX ${subject.score} [${subject.tier}]. LIKENESS PENDING.`, "ok");
+        report(n, `NEW ARRIVAL PROCESSED: ${subject.name.toUpperCase()}. VALUE INDEX ${subject.score} [${subject.tier}]. ${subject.localOfficial ? `FILED FROM ${subject.sources?.length || 0} PUBLIC SOURCE(S). ` : ""}LIKENESS PENDING.`, "ok");
         if (!retryName) setName("");
       } else {
         simRef.current?.refer?.(subject);
@@ -502,6 +525,20 @@ function ReferralBar({ simRef }) {
         <ol className="hvi-refer-log" aria-label="Recent referrals">
           {log.filter(r => r.text !== out?.text).map((r, i) => <li key={i} className={r.tone}>› {r.text}</li>)}
         </ol>
+      )}
+      {srcFor && owner && (
+        <form className="hvi-refer-src" onSubmit={e => { e.preventDefault(); const u = srcUrls.map(x => x.trim()).filter(Boolean); if (u.length) submit(null, srcFor, undefined, u); }}>
+          <div className="hvi-refer-quota">NO ARTICLE ON FILE FOR {srcFor.toUpperCase()}. A REAL PUBLIC OFFICIAL MAY BE ADDED FROM PUBLIC SOURCES: AN OFFICIAL PAGE, THEN NEWS. SCORED FROM THESE PAGES ONLY.</div>
+          {srcUrls.map((u, i) => (
+            <TextField key={i} id={`hvi-refer-src-${i}`} label={`SOURCE ${i + 1}`} type="url" value={u} maxLength={1000}
+              spellCheck="false" autoCapitalize="off" placeholder={i === 0 ? "https:// official page" : "https:// (optional)"}
+              onChange={e => setSrcUrls(l => l.map((x, k) => (k === i ? e.target.value : x)))} />
+          ))}
+          <ButtonRow>
+            <Button type="submit" variant="primary" disabled={busy || !srcUrls.some(x => /^https?:\/\/\S+$/.test(x.trim()))}>Add with source</Button>
+            <Button type="button" onClick={() => setSrcFor(null)}>Cancel</Button>
+          </ButtonRow>
+        </form>
       )}
       {needRestore && (
         <div className="hvi-refer-restore">

@@ -149,6 +149,7 @@ export const figureIndexEntry = c => ({
   source: c.source ?? null,
   places: c.places ?? null, stratum: c.stratum ?? null, description: c.description ?? null, origin: c.origin ?? null, height: c.height ?? null, sex: c.sex ?? null,
   skin: c.skin ?? null,
+  localOfficial: c.localOfficial === true ? true : undefined, candidate: c.candidate === true ? true : undefined,
   // The file's movement log (src/movement.js); the Department's changes shown apart from the subject's.
   scoreHistory: Array.isArray(c.scoreHistory) ? c.scoreHistory.slice(-40) : null,
 });

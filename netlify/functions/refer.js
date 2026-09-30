@@ -1,9 +1,11 @@
 import { SYSTEM_PROMPT } from "../lib/systemPrompt.js";
 import { safeLook } from "../lib/look.js";
-import { PUBLIC_RECORD, REFERRAL_ADDENDUM, directiveFor } from "../lib/publicRecord.js";
-import { callClaude, ScoreError } from "../lib/score.js";
+import { PUBLIC_RECORD, REFERRAL_ADDENDUM, OWNER_SOURCE_ADDENDUM, directiveFor } from "../lib/publicRecord.js";
+import { callClaude, ScoreError, dollarsOf } from "../lib/score.js";
 import { factCheck } from "../lib/factCheck.js";
-import { isCaseId, normalizeAssessment, computeScore, getTier, cube, harmGated, needsHarmReview } from "../lib/intake.js";
+import { isCaseId, normalizeAssessment, computeScore, getTier, cube, harmGated, needsHarmReview, medianAssessment, medianSeverity, MIN_ASSESSED, assessedCount } from "../lib/intake.js";
+import { MAX_SOURCES, sourceUrlError, fetchSources, sourceRecord } from "../lib/ownerSource.js";
+import { normOrigin } from "../../src/origin.js";
 import { slugify } from "../../src/figures.js";
 import { nameError, cleanName, resolveTitle, resolveCandidates, needsChoice, safeToAssume, searchHumans, qualifierFrom, matchesName, onFileByQid, fetchArticleText, onFileFigure, placeReferral, publicFigure, isHeadOfStateOrGov, originsOf, staturesOf, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
 import { displayName } from "../../src/figures.js";
@@ -99,6 +101,11 @@ export default async (req, context) => {
     if (!title) { const hit = await typedOnFile(); if (hit) return hit; }
     return json(403, { error: NOT_ASSESSED, reason: "unassessed" });
   }
+
+  // Owner-only: a public official with no Wikipedia article, filed from public source links
+  // (Scott, 2026-09-30). Anyone else's sources are ignored: the name goes through the
+  // Wikipedia desk like every referral, and no article is still "No public record".
+  if (isOwner(caseId) && body?.sources != null) return ownerSourceReferral({ json, name, caseId, sources: body.sources });
 
   const ip = clientIp(req, context);
   try {
@@ -258,6 +265,8 @@ export default async (req, context) => {
       verdictStatus, living: wiki.living, born: wiki.born, died: wiki.died,
       factCheck: fc ? { checked: fc.checked, removed: fc.removed, guard: fc.guard ?? null, regenerated: Boolean(fc.regenerated), at: new Date().toISOString() } : null,
       noDangle: raw?.no_dangle === true,
+      // A living candidate in an election not yet held: the file says the Department does not vote.
+      candidate: wiki.living && raw?.pending_candidate === true,
       flags: a.flags, commendations: a.commendations, harm: a.harm, headOfState, harmReviewPending,
       sprite: null, spriteStatus: "pending", spriteAttempts: 0, look,
       referredBy: caseId.slice(-4), at: new Date().toISOString(),
@@ -276,5 +285,112 @@ export default async (req, context) => {
     return json(500, { error: "The referral desk suffered an internal failure. The paperwork has been lost. It will be blamed on you." });
   }
 };
+
+// ---- owner-added local public officials ------------------------------------------------
+// The sources are the whole record: fetched server side (lib/ownerSource.js, SSRF-safe,
+// 200 KB cap), scored three times on them alone and the per-dimension median kept, then
+// fact-checked against the same text under the living-subject guard. No Wikidata: no
+// birth, death, height or sex; origin only when the sources make the country plain.
+// No regeneration: a verdict that mostly fails the check is withheld, not rewritten.
+const SOURCE_RUNS = 3;
+const GENERIC_SKIN = "medium";   // no photo lookup for these files: the likeness is generic
+async function ownerSourceReferral({ json, name, caseId, sources: given }) {
+  const urls = Array.isArray(given) ? [...new Set(given.map(u => String(u || "").trim()).filter(Boolean))] : [];
+  if (!urls.length || urls.length > MAX_SOURCES) return json(400, { error: `Give one to ${MAX_SOURCES} public source links.`, reason: "sources" });
+  const bad = urls.map(u => [u, sourceUrlError(u)]).filter(([, e]) => e);
+  if (bad.length) return json(400, { error: `Source refused: ${bad.map(([u, e]) => `${u.slice(0, 80)} (${e})`).join("; ")}.`, reason: "sources" });
+
+  // The source path is for people WITHOUT an article. Someone with one files by name.
+  const c = await resolveCandidates(name);
+  if (!c.ok) return json(503, { error: REJECT.lookup, reason: "lookup" });
+  if (c.candidates.length) return json(409, { error: "This subject has a Wikipedia article. File the name; the source desk is for officials without one.", reason: "hasArticle", candidates: c.candidates.slice(0, 3).map(k => ({ title: k.title, description: k.description })) });
+
+  const base = slugify(name);
+  if (!base || RESERVED_SLUGS_OWNER.has(base)) return json(422, { error: REJECT.ambiguous, reason: "ambiguous" });
+  try {
+    const prior = await getFigure(base);
+    if (prior?.removed && prior?.excluded) return json(403, { error: EXCLUDED_LINE, reason: "excluded" });
+    if (prior?.removed && prior?.source === "owner-source") return json(410, { error: REJECT.withdrawn, reason: "withdrawn" });
+    if (prior?.name && prior.source === "owner-source") return json(200, onFileBody(publicFigure(prior)));
+  } catch (err) {
+    console.error("owner-source read failed", err);
+    return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
+  }
+
+  const fetched = await fetchSources(urls);
+  if (!fetched.sources.length) return json(422, { error: "None of the sources could be read. The Department files nothing it has not read.", reason: "sources", dropped: fetched.dropped });
+  const record = sourceRecord(fetched.sources);
+  if (!(await chargeGlobal(SOURCE_RUNS + 1))) return json(503, { error: GLOBAL_CAP_LINE, caseId }, { "Retry-After": "3600" });
+
+  const usage = [];
+  try {
+    const user = `PUBLIC OFFICIAL: ${name}\nSTATUS: living\n(If you cite a directive, cite Directive ${directiveFor(name)}.)\n\nSOURCES:\n${record}`;
+    const settled = await Promise.allSettled(Array.from({ length: SOURCE_RUNS }, () => callClaude(SYSTEM_PROMPT + PUBLIC_RECORD + OWNER_SOURCE_ADDENDUM, user, { usage })));
+    const raws = settled.filter(r => r.status === "fulfilled" && r.value && typeof r.value === "object").map(r => r.value);
+    if (!raws.length) { const e = settled.find(r => r.status === "rejected")?.reason; throw e instanceof ScoreError ? e : new ScoreError("The Assessment Engine produced nothing usable. Resubmit."); }
+    const most = pred => raws.filter(pred).length * 2 > raws.length;
+    if (most(r => r.is_human_public_figure === false)) return json(422, { error: REJECT.notHuman, reason: "notHuman", caseId });
+    const declined = raws.map(r => r.decline).find(d => DECLINE.has(d) && most(r => r.decline === d));
+    if (declined) return json(422, { error: REJECT[declined], reason: declined, caseId });
+
+    // Model confidence kept: a dimension the sources don't cover stays unassessed.
+    const readings = raws.map(r => ({ raw: r, a: normalizeAssessment(r) }));
+    const med = medianAssessment(readings.map(x => x.a));
+    const closest = readings.reduce((b, x) => (dist(x.a.breakdown, med.breakdown) < dist(b.a.breakdown, med.breakdown) ? x : b));
+    const raw = closest.raw;
+    const severity = medianSeverity(readings.map(x => x.a.harm?.severity ?? null));
+    const a = { ...closest.a, breakdown: med.breakdown };
+
+    let verdict = a.verdict, verdictStatus = "withheld", fc = null;
+    try {
+      fc = await factCheck({ name, deceased: false, source: record, verdict, usage });
+      if (fc.verdict && !fc.mostlyFailed) { verdict = fc.verdict; verdictStatus = "published"; }
+    } catch (err) {
+      console.error("owner-source fact-check failed; verdict withheld", err?.message || err);
+    }
+
+    const str = (v, n) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, n) : "") || null;
+    const qualifier = str(raw.qualifier, 40)?.toLowerCase().replace(/[^a-z0-9 ,.'&-]/g, "").trim() || null;
+    const score = computeScore(a.breakdown, severity);
+    const harmReviewPending = needsHarmReview({ breakdown: a.breakdown, harm: a.harm, headOfState: null });
+    const look = safeLook(str(raw.sprite_look, MAX_LOOK) || "");
+    // Namesakes: the bare name first, then name + office; a file already holding both is not overwritten.
+    const slugs = [base, qualifier && slugify(`${name} ${qualifier}`)].filter(s => s && !onFileFigure(s));
+    const card = {
+      slug: null, name, qualifier, wikiTitle: null, wikidata: null,
+      origin: normOrigin(raw.country), height: null, sex: null,
+      score, tier: getTier(score), ...cube(a.breakdown), breakdown: a.breakdown, confidence: med.confidence ?? null, verdict,
+      verdictStatus, living: true, born: null, died: null,
+      provisional: assessedCount(a.breakdown) < MIN_ASSESSED,
+      factCheck: fc ? { checked: fc.checked, removed: fc.removed, guard: fc.guard ?? null, regenerated: false, mostlyFailed: Boolean(fc.mostlyFailed), at: new Date().toISOString() } : null,
+      noDangle: raw.no_dangle === true,
+      candidate: raws.some(r => r.pending_candidate === true),
+      flags: a.flags, commendations: a.commendations, harm: a.harm, headOfState: null, harmReviewPending,
+      sprite: null, spriteStatus: "pending", spriteAttempts: 0, look, skin: GENERIC_SKIN, likeness: "generic",
+      source: "owner-source", localOfficial: true,
+      sources: fetched.sources.map(s => s.url), sourcesDropped: fetched.dropped,
+      stratum: { pool: "local-official", domain: "politics", occupation: str(raw.occupation, 30)?.toLowerCase() || null },
+      description: str(raw.description, 110),
+      runScores: readings.map(x => x.a.score),
+      cost: { dollars: Math.round(dollarsOf(usage) * 10000) / 10000, calls: usage.length, input: usage.reduce((t, u) => t + u.input, 0), output: usage.reduce((t, u) => t + u.output, 0) },
+      referredBy: caseId.slice(-4), at: new Date().toISOString(),
+    };
+    for (const slug of slugs) {
+      const taken = await getFigure(slug);
+      if (taken) continue;
+      if (await createFigure({ ...card, slug })) {
+        const made = { ...card, slug };
+        return json(201, { status: "created", message: `New arrival processed: ${displayName(made)}. Filed from ${card.sources.length} public source${card.sources.length === 1 ? "" : "s"}. Likeness pending, and generic.`, subject: publicFigure(made), caseId, remaining: null, dropped: fetched.dropped, cost: card.cost, verdictStatus });
+      }
+    }
+    return json(409, { error: REJECT.ambiguous, reason: "ambiguous", caseId });
+  } catch (err) {
+    if (err instanceof ScoreError) return json(err.status, { error: err.message });
+    console.error("owner-source referral failed", err);
+    return json(500, { error: "The referral desk suffered an internal failure. The paperwork has been lost. It will be blamed on you." });
+  }
+}
+const RESERVED_SLUGS_OWNER = new Set(["index"]);
+const dist = (x, y) => Object.keys(y || {}).reduce((t, d) => t + (typeof x?.[d] === "number" && typeof y[d] === "number" ? Math.abs(x[d] - y[d]) : (x?.[d] == null) !== (y[d] == null) ? 50 : 0), 0);
 
 export const config = { path: "/api/refer" };

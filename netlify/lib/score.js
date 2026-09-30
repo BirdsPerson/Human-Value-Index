@@ -28,7 +28,8 @@ export function parseModelJson(text) {
 
 // One request to the Messages API; returns the reply text. model and maxTokens are
 // fixed by each caller in code, never taken from the client.
-export async function claudeText({ system, messages, model = MODEL, maxTokens = MAX_TOKENS }) {
+// usage (optional): an array each call's token counts are pushed onto, for cost reports.
+export async function claudeText({ system, messages, model = MODEL, maxTokens = MAX_TOKENS, usage = null }) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new ScoreError("The Assessment Engine is not connected. The Department regrets nothing.", 500);
 
@@ -51,10 +52,15 @@ export async function claudeText({ system, messages, model = MODEL, maxTokens = 
     if (response.status === 429 || response.status === 529) throw new ScoreError("The Assessment Engine is overloaded with subjects more interesting than you. Try again shortly.", 503);
     throw new ScoreError("The Assessment Engine rejected the request. This is rare, and it is not a compliment.");
   }
+  if (Array.isArray(usage)) usage.push({ model, input: data?.usage?.input_tokens || 0, output: data?.usage?.output_tokens || 0 });
   if (data?.stop_reason === "max_tokens") console.warn("anthropic hit max_tokens; using what arrived");
   return (data?.content || []).map(b => b.text || "").join("");
 }
 
-export async function callClaude(system, user) {
-  return parseModelJson(await claudeText({ system, messages: [{ role: "user", content: user }] }));
+export async function callClaude(system, user, { usage = null } = {}) {
+  return parseModelJson(await claudeText({ system, messages: [{ role: "user", content: user }], usage }));
 }
+
+// Standard prices per million tokens (claude-api skill; batch prices in scripts/roster/batch.mjs).
+export const PRICES = { "claude-sonnet-5": { in: 2, out: 10 }, "claude-haiku-4-5-20251001": { in: 1, out: 5 } };
+export const dollarsOf = usage => (usage || []).reduce((t, u) => t + ((PRICES[u.model]?.in || 0) * u.input + (PRICES[u.model]?.out || 0) * u.output) / 1e6, 0);

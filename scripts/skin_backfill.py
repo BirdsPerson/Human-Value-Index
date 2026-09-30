@@ -119,7 +119,7 @@ def prod_subjects():
                                     capture_output=True, text=True, timeout=300).stdout)
     res = {}
     for c in idx.get("cards", []):
-        if c.get("removed"):
+        if c.get("removed") or c.get("localOfficial"):   # owner-added officials: generic skin, no photo lookup
             continue
         res[c["slug"]] = (c.get("name"), c.get("wikiTitle") or c.get("name"))
     return res

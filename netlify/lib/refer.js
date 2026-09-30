@@ -445,13 +445,18 @@ export const publicFigure = c => ({
   origin: normOrigin(c.origin),
   height: Number.isFinite(c.height) ? c.height : null, sex: c.sex === "m" || c.sex === "f" ? c.sex : null,
   scoreHistory: Array.isArray(c.scoreHistory) ? c.scoreHistory.slice(-40) : null,
+  // Owner-added local public officials: the record is the listed public sources, nothing else.
+  localOfficial: c.localOfficial === true,
+  sources: c.localOfficial === true && Array.isArray(c.sources) ? c.sources.filter(u => typeof u === "string" && /^https?:\/\//.test(u)).slice(0, 3) : null,
+  // A living candidate in an election not yet held: the file carries the Department's abstention.
+  candidate: c.candidate === true && !c.died,
 });
 
 // The census (/api/pen, the social tick) carries what the city, pen, cube and analytics
 // read for every subject; these only a file shows, so /api/figure/<slug> serves them
 // when a file opens. Breakdown stays: the city's jobs and friendships and the analytics
 // category profile read it for everyone (~140 bytes a subject).
-export const FILE_ONLY = ["verdict", "scoreHistory", "harmReview"];
+export const FILE_ONLY = ["verdict", "scoreHistory", "harmReview", "sources"];
 export const censusFigure = c => {
   const f = publicFigure(c);
   for (const k of FILE_ONLY) delete f[k];

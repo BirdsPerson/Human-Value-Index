@@ -33,5 +33,5 @@ export function useFileDetail(subject) {
   if (!need) return { subject, loading: false };
   if (got?.slug !== slug) return { subject, loading: true };
   const d = got.detail;
-  return { subject: { ...subject, verdict: d.verdict ?? null, scoreHistory: d.scoreHistory ?? null, harmReview: d.harmReview ?? null, breakdown: subject.breakdown ?? d.breakdown ?? null }, loading: false };
+  return { subject: { ...subject, verdict: d.verdict ?? null, scoreHistory: d.scoreHistory ?? null, harmReview: d.harmReview ?? null, sources: d.sources ?? null, localOfficial: subject.localOfficial || d.localOfficial || false, candidate: subject.candidate || d.candidate || false, breakdown: subject.breakdown ?? d.breakdown ?? null }, loading: false };
 }

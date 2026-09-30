@@ -43,7 +43,7 @@ const dims = ["care", "alignment", "utility", "adaptability", "legacy", "network
 let wikiRoutes = [], wikiCalls = 0;
 // Fact-check pass (lib/factCheck.js): "ok" all supported, "fail" mostly contradicted, "error" a 500.
 let factMode = "ok", factCalls = 0, lastFactUser = "";
-let avatarCalls = 0, lastAvatarUser = "";
+let avatarCalls = 0, lastAvatarUser = "", ownerCalls = 0;
 globalThis.fetch = async (url, init) => {
   if (/wikipedia\.org|wikidata\.org/.test(String(url))) {
     wikiCalls++;
@@ -59,7 +59,9 @@ globalThis.fetch = async (url, init) => {
     if (factMode === "error") return new Response(JSON.stringify({ error: { type: "api_error" } }), { status: 500 });
     // "fail": the claims carry quotes into the "record" verdict and the rewrite is a clean
     // deletion, so it clears the living-subject guard (lib/factCheck.js).
-    const fc = factMode === "fail"
+    const fc = factMode === "owner"
+      ? { claims: [{ claim: "mayor", quote: "serves as mayor of Cape May", status: "supported" }, { claim: "museum", quote: "restored the Harriet Tubman Museum", status: "unsupported" }, { claim: "primary", quote: "won the 2026 Democratic primary", status: "supported" }], verdict: "x" }
+      : factMode === "fail"
       ? { claims: [{ claim: "a", quote: "recorded eleven albums", status: "contradicted" }, { claim: "b", quote: "founded a fictional charity", status: "unsupported" }, { claim: "c", quote: "hosted a children's program", status: "supported" }], verdict: "Subject hosted a children's program for decades. Directive 9 requires acknowledgment. Acknowledged." }
       : { claims: [{ claim: "sang", status: "supported" }, { claim: "wrote", status: "supported" }, { claim: "invented", status: "unsupported" }], verdict: "Checked verdict. Directive 9 requires acknowledgment. Acknowledged." };
     return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(fc) }], stop_reason: "end_turn" }), { status: 200 });
@@ -80,6 +82,17 @@ globalThis.fetch = async (url, init) => {
   }
 
   lastUser = reqBody.messages[0].content;
+  if (/LOCAL PUBLIC OFFICIAL MODE/.test(reqBody.system || "")) {
+    ownerCalls++;
+    // Three readings that differ: the median is kept; physical and threat left unassessed.
+    const k = ownerCalls % 3;
+    const out = { breakdown: Object.fromEntries(dims.map(d => [d, 50 + k * 5])), confidence: Object.fromEntries(dims.map(d => [d, ["physical", "threat"].includes(d) ? 10 : 70])),
+      verdict: "Subject serves as mayor of Cape May. Subject restored the Harriet Tubman Museum. Subject won the 2026 Democratic primary for the 2nd Congressional District. The file rests on a thin public record.",
+      flags: [], commendations: [], documented_harm: "none", era_context: "modern", harm_severity: null, harm_official_capacity: false,
+      is_human_public_figure: true, decline: null, no_dangle: false, pending_candidate: true, qualifier: "Mayor of Cape May", description: "Mayor of Cape May, New Jersey",
+      occupation: "mayor", country: "USA", sprite_look: "plain dark suit, white shirt, holding a slim folder" };
+    return new Response(JSON.stringify({ content: [{ type: "text", text: JSON.stringify(out) }], usage: { input_tokens: 9000, output_tokens: 700 }, stop_reason: "end_turn" }), { status: 200 });
+  }
   if (claudeMode === "overloaded") return new Response(JSON.stringify({ error: { type: "overloaded" } }), { status: 529 });
   const out = claudeMode === "appeal" ? {
     // Loud readings on every section: an appeal must only let the sections in scope through.
@@ -513,6 +526,76 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
   // a non-owner stranger with no case is still refused
   r = await read(await post(refer, "/api/refer", { name: "Terence McKenna" }, { ip: "192.0.2.61" }));
   assert.ok(r.status === 200 || r.status === 403, "now on file, or refused: never scored for a stranger");
+
+  // Owner-added local public officials (lib/ownerSource.js): no article, public source links.
+  {
+    const OS = await import("../netlify/lib/ownerSource.js");
+    const realGet = OS.transport.get;
+    const PAGES = {
+      "https://www.capemaycity.com/MayorZacharyMullock": "<html><head><title>Mayor Zachary Mullock</title></head><body><nav>Home Menu</nav><p>Zack Mullock, Mayor of Cape May, New Jersey. Term Exp. 12/31/2028. Restoration and project management of the Harriet Tubman Museum. Born and raised in South Jersey. Attended Cape May Elementary and Wildwood Catholic. Historic Preservation Commission member.</p></body></html>",
+      "https://whyy.org/a": "<html><body><article><p>Cape May Mayor Zack Mullock won the 2026 Democratic primary for the 2nd Congressional District and will face the incumbent in the November general election. " + "More reporting. ".repeat(20) + "</p></article></body></html>",
+    };
+    let gets = [];
+    OS.transport.get = async url => { gets.push(url); const b = PAGES[url]; if (!b) throw Object.assign(new Error("down"), { code: "ENOTFOUND" }); return { status: 200, headers: { "content-type": "text/html" }, body: Buffer.from(b), truncated: false }; };
+    try {
+      const SRC = ["https://www.capemaycity.com/MayorZacharyMullock", "https://whyy.org/a", "https://6abc.example/gone"];
+      // a non-owner's sources are ignored: the old desk, and no article is still "No public record"
+      const c0 = claudeCalls;
+      r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId, sources: SRC }, { ip: "192.0.2.63" }));
+      assert.equal(r.status, 422, JSON.stringify(r.body)); assert.equal(r.body.reason, "none");
+      assert.equal(gets.length, 0, "no source is fetched for a non-owner"); assert.equal(claudeCalls, c0, "nothing scored");
+      // the owner: unsafe URLs refused before anything is fetched or charged
+      for (const bad of ["http://localhost/x", "http://169.254.169.254/latest/meta-data/", "http://10.0.0.8/", "file:///etc/passwd", "ftp://example.org/a", "https://example.org:8443/"]) {
+        r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: [SRC[0], bad] }, { ip: "192.0.2.64" }));
+        assert.equal(r.status, 400, bad); assert.equal(r.body.reason, "sources");
+      }
+      r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: [...SRC, "https://d.example/", "https://e.example/"] }, { ip: "192.0.2.64" }));
+      assert.equal(r.status, 400, "at most three sources");
+      assert.equal(gets.length, 0);
+      // someone with an article files by name, not from sources
+      r = await read(await post(refer, "/api/refer", { name: "Fred Rogers", caseId: "HVI-OWNERAAA", sources: [SRC[0]] }, { ip: "192.0.2.64" }));
+      assert.equal(r.status, 409, JSON.stringify(r.body)); assert.equal(r.body.reason, "hasArticle");
+      // the owner with sources: three readings on the sources alone, median kept, fact-checked against them
+      const c1 = claudeCalls, f1 = factCalls, o1 = ownerCalls, fm = factMode;
+      factMode = "owner";
+      r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: SRC }, { ip: "192.0.2.64" }));
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(ownerCalls - o1, 3, "median of three readings"); assert.equal(factCalls - f1, 1, "one fact-check"); assert.equal(claudeCalls - c1, 4);
+      assert.match(lastUser, /PUBLIC OFFICIAL: Zack Mullock\nSTATUS: living/);
+      assert.match(lastUser, /== SOURCE 1: https:\/\/www\.capemaycity\.com\/MayorZacharyMullock \(Mayor Zachary Mullock\) ==/);
+      assert.ok(!/Home Menu/.test(lastUser), "page chrome stripped");
+      assert.match(lastFactUser, /STATUS: living/); assert.match(lastFactUser, /Harriet Tubman Museum/, "the fact-check reads the source text");
+      assert.ok(!/wikipedia/i.test(lastFactUser));
+      const card = globalThis.__blobs.get("hvi-figures").get("zack-mullock").data;
+      assert.equal(card.source, "owner-source"); assert.equal(card.localOfficial, true); assert.equal(card.wikidata, null);
+      assert.deepEqual(card.sources, SRC.slice(0, 2), "the unreadable source is dropped");
+      assert.equal(card.sourcesDropped.length, 1);
+      assert.equal(card.origin, "USA"); assert.equal(card.qualifier, "mayor of cape may"); assert.equal(card.description, "Mayor of Cape May, New Jersey");
+      assert.equal(card.breakdown.physical, null, "a dimension the sources don't cover stays unassessed"); assert.equal(card.breakdown.threat, null);
+      assert.equal(card.breakdown.care, 55, "per-dimension median of 50/55/60");
+      assert.equal(card.candidate, true); assert.equal(card.living, true); assert.equal(card.born, null);
+      assert.equal(card.skin, "medium"); assert.equal(card.likeness, "generic"); assert.equal(card.spriteStatus, "pending");
+      factMode = fm;
+      assert.equal(card.verdictStatus, "published");
+      assert.equal(card.verdict, "Subject serves as mayor of Cape May. Subject won the 2026 Democratic primary for the 2nd Congressional District. The file rests on a thin public record.", "the claim the sources don't back is deleted (living guard)");
+      assert.equal(card.factCheck.guard, "deletion");
+      assert.ok(card.cost.dollars > 0 && card.cost.calls === 4);
+      assert.equal(r.body.subject.localOfficial, true); assert.deepEqual(r.body.subject.sources, SRC.slice(0, 2)); assert.equal(r.body.subject.candidate, true);
+      assert.ok(!("cost" in r.body.subject) && !("sourcesDropped" in r.body.subject), "internal fields stay internal");
+      // the census leaves the links to the file; the file serves them
+      const { censusFigure } = await import("../netlify/lib/refer.js");
+      assert.ok(!("sources" in censusFigure(card)));
+      const fig = await read(await (await import("../netlify/functions/figure.js")).default(new Request(HOST + "/api/figure/zack-mullock"), { params: { slug: "zack-mullock" } }));
+      assert.deepEqual(fig.body.subject.sources, SRC.slice(0, 2));
+      // filed once: a second add is the file on record, not a second scoring
+      const c2 = claudeCalls;
+      r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: SRC }, { ip: "192.0.2.64" }));
+      assert.equal(r.body.status, "on-file"); assert.equal(claudeCalls, c2);
+      // every source unreadable: nothing charged, nothing filed
+      r = await read(await post(refer, "/api/refer", { name: "Pat Nobody", caseId: "HVI-OWNERAAA", sources: ["https://gone.example/1"] }, { ip: "192.0.2.64" }));
+      assert.equal(r.status, 422); assert.equal(r.body.reason, "sources"); assert.equal(claudeCalls, c2);
+    } finally { OS.transport.get = realGet; }
+  }
 
   // The sharded index (netlify/lib/figure-index.js): the store was born sharded (no legacy
   // blob), every referral indexed in its shard, and the census reads them back.
