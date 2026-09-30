@@ -16,7 +16,7 @@ import {
   mergeRoster, tierCounts, histogram, tierMarkers, quadrantShare, categoryProfile, eraOf, domainOf,
   groupAverages, coverage, topBottom, scatterPoints, DIMS, mean,
 } from "./aggregate.js";
-import { regionOf, countryOf, representation } from "../origin.js";
+import { regionOf, countryOf, representation, REGIONS } from "../origin.js";
 import "./analytics.css";
 
 // Marks: validated for the #0a0f0a surface (L 0.48-0.67, adjacent CVD >= 6 with direct
@@ -390,7 +390,19 @@ export default function Analytics({ figures }) {
     fetchPen({ kind: "figure" }).then(list => { if (!off) setPen(list); }).catch(() => { if (!off) setPen([]); });
     return () => { off = true; };
   }, []);
-  const subjects = useMemo(() => mergeRoster(figures, pen || []), [figures, pen]);
+  const everyone = useMemo(() => mergeRoster(figures, pen || []), [figures, pen]);
+  // Birth region / country filter: every chart below reads the filtered set, except WHO IS
+  // ON FILE, which is about the whole file's spread and would be meaningless inside one region.
+  const [region, setRegion] = useState(null);
+  const [country, setCountry] = useState("");
+  const regions = useMemo(() => REGIONS.filter(r => everyone.some(s => regionOf(s) === r)), [everyone]);
+  const countries = useMemo(() => {
+    const m = new Map();
+    for (const s of everyone) { const c = countryOf(s); if (c && (!region || regionOf(s) === region)) m.set(c, (m.get(c) || 0) + 1); }
+    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [everyone, region]);
+  const subjects = useMemo(() => everyone.filter(s => (!region || regionOf(s) === region) && (!country || countryOf(s) === country)), [everyone, region, country]);
+  const pickRegion = (r) => { setRegion(r); setCountry(""); };
   const bySource = useMemo(() => {
     const c = { record: 0, referral: 0, engine: 0 };
     for (const s of subjects) c[s.source] = (c[s.source] || 0) + 1;
@@ -401,6 +413,21 @@ export default function Analytics({ figures }) {
       <div className="hvi-fi-count" aria-live="polite">
         {subjects.length} SUBJECTS // {bySource.record} ON RECORD · {bySource.referral} REFERRED · {bySource.engine} DRAFTED
         {pen === null ? " // [ .. ] PULLING REFERRALS █" : ""}
+        {subjects.length !== everyone.length ? ` // FILTERED FROM ${everyone.length}` : ""}
+      </div>
+      <div className="hvi-an-filter">
+        <ChipStrip label="Filter by birth region">
+          <Chip pressed={!region} onClick={() => pickRegion(null)}>ALL REGIONS</Chip>
+          {regions.map(r => <Chip key={r} pressed={region === r} onClick={() => pickRegion(r)}>{r}</Chip>)}
+        </ChipStrip>
+        <label className="hvi-an-country">
+          <span>COUNTRY</span>
+          <select value={country} onChange={e => setCountry(e.target.value)}>
+            <option value="">ALL{region ? ` IN ${region}` : ""} ({countries.reduce((a, [, n]) => a + n, 0)})</option>
+            {countries.map(([c, n]) => <option key={c} value={c}>{c.toUpperCase()} ({n})</option>)}
+          </select>
+        </label>
+        {subjects.length === 0 && pen !== null && <p className="hvi-an-empty">NO FILES MATCH. THE DEPARTMENT HAS NOT YET PROCESSED THAT PART OF THE PLANET.</p>}
       </div>
       {/* The four a visitor wants first. The rest is one disclosure: twelve charts ran to
           about fourteen phone screens (docs/design-audit/AUDIT-2026-09-29.md). */}
@@ -417,7 +444,7 @@ export default function Analytics({ figures }) {
             caption="MEAN SCORE PER FIELD OF ENDEAVOUR. THE LINE IS THE MEAN OF EVERYONE." />
           <GroupChart subjects={subjects} title="VALUE BY ERA" keyFn={eraOf} noun="ERA"
             caption="MEAN SCORE BY BIRTH ERA. ANTIQUITY IS JUDGED ON WHAT SURVIVED OF IT." />
-          <Representation subjects={subjects} />
+          <Representation subjects={everyone} />
           <GroupChart subjects={subjects} title="VALUE BY REGION" keyFn={regionOf} noun="REGION"
             caption="MEAN SCORE BY BIRTH REGION. SMALL SAMPLES ARE NOISE, AND THE DEPARTMENT KNOWS IT." />
           <Coverage subjects={subjects} />
