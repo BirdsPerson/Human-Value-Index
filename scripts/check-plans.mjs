@@ -278,8 +278,12 @@ for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["sy
     assert.deepEqual(gaps, [], `every ${every} min: days skipped`); checks++;
     ok(late === 0, `every ${every} min: today always has a plan (${late} misses)`);
     ok(hi >= SIM.machineClock(startMs + 12 * 60 * 60 * 1000).day + 1, `every ${every} min: built ahead of the clock`);
-    const blobs = [...globalThis.__blobs.get(PL.STORE).keys()].filter(k => k.includes("/day/"));
+    const blobs = [...globalThis.__blobs.get(PL.STORE).keys()].filter(k => k.startsWith("f1/day/"));
     ok(blobs.length === Object.keys(man().days).length, `every ${every} min: retired days' blobs are deleted (${blobs.length} kept)`);
+    const m2 = raw(PL.MANIFEST2);
+    const groups = new Set([...globalThis.__blobs.get(PL.STORE).keys()].filter(k => k.startsWith("f2/day/")).map(k => k.split("/").slice(2, 4).join("/")));
+    ok(m2 && Object.keys(m2.days).length === Object.keys(man().days).length && groups.size === Object.keys(m2.days).length, `every ${every} min: every planned day is split, retired splits deleted (${groups.size} kept)`);
+    ok(Object.entries(m2.days).every(([d, e]) => e.ver === man().days[d].ver), `every ${every} min: a day's split carries its plan's version`);
     console.log(`  cadence ${every} min: days ${lo}..${hi} all built, none late`);
   }
 
@@ -299,11 +303,223 @@ for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["sy
   ok(got[day] === ver && SIM.planOf(Number(day))?.ver === ver, "loadPlans loads the manifest's version");
   SIM.clearPlans();
 }
+// ---- 7. the sector split (scaling step 4: planSplit.js, planClient.js, crowd.js) -------------------
+// The split IS the plan: every (sector, window) file reassembles to the whole day; one file
+// alone places everyone in it exactly as the whole plan does for its six hours; a subject's
+// segments are in every sector they touch; the summary is the plan's own occupancy; the crowd
+// fills exactly what the browser does not hold; the find index points into the right files.
+{
+  const SPLIT = await import("../src/city/planSplit.js");
+  const CROWD = await import("../src/city/crowd.js");
+  const { roomIn, atDistrict } = await import("../src/city/simApi.js");
+  for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["synthetic rich 1500", synthRoster(1500, { seed: 9, rich: true })]]) {
+    SIM.clearPlans(); SIM.clearSocialSnapshots();
+    SIM.setSocialSnapshots(snapshotsFor(roster, [D - 1, D, D + 1]));
+    SIM.setRoster(roster);
+    const people = new Map(roster.map(x => [SIM.keyOf(x), x]));
+    const plan = roundTrip(SIM.buildPlan(D)), ver = PL.versionOf(plan);
+    SIM.clearPlans(); SIM.setPlan(plan, ver);
+    const split = roundTrip(SPLIT.splitDay(plan, ver, people));
+    const T = Array.from({ length: 24 * 4 }, (_, i) => (D - 1) * 24 + i / 4);
+    const full = new Map(roster.map(x => [SIM.keyOf(x), T.map(t => JSON.stringify(SIM.whereAt(x, t)))]));
+    const fullSegs = new Map(roster.map(x => [SIM.keyOf(x), SIM.schedule(x, D)]));
+    // occupancy the way the city counts it, at every summary sample
+    const samples = Array.from({ length: SPLIT.SAMPLES }, (_, k) => (D - 1) * 24 + k * SPLIT.STEP);
+    const occ = samples.map(t => SIM.occupancy(roster, t));
+    const held = samples.map(t => roster.map(x => ({ s: x, w: SIM.whereAt(x, t) })));
+    const bld = samples.map((t, k) => { const b = {}; for (const { s: x, w } of held[k]) { const r = roomIn(w, x); if (r) b[r.buildingId] = (b[r.buildingId] || 0) + 1; } return b; });
+    const dist = samples.map((t, k) => { const d = {}; for (const { w } of held[k]) if (w.sub !== "riding") d[atDistrict(w)] = (d[atDistrict(w)] || 0) + 1; return d; });
+
+    // a. every file loaded: the whole day, identical
+    SIM.clearPlans();
+    for (const id of SPLIT.SECTORS) for (const f of split.windows[id]) SIM.addPlanRows(D, ver, f.places, Object.fromEntries(Object.entries(f.subjects).map(([k, v]) => [k, v[1]])));
+    let diffs = 0, first = null, uncovered = 0;
+    for (const x of roster) {
+      const k = SIM.keyOf(x), want = full.get(k);
+      T.forEach((t, i) => {
+        if (!SIM.covers(x, t)) uncovered++;
+        const got = JSON.stringify(SIM.whereAt(x, t));
+        if (got !== want[i]) { diffs++; first ||= `${k} @${t}\n full  ${want[i]}\n split ${got}`; }
+      });
+    }
+    assert.equal(uncovered, 0, `${label}: the windows reassembled cover every subject all day`); checks++;
+    assert.equal(diffs, 0, `${label}: whereAt from the reassembled windows differs ${diffs} times; first:\n${first}`); checks++;
+
+    // b. one file alone places everyone in it, for its whole window, as the whole plan does
+    let alone = 0, aloneBad = null;
+    for (const id of SPLIT.SECTORS) for (const f of split.windows[id]) {
+      SIM.clearPlans();
+      SIM.addPlanRows(D, ver, f.places, Object.fromEntries(Object.entries(f.subjects).map(([k, v]) => [k, v[1]])));
+      const lo = f.window * SIM.WINDOW_H * 4, hi = lo + SIM.WINDOW_H * 4;
+      for (const k of Object.keys(f.subjects)) {
+        const x = people.get(k), want = full.get(k);
+        for (let i = lo; i < hi; i++) {
+          alone++;
+          if (!SIM.covers(x, T[i]) || JSON.stringify(SIM.whereAt(x, T[i])) !== want[i]) aloneBad ||= `${id}/${f.window} ${k} @${T[i]}`;
+        }
+      }
+    }
+    assert.equal(aloneBad, null, `${label}: a lone window places its subjects as the plan does (first miss ${aloneBad})`); checks++;
+
+    // c. every segment is in every sector it touches, in each window it overlaps
+    let missing = null, touched = 0;
+    for (const [k, segs] of fullSegs) for (const g of segs) for (let w = 0; w < SIM.WINDOWS; w++) {
+      if (!(g.from < (w + 1) * SIM.WINDOW_H && g.to > w * SIM.WINDOW_H)) continue;
+      for (const d of SIM.segDistricts(g)) {
+        touched++;
+        const e = split.windows[d][w].subjects[k];
+        if (!e) { missing ||= `${k} ${d}/${w} (not listed)`; continue; }
+        SIM.clearPlans(); SIM.addPlanRows(D, ver, plan.places, { [k]: e[1] });
+        const have = SIM.schedule(people.get(k), D);
+        if (!have.some(h => h.from === g.from && h.to === g.to && h.placeId === g.placeId && h.activity === g.activity)) missing ||= `${k} ${d}/${w} (segment ${g.from}-${g.to} ${g.placeId})`;
+      }
+    }
+    assert.equal(missing, null, `${label}: a subject's segments are in every sector they touch (${touched} checked; first miss ${missing})`); checks++;
+    // and a file lists nobody who has no segment in its sector and window
+    let stray = null;
+    for (const id of SPLIT.SECTORS) for (const f of split.windows[id]) for (const k of Object.keys(f.subjects)) {
+      if (!fullSegs.get(k).some(g => g.from < (f.window + 1) * SIM.WINDOW_H && g.to > f.window * SIM.WINDOW_H && SIM.segDistricts(g).includes(id))) stray ||= `${k} in ${id}/${f.window}`;
+    }
+    assert.equal(stray, null, `${label}: nobody is listed where they never are (${stray})`); checks++;
+    const recs = Object.values(split.windows.sprawl[1].subjects).map(v => v[0]).filter(Boolean);
+    ok(recs.every(r => !("breakdown" in r) && !("stratum" in r) && !("places" in r) && Array.isArray(r.cj)), `${label}: display records carry the job, not the sim's inputs`);
+    ok(recs.every(r => SIM.assignJob(r).jobId === SIM.assignJob(people.get(r.slug)).jobId), `${label}: the record's job is the one the sim assigns`);
+
+    // d. the summary is the plan's occupancy, sample by sample
+    const sm = split.summary, at = (m, id, k) => sm[m]?.[id]?.[k] || 0;
+    let bad = null;
+    samples.forEach((t, k) => {
+      const o = occ[k];
+      for (const [id, n] of Object.entries(o.places)) if (at("p", id, k) !== n) bad ||= `place ${id} @${k}: ${at("p", id, k)} vs ${n}`;
+      for (const id of Object.keys(sm.p)) if ((o.places[id] || 0) !== at("p", id, k)) bad ||= `place ${id} @${k}`;
+      for (const [id, n] of Object.entries(o.stations)) if (at("st", id, k) !== n) bad ||= `station ${id} @${k}`;
+      for (const [id, tr] of Object.entries(o.trains)) if (JSON.stringify(sm.car[id]?.[k]) !== JSON.stringify(tr.cars)) bad ||= `train ${id} @${k}`;
+      if (sm.loop[k] !== o.loop) bad ||= `loop @${k}`;
+      for (const [id, n] of Object.entries(bld[k])) if (at("b", id, k) !== n) bad ||= `building ${id} @${k}`;
+      for (const [id, n] of Object.entries(dist[k])) if (at("d", id, k) !== n) bad ||= `district ${id} @${k}`;
+      if (Object.values(o.subs).reduce((a, b) => a + b, 0) - (o.subs.riding || 0) !== Object.values(sm.wk).reduce((a, x) => a + x[k], 0) + Object.values(sm.st).reduce((a, x) => a + x[k], 0)) bad ||= `walkers + platforms @${k}`;
+    });
+    assert.equal(bad, null, `${label}: summary counts equal the plan's occupancy (${bad})`); checks++;
+    ok(sm.n === roster.length && Object.values(sm.fam).reduce((a, b) => a + b, 0) === roster.length, `${label}: the summary counts the whole roster`);
+    ok(Object.keys(sm.onFile).length === onFile().length && Object.entries(sm.onFile).every(([k, r]) => JSON.stringify(r) === JSON.stringify(plan.subjects[k])), `${label}: the figures on file ride in the summary, whole day`);
+
+    // e. the crowd fills what the browser does not hold: nothing loaded -> the summary (capped);
+    // everyone held -> nobody; every district loaded -> nobody
+    const none = new Set(), all = new Set(SPLIT.SECTORS);
+    let crowdBad = null;
+    samples.forEach((t, k) => {
+      const h = k * SPLIT.STEP;
+      const c0 = CROWD.crowdAt(sm, h, none, []);
+      const byPlace = {};
+      for (const { w } of c0) if (w.activity !== "commute") byPlace[w.placeId] = (byPlace[w.placeId] || 0) + 1;
+      for (const [id, n] of Object.entries(occ[k].places)) if ((byPlace[id] || 0) !== Math.min(n, Math.ceil(SIM.PLACES[id].cap * 1.25))) crowdBad ||= `empty browser, ${id} @${k}: ${byPlace[id]} vs ${n}`;
+      const riders = c0.filter(e => e.w.sub === "riding").length;
+      if (riders !== occ[k].loop && Object.values(occ[k].trains).every(tr => tr.cars.every(n => n <= SIM.CAR_CAP * 2))) crowdBad ||= `riders @${k}`;
+      if (CROWD.crowdAt(sm, h, none, held[k]).length) crowdBad ||= `everyone held, crowd @${k}`;
+      if (CROWD.crowdAt(sm, h, all, []).length) crowdBad ||= `every district loaded, crowd @${k}`;
+    });
+    assert.equal(crowdBad, null, `${label}: the crowd is the summary less what the browser holds (${crowdBad})`); checks++;
+    const one = CROWD.crowdAt(sm, 18.25, none, []);
+    ok(one.every(e => e.s.crowd && e.s.slug.startsWith("~") && JSON.stringify(CROWD.crowdAt(sm, 18.25, none, []).find(x => x.s === e.s)?.w) === JSON.stringify(e.w)), `${label}: stand-ins keep their identity and place from tick to tick`);
+
+    // f. the find index points into the files the subject is in
+    let findBad = null;
+    for (const [k, name, , at4] of split.find.subjects) {
+      if (!name) findBad ||= `${k}: no name`;
+      [...at4].forEach((ch, w) => { const id = split.find.sectors[parseInt(ch, 36)]; if (ch === "-" || !split.windows[id][w].subjects[k]) findBad ||= `${k} window ${w}`; });
+    }
+    ok(split.find.subjects.length === roster.length && !findBad, `${label}: the find index names everyone and points at a file holding them (${findBad})`);
+    const sizes = SPLIT.SECTORS.flatMap(id => split.windows[id].map(f => JSON.stringify(f).length));
+    console.log(`  ${label}: split identical; summary ${(JSON.stringify(sm).length / 1024).toFixed(0)} KB, windows ${(Math.min(...sizes) / 1024).toFixed(0)}-${(Math.max(...sizes) / 1024).toFixed(0)} KB, find ${(JSON.stringify(split.find).length / 1024).toFixed(0)} KB`);
+  }
+  SIM.clearPlans(); SIM.clearSocialSnapshots(); SIM.clearRoster();
+
+  // The builder publishes the split; /api/plan serves it; /api/find answers from it.
+  const { getStore } = await import("@netlify/blobs");
+  globalThis.__blobs = new Map();
+  const store = () => getStore({ name: PL.STORE });
+  const roster = onFile();
+  const census = [...roster.slice(10), { slug: "citizen-7f3a", name: "Subject 7F3A", score: 540, tier: "TOLERATED GENERALIST", kind: "citizen", warmth: 60, competence: 55, quadrant: "ADMIRED" }];
+  const io = PL.planIo(store, { census: async () => census, snapshots: async () => ({}) });
+  const nowMs = T0 + 5 * 60 * 1000;
+  const r = await PL.buildPlans(nowMs, io, { lookahead: 1 });
+  ok(r.split.map(x => x.day).join() === r.built.map(x => x.day).join(), `every built day is split in the same run (${r.split.map(x => x.day)})`);
+  const raw = (k) => globalThis.__blobs.get(PL.STORE)?.get(k)?.data ?? null;
+  const m2 = raw(PL.MANIFEST2), e = m2.days[D];
+  ok(e && e.ver === raw(PL.MANIFEST).days[D].ver && Object.keys(e.files).length === 10 && e.files.sprawl.length === 4, "the f2 manifest lists every sector's four windows under the plan's version");
+  for (const id of SPLIT.SECTORS) for (let w = 0; w < 4; w++) ok(raw(PL.partKey(D, e.ver, PL.windowPart(id, w, 0)))?.sector === id && e.files[id][w][2] === 1, `window ${id}/${w} published`);
+  ok(JSON.stringify(raw(PL.partKey(D, e.ver, "summary")).parts.sprawl) === "[1,1,1,1]", "the summary says how many parts each window has");
+  // a day built before the split existed is split from its f1 blob, identically
+  const f2day = raw(PL.partKey(D, e.ver, PL.windowPart("arts", 2, 0)));
+  for (const k of [...globalThis.__blobs.get(PL.STORE).keys()]) if (k.startsWith("f2/")) globalThis.__blobs.get(PL.STORE).delete(k);
+  const r2 = await PL.buildPlans(nowMs, io, { lookahead: 1 });
+  ok(r2.built.length === 0 && r2.split.length === r.split.length, "an unsplit day already planned is split from its published plan");
+  ok(JSON.stringify(raw(PL.partKey(D, e.ver, PL.windowPart("arts", 2, 0)))) === JSON.stringify(f2day), "and splits the same");
+  // a dense window is published in parts that partition it, and /api/find reads the right one
+  {
+    const big = synthRoster(1500, { seed: 5 });
+    const box = new Map(), io2 = { putPart: async (k, v) => { box.set(k, roundTrip(v)); } };
+    SIM.clearPlans(); SIM.setRoster(big);
+    const p1 = roundTrip(SIM.buildPlan(D)), v1 = PL.versionOf(p1);
+    SIM.clearRoster();
+    const saved = PL.PART_MAX;
+    const entry = await PL.publishSplit(io2, p1, v1, big, "x", () => nowMs, 100);
+    const whole = (() => { SIM.setPlan(p1, v1); try { return SPLIT.splitDay(p1, v1, new Map(big.map(x => [SIM.keyOf(x), x]))); } finally { SIM.dropPlan(D); } })();
+    let partsOk = true, multi = 0;
+    for (const id of SPLIT.SECTORS) for (let w = 0; w < 4; w++) {
+      const P = entry.files[id][w][2], got = {};
+      if (P > 1) multi++;
+      for (let q = 0; q < P; q++) { const f = box.get(PL.partKey(D, v1, PL.windowPart(id, w, q))); for (const [k, v] of Object.entries(f.subjects)) { if (k in got || PL.partOf(k, P) !== q) partsOk = false; got[k] = v; } }
+      if (JSON.stringify(Object.keys(got).sort()) !== JSON.stringify(Object.keys(whole.windows[id][w].subjects).sort())) partsOk = false;
+    }
+    ok(partsOk && multi > 0 && saved === PL.PART_MAX, `parts partition each window (${multi} windows split in parts)`);
+  }
+
+  const fn = (await import("../netlify/functions/plan.js")).default;
+  const m = await (await fn(new Request("https://x/api/plan"))).json();
+  ok(m.sectors?.[D] === e.ver && m.days[D] === e.ver, "/api/plan lists the split days");
+  const sres = await fn(new Request(`https://x/api/plan/${D}/${e.ver}/summary`));
+  const sum = await sres.json();
+  ok(sres.status === 200 && /immutable/.test(sres.headers.get("cache-control")) && sum.kind === "summary" && sum.day === D, "the summary is served immutable");
+  const wres = await fn(new Request(`https://x/api/plan/${D}/${e.ver}/commons/1/0`));
+  const win = await wres.json();
+  ok(wres.status === 200 && win.sector === "commons" && win.window === 1, "a sector window is served");
+  ok((await fn(new Request(`https://x/api/plan/${D}/${e.ver}/commons/1`))).status === 200, "part 0 is also the window's bare path");
+  ok((await fn(new Request(`https://x/api/plan/${D}/${e.ver}/commons/1/1`))).status === 404, "a part that does not exist: 404");
+  for (const bad of [`/api/plan/${D}/${e.ver}/nowhere/1`, `/api/plan/${D}/${e.ver}/arts/4`, `/api/plan/${D}/${e.ver}/sumary`, `/api/plan/${D}/${e.ver}/arts/1/x`]) ok((await fn(new Request("https://x" + bad))).status === 404, `${bad}: 404`);
+  // what a browser does with them: the summary's figures on file, then one window
+  SIM.clearPlans();
+  SIM.addPlanRows(D, e.ver, sum.places, sum.onFile, { n: sum.n });
+  const fig = roster[0];
+  ok(SIM.covers(fig, (D - 1) * 24 + 13.3), "the summary alone places the figures on file all day");
+  SIM.addPlanRows(D, e.ver, win.places, Object.fromEntries(Object.entries(win.subjects).map(([k, v]) => [k, v[1]])));
+  const someone = Object.keys(win.subjects).find(k => !sum.onFile[k]);
+  ok(!someone || SIM.covers({ slug: someone }, (D - 1) * 24 + 7), "a window places its own subjects in its hours");
+
+  const find = (await import("../netlify/functions/find.js")).default;
+  const realNow = Date.now;
+  Date.now = () => nowMs;
+  try {
+    PL.forgetManifest();
+    const f1 = await (await find(new Request("https://x/api/find?q=subject 7f3a"))).json();
+    ok(f1.hits?.[0]?.key === "citizen-7f3a" && f1.hits[0].rec?.cj && Array.isArray(f1.hits[0].row), `/api/find finds a citizen by name, with its record and row (${JSON.stringify(f1.hits?.[0]?.key)})`);
+    SIM.clearPlans();
+    SIM.addPlanRows(f1.day, f1.ver, sum.places, { [f1.hits[0].key]: f1.hits[0].row });
+    ok(SIM.covers({ slug: "citizen-7f3a" }, SIM.machineClock(nowMs).mt), "the row it returns covers now");
+    const f2 = await (await find(new Request(`https://x/api/find?slug=${SIM.keyOf(fig)}&day=${D}&w=3`))).json();
+    ok(f2.hits.length === 1 && f2.hits[0].rec === 0 && f2.w === 3, "by slug, any window; a figure on file comes back without a record (the bundle has it)");
+    ok((await find(new Request("https://x/api/find?q=zzzzqqq"))).status === 200, "no match is an empty answer");
+    ok((await find(new Request("https://x/api/find"))).status === 400, "nothing asked: 400");
+    ok((await find(new Request(`https://x/api/find?slug=x&day=${D + 40}`))).status === 404, "a day not split: 404 (the browser searches its own census)");
+  } finally { Date.now = realNow; }
+  SIM.clearPlans();
+}
 // ---- 6. the stall alarm (scripts/plan-health.mjs, run by the referral-sprites job) -------------
 {
   const { health, withSection } = await import("./plan-health.mjs");
   const now = T0 + 5 * 60 * 1000;   // day D
-  ok((await health(async () => ({ latest: D + 2 }), now)).ok, "built ahead: healthy");
+  ok((await health(async () => ({ latest: D + 2, sectors: { [D + 1]: "v", [D + 2]: "v" } }), now)).ok, "built and split ahead: healthy");
+  ok(!(await health(async () => ({ latest: D + 2, sectors: { [D]: "v" } }), now)).ok, "built but not split ahead: stalled");
   ok(!(await health(async () => ({ latest: D }), now)).ok, "tomorrow missing: stalled");
   ok(!(await health(async () => ({ latest: null, days: {} }), now)).ok, "empty manifest: stalled");
   ok(!(await health(async () => { throw new Error("HTTP 503"); }, now)).ok, "unreadable manifest: stalled");

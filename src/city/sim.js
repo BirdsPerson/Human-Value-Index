@@ -586,7 +586,16 @@ function draft(pool, dims, dead, key, seed) {
 }
 
 // -> { jobId, rank, title, rankTitle, place, district }
+// A subject read from a published sector window (sectors.js) arrives without the inputs a
+// job is scored from (breakdown, stratum, place tendencies: they stay on the server) and
+// carries the builder's own assignment instead: cj = [jobId, rank], from this function.
+const CJ = new WeakMap();
 export function assignJob(s, seed = SEED) {
+  if (seed === SEED && Array.isArray(s?.cj) && JOB[s.cj[0]]) {
+    let j = CJ.get(s);
+    if (!j) { const best = JOB[s.cj[0]], rank = s.cj[1] | 0; j = { jobId: best.id, rank, title: best.title, rankTitle: best.ladder[rank], place: best.place, district: best.district }; CJ.set(s, j); }
+    return j;
+  }
   return remember("job|" + subjKey(s, seed), () => {
     const key = keyOf(s), t = tierIdx(s), fields = fieldsOf(s), dims = topDims(s);
     const evidence = Math.max(0, ...Object.values(fields));
@@ -1365,11 +1374,19 @@ export function schedule(s, day, seed = SEED) {
   const plan = seed === SEED ? PLANS.get(day) : undefined;
   if (plan) {
     const key = keyOf(s), row = plan.rows.get(key);
-    if (row) return remember(`psch|${plan.ver}|${key}`, () => planSegs(plan, row));
+    if (row) return remember(`psch|${plan.ver}|${key}`, () => planSegs(plan.places, row, 1, 0));
+    const part = plan.parts.get(key);
+    if (part) return part.segs;
+    if (s?.cj) return homeDay(s, seed);
     return remember(`rsch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}`, () => simSchedule(s, day, seed, true));
   }
+  // A subject read from a published plan is never simulated here (its record lacks the
+  // sim's inputs): outside the hours this browser holds it is at home. The census only
+  // reads it where covers() says the plan holds it.
+  if (s?.cj && seed === SEED) return homeDay(s, seed);
   return remember(`sch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}|${ROSTER_VER}`, () => simSchedule(s, day, seed, false));
 }
+const homeDay = (s, seed) => [{ from: 0, to: 24, placeId: homeOf(s, seed), activity: "home" }];
 function simSchedule(s, day, seed, raw) {
   const home = homeOf(s, seed);
   const raws = [
@@ -1407,24 +1424,35 @@ function simSchedule(s, day, seed, raw) {
 export const PLAN_FORMAT = 1;
 const PLAN_ACT = { work: 1, leisure: 2, commute: 3 };
 const PLAN_ACT_NAME = [null, "work", "leisure", "commute"];
-const PLANS = new Map();   // day -> {ver, day, places, rows: Map key -> row, meta}
+// day -> {ver, day, places, rows: Map key -> format-1 row (the whole day), parts: Map key ->
+// {segs, iv} (the hours a sector window gave: sectors.js), meta}
+const PLANS = new Map();
 export const planVersion = (plan) => plan?.ver || null;
+function planEntry(day, ver, places, meta) {
+  let p = PLANS.get(day);
+  if (!p || p.ver !== ver) { p = { ver, day, places, rows: new Map(), parts: new Map(), meta: meta || {} }; PLANS.set(day, p); }
+  if (meta) p.meta = { ...p.meta, ...meta };
+  return p;
+}
 export function setPlan(json, ver) {
   if (!json || json.format !== PLAN_FORMAT || json.seed !== SEED || !Number.isFinite(json.day) || !json.subjects) return false;
   const v = String(ver || json.ver || "");
-  if (!v || PLANS.get(json.day)?.ver === v) return false;
-  PLANS.set(json.day, { ver: v, day: json.day, places: json.places, rows: new Map(Object.entries(json.subjects)), meta: { roster: json.roster, social: json.social, n: json.n } });
+  const cur = PLANS.get(json.day);
+  if (!v || (cur?.ver === v && cur.full)) return false;
+  const p = planEntry(json.day, v, json.places, { roster: json.roster, social: json.social, n: json.n });
+  p.rows = new Map(Object.entries(json.subjects)); p.full = true;
   return true;
 }
 export const plannedDays = () => [...PLANS.keys()].sort((a, b) => a - b);
-export const planOf = (day) => { const p = PLANS.get(day); return p ? { day, ver: p.ver, ...p.meta } : null; };
+export const planOf = (day) => { const p = PLANS.get(day); return p ? { day, ver: p.ver, full: Boolean(p.full), ...p.meta } : null; };
 export function dropPlan(day) { return PLANS.delete(day); }
 export function clearPlans() { PLANS.clear(); }
 
-function planSegs(plan, row) {
-  const P = plan.places, home = P[row[0]], out = [];
-  let t = 0;
-  for (let i = 1; i < row.length; i++) {
+// Decode format-1 segment entries row[i0..] (the home place is row[0]), the first starting at t.
+function planSegs(P, row, i0, t0) {
+  const home = P[row[0]], out = [];
+  let t = t0;
+  for (let i = i0; i < row.length; i++) {
     const e = row[i];
     if (e.length === 1) { out.push({ from: t, to: e[0], placeId: home, activity: "home" }); t = e[0]; continue; }
     const [to, pi, act, fl] = e;
@@ -1482,6 +1510,114 @@ export function buildPlan(day, seed = SEED) {
     subjects[key] = row;
   }
   return { format: PLAN_FORMAT, day, seed, roster: ROSTER_VER, social: { [day]: socialVer(day), [day - 1]: socialVer(day - 1) }, n: ROSTER_ORDER.length, places, subjects };
+}
+
+// ---- sector windows (scaling step 4: netlify/lib/plans.js, src/city/sectors.js) --------------
+// A day is also published split by SECTOR (a district) and WINDOW (6 machine hours): the
+// file (sector, w) holds everyone with a segment in that district during those hours, and
+// for each of them every segment overlapping the window, whatever district it is in. So a
+// browser that loads one district's window can place everyone who is there at any moment
+// of it, the same as the whole plan would, and follow them out of the district until the
+// window ends. A window row is [homeIdx, from0, ...entries]: format-1 segment entries, the
+// first starting at from0 (the whole row's own chaining, cut).
+export const WINDOW_H = 6, WINDOWS = 24 / WINDOW_H;
+export const windowOf = (h) => Math.max(0, Math.min(WINDOWS - 1, Math.floor(h / WINDOW_H)));
+// The districts a decoded segment touches: where it is, or both ends of a trip.
+export const segDistricts = (g) => (g.activity === "commute" ? [...new Set([PLACES[g.fromPlaceId].district, PLACES[g.placeId].district])] : [PLACES[g.placeId].district]);
+// A format-1 row cut to each window: -> [{w, row, districts: Set}] (windows it has segments in).
+export function splitRow(places, row) {
+  const segs = planSegs(places, row, 1, 0), out = [];
+  for (let w = 0; w < WINDOWS; w++) {
+    const a = w * WINDOW_H, b = a + WINDOW_H;
+    let i0 = -1, i1 = -1;
+    segs.forEach((g, i) => { if (g.from < b && g.to > a) { if (i0 < 0) i0 = i; i1 = i; } });
+    if (i0 < 0) continue;
+    const t0 = i0 === 0 ? 0 : row[i0][0];   // the chained start: the entry before ends there
+    const districts = new Set();
+    for (let i = i0; i <= i1; i++) for (const d of segDistricts(segs[i])) districts.add(d);
+    out.push({ w, row: [row[0], t0, ...row.slice(1 + i0, 2 + i1)], districts });
+  }
+  return out;
+}
+// Load window rows {key: [homeIdx, from0, ...entries]} of a day's plan version into the sim.
+// A subject's rows from several windows merge (the same segment from two files is one).
+export function addPlanRows(day, ver, places, rows, meta = null) {
+  const p = planEntry(day, String(ver), places, meta);
+  let n = 0;
+  for (const [key, row] of Object.entries(rows || {})) {
+    if (!Array.isArray(row) || p.rows.has(key)) continue;
+    if (Array.isArray(row[1])) { p.rows.set(key, row); p.parts.delete(key); n++; continue; }   // a whole-day row
+    if (row.length < 3) continue;
+    const segs = planSegs(places, row, 2, row[1]);
+    if (!segs.length) continue;
+    const part = p.parts.get(key);
+    if (!part) { p.parts.set(key, { segs, iv: [[segs[0].from, segs[segs.length - 1].to]] }); n++; continue; }
+    const have = new Set(part.segs.map(g => g.from));
+    const add = segs.filter(g => !have.has(g.from));
+    if (add.length) { part.segs = [...part.segs, ...add].sort((a, b) => a.from - b.from); n++; }
+    const iv = [...part.iv, [segs[0].from, segs[segs.length - 1].to]].sort((a, b) => a[0] - b[0]);
+    part.iv = iv.reduce((acc, x) => { const l = acc[acc.length - 1]; if (l && x[0] <= l[1]) l[1] = Math.max(l[1], x[1]); else acc.push([...x]); return acc; }, []);
+  }
+  return n;
+}
+// Does a loaded plan place this subject at machine time T? (A whole-day row, or a window
+// row covering that hour.) The census reads nobody it does not.
+export function covers(s, machineTime) {
+  const T = toHours(machineTime), d0 = Math.floor(T / 24), h = T - d0 * 24;
+  const p = PLANS.get(d0 + 1);
+  if (!p) return false;
+  const key = keyOf(s);
+  if (p.rows.has(key)) return true;
+  const part = p.parts.get(key);
+  return Boolean(part && part.iv.some(([a, b]) => h >= a && h < b));
+}
+// The hours of day `day` this subject is held until, from hour h (null if not held at h).
+export function coveredUntil(s, day, h) {
+  const p = PLANS.get(day);
+  if (!p) return null;
+  const key = keyOf(s);
+  if (p.rows.has(key)) return 24;
+  const iv = p.parts.get(key)?.iv.find(([a, b]) => h >= a && h < b);
+  return iv ? iv[1] : null;
+}
+
+// ---- stand-ins (src/city/crowd.js) ------------------------------------------------------------
+// The far view draws the crowds the day summary counts, not the people: a district nobody
+// has loaded is filled with anonymous stand-ins shaped like whereAt's answers, so every view
+// draws them the way it draws anyone (a dot from afar). Keys start with "~": no subject's does.
+export function standInAt(placeId, key, activity, seed = SEED) {
+  const p = spotIn(placeId, key, seed), pl = PLACES[placeId];
+  const floor = floorOf(placeId, key, seed);
+  return { placeId, districtId: pl.district, activity, progress: 0.5, x: p.x, y: p.y, buildingId: pl.building, floor, floorId: BUILDING[pl.building].floors[floor].id };
+}
+// A walker in a district: back and forth between two of its places, at walking pace.
+const DPLACES = Object.fromEntries(DISTRICTS.map(d => [d.id, PLACE_LIST.filter(p => p.district === d.id).map(p => p.id)]));
+export function standInWalk(districtId, i, machineTime, seed = SEED) {
+  const ps = DPLACES[districtId] || [];
+  if (ps.length < 2) return null;
+  const tpl = i % 12, a = ps[fnv(`~w|${districtId}|${tpl}|a`) % ps.length];
+  let b = ps[fnv(`~w|${districtId}|${tpl}|b`) % ps.length];
+  if (b === a) b = ps[(ps.indexOf(a) + 1) % ps.length];
+  const key = `~w|${districtId}|${tpl}`;
+  const r = route(a, b, key, seed), T = toHours(machineTime);
+  const lap = 2 * r.total, t = mod(T + h01(`~w|${districtId}|${i}|phase`) * lap, lap);
+  const back = t >= r.total, u = back ? t - r.total : t;
+  const legs = back ? [...r.legs].reverse().map(l => ({ ...l, a: l.b, b: l.a, pts: l.pts ? [...l.pts].reverse() : l.pts })) : r.legs;
+  const { p } = alongLegs(legs, u);
+  const [from, to] = back ? [b, a] : [a, b];
+  return { placeId: to, fromPlaceId: from, fromDistrictId: districtId, districtId, activity: "commute", progress: u / r.total, buildingId: null, floor: null, floorId: null, atDistrictId: districtId, sub: "walking", leg: "walk", x: p.x, y: p.y };
+}
+// Someone on a platform, along its length.
+export function standInPlatform(stationId, i) {
+  const st = STATIONS[stationId], half = trainLen(4) / 2;
+  const p = platformSpot(st, st.s + (h01(`~p|${stationId}|${i}`) * 2 - 1) * half);
+  const pl = DPLACES[stationId]?.[0] || null;
+  return { placeId: pl, fromPlaceId: pl, fromDistrictId: stationId, districtId: stationId, activity: "commute", progress: 0.5, buildingId: null, floor: null, floorId: null, atDistrictId: stationId, sub: "waiting", leg: "wait", stationId, x: p.x, y: p.y };
+}
+// Someone aboard a car of train k.
+export function standInRider(k, car, machineTime) {
+  const T = toHours(machineTime), p = carPoint(k, car, T), st = trainState(k, T), to = st.nextStationId, pl = DPLACES[to]?.[0] || null;
+  return { placeId: pl, fromPlaceId: pl, fromDistrictId: st.lastStationId || to, districtId: to, activity: "commute", progress: 0.5, buildingId: null, floor: null, floorId: null, atDistrictId: "loop", sub: "riding", leg: "ride", stationId: null, trainId: TRAINS[k].id, car, x: p.x, y: p.y };
 }
 
 // ---- time -------------------------------------------------------------------------

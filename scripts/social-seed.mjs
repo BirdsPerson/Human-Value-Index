@@ -6,14 +6,14 @@
 import { store } from "./roster/prod.mjs";
 import { tick } from "../netlify/lib/social-tick.js";
 import { tickIo } from "../netlify/lib/social-store.js";
+import { fetchPen } from "../src/penClient.js";
 
 const s = store("hvi-social");
 // The tick forgets anyone missing from the census, so a failed or figure-less read
 // (/api/pen tolerates a failed figure read) must not pass for an empty city.
 const io = tickIo(() => s, async () => {
-  const res = await fetch("https://humanvalueindex.com/api/pen");
-  const subjects = res.ok ? (await res.json()).subjects : null;
-  if (!subjects?.some(s => s.kind === "figure")) throw new Error(`census incomplete (HTTP ${res.status}); ledger left alone`);
+  const subjects = await fetchPen({ base: "https://humanvalueindex.com" }).catch(err => { throw new Error(`census unreadable (${err.message}); ledger left alone`); });
+  if (!subjects?.some(s => s.kind === "figure")) throw new Error("census incomplete; ledger left alone");
   return subjects;
 });
 const r = await tick(Date.now(), io);

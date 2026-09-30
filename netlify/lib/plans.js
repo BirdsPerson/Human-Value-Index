@@ -21,6 +21,7 @@ import { createHash } from "node:crypto";
 import { getStore } from "@netlify/blobs";
 import * as SIM from "../../src/city/sim.js";
 import { fullRoster } from "../../src/city/roster.js";
+import { splitDay, SECTORS, FORMAT as FORMAT2 } from "../../src/city/planSplit.js";
 
 export const STORE = "hvi-plans";
 export const FORMAT = SIM.PLAN_FORMAT;
@@ -28,6 +29,26 @@ export const LOOKAHEAD = 3;
 export const KEEP_BEHIND = 2;          // days before today kept in the manifest (the tick and quests look back)
 export const MANIFEST = `f${FORMAT}/manifest`;
 export const dayKey = (day, ver) => `f${FORMAT}/day/${day}/${ver}`;
+// Format 2 (scaling step 4, docs/CITY_SPEC.md "Sectors"): the same day, split for browsers.
+//   f2/day/<day>/<ver>/w/<sector>/<w>/<p>  everyone with a segment in that district in machine
+//                                       hours [6w, 6w + 6), with their display records (in
+//                                       parts of at most PART_MAX)
+//   f2/day/<day>/<ver>/summary          the far view's counts every 30 machine minutes, the
+//                                       figures on file's whole-day rows
+//   f2/day/<day>/<ver>/find             names -> the sector each is in, per window (/api/find)
+//   f2/manifest                         {format: 2, days: {day: {ver, n, files, ...}}}, LAST
+// <ver> is the format-1 plan's version: the two formats of a day are the same city. Every
+// f2 day is split from its f1 blob, so a day built before format 2 existed splits the same.
+export const FORMAT_2 = FORMAT2;
+export const MANIFEST2 = `f${FORMAT2}/manifest`;
+export const partKey = (day, ver, part) => `f${FORMAT2}/day/${day}/${ver}/${part}`;
+export const windowPart = (sector, w, part = 0) => `w/${sector}/${w}/${part}`;
+// A window's subjects are spread over parts of at most PART_MAX (by a hash of the key), so
+// no response nears the 6 MB function limit however dense a district gets (the Sprawl's
+// morning window is ~5 MB at 20,000 subjects). The summary says how many parts each has.
+export const PART_MAX = 3000;
+export const partOf = (key, parts) => fnv32(key) % parts;
+function fnv32(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 const store = () => getStore({ name: STORE, consistency: "strong" });
 
 export class PlanConflict extends Error {
@@ -60,6 +81,18 @@ export function planIo(s = store, { census, snapshots }) {
     },
     async dropDay(key) { await s().delete(key).catch(() => {}); },
     async list() { return (await s().list({ prefix: `f${FORMAT}/day/` })).blobs.map(b => b.key); },
+    async getDay(key) { return s().get(key, { type: "json" }); },
+    async manifest2() {
+      const r = await s().getWithMetadata(MANIFEST2, { type: "json" });
+      return r ? { manifest: r.data, etag: r.etag } : { manifest: null, etag: null };
+    },
+    async putPart(key, json) { await s().setJSON(key, json, { onlyIfNew: true }); },
+    async putManifest2(m, etag) {
+      const r = await s().setJSON(MANIFEST2, m, etag ? { onlyIfMatch: etag } : { onlyIfNew: true });
+      if (!r.modified) throw new PlanConflict("f2 manifest changed since it was read");
+      return r.etag || (await s().getMetadata(MANIFEST2))?.etag;
+    },
+    async list2() { return (await s().list({ prefix: `f${FORMAT2}/day/` })).blobs.map(b => b.key); },
     lease: {
       async acquire(run, ms) {
         const now = Date.now();
@@ -98,11 +131,11 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
     manifest ||= { format: FORMAT, days: {}, at: null };
     const want = wantedDays(nowMs, opts.lookahead ?? LOOKAHEAD);
     const missing = want.filter(d => !manifest.days[d]);
-    const built = [];
-    let waiting = null;
+    const built = [], jsons = new Map();
+    let waiting = null, roster = null;
     if (missing.length) {
       // Read everything first: a failed census or ledger read builds nothing.
-      const roster = fullRoster(await io.census());
+      roster = fullRoster(await io.census());
       const snaps = (await io.snapshots()) || {};
       SIM.clearPlans();   // the builder reads the sim, never a plan
       SIM.clearSocialSnapshots();
@@ -117,6 +150,7 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
         const ver = versionOf(json), key = dayKey(day, ver);
         const bytes = JSON.stringify(json).length;
         await io.putDay(key, json);   // the day's blob first ...
+        jsons.set(day, json);
         const entry = { ver, key, roster: json.roster, social: json.social, n: json.n, bytes, at: new Date(clock()).toISOString(), run };
         // ... then the manifest, only over the version we read. On a conflict, re-read: if
         // another builder published this day meanwhile, theirs stands.
@@ -133,6 +167,45 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
         }
       }
     }
+    // Format 2: every listed day not yet split, oldest first, each published as it is done.
+    const split = [];
+    if (io.manifest2) {
+      let { manifest: m2, etag: e2 } = await io.manifest2();
+      m2 ||= { format: FORMAT_2, days: {}, at: null };
+      const todo = want.filter(d => manifest.days[d] && !m2.days[d]);
+      for (const day of todo) {
+        if ((built.length || split.length) && clock() - t0 >= budgetMs) break;
+        const a = clock(), e = manifest.days[day];
+        const json = jsons.get(day) || await io.getDay(e.key);
+        if (!json) continue;
+        roster ||= fullRoster(await io.census());
+        const entry = await publishSplit(io, json, e.ver, roster, run, clock);
+        for (let tries = 0; ; tries++) {
+          if (m2.days[day]) break;
+          const next = { format: FORMAT_2, days: { ...m2.days, [day]: entry }, at: entry.at };
+          for (const d of Object.keys(next.days)) if (Number(d) < today - KEEP_BEHIND) delete next.days[d];
+          try { e2 = await io.putManifest2(next, e2); m2 = next; split.push({ day, ver: e.ver, ms: Math.round(clock() - a), bytes: entry.bytes }); break; }
+          catch (err) {
+            if (!(err instanceof PlanConflict) || tries >= 4) throw err;
+            ({ manifest: m2, etag: e2 } = await io.manifest2());
+            m2 ||= { format: FORMAT_2, days: {}, at: null };
+          }
+        }
+      }
+      const stale2 = Object.keys(m2.days).filter(d => Number(d) < today - KEEP_BEHIND);
+      if (stale2.length) {
+        const next = { ...m2, days: { ...m2.days } };
+        for (const d of stale2) delete next.days[d];
+        try { e2 = await io.putManifest2(next, e2); m2 = next; } catch (err) { if (!(err instanceof PlanConflict)) throw err; }
+      }
+      if (io.list2) {
+        const keep = new Set(Object.entries(m2.days).map(([d, x]) => `${d}/${x.ver}/`));
+        for (const key of await io.list2()) {
+          const [, , d, v] = String(key).split("/");
+          if (!keep.has(`${d}/${v}/`) && Number(d) < today - KEEP_BEHIND) await io.dropDay(key);
+        }
+      }
+    }
     // Days before today - KEEP_BEHIND leave the manifest (also on a run that built nothing),
     // then their blobs go. A conflict here is left to the next run.
     const stale = Object.keys(manifest.days).filter(d => Number(d) < today - KEEP_BEHIND);
@@ -146,12 +219,47 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
       for (const key of await io.list()) if (!keep.has(key) && dayOfKey(key) < today - KEEP_BEHIND) await io.dropDay(key);
     }
     const days = Object.keys(manifest.days).map(Number);
-    return { run, today, built, have: days.length, waiting, latest: days.length ? Math.max(...days) : null, ms: Math.round(clock() - t0) };
+    return { run, today, built, split, have: days.length, waiting, latest: days.length ? Math.max(...days) : null, ms: Math.round(clock() - t0) };
   } finally {
     if (io.lease) await io.lease.release(run).catch(() => {});
   }
 }
 const dayOfKey = (key) => Number(String(key).split("/")[2]);
+
+// One day's format-2 files from its format-1 plan: windows and the find index first, the
+// summary, then (by the caller) the manifest. -> the manifest entry.
+export async function publishSplit(io, json, ver, roster, run, clock = Date.now, partMax = PART_MAX) {
+  SIM.setPlan(json, ver);   // the split reads whereAt from the plan itself
+  const people = new Map(roster.map(s => [SIM.keyOf(s), s]));
+  let parts;
+  try { parts = splitDay(json, ver, people); } finally { SIM.dropPlan(json.day); }   // the builder reads the sim, never a plan
+  const { windows, summary, find } = parts;
+  const files = {}, jobs = [];
+  let bytes = 0;
+  summary.parts = {};
+  for (const sector of SECTORS) {
+    summary.parts[sector] = [];
+    files[sector] = windows[sector].map((w, i) => {
+      const keys = Object.keys(w.subjects), n = keys.length, P = Math.max(1, Math.ceil(n / partMax));
+      const subs = Array.from({ length: P }, () => ({}));
+      for (const k of keys) subs[partOf(k, P)][k] = w.subjects[k];
+      let b = 0;
+      subs.forEach((sub, p) => {
+        const f = { ...w, part: p, parts: P, subjects: sub };
+        b += JSON.stringify(f).length;
+        jobs.push(() => io.putPart(partKey(json.day, ver, windowPart(sector, i, p)), f));
+      });
+      bytes += b;
+      summary.parts[sector].push(P);
+      return [n, b, P];
+    });
+  }
+  jobs.push(() => io.putPart(partKey(json.day, ver, "find"), find));
+  for (let i = 0; i < jobs.length; i += 8) await Promise.all(jobs.slice(i, i + 8).map(f => f()));
+  const sb = JSON.stringify(summary).length;
+  await io.putPart(partKey(json.day, ver, "summary"), summary);
+  return { ver, n: json.n, roster: json.roster, social: json.social, sectors: SECTORS, files, summary: sb, find: JSON.stringify(find).length, bytes: bytes + sb, at: new Date(clock()).toISOString(), run };
+}
 
 // ---- readers (quest checks, the social tick) ----------------------------------------------
 let man = { at: 0, m: null };
@@ -162,7 +270,15 @@ export async function manifestCached(maxAgeMs = 30 * 1000, s = store) {
   }
   return man.m;
 }
-export function forgetManifest() { man = { at: 0, m: null }; }
+export function forgetManifest() { man = { at: 0, m: null }; man2 = { at: 0, m: null }; }
+let man2 = { at: 0, m: null };
+export async function manifest2Cached(maxAgeMs = 30 * 1000, s = store) {
+  if (!man2.m || Date.now() - man2.at > maxAgeMs) {
+    const r = await s().get(MANIFEST2, { type: "json" });
+    man2 = { at: Date.now(), m: r || null };
+  }
+  return man2.m;
+}
 
 // Load the published plans for these days into the sim, pinned by the manifest's version.
 // Days with no plan are left to the local sim. -> {day: ver} of what is loaded.

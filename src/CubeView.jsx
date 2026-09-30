@@ -6,6 +6,7 @@ import { pointOf, FILTERS, passes } from "./cube3d.js";
 import { OCTANT_ORDER, OCTANT_FAMILY, OCTANT_LINES } from "./cube.js";
 import { FAMOUS_FIGURES } from "./figures.js";
 import { readLastResult } from "./caseFile.jsx";
+import { fetchPen } from "./penClient.js";
 
 // THE CUBE: every file on record as one point in conduct × competence × likability.
 // Three midplanes at 50 cut the cube into eight octants. Figures from the roster,
@@ -36,9 +37,9 @@ export default function CubeView() {
 
   useEffect(() => {
     let off = false;
-    fetch("/api/pen").then(r => (r.ok ? r.json() : null)).then(d => {
-      if (off || !d) return;
-      setReferred((d.subjects || []).filter(s => s && s.kind === "figure" && s.referred && s.name));
+    fetchPen({ fields: "cube", kind: "figure" }).then(list => {
+      if (off) return;
+      setReferred(list.filter(s => s && s.kind === "figure" && s.referred && s.name));
     }).catch(() => {});
     return () => { off = true; };
   }, []);

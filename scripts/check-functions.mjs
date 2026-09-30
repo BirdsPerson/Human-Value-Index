@@ -525,6 +525,26 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
   assert.ok(census.includes("jack-johnson-musician") && census.includes("terence-mckenna"), "the census reads the shards");
   const penShards = await read(await (await import("../netlify/functions/pen.js?shards")).default(new Request(HOST + "/api/pen")));
   assert.ok(penShards.body.subjects.some(s => s.slug === "jack-johnson-musician"), "/api/pen reads the shards");
+  // /api/pen is paged (scaling step 4): pages in slug order, a cursor, field sets, a kind filter
+  {
+    const penP = (await import("../netlify/functions/pen.js?pages")).default;
+    const all = penShards.body.subjects, total = penShards.body.total;
+    assert.equal(all.length, total, "one default page holds a small census whole");
+    assert.equal(penShards.body.next, null);
+    const walked = [];
+    let cur = null, pages = 0;
+    do { const q = await read(await penP(new Request(HOST + `/api/pen?limit=2${cur ? "&cursor=" + encodeURIComponent(cur) : ""}`))); walked.push(...q.body.subjects); cur = q.body.next; pages++; } while (cur && pages < 500);
+    assert.deepEqual(walked.map(x => x.slug), all.map(x => x.slug).sort(), "walking the pages reads everyone once, in slug order");
+    assert.ok(pages > 1, "a small page size pages");
+    const list = await read(await penP(new Request(HOST + "/api/pen?fields=list")));
+    assert.ok(list.body.subjects.every(x => !("breakdown" in x) && !("stratum" in x) && !("places" in x)) && list.body.subjects.some(x => x.slug === "dolly-parton" || x.slug === "terence-mckenna"), "fields=list drops the sim's inputs");
+    const cube = await read(await penP(new Request(HOST + "/api/pen?fields=cube&kind=figure")));
+    assert.ok(cube.body.subjects.length && cube.body.subjects.every(x => x.kind === "figure" && "warmth" in x && !("breakdown" in x) && !("description" in x)), "fields=cube, kind=figure: figures, the cube's fields only");
+    const { fetchPen } = await import("../src/penClient.js");
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (u) => penP(new Request(new URL(String(u), HOST)));
+    try { assert.equal((await fetchPen({ fields: "list" })).length, total, "penClient walks every page"); } finally { globalThis.fetch = realFetch; }
+  }
   r = await read(await post(refer, "/api/refer", { name: "Jack Johnson", caseId }, { ip: "192.0.2.62" }));
   assert.equal(r.body.status, "choose");
   assert.deepEqual(r.body.candidates.find(c => c.title === "Jack Johnson").onFile, { score: 668, slug: "jack-johnson" }, "a lookup marks the figure on file from the shards");

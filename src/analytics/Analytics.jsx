@@ -9,6 +9,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import CAL from "../../netlify/lib/calibration.json" with { type: "json" };
+import { fetchPen } from "../penClient.js";
 import { displayName, getTier } from "../figures.js";
 import { Chip, ChipStrip, Disclosure, Frame } from "../ui/index.js";
 import {
@@ -386,7 +387,7 @@ export default function Analytics({ figures }) {
   const [pen, setPen] = useState(null);
   useEffect(() => {
     let off = false;
-    fetch("/api/pen").then(r => (r.ok ? r.json() : null)).then(d => { if (!off) setPen(d?.subjects || []); }).catch(() => { if (!off) setPen([]); });
+    fetchPen({ kind: "figure" }).then(list => { if (!off) setPen(list); }).catch(() => { if (!off) setPen([]); });
     return () => { off = true; };
   }, []);
   const subjects = useMemo(() => mergeRoster(figures, pen || []), [figures, pen]);

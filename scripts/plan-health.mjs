@@ -4,6 +4,8 @@
 // manifest without tomorrow means the builder has not run for a machine day (24+ real
 // minutes). The city then quietly falls back to building each day in every browser, and
 // the social tick and quests to the local sim, so nothing looks broken: this is the alarm.
+// Since step 4 it also checks the split browsers read (manifest `sectors`): without it every
+// browser downloads the whole census again.
 //
 // Stalled: a "## City plans stalled" section goes into MORNING_REPORT.md (replaced in place,
 // never appended) and the desk collector runs. Recovered: the section is removed, the
@@ -33,7 +35,11 @@ export async function health(fetchJson, nowMs = Date.now()) {
   const latest = m?.latest ?? null;
   if (latest == null) return { ok: false, today, latest, note: "the manifest lists no days" };
   if (latest < today + 1) return { ok: false, today, latest, note: `the latest built machine day is ${latest}, today is ${today}: tomorrow is not built` };
-  return { ok: true, today, latest, note: `built through day ${latest} (today ${today})` };
+  // The browsers read the split (format 2: sectors); without it they fall back to the census.
+  const split = Object.keys(m?.sectors || {}).map(Number);
+  const lastSplit = split.length ? Math.max(...split) : null;
+  if (lastSplit == null || lastSplit < today + 1) return { ok: false, today, latest, note: `the plans are built through day ${latest} but split for browsers only through ${lastSplit ?? "none"} (today ${today})` };
+  return { ok: true, today, latest, note: `built and split through day ${latest} (today ${today})` };
 }
 
 // The report with the section set to `body` (null removes it); everything else untouched.

@@ -8,6 +8,7 @@ import {
 } from "./sprites.js";
 import FilePhoto from "./FilePhoto.jsx";
 import { useFileDetail } from "./fileDetail.js";
+import { fetchPen } from "./penClient.js";
 import { Associates, ASSOC_CSS } from "./city/Associates.jsx";
 import {
   FLOORS, F, FH, ROOF_H, BUILDING_H, FOUNDATION, SHAFT_X, SHAFT_W, ROOM_X0, WALL_TOP, WALK_TOP, DOOR_W,
@@ -901,8 +902,9 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
     // likeness the Mac job has since drawn swaps its placeholder for the real sprite.
     const rosterNames = new Set();   // offsite registry entries already added
     function pollPen(first) {
-      return fetch("/api/pen").then(r => r.ok ? r.json() : Promise.reject(r.status)).then(data => {
+      return fetchPen({ fields: "list" }).then(list => {
         if (cancelled) return;
+        const data = { subjects: list };
         const byName = new Map(sim.ents.map(e => [e.s.name, e]));
         const queued = new Set(sim.arrivals.map(a => a.s.name));
         const subjects = (data?.subjects || []).filter(s => s && s.name && typeof s.score === "number" && (s.kind !== "figure" || s.referred));
