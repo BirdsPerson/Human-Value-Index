@@ -7,18 +7,39 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import TouchGate, { isTouchOnly } from "../ui/TouchGate.jsx";
 import { Chip, Chips } from "../ui/index.js";
-import { DISTRICTS, DISTRICT, clockAt, whereOf, jobLine, activityLine } from "./simApi.js";
-import { familyOf, FAMILY_COLOR } from "./cityKit.js";
-import { sheetFor } from "./spriteBank.js";
+import { DISTRICTS, DISTRICT, BUILDING, BUILDINGS, clockAt, whereOf, jobLine, activityLine, roomIn, gameAt } from "./simApi.js";
+import { sheetFor, miniFor } from "./spriteBank.js";
 import { wantSectors } from "./planClient.js";
 import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
-import { locate, trains, carArc, STATIONS as ST3D } from "./city3d.js";
+import { trains, carArc, STATIONS as ST3D } from "./city3d.js";
+import { lodFor, DECK } from "./iso.js";
+import { massingOf } from "./archGeo.js";
+import { drawBody, drawYardProp, drawArchGround } from "./archDraw.js";
+import { PARK_LOTS, PARK_PLACES } from "./parkGeo.js";
+import { drawParkLot } from "./parkDraw.js";
+import { DECK_HW, CAR_HW } from "./loopGeo.js";
+import { streetKitG, SH, shade } from "./streetArch.js";
 import {
-  FLOOR_H, LOOP_H, PERSON_H, EYE_H, RIDE_H, NEAR, FAR, WALK_SPEED, TURN_SPEED, RIDE_SPEED, TOUR_SPEED,
-  STREET_BUILDINGS, wallsOf, wallFaces, toCam, project, viewFor, clipNear, clipSeg, fogAt, inFov,
+  PERSON_H, EYE_H, NEAR, FAR, FOV, WALK_SPEED, TURN_SPEED, RIDE_SPEED, TOUR_SPEED,
+  STREET_BUILDINGS, toCam, project, viewFor, clipNear, clipSeg, inFov,
   RING_L, ringAt, ringTangent, nearestArc, arcDelta, tourPose, onStreet, heightOf, buildingAt, clampToWorld,
-  districtAt, compass, occupancyByFloor, BOUNDS,
+  districtAt, compass, BOUNDS, RIDE_H,
 } from "./streetKit.js";
+
+// The city's palette (CityIso.jsx): district ground, open lots, the Loop's concrete and steel.
+const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316" };
+const LOT_FILL = { "the-green": "#123a18", "the-allotment": "#1a2e12", "the-street": "#20241f", "the-plaza": "#24261f" };
+const LOOP = {
+  deck: "#343f39", pier: "#2e3833", parapet: "#48554e", rail: "#a3b8ae", cyan: "#22d3ee", cyanHi: "#67e8f9",
+  body: "#a9bab1", roof: "#cfdcd5", stripe: "#22d3ee", door: "#5d6b64", glassDay: "#3f6f78", glassNight: "#fcd34d", sil: "#0c1512",
+  plat: "#4a5650", platLit: "#5b6c63", edge: "#fbbf24", canopy: "#2a3a32", stair: "#4a554f",
+};
+const DECK_T = 0.16, CAR_H = 0.62, CANOPY = DECK + 1.1;   // storeys, as the city draws them
+const nightAt = (hour) => hour >= 19 || hour < 6.5;
+const PARK_PLACE_SET = new Set(PARK_PLACES);
+const CAP = Object.fromEntries(BUILDINGS.map(b => [b.id, Math.max(1, b.floors.reduce((n, f) => n + (f.cap || 0), 0))]));
+const BID = new Map();
+const bidOf = (id) => { let v = BID.get(id); if (v == null) { let h = 2166136261; for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); } v = h >>> 0; BID.set(id, v); } return v; };
 
 const IDLE_TO_TOUR = 30;   // seconds of no input before the tour resumes
 const C = { bg: "#0a0f0a", ghost: "#2d5040", line: "#1f4a2c", mute: "#4b7c5e", dim: "#86c9a0", fg: "#c8f5d8", accent: "#4ade80", warn: "#fbbf24", harm: "#f87171", panel: "#0d140d" };
@@ -49,7 +70,8 @@ function Street({ censusRef, onOpen, onEnter }) {
   const cam = useRef(null);
   const input = useRef({ keys: new Set(), pad: new Set(), drag: null, lastInput: -1e9, bump: 0, bumpId: null });
   const hits = useRef({ people: [], buildings: [] });
-  const occ = useRef({ v: -1, map: {} });
+  const occ = useRef({ v: -1, byB: {}, park: new Map(), riders: new Map() });
+  const parkSeats = useRef(new Map());
   const perf = useRef({ n: 0, sum: 0, max: 0 });
   const [hud, setHud] = useState({ district: "", heading: "N", mode: "tour" });
   const [tip, setTip] = useState(null);
@@ -164,307 +186,360 @@ function Street({ censusRef, onOpen, onEnter }) {
       wantSectors("street", DISTRICTS.filter(d => { const r = d.rect, dx = Math.max(r.x - c.x, 0, c.x - r.x - r.w), dy = Math.max(r.y - c.y, 0, c.y - r.y - r.h); return Math.hypot(dx, dy) < R; }).map(d => d.id));
     }
 
+    // The census, counted the city's way (simApi.roomIn): lit windows per building, who is
+    // on each ground (parkDraw poses them), riders per car (silhouettes in the windows).
+    function readCensus(census) {
+      if (occ.current.v === census.v) return;
+      const byB = {}, park = new Map(PARK_PLACES.map(id => [id, []])), riders = new Map();
+      for (const { s, w } of census.list || []) {
+        if (!w) continue;
+        if (w.sub === "riding" && w.trainId) { const k = `${w.trainId}|${w.car}`; riders.set(k, (riders.get(k) || 0) + 1); }
+        const r = roomIn(w, s);
+        if (!r) continue;
+        byB[r.buildingId] = (byB[r.buildingId] || 0) + 1;
+        if (r.mode === "here" && park.has(w.placeId)) park.get(w.placeId).push({ s, w });
+      }
+      occ.current = { v: census.v, byB, park, riders };
+    }
+    const ST_ARC = new Map(ST3D.map(st => [st, st.s ?? nearestArc(st.x, st.y)]));
+    let trainCache = { mt: -1, list: [] };
+    const trainList = (mt) => { if (trainCache.mt !== mt) trainCache = { mt, list: trains(mt) }; return trainCache.list; };
+    const trainIn = (st, mt) => trainList(mt).some(tr => Math.abs(arcDelta(tr.s ?? 0, ST_ARC.get(st))) < 4);
+
     function render(now) {
       const c = cam.current;
       wantView(c, now);
       const view = viewFor(W, H);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.imageSmoothingEnabled = false;
-      // sky: the machine's ceiling, faint scan bands above the horizon
-      ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
-      for (let y = view.horizon - 4; y > 0; y -= 7) { ctx.fillStyle = alpha(C.accent, 0.018 + 0.03 * (y / view.horizon)); ctx.fillRect(0, y, W, 1); }
-      ctx.fillStyle = alpha(C.accent, 0.22); ctx.fillRect(0, view.horizon, W, 1);
+      ctx.globalAlpha = 1;
 
       const census = censusRef.current;
       const mt = census.mt != null ? census.mt + (performance.now() - census.t) / 60000 : clockAt(Date.now()).mt;
+      const hour = ((mt % 24) + 24) % 24, night = nightAt(hour);
+      const t = reduce.current ? 0 : now / 1000;
+      readCensus(census);
+      const G = streetKitG(ctx, c, view, { t, hits: [] });
+      const Q = G.Q;
+      const eyeZ = c.h;
 
-      // ground: the street grid, clipped to the near plane, fogged
+      // ---- sky and ground: the city's dark ground under a machine sky ----------------
+      const hz = Math.max(0, Math.min(H, view.horizon));
+      const sky = ctx.createLinearGradient(0, 0, 0, hz);
+      sky.addColorStop(0, night ? "#020403" : "#050b08"); sky.addColorStop(1, night ? "#0a1512" : "#17281f");
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, W, hz);
+      ctx.fillStyle = night ? "#07090a" : "#101413"; ctx.fillRect(0, hz, W, H - hz);
+      // flat ground: clipped at the near plane (a street runs under your feet)
+      const flat = (x0, y0, x1, y1, fill, stroke) => {
+        const cp = clipNear([toCam(c, x0, y0, 0), toCam(c, x1, y0, 0), toCam(c, x1, y1, 0), toCam(c, x0, y1, 0)]);
+        if (cp.length < 3) return;
+        ctx.beginPath();
+        cp.forEach((p, i) => { const q = project(p, view); if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); });
+        ctx.closePath();
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+      };
+      const gk = night ? 1 : 1.45;
+      for (const d of DISTRICTS) {
+        const r = d.rect;
+        if (Math.max(r.x - c.x, 0, c.x - r.x - r.w) > FAR || Math.max(r.y - c.y, 0, c.y - r.y - r.h) > FAR) continue;
+        flat(r.x - 0.35, r.y - 0.35, r.x + r.w + 0.35, r.y + r.h + 0.35, night ? "#1c211f" : "#2a302d");   // the kerb and pavement
+        flat(r.x, r.y, r.x + r.w, r.y + r.h, shade(GROUND[d.id] || "#101410", gk), "rgba(74,222,128,0.14)");
+      }
+      // a faint street grid, as in the city
       ctx.lineWidth = 1;
-      const seg = (x0, y0, x1, y1, z, color, a0 = 1) => {
-        const s = clipSeg(toCam(c, x0, y0, z), toCam(c, x1, y1, z));
+      const seg = (x0, y0, x1, y1, color) => {
+        const s = clipSeg(toCam(c, x0, y0, 0), toCam(c, x1, y1, 0));
         if (!s) return;
         const p = project(s[0], view), q = project(s[1], view);
         if (!p || !q) return;
-        const f = Math.min(p.f, q.f);
-        if (f > FAR) return;
-        ctx.strokeStyle = alpha(color, a0 * fogAt(f));
-        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+        ctx.strokeStyle = color; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
       };
-      const G = 4;
-      const gx0 = Math.max(BOUNDS.x0, Math.floor((c.x - FAR) / G) * G), gx1 = Math.min(BOUNDS.x1, c.x + FAR);
-      const gy0 = Math.max(BOUNDS.y0, Math.floor((c.y - FAR) / G) * G), gy1 = Math.min(BOUNDS.y1, c.y + FAR);
-      for (let x = gx0; x <= gx1; x += G) seg(x, gy0, x, gy1, 0, C.ghost, 0.9);
-      for (let y = gy0; y <= gy1; y += G) seg(gx0, y, gx1, y, 0, C.ghost, 0.9);
-      for (const d of DISTRICTS) { const r = d.rect; seg(r.x, r.y, r.x + r.w, r.y, 0, C.line, 1.4); seg(r.x + r.w, r.y, r.x + r.w, r.y + r.h, 0, C.line, 1.4); seg(r.x + r.w, r.y + r.h, r.x, r.y + r.h, 0, C.line, 1.4); seg(r.x, r.y + r.h, r.x, r.y, 0, C.line, 1.4); }
+      const GS = 4;
+      const gx0 = Math.max(BOUNDS.x0, Math.floor((c.x - FAR) / GS) * GS), gx1 = Math.min(BOUNDS.x1, c.x + FAR);
+      const gy0 = Math.max(BOUNDS.y0, Math.floor((c.y - FAR) / GS) * GS), gy1 = Math.min(BOUNDS.y1, c.y + FAR);
+      for (let x = gx0; x <= gx1; x += GS) seg(x, gy0, x, gy1, "rgba(74,222,128,0.05)");
+      for (let y = gy0; y <= gy1; y += GS) seg(gx0, y, gx1, y, "rgba(74,222,128,0.05)");
 
-      // ---- drawables, sorted far to near ----
-      const items = [];
-      // buildings
-      if (occ.current.v !== census.v) occ.current = { v: census.v, map: occupancyByFloor(census.list || [], locate) };
+      // ---- what stands: gather, then paint far to near --------------------------------
+      const tanH = Math.tan(FOV / 2) + 0.2;
+      const nearD = (x0, y0, x1, y1) => Math.hypot(Math.max(x0 - c.x, 0, c.x - x1), Math.max(y0 - c.y, 0, c.y - y1));
+      const seen = (x0, y0, x1, y1) => {
+        // any corner (or the eye inside the footprint) within the horizontal field of view
+        if (c.x >= x0 && c.x <= x1 && c.y >= y0 && c.y <= y1) return true;
+        let front = false, left = false, right = false;
+        for (const [x, y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]) {
+          const p = toCam(c, x, y, 0);
+          if (p.f <= NEAR) { if (p.s < 0) left = true; else right = true; continue; }
+          front = true;
+          const k = p.s / p.f;
+          if (Math.abs(k) < tanH) return true;
+          if (k < 0) left = true; else right = true;
+        }
+        return front && left && right;
+      };
+      const items = [], ground = [];
+      const env = { lod: "near", night, hour, t };
       for (const b of STREET_BUILDINGS) {
-        const cx = b.rect.x + b.rect.w / 2, cy = b.rect.y + b.rect.h / 2;
-        const p = toCam(c, cx, cy, 0);
-        const rad = Math.hypot(b.rect.w, b.rect.h) / 2;
-        if (p.f < -rad || p.f > FAR + rad) continue;
-        if (p.f > rad && Math.abs(p.s / p.f) > Math.tan(0.8) + rad / p.f) continue;
-        items.push({ k: "b", d: Math.hypot(cx - c.x, cy - c.y), b });
+        const sb = BUILDING[b.id], m = sb ? massingOf(sb) : null, r = b.rect;
+        const d = nearD(r.x, r.y, r.x + r.w, r.y + r.h);
+        if (d > FAR || !seen(r.x, r.y, r.x + r.w, r.y + r.h)) continue;
+        const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+        if (PARK_LOTS[b.id]) { items.push({ k: "park", d, b, cx, cy }); continue; }
+        if (!m) { ground.push({ k: "lot", b }); items.push({ k: "tag", d, b, cx, cy, top: 0.3 }); continue; }
+        if (m.ground.length) ground.push({ k: "arch", b, m, cx, cy });
+        const bx = m.box;
+        items.push({ k: "arch", d: nearD(bx.x0, bx.y0, bx.x1, bx.y1), b, sb, m, cx: (bx.x0 + bx.x1) / 2, cy: (bx.y0 + bx.y1) / 2 });
+        for (const p of m.yard) {
+          const dd = nearD(p.x0, p.y0, p.x1, p.y1);
+          if (dd < 45) items.push({ k: "yard", d: dd, p, m });
+        }
       }
-      // the Loop deck, in short segments so it sorts against buildings
+      // the Loop's deck, in short pieces so it sorts against the buildings
       for (let s = 0; s < RING_L; s += 2.5) {
         const a = ringAt(s), e = ringAt(s + 2.5);
-        const m = { x: (a.x + e.x) / 2, y: (a.y + e.y) / 2 };
-        const dd = Math.hypot(m.x - c.x, m.y - c.y);
-        if (dd > FAR) continue;
-        items.push({ k: "rail", d: dd, a, e, pillar: Math.round(s / 2.5) % 4 === 0 });
+        const dd = nearD(Math.min(a.x, e.x), Math.min(a.y, e.y), Math.max(a.x, e.x), Math.max(a.y, e.y));
+        if (dd > FAR || !seen(Math.min(a.x, e.x) - 0.7, Math.min(a.y, e.y) - 0.7, Math.max(a.x, e.x) + 0.7, Math.max(a.y, e.y) + 0.7)) continue;
+        items.push({ k: "rail", d: dd, a, e, pier: Math.round(s / 2.5) % 2 === 0 });
       }
-      for (const st of ST3D) { const dd = Math.hypot(st.x - c.x, st.y - c.y); if (dd < FAR) items.push({ k: "st", d: dd, st }); }
-      for (const t of trains(mt)) for (let k = 0; k < t.cars; k++) {
-        const sArc = carArc(t, k), p = ringAt(sArc);
+      for (const st of ST3D) { const dd = Math.hypot(st.x - c.x, st.y - c.y); if (dd < FAR) items.push({ k: "st", d: Math.max(0, dd - 3), st }); }
+      for (const tr of trainList(mt)) for (let k = 0; k < tr.cars; k++) {
+        const sArc = carArc(tr, k), p = ringAt(sArc);
         const dd = Math.hypot(p.x - c.x, p.y - c.y);
-        if (dd < FAR) items.push({ k: "car", d: dd, p, s: sArc, lead: k === 0, t });
+        if (dd < FAR) items.push({ k: "car", d: Math.max(0, dd - 1), p, s: sArc, lead: k === 0, last: k === tr.cars - 1, t: tr, car: k });
       }
-      // people on the street, platforms and trains
+      // people on the street and the platforms (the grounds draw their own, posed)
       const list = census.list || [];
       for (let i = 0; i < list.length; i++) {
         const e = list[i];
-        if (!onStreet(e.w)) continue;
+        if (!onStreet(e.w) || PARK_PLACE_SET.has(e.w.placeId) || e.w.sub === "riding") continue;
         if (Math.abs(e.w.x - c.x) > FAR || Math.abs(e.w.y - c.y) > FAR) continue;
-        // walkers are re-placed every frame so they move smoothly between census ticks
         const w = e.w.activity === "commute" && Math.hypot(e.w.x - c.x, e.w.y - c.y) < 40 ? whereOf(e.s, mt) : e.w;
-        if (!w || !onStreet(w)) continue;
+        if (!w || !onStreet(w) || w.sub === "riding") continue;
         const dd = Math.hypot(w.x - c.x, w.y - c.y);
         if (dd > FAR) continue;
         items.push({ k: "p", d: dd, s: e.s, w });
       }
-      // district signs
       for (const d of DISTRICTS) { const x = d.rect.x + d.rect.w / 2, y = d.rect.y - 0.6; const dd = Math.hypot(x - c.x, y - c.y); if (dd < FAR) items.push({ k: "sign", d: dd, x, y, text: d.name }); }
       items.sort((a, b) => b.d - a.d);
-      // Labels: nearest first, a label that would overlap a nearer one is dropped.
-      const labels = new Set(), taken = [];
-      ctx.textBaseline = "bottom";
+
+      // ---- the ground's own dressing: lots, courts, plazas, lawns -------------------------
+      for (const g of ground) {
+        if (g.k === "lot") {
+          const r = g.b.rect;
+          flat(r.x, r.y, r.x + r.w, r.y + r.h, shade(LOT_FILL[g.b.id] || "#20241f", night ? 1 : 1.3), "rgba(74,222,128,0.3)");
+        } else drawArchGround(G.aim(g.cx, g.cy), g.m, { ...env, lod: "near" });
+      }
+
+      const hp = [], hb = [];
+      const fade = (d) => Math.max(0, Math.min(1, (FAR - d) / 14));
+      for (const it of items) {
+        const a = fade(it.d);
+        if (a <= 0.02) continue;
+        ctx.globalAlpha = a;
+        if (it.k === "arch") drawArch(it);
+        else if (it.k === "yard") drawYardProp(G.aim(it.p.x, it.p.y), it.p, { ...env, lod: lodFor(G.z * 0.8) });
+        else if (it.k === "park") drawPark(it);
+        else if (it.k === "rail") drawRail(it);
+        else if (it.k === "st") drawStation(it.st);
+        else if (it.k === "car") drawCar(it);
+        else if (it.k === "p") drawPerson(it, now, hp);
+        else if (it.k === "tag") hb.push({ b: it.b, box: hullOf(it.b.rect.x, it.b.rect.y, it.b.rect.x + it.b.rect.w, it.b.rect.y + it.b.rect.h, 0.3), d: it.d });
+      }
+      ctx.globalAlpha = 1;
+      for (const h of G.hits) if (h.kind === "p") hp.push({ s: h.s, x: h.box[0], y: h.box[1], w2: h.box[2] - h.box[0], h: h.box[3] - h.box[1], f: 1 });
+      hits.current = { people: hp, buildings: hb };
+
+      // ---- labels on top, nearest first, never over each other (the city's label style) ----
+      const taken = [];
+      ctx.textBaseline = "bottom"; ctx.textAlign = "center";
       for (let i = items.length - 1; i >= 0; i--) {
         const it = items[i];
-        let pos = null, text = null, px = 0;
-        if (it.k === "b") { text = it.b.name; pos = project(toCam(c, it.b.rect.x + it.b.rect.w / 2, it.b.rect.y + it.b.rect.h / 2, it.b.height + 0.9), view); if (pos) px = Math.min(15, (0.9 / pos.f) * view.focal); }
-        else if (it.k === "sign") { text = it.text; pos = project(toCam(c, it.x, it.y, 3.6), view); if (pos) px = Math.min(18, (1.1 / pos.f) * view.focal); }
-        else if (it.k === "st") { text = it.st.name; const n = it.st.n || { x: 0, y: -1 }; pos = project(toCam(c, it.st.x + n.x * 1.2, it.st.y + n.y * 1.2, LOOP_H + 2.2), view); if (pos) px = Math.min(14, (0.8 / pos.f) * view.focal); }
+        let pos = null, text = null, px = 0, kind = "b";
+        if (it.k === "arch" || it.k === "tag" || it.k === "park") {
+          const top = it.k === "arch" ? it.m.rise * SH : it.k === "park" ? 1.2 * SH : 0.6 * SH;
+          const g = PARK_LOTS[it.b.id] && gameAt(PARK_LOTS[it.b.id], mt);
+          text = g ? `${it.b.name} // ${g.label}` : it.b.name;
+          const p = toCam(c, it.cx, it.cy, top + 0.9);
+          pos = project(p, view); if (pos) px = Math.min(14, (0.9 / pos.f) * view.focal);
+        } else if (it.k === "st") { kind = "st"; text = it.st.name; const n = it.st.n || { x: 0, y: -1 }; pos = project(toCam(c, it.st.x + n.x * 1.2, it.st.y + n.y * 1.2, CANOPY * SH + 1.4), view); if (pos) px = Math.min(13, (0.8 / pos.f) * view.focal); }
+        else if (it.k === "sign") { kind = "sign"; text = it.text; pos = project(toCam(c, it.x, it.y, 3.2), view); if (pos) px = Math.min(15, (1.1 / pos.f) * view.focal); }
         else continue;
-        if (!pos || px < 8.5 || pos.f > 46) continue;
+        if (!pos || px < 8.5 || pos.f > 42) continue;
+        if (text.length > 34) text = text.slice(0, 33) + "…";
         ctx.font = `${Math.round(px)}px ${FONT}`;
         const tw = ctx.measureText(text).width + 10;
         const r = { x0: pos.x - tw / 2, x1: pos.x + tw / 2, y0: pos.y - px - 5, y1: pos.y + 2 };
         if (r.x1 < 0 || r.x0 > W || r.y0 < 26 || r.y0 > H) continue;
-        if (taken.some(t => r.x0 < t.x1 && r.x1 > t.x0 && r.y0 < t.y1 && r.y1 > t.y0)) continue;
-        taken.push(r); labels.add(it);
+        if (taken.some(q => r.x0 < q.x1 + 3 && r.x1 > q.x0 - 3 && r.y0 < q.y1 + 1 && r.y1 > q.y0 - 1)) continue;
+        // behind a nearer building: no label through its walls
+        if (hb.some(h => h.solid && h.d < it.d - 1 && h.b !== it.b && pos.x > h.box[0] && pos.x < h.box[2] && pos.y > h.box[1] && pos.y < h.box[3])) continue;
+        taken.push(r);
+        const a = Math.min(1, fade(it.d) * 1.2);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = "rgba(6,10,6,0.86)"; ctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+        if (kind === "st") { ctx.fillStyle = "rgba(34,211,238,0.6)"; ctx.fillRect(r.x0, r.y1 - 1, r.x1 - r.x0, 1); }
+        if (kind === "sign") { ctx.strokeStyle = "rgba(74,222,128,0.6)"; ctx.lineWidth = 1; ctx.strokeRect(r.x0 + 0.5, r.y0 + 0.5, r.x1 - r.x0 - 1, r.y1 - r.y0 - 1); }
+        ctx.fillStyle = kind === "st" ? "#67e8f9" : kind === "sign" ? "#4ade80" : "#a7d7b5";
+        ctx.fillText(text, Math.round(pos.x), Math.round(pos.y));
+        ctx.globalAlpha = 1;
       }
 
-      const hp = [], hb = [];
-      for (const it of items) {
-        if (it.k === "b") drawBuilding(it.b, view, hb, labels.has(it));
-        else if (it.k === "rail") drawRail(it, view);
-        else if (it.k === "st") drawStation(it.st, view, labels.has(it));
-        else if (it.k === "car") drawCar(it, view);
-        else if (it.k === "p") drawPerson(it, view, now, hp);
-        else if (it.k === "sign" && labels.has(it)) drawSign(it, view);
-      }
-      hits.current = { people: hp, buildings: hb };
-
-      // vignette + a whisper of scanlines (static, cheap)
+      // a whisper of scanlines (static, cheap), as on every terminal surface
       ctx.fillStyle = "rgba(0,0,0,0.06)";
       for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
 
-      function poly(pts, fill, stroke, lw = 1) {
-        ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.closePath();
-        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-        if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+      // ---- drawers --------------------------------------------------------------------
+      // A screen box round a map box (for taps): its corners, clamped to the screen.
+      function hullOf(x0, y0, x1, y1, h) {
+        let a = Infinity, b = Infinity, e = -Infinity, f = -Infinity;
+        for (const [x, y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]) for (const z of [0, h]) {
+          const p = toCam(c, x, y, z * SH);
+          if (p.f < NEAR) { const s = p.s < 0 ? -1e5 : 1e5; a = Math.min(a, s); e = Math.max(e, s); continue; }
+          const q = project(p, view);
+          a = Math.min(a, q.x); e = Math.max(e, q.x); b = Math.min(b, q.y); f = Math.max(f, q.y);
+        }
+        return [Math.max(0, a), Math.max(0, b), Math.min(W, e), Math.min(H, f)];
       }
-      // A vertical quad from (ax,ay) to (bx,by), z0..z1 -> projected polygon or null
-      function quad(ax, ay, bx, by, z0, z1) {
-        const cp = clipNear([toCam(c, ax, ay, z0), toCam(c, bx, by, z0), toCam(c, bx, by, z1), toCam(c, ax, ay, z1)]);
-        if (cp.length < 3) return null;
-        const pr = cp.map(p => project(p, view));
-        if (pr.some(p => !p)) return null;
-        return pr;
+      function drawArch(it) {
+        const { b, sb, m } = it;
+        G.aim(it.cx, it.cy);
+        // HQ's census is classified: its windows keep office hours, not a head count.
+        const lit = b.id === "hq" ? 0.45 : Math.min(1, (occ.current.byB[b.id] || 0) / (CAP[b.id] * 0.55));
+        drawBody(G, sb, m, { ...env, lod: lodFor(G.z * 0.7), lit, bid: bidOf(b.id), name: sb.name, style: m.style });
+        hb.push({ b, box: hullOf(m.box.x0, m.box.y0, m.box.x1, m.box.y1, m.rise * 0.85), d: it.d, solid: true });
       }
-      function drawBuilding(b, v, hb, labelOk) {
-        const walls = wallsOf(b.rect).filter(w => wallFaces(w, c.x, c.y));
-        const floorsLit = occ.current.map[b.id] || {};
-        const minF = Math.max(NEAR, toCam(c, b.rect.x + b.rect.w / 2, b.rect.y + b.rect.h / 2).f);
-        const fog = fogAt(minF);
-        if (fog <= 0.02) return;
-        const outline = alpha(b.outdoor ? C.mute : C.accent, 0.35 + 0.55 * fog);
-        const polys = [];
-        for (const w of walls) {
-          const pr = quad(w.a[0], w.a[1], w.b[0], w.b[1], 0, b.height);
-          if (!pr) continue;
-          polys.push(pr);
-          // lit faces (east/south, toward the imagined morning) a touch brighter
-          const shade = w.n[0] > 0 || w.n[1] > 0 ? 0.42 : 0.3;
-          poly(pr, mix(C.bg, C.line, shade * (0.35 + 0.65 * fog)), outline, 1);
-          if (b.outdoor) continue;
-          const pa = project(toCam(c, w.a[0], w.a[1], 0), v), pb = project(toCam(c, w.b[0], w.b[1], 0), v);
-          const ph = pa && pb ? Math.max(Math.abs(pa.y - project(toCam(c, w.a[0], w.a[1], b.height), v)?.y || 0), 0) : 0;
-          const tall = ph > 28;
-          // storey lines
-          for (let l = 1; l < b.storeys; l++) {
-            const q = clipSeg(toCam(c, w.a[0], w.a[1], l * FLOOR_H), toCam(c, w.b[0], w.b[1], l * FLOOR_H));
-            if (!q) continue;
-            const p0 = project(q[0], v), p1 = project(q[1], v);
-            if (p0 && p1) { ctx.strokeStyle = alpha(C.line, 0.9 * fog); ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke(); }
-          }
-          if (!tall || !pa || !pb) continue;
-          // windows: lit by who is on that storey
-          const cols = Math.max(1, Math.floor(w.len / 1.7));
-          for (let l = 0; l < b.storeys; l++) {
-            const n = floorsLit[l] || 0;
-            const litShare = Math.min(1, n / Math.max(1, cols * 0.6));
-            for (let k = 0; k < cols; k++) {
-              const t0 = (k + 0.28) / cols, t1 = (k + 0.72) / cols;
-              const x0 = w.a[0] + (w.b[0] - w.a[0]) * t0, y0 = w.a[1] + (w.b[1] - w.a[1]) * t0;
-              const x1 = w.a[0] + (w.b[0] - w.a[0]) * t1, y1 = w.a[1] + (w.b[1] - w.a[1]) * t1;
-              const wq = quad(x0, y0, x1, y1, l * FLOOR_H + 0.7, l * FLOOR_H + 1.75);
-              if (!wq) continue;
-              const lit = hash01(`${b.id}|${l}|${k}|${w.n}`) < litShare;
-              poly(wq, lit ? alpha(l % 3 === 0 ? C.warn : C.accent, 0.55 * fog) : alpha(C.ghost, 0.55 * fog), null);
-            }
-          }
-          // a door on every long wall: walk into it
-          if (w.len >= 2.5) {
-            const t0 = 0.5 - 0.55 / w.len, t1 = 0.5 + 0.55 / w.len;
-            const dq = quad(w.a[0] + (w.b[0] - w.a[0]) * t0, w.a[1] + (w.b[1] - w.a[1]) * t0, w.a[0] + (w.b[0] - w.a[0]) * t1, w.a[1] + (w.b[1] - w.a[1]) * t1, 0, 1.6);
-            if (dq) poly(dq, alpha(C.accent, 0.18 * fog), alpha(C.accent, 0.9 * fog), 1);
-          }
-        }
-        if (b.outdoor) {
-          // an open lot: a few pixel trees for the green, lamp posts elsewhere
-          const r = b.rect, n = Math.max(2, Math.round((r.w * r.h) / 12));
-          for (let i = 0; i < n; i++) {
-            const x = r.x + r.w * hash01(b.id + "tx" + i), y = r.y + r.h * hash01(b.id + "ty" + i);
-            const p = project(toCam(c, x, y, 0), v), q = project(toCam(c, x, y, b.id === "the-green" ? 2.2 : 3), v);
-            if (!p || !q || !inFov(toCam(c, x, y))) continue;
-            ctx.strokeStyle = alpha(C.mute, fog); ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
-            const rr = Math.max(1.5, (0.7 / p.f) * v.focal);
-            ctx.fillStyle = alpha(b.id === "the-green" ? C.accent : C.warn, 0.45 * fog);
-            ctx.fillRect(q.x - rr, q.y - rr, rr * 2, rr * 2);
-          }
-        }
-        // the sign on the roofline
-        const top = labelOk ? project(toCam(c, b.rect.x + b.rect.w / 2, b.rect.y + b.rect.h / 2, b.height + 0.9), v) : null;
-        if (top) {
-          const px = Math.min(15, (0.9 / top.f) * v.focal);
-          if (px >= 7) {
-            ctx.font = `${Math.round(px)}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-            ctx.fillStyle = alpha(b.outdoor ? C.dim : C.fg, 0.95 * fog);
-            ctx.fillText(b.name, top.x, top.y);
-          }
-        }
-        if (polys.length) hb.push({ b, polys });
+      function drawPark(it) {
+        const pid = PARK_LOTS[it.b.id];
+        G.aim(it.cx, it.cy);
+        const res = drawParkLot(G, it.b.id, lodFor(G.z * 0.7), mt, occ.current.park.get(pid) || [], parkSeats.current.get(pid) || null);
+        parkSeats.current.set(pid, res.at);
+        const r = it.b.rect;
+        hb.push({ b: it.b, box: hullOf(r.x, r.y, r.x + r.w, r.y + r.h, 1.5), d: it.d });
       }
-      function drawRail(it, v) {
-        const fog = fogAt(it.d);
-        for (const off of [-0.45, 0.45]) {
-          const tan = Math.atan2(it.e.y - it.a.y, it.e.x - it.a.x), nx = -Math.sin(tan) * off, ny = Math.cos(tan) * off;
-          const s = clipSeg(toCam(c, it.a.x + nx, it.a.y + ny, LOOP_H), toCam(c, it.e.x + nx, it.e.y + ny, LOOP_H));
-          if (!s) continue;
-          const p = project(s[0], v), q = project(s[1], v);
-          if (!p || !q) continue;
-          ctx.strokeStyle = alpha(C.dim, 0.75 * fog); ctx.lineWidth = 1.2;
-          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
-        }
-        if (it.pillar) {
-          const p = project(toCam(c, it.a.x, it.a.y, 0), v), q = project(toCam(c, it.a.x, it.a.y, LOOP_H - 0.1), v);
-          if (p && q && p.f > 1.5) { ctx.strokeStyle = alpha(C.line, 0.9 * fog); ctx.lineWidth = Math.min(10, Math.max(1, (0.35 / p.f) * v.focal)); ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke(); }
-        }
-        ctx.lineWidth = 1;
+      // The Loop, in the city's concrete and steel: deck slab with the line's cyan on the
+      // fascia, piers, the rails on top (seen from the platform or aboard).
+      function under(pts, fill) {
+        // the deck's underside: horizontal and above the eye, so poly() would hide it
+        const cp = clipNear(pts.map(([x, y, h]) => toCam(c, x, y, h * SH)));
+        if (cp.length < 3) return;
+        ctx.beginPath(); cp.forEach((p, i) => { const q = project(p, view); if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); }); ctx.closePath();
+        ctx.fillStyle = fill; ctx.fill();
       }
-      function drawStation(st, v, labelOk) {
-        const fog = fogAt(Math.hypot(st.x - c.x, st.y - c.y));
+      function drawRail(it) {
+        const { a, e } = it;
+        const L = Math.hypot(e.x - a.x, e.y - a.y) || 1, dx = (e.x - a.x) / L, dy = (e.y - a.y) / L, nx = -dy, ny = dx;
+        const W2 = DECK_HW;
+        const foot = [[a.x + nx * W2, a.y + ny * W2], [e.x + nx * W2, e.y + ny * W2], [e.x - nx * W2, e.y - ny * W2], [a.x - nx * W2, a.y - ny * W2]];
+        const nf = night ? 0.7 : 1;
+        if (it.pier) {
+          G.prism([[a.x - 0.19, a.y - 0.19], [a.x + 0.19, a.y - 0.19], [a.x + 0.19, a.y + 0.19], [a.x - 0.19, a.y + 0.19]], 0, DECK - DECK_T, LOOP.pier, 1.1);
+        }
+        if (eyeZ < (DECK - DECK_T) * SH) under(foot.map(([x, y]) => [x, y, DECK - DECK_T]), shade(LOOP.deck, 0.62 * nf));
+        G.prism(foot, DECK - DECK_T, DECK, LOOP.deck, 1.12);
+        // the cyan line along each fascia that faces us
+        for (const [p0, p1] of [[foot[0], foot[1]], [foot[2], foot[3]]]) {
+          if (!G.facing(p0, p1, [(a.x + e.x) / 2, (a.y + e.y) / 2])) continue;
+          const A = Q(p0[0], p0[1], DECK - DECK_T * 0.45), B = Q(p1[0], p1[1], DECK - DECK_T * 0.45);
+          ctx.strokeStyle = night ? LOOP.cyanHi : LOOP.cyan; ctx.lineWidth = Math.max(1, Math.min(4, G.z * 0.05));
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+        }
+        // parapets, and the rails when the deck top is in view
+        for (const s of [1, -1]) {
+          const p0 = [a.x + nx * W2 * s, a.y + ny * W2 * s], p1 = [e.x + nx * W2 * s, e.y + ny * W2 * s];
+          if (eyeZ < DECK * SH && !G.facing(p0, p1, [(a.x + e.x) / 2, (a.y + e.y) / 2])) continue;   // the far parapet hides behind the deck
+          const A = Q(p0[0], p0[1], DECK + 0.12), B = Q(p1[0], p1[1], DECK + 0.12);
+          ctx.strokeStyle = shade(LOOP.parapet, nf); ctx.lineWidth = Math.max(1, Math.min(5, G.z * 0.06));
+          ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+        }
+        if (eyeZ > DECK * SH) for (const s of [0.28, -0.28]) {
+          const A = Q(a.x + nx * s, a.y + ny * s, DECK + 0.02), B = Q(e.x + nx * s, e.y + ny * s, DECK + 0.02);
+          ctx.strokeStyle = LOOP.rail; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+        }
+      }
+      function drawStation(st) {
         const n = st.n || { x: 0, y: -1 };
-        const tx = -n.y, ty = n.x;   // along the track
-        const cx = st.x + n.x * 1.2, cy = st.y + n.y * 1.2;
-        const L = 3.2, Wd = 0.9;
-        const pts = [[cx - tx * L - n.x * Wd, cy - ty * L - n.y * Wd], [cx + tx * L - n.x * Wd, cy + ty * L - n.y * Wd], [cx + tx * L + n.x * Wd, cy + ty * L + n.y * Wd], [cx - tx * L + n.x * Wd, cy - ty * L + n.y * Wd]];
-        // the platform: a slab with a visible edge face, on two legs
-        for (let i = 0; i < 4; i++) {
-          const a = pts[i], e = pts[(i + 1) % 4];
-          const mx = (a[0] + e[0]) / 2 - cx, my = (a[1] + e[1]) / 2 - cy;
-          if ((c.x - (cx + mx)) * mx + (c.y - (cy + my)) * my <= 0) continue;
-          const q = quad(a[0], a[1], e[0], e[1], LOOP_H - 0.75, LOOP_H - 0.15);
-          if (q) poly(q, alpha(C.panel, 0.95), alpha(C.accent, 0.55 * fog));
+        const tx = -n.y, ty = n.x;
+        const cx = st.x + n.x * 1.0, cy = st.y + n.y * 1.0;
+        const Lh = 4.5, Wd = 0.35;
+        const rect = (l, w0, w1) => [[cx - tx * l + n.x * w0, cy - ty * l + n.y * w0], [cx + tx * l + n.x * w0, cy + ty * l + n.y * w0], [cx + tx * l + n.x * w1, cy + ty * l + n.y * w1], [cx - tx * l + n.x * w1, cy - ty * l + n.y * w1]];
+        const lit = trainIn(st, mt);
+        const plat = rect(Lh, -Wd, Wd);
+        if (eyeZ < (DECK - DECK_T) * SH) under(plat.map(([x, y]) => [x, y, DECK - DECK_T]), shade(LOOP.plat, 0.55));
+        G.prism(plat, DECK - DECK_T, DECK + 0.03, lit ? LOOP.platLit : LOOP.plat, 1.3);
+        // the yellow edge along the track side
+        const A = Q(plat[0][0], plat[0][1], DECK + 0.035), B = Q(plat[1][0], plat[1][1], DECK + 0.035);
+        ctx.strokeStyle = LOOP.edge; ctx.lineWidth = Math.max(1, Math.min(3, G.z * 0.04)); ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+        // posts and the canopy, its fascia lit while a train stands
+        for (const l of [-Lh + 0.8, 0, Lh - 0.8]) {
+          const px2 = cx + tx * l + n.x * Wd * 0.6, py2 = cy + ty * l + n.y * Wd * 0.6;
+          const P0 = Q(px2, py2, DECK), P1 = Q(px2, py2, CANOPY);
+          ctx.strokeStyle = shade(LOOP.stair, 1); ctx.lineWidth = Math.max(1, Math.min(4, G.z * 0.05)); ctx.beginPath(); ctx.moveTo(P0[0], P0[1]); ctx.lineTo(P1[0], P1[1]); ctx.stroke();
         }
-        for (const t of [-0.7, 0.7]) {
-          const lx = cx + tx * L * t, ly = cy + ty * L * t;
-          const p = project(toCam(c, lx, ly, 0), v), q = project(toCam(c, lx, ly, LOOP_H - 0.75), v);
-          if (p && q && p.f > 1.5) { ctx.strokeStyle = alpha(C.line, 0.9 * fog); ctx.lineWidth = Math.min(8, Math.max(1, (0.3 / p.f) * v.focal)); ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.lineWidth = 1; }
-        }
-        const cp = clipNear(pts.map(([x, y]) => toCam(c, x, y, LOOP_H - 0.15)));
-        if (cp.length >= 3) { const pr = cp.map(p => project(p, v)); if (pr.every(Boolean)) poly(pr, alpha(C.accent, 0.12 * fog), alpha(C.accent, 0.7 * fog)); }
-        const sp = labelOk ? project(toCam(c, cx, cy, LOOP_H + 2.2), v) : null;
-        if (sp) {
-          const px = Math.min(14, (0.8 / sp.f) * v.focal);
-          if (px >= 7) { ctx.font = `${Math.round(px)}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom"; ctx.fillStyle = alpha(C.warn, 0.95 * fog); ctx.fillText(st.name, sp.x, sp.y); }
-        }
+        const can = rect(Lh - 0.5, -Wd - 0.1, Wd + 0.15);
+        if (eyeZ < CANOPY * SH) under(can.map(([x, y]) => [x, y, CANOPY]), lit ? "#2f5a52" : shade(LOOP.canopy, 0.7));
+        G.prism(can, CANOPY, CANOPY + 0.07, LOOP.canopy, 1.6, 0.9);
+        const f0 = Q(can[0][0], can[0][1], CANOPY + 0.035), f1 = Q(can[1][0], can[1][1], CANOPY + 0.035);
+        ctx.strokeStyle = lit ? LOOP.cyanHi : "rgba(34,211,238,0.5)"; ctx.lineWidth = Math.max(1, Math.min(3, G.z * 0.04)); ctx.beginPath(); ctx.moveTo(f0[0], f0[1]); ctx.lineTo(f1[0], f1[1]); ctx.stroke();
       }
-      function drawCar(it, v) {
-        const fog = fogAt(it.d);
+      function drawCar(it) {
         const yaw = ringTangent(it.s), fx = Math.sin(yaw), fy = -Math.cos(yaw), rx = Math.cos(yaw), ry = Math.sin(yaw);
-        const hl = 1.15, hw = 0.6, z0 = LOOP_H + 0.1, z1 = LOOP_H + 1.5;
+        const hl = 1.15, hw = CAR_HW, z0 = DECK + 0.05, z1 = z0 + CAR_H;
         const corners = [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]].map(([a, b]) => [it.p.x + fx * a + rx * b, it.p.y + fy * a + ry * b]);
+        const ctr = [it.p.x, it.p.y];
+        const nf = night ? 0.72 : 1;
+        const riders = occ.current.riders.get(`${it.t.id}|${it.car}`) || 0;
         for (let i = 0; i < 4; i++) {
           const a = corners[i], b = corners[(i + 1) % 4];
-          const mx = (a[0] + b[0]) / 2 - it.p.x, my = (a[1] + b[1]) / 2 - it.p.y;
-          if ((c.x - (it.p.x + mx)) * mx + (c.y - (it.p.y + my)) * my <= 0) continue;
-          const q = quad(a[0], a[1], b[0], b[1], z0, z1);
-          if (!q) continue;
-          poly(q, alpha(C.panel, 0.95), alpha(C.warn, 0.85 * fog), 1);
-          const wq = quad(a[0] + (b[0] - a[0]) * 0.15, a[1] + (b[1] - a[1]) * 0.15, a[0] + (b[0] - a[0]) * 0.85, a[1] + (b[1] - a[1]) * 0.85, z0 + 0.55, z0 + 1.05);
-          if (wq) poly(wq, alpha(C.warn, 0.35 * fog), null);
+          const sh = G.facing(a, b, ctr);
+          if (!sh) continue;
+          G.poly([Q(a[0], a[1], z1), Q(b[0], b[1], z1), Q(b[0], b[1], z0), Q(a[0], a[1], z0)], shade(LOOP.body, sh * nf));
+          const along = i % 2 === 0;   // edges 0 and 2 run along the car; 1 and 3 are its ends
+          const q = (t0, t1, h0, h1) => [Q(a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0, h1), Q(a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1, h1), Q(a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1, h0), Q(a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0, h0)];
+          G.poly(q(0, 1, z0 + 0.08, z0 + 0.14), LOOP.stripe);
+          if (along) {
+            const win = night ? LOOP.glassNight : shade(LOOP.glassDay, sh);
+            for (let k = 0; k < 5; k++) G.poly(q(0.08 + k * 0.18, 0.2 + k * 0.18, z0 + 0.26, z0 + 0.5), win);
+            if (riders && night) for (let k = 0; k < Math.min(5, riders); k++) G.poly(q(0.12 + k * 0.18, 0.16 + k * 0.18, z0 + 0.26, z0 + 0.42), LOOP.sil);
+            G.poly(q(0.47, 0.53, z0 + 0.05, z0 + 0.52), shade(LOOP.door, sh * nf));
+          } else {
+            // the cab: windscreen, headlamps on the lead car, tail lamps on the last
+            G.poly(q(0.18, 0.82, z0 + 0.3, z0 + 0.52), night ? "#1c2a26" : shade(LOOP.glassDay, 1.1));
+            const front = (a[0] + b[0]) / 2 - it.p.x, frontY = (a[1] + b[1]) / 2 - it.p.y;
+            const ahead = front * fx + frontY * fy > 0;
+            if ((ahead && it.lead) || (!ahead && it.last)) for (const tt of [0.2, 0.8]) G.poly(q(tt - 0.06, tt + 0.06, z0 + 0.14, z0 + 0.22), ahead ? "#fff7d6" : "#f87171");
+          }
         }
+        G.poly(corners.map(([x, y]) => Q(x, y, z1)), shade(LOOP.roof, nf));
       }
-      function drawPerson(it, v, now, hp) {
+      function drawPerson(it, now2, hp2) {
         const z = heightOf(it.w);
         const base = toCam(c, it.w.x, it.w.y, z);
         if (!inFov(base)) return;
-        const p = project(base, v), q = project(toCam(c, it.w.x, it.w.y, z + PERSON_H * statureOf(it.s)), v);   // to scale, from the feet
+        const p = project(base, view), q = project(toCam(c, it.w.x, it.w.y, z + PERSON_H * statureOf(it.s)), view);   // to scale, from the feet
         if (!p || !q) return;
-        const fog = fogAt(p.f);
         const hpx = p.y - q.y;
+        // a shadow on the ground under them, as in the city
+        ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.beginPath(); ctx.ellipse(p.x, p.y, Math.max(1.5, hpx * 0.2), Math.max(0.8, hpx * 0.06), 0, 0, Math.PI * 2); ctx.fill();
         // a stand-in from the day's summary (crowd.js) is drawn like anyone, and never opens
         if (hpx < 11) {
-          const col = FAMILY_COLOR[familyOf(it.s).family] || C.dim;
-          ctx.fillStyle = alpha(col, fog);
-          const r = Math.max(1.2, hpx / 5);
-          ctx.fillRect(p.x - r, p.y - r * 2.5, r * 2, r * 2.5);
-          if (!it.s.crowd) hp.push({ s: it.s, w: it.w, x: p.x - 4, y: p.y - 10, w2: 8, h: 10, f: p.f });
+          const m2 = miniFor(it.s), sc = hpx / (SPRITE_H / 2);
+          try { ctx.drawImage(m2, Math.round(p.x - (SPRITE_W / 4) * sc), Math.round(p.y - hpx), Math.max(1, Math.round((SPRITE_W / 2) * sc)), Math.max(1, Math.round(hpx))); } catch { /* not decoded */ }
+          if (!it.s.crowd) hp2.push({ s: it.s, w: it.w, x: p.x - 4, y: p.y - 10, w2: 8, h: 10, f: p.f });
           return;
         }
         const e = sheetFor(it.s);
         const wpx = hpx * (SPRITE_W / SPRITE_H);
         const walking = it.w.activity === "commute" && (it.w.sub === "walking" || !it.w.sub) && !reduce.current;
-        const fr = walking && e.frames > 1 ? Math.floor(now / 260 + hash01(it.s.name) * 4) % 2 : 0;
-        ctx.globalAlpha = Math.max(0.25, fog);
+        const fr = walking && e.frames > 1 ? Math.floor(now2 / 260 + hash01(it.s.name) * 4) % 2 : 0;
         try { ctx.drawImage(e.img, fr * SPRITE_W, 0, SPRITE_W, SPRITE_H, Math.round(p.x - wpx / 2), Math.round(q.y), Math.round(wpx), Math.round(hpx)); } catch { /* not decoded */ }
-        ctx.globalAlpha = 1;
         if (it.s.you) {
           ctx.fillStyle = C.accent; ctx.font = `${Math.round(Math.min(14, Math.max(9, hpx / 5)))}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
           ctx.fillText("▼ YOU", p.x, q.y - 2);
         }
-        if (!it.s.crowd) hp.push({ s: it.s, w: it.w, x: p.x - wpx / 2, y: q.y, w2: wpx, h: hpx, f: p.f });
-      }
-      function drawSign(it, v) {
-        const p = project(toCam(c, it.x, it.y, 3.6), v), b = project(toCam(c, it.x, it.y, 0), v);
-        if (!p || !b) return;
-        const fog = fogAt(p.f), px = Math.min(18, (1.1 / p.f) * v.focal);
-        if (px < 7) return;
-        ctx.strokeStyle = alpha(C.mute, fog); ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(p.x, p.y); ctx.stroke();
-        ctx.font = `${Math.round(px)}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-        const tw = ctx.measureText(it.text).width;
-        ctx.fillStyle = alpha(C.bg, 0.85 * fog); ctx.fillRect(p.x - tw / 2 - 4, p.y - px - 4, tw + 8, px + 6);
-        ctx.strokeStyle = alpha(C.accent, 0.8 * fog); ctx.strokeRect(p.x - tw / 2 - 4, p.y - px - 4, tw + 8, px + 6);
-        ctx.fillStyle = alpha(C.accent, fog); ctx.fillText(it.text, p.x, p.y);
+        if (!it.s.crowd) hp2.push({ s: it.s, w: it.w, x: p.x - wpx / 2, y: q.y, w2: wpx, h: hpx, f: p.f });
       }
     }
-
     function frame(now) {
       raf = 0;
       if (!visible || document.hidden) return;

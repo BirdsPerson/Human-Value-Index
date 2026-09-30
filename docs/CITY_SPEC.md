@@ -800,3 +800,47 @@ board). Check: `scripts/check-civic.mjs`.
   every wage and purchase is a write against a balance). Then ballots and balances become
   rows (unique (session, voter); balances with transactional updates), and the fold reads
   their aggregates the way it reads the Assembly's result now.
+
+## STREET in the city's language (pass 1, 2026-09-30)
+
+Scott: "if it's not too much trouble, maybe we could start polishing [the street view] a little
+bit at a time to make it look like everything else at least." The STREET view was a green
+wireframe (flat boxes, a window grid, a line for the Loop). Pass 1 makes it draw with the same
+code as the CITY view, so a building looks the same from the street as from above.
+
+- **One drawing kit, two cameras.** archDraw.js, parkDraw.js (and CityIso) draw through a kit
+  G = {ctx, Q, poly, prism, wall, facing, z, r}. `src/city/streetArch.js` builds that kit for
+  the street camera: Q(x, y, h) is the perspective projection (h storeys of STOREY cells, the
+  iso view's own proportion), so `drawBody`, `drawYardProp`, `drawArchGround` and `drawParkLot`
+  run unchanged. What the kit absorbs: `facing` asks the camera (outward side; a face wholly
+  behind the near plane is hidden); `r` is picked per building (`quarterFor`) so archDraw's
+  "nearer = larger u + v" painter's order inside a building holds; `z` is px per cell at the
+  depth of the last point projected, so figures, trees and players drawn at their own point come
+  out at their own size; `poly` drops an up-facing surface the eye is under (a roof seen from
+  below is behind its walls) unless it is thin (a balcony slab, a canopy); Q clamps depth to the
+  near plane.
+- **Heights** follow the city: a storey is STOREY (2.1) cells, the Loop's deck DECK (1.5)
+  storeys up (`streetKit.FLOOR_H`, `LOOP_H`); buildings stand at their massing's `rise`.
+- **Scene** (Street.jsx render): a dark machine sky (a touch lighter by day), the district
+  ground in the city's GROUND tints with pavements and the faint street grid, open lots in the
+  city's LOT_FILL, the buildings' flat ground (courts, plazas, lawns); then, far to near by the
+  nearest point of each footprint: bodies (archDraw, LOD by depth, lit by the census counted the
+  city's way, `simApi.roomIn`; HQ keeps office hours), yard props, the grounds (parkDraw, with the
+  people there posed at their anchors), the Loop (concrete deck and piers, the line's cyan on the
+  fascia, the underside when overhead; stations with the yellow edge and a canopy lit while a
+  train stands; steel cars with the cyan stripe, windows glass by day and warm by night with rider
+  silhouettes, headlamps and tail lamps), people on the streets and platforms (sprites to scale
+  with a shadow; riders are in the windows, the grounds' people are parkDraw's). Labels in the
+  city's style (dark box, `#a7d7b5`; stations cyan-underlined), nearest first, none through a
+  nearer building's walls.
+- The auto-tour walks TOUR_SIDE (1.5) cells inside the viaduct, not under it.
+- `check-street`: the heights are the city's; `quarterFor` faces every offset; facing (front,
+  back, behind the camera); the top rule (roof above the eye hidden, low slab and thin slab
+  shown, walls pass); z halves at twice the depth; every building is drawable.
+
+Measured (headless Chromium, dev build, walking): 1440 Sprawl 22:00 draw 2.2 ms avg / 3.2 max,
+frame gap 16.6 / p95 17.3; 1440 Finance 12:00 1.9 / 6.1, 16.6 / 17.4; 1440 tour 18:30 2.4 / 4.1,
+16.6 / 17.1; 390 Sprawl 22:00 2.4 / 3.2, 16.7 / 17.4; no frame over 20 ms. Screens:
+docs/screens/street-pass1/compare-*.png (before and after, same spot and hour). Next passes:
+docs/ROADMAP.md item 9a.
+

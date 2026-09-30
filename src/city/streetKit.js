@@ -6,9 +6,11 @@
 
 import * as SIM from "./sim.js";
 import { BUILDINGS as B3D, levelOf } from "./city3d.js";
+import { STOREY, DECK } from "./iso.js";
 
-export const FLOOR_H = 2.4;        // one storey, in cells
-export const LOOP_H = 5.4;         // the Loop's deck: above the two-storey line
+// Heights follow the city view (iso.js): a storey is STOREY cells, the Loop's deck DECK storeys up.
+export const FLOOR_H = STOREY;     // one storey, in cells
+export const LOOP_H = DECK * STOREY;   // the Loop's deck (3.15 cells)
 export const PERSON_H = 1.9;       // a subject, head to feet
 export const EYE_H = 2.4;          // camera height on foot (a low drone at shoulder height)
 export const RIDE_H = LOOP_H + 1.3;
@@ -129,13 +131,18 @@ export function arcDelta(s0, s1) {
   return d;
 }
 
-// The auto-tour walks the streets under the Loop, looking slightly inward so buildings
+// The auto-tour walks the streets beside the Loop (TOUR_SIDE cells inside the viaduct, so
+// the deck and the trains are in view, not overhead), looking slightly inward so buildings
 // on the inner side stay in frame. t is seconds; the tour is the same for every viewer.
+export const TOUR_SIDE = 1.5;
 export function tourPose(t) {
   const s = t * TOUR_SPEED;
   const p = ringAt(s);
-  const yaw = ringTangent(s) + 0.28 * Math.sin(t / 9);
-  return { x: p.x, y: p.y, yaw, s };
+  const tan = ringTangent(s);
+  // clockwise round the ring, the inside is on the right
+  const x = p.x + Math.cos(tan) * TOUR_SIDE, y = p.y + Math.sin(tan) * TOUR_SIDE;
+  const yaw = tan + 0.28 * Math.sin(t / 9);
+  return { x, y, yaw, s };
 }
 
 // ---- where people stand ---------------------------------------------------------

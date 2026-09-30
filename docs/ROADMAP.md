@@ -163,7 +163,31 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 8. **Backfill field/domain on every subject.** 104 of 185 subjects (referrals + engine) carry no field, so analytics by field covers only 81. Classify field + era from Wikidata occupation/P106 and birth date for every card (cheap, no model needed where Wikidata has it), store on the card and index, and make referral + engine paths set it at creation.
 
-9. **City polish from the iso build:** ward curtains drawn too tall; verify the "+K" crowd badge on a real crowded room; test pinch/twist on a real phone. STREET view is back burner (kept, not default).
+9. **City polish from the iso build:** ward curtains drawn too tall; verify the "+K" crowd badge on a real crowded room; test pinch/twist on a real phone.
+
+9a. [next] **STREET polish, a pass a night** (Scott 2026-09-30: "start polishing that a little
+   bit at a time to make it look like everything else"). Pass 1 shipped 2026-09-30 (see Done and
+   docs/CITY_SPEC.md "STREET in the city's language"): facades, ground, grounds, Loop palette.
+   One pass per night, in order; each ships with before/after screens in docs/screens/street-pass<N>/,
+   day (?at=12:00) and night (?at=22:00), 1440 and 390, and frame timings (60 fps both widths):
+   - **Pass 2: the Loop as loopGeo builds it.** Draw the viaduct from `loopGeo.loopPieces()`
+     (radius-2 curves at the corners, piers every other piece), cars from `trainPoses`/`carCorners`
+     (bogie-placed, bending through the corners, gangways, roof units, cab with headlamps), the
+     stations from `stationGeo` (platform + yellow edge strip, glazed canopy on posts with the lit
+     fascia, the stairs down beside it, the name board; `// TRAIN IN` while one stands). Riders on
+     the platform stand on it, commuters climb the stairs (`climb`). Walking collides with piers
+     and stair bases. Lift the shared Loop drawer out of CityIso into a module both views call
+     (coordinate with whoever holds CityIso.jsx).
+   - **Pass 3: open ground and the civic lots.** The Green, the Allotment, THE STREET and THE PLAZA
+     dressed as the city does (trees, beds, benches, lamps, stalls); THE ASSEMBLY and LOT 0x6F07
+     through `civicDraw.drawCivicLot` (its kit already takes `prism`/`wall`); road markings and
+     kerbs between the blocks; street lamps that light at dusk with a pool on the pavement.
+   - **Pass 4: people with the city's poses.** Walkers and loiterers on the streets through
+     `poses.drawPose` (walk cycle facing their heading, idle acts on the open lots, sitting on
+     benches), whoever is walking in or out drawn at the front door (`archDraw.doorAt`, as the
+     iso view does up close), the doorman/guards; LOD by depth (mini sprites far off), tap
+     targets unchanged; perf budget re-measured at 1440 and 390.
+   Later: a pass for weather/sky (dusk gradient, the searchlight at night), and the HUD chrome.
 
 10. **Shared animation rig recoloured per person** (Scott 2026-09-28: faces hidden, identity by colours). Extract each subject's palette (hair, skin, top, bottom, shoes, accent) from their existing sprite; draw a small shared rig once (4-direction walk, sit, desk work, cheers, dance) in the design-system style; recolour per subject client-side (zero image generation). Real face only in front idle + file photo. Use in CITY iso, STREET, pen, building cutaways.
 
@@ -182,6 +206,15 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
   ~/projects/organize/collect_reports.py.
 
 ## Done
+
+- 2026-09-30 STREET polish, pass 1 (item 9a): the STREET view now draws with the city's own
+  drawers through a perspective kit (src/city/streetArch.js): every building's architecture
+  (archDraw: projects, brownstones, the Meridian, HQ's monolith, gothic campus, neon Strip...),
+  windows lit by occupancy by day and night, yard props and flat ground, the grounds through
+  parkDraw (players posed), the district ground and the Loop in the city's palette; heights are
+  the iso view's (a storey = STOREY cells, the deck at DECK storeys); labels in the city's style,
+  hidden behind nearer buildings; the auto-tour walks beside the viaduct. Screens:
+  docs/screens/street-pass1/. Check: check-street (the kit's rules).
 
 - 2026-09-29 Scale (item 0a): production sprite atlas (scripts/prod-atlas.mjs packs every
   ready referral sprite into content-hashed sheets in Blobs; /api/atlas.json + /api/atlas/<hash>.png;
