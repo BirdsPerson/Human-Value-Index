@@ -1350,8 +1350,8 @@ the PA), `simApi.js` (boards and PA). Check: `scripts/check-civic.mjs` section 3
   champion, draft}}, tennis {seed, ladder}, pit {dist, rank}, cup {table, last}}`;
   `districts[id].teams {<sport>: {rating, roster, pos, p, w, d, l, f, a, pts, form}}` and `cup {pos,
   pts}` (the Coast and the Heights: `cup.pos` null, no teams); no `league`, no `team`. Measured:
-  ~2.5-2.6 KB per district at 430 / 5,000 / 20,000 subjects (the rosters are most of it), fold
-  ~150 ms at 5,000.
+  2,507 / 2,620 / 2,670 bytes per district at 430 / 5,000 / 20,000 subjects (the rosters are
+  most of it; the mixed league's was ~950-990), fold 127 / 534 ms at 5,000 / 20,000 on draft day.
 - **In the city.** `#city/league` is a hub: BASEBALL / BASKETBALL / FOOTBALL / SOCCER (table with
   Cup points, today, results with box scores, leaders, sortable player stats, team stats, rosters,
   the draft board), TENNIS, PIT, CUP. A district page shows its Cup position and its four teams; the
