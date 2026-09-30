@@ -9,6 +9,11 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Backlog (priority order)
 
+- [next, small] Park chess polish (Claude's call 2026-09-30): the Recreation Ground reads cramped up
+  close (sprites taller than the tables): cut it to ONE stone table and fewer kibitzers there; add
+  the chess tables to the Recreation Ground's side-view cutaway (props.js picnic plan); prune void
+  chess game records older than 12 h (netlify/lib/chess-store.js).
+
 0. [in progress 2026-09-29, Scott's order: scale -> community -> HQ]
    a. [shipped 2026-09-29, see Done] **Scale.** Production sprite atlas + slim /api/pen.
    b. **Community + incidents.** Real-life ties from Wikidata (spouse, sibling, bandmates
