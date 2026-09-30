@@ -892,8 +892,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       if (V.camTo || t - V.camAt < 350 || t - (V.wantAt || 0) < 300) return;
       V.wantAt = t;
       const ids = new Set();
-      if (V.cam.z >= Math.max(LOD_MID * 1.5, V.fitZ * 1.6)) for (const { d, R } of V.geo.districts) {
-        if (onScreen([P(R.x0, R.y0, 0), P(R.x1, R.y0, 0), P(R.x1, R.y1, 0), P(R.x0, R.y1, 0)], 60)) ids.add(d.id);
+      // on screen: the ground under a 7 x 7 grid over the view (a district's diamond is far
+      // smaller than its bounding box), widened a little so a neighbour at the edge is ready
+      if (V.cam.z >= Math.max(LOD_MID * 1.5, V.fitZ * 1.6)) for (let i = 0; i <= 6; i++) for (let j = 0; j <= 6; j++) {
+        const [x, y] = screenToMap(-40 + (V.cssW + 80) * i / 6, -40 + (V.cssH + 120) * j / 6, V.cam);
+        const d = DISTRICTS.find(q => x >= q.rect.x - 2 && x <= q.rect.x + q.rect.w + 2 && y >= q.rect.y - 2 && y <= q.rect.y + q.rect.h + 2);
+        if (d) ids.add(d.id);
       }
       if (V.sel && BUILDING[V.sel]) ids.add(BUILDING[V.sel].districtId);
       const fw = V.find?.t?.w;
