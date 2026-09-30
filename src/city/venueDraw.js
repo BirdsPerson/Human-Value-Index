@@ -344,7 +344,7 @@ function tennisLot(K) {
 
 // ---- labels and the cutaway line ------------------------------------------------------------------
 export function venueLabel(lotId, mt) {
-  if (VENUE_LOTS[lotId] === "pit") { const b = boutAt(mt); return b ? `THE PIT // ${b.phase.phase === "round" ? `ROUND ${b.phase.round}` : b.phase.phase === "walkout" ? "WALKOUT" : b.phase.phase === "break" ? "BETWEEN ROUNDS" : "THE DECISION"}` : "THE PIT"; }
+  if (VENUE_LOTS[lotId] === "pit") { const b = boutAt(mt); return b ? `THE PIT // ${b.phase.phase === "round" ? `ROUND ${b.phase.round}` : b.phase.phase === "walkout" ? "WALKOUT" : b.phase.phase === "break" ? "BETWEEN ROUNDS" : b.phase.phase === "decision" ? "THE DECISION" : "RESULT IN"}` : "THE PIT"; }
   const m = tennisAt(mt);
   return m ? `THE TENNIS CLUB // ${m.label}` : "THE TENNIS CLUB";
 }

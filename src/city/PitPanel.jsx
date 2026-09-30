@@ -18,10 +18,11 @@ export default function PitPanel({ districtId = null }) {
   let list = boutsOn(day), when = "TONIGHT";
   if (!list.length) { for (let d = day + 1; d <= day + 7; d++) if (weekdayOf(d) === CARD_DAY) { list = cardFor(d) || []; when = d === day + 1 ? "TOMORROW" : `MACHINE DAY ${d}`; break; } }
   const on = boutAt(mt), m = tennisAt(mt);
-  const meta = on ? `NOW: ${billLine(on.bout)}` : `${when}: ${list.length} BOUT${list.length === 1 ? "" : "S"}`;
+  const meta = on ? `NOW: ${billLine(on.bout)}` : `${when.replace("MACHINE DAY", "DAY")}: ${list.length} BOUT${list.length === 1 ? "" : "S"}`;
   const nextTennis = (() => { for (let d = day; d <= day + 7; d++) for (const f of TENNIS_FIXTURES) if (f.days.includes(weekdayOf(d)) && (d > day || c.hour < f.to)) return `${d === day ? "TODAY" : `MACHINE DAY ${d}`} ${hhmm(f.from)} // ${f.name}`; return null; })();
   return (
-    <Disclosure className="hvi-city-disc" title="THE PIT // THE FIGHT BOARD" meta={meta}>
+    <Disclosure className="hvi-city-disc" title="THE PIT" meta={meta}>
+      <div className="hvi-civic-fx">THE FIGHT BOARD</div>
       <div className="hvi-civic-fx">FRIDAYS {hhmm(CARD_FROM)} THE CARD // NIGHTLY {hhmm(GRIEVANCE_FROM)} GRIEVANCES, WHEN THE LEDGER BOOKS ONE. NOBODY IS HARMED. EVERYBODY IS ASSESSED.</div>
       {list.map(b => {
         const t0 = (b.day - 1) * 24 + b.from, done = mt >= t0 + SLOT_H - 0.06, now = on && on.bout.id === b.id;
