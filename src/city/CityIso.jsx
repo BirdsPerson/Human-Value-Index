@@ -10,6 +10,7 @@ import { wantSectors } from "./planClient.js";
 import { loopPieces, trainPoses, carCorners, carBox, stationGeo, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
+import { greet } from "./rigReact.js";
 import { PARK_LOTS, PARK_PLACES, fieldRole } from "./parkGeo.js";
 import { drawParkLot } from "./parkDraw.js";
 import { CIVIC_LOTS, CIVIC_PLACES } from "./civicGeo.js";
@@ -877,6 +878,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       V.seats.set(rk, { plan, at });
       const byAnchor = new Array(plan.anchors.length);
       for (const p of people) { const i = at.get(p.key); if (i != null) byAnchor[i] = p; }
+      if (live && byAnchor.length > 1) greet(rk, byAnchor.filter(Boolean).map(p => ({ s: p.s, sheet: sheetFor(p.s) })), now);   // friends who just met wave (rigReact)
       drawRoom(ctx, pid, rx, ry, rw, rh, u, {
         t: now, hour, plan, lit: true,
         people: (row) => {

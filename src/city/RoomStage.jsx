@@ -6,6 +6,7 @@ import { sheetFor } from "./spriteBank.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
 import { fieldRole } from "./parkGeo.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
+import { greet } from "./rigReact.js";
 import { FONT, SubjectTip } from "./cityUi.jsx";
 
 // Rooms as terminal boxes on one canvas, with the subjects the census puts in each one
@@ -422,6 +423,7 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         const r = V.rects[i];
         if (r.y + r.h < top || r.y > bot) return;
         const X = r.x + G.ix, Y = r.y + G.iy, here = at[i];
+        if (here && here.size > 1) greet(placeOf[i], [...here.values()].map(e => ({ s: e.s, sheet: sheetFor(e.s) })), t);   // friends who just met wave (rigReact)
         drawRoom(ctx, placeOf[i], X, Y, G.iw, G.ih, G.u, {
           t, hour, plan: G.plan,
           people: here ? (row) => {

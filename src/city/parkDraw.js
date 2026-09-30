@@ -26,6 +26,7 @@ import { drawPose, phaseOf, PITCH_S, SHOT_S, PLAY_S, SNAP_F, THROW_F, CATCH_F } 
 import { assignAnchors, actAt, typeOf } from "./props.js";
 import { DIAMOND, COURTS, REC, BOWL, PITCH, PARK_ANCHORS, PARK_LOTS, ringAt, fieldRole } from "./parkGeo.js";
 import { gameAt, leagueTableAt } from "./simApi.js";
+import { scoreCheer } from "./rigReact.js";
 
 const who = (s) => s.slug || s.name;
 function h01(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 100000) / 100000; }
@@ -56,7 +57,8 @@ export function drawParkLot(G, lotId, lod, mt, people, prev) {
   const gpath = (pts, col, w, close = false, h = 0.015) => { const c = G.ctx; c.strokeStyle = col; c.lineWidth = w; c.beginPath(); pts.forEach((p, i) => { const S = G.Q(p[0], p[1], h); if (i) c.lineTo(S[0], S[1]); else c.moveTo(S[0], S[1]); }); if (close) c.closePath(); c.stroke(); };
   const vline = (x, y, h0, h1, col, w) => { const A = G.Q(x, y, h0), B = G.Q(x, y, h1); G.ctx.strokeStyle = col; G.ctx.lineWidth = w; G.ctx.beginPath(); G.ctx.moveTo(A[0], A[1]); G.ctx.lineTo(B[0], B[1]); G.ctx.stroke(); };
   const px = Math.max(1, G.z * 0.06);
-  const K = { G, lod, hour, game, put, ground, gline, gpath, vline, px, carried, t: G.t, mt };
+  // a score just changed: the stands are on their feet for a few seconds (rigReact.scoreCheer)
+  const K = { G, lod, hour, game, put, ground, gline, gpath, vline, px, carried, t: G.t, mt, roar: scoreCheer(pid, game, G.t) };
 
   // who stands where (the order the anchors are listed: the battery first, then the field)
   const anchors = PARK_ANCHORS[pid];
@@ -110,11 +112,14 @@ function personDraw(K, pid, a, p) {
     }
     let face = 0;
     if (look) { const [lx] = G.Q(look[0], look[1], a.h); face = lx > sx + 0.5 ? 1 : -1; }
-    const box = drawPose(G.ctx, sheetFor(p.s), { kind: a.kind, act, face, walk: null }, act, sx, sy, hh0, G.t, ph, k);
+    const fan = K.roar && FAN_ACTS.has(act);
+    const box = drawPose(G.ctx, sheetFor(p.s), { kind: a.kind, act, face, walk: null, anim: fan ? (frac(ph * 5.3) < 0.7 ? "cheer" : "clap") : null }, act, sx, sy, hh0, G.t, ph, k);
     if (!p.s.crowd) G.hits.push({ kind: "p", s: p.s, box });
   };
   return { x, y, draw };
 }
+// who is watching rather than playing: they cheer a score
+const FAN_ACTS = new Set(["cheer", "watch", "view", "eat", "drink", "sit", "rest", "wait", "listen"]);
 const courtPhase = (a) => (a.id.endsWith("1") ? 0.37 : 0);
 
 // A ball in play: an orange or white dot at a map point and height, with its shadow.

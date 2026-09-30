@@ -10,6 +10,7 @@
 // motion) gives each pose at rest.
 
 import { SPRITE_W as FW, SPRITE_H as FH, statureOf } from "../sprites.js";
+import { rigPose } from "./rigReact.js";   // the shared animation rig (rig.js): an act or reaction that is an animation
 
 // A person's stature in a room cutaway: to scale, but never through the ceiling. footY is the
 // anchor's feet measured from the room's top edge, hh the anchor's standing sprite height.
@@ -66,6 +67,7 @@ export function drawPose(c, sheet, a, act, x, y, hh0, t, ph, k = 1) {
   const bp = hh0 / FH, hh = hh0 * k;          // bp: one sprite pixel at the furniture's scale
   const f = hh / FH, ww = FW * f, px = f;   // one sprite pixel of this person
   let pose = poseOf(a, act);
+  if (pose !== "lie" && !(pose === "walk" && !a.anim)) { const rb = rigPose(c, sheet, a, act, x, y, hh0, t, ph, k, pose === "sit", SEAT); if (rb) return rb; }
   let flip = a.face === 1;
   let dx = 0, dy = 0, fi = 0;
   try {

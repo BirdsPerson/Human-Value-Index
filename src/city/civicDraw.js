@@ -18,6 +18,7 @@ import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { drawPose, phaseOf } from "./poses.js";
+import { assemblyCrowd } from "./rigReact.js";
 import { assignAnchors } from "./props.js";
 import { lotPhase } from "./sim.js";
 import { CIVIC_LOTS, CIVIC_ANCHORS, FORUM, SIGN, VACANT, SITE, GOLF, FARM, faceOf } from "./civicGeo.js";
@@ -45,7 +46,7 @@ export function drawCivicLot(G, lotId, lod, mt, people, prev) {
   const put = (x, y, draw, bias = 0) => { const [u, v] = rot(x, y, G.r); items.push({ k: u + v + bias, draw }); };
   const ground = (pts, fill, h = 0.01) => G.poly(pts.map(p => G.Q(p[0], p[1], h)), fill);
   const vline = (x, y, h0, h1, col, w) => { const A = G.Q(x, y, h0), B = G.Q(x, y, h1); G.ctx.strokeStyle = col; G.ctx.lineWidth = w; G.ctx.beginPath(); G.ctx.moveTo(A[0], A[1]); G.ctx.lineTo(B[0], B[1]); G.ctx.stroke(); };
-  const K = { G, lod, hour, put, ground, vline, carried, t: G.t, px: Math.max(1, G.z * 0.06), phase, mt };
+  const K = { G, lod, hour, put, ground, vline, carried, t: G.t, px: Math.max(1, G.z * 0.06), phase, mt, forum: face === "forum" };
 
   const anchors = CIVIC_ANCHORS[face] || [];
   const list = people.map(o => ({ key: who(o.s), role: "patron", pri: 0, s: o.s }));
@@ -114,7 +115,9 @@ function personDraw(K, a, p, hat) {
     } else {
       let face = 0;
       if (look) { const [lx] = G.Q(look[0], look[1], a.h); face = lx > sx + 0.5 ? 1 : -1; }
-      box = drawPose(G.ctx, sheetFor(p.s), { kind: a.kind, act, face, walk: null }, act, sx, sy, hh0, G.t, ph, k);
+      // the benches applaud a result, and clap each vote as it lands (rigReact.assemblyCrowd)
+      const anim = K.forum ? assemblyCrowd(assemblyNow(), act, G.t, ph) : null;
+      box = drawPose(G.ctx, sheetFor(p.s), { kind: a.kind, act, face, walk: null, anim }, act, sx, sy, hh0, G.t, ph, k);
     }
     if (hat) hardHat(G.ctx, box);
     if (!p.s.crowd) G.hits.push({ kind: "p", s: p.s, box });

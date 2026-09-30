@@ -215,6 +215,93 @@ Measured (headless Chromium, 422 subjects): hab block at 21:00, 1440: frame gap 
 p95 17.8; iso cutaway on a hab block: 16.7 / 18.0; works district at 390: 16.7 / 18.1; no
 long tasks. Screens: docs/screens/rooms-detail/.
 
+## Animation rig (2026-09-30)
+
+Scott: "add some generic animations that everybody could use, the sprites." Every subject's
+own sprite, cut into body parts once when it loads and moved by one shared set of keyframed
+animations. No image is generated and nobody is redrawn: the face, the outfit and the prop
+stay theirs. Code: `src/city/rig.js` (the cut, the animations, drawing),
+`src/city/rigReact.js` (acts, reactions, the crowd), a two-line hook in `poses.drawPose`.
+
+**The cut** (`splitParts`, frame 0 of the 32x48 sheet, style C proportions): the head is the
+run of pixels round the head's centre above the neck (the narrowest row 8 to 14 rows under
+the head top); anything beside it at that height (a bat on the shoulder, a raised hand) stays
+with the head and marks that arm *posed*. The arms are what lies outside the torso core
+(the shoulder row less an arm each side, nudged to the outline seam between arm and body)
+from the shoulders down to where that side stops carrying colour: hands at the hip, or arms
+folded over the chest. Each arm is an upper and a fore segment, split halfway. A thin prop
+running below the hand clear of the legs (a staff, a crook) goes with the hand. The legs are
+everything from the hip (27 rows, poses.js HIP) down, split left and right at the gap
+between the feet; a dress, a robe or a chair (lower body as wide as the torso) is one skirt
+that moves only as a whole. The torso is the rest. Every opaque pixel is in exactly one part.
+
+**The moves**: an animation is 4 to 8 held keyframes (never tweened) of whole-pixel offsets
+(body, torso, head) and arm and leg angles (0 = as drawn, positive = outward; a forearm
+relative to its upper arm). Rotations are cut once per (part, 15-degree step) with
+nearest-neighbour sampling and cached per sprite: a frame is a few `drawImage` calls, no
+pixel work. A swung limb gets a 1 px outline where it met the body, and the body gets one
+where the limb was. The head is drawn over raised arms (a cheer never hides the face) and
+under them only for the hands-to-the-front moves. The torso and head never move up off what
+they sit on (a gap); the whole body does. A swung foot is lifted back to the ground. An arm
+with a big prop (a guitar, a rocket, a robe's sleeve) is *heavy* and swings at most 40
+degrees; a *posed* arm (drawn raised) does not move; a one-handed move (wave, point, phone)
+goes to the free hand when the leading one is busy.
+
+**The animations** (`ANIMS`): `idle`, `wave`, `clap`, `cheer`, `point`, `talk`, `dance`,
+`dance2`, `run`, `jump`, `shrug`, `sittalk` (seated), `facepalm`, `stumble` (a trip and a
+recovery, nobody falls), `swim` (for the Coast: under water from the waist, a crawl),
+`ski` and `snowboard` (the Heights), `golf` (address, backswing, through, follow-through),
+`deal` and `chips` (the casino), `arcade` (hands on the controls), `type`, `sweep`, `carry`
+(a box), `phone`. Props the move needs (cards, chips, a box, a broom, a club, poles and skis,
+a board, a phone, the waterline) are drawn by the rig, a few pixels each.
+
+**API** (browser):
+- `drawRig(ctx, sheet, anim, t, x, y, scale, facing, {ph, seat, seatY})`: one subject doing
+  one animation; `x, y` the feet, `scale` canvas px per sprite px, `facing` 1 turned right.
+  Returns the box drawn, or null when the sheet cannot be rigged yet (draw it as before).
+- `poses.drawPose` asks `rigPose` first: an animation is drawn when the subject has a
+  reaction under way, the anchor names one (`{..., anim: "wave"}`), or the act is one
+  (`RIG_ACTS`: `dance`, `dance2`, `wave`, `clap`/`applaud`, `point`, `shrug`, `facepalm`,
+  `stumble`, `swim`, `ski`, `snowboard`, `golf`, `deal`, `chips`, `arcade`, `phone`, `carry`,
+  `sittalk`, `hooray` (cheer)). Seated anchors sit (the shins below the seat, as poses.js).
+  Everything else is poses.js as before; walkers and bunks are never rigged.
+- `react(sheet, anim, t, secs, turn)`: start an animation on a subject for a few seconds
+  (`turn`: face the other way). `reactionOf(sheet, t)`.
+- `greet(scope, [{s, sheet}], t)`: everyone together in one place this frame; a pair of
+  friends (the social ledger's published friends) who were not together a moment ago wave,
+  a beat apart; rivals: one shrugs, the other turns away.
+- `scoreCheer(place, game, t)`: true for 4 s after a fixture's score goes up (never on first
+  sight). `assemblyCrowd(view, act, t, ph)`: the Assembly benches' animation now.
+
+**Where it runs** (first set): the Assembly's benches applaud a result for two days after the
+polls close, in waves, the `cheer` seats on their feet, and clap each vote as the tally rises
+(civicDraw.js); the stands at the Diamond, the Courts, the Bowl and the pitch cheer and clap
+for 4 s when the score changes (parkDraw.js); friends who meet in a room wave, rivals shrug
+and turn away (RoomStage.jsx, the iso cutaways in CityIso.jsx); at the Dive (and the Lantern)
+from 23:00 to 03:00 every other stool is up dancing, two styles (props.actAt); casino dealers
+deal (act `deal`); the course's golfers swing (act `golf`). The arcade, the Coast and the
+Heights use `arcade`, `swim`, `ski`, `snowboard` by naming the act or `anim` on an anchor.
+
+**Timing**: the caller's clock (performance.now seconds) plus the subject's phase
+(`poses.phaseOf`), so a crowd never moves in lockstep; `t = 0` (reduced motion) holds each
+animation's key pose and no reaction fires.
+
+**The lab**: `?rig=1` shows six figures doing every animation, both facings (`&t=1.3`
+freezes the clock, `&frames=1` lays out every frame, `&parts=1` colours the cut, `&figs=a,b`
+picks the sprites). Screens: `docs/screens/rig/`.
+
+**Checks** (`scripts/check-rig.mjs`): the cut covers every opaque pixel exactly once for all
+repo sprites, 14 referral sprites (`scripts/fixtures/rig-referrals/`), the local referral
+cache when the machine has one, and 24 procedural stand-ins and citizens; every frame of
+every animation stays inside the sprite's own box plus 22 px each side, 22 px above and 2 px
+below; fewer than 4% of frames show a piece the standing sprite does not (a detached limb);
+cutting and drawing are deterministic; the wiring above behaves.
+
+**Limitations**: the cut is a heuristic over hand-varied art. Arms drawn folded over the
+chest move from the elbow out while what they hold stays on the chest; a sprite drawn with
+both arms raised keeps them there; robes, capes and big props swing only a little; a skirt
+never splits into legs. No back view yet.
+
 ## The Loop as an elevated line (iso view, 2026-09-29)
 
 Scott: "the train kind of looks like shit." It was a thin cyan line with cyan dashes.

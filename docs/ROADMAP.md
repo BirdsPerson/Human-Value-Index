@@ -192,7 +192,7 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
      targets unchanged; perf budget re-measured at 1440 and 390.
    Later: a pass for weather/sky (dusk gradient, the searchlight at night), and the HUD chrome.
 
-10. **Shared animation rig recoloured per person** (Scott 2026-09-28: faces hidden, identity by colours). Extract each subject's palette (hair, skin, top, bottom, shoes, accent) from their existing sprite; draw a small shared rig once (4-direction walk, sit, desk work, cheers, dance) in the design-system style; recolour per subject client-side (zero image generation). Real face only in front idle + file photo. Use in CITY iso, STREET, pen, building cutaways.
+10. **Shared animation rig recoloured per person** (Scott 2026-09-28: faces hidden, identity by colours). Extract each subject's palette (hair, skin, top, bottom, shoes, accent) from their existing sprite; draw a small shared rig once (4-direction walk, sit, desk work, cheers, dance) in the design-system style; recolour per subject client-side (zero image generation). Real face only in front idle + file photo. Use in CITY iso, STREET, pen, building cutaways. (2026-09-30: a first rig SHIPPED without recolouring: each subject's own sprite is cut into parts and moved by 25 shared animations, docs/CITY_SPEC.md "Animation rig"; the recoloured shared body and a 4-direction walk are still open.)
 
 11. **HQ as a tall SimTower building (~12 floors) of Overlord departments:** Intake, Records, Archive stacks, Calibration Lab (shows current method version), Review Board, Tribunal, Holding Cells, Operations, Executive Suite, roof. Real sim use per floor.
 

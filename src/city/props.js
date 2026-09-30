@@ -429,8 +429,11 @@ const STAFF_ACT = {
 export function actAt(a, hour, role = null, type = null) {
   let act = a.kind === "bed" && a.act === "sleep" ? (isNight(hour) ? "sleep" : "rest") : a.act;
   if (role === "staff" && LEISURE_ACTS.has(act)) act = STAFF_ACT[type] || "inspect";
+  // the Dive after 23:00: every other stool is up and dancing (rig.js), two styles
+  else if (type === "bar" && act === "drink" && a.kind === "seat" && lateNight(hour) && (a.i ?? 0) % 2 === 0) act = (a.i ?? 0) % 4 === 0 ? "dance" : "dance2";
   return act;
 }
+const lateNight = (hour) => hour >= 23 || hour < 3;
 
 // ---- drawing ----------------------------------------------------------------------------
 // All coordinates in px; u = one pixel-art unit of the room's decor (>=1); furniture is
