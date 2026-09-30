@@ -3,11 +3,12 @@
 // the background worker (social-tick-background.js, 15 min), which answers 202 at once and
 // does the work. The tick itself lives in netlify/lib/social-tick.js.
 import { censusSubjects } from "../lib/census.js";
+import { loadPlans } from "../lib/plans.js";
 import { tickIo, tickSecret, TICK_HEADER } from "../lib/social-store.js";
 import { tick as runTick, FAST_FORWARD_DAYS } from "../lib/social-tick.js";
 
 export { FAST_FORWARD_DAYS };
-const defaultIo = () => tickIo(undefined, () => censusSubjects({ strict: true }));
+const defaultIo = () => tickIo(undefined, () => censusSubjects({ strict: true }), { plans: loadPlans });
 // Kept for scripts and checks: the same tick, by default against this site's Blobs.
 export const tick = (nowMs = Date.now(), io = defaultIo(), opts) => runTick(nowMs, io, opts);
 

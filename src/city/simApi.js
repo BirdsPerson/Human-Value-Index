@@ -80,4 +80,7 @@ export const occupancyAt = (subjects, mt) => SIM.occupancy(subjects, mt);
 // Relationships bias where friends spend their leisure. Every page that reads the city
 // through here (the map, the street, the quest log) loads the same published snapshots.
 import { ensureSocial } from "./socialClient.js";
-if (typeof window !== "undefined") ensureSocial();
+// ... and the published plans: the day's city built once server side (planClient.js), so
+// no view pays the whole roster's day build. Without one the sim builds the day locally.
+import { startPlans } from "./planClient.js";
+if (typeof window !== "undefined") { ensureSocial(); startPlans(); }

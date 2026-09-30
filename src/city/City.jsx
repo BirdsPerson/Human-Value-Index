@@ -21,6 +21,7 @@ import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
 import SocialPanel from "./SocialPanel.jsx";
 import { useSocial, ensureSocial } from "./socialClient.js";
+import { ensurePlans } from "./planClient.js";
 // The districts with a ground (the Arena, the Sprawl's estate pitch), and the PA's sign-off
 // under each kind of score.
 const GAME_DISTRICTS = new Set(Object.keys(GAMES).map(id => PLACES[id].district));
@@ -123,16 +124,17 @@ export default function City({ route }) {
       if (bsig !== old.bsig) next = { ...next, buildings: bcounts, bsig };
       if (next !== old) { statsRef.current = next; setStats(next); }
     }
-    // The first census waits (briefly) for the social ledger: it moves where friends spend
-    // their leisure, so a census taken before it lands puts people in rooms they leave a
-    // second later. Cached after the first visit, so this is instant from then on.
+    // The first census waits (briefly) for the social ledger and the day's published plan:
+    // the ledger moves where friends spend their leisure, and the plan is the whole day
+    // already built, so the first census costs a lookup instead of the roster's day build
+    // on the main thread. Cached after the first visit, so this is instant from then on.
     let iv = 0, dead = false;
     const start = () => {
       if (dead || iv) return;
       take();
       iv = setInterval(() => { if (!document.hidden) take(); }, 1000);
     };
-    ensureSocial().finally(start);
+    Promise.allSettled([ensureSocial(), ensurePlans()]).finally(start);
     const late = setTimeout(start, 1500);
     return () => { dead = true; clearTimeout(late); clearInterval(iv); };
   }, [roster, offsetV]);
