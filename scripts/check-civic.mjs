@@ -258,7 +258,12 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   ok(lg.season === 13 && lg.day === 1 && L.SPORTS.every(sp => lg.sports[sp].draft.season === 13), "draft day: four drafts, season 13");
   // the first drafts: every league in the reverse of the mixed league's end, the champion last
   const endOld = C.seasonEnd(12 - 1, Object.fromEntries(DIST.map(id => [id, ch.get(336).districts[id].team.roster])));
-  for (const sp of L.SPORTS) eq(lg.sports[sp].draft.order, L.draftOrder(endOld.table, endOld.champion), `${sp}: the first draft order is the mixed league's table reversed`);
+  // rotated per sport so no district picks first in all four (the Cup would be one district's)
+  L.SPORTS.forEach((sp, i) => {
+    const t = endOld.table, k = (i * 3) % t.length;
+    eq(lg.sports[sp].draft.order, L.draftOrder([...t.slice(k), ...t.slice(0, k)], i === 0 ? endOld.champion : null), `${sp}: the first draft order is the mixed table, rotated for the sport, reversed`);
+  });
+  ok(new Set(L.SPORTS.map(sp => lg.sports[sp].draft.order[0])).size === L.SPORTS.length, "a different district picks first in every sport");
   // deterministic; the chain and the census alone agree (draft day and mid-season)
   eq(C.civicFold(clone(P3.get(337)), peopleOf(clone(roster)), clone(ch.get(336))), b, "draft day is deterministic");
   for (const d of [337, 338, 340]) eq(C.civicFold(P3.get(d), people, null), C.civicFold(P3.get(d), people, null), `day ${d}: the same block twice`);

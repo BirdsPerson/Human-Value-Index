@@ -355,7 +355,15 @@ export function sportDraft(season, subjects, ends) {
 }
 // Each league's end of `season` from its rosters (the mixed league's for the season before the first).
 function endsOf(season, v) {
-  if (season < LEAGUES_FROM) { const e = seasonEnd(season, v.rosters); return Object.fromEntries(L.SPORTS.map(sp => [sp, e])); }
+  // The first per-sport drafts come off the one mixed table: rotate it per sport so the same
+  // district doesn't pick first in all four and stack the Cup (Scott's leagues, 2026-09-30).
+  if (season < LEAGUES_FROM) {
+    const e = seasonEnd(season, v.rosters), t = e.table;
+    return Object.fromEntries(L.SPORTS.map((sp, i) => {
+      const k = (i * 3) % Math.max(1, t.length);
+      return [sp, { ...e, table: [...t.slice(k), ...t.slice(0, k)], champion: i === 0 ? e.champion : null }];
+    }));
+  }
   return Object.fromEntries(L.SPORTS.map(sp => [sp, L.sportEnd(sp, season, v.rosters[sp])]));
 }
 // The Cup at machine hour T of `season` (v: that season's draft). -> [{id, pts, by}]

@@ -145,6 +145,13 @@
   "image": true,
   "note": "Light complexion consistent with Austrian heritage, visible in photo with even fair skin tone"
  },
+ "arsenio-hall": {
+  "band": "brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with known appearance; photo shows medium-brown skin tone under stage lighting."
+ },
  "arthur-ashe": {
   "band": "brown",
   "basis": "photo",
@@ -165,6 +172,12 @@
   "confidence": "high",
   "image": true,
   "note": "Light complexion visible in photo, consistent with known appearance"
+ },
+ "augustus": {
+  "band": "medium",
+  "basis": "knowledge",
+  "image": true,
+  "note": "Statue is marble with no original skin color preserved; based on Roman/Mediterranean ethnicity, medium tone is a reasonable estimate."
  },
  "babe-ruth": {
   "band": "fair",
@@ -1195,6 +1208,13 @@
   "image": true,
   "note": "Visible skin tone in photo consistent with well-known appearance of Jalen Hurts"
  },
+ "james-dean": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Black-and-white photo of James Dean, a fair-skinned American actor of European descent; consistent with well-established knowledge."
+ },
  "james-woods": {
   "band": "fair",
   "basis": "photo",
@@ -1349,6 +1369,13 @@
   "image": false,
   "note": "Jim Cramer is a white American male; no image available, relying on general knowledge of his appearance as a fair-skinned person of European descent."
  },
+ "jim-morrison": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Black and white photo of Jim Morrison, known to have fair skin typical of his Scottish-Irish American heritage"
+ },
  "jimmy-carter": {
   "band": "fair",
   "basis": "photo",
@@ -1369,6 +1396,13 @@
   "confidence": "high",
   "image": true,
   "note": "Light complexion consistent with well-known appearance"
+ },
+ "jimmy-page": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Elderly white man with light skin tone visible in photo, consistent with known appearance"
  },
  "joan-of-arc": {
   "band": "fair",
@@ -1481,6 +1515,13 @@
   "confidence": "low",
   "image": false,
   "note": "American man of Italian descent; no image available, estimate based on typical fair-to-medium complexion common in this background, lowered confidence due to lack of visual confirmation"
+ },
+ "johnny-depp": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light complexion consistent with known appearance"
  },
  "johnny-knoxville": {
   "band": "fair",
@@ -2132,6 +2173,13 @@
   "confidence": "medium",
   "image": true,
   "note": "Statue is painted white/neutral, not indicative of true skin tone; based on Japanese ethnicity, light brown is a reasonable estimate for natural skin tone."
+ },
+ "paul-reubens": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light complexion visible in photo, consistent with known appearance"
  },
  "paula-deen": {
   "band": "fair",
