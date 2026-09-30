@@ -11,7 +11,8 @@ Economy (CYCLES/UBI) and player decisions come later; v1 is the living city you 
 - Overlord voice on every string.
 - Client-side, deterministic: the whole city is computed from `seed` + the machine
   clock, so every viewer sees the same city at the same moment. No server sim, no new API cost.
-- Passive: no action controls. Tap/click to inspect; optional "follow" a subject.
+- Passive: no action controls. Tap/click to inspect; optional "follow" a subject. One exception since
+  2026-09-30: DRIVE YOURSELF (below), your own citizen, in your own browser only.
 - Performance: 300+ subjects; one rAF loop; only the visible layer is simulated in
   detail (others advance by schedule math, not per-frame physics).
 - Works at 400px (map pans/zooms; district views stack).
@@ -905,4 +906,57 @@ frame gap 16.6 / p95 17.3; 1440 Finance 12:00 1.9 / 6.1, 16.6 / 17.4; 1440 tour 
 16.6 / 17.1; 390 Sprawl 22:00 2.4 / 3.2, 16.7 / 17.4; no frame over 20 ms. Screens:
 docs/screens/street-pass1/compare-*.png (before and after, same spot and hour). Next passes:
 docs/ROADMAP.md item 9a.
+
+## DRIVE YOURSELF: your citizen, in your hands (2026-09-30)
+
+Scott: "is there a mechanism for taking control of and controlling your character, and can we
+introduce a controller function". v1 is solo: you drive your own citizen, nobody else sees it.
+
+- **Taking control**: FIND ME, then TAKE CONTROL on the tracking strip; MY FILE's ENTER THE
+  SUBSTRATE (`#city?control=1`, opens the CITY view and hands over once it is up); or Start on
+  a controller while the CITY view is open. Only your own file (`s.you`: a case with a result
+  in this browser). Your citizen starts where the schedule has it (on the street, inside its
+  room, on its platform, aboard its car; from HQ it is let out at the door). Strip:
+  `DRIVING // YOU // <where>` and RELEASE; the Overlord: SCHEDULE SUSPENDED. THE DEPARTMENT IS
+  WATCHING YOU WALK.
+- **What it is not**: the sim. The controlled avatar is a client-side overlay: the plan, the
+  census, the header counts, the Loop panel, the quest check and every other viewer still see
+  the scheduled self at its job. This browser's census leaves the scheduled self out while it
+  is driven (`ctl.skipSelf`), so there is one of you on screen. RELEASE (Esc, Start, the strip)
+  hands you back: SCHEDULE RESUMED. YOU WERE NEVER ANYWHERE ELSE.
+- **Input**: keys (WASD / arrows, Shift runs, E acts, B / Backspace backs out, Q / R turn, Esc
+  releases; read on the window, never while typing or with a file open); a controller through
+  the Gamepad API (`gamepad.js`: left stick or d-pad, radial dead zone 0.2; standard mapping;
+  Xbox A / PlayStation cross / Switch A act, B / circle / B back, LB RB turn, RT or a full
+  stick runs, Start releases; connect and disconnect are noticed and announced); touch (a
+  thumbstick bottom-left, ACT and BACK bottom-right, 48 px and up, `touch-action: none` on
+  those only; the TAP TO OPERATE veil stays, shrunk into a corner, so a swipe elsewhere still
+  scrolls the page). The legend says what E does now, in the words of the input in use.
+- **Moving**: "up" is screen up at every quarter turn (`screenToMapDir`). Solid: every building
+  with a massed body (archGeo box, stoops included); lots, fields and the Bowl are walked onto.
+  Sliding along walls. The camera follows until a hand drags the map; any move follows again.
+  Behind a building you show through it (a faint copy drawn over the scene) and YOU marks you.
+- **E**, nearest first: a subject within reach (their file opens), a door (ENTER; leaning on it
+  0.4 s goes in too; HQ: IT IS OPEN ABOUT YOU), open ground underfoot (STEP INTO), station stairs
+  (CLIMB), a yard bench (SIT). Inside the cutaway: left / right walk the floor through its rooms,
+  up / down walk to the lift at the west wall and ride it, E sits at the nearer free seat (stool,
+  pew, bleacher) or opens the nearer subject's file, the east end of the ground floor (or B)
+  leaves by the front door. Platform: E boards a standing train or waits for the next (boards it
+  when it stands); aboard, E (or B) gets off at the next stop, onto that station's platform.
+- **Quests**: REPORT CONTACT and witness work where you stand: a file opened while your avatar
+  is in a building passes that building (`controlBuildingId()`) exactly as the building page
+  always did. Honest: the server never checked where the reporter stood, only that the figure
+  is in the named building, and it still checks that.
+- **Kept**: `localStorage["hvi-control"]` (try/catch), saved each second; a reload or Back from a
+  building page resumes the drive for 6 hours; RELEASE clears it. Another self never inherits it.
+- **Modules**: `control.js` (rules, pure; `scripts/check-control.mjs`: collision, doors of every
+  building, the lift to every floor, the exit, seat snapping, keys, the touch stick, mocked
+  Xbox / PlayStation / Switch / d-pad / non-standard pads, the Loop's stairs and platform, the
+  store), `gamepad.js`, `controlIso.js` (step, camera, drawing), `ControlLayer.jsx` (strip,
+  legend, touch pad). CityIso.jsx hooks are marked `DRIVE YOURSELF`.
+- **Not yet**: STREET view (its drone camera still walks by keys and the on-screen pad, not your
+  citizen); others seeing you (multiplayer); bumping into people; a seat can be taken by someone
+  scheduled onto it after you sit.
+- Measured (headless Chromium, dev build): 1440 walking 16.6 ms average frame, p95 17.2; 390
+  touch emulation 16.6 / 18.0. Screens: docs/screens/control/.
 

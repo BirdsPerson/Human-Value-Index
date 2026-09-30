@@ -23,6 +23,7 @@ import BuildingView from "./BuildingView.jsx";
 import { buildingHref, parseCityRoute } from "./city3d.js";
 import { readCaseId } from "../caseFile.jsx";
 import CityFind from "./CityFind.jsx";
+import { CTL, controlBuildingId } from "./control.js";   // DRIVE YOURSELF
 import { buildIndex, bySlug, findHref } from "./find.js";
 import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
@@ -56,7 +57,7 @@ export default function City({ route }) {
   // The query minus the floor: what survives moving between views (?at=, ?stress=).
   const query = useMemo(() => {
     const q = new URLSearchParams(parsed.query.replace(/^\?/, ""));
-    q.delete("floor"); q.delete("find");
+    q.delete("floor"); q.delete("find"); q.delete("control");
     const s = q.toString();
     return s ? "?" + s : "";
   }, [parsed.query]);
@@ -257,6 +258,15 @@ export default function City({ route }) {
   const close = useCallback(() => setCard(null), []);
   const [mode, setMode] = useCityViewMode();
   const civicNow = useCivic();
+  // DRIVE YOURSELF: #city?control=1 (MY FILE's ENTER THE SUBSTRATE) opens the CITY view and
+  // hands your citizen to you once it is up (controlIso.js reads CTL.request).
+  const wantsControl = /[?&]control=1/.test(parsed.query);
+  useEffect(() => {
+    if (!wantsControl) return;
+    CTL.request = Date.now();   // honoured for a few seconds, once
+    if (mode !== "city") setMode("city");
+    window.location.replace(window.location.href.split("#")[0] + (districtId ? `#city/${districtId}` : "#city") + query);
+  }, [wantsControl]);   // eslint-disable-line react-hooks/exhaustive-deps
   // A find is shown in the CITY view: a pick (or a link) from MAP, STACK or STREET switches to it.
   useEffect(() => { if (findSlug && !districtId && mode !== "city") setMode("city"); }, [findSlug, districtId, mode, setMode]);
   const onPick = useCallback((e) => {
@@ -273,7 +283,7 @@ export default function City({ route }) {
   const cardEl = useMemo(() => card && (
     <SubjectCard subject={card} onClose={close} where="THE SUBSTRATE" back="Return subject to the Substrate" assignment={`ASSIGNMENT: ${jobLine(card)}`}
       extra={card.kind === "figure" && questsFor(card.slug).map(q => (
-        <QuestCardPanel key={q.id} quests={quests} q={q} slug={card.slug} buildingId={b?.id || null} />
+        <QuestCardPanel key={q.id} quests={quests} q={q} slug={card.slug} buildingId={b?.id || controlBuildingId() || null} />
       ))} />
   ), [card, close, quests, b]);
   const d = districtId && DISTRICT[districtId];
@@ -327,7 +337,7 @@ export default function City({ route }) {
           : d
             ? <DistrictView key={d.id} districtId={d.id} censusRef={censusRef} onOpen={open} onBuilding={onBuilding} counts={stats.buildings} />
             : iso
-              ? <CityIso censusRef={censusRef} onOpen={open} onEnter={goBuilding} find={find} onFindEnd={endFind} />
+              ? <CityIso censusRef={censusRef} onOpen={open} onEnter={goBuilding} find={find} onFindEnd={endFind} self={selfEntry?.s || null} />
             : street
               ? <Street censusRef={censusRef} onOpen={open} onEnter={goBuilding} />
               : three

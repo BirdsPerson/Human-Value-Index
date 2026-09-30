@@ -17,6 +17,9 @@ import { drawCivicLot, civicLabel, civicLine } from "./civicDraw.js";
 import { isoItems } from "./archGeo.js";
 import { drawBody, drawYardProp, drawArchGround, doorAt } from "./archDraw.js";
 import { findTarget, findLine } from "./find.js";
+// DRIVE YOURSELF (controlIso.js, ControlLayer.jsx): the viewer's own citizen, steered
+import { makeIsoControl } from "./controlIso.js";
+import ControlLayer, { TakeControlButton } from "./ControlLayer.jsx";
 
 // THE SUBSTRATE, SimCity-style: every building drawn in its own architecture (archGeo.js
 // massing, archDraw.js drawing: the projects, brownstones, the glass tower, the monolith...),
@@ -67,7 +70,7 @@ const SGEO = Object.fromEntries(Object.values(STATIONS).map(st => [st.id, statio
 let SAVED = null;
 
 export default memo(CityIso);
-function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
+function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = null }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const apiRef = useRef({});
@@ -79,6 +82,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
   const setSelRef = useRef(setSel); setSelRef.current = setSel;
   const setFoundRef = useRef(setFound); setFoundRef.current = setFound;
   const onFindEndRef = useRef(onFindEnd); onFindEndRef.current = onFindEnd;
+  const selfRef = useRef(self); selfRef.current = self;
 
   useEffect(() => {
     const canvas = canvasRef.current, wrap = wrapRef.current;
@@ -115,6 +119,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map([...PARK_PLACES, ...CIVIC_PLACES].map(id => [id, []])), doors = new Map();
       for (const { s, w } of c.list || []) {
         if (!w) continue;
+        if (ctl.skipSelf(s)) continue;   // DRIVE YOURSELF: the scheduled self steps out while you drive it
         if (w.sub === "riding" && w.trainId) { const k = `${w.trainId}|${w.car}`; riders.set(k, (riders.get(k) || 0) + 1); }
         const r = roomIn(w, s);
         if (r) {
@@ -273,7 +278,13 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       if (F.fly && Math.abs(V.cam.z - z) < 0.05) F.fly = false;
       setCam(z, ox, oy);
     }
+    // DRIVE YOURSELF: the kit it draws and moves with (controlIso.js)
+    const ctl = makeIsoControl({
+      V, ctx, P: (u, v, h) => project(u, v, h, V.cam), Q: (x, y, h) => { const [u, v] = rot(x, y, V.cam.r); return project(u, v, h, V.cam); },
+      select, setCam, turn, unfollowFind: unfollow, hit: (h) => V.hits.push(h), onOpen: (s) => onOpenRef.current?.(s), getSelf: () => selfRef.current,
+    });
     apiRef.current = {
+      takeControl: () => { if (ctl.start(selfRef.current || V.find?.s)) onFindEndRef.current?.(); }, release: () => ctl.release(),
       zoom: (f) => zoomAt(V.cssW / 2, V.cssH / 2, f), fit: () => { unfollow(); select(null); fit(); }, turn: (d) => turn(d), close: () => { unfollow(); select(null); },
       enter: () => { const b = V.sel && BUILDING[V.sel]; if (b) onEnterRef.current?.(b.district, b.id); },
       find: startFind, follow: refollow, endFind: () => onFindEndRef.current?.(),
@@ -600,6 +611,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
         const [u, v] = rot(x, y, r);
         out.push({ kind: "p", s: o.s, u, v, h, box: { x0: u, y0: v, x1: u, y1: v } });
       }
+      ctl.movers(out, r);   // DRIVE YOURSELF: who is within reach, and the avatar itself
       return out;
     }
 
@@ -730,7 +742,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       }
       if (!p.s.crowd) V.hits.push({ kind: "p", s: p.s, box: [x - hpx * 0.3, y - hpx, x + hpx * 0.3, y] });   // a stand-in (crowd.js) never opens
     }
-    function drawMover(m, lod) { if (m.kind === "p") drawPerson(m, lod); else drawCar(m, lod); }
+    function drawMover(m, lod) { if (m.kind === "p") drawPerson(m, lod); else if (m.kind === "ctl") ctl.drawMover(m, lod); else drawCar(m, lod); }
 
     // ---- labels: one pass on top, nearest first, none over another --------------------------
     // They fade in over a zoom range instead of all switching on at once.
@@ -877,6 +889,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
           }
         },
       });
+      if (live) ctl.room(b, f, pid, rx, ry, rw, rh, sh, plan, byAnchor, now);   // DRIVE YOURSELF: the avatar in its room
       const fx = PARK_LOTS[b.id] && gameAt(pid, mt);
       nameTab(fx ? `${fx.name} // IN PLAY` : many ? PLACES[pid].name : f.name, rx, ry, rw);
       if (hq) {
@@ -928,6 +941,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       V.mt = mt;
       const trains = trainPoses(trainsAt(mt));
       if (V.find) findStep(mt, trains);
+      ctl.step(mt, trains);   // DRIVE YOURSELF: input, moves, its camera
       easeCam();
       const lod = lodFor(V.cam.z);
       ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
@@ -952,6 +966,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
         for (const m of slots.get(k) || []) drawMover(m, lod);
       }
       drawLabels();
+      ctl.overlay();   // DRIVE YOURSELF: YOU
       // compass
       ctx.font = `11px ${FONT}`; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillStyle = "rgba(107,154,124,0.8)";
       ctx.fillText(`FACING ${["NW", "NE", "SE", "SW"][V.cam.r]} // ${lod === "far" ? "OVERVIEW" : lod === "mid" ? "DISTRICT" : "STREET"}`, 8, 8);
@@ -1090,7 +1105,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       }
       if (drag) {
         const [x, y] = local(e);
-        if (Math.abs(x - drag.x) + Math.abs(y - drag.y) > 4) { if (!drag.moved) { hands(); unfollow(); } drag.moved = true; }
+        if (Math.abs(x - drag.x) + Math.abs(y - drag.y) > 4) { if (!drag.moved) { hands(); unfollow(); ctl.hands(); } drag.moved = true; }
         if (drag.moved) { V.cam.ox = drag.ox + (x - drag.x); V.cam.oy = drag.oy + (y - drag.y); V.need = true; }
       }
     }
@@ -1131,6 +1146,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       zoomAt(x, y, Math.exp(-e.deltaY * 0.0015));
     }
     function onKey(e) {
+      if (ctl.owns(e)) return;   // DRIVE YOURSELF: its keys are read on the window
       if (e.key === "q" || e.key === "Q") { turn(-1); e.preventDefault(); }
       else if (e.key === "e" || e.key === "E") { turn(1); e.preventDefault(); }
       else if (e.key === "+" || e.key === "=") zoomAt(V.cssW / 2, V.cssH / 2, 1.3);
@@ -1152,8 +1168,9 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
     canvas.addEventListener("pointercancel", onUp);
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("keydown", onKey);
+    const ctlDetach = ctl.attach();
     const onDocKey = (e) => {
-      if (e.key !== "Escape" || !V.find || e.defaultPrevented) return;
+      if (e.key !== "Escape" || !V.find || e.defaultPrevented || ctl.active()) return;
       const a = document.activeElement;
       if (a === canvas || (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return;
       if (document.querySelector(".hvi-pen-card, [role='dialog']")) return;
@@ -1190,7 +1207,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
     }
     SAVED = null;
     sync();
-    if (import.meta.env?.DEV) window.__hviIso = { V, turn, select, zoomAt, fit, tap, draw, startFind };
+    if (import.meta.env?.DEV) window.__hviIso = { V, turn, select, zoomAt, fit, tap, draw, startFind, ctl, selfRef };
     return () => {
       SAVED = { cam: { ...(V.camTo ? { ...V.cam, ...V.camTo } : V.cam) }, sel: V.sel, cssW: V.cssW };
       dead = true; sync();
@@ -1206,6 +1223,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("keydown", onKey);
       window.removeEventListener("keydown", onDocKey);
+      ctlDetach();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1221,9 +1239,11 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd }) {
           <span className="tag" aria-hidden="true">{found.following ? "TRACKING" : "FOUND"}</span>
           <span className="l" role="status">{found.line}</span>
           {!found.following && <button type="button" className="hvi-city-zb txt" onClick={() => apiRef.current.follow?.()}>FOLLOW</button>}
+          {find?.s?.you && <TakeControlButton onTake={() => apiRef.current.takeControl?.()} />}
           <button type="button" className="hvi-city-zb" aria-label="Stop finding" onClick={() => apiRef.current.endFind?.()}>×</button>
         </div>
       )}
+      <ControlLayer onRelease={() => apiRef.current.release?.()} />
       <TouchGate>
         <canvas ref={canvasRef} tabIndex={0} className="hvi-city-canvas" role="img"
           aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag to pan, pinch to zoom, click then wheel to zoom, Q and E to turn. Select a building to open its cutaway: every floor and room, and who is in it. The district directory below lists every district by keyboard." />

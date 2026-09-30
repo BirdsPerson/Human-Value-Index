@@ -603,7 +603,11 @@ export default function Intake({ view = "intake" }) {
           {scoreCard(last, { visits, typeVerdict: false })}
           {error && errLine(error)}
           <div className="hvi-next">
-            <ButtonRow stackOnMobile><Button variant="secondary" onClick={() => shareScore(last)}>Share your score</Button></ButtonRow>
+            <ButtonRow stackOnMobile>
+              <Button variant="secondary" onClick={() => shareScore(last)}>Share your score</Button>
+              {/* DRIVE YOURSELF (src/city/control.js): your citizen, off its schedule, in your hands */}
+              <Button variant="secondary" href="#city?control=1" aria-label="Enter the Substrate: take control of your own citizen in the city">Enter the Substrate</Button>
+            </ButtonRow>
             {shareLine && <div className="hvi-note" role="status">{shareLine}</div>}
             {startCmds(true)}
           </div>
