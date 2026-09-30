@@ -20,6 +20,21 @@ const css = `
   .hvi-city-pa > :last-child { min-width: 0; }
   .hvi-city-note { color: var(--fg-mute); font-size: var(--t-xs); margin: 0 0 var(--s3); }
   .hvi-city-in { padding: var(--s3); }
+
+  /* the civic record (CivicPanel.jsx): mood, team, council seat; the league */
+  .hvi-civic { margin: 0 0 var(--s4); }
+  .hvi-civic-line { font-size: var(--t-xs); color: var(--fg-dim); margin: var(--s1) 0 var(--s2); }
+  .hvi-civic-line b, .hvi-civic-kv b { color: var(--fg); }
+  .hvi-civic-kv .warn { color: var(--warn); }
+  .hvi-civic-factors { display: flex; flex-wrap: wrap; gap: 0 var(--s3); font-size: var(--t-xs); color: var(--fg-mute); margin: 0 0 var(--s3); }
+  .hvi-civic-kv { display: grid; grid-template-columns: 9ch minmax(0, 1fr); gap: var(--s1) var(--s2); font-size: var(--t-xs); }
+  .hvi-civic-kv .k { color: var(--fg-mute); letter-spacing: 0.06em; }
+  .hvi-civic-kv .v { color: var(--fg-dim); min-width: 0; overflow-wrap: anywhere; }
+  .hvi-civic-kv .v.dim { color: var(--fg-mute); }
+  .hvi-civic-kv a { color: var(--accent); }
+  .hvi-civic-table { font: inherit; font-size: var(--t-xs); color: var(--fg-dim); margin: 0 0 var(--s2); white-space: pre; overflow-x: auto; }
+  .hvi-civic-table b { color: var(--accent); font-weight: 700; }
+  .hvi-civic-fx { font-size: var(--t-xs); color: var(--fg-dim); padding: 2px 0; }
   .hvi-city-in > .ui-disc { margin: 0; }
 
   /* FIND: a name in the census, and FIND ME */

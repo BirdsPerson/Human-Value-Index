@@ -76,8 +76,54 @@ export const trainsAt = (mt) => SIM.trainsAt(mt);
 export const timetable = (stationId, mt, n) => SIM.timetable(stationId, mt, n);
 export const loopEvents = (fromMt, toMt) => SIM.loopEvents(fromMt, toMt);
 // The grounds' fixtures: the game on at a place now, and the PA's kickoff, score and final lines.
-export const gameAt = (placeId, mt) => SIM.gameAt(placeId, mt);
-export const gameEvents = (fromMt, toMt) => SIM.gameEvents(fromMt, toMt);
+// A fixture the league plays (the day's civic block, civic.js) names its teams: the scoreboard's
+// sides, the status, the PA. Without the day's summary (legacy mode) the generic sides play.
+export const civicOf = (day) => summaryOf(day)?.civic || null;
+export function leagueAt(placeId, mt) {
+  const T = SIM.toHours(mt);
+  return leagueMatchAt(civicOf(Math.floor(T / 24) + 1), placeId, T);
+}
+export const gameAt = (placeId, mt) => withLeague(SIM.gameAt(placeId, mt), mt);
+function withLeague(g, mt) {
+  if (!g) return g;
+  const m = leagueAt(g.placeId, mt);
+  if (!m || m.from !== g.from) return g;
+  const names = m.sides.map(teamName), shorts = m.sides.map(teamShort), S = SIM.SIDES[g.kind];
+  let { status, short } = g;
+  if (S) {
+    status = status.replace(S[0][0], names[0]).replace(S[1][0], names[1]);
+    short = short.replace(S[0][1], shorts[0]).replace(S[1][1], shorts[1]);
+  } else if (g.kind === "hoops") {
+    const [a, b] = hoopGames(m, g.game - 1);
+    status = `${status} // GAMES: ${shorts[0]} ${a}, ${shorts[1]} ${b}`;
+    short = `${shorts[0]} ${a}-${b} ${shorts[1]} // G${g.game} ${g.score[0]}-${g.score[1]}`;
+  }
+  return { ...g, league: m, sides: shorts, status, short };
+}
+// The league table as it stands at machine time mt (the day's block plus every whistle so far):
+// -> [{id, pos, short, pts, ...}] | null
+export function leagueTableAt(mt) {
+  const T = SIM.toHours(mt), d0 = Math.floor(T / 24), block = civicOf(d0 + 1);
+  return block ? tableAt(block, T - d0 * 24).map(r => ({ ...r, short: teamShort(r.id) })) : null;
+}
+// The PA's lines for a fixture the league plays: kickoff and final name the teams and the stage.
+export function gameEvents(fromMt, toMt) {
+  return SIM.gameEvents(fromMt, toMt).map(e => {
+    const m = leagueAt(e.placeId, e.kind === "end" ? e.t - 1e-6 : e.t + 1e-6);
+    if (!m) return e;
+    const S = SIM.SIDES[m.kind], names = m.sides.map(teamName), venue = SIM.GAME_VENUE[e.placeId];
+    if (e.kind === "start") return { ...e, text: `${venue}: ${STAGE_NAME[m.stage]}, ${names[0]} V ${names[1]}. ${S ? e.text.replace(S[0][0], names[0]).replace(S[1][0], names[1]) : e.text}` };
+    if (e.kind === "end") return { ...e, league: m, text: finalLine(m) };
+    return { ...e, text: S ? e.text.replace(S[0][0], names[0]).replace(S[1][0], names[1]) : e.text };
+  });
+}
+function finalLine(m) {
+  const venue = SIM.GAME_VENUE[m.placeId], w = m.score[0] > m.score[1] ? m.sides[0] : m.score[1] > m.score[0] ? m.sides[1] : m.tiebreak;
+  const tail = m.stage === "final" ? `${teamName(w)} ARE CHAMPIONS. THE TROPHY HAS BEEN RETAINED BY THE DEPARTMENT.`
+    : m.stage === "semi" ? `${teamName(w)} ADVANCE TO THE FINAL. THE OTHERS ADVANCE TO WORK.`
+      : "THE TABLE HAS BEEN UPDATED. SO HAVE THE FILES.";
+  return `FINAL AT ${venue}: ${matchLine(m)}. ${tail}`;
+}
 export const occupancyAt = (subjects, mt) => SIM.occupancy(subjects, mt);
 
 // Relationships bias where friends spend their leisure. Every page that reads the city
@@ -85,5 +131,6 @@ export const occupancyAt = (subjects, mt) => SIM.occupancy(subjects, mt);
 import { ensureSocial } from "./socialClient.js";
 // ... and the published plans: the day's city built once server side (planClient.js), so
 // no view pays the whole roster's day build. Without one the sim builds the day locally.
-import { startPlans, setPlanClockOffset } from "./planClient.js";
+import { startPlans, setPlanClockOffset, summaryOf } from "./planClient.js";
+import { leagueMatchAt, tableAt, teamName, teamShort, hoopGames, matchLine, STAGE_NAME } from "./civic.js";
 if (typeof window !== "undefined") { ensureSocial(); startPlans(); }

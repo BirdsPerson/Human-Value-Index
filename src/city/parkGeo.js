@@ -123,6 +123,9 @@ export const DIAMOND = (() => {
   // n: the board's face, towards home; a -> b runs left to right as seen from the plate
   const L = Math.hypot(HOME[0] - bc[0], HOME[1] - bc[1]), nrm = [(HOME[0] - bc[0]) / L, (HOME[1] - bc[1]) / L], left = [-nrm[1], nrm[0]];
   const board = { c: bc, n: nrm, a: [bc[0] + left[0] * half, bc[1] + left[1] * half], b: [bc[0] - left[0] * half, bc[1] - left[1] * half] };
+  // the league's STANDINGS board (src/city/civic.js), beside the scoreboard on its left, same facing
+  const sc = [bc[0] + left[0] * (2 * half + 0.3), bc[1] + left[1] * (2 * half + 0.3)];
+  const standings = { c: sc, n: nrm, a: [sc[0] + left[0] * half, sc[1] + left[1] * half], b: [sc[0] - left[0] * half, sc[1] - left[1] * half] };
   const backstop = [[W + 0.05, HOME[1] - 1.7], [W + 0.05, HOME[1] - 0.85], [W + 0.05, S - 0.05], [HOME[0] + 0.85, S - 0.05], [HOME[0] + 1.0, S - 0.05]];
   return {
     lot: F, home: HOME, first, second, third, mound, base: BASE, fenceR: FENCE_R, cf: CF, pt, off,
@@ -134,7 +137,7 @@ export const DIAMOND = (() => {
     rubber: box(mound, -0.12, -0.03, 0.12, 0.03),
     bases: [first, second, third].map(b => box(b, -0.12, -0.12, 0.12, 0.12)),
     lights: [[F.x + 0.45, F.y + 0.45], [F.x + F.w - 0.45, F.y + 0.45], [F.x + 0.35, F.y + F.h - 0.35], [F.x + F.w - 0.45, F.y + F.h - 0.45]],
-    board,
+    board, standings,
     arc,
   };
 })();

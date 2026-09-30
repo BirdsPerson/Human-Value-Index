@@ -25,7 +25,7 @@ import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { drawPose, phaseOf, PITCH_S, SHOT_S, PLAY_S, SNAP_F, THROW_F, CATCH_F } from "./poses.js";
 import { assignAnchors, actAt, typeOf } from "./props.js";
 import { DIAMOND, COURTS, REC, BOWL, PITCH, PARK_ANCHORS, PARK_LOTS, ringAt, fieldRole } from "./parkGeo.js";
-import { gameAt } from "./simApi.js";
+import { gameAt, leagueTableAt } from "./simApi.js";
 
 const who = (s) => s.slug || s.name;
 function h01(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return ((h >>> 0) % 100000) / 100000; }
@@ -56,7 +56,7 @@ export function drawParkLot(G, lotId, lod, mt, people, prev) {
   const gpath = (pts, col, w, close = false, h = 0.015) => { const c = G.ctx; c.strokeStyle = col; c.lineWidth = w; c.beginPath(); pts.forEach((p, i) => { const S = G.Q(p[0], p[1], h); if (i) c.lineTo(S[0], S[1]); else c.moveTo(S[0], S[1]); }); if (close) c.closePath(); c.stroke(); };
   const vline = (x, y, h0, h1, col, w) => { const A = G.Q(x, y, h0), B = G.Q(x, y, h1); G.ctx.strokeStyle = col; G.ctx.lineWidth = w; G.ctx.beginPath(); G.ctx.moveTo(A[0], A[1]); G.ctx.lineTo(B[0], B[1]); G.ctx.stroke(); };
   const px = Math.max(1, G.z * 0.06);
-  const K = { G, lod, hour, game, put, ground, gline, gpath, vline, px, carried, t: G.t };
+  const K = { G, lod, hour, game, put, ground, gline, gpath, vline, px, carried, t: G.t, mt };
 
   // who stands where (the order the anchors are listed: the battery first, then the field)
   const anchors = PARK_ANCHORS[pid];
@@ -243,9 +243,33 @@ function diamond(K) {
     c.save(); c.font = `${fs}px "Fira Mono", monospace`; c.textBaseline = "top"; c.textAlign = "left";
     const ang = Math.atan2(B[1] - A[1], B[0] - A[0]);
     c.translate(A[0], A[1]); c.rotate(ang);
-    const rows = game ? [["COMPLIANT", game.score[0]], ["ASSESSED", game.score[1]]] : [["HOME", "-"], ["AWAY", "-"]];
+    const rows = game ? [[game.sides?.[0] || "COMPLIANT", game.score[0]], [game.sides?.[1] || "ASSESSED", game.score[1]]] : [["HOME", "-"], ["AWAY", "-"]];
     rows.forEach(([nm, v], i) => { c.fillStyle = i ? "#f87171" : "#fbbf24"; c.fillText(nm, 0, i * fs * 1.15); c.fillText(String(v), Math.hypot(B[0] - A[0], B[1] - A[1]) - fs, i * fs * 1.15); });
     c.fillStyle = "#4ade80"; c.fillText(game ? `${game.top ? "TOP" : "BOT"} ${game.inning}` : "NO FIXTURE", 0, 2.3 * fs * 1.15);
+    c.restore();
+  });
+
+  // the league's STANDINGS board beside it: the top four as the table stands this minute
+  const sd = D.standings, sa = [sd.a[0] + n[0] * T, sd.a[1] + n[1] * T], sb = [sd.b[0] + n[0] * T, sd.b[1] + n[1] * T];
+  put(sd.c[0], sd.c[1], () => {
+    for (const k of [0.2, 0.8]) { const p = lerp(sd.a, sd.b, k); vline(p[0], p[1], 0, 1.3, "#4b5563", Math.max(1, G.z * 0.08)); }
+    const f = G.facing ? G.facing(sa, sb, sd.c) : 1;
+    const [hu, hv] = rot(H[0], H[1], G.r), [su, sv] = rot(sd.c[0], sd.c[1], G.r);
+    const hides = (su + sv - hu - hv) / (Math.SQRT2 * Math.hypot(sd.c[0] - H[0], sd.c[1] - H[1])) > 0.6;
+    G.prism([[sd.a[0] - n[0] * T, sd.a[1] - n[1] * T], [sd.b[0] - n[0] * T, sd.b[1] - n[1] * T], sb, sa], 1.3, 2.9, f ? "#0f1a14" : "#39414a", 1.2, f || !hides ? 1 : 0.3);
+    if (lod !== "near" || !f) return;
+    const tbl = leagueTableAt(K.mt);
+    const i0 = lerp(sa, sb, 0.06), i1 = lerp(sa, sb, 0.94);
+    const A = G.Q(i0[0] + n[0] * 0.01, i0[1] + n[1] * 0.01, 2.78), B = G.Q(i1[0] + n[0] * 0.01, i1[1] + n[1] * 0.01, 2.78);
+    const c = G.ctx, fs = Math.max(6, Math.round(G.z * 0.27)), wpx = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    c.save(); c.font = `${fs}px "Fira Mono", monospace`; c.textBaseline = "top"; c.textAlign = "left";
+    c.translate(A[0], A[1]); c.rotate(Math.atan2(B[1] - A[1], B[0] - A[0]));
+    c.fillStyle = "#4ade80"; c.fillText(tbl ? "STANDINGS" : "STANDINGS // PENDING", 0, 0);
+    (tbl || []).slice(0, 4).forEach((r, i) => {
+      c.fillStyle = i ? "#d1d5db" : "#fbbf24";
+      c.fillText(`${r.pos} ${r.short}`, 0, (i + 1) * fs * 1.15);
+      c.textAlign = "right"; c.fillText(String(r.pts), wpx, (i + 1) * fs * 1.15); c.textAlign = "left";
+    });
     c.restore();
   });
 
@@ -524,7 +548,7 @@ function bowl(K) {
     const seen = !G.facing || G.facing([bd.x0, bd.y + 0.09], [bd.x1, bd.y + 0.09], [(bd.x0 + bd.x1) / 2, bd.y]);
     G.prism(rectPts(bd.x0, bd.y - 0.08, bd.x1, bd.y + 0.08), 1.1, 2.15, "#0b1210", 1.2, seen ? 1 : 0.3);
     if (lod !== "near") return;
-    const S = SIDES_SHORT.gridiron;
+    const S = game?.sides || SIDES_SHORT.gridiron;
     board(K, [bd.x0, bd.y + 0.09], [bd.x1, bd.y + 0.09], [(bd.x0 + bd.x1) / 2, bd.y], 2.0,
       game?.practice ? [["PRACTICE", ""], ["UNDER REVIEW", ""]] : game ? [[S[0], game.score[0]], [S[1], game.score[1]]] : [["ENFORCERS", "-"], ["ASSETS", "-"]],
       game?.practice ? "EFFORT: GRADED" : game ? (game.half ? "HALF TIME" : `Q${game.quarter} ${ordinalS(game.down)} & ${game.togo}`) : "NO FIXTURE");
@@ -655,7 +679,7 @@ function pitchLot(K) {
     const seen = !G.facing || G.facing([bd.x + 0.09, bd.y1], [bd.x + 0.09, bd.y0], [bd.x, (bd.y0 + bd.y1) / 2]);
     G.prism(rectPts(bd.x - 0.08, bd.y0, bd.x + 0.08, bd.y1), 0.9, 1.9, "#0b1210", 1.2, seen ? 1 : 0.3);
     if (lod !== "near") return;
-    const S = SIDES_SHORT.soccer;
+    const S = game?.sides || SIDES_SHORT.soccer;
     board(K, [bd.x + 0.09, bd.y1], [bd.x + 0.09, bd.y0], [bd.x, (bd.y0 + bd.y1) / 2], 1.75,
       game ? [[S[0], game.score[0]], [S[1], game.score[1]]] : [["HOME", "-"], ["AWAY", "-"]],
       game ? (game.half ? "HALF TIME" : `${Math.min(90, game.minute)}'`) : "NO FIXTURE");

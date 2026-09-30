@@ -2,7 +2,9 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { pad, padL } from "../term.jsx";
 import { Frame, Button, ButtonRow, Disclosure, ListRow } from "../ui/index.js";
 import { SubjectCard, injectPenStyles } from "../Pen.jsx";
-import { DISTRICTS, DISTRICT, BUILDING, TRAIN, STATIONS, PLACES, GAMES, GAME_VENUE, districtCap, clockAt, whereOf, atDistrict, isOnLoop, setClockOffset, offsetFor, jobLine, loopEvents, roomIn, gameAt, gameEvents } from "./simApi.js";
+import { DISTRICTS, DISTRICT, BUILDING, TRAIN, STATIONS, PLACES, GAMES, GAME_VENUE, districtCap, clockAt, whereOf, atDistrict, isOnLoop, setClockOffset, offsetFor, jobLine, loopEvents, roomIn, gameAt, gameEvents, civicOf } from "./simApi.js";
+import { DistrictCivic, LeaguePanel, civicPaLines, useCivic } from "./CivicPanel.jsx";
+import { moodWord } from "./civic.js";
 import { covers, setCivic, lotPhase } from "./sim.js";
 import { loadAssembly, assemblyNow } from "../assembly/client.js";
 import { paLines as assemblyPa, SESSION as ASM, APPLICATIONS as ASM_APPS, OUTCOME as ASM_OUT } from "../assembly/content.js";
@@ -45,6 +47,8 @@ export default function City({ route }) {
   useEffect(() => () => clearBank(), []);
   const parsed = useMemo(() => parseCityRoute(route || ""), [route]);
   const districtId = parsed.districtId && DISTRICT[parsed.districtId] ? parsed.districtId : null;
+  // #city/league: the league's table, fixtures and results over the city (CivicPanel.jsx)
+  const leaguePage = parsed.districtId === "league";
   const b = districtId && parsed.buildingId && BUILDING[parsed.buildingId]?.districtId === districtId ? BUILDING[parsed.buildingId] : null;
   // HQ runs its own simulation (the Holding Pen): it has floors, but no view of them to focus.
   const floor = b && b.id !== "hq" && parsed.floor != null && b.floors[parsed.floor] ? parsed.floor : null;
@@ -217,7 +221,10 @@ export default function City({ route }) {
     // While a fixture is on, every fourth line is the score (on the map and in its district).
     const games = Object.keys(GAMES).filter(id => !here || PLACES[id].district === here).map(id => gameAt(id, mt)).filter(Boolean);
     const civic = civicPa(asmRef.current, mt);
+    // the civic record (civic.js): this district's mood and team inside one; swings and the table on the map
+    const record = civicPaLines(civicOf(clock.day), here);
     if (civic.length && k % 5 === 3 && (!here || here === "commons")) setPa(civic[Math.floor(k / 5) % civic.length]);
+    else if (record.length && k % 7 === 6) setPa(record[Math.floor(k / 7) % record.length]);
     else if (games.length && k % 4 === 1) { const g = games[Math.floor(k / 4) % games.length]; setPa(`${GAME_VENUE[g.placeId]}, ${g.name}: ${g.status}. ${SCORE_TAG[g.kind]}`); }
     else if (!here && gossip.length && k % 3 === 2) setPa(gossip[Math.floor(k / 3) % Math.min(gossip.length, 12)].text);
     else setPa(paLine(st, k, evs.length ? evs[evs.length - 1].text : null));
@@ -248,6 +255,7 @@ export default function City({ route }) {
   const open = useCallback((s) => setCard({ ...s }), []);
   const close = useCallback(() => setCard(null), []);
   const [mode, setMode] = useCityViewMode();
+  const civicNow = useCivic();
   // A find is shown in the CITY view: a pick (or a link) from MAP, STACK or STREET switches to it.
   useEffect(() => { if (findSlug && !districtId && mode !== "city") setMode("city"); }, [findSlug, districtId, mode, setMode]);
   const onPick = useCallback((e) => {
@@ -275,9 +283,11 @@ export default function City({ route }) {
     : d
       ? d.id === "hq" ? `${d.addr} // HOLDING PEN B // CENSUS CLASSIFIED` : `${d.addr} // ${here?.count ?? 0} ON SITE // CAP ${districtCap(d.id)}`
       : `POP ${stats.pop ?? roster.length} // ABOARD ${stats.transit} // ON PLATFORMS ${stats.waiting}${census === "down" ? " // CENSUS OFFLINE" : ""}`;
+  const moodHere = d && !b && civicNow.block?.districts?.[d.id]?.mood;
 
   const crumbs = [{ label: "CITY", go: () => go(null) }];
   if (d) crumbs.push({ label: d.name, go: () => go(d.id) });
+  if (leaguePage) crumbs.push({ label: "THE LEAGUE" });
   if (b) crumbs.push({ label: b.name, go: () => goBuilding(d.id, b.id) });
   if (b && floor != null) { const f = b.floors[floor]; crumbs.push({ label: `${f.code} ${f.name}` }); }
   const three = !d && mode === "stack";
@@ -289,6 +299,7 @@ export default function City({ route }) {
       {stats.districts.map(x => (
         <div key={x.id} role="listitem">
           <ListRow lead={pad(DISTRICT[x.id].addr, 7)} label={x.name} value={<span className={x.count > x.cap ? "over" : undefined}>{padL(x.count, 3)}/{x.cap}</span>}
+            tag={civicNow.block?.districts?.[x.id] ? moodWord(civicNow.block.districts[x.id].mood.s) : undefined} tagOptional
             aria-current={x.id === districtId ? "true" : undefined} onClick={() => go(x.id)}
             aria-label={`${x.name}, ${x.count} present, capacity ${x.cap}. Enter district.`} />
         </div>
@@ -298,15 +309,16 @@ export default function City({ route }) {
 
   return (
     <div>
-      <CityHeader clockText={<LiveClock />} right={right} pa={pa}
+      <CityHeader clockText={<LiveClock />} right={moodHere ? `${right} // MOOD: ${moodWord(moodHere.s)}` : right} pa={pa}
         find={<CityFind index={index} remote={sectors} onPick={onPick} self={selfEntry} caseId={caseId} />} />
       <div className="hvi-city-bar">
         <Breadcrumb crumbs={crumbs} />
-        {!d && <ViewToggle mode={mode} onChange={setMode} />}
+        {!d && !leaguePage && <ViewToggle mode={mode} onChange={setMode} />}
       </div>
       {findSlug && !findEntry && !findPending && census !== "pending" && (
         <div className="hvi-city-note" role="status">NO SUBJECT ON FILE AS "{findSlug.toUpperCase()}". THE DEPARTMENT HAS CHECKED. TWICE.</div>
       )}
+      {leaguePage && <LeaguePanel full />}
       <Frame box title={b ? b.name : d ? d.name : iso ? "THE SUBSTRATE" : street ? "THE SUBSTRATE // STREET LEVEL" : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
         meta={b ? "CROSS-SECTION" : d ? "INTERIOR" : iso ? "DRAG // PINCH // TURN // TAP A BUILDING" : street ? "WALK // TURN // ENTER A DOOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} flush>
         {b
@@ -321,6 +333,7 @@ export default function City({ route }) {
               ? <City3D censusRef={censusRef} onDistrict={go} onOpen={open} onFloor={goBuilding} query={query} />
               : <CityMap censusRef={censusRef} onDistrict={go} onOpen={open} />}
       </Frame>
+      {d && !b && <DistrictCivic districtId={d.id} onLeague={(e) => { e.preventDefault(); window.location.hash = "#city/league" + query; }} />}
       {(!d || d.id === "commons") && <AssemblyRow asm={asm} />}
       {!d && <MapKey />}
       {!d && !b && <SocialPanel />}
@@ -338,6 +351,7 @@ export default function City({ route }) {
               : "EVERYONE HAS BEEN UPLOADED. EVERYONE HAS A JOB. THE LOOP RUNS ON TIME. ZOOM IN TO SEE FACES."}
       </div>
       {!d && <LoopPanel riders={stats.riders} aboard={stats.transit} waiting={stats.waiting} self={stats.self} onOpen={open} onDistrict={go} />}
+      {(!leaguePage && (!d || GAME_DISTRICTS.has(d.id))) && <LeaguePanel highlight={d?.id || null} />}
       {d
         ? <Disclosure className="hvi-city-dir" title="DISTRICT DIRECTORY" meta={`${stats.districts.length} DISTRICTS`}>{directory}</Disclosure>
         : <Frame title="DISTRICT DIRECTORY" meta={`${stats.districts.length} ON RECORD`} className="hvi-city-dir">{directory}</Frame>}
