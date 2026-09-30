@@ -108,6 +108,15 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       smokestacks, conveyors; Campus = gothic stone and ivy; Strip = neon and the casino
       marquee; HQ = the Overlord monolith. Later, with the economy: buildings decay or
       gentrify with their district's fortunes.
+   b7. **CITY PLANNER + THE PIT + TENNIS** (Scott 2026-09-30; starts when the COAST/HEIGHTS
+      expansion lands): (1) a whole-city planning review and master plan (zoning: industry away
+      from homes, stations near density, the sports cluster, green space per district, resort
+      edges), applied as deterministic rearrangements; in-world a Dept of Planning with ROBERT
+      MOSES and JANE JACOBS as dead advocates arguing future developments. (2) THE PIT: a boxing
+      ring + an MMA octagon; fight cards between real fighters on file (Ali, Tyson, Jack Johnson,
+      Bruce Lee...); nemesis-level rivalries can be settled there: dead rivals fight, living
+      non-fighters name a champion; non-graphic ("RETIRED FROM THE BOUT"); outcomes move the
+      rivalry; PA calls. (3) TENNIS COURTS (placed by the master plan, not tied to the golf vote).
    c. **The Overlord tower (item 11) as the admin building:** Intake, Appeals desk, Review
       Board, Records, Calibration Lab, Holding Cells (item 12), and THE PEOPLE'S PETITION
       console = the People's Vote exactly as designed in docs/story/STORYLINE_TOURNAMENT.md
