@@ -4,6 +4,8 @@
 
 import { SPRITE_W, SPRITE_H, paintAvatar, paintPlaceholder, loadManifest, loadSprite, loadRepoSprite } from "../sprites.js";
 import { getTier, slugify, slugCandidates, FAMOUS_FIGURES } from "../figures.js";
+import { assignJob } from "./sim.js";
+import { sectorsWanted, planMode } from "./planClient.js";
 
 let manifestP = null;
 const bank = new Map();   // name -> entry
@@ -33,6 +35,17 @@ export function sheetFor(s) {
 
 const srcOf = (s) => (s.avatar?.kind === "sprite" && s.avatar.url) || (typeof s.sprite === "string" && s.sprite ? s.sprite : null);
 
+// The production atlas packs a likeness with the others of its sector, the subject's work
+// district (scripts/prod-atlas.mjs). A face whose sector the view has loaded counts toward
+// buying that sector's sheet; any other face (a visitor from a district not in view) is
+// fetched on its own. Without a split day (legacy: the whole census) every district is in
+// view.
+function sectorFor(s) {
+  let d = null;
+  try { d = assignJob(s).district; } catch { return null; }
+  return planMode() === "legacy" || sectorsWanted().has(d) ? d : null;
+}
+
 function attach(s, e, slug) {
   manifestP = manifestP || loadManifest();
   manifestP.then(manifest => {
@@ -40,7 +53,7 @@ function attach(s, e, slug) {
     const key = slugCandidates(s.name).concat(slug).find(k => manifest && manifest[k]);
     if (!src && !key) return;
     const meta = (key && manifest[key]) || {};
-    (src ? loadSprite(src) : loadRepoSprite(key)).then(img => {
+    (src ? loadSprite(src, { sector: sectorFor(s) }) : loadRepoSprite(key)).then(img => {
       if (!img) return;
       e.img = img; e.real = true; e.mini = null; e.v++;
       e.frames = Math.max(1, meta.frames || Math.floor(img.width / (meta.w || SPRITE_W)) || 1);

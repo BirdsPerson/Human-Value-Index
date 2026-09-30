@@ -1,13 +1,16 @@
 // What a visit to #city downloads, before and after the sector split (scaling step 4,
-// docs/CITY_SPEC.md "Sectors"). Not a check: a measurement, run by hand.
+// docs/CITY_SPEC.md "Sectors") and the sector sheets (step 5, "Sector sheets"). Not a
+// check: a measurement, run by hand.
 //
-//   node scripts/bench-sectors.mjs --dist <built dist> [--label after] [--profile desktop|mobile|both] [live|N ...]
+//   node scripts/bench-sectors.mjs --dist <built dist> [--label after] [--profile desktop|mobile|both] [--atlas none] [live|N ...]
 //
 // A local server serves the build and a stub API: /api/pen (the census: the live one for
 // "live", else N clones of live records with new slugs), /api/plan and /api/find answered
-// by the real functions over plans the real builder publishes into in-memory Blobs, a stub
-// production atlas (every sheet is the live sheet under its own hash, so image bytes are
-// real), /api/social not ready. The browser is agent-browser's Chrome over DevTools, cache
+// by the real functions over plans the real builder publishes into in-memory Blobs, the
+// production atlas as prod-atlas.mjs packs this census (sector sheets and maps; every sheet
+// is 64 live faces under its own hash, so image bytes are real), /api/sprite/<slug> (one
+// live face), /api/social not ready. --atlas none serves an empty atlas: every face drawn
+// asks for its own URL, so each step's `sprites` (in the result file) is who it drew. The browser is agent-browser's Chrome over DevTools, cache
 // off, the page clock pinned to machine hour 18:15 (the evening commute).
 // Desktop (1440x900): load #city, the fit view; zoom (ctrl+wheel) into the Arts district,
 // back out, into the Sprawl. Bytes and requests are the transfer (compressed) after each
@@ -50,7 +53,8 @@ const PL = await import("../netlify/lib/plans.js");
 const planFn = (await import("../netlify/functions/plan.js")).default;
 const findFn = (await import("../netlify/functions/find.js")).default;
 const { fetchPen } = await import("../src/penClient.js");
-const { readySprites, SHEET_CAP } = await import("./prod-atlas.mjs");
+const { readySprites, sectorsOf, assignSheets, packAtlas, SHEET_W } = await import("./prod-atlas.mjs");
+const { decodePng, encodePng } = await import("./sprite-atlas.mjs");
 const ISO = await import("../src/city/iso.js");
 const { FAMOUS_FIGURES } = await import("../src/figures.js");
 
@@ -100,7 +104,19 @@ if (!existsSync(SHEET)) {
   const a = await (await fetch("https://humanvalueindex.com/api/atlas.json")).json();
   writeFileSync(SHEET, Buffer.from(await (await fetch(`https://humanvalueindex.com/api/atlas/${a.sheets[0]}.png`)).arrayBuffer()));
 }
-const sheetBuf = readFileSync(SHEET);
+// A production sheet is 8 x 8 faces (prod-atlas.mjs SHEET_CAP): the live sheet's first 64,
+// so a stub sheet weighs what a real one does.
+const sheetBuf = (() => {
+  const big = decodePng(readFileSync(SHEET)), w = Math.min(SHEET_W, big.w), h = Math.min(384, big.h), px = Buffer.alloc(w * h * 4);
+  for (let y = 0; y < h; y++) big.rgba.copy(px, y * w * 4, y * big.w * 4, (y * big.w + w) * 4);
+  return encodePng(w, h, px);
+})();
+// --atlas none: an empty production atlas, so every drawn likeness asks for its own
+// /api/sprite/<slug> and the request log names exactly who each step drew.
+const ATLAS = flag("--atlas", "packed");
+const ONE = join(CACHE, "sprite.png");
+if (!existsSync(ONE)) writeFileSync(ONE, Buffer.from(await (await fetch("https://humanvalueindex.com/api/sprite/a-j-brown?v=1790589328")).arrayBuffer()));
+const oneBuf = readFileSync(ONE);
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x"), p = url.pathname;
   const gz = /gzip/.test(req.headers["accept-encoding"] || "");
@@ -124,7 +140,9 @@ const server = http.createServer(async (req, res) => {
     if (p === "/api/plan" || p.startsWith("/api/plan/")) return viaFn(planFn);
     if (p === "/api/find") return viaFn(findFn);
     if (p === "/api/atlas.json") return send(200, current.atlas);
+    if (p.startsWith("/api/atlas/") && p.endsWith(".json")) { const m = current.maps.get(p.slice(11, 27)); return m ? send(200, JSON.stringify(m)) : send(404, "{}"); }
     if (p.startsWith("/api/atlas/")) { res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" }); return res.end(sheetBuf); }
+    if (p.startsWith("/api/sprite/")) { res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" }); return res.end(oneBuf); }
     if (p === "/api/social") return send(200, '{"ready":false}');
     if (p.startsWith("/api/")) return send(404, '{"error":"stub"}');
     let f = join(DIST, p);
@@ -155,14 +173,19 @@ async function setup(N) {
   const t = performance.now();
   const r = await PL.buildPlans(nowMs, io, { lookahead: 1 });
   SIM.clearRoster(); SIM.clearPlans();
-  const want = [...readySprites(census.filter(s => s.kind === "figure"))];
-  const sheets = Array.from({ length: Math.ceil(want.length / SHEET_CAP) }, (_, i) => createHash("sha1").update(`sheet${i}`).digest("hex").slice(0, 16));
-  const sprites = Object.fromEntries(want.map(([slug, v], i) => { const c = i % SHEET_CAP; return [slug, [v, Math.floor(i / SHEET_CAP), (c % 16) * 64, Math.floor(c / 16) * 48, 64, 48, 2]]; }));
-  current = { census, atlas: JSON.stringify({ v: "bench", count: want.length, sheets, sprites }), delta };
+  // the production atlas as prod-atlas.mjs packs it (sector sheets, maps), every sheet the stub
+  const figs = census.filter(s => s.kind === "figure"), want = readySprites(figs);
+  const groups = assignSheets(want, null, sectorsOf(figs, want));
+  const reuse = new Map(groups.map((g, gi) => [g.members.map(m => `${m}@${want.get(m)}`).join(","), {
+    hash: createHash("sha1").update(`sheet${gi}`).digest("hex").slice(0, 16), sector: g.sector, bytes: sheetBuf.length,
+    rects: Object.fromEntries(g.members.map((m, i) => [m, [want.get(m), gi, (i % 8) * 64, Math.floor(i / 8) * 48, 64, 48, 2]])) }]));
+  const packed = await packAtlas(want, groups, async () => null, { reuse });
+  const index = ATLAS === "none" ? { v: "none", count: 0, maps: {} } : { v: packed.json.v, count: packed.json.count, maps: packed.json.maps };
+  current = { census, atlas: JSON.stringify(index), maps: packed.maps, sheets: packed.json.sheets.length, delta };
   // functions read Date.now: the stub serves the pinned day
   const real = Date.now.bind(Date);
   Date.now = () => real() + delta;
-  return { n: census.length + FAMOUS_FIGURES.length, buildS: ((performance.now() - t) / 1000).toFixed(1), days: r.split.map(x => x.day), restore: () => { Date.now = real; } };
+  return { n: census.length + FAMOUS_FIGURES.length, sheets: current.sheets, buildS: ((performance.now() - t) / 1000).toFixed(1), days: r.split.map(x => x.day), restore: () => { Date.now = real; } };
 }
 
 // ---- CDP ----------------------------------------------------------------------------------------
@@ -222,7 +245,7 @@ async function visit(B, N, prof, delta) {
     const cls = (u) => (/\/api\/(pen|plan|find|social)/.test(u) ? "data" : /\/api\/atlas|\/api\/sprite|\/sprites\/|\.png/.test(u) ? "img" : "app");
     const by = {};
     for (const r of list) { const c = cls(r.url); by[c] = by[c] || { n: 0, kb: 0 }; by[c].n++; by[c].kb += r.bytes / 1024; }
-    return { label, requests: list.length, kb: Math.round(list.reduce((n, r) => n + r.bytes, 0) / 1024), by: Object.fromEntries(Object.entries(by).map(([k, v]) => [k, `${v.n} req ${Math.round(v.kb)} KB`])), data: list.filter(r => cls(r.url) === "data").map(r => `${r.url.replace(/\?.*$/, "").replace(/\/api\/plan\/\d+\/[\d.a-f]+/, "/api/plan/D/V")} ${(r.bytes / 1024).toFixed(1)}`) };
+    return { label, requests: list.length, kb: Math.round(list.reduce((n, r) => n + r.bytes, 0) / 1024), by: Object.fromEntries(Object.entries(by).map(([k, v]) => [k, `${v.n} req ${Math.round(v.kb)} KB`])), sprites: list.filter(r => r.url.startsWith("/api/sprite/")).map(r => r.url.slice(12).replace(/\?.*$/, "")), sheets: list.filter(r => /^\/api\/atlas\/[0-9a-f]+\.png/.test(r.url)).map(r => r.url.slice(11, 27)), data: list.filter(r => cls(r.url) === "data").map(r => `${r.url.replace(/\?.*$/, "").replace(/\/api\/plan\/\d+\/[\d.a-f]+/, "/api/plan/D/V")} ${(r.bytes / 1024).toFixed(1)}`) };
   };
   const out = { firstRenderMs: Math.round((LABEL === "before" ? fr.takenAt : fr.popAt) ?? NaN), steps: [] };
   if (prof === "mobile") { await B.send("Target.closeTarget", { targetId }); return out; }
@@ -261,7 +284,7 @@ const rows = [];
 try {
   for (const N of Ns.length ? Ns : ["live"]) {
     const env = await setup(N === "live" ? "live" : Number(N));
-    console.log(`\n== ${LABEL} N=${env.n} (plans built and split in ${env.buildS} s, days ${env.days})`);
+    console.log(`\n== ${LABEL} N=${env.n} (plans built and split in ${env.buildS} s, days ${env.days}; atlas ${env.sheets} sheets)`);
     for (const prof of PROFILE === "both" ? ["desktop", "mobile"] : [PROFILE]) {
       const r = await visit(B, env.n, prof, current.delta);
       console.log(`  ${prof}: first render ${r.firstRenderMs} ms`);

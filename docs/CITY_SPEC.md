@@ -548,3 +548,62 @@ shows.
   the summary equals the plan's occupancy at every sample; the crowd is the summary less what
   is held (zero when everyone is held or every district is loaded); the find index points at a
   file holding the subject; parts partition a window; /api/plan and /api/find serve them.
+
+## Sector sheets: a browser downloads the faces it draws (scaling step 5, 2026-09-30)
+
+Before, the production atlas was a few 256-face sheets filled in slug order, and one
+atlas.json naming every face. A zoom drew a few hundred faces scattered over every sheet, so
+it fetched them all: at 20k (synthetic, `scripts/bench-sectors.mjs`) 81 image requests,
+11.8 MB, for one district.
+
+- **Sheets by sector** (`scripts/prod-atlas.mjs`): a face is packed with the others of its
+  SECTOR, the subject's work district (`sim.js assignJob` on the census record: the same
+  answer the plan builder gives, the `cj` a window carries, so the browser knows it without
+  a lookup). Within a sector, a sheet holds a workplace together where it can (a room's
+  cutaway draws from one or two sheets). Sheets are 8 x 8 faces (512x384, ~40 KB). A face
+  stays in its sheet while its ?v= and its sector hold; a new one joins the sheet of its
+  sector with room holding most of its workplace. So a referral re-encodes one sheet and one
+  map; a redraw or a change of job moves one face. A sprite that will not decode is
+  remembered (`skipped`) and left out until redrawn.
+- **Maps**: `/api/atlas.json` is an index `{v, at, count, maps: {sector: hash}}` (60 s);
+  `/api/atlas/<hash>.json` is one sector's map `{sector, sheets: [[hash, bytes]], sprites:
+  {slug: [v, i, x, y, w, h, frames]}}` and `/api/atlas/<hash>.png` a sheet, both immutable.
+  A map indexes its own sheets, so it changes only with its sector. The packer keeps its
+  full record (`current`: sheets, sprites, skipped, sig) and the previous pack's sheets and
+  maps (a page loaded a minute ago still asks for them).
+- **Which predicts where a face is seen** (measured at 18:15, the faces the bench zoom
+  draws, over the sectors that zoom loads): work district 23-29% of the faces drawn in the
+  Arts zoom (4 sectors loaded), 73% after the Sprawl zoom (8 loaded), at 432, 5k and 20k
+  alike. Home is useless (four in five live in the Sprawl: 0% in the Arts); the district
+  a subject is usually in over a week (not stable anyway) does no better (25% / 76%). The
+  city moves: evenings are leisure, spread over every district.
+- **Rent, then buy** (`src/sprites.js loadSprite`): a zoom draws 1-6% of the faces of the
+  sectors it loads, so a sheet is almost never worth its bytes: every sheet a view touches
+  cost ~20x the faces it used. So a face costs its own URL (`/api/sprite/<slug>?v=`, ~1.2 KB,
+  edge-cached and immutable) until its sheet has been asked for as many faces as it weighs
+  (`buyNow`: faces x 1.5 KB >= sheet bytes, ~26 faces), then the sheet is fetched and the
+  rest are cut from it (a room full of one workplace, a long stay, a small roster). Only
+  sectors in view count toward a sheet (`spriteBank.sectorFor`: `sectorsWanted`, every
+  district in legacy mode); a visitor from elsewhere is always its own URL, and no map is
+  fetched for them. The pen (every face at once) calls `loadSprite(src)`: every map, each
+  sheet on first need. A file photo is one face: its own URL.
+- **Measured** (`bench-sectors.mjs`, desktop 1440x900, cache off, 18:15; image bytes =
+  atlas index + maps + sheets + own URLs; the fit view's 42 KB is the repo atlas the stand-ins
+  wear, unchanged):
+
+  | roster | fit | Arts zoom (before -> after) | + Sprawl zoom (before -> after) |
+  |---|---|---|---|
+  | 432 (live) | 42 KB | 348 KB, 6 req -> 59 KB, 18 req | 348 KB, 6 req -> 152 KB, 91 req |
+  | 5k | 42 KB | 2.8 MB, 22 req -> 130 KB, 66 req | 3.0 MB, 23 req -> 530 KB, 339 req |
+  | 20k | 42 KB | 11.8 MB, 81 req -> 520 KB, 353 req | 11.8 MB, 81 req -> 1.5 MB, 1,050 req |
+
+  Bytes now scale with the faces drawn (~1.4 KB each), not the roster; requests do too (one
+  per face, HTTP/2, each cached forever by the browser and the edge).
+- **Far view**: the dots are coloured by family again (`FAMILY_COLOR[familyOf(s).family]`:
+  the views indexed it with the object, so every far dot was the fallback green).
+- **Checks** (`scripts/check-atlas.mjs`): every packed sprite in exactly one map and one
+  sheet of its own sector (unit roster and 900 clones of the figures on file), none over
+  the cap; the same census packs the same sheets and maps (nothing re-encoded or fetched);
+  a new face re-encodes one sheet and changes one map; a redraw, a takedown, a new job move
+  only that face; an old roster-wide atlas is repacked once; the lookup falls back to the
+  own URL (redrawn, left out, another sector's map, a missing sheet, no map); `buyNow`.

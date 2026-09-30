@@ -167,6 +167,7 @@ export async function getSprite(slug) {
 const atlas = () => getStore({ name: "hvi-atlas", consistency: "strong" });
 export const getAtlasJson = () => atlas().get("current", { type: "json" });
 export const getAtlasSheet = hash => atlas().get(`sheet-${hash}`, { type: "arrayBuffer" });
+export const getAtlasMap = hash => atlas().get(`map-${hash}`, { type: "text" });
 
 // ---- purge (the subject's own request, /api/purge) ---------------------------------------
 export async function deleteCase(caseId) {

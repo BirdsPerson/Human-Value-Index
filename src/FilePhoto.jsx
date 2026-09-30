@@ -49,7 +49,7 @@ function PhotoCanvas({ subject, scale, label }) {
     };
     const stand = () => paintPlaceholder(subject?.slug || strict(subject?.name) || "subject", getTier(subject?.score ?? 500).color, 1);
     if (src.spec) { draw(paintAvatar(src.spec, 1)); return; }
-    const tries = src.repo?.length ? src.repo.map(slug => () => loadRepoSprite(slug)) : (src.img || []).map(u => () => loadSprite(u));
+    const tries = src.repo?.length ? src.repo.map(slug => () => loadRepoSprite(slug)) : (src.img || []).map(u => () => loadSprite(u, { sector: null }));   // one face: its own URL
     if (!tries.length) { draw(stand()); return; }
     (async () => {
       for (const load of tries) { const img = await load(); if (img) return draw(img); if (dead) return; }
