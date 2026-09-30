@@ -108,6 +108,9 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       (Scott approved 2026-09-29 in chat: TOO HIGH / FAIR / TOO LOW on public figures only,
       verified logins, NOTED at 25, review at 40 bridged across 3 of 4 quadrants over 72h,
       max 3 reviews/day, no free text, votes never move a score). Figures work there.
+      [the mechanic SHIPPED 2026-09-30, docs/PETITION.md: the panel on every public figure's
+      file, one vote per evaluation period, hourly tick, Mac review job, likability blend.
+      Still open: the tower console in the city, the PETITION REGISTER page, wave quarantine.]
    Standing (Scott): environments keep getting more realistic: things to do, items used.
    d. **The city grows** (after c). Sectors develop over machine weeks: empty lots become
       construction sites (crews at work, cranes, scaffolds), then buildings (a sports arena

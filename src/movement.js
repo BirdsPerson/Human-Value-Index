@@ -9,7 +9,8 @@
 //   vouch     a vouch the subject earned            }
 //   method    the Department changed its method (calibration, tier cutoffs)  } THE DEPARTMENT'S
 //   record    the public record was re-read (news, a roster rescore)         } CHANGES
-//   review    a case-by-case harm review                                     }
+//   review    a case-by-case harm review, or (sub "petition") the re-examination }
+//             the people petitioned for (docs/PETITION.md)                    }
 export const CAUSES = ["baseline", "visit", "appeal", "vouch", "method", "record", "review"];
 export const YOUR_CAUSES = ["visit", "appeal", "vouch"];
 export const DEPARTMENT_CAUSES = ["method", "record", "review"];
@@ -44,10 +45,10 @@ export function publicHistory(history) {
 }
 
 // Figures keep a compact log: [{at, score, tier, cause, note, method}], oldest first.
-export function figureEntry({ at, score, tier, cause, note = null, method = null }) {
+export function figureEntry({ at, score, tier, cause, note = null, method = null, sub = null }) {
   if (!validCause(cause)) throw new Error(`invalid cause: ${cause}`);
   if (!isNum(score)) throw new Error("score must be a number");
-  return { at, score, tier, cause, ...(note ? { note } : {}), ...(method ? { method } : {}) };
+  return { at, score, tier, cause, ...(sub ? { sub } : {}), ...(note ? { note } : {}), ...(method ? { method } : {}) };
 }
 // Append to a figure's log, seeding a baseline from `before` when the log is empty.
 export function appendFigureHistory(log, entry, before = null) {
@@ -78,7 +79,7 @@ export function movement(log) {
   for (const h of log || []) {
     if (!h || !isNum(h.score)) continue;
     const cause = causeOf(h);
-    rows.push({ at: h.at || null, cause, score: h.score, tier: h.tier || null, delta: prev === null ? null : h.score - prev, note: h.note || null, method: h.method || null });
+    rows.push({ at: h.at || null, cause, sub: h.sub || null, score: h.score, tier: h.tier || null, delta: prev === null ? null : h.score - prev, note: h.note || null, method: h.method || null });
     prev = h.score;
   }
   return {
@@ -93,3 +94,5 @@ export const CAUSE_LABEL = {
   baseline: "ON FILE", visit: "INTERVIEW", appeal: "APPEAL", vouch: "VOUCH",
   method: "METHOD REVISED", record: "RECORD RE-READ", review: "HARM REVIEW",
 };
+export const SUB_LABEL = { petition: "PETITION REVIEW" };
+export const causeLabel = (r) => SUB_LABEL[r?.sub] || CAUSE_LABEL[r?.cause] || String(r?.cause || "").toUpperCase();

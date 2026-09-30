@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import CubePanel, { CubeChips } from "./CubePanel.jsx";
+import PetitionPanel, { petitionable } from "./PetitionPanel.jsx";
 import { FAMOUS_FIGURES, getTier, slugify, slugCandidates, displayName } from "./figures.js";
 import {
   SPRITE_W, SPRITE_H, gaitFor, clamp, statureOf,
@@ -319,6 +320,7 @@ export function SubjectCard({ subject: listed, onClose, where = "PEN B", back = 
               </Frame>
             );
           })()}
+          {petitionable(subject) && <PetitionPanel subject={subject} />}
           {subject.kind !== "citizen" && !subject.you && (
             // Every public-figure file can be disputed (src/legal, /api/request).
             <div className="hvi-card-note">

@@ -121,5 +121,34 @@
     "FLAGGED FOR DELETION": 300
   },
   "retainedFloor": 650,
-  "tierNote": "Method v3.2 (2026-09-28): ESSENTIAL and RETAINED are tuned to the reference roster (top 8% / 30%, RETAINED never below 650). The roster is history's most notable people, so the middle of the scale is anchored to ordinary people instead: TOLERATED >= 600, MONITORED >= 450, FLAGGED >= 300. An ordinary decent person should not read as Monitored for not being famous."
+  "tierNote": "Method v3.2 (2026-09-28): ESSENTIAL and RETAINED are tuned to the reference roster (top 8% / 30%, RETAINED never below 650). The roster is history's most notable people, so the middle of the scale is anchored to ordinary people instead: TOLERATED >= 600, MONITORED >= 450, FLAGGED >= 300. An ordinary decent person should not read as Monitored for not being famous.",
+  "petition": {
+    "note": "THE PEOPLE'S PETITION (docs/PETITION.md). Votes never move a score; they can only buy a machine re-examination. Thresholds are config, never desk items; the Sunday loop may propose changes and Scott approves.",
+    "notedVoters": 25,
+    "reviewVoters": 40,
+    "wilsonZ": 1.96,
+    "reviewWilson": 0.6,
+    "cohortMin": 5,
+    "cohortShare": 0.55,
+    "cohortsNeeded": 3,
+    "cohortMaxShare": 0.5,
+    "holdHours": 72,
+    "reviewsPerDay": 3,
+    "cooldownDays": 30,
+    "maxSectionMove": 60,
+    "stirringVoters": 5,
+    "limits": {
+      "casesPerIp": 3,
+      "casesPerDevice": 2,
+      "revisions": 5,
+      "votesPerIpHour": 60,
+      "votesPerCaseDay": 30
+    },
+    "people": {
+      "swing": 50,
+      "periodDecay": 0.5,
+      "yougovWeight": 100,
+      "minVoters": 25
+    }
+  }
 }

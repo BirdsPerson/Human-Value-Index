@@ -3,7 +3,7 @@ import { getTier } from "./figures.js";
 import { Typed, BigNumber, prefersReducedMotion } from "./term.jsx";
 import { Frame, Chip, Chips, Meter, ListRow, TextField, Button } from "./ui/components.jsx";
 import "./coreScreens.css";
-import { movement, CAUSE_LABEL } from "./movement.js";
+import { movement, causeLabel } from "./movement.js";
 
 // The subject's file: identity (case number), the cached result, and the result pieces
 // every screen shares (score card, breakdown, appeals, case logon). Kept out of
@@ -251,7 +251,7 @@ function MovementRows({ rows, label }) {
       {rows.slice().reverse().map((r, i) => (
         <div key={`${r.at}-${i}`} className={`hvi-move-row cause-${r.cause}`} role="listitem">
           <span className="hvi-move-when">{fmtDate(r.at)}</span>
-          <span className="hvi-move-what">{CAUSE_LABEL[r.cause] || r.cause.toUpperCase()}</span>
+          <span className="hvi-move-what">{causeLabel(r)}</span>
           <span className="hvi-move-delta">{fmtDelta(r.delta)}</span>
           <span className="hvi-move-score">→ {r.score}</span>
           {r.note && <span className="hvi-move-note">{r.note}</span>}

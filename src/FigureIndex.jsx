@@ -9,6 +9,7 @@ import FilePhoto from "./FilePhoto.jsx";
 import { Rule, padL } from "./term.jsx";
 import { Button, ButtonRow, Chip, Chips, ChipStrip, ListRow, TextField, ScreenHead } from "./ui/index.js";
 import "./figureIndex.css";
+import PetitionPanel from "./PetitionPanel.jsx";
 
 // ANALYTICS loads only when asked for (charts are their own chunk).
 const Analytics = lazy(() => import("./analytics/Analytics.jsx"));
@@ -109,6 +110,7 @@ export default function FigureIndex({ figures, result, onPrimary }) {
                 </Chips>
                 <p className="hvi-fi-verdict">{fig.verdict}</p>
                 <a className="hvi-fi-dispute" href={`#dispute?file=${encodeURIComponent(displayName(fig))}`}>DISPUTE THIS FILE</a>
+                <PetitionPanel subject={fig} />
               </ListRow>
             );
           });

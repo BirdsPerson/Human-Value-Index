@@ -4,7 +4,9 @@ import Cube3D from "./Cube3D.jsx";
 import { OctantLegend } from "./CubePanel.jsx";
 import { pointOf, FILTERS, passes } from "./cube3d.js";
 import { OCTANT_ORDER, OCTANT_FAMILY, OCTANT_LINES } from "./cube.js";
-import { FAMOUS_FIGURES } from "./figures.js";
+import { FAMOUS_FIGURES, slugify } from "./figures.js";
+import { withCrowd } from "./petition.js";
+import { loadCrowd } from "./petitionClient.js";
 import { readLastResult } from "./caseFile.jsx";
 import { fetchPen } from "./penClient.js";
 
@@ -34,6 +36,9 @@ export default function CubeView() {
   const [filter, setFilter] = useState("ALL");
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState(null);
+  // The People's Petition enriches the roster's likability (referrals arrive blended from /api/pen).
+  const [crowd, setCrowd] = useState(null);
+  useEffect(() => { let off = false; loadCrowd().then(c => { if (!off) setCrowd(c); }); return () => { off = true; }; }, []);
 
   useEffect(() => {
     let off = false;
@@ -48,7 +53,8 @@ export default function CubeView() {
   useEffect(() => { const on = () => setFileTick(t => t + 1); window.addEventListener("hvi-file", on); return () => window.removeEventListener("hvi-file", on); }, []);
   const all = useMemo(() => {
     const seen = new Set(), out = [];
-    for (const s of [...FAMOUS_FIGURES, ...referred]) {
+    const roster = crowd ? FAMOUS_FIGURES.map(f => withCrowd({ ...f, slug: slugify(f.name) }, crowd)) : FAMOUS_FIGURES;
+    for (const s of [...roster, ...referred]) {
       if (seen.has(s.name)) continue;
       const g = pointOf(s);
       if (g) { seen.add(s.name); out.push(g); }
@@ -57,7 +63,7 @@ export default function CubeView() {
     const g = mine && pointOf({ ...mine, name: "YOU" });
     if (g) out.push(g);
     return out;
-  }, [referred, fileTick]);
+  }, [referred, fileTick, crowd]);
 
   const shown = all.filter(g => passes(g, filter));
   const q = query.trim().toLowerCase();
