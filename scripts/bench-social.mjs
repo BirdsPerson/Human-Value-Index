@@ -41,6 +41,7 @@ const PL = await imp("netlify/lib/plans.js");
 const { fullRoster } = await imp("src/city/roster.js");
 const { synthRoster } = await import(pathToFileURL(join(here, "scripts/synth-roster.mjs")).href);
 const roster = synthRoster(N);
+SIM.setMemoCap(1e8);   // as the builder does: the default cap clears mid-day above ~5k and the run goes quadratic
 const census = roster.filter(s => s.engine || s.kind === "citizen");
 const n = fullRoster(census).length;
 const mem = { state: null, pub: null, shards: [] };

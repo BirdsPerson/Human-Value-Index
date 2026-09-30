@@ -675,6 +675,30 @@ measured (synthetic, 30 machine days) 0.116 friends per subject at 430, 0.036 at
   it), `/api/plan/<day>/<ver>` and the browser's legacy fallback (`planClient.js`, a day
   with no split), and the tick's and quests' fallback for a day not split. Nothing reads it
   when the builder is current.
+- **Measured** (`scripts/bench-social.mjs`, synthetic census, 30 machine days from empty,
+  then a steady hourly run of 60 machine hours; Mac M5 Pro, Lambda ~9x; before = 2799413):
+
+  | roster | friends per subject (before -> after) | figures on file | engine figures | steady tick over published plans (before: one-file plan -> after: sector windows), x9 |
+  |---|---|---|---|---|
+  | 430 | 0.116 -> 0.116 | 0.68 -> 0.68 | 0.023 -> 0.023 | 0.61 s -> 0.08 s (~5.5 s -> 0.7 s) |
+  | 1,000 | 0.036 -> 0.076 | 0.39 -> 0.68 | 0.013 -> 0.038 | 1.8 s -> 0.25 s (~16 s -> 2.2 s) |
+  | 5,000 | 0 (1 pair) -> 0.044 (110) | 0.03 -> 0.40 | 0 -> 0.040 | 6.1 s -> 0.95 s (~54 s -> 8.6 s) |
+  | 20,000 | 0 -> 0.032 (320) | 0 -> 0.16 | 0 -> 0.032 | 24 s -> 5.0 s (~215 s -> 45 s) |
+
+  Engine figures (the bulk of any roster) hold ~0.03 friends each at every size. The
+  figures on file (62, full breakdowns, the city's friendliest) fall at 20,000 because 50
+  circles scatter them: fewer of them share a circle. The average falls with the mix. The
+  tick no longer calls whereAt per subject per hour (segments are read straight from the
+  rows), so a steady run over published days is 5-8x faster; with no plan the sim itself
+  dominates, unchanged (1.1 / 3 / 14 / ~50 s), as does the first run's 30-day fast-forward
+  (10 s / 27 s / 2.6 min / 9.4 min). Ledger after 30 days: 4.6k / 10.7k / 53k / 213k pairs
+  (at most 12 x N); at 20,000 ~13.6 MB over 64 buckets (~210 KB each); a subject shard 42 KB;
+  `/api/social` 275 KB raw / 45 KB gzip, mostly the snapshots (every boosted subject).
+  Production at the migration (machine hour 6121, 560 subjects): 6,005 pairs, 190 subjects
+  over 24 (the busiest held 91); K = 24 prunes 2,472 at the first boundary, no friendship
+  lost (141 before and after). After the 07:00 and 08:00 ticks: 5,190 then 6,280 pairs
+  (mid-day), 143 then 140 friendships, 132 blobs (64 buckets, 64 shards, head, public,
+  state, lease).
 - **Checks** (`scripts/check-social.mjs`): nobody over K after a boundary (and the bound is
   what bit); a pair survives only if both keep it; this week's meetings rank, last week's
   do not; same state in one run or 5-hour chunks with the bound biting; circles evenly
