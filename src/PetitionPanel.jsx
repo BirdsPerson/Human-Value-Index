@@ -90,7 +90,7 @@ export default function PetitionPanel({ subject }) {
           <h3>THE PEOPLE, THIS EVALUATION</h3>
           {d.counts?.lean ? <Lean lean={d.counts.lean} /> : <div className="pt-fine">TESTIMONY TOO THIN TO LEAN.</div>}
           <p className="pt-fine">{voters == null ? "FEWER THAN 5 SUBJECTS HAVE VOTED." : `${d.state === "REVIEW PENDING" ? "" : "~"}${voters} SUBJECTS HAVE VOTED.`}
-            {people?.crowd ? ` PUBLIC LIKABILITY ${people.likability}${people.polled != null ? ` (POLLED ${people.polled})` : ""}.` : ""}</p>
+            {people?.crowd?.n >= 5 ? ` PUBLIC LIKABILITY ${people.likability}${people.polled != null ? ` (POLLED ${people.polled})` : ""}.` : ""}</p>
         </div>
       </div>
       <div className="pt-state" style={{ "--tone": STATE_TONE[d.state] }}><b>{d.state}</b>{d.stateLine}</div>
