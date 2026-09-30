@@ -306,3 +306,52 @@ export async function loadPlans(days, s = store) {
 export function questDays(realMs, slackS = 90) {
   return [...new Set([SIM.machineClock(realMs - slackS * 1000).day, SIM.machineClock(realMs).day])];
 }
+
+// ---- format-2 readers (scaling step 6: the social tick and quests off the one-file plan) -----
+// One window of one day, every sector's parts: {day, w, ver, places, files: [{sector, subjects}]}
+// for social.js sectorPresence, or null when the day is not split (the caller falls back to
+// the one-file plan). Throws if a listed file is unreadable: a window with a sector missing
+// would silently lose that district's meetings.
+export async function loadWindows(day, w, s = store) {
+  const m = await manifest2Cached(30 * 1000, s);
+  const e = m?.days?.[day];
+  if (!e?.files) return null;
+  const jobs = [];
+  for (const sector of e.sectors || SECTORS) {
+    const parts = e.files[sector]?.[w]?.[2] ?? 1;
+    for (let p = 0; p < parts; p++) jobs.push([sector, partKey(day, e.ver, windowPart(sector, w, p))]);
+  }
+  const files = [];
+  for (let i = 0; i < jobs.length; i += 8) {
+    const got = await Promise.all(jobs.slice(i, i + 8).map(([, k]) => s().get(k, { type: "json" })));
+    got.forEach((f, k) => {
+      if (!f?.subjects) throw new Error(`window file ${jobs[i + k][1]} unreadable`);
+      files.push({ sector: jobs[i + k][0], subjects: f.subjects, places: f.places });
+    });
+  }
+  return { day, w, ver: e.ver, places: files[0]?.places || [], files };
+}
+
+// The figures on file's whole-day rows for these days, from each split day's summary (what
+// the quest checks locate: every quest figure is on file). A day not split loads its
+// one-file plan instead (loadPlans). -> {day: ver} of what is loaded.
+export async function loadOnFile(days, s = store) {
+  const m2 = await manifest2Cached(30 * 1000, s);
+  const out = {}, rest = [];
+  for (const day of new Set(days)) {
+    const e = m2?.days?.[day];
+    if (!e) { rest.push(day); continue; }
+    const have = SIM.planOf(day);
+    if (have?.ver !== e.ver || !(have.full || have.onFile)) {
+      const sum = await s().get(partKey(day, e.ver, "summary"), { type: "json" });
+      if (!sum?.onFile) { rest.push(day); continue; }
+      SIM.dropPlan(day);
+      SIM.addPlanRows(day, e.ver, sum.places || [], sum.onFile, { roster: sum.roster, social: sum.social, n: sum.n, onFile: true });
+    }
+    out[day] = e.ver;
+  }
+  if (rest.length) Object.assign(out, await loadPlans(rest, s));
+  const lo = Math.min(...days);
+  for (const d of SIM.plannedDays()) if (d < lo - 1) SIM.dropPlan(d);
+  return out;
+}

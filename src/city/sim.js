@@ -1539,6 +1539,9 @@ export function splitRow(places, row) {
   }
   return out;
 }
+// Decode one plan row without loading it: a format-1 day row, or (window) a window row
+// [homeIdx, from0, ...entries]. The social tick reads presence straight from these.
+export const rowSegs = (places, row, window = false) => (window ? planSegs(places, row, 2, row[1]) : planSegs(places, row, 1, 0));
 // Load window rows {key: [homeIdx, from0, ...entries]} of a day's plan version into the sim.
 // A subject's rows from several windows merge (the same segment from two files is one).
 export function addPlanRows(day, ver, places, rows, meta = null) {

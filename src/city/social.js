@@ -17,8 +17,17 @@ import * as SIM from "./sim.js";
 
 export const LAG = 4;                 // machine days between a state and the snapshot it produces
 export const DECAY = 0.985;           // affinity kept per machine day
-export const MAX_PAIRS = 6000;        // bounded state
-export const MAX_EVENTS = 200;
+// Bounded per subject, not globally (scaling step 6): at each day boundary every subject
+// ranks its pairs by |affinity| + RECENT_W x this week's meetings and keeps its best K; a
+// pair survives only if BOTH sides keep it, so nobody holds more than K after a boundary
+// (between boundaries, at most one machine day of new pairs over). The city's size no
+// longer dilutes anyone's friendships: the old global cap of 6,000 pairs left 2 friendships
+// at 5,000 subjects and none at 20,000.
+export const K = 24;
+export const RECENT_W = 2;            // a meeting this week counts as 2 points of affinity in the ranking
+export const WEEK = 24 * 7;
+export const MAX_EVENTS = 200;        // the merged log the one-blob (v1) copy keeps
+export const BUCKET_EVENTS = 24;      // events kept per bucket (64 x 24 city-wide)
 export const KEEP_SNAPSHOTS = 8;
 export const T = {                    // thresholds (affinity is -100..100)
   acquaintance: 10, friends: 30, close: 60, rivals: -30, nemesis: -60,
@@ -78,15 +87,68 @@ export function compat(a, b) {
   return clamp(c, -1, 1);
 }
 
-// ---- state ---------------------------------------------------------------------------
-// {v, seed, hour (next hour to process), pairs: {"a|b": [aff, meetings, lastHour, lastPlace, recent]},
-//  names: {key: display}, events: [...], snapshots: {day: {ver, boosts}}}
+// ---- state ----------------------------------------------------------------------------
+// {v: 2, seed, hour (next hour to process), names: {key: display} (rebuilt from the census
+//  every advance; never stored), snapshots: {day: {ver, boosts}},
+//  buckets: [BUCKETS x {pairs: {"a|b": [aff, meetings, lastHour, lastPlace, recent, lastEvent?]},
+//                        events: [...]}]}
+// A pair lives in bucket bucketOf("a|b"); so do its events. Everything that changes a pair
+// reads only that pair's record, so each bucket folds on its own (scaling step 6, docs/
+// CITY_SPEC.md "Relations"); only the day boundary (decay, the per-subject bound, the
+// snapshot) looks across buckets. v1 (one `pairs` map and one event log) converts with fromV1.
+export const BUCKETS = 64;
+export const bucketOf = (pk) => fnv(`rel|${pk}`) % BUCKETS;
 export function emptyState(startHour, seed = SIM.SEED) {
-  return { v: 1, seed, hour: Math.floor(startHour), pairs: {}, names: {}, events: [], snapshots: {} };
+  return { v: 2, seed, hour: Math.floor(startHour), names: {}, snapshots: {}, buckets: Array.from({ length: BUCKETS }, () => ({ pairs: {}, events: [] })) };
+}
+export const pairOf = (state, pk) => state.buckets[bucketOf(pk)].pairs[pk];
+// Every pair, bucket by bucket: [[pk, rec], ...]
+export function allPairs(state) {
+  const out = [];
+  for (const b of state.buckets) for (const e of Object.entries(b.pairs)) out.push(e);
+  return out;
+}
+export const pairCount = (state) => state.buckets.reduce((n, b) => n + Object.keys(b.pairs).length, 0);
+// Events in canonical order (machine hour, place, pair): the order every bucket folds in.
+const evCmp = (x, y) => x.h - y.h || cmpStr(x.placeId || "", y.placeId || "") || cmpStr(`${x.a}|${x.b}`, `${y.a}|${y.b}`);
+const cmpStr = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+export function allEvents(state) {
+  return state.buckets.flatMap(b => b.events).sort(evCmp);
+}
+
+// The one-blob ledger (v1: {pairs, events, ...}) as buckets: every record kept as it is
+// (affinity, meetings, last hour and place, this week's meetings), each event filed with its
+// pair, and the hour of the pair's latest event noted on the pair ("again" reads it).
+export function fromV1(v1) {
+  if (!v1 || v1.v === 2) return v1;
+  const st = emptyState(v1.hour, v1.seed);
+  for (const k of ["snapshots", "rosters", "plans", "tick"]) if (v1[k]) st[k] = v1[k];
+  st.names = { ...(v1.names || {}) };
+  const lastEv = new Map();
+  for (const e of v1.events || []) { const pk = pairKey(e.a, e.b); lastEv.set(pk, Math.max(lastEv.get(pk) ?? -Infinity, e.h)); }
+  for (const [pk, rec] of Object.entries(v1.pairs || {})) {
+    const r = rec.slice(0, 5);
+    if (lastEv.has(pk)) r[5] = lastEv.get(pk);
+    st.buckets[bucketOf(pk)].pairs[pk] = r;
+  }
+  for (const e of v1.events || []) {
+    const b = st.buckets[bucketOf(pairKey(e.a, e.b))];
+    b.events.push(e);
+    if (b.events.length > BUCKET_EVENTS) b.events.shift();
+  }
+  return st;
+}
+// And back, for the rollback copy (the one-blob `state` the previous tick reads).
+export function toV1(st) {
+  const pairs = {};
+  for (const [pk, rec] of allPairs(st).sort((x, y) => cmpStr(x[0], y[0]))) pairs[pk] = rec;
+  const out = { v: 1, seed: st.seed, hour: st.hour, pairs, names: st.names || {}, events: allEvents(st).slice(-MAX_EVENTS), snapshots: st.snapshots || {} };
+  for (const k of ["rosters", "plans", "tick"]) if (st[k]) out[k] = st[k];
+  return out;
 }
 
 const displayName = (s) => (s?.qualifier && s?.baseName ? `${s.baseName} (${s.qualifier})` : s?.name || SIM.keyOf(s));
-const ENCOUNTER_BASE = { leisure: 0.6, mixed: 0.45, work: 0.25 };
+export const ENCOUNTER_BASE = { leisure: 0.6, mixed: 0.45, work: 0.25 };
 
 function levelOf(aff) {
   if (aff >= T.close) return "close";
@@ -135,42 +197,129 @@ export const KNOWN_TIES = [
 export function seedTies(state, live, ties = KNOWN_TIES) {
   for (const [a, b, aff, why] of ties) {
     if (!live.has(a) || !live.has(b)) continue;
-    const pk = pairKey(a, b);
-    if (state.pairs[pk]) continue;
-    state.pairs[pk] = [aff, 0, state.hour, null, 0];
+    const pk = pairKey(a, b), bucket = state.buckets[bucketOf(pk)];
+    if (bucket.pairs[pk]) continue;
+    const rec = bucket.pairs[pk] = [aff, 0, state.hour, null, 0];
     const [ka, kb] = a < b ? [a, b] : [b, a];
-    pushEvent(state, { h: state.hour, kind: "record", a: ka, b: kb, placeId: null,
+    pushEvent(bucket, rec, { h: state.hour, kind: "record", a: ka, b: kb, placeId: null,
       text: `${(state.names[a] || a).toUpperCase()} AND ${(state.names[b] || b).toUpperCase()}: KNOWN TO EACH OTHER BEFORE INTAKE. ${why}. THE DEPARTMENT HAS RESTORED THE LINK.` });
   }
   return state;
 }
 
+// ---- presence: who is where, each machine hour ----------------------------------------------
+// Two subjects can meet in machine hour h if both are at the same work or leisure place at
+// h + 0.5 (whereAt's answer at the half hour). A presence source fills out: Map "h|place" ->
+// [keys] for hours [h0, h1) of machine day `day`. Sources differ only in where the segments
+// come from; the fold never knows which one ran.
+const ENC_KINDS = ENCOUNTER_BASE;
+function addSegs(out, key, segs, d0, h0, h1, district) {
+  for (const g of segs) {
+    if (g.activity !== "work" && g.activity !== "leisure") continue;
+    const pl = SIM.PLACES[g.placeId];
+    if (!pl || !ENC_KINDS[pl.kind] || (district && pl.district !== district)) continue;
+    // the hours h with g.from <= h - d0 + 0.5 < g.to
+    const a = Math.max(h0, d0 + Math.ceil(g.from - 0.5)), b = Math.min(h1, d0 + Math.ceil(g.to - 0.5));
+    for (let h = a; h < b; h++) {
+      const k = `${h}|${g.placeId}`, l = out.get(k);
+      if (l) l.push(key); else out.set(k, [key]);
+    }
+  }
+}
+// The sim's own schedule (a loaded plan when there is one): the default, and the fallback.
+export function simPresence(day, h0, h1, people, out = new Map(), seed = SIM.SEED) {
+  const d0 = (day - 1) * 24;
+  for (const s of people) addSegs(out, SIM.keyOf(s), SIM.schedule(s, day, seed), d0, h0, h1, null);
+  return out;
+}
+// Per SECTOR, from one day's window files (netlify/lib/plans.js format 2): each file lists
+// everyone with a segment in its district during the window, with their window row; a file
+// emits only the hours they spend at a place in its own district, so every (hour, place) is
+// emitted by exactly one file. Census subjects no file lists (indexed after the plan was
+// built) are placed as the plan would place them (sim.js schedule: raw, no allocation).
+// win: {day, w, ver, places, files: [{sector, subjects: {key: [rec, windowRow]}}]}
+export function sectorPresence(win) {
+  return (day, h0, h1, people, out = new Map(), seed = SIM.SEED) => {
+    const d0 = (day - 1) * 24, a = d0 + win.w * SIM.WINDOW_H, b = a + SIM.WINDOW_H;
+    if (day !== win.day || h0 < a || h1 > b) return simPresence(day, h0, h1, people, out, seed);
+    const want = new Set(people.map(SIM.keyOf)), seen = new Set();
+    for (const f of win.files) {
+      for (const [key, v] of Object.entries(f.subjects)) {
+        seen.add(key);
+        if (want.has(key)) addSegs(out, key, SIM.rowSegs(win.places, v[1], true), d0, h0, h1, f.sector);
+      }
+    }
+    const rest = people.filter(s => !seen.has(SIM.keyOf(s)));
+    if (rest.length) {
+      const had = SIM.planOf(day);
+      SIM.addPlanRows(day, win.ver, win.places, {});   // the day is planned: the sim places the rest raw
+      try { simPresence(day, h0, h1, rest, out, seed); } finally { if (!had) SIM.dropPlan(day); }
+    }
+    return out;
+  };
+}
+
+// Who meets whom at one place in one machine hour: each person present tries twice to strike
+// something up, at a rate that thins as the room fills. Depends only on (seed, hour, place)
+// and who is there, never on the ledger, so the meetings can be listed before any fold.
+export function pairsMet(seed, h, placeId, keys) {
+  if (keys.length < 2) return [];
+  const p = ENCOUNTER_BASE[SIM.PLACES[placeId].kind] / (1 + (keys.length - 1) / 10);
+  const r = rng(`${seed}|enc|${h}|${placeId}`);
+  const met = new Set(), out = [];   // a pair meets once an hour at most, whoever starts it
+  for (let i = 0; i < keys.length; i++) {
+    for (let tries = 0; tries < 2; tries++) {
+      if (r() >= p) continue;
+      let j = Math.floor(r() * (keys.length - 1));
+      if (j >= i) j++;
+      const pk = pairKey(keys[i], keys[j]);
+      if (met.has(pk)) continue;
+      met.add(pk);
+      out.push(pk);
+    }
+  }
+  return out;
+}
+
+// Presence -> the meetings, in canonical order (hour, place, pair).
+export function meetingsOf(presence, seed) {
+  const groups = [...presence.entries()].map(([k, keys]) => { const i = k.indexOf("|"); return [Number(k.slice(0, i)), k.slice(i + 1), keys]; });
+  groups.sort((x, y) => x[0] - y[0] || cmpStr(x[1], y[1]));
+  const out = [];
+  for (const [h, placeId, keys] of groups) {
+    keys.sort(cmpStr);
+    for (const pk of pairsMet(seed, h, placeId, keys).sort(cmpStr)) out.push([h, placeId, pk]);
+  }
+  return out;
+}
+
 // ---- the tick --------------------------------------------------------------------------
 // Advance `state` to `toHour` (exclusive) with `subjects` (the census). Mutates and
-// returns state. Applies published snapshots to the sim as it goes.
+// returns state. Applies published snapshots to the sim as it goes. opts.presence: a
+// presence source (sectorPresence) for the hours it covers; the sim's schedule otherwise.
 export function advance(state, subjects, toHour, opts = {}) {
   const seed = state.seed || SIM.SEED;
   const people = dedupe(subjects);
-  forget(state, new Set(people.map(SIM.keyOf)));   // withdrawn/removed files leave the ledger
+  const byKey = new Map(people.map(s => [SIM.keyOf(s), s]));
+  forget(state, new Set(byKey.keys()));   // withdrawn/removed files leave the ledger
   SIM.setRoster(people);   // capacity-aware placement, same roster the browsers register
   for (const s of people) state.names[SIM.keyOf(s)] = displayName(s);
-  seedTies(state, new Set(people.map(SIM.keyOf)));
+  seedTies(state, new Set(byKey.keys()));
   // Make every snapshot the state already knows about visible to the sim.
   SIM.setSocialSnapshots(state.snapshots);
-  const maxHours = opts.maxHours ?? Infinity;
-  let done = 0;
-  while (state.hour < toHour && done < maxHours) {
-    const h = state.hour;
-    stepHour(state, people, h, seed);
-    state.hour = h + 1; done++;
-    if (state.hour % 24 === 0) {   // end of machine day dayOfHour(h)
-      const day = dayOfHour(h);
+  const presence = opts.presence || simPresence;
+  while (state.hour < toHour) {
+    const h0 = state.hour, day = dayOfHour(h0);
+    const h1 = Math.min(toHour, day * 24);
+    const met = meetingsOf(presence(day, h0, h1, people, new Map(), seed), seed);
+    foldBuckets(state, met, byKey, seed);
+    state.hour = h1;
+    if (h1 === day * 24) {   // end of machine day `day`
       decayDay(state);
-      // The pair cap is enforced at the day boundary, never at the end of a call: a call
-      // ends wherever the tick's wall-clock budget runs out, and pruning there would make
-      // the city depend on how the work was chunked. Between boundaries the ledger can
-      // hold one machine day of new pairs over the cap.
-      prunePairs(state, opts.maxPairs ?? MAX_PAIRS);
+      // The per-subject bound is enforced at the day boundary, never at the end of a call: a
+      // call ends wherever the tick's wall-clock budget runs out, and pruning there would
+      // make the city depend on how the work was chunked.
+      prunePerSubject(state, h1, opts.k ?? K);
       const snapDay = day + LAG;
       state.snapshots[snapDay] = snapshotFor(state, people, snapDay, seed);
       pruneSnapshots(state, snapDay, opts.keepSnapshots ?? KEEP_SNAPSHOTS);
@@ -180,15 +329,34 @@ export function advance(state, subjects, toHour, opts = {}) {
   return state;
 }
 
+// Fold the meetings bucket by bucket, each in canonical order. A meeting reads and writes only
+// its own pair (and that bucket's event log), so the buckets are independent: folding them one
+// at a time, in any order or on different workers, gives the same ledger.
+export function foldBuckets(state, meetings, byKey, seed = state.seed || SIM.SEED) {
+  const per = new Map();
+  for (const m of meetings) { const b = bucketOf(m[2]); const l = per.get(b); if (l) l.push(m); else per.set(b, [m]); }
+  for (const [b, list] of per) foldBucket(state.buckets[b], list, byKey, state.names, seed);
+  return state;
+}
+export function foldBucket(bucket, meetings, byKey, names, seed) {
+  for (const [h, placeId, pk] of meetings) {
+    const i = pk.indexOf("|"), a = byKey.get(pk.slice(0, i)), b = byKey.get(pk.slice(i + 1));
+    if (a && b) meet(bucket, a, b, placeId, h, names, seed);
+  }
+  return bucket;
+}
+
 // Drop everyone not in the census: their pairs, events, name and friend-pull boosts.
 // The census must be complete (social-tick reads it strictly), or a Blobs hiccup would
 // erase every referral's relationships.
 export function forget(state, live) {
-  for (const pk of Object.keys(state.pairs)) {
-    const [a, b] = pk.split("|");
-    if (!live.has(a) || !live.has(b)) delete state.pairs[pk];
+  for (const b of state.buckets) {
+    for (const pk of Object.keys(b.pairs)) {
+      const [x, y] = pk.split("|");
+      if (!live.has(x) || !live.has(y)) delete b.pairs[pk];
+    }
+    b.events = b.events.filter(e => live.has(e.a) && live.has(e.b));
   }
-  state.events = state.events.filter(e => live.has(e.a) && live.has(e.b));
   for (const k of Object.keys(state.names)) if (!live.has(k)) delete state.names[k];
   for (const snap of Object.values(state.snapshots)) {
     let changed = false;
@@ -209,39 +377,12 @@ function dedupe(subjects) {
   return out.sort((a, b) => (SIM.keyOf(a) < SIM.keyOf(b) ? -1 : 1));   // input order never matters
 }
 
-function stepHour(state, people, h, seed) {
-  const byPlace = new Map();
-  for (const s of people) {
-    const w = SIM.whereAt(s, h + 0.5, seed);
-    if (!w || w.activity === "commute" || w.activity === "home") continue;
-    const kind = SIM.PLACES[w.placeId]?.kind;
-    if (!ENCOUNTER_BASE[kind]) continue;
-    if (!byPlace.has(w.placeId)) byPlace.set(w.placeId, []);
-    byPlace.get(w.placeId).push(s);
-  }
-  for (const [placeId, here] of [...byPlace.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-    if (here.length < 2) continue;
-    const kind = SIM.PLACES[placeId].kind;
-    const p = ENCOUNTER_BASE[kind] / (1 + (here.length - 1) / 10);
-    const r = rng(`${seed}|enc|${h}|${placeId}`);
-    const met = new Set();   // a pair meets once an hour at most, whoever starts it
-    for (let i = 0; i < here.length; i++) {
-      for (let tries = 0; tries < 2; tries++) {
-        if (r() >= p) continue;
-        let j = Math.floor(r() * (here.length - 1));
-        if (j >= i) j++;
-        const pk = pairKey(SIM.keyOf(here[i]), SIM.keyOf(here[j]));
-        if (met.has(pk)) continue;
-        met.add(pk);
-        meet(state, here[i], here[j], placeId, h, r);
-      }
-    }
-  }
-}
-
-function meet(state, a, b, placeId, h, r) {
+// One meeting. Its chance draws come from (seed, hour, pair) alone, so the result never
+// depends on what else happened that hour or in which bucket order.
+function meet(bucket, a, b, placeId, h, names, seed) {
   const ka = SIM.keyOf(a), kb = SIM.keyOf(b), pk = pairKey(ka, kb);
-  const rec = state.pairs[pk] || [0, 0, -1, null, 0];
+  const r = rng(`${seed}|meet|${h}|${pk}`);
+  const rec = bucket.pairs[pk] || [0, 0, -1, null, 0];
   const before = rec[0], lvl0 = levelOf(before);
   const c = compat(a, b);
   const noise = (r() + r() + r() - 1.5) * 1.7;   // roughly -2.5..2.5, peaked at 0
@@ -253,9 +394,9 @@ function meet(state, a, b, placeId, h, r) {
   rec[1] += 1;
   rec[4] = h - rec[2] < 24 * 7 ? rec[4] + 1 : 1;   // meetings in the last week
   rec[2] = h; rec[3] = placeId;
-  state.pairs[pk] = rec;
+  bucket.pairs[pk] = rec;
   const lvl1 = levelOf(aff);
-  const [A, B] = ka < kb ? [state.names[ka], state.names[kb]] : [state.names[kb], state.names[ka]];
+  const [A, B] = ka < kb ? [names[ka], names[kb]] : [names[kb], names[ka]];
   let kind = null;
   if (RANK[lvl1] > RANK[lvl0]) {
     if (lvl1 === "friends" || lvl1 === "close") kind = lvl1;
@@ -263,41 +404,51 @@ function meet(state, a, b, placeId, h, r) {
   } else if (RANK[lvl1] < RANK[lvl0]) {
     if (lvl1 === "rivals" || lvl1 === "nemesis") kind = lvl1;
     else if ((lvl0 === "friends" || lvl0 === "close") && aff < T.acquaintance) kind = "fallout";
-  } else if (again && aff >= T.friends && r() < 0.15 && !saidLately(state, ka < kb ? ka : kb, ka < kb ? kb : ka, h)) kind = "again";
+  } else if (again && aff >= T.friends && r() < 0.15 && !(rec[5] != null && h - rec[5] < AGAIN_GAP)) kind = "again";
   // Work rooms are not tables: colleagues are rostered together, not seated.
   const say = kind === "again" && SIM.PLACES[placeId]?.kind === "work" ? "againWork" : kind;
-  if (kind) pushEvent(state, { h, kind, a: ka < kb ? ka : kb, b: ka < kb ? kb : ka, placeId, text: line(say, A, B, placeId, r) });
+  if (kind) pushEvent(bucket, rec, { h, kind, a: ka < kb ? ka : kb, b: ka < kb ? kb : ka, placeId, text: line(say, A || ka, B || kb, placeId, r) });
 }
 
 // "Again" is news once in a while, not every hour: one per pair per AGAIN_GAP machine hours
-// (and never while a bigger event about them is that fresh).
+// (and never while a bigger event about them is that fresh). The pair's record keeps the
+// hour of its latest event (rec[5]).
 const AGAIN_GAP = 72;
-function saidLately(state, a, b, h) {
-  for (let i = state.events.length - 1; i >= 0; i--) {
-    const e = state.events[i];
-    if (h - e.h >= AGAIN_GAP) return false;
-    if (e.a === a && e.b === b) return true;
-  }
-  return false;
-}
 
-function pushEvent(state, e) {
-  state.events.push(e);
-  if (state.events.length > MAX_EVENTS) state.events.splice(0, state.events.length - MAX_EVENTS);
+function pushEvent(bucket, rec, e) {
+  bucket.events.push(e);
+  rec[5] = e.h;
+  if (bucket.events.length > BUCKET_EVENTS) bucket.events.splice(0, bucket.events.length - BUCKET_EVENTS);
 }
 
 function decayDay(state) {
-  for (const [k, rec] of Object.entries(state.pairs)) {
-    rec[0] = Math.round(rec[0] * DECAY * 100) / 100;
-    if (Math.abs(rec[0]) < 0.5 && rec[1] < 3) delete state.pairs[k];
+  for (const b of state.buckets) {
+    for (const [k, rec] of Object.entries(b.pairs)) {
+      rec[0] = Math.round(rec[0] * DECAY * 100) / 100;
+      if (Math.abs(rec[0]) < 0.5 && rec[1] < 3) delete b.pairs[k];
+    }
   }
 }
 
-function prunePairs(state, max = MAX_PAIRS) {
-  const keys = Object.keys(state.pairs);
-  if (keys.length <= max) return;
-  keys.sort((x, y) => Math.abs(state.pairs[y][0]) - Math.abs(state.pairs[x][0]) || state.pairs[y][2] - state.pairs[x][2] || (x < y ? -1 : 1));
-  for (const k of keys.slice(max)) delete state.pairs[k];
+// What a subject would give up last: strong feeling either way, then company kept this week.
+export const keepScore = (rec, hour) => Math.abs(rec[0]) + (hour - rec[2] < WEEK ? RECENT_W * rec[4] : 0);
+// Each subject keeps its best k pairs (score, then the most recent meeting, then the key);
+// a pair survives only when both sides keep it. -> pairs dropped.
+export function prunePerSubject(state, hour, k = K) {
+  const by = new Map();
+  const add = (key, e) => { const l = by.get(key); if (l) l.push(e); else by.set(key, [e]); };
+  for (const [pk, rec] of allPairs(state)) {
+    const e = [pk, keepScore(rec, hour), rec[2]], i = pk.indexOf("|");
+    add(pk.slice(0, i), e); add(pk.slice(i + 1), e);
+  }
+  const drop = new Set();
+  for (const list of by.values()) {
+    if (list.length <= k) continue;
+    list.sort((x, y) => y[1] - x[1] || y[2] - x[2] || cmpStr(x[0], y[0]));
+    for (let i = k; i < list.length; i++) drop.add(list[i][0]);
+  }
+  for (const pk of drop) delete state.buckets[bucketOf(pk)].pairs[pk];
+  return drop.size;
 }
 
 function pruneSnapshots(state, newest, keep) {
@@ -306,20 +457,13 @@ function pruneSnapshots(state, newest, keep) {
 
 // Top friends/rivals per subject, from the pairs.
 export function relationsOf(state, key, limit = 8) {
-  const out = [];
-  for (const [pk, rec] of Object.entries(state.pairs)) {
-    const [x, y] = pk.split("|");
-    if (x !== key && y !== key) continue;
-    const other = x === key ? y : x;
-    const level = levelOf(rec[0]);
-    if (level === "neutral") continue;
-    out.push({ key: other, name: state.names[other] || other, affinity: rec[0], level, meetings: rec[1], lastPlace: rec[3] ? PLACE(rec[3]) : null });
-  }
-  return out.sort((a, b) => Math.abs(b.affinity) - Math.abs(a.affinity)).slice(0, limit);
+  return publishAll(state, [key], { relations: limit })[key]?.relations || [];
 }
+const relCmp = (a, b) => Math.abs(b.affinity) - Math.abs(a.affinity) || cmpStr(a.key, b.key);
 
 // Where each subject's friends are likely to be (their unbiased favourite spots),
-// weighted by affinity; where their rivals hang out is discounted.
+// weighted by affinity; where their rivals hang out is discounted. Pairs are read in key
+// order: the boosts round as they add up, so the order is part of the answer.
 function snapshotFor(state, people, day, seed) {
   const byKey = new Map(people.map(s => [SIM.keyOf(s), s]));
   const favs = new Map();
@@ -331,9 +475,9 @@ function snapshotFor(state, people, day, seed) {
   };
   const boosts = {};
   const add = (k, id, v) => { (boosts[k] ||= {}); boosts[k][id] = Math.round(clamp((boosts[k][id] || 0) + v, -0.7, 1.2) * 1000) / 1000; };
-  for (const [pk, rec] of Object.entries(state.pairs)) {
+  const strong = allPairs(state).filter(([, rec]) => rec[0] <= -T.friends || rec[0] >= T.friends).sort((x, y) => cmpStr(x[0], y[0]));
+  for (const [pk, rec] of strong) {
     const aff = rec[0];
-    if (aff > -T.friends && aff < T.friends) continue;
     const [x, y] = pk.split("|");
     for (const [me, them] of [[x, y], [y, x]]) {
       if (!byKey.has(me)) continue;
@@ -349,42 +493,57 @@ export function publish(state, nowHour) {
   const nowDay = dayOfHour(nowHour);
   const snapshots = {};
   for (const [d, snap] of Object.entries(state.snapshots)) if (Number(d) >= nowDay - 1) snapshots[d] = snap;
-  const pairs = Object.entries(state.pairs).map(([pk, rec]) => {
+  let npairs = 0;
+  const pairs = [];
+  for (const [pk, rec] of allPairs(state)) {
+    npairs++;
+    const level = levelOf(rec[0]);
+    if (level === "neutral" || level === "acquaintance") continue;
     const [a, b] = pk.split("|");
-    return { a, b, an: state.names[a] || a, bn: state.names[b] || b, affinity: rec[0], level: levelOf(rec[0]), meetings: rec[1], lastPlace: rec[3] ? PLACE(rec[3]) : null };
-  }).filter(p => p.level !== "neutral" && p.level !== "acquaintance");
-  const friends = pairs.filter(p => p.affinity > 0).sort((x, y) => y.affinity - x.affinity).slice(0, 40);
-  const rivals = pairs.filter(p => p.affinity < 0).sort((x, y) => x.affinity - y.affinity).slice(0, 25);
+    pairs.push({ a, b, an: state.names[a] || a, bn: state.names[b] || b, affinity: rec[0], level, meetings: rec[1], lastPlace: rec[3] ? PLACE(rec[3]) : null });
+  }
+  const tie = (x, y) => cmpStr(`${x.a}|${x.b}`, `${y.a}|${y.b}`);
+  const friends = pairs.filter(p => p.affinity > 0).sort((x, y) => y.affinity - x.affinity || tie(x, y)).slice(0, 40);
+  const rivals = pairs.filter(p => p.affinity < 0).sort((x, y) => x.affinity - y.affinity || tie(x, y)).slice(0, 25);
   return {
     hour: state.hour, day: nowDay, snapshots,
     friends, rivals,
-    events: state.events.slice(-60).reverse(),
-    counts: { pairs: Object.keys(state.pairs).length, friends: pairs.filter(p => p.affinity > 0).length, rivals: pairs.filter(p => p.affinity < 0).length },
+    events: allEvents(state).slice(-60).reverse(),
+    counts: { pairs: npairs, friends: pairs.filter(p => p.affinity > 0).length, rivals: pairs.filter(p => p.affinity < 0).length },
   };
 }
 
-// Relationships for one subject, for the card.
-export function publishSubject(state, key) {
-  return { key, relations: relationsOf(state, key, 10), events: state.events.filter(e => e.a === key || e.b === key).slice(-10).reverse() };
+// Relationships for one subject, for the card: a scan of every pair (the reference
+// publishAll is checked against).
+export function publishSubject(state, key, { relations = 10, events = 10 } = {}) {
+  const rel = [];
+  for (const [pk, rec] of allPairs(state)) {
+    const [x, y] = pk.split("|");
+    if (x !== key && y !== key) continue;
+    const level = levelOf(rec[0]);
+    if (level === "neutral") continue;
+    const other = x === key ? y : x;
+    rel.push({ key: other, name: state.names[other] || other, affinity: rec[0], level, meetings: rec[1], lastPlace: rec[3] ? PLACE(rec[3]) : null });
+  }
+  return { key, relations: rel.sort(relCmp).slice(0, relations), events: allEvents(state).filter(e => e.a === key || e.b === key).slice(-events).reverse() };
 }
 
-// publishSubject for every key at once, in one pass over the pairs and one over the events
-// (calling publishSubject per subject scans every pair per subject: O(N x pairs), about half
-// the tick at scale). Same output, entry for entry: pairs are visited in the same order and
-// the sort is stable. Subjects with nothing to show are left out.
+// publishSubject for every key at once, in one pass over the pairs and one over the events.
+// Subjects with nothing to show are left out.
 export function publishAll(state, keys, { relations = 10, events = 10 } = {}) {
   const want = new Set(keys);
   const rel = new Map(), ev = new Map();
   const push = (m, k, v) => { const l = m.get(k); if (l) l.push(v); else m.set(k, [v]); };
-  for (const [pk, rec] of Object.entries(state.pairs)) {
+  for (const [pk, rec] of allPairs(state)) {
     const level = levelOf(rec[0]);
     if (level === "neutral") continue;
     const [x, y] = pk.split("|");
+    if (!want.has(x) && !want.has(y)) continue;
     const lastPlace = rec[3] ? PLACE(rec[3]) : null;
     if (want.has(x)) push(rel, x, { key: y, name: state.names[y] || y, affinity: rec[0], level, meetings: rec[1], lastPlace });
     if (want.has(y) && y !== x) push(rel, y, { key: x, name: state.names[x] || x, affinity: rec[0], level, meetings: rec[1], lastPlace });
   }
-  for (const e of state.events) {
+  for (const e of allEvents(state)) {
     if (want.has(e.a)) push(ev, e.a, e);
     if (want.has(e.b) && e.b !== e.a) push(ev, e.b, e);
   }
@@ -393,9 +552,19 @@ export function publishAll(state, keys, { relations = 10, events = 10 } = {}) {
     const r = rel.get(k), e = ev.get(k);
     if (!r && !e) continue;
     out[k] = {
-      relations: r ? r.sort((a, b) => Math.abs(b.affinity) - Math.abs(a.affinity)).slice(0, relations) : [],
+      relations: r ? r.sort(relCmp).slice(0, relations) : [],
       events: e ? e.slice(-events).reverse() : [],
     };
   }
+  return out;
+}
+
+// The per-subject view split the way /api/social/<slug> reads it: SUBJECT_SHARDS blobs by a
+// hash of the slug, so a card fetches its own subject's shard, never the whole city.
+export const SUBJECT_SHARDS = 64;
+export const subjectShard = (slug) => fnv(`subj|${slug}`) % SUBJECT_SHARDS;
+export function shardSubjects(bySubject) {
+  const out = Array.from({ length: SUBJECT_SHARDS }, () => ({}));
+  for (const [k, v] of Object.entries(bySubject)) out[subjectShard(k)][k] = v;
   return out;
 }

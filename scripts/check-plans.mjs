@@ -180,7 +180,7 @@ for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["sy
     return { r, state: box.state };
   };
   const a = await run(false), b = await run(true);
-  ok(b.r.plans === 2 && a.r.plans === 0, `the tick loaded the plans for its days (${b.r.plans})`);
+  ok(b.r.sources.plan > 0 && b.r.sources.sim === 0 && a.r.sources.plan === 0, `the tick read the plans for its days (${JSON.stringify(b.r.sources)})`);
   ok(b.state.plans[D] === PL.versionOf(plans[0]) && a.state.plans[D] === "sim", "the ledger records which plan placed each day");
   const strip = ({ tick: _t, plans: _p, ...rest }) => JSON.stringify(rest);
   assert.equal(strip(b.state), strip(a.state), "the ledger advanced over the plans equals the ledger advanced by the sim"); checks++;
@@ -301,7 +301,23 @@ for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["sy
   SIM.clearPlans(); PL.forgetManifest();
   const got = await PL.loadPlans([Number(day)], store);
   ok(got[day] === ver && SIM.planOf(Number(day))?.ver === ver, "loadPlans loads the manifest's version");
-  SIM.clearPlans();
+  // loadOnFile (quests, scaling step 6): the figures on file's rows from the day's summary put
+  // every quest figure exactly where the one-file plan does; a day not split reads the plan.
+  const dayN = Number(day), qt = Array.from({ length: 24 * 12 }, (_, i) => (dayN - 1) * 24 + i / 12);
+  const figs = [...new Set(QUESTS.flatMap(q => [q.figure, q.with]).filter(Boolean))];
+  const fig = new Map(onFile().map(x => [SIM.keyOf(x), x]));
+  ok(figs.every(k => fig.has(k)), "every quest figure (and partner) is on file");
+  SIM.setRoster(onFile());
+  const at = () => figs.map(k => qt.map(t => JSON.stringify(SIM.whereAt(fig.get(k), t))).join()).join();
+  const viaPlan = at();
+  SIM.clearPlans(); PL.forgetManifest();
+  const got2 = await PL.loadOnFile([dayN], store);
+  ok(got2[day] === ver && SIM.planOf(dayN)?.onFile && !SIM.planOf(dayN)?.full, "loadOnFile loads the day's on-file rows, not the plan");
+  ok(at() === viaPlan, "quest figures from the summary == from the one-file plan, every 5 machine minutes");
+  const m2 = raw(PL.MANIFEST2);
+  const unsplit = Object.keys(man().days).map(Number).find(d => !m2?.days?.[d]);
+  if (unsplit) { SIM.clearPlans(); const g3 = await PL.loadOnFile([unsplit], store); ok(SIM.planOf(unsplit)?.full && g3[unsplit], "a day not split: the one-file plan"); }
+  SIM.clearPlans(); SIM.clearRoster();
 }
 // ---- 7. the sector split (scaling step 4: planSplit.js, planClient.js, crowd.js) -------------------
 // The split IS the plan: every (sector, window) file reassembles to the whole day; one file

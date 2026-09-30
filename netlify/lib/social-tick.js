@@ -10,12 +10,18 @@
 // killed run loses at most one chunk and a stale or concurrent worker can never roll the
 // ledger back. A lease keeps two workers from running at once. After budgetMs the run
 // stops starting chunks and publishes what it has; the next hour picks up from there.
-import { machineClock, SEED, rosterVersion } from "../../src/city/sim.js";
-import { emptyState, advance, publish, publishAll } from "../../src/city/social.js";
+//
+// Scaling step 6 (docs/CITY_SPEC.md "Relations"): the ledger is 64 pair buckets under a
+// header (netlify/lib/social-store.js), and each chunk is one 6-machine-hour window of a
+// published day: the tick reads who was where from that window's sector files (plans.js
+// format 2), falls back to the day's one-file plan (format 1), then to the sim. All three
+// give the same city for the same plan (scripts/check-social.mjs).
+import { machineClock, SEED, rosterVersion, WINDOW_H } from "../../src/city/sim.js";
+import { emptyState, advance, publish, publishAll, fromV1, sectorPresence } from "../../src/city/social.js";
 import { fullRoster } from "../../src/city/roster.js";
 
 export const FAST_FORWARD_DAYS = 30;
-export const CHUNK_HOURS = 6;
+export const CHUNK_HOURS = WINDOW_H;          // one sector window per chunk
 export const MAX_HOURS_PER_RUN = 24 * 40;   // a longer backlog catches up over the next runs
 export const ROSTER_LOG = 48;                // processed ranges kept in state.rosters
 
@@ -34,19 +40,23 @@ function noteRoster(state, from, to, ver) {
   if (log.length > ROSTER_LOG) log.splice(0, log.length - ROSTER_LOG);
 }
 
-// Which published plan (sim.js setPlan) placed each machine day the tick processed, so a
+// Which published plan placed each machine day the tick processed ("sim" when none), so a
 // ledger can be traced to the city it saw. Bounded like the roster log.
-function notePlans(state, from, to, plans) {
+function notePlan(state, day, ver) {
   const log = (state.plans ||= {});
-  for (let d = Math.floor(from / 24) + 1; d <= Math.floor((to - 1) / 24) + 1; d++) log[d] = plans[d] || "sim";
+  log[day] = ver || "sim";
   const days = Object.keys(log).map(Number).sort((x, y) => x - y);
   for (const d of days.slice(0, Math.max(0, days.length - ROSTER_LOG))) delete log[d];
 }
 
-// io: { census, putPublic, plans? (days -> {day: ver} loaded into the sim) } plus either
+// io: { census, putPublic, putSubjects? (64 per-subject shards), windows? ((day, w) -> the
+//   window's sector files, plans.js loadWindows), plans? (days -> {day: ver} loaded into the
+//   sim, the one-file plans) } plus either
 //   load() -> { state, etag } and save(state, etag) -> newEtag (throws TickConflict), with an
 //   optional lease { acquire(run, ms) -> bool, release(run) }   (netlify/lib/social-store.js)
 // or the plain getState()/putState(state) pair (benchmarks: no conditional writes).
+// opts.checkpointMs: checkpoint after a chunk only if this long has passed since the last
+// one (0, the default: every chunk); the run's last chunk always checkpoints.
 export async function tick(nowMs = Date.now(), io, opts = {}) {
   const clock = opts.clock || Date.now;
   const t0 = clock();
@@ -64,44 +74,69 @@ export async function tick(nowMs = Date.now(), io, opts = {}) {
     const t = { io: 0, sim: 0 };
     const timed = async (k, f) => { const a = clock(); try { return await f(); } finally { t[k] += clock() - a; } };
     const roster = fullRoster(await timed("io", () => io.census()));
-    let { state, etag } = await timed("io", () => (io.load ? io.load() : io.getState().catch(() => null).then(state => ({ state, etag: null }))));
+    let { state, etag, migrated } = await timed("io", () => (io.load ? io.load() : io.getState().catch(() => null).then(state => ({ state, etag: null }))));
     const save = io.save ? (s, e) => io.save(s, e) : async (s) => { await io.putState(s); return null; };
+    if (state && state.v !== 2) state = fromV1(state);
     if (!state || state.seed !== SEED) {
       const start = nowHour - 24 * FAST_FORWARD_DAYS;
       state = emptyState(start - (((start % 24) + 24) % 24), SEED);
     }
     const from = state.hour;
     const target = Math.min(nowHour, state.hour + MAX_HOURS_PER_RUN);
-    // The published plans for the days this run covers (netlify/lib/plans.js): the tick
-    // meets people where every browser sees them. A day without a plan runs the sim.
-    let plans = {};
-    if (io.plans && target > state.hour) {
-      const days = [];
-      for (let d = Math.floor(state.hour / 24) + 1; d <= Math.floor((target - 1) / 24) + 1; d++) days.push(d);
-      plans = await timed("io", () => io.plans(days)).catch(err => { console.error("social tick: plans unreadable, the sim decides", err?.message); return {}; });
-    }
-    let chunks = 0;
+    let chunks = 0, saved = clock(), dirty = false;
+    const sources = { sectors: 0, plan: 0, sim: 0 }, f1 = {};
     while (state.hour < target) {
       if (chunks > 0 && clock() - t0 >= budgetMs) break;
       const a = state.hour;
       const b = Math.min(target, (Math.floor(a / CHUNK_HOURS) + 1) * CHUNK_HOURS);
+      const day = Math.floor(a / 24) + 1, w = Math.floor((a - (day - 1) * 24) / WINDOW_H);
+      // Who was where: the window's sector files, else the day's one-file plan, else the sim.
+      let win = null, ver = null;
+      if (io.windows) win = await timed("io", () => io.windows(day, w)).catch(err => { console.error("social tick: sector windows unreadable, the one-file plan decides", day, w, err?.message); return null; });
+      if (win) { ver = win.ver; sources.sectors++; }
+      else {
+        if (io.plans && !(day in f1)) f1[day] = (await timed("io", () => io.plans([day])).catch(err => { console.error("social tick: plans unreadable, the sim decides", err?.message); return {}; }))[day] || null;
+        ver = f1[day] || null;
+        sources[ver ? "plan" : "sim"]++;
+      }
       const c = clock();
-      advance(state, roster, b);
+      advance(state, roster, b, win ? { presence: sectorPresence(win) } : {});
       t.sim += clock() - c;
       noteRoster(state, a, b, rosterVersion());
-      notePlans(state, a, b, plans);
-      chunks++;
-      state.tick = { run, at: new Date(clock()).toISOString(), chunk: chunks };
-      etag = await timed("io", () => save(state, etag));   // checkpoint; TickConflict if the ledger moved under us
+      notePlan(state, day, ver);
+      chunks++; dirty = true;
+      const last = state.hour >= target || clock() - t0 >= budgetMs;
+      if (last || !opts.checkpointMs || clock() - saved >= opts.checkpointMs) {
+        state.tick = { run, at: new Date(clock()).toISOString(), chunk: chunks };
+        etag = await timed("io", () => save(state, etag));   // checkpoint; TickConflict if the ledger moved under us
+        saved = clock(); dirty = false;
+      }
     }
+    if (dirty) {   // (only when the budget ran out between a skipped checkpoint and the loop test)
+      state.tick = { run, at: new Date(clock()).toISOString(), chunk: chunks };
+      etag = await timed("io", () => save(state, etag));
+    }
+    if (migrated && !chunks) etag = await timed("io", () => save(state, etag));   // a migration lands even with nothing to advance
     const c = clock();
     const pub = publish(state, state.hour);
-    pub.bySubject = publishAll(state, roster.map(s => s.slug), { relations: 8, events: 5 });
+    const bySubject = publishAll(state, roster.map(s => s.slug), { relations: SUBJECT_RELATIONS, events: SUBJECT_EVENTS });
     pub.at = new Date(nowMs).toISOString();
     t.sim += clock() - c;
-    await timed("io", () => io.putPublic(pub));
-    return { run, hour: state.hour, nowHour, from, plans: Object.keys(plans).length, behind: nowHour - state.hour, chunks, ms: Math.round(clock() - t0), simMs: Math.round(t.sim), ioMs: Math.round(t.io), counts: pub.counts };
+    if (io.putSubjects) await timed("io", () => io.putSubjects(bySubject, { hour: state.hour, at: pub.at }));
+    // The one-blob public view keeps bySubject for clients that still read ?subject= from it.
+    await timed("io", () => io.putPublic(opts.legacyPublic === false ? pub : { ...pub, bySubject: trimSubjects(bySubject) }));
+    if (io.after) await timed("io", () => io.after(state));
+    return { run, hour: state.hour, nowHour, from, sources, migrated: migrated || undefined, behind: nowHour - state.hour, chunks, ms: Math.round(clock() - t0), simMs: Math.round(t.sim), ioMs: Math.round(t.io), counts: pub.counts };
   } finally {
     if (io.lease) await io.lease.release(run).catch(() => {});
   }
+}
+
+// What a subject's shard holds (/api/social/<slug>), and the trimmed copy in the one-blob
+// public view (what /api/social?subject= served before shards: 8 relations, 5 events).
+export const SUBJECT_RELATIONS = 12, SUBJECT_EVENTS = 8;
+function trimSubjects(bySubject) {
+  const out = {};
+  for (const [k, v] of Object.entries(bySubject)) out[k] = { relations: v.relations.slice(0, 8), events: v.events.slice(0, 5) };
+  return out;
 }
