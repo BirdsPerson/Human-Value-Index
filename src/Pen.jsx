@@ -476,9 +476,20 @@ export function ReferralBar({ simRef }) {
     submit(null, c.name || who, c.title);
   }
 
+  // NONE OF THESE: the list closes without filing anyone; the owner gets ADD WITH SOURCE.
+  const noneOfThese = () => {
+    const who = choices?.name || name;
+    setChoices(null);
+    setOut({ text: owner
+      ? `NONE OF THESE. IF ${String(who).toUpperCase()} IS A PUBLIC OFFICIAL WITH NO ARTICLE, ADD WITH SOURCE BELOW.`
+      : "NONE OF THESE. THE DEPARTMENT WILL NOT GUESS. TRY THE FULL NAME, OR A WORD THAT NARROWS IT.", tone: "" });
+    if (owner) { setSrcFor(who); setSrcUrls(["", "", ""]); }
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
   const onPickKey = (e) => {
-    const k = e.key, n = choices.candidates.length;
-    if (/^[1-8]$/.test(k) && Number(k) <= n) { e.preventDefault(); choose(choices.candidates[Number(k) - 1]); }
+    const k = e.key, n = choices.candidates.length + 1;   // + NONE OF THESE
+    if (/^[1-8]$/.test(k) && Number(k) < n) { e.preventDefault(); choose(choices.candidates[Number(k) - 1]); }
+    else if (k === "0") { e.preventDefault(); noneOfThese(); }
     else if (k === "ArrowDown" || k === "ArrowUp") {
       e.preventDefault();
       const next = (pick + (k === "ArrowDown" ? 1 : n - 1)) % n;
@@ -512,6 +523,10 @@ export function ReferralBar({ simRef }) {
                 sub={<>{candidateSub(c)}{c.excluded ? " · SEALED BY POLICY" : c.onFile ? <span className="onfile"> · ON FILE: {c.onFile.score}</span> : ""}</>}
                 onFocus={() => setPick(i)} onClick={() => choose(c)} />
             ))}
+            <Command key="none" id={`hvi-refer-pick-${choices.candidates.length}`} n={0}
+              selected={pick === choices.candidates.length} kbd="×" label="NONE OF THESE"
+              sub="CLOSE THE LIST. NOBODY IS FILED." aria-label="None of these: close the list without filing anyone"
+              onFocus={() => setPick(choices.candidates.length)} onClick={noneOfThese} />
           </CommandList>
         </div>
       )}

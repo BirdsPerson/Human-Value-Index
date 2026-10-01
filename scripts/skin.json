@@ -2760,6 +2760,13 @@
   "image": true,
   "note": "Light complexion visible in photo, consistent with known appearance"
  },
+ "tom-curran": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light skin tone visible in photo, consistent with English cricketer of white British heritage."
+ },
  "tom-morello": {
   "band": "medium",
   "basis": "photo",
