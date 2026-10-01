@@ -188,6 +188,13 @@ const penStyles = `
   .hvi-refer-out.err { color: var(--harm); }
   .hvi-refer-out.ok { color: var(--warn); }
   .hvi-refer-quota { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s1); }
+  .hvi-refer-multi { list-style: none; margin: var(--s2) 0; }
+  .hvi-refer-multi fieldset { border: 1px solid var(--line); padding: var(--s1) var(--s2); margin: 0; display: grid; gap: 2px; }
+  .hvi-refer-multi legend { font-size: var(--t-xs); color: var(--fg-mute); padding: 0 var(--s1); }
+  .hvi-refer-multi label { display: flex; align-items: center; gap: var(--s2); min-height: 44px; cursor: pointer; font-size: var(--t-s); }
+  .hvi-refer-multi input { width: 22px; height: 22px; accent-color: var(--accent); }
+  .hvi-refer-multi button { min-height: 44px; margin-top: var(--s1); background: var(--accent); color: var(--accent-ink); border: 0; font: inherit; cursor: pointer; }
+  .hvi-refer-multi button:disabled { background: var(--line); color: var(--fg-mute); cursor: default; }
   .hvi-refer-queue { margin-top: var(--s1); font-size: var(--t-xs); color: var(--fg-dim); }
   .hvi-refer-queue ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s1); }
   .hvi-refer-queue li { display: inline-flex; align-items: center; border: 1px solid var(--line); padding-left: var(--s1); }
@@ -377,7 +384,7 @@ export function ReferralBar({ simRef }) {
   const [srcUrls, setSrcUrls] = useState(["", "", ""]);
   // Names typed while the desk is busy wait here (kept across reloads) and are filed one at a
   // time; a namesake list pauses the line until it is answered. The log keeps each outcome.
-  const [queue, setQueue] = useState(() => { try { const q = JSON.parse(localStorage.getItem(QUEUE_KEY)); return Array.isArray(q) ? q.filter(x => typeof x === "string").slice(0, 30) : []; } catch { return []; } });
+  const [queue, setQueue] = useState(() => { try { const q = JSON.parse(localStorage.getItem(QUEUE_KEY)); return Array.isArray(q) ? q.filter(x => typeof x === "string" || (x && typeof x.n === "string" && typeof x.t === "string")).slice(0, 30) : []; } catch { return []; } });
   const [log, setLog] = useState([]);
   const inputRef = useRef(null);
   useEffect(() => { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(queue)); } catch { /* private mode */ } }, [queue]);
@@ -386,7 +393,8 @@ export function ReferralBar({ simRef }) {
     if (busy || choices || needRestore || !queue.length) return;
     const [next, ...rest] = queue;
     setQueue(rest);
-    submit(null, next);
+    // A queued pick from a namesake list carries its exact title ({n, t}); a typed name is a string.
+    if (typeof next === "string") submit(null, next); else submit(null, next.n, next.t);
   }, [busy, choices, needRestore, queue]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -476,6 +484,19 @@ export function ReferralBar({ simRef }) {
     submit(null, c.name || who, c.title);
   }
 
+  // Several namesakes at once: tick them, FILE SELECTED files the first now and lines up the rest
+  // with their exact titles (on-file and sealed ones can't be ticked).
+  const [ticked, setTicked] = useState(() => new Set());
+  useEffect(() => { setTicked(new Set()); }, [choices]);
+  const toggleTick = (c) => setTicked(t => { const n = new Set(t); n.has(c.qid) ? n.delete(c.qid) : n.add(c.qid); return n; });
+  const fileTicked = () => {
+    const who = choices?.name || name;
+    const picks = choices.candidates.filter(c => ticked.has(c.qid) && !c.excluded && !c.onFile?.slug);
+    if (!picks.length) return;
+    const [first, ...rest] = picks;
+    setQueue(q => [...rest.map(c => ({ n: c.name || who, t: c.title })), ...q].slice(0, 30));
+    choose(first);
+  };
   // NONE OF THESE: the list closes without filing anyone; the owner gets ADD WITH SOURCE.
   const noneOfThese = () => {
     const who = choices?.name || name;
@@ -523,6 +544,17 @@ export function ReferralBar({ simRef }) {
                 sub={<>{candidateSub(c)}{c.excluded ? " · SEALED BY POLICY" : c.onFile ? <span className="onfile"> · ON FILE: {c.onFile.score}</span> : ""}</>}
                 onFocus={() => setPick(i)} onClick={() => choose(c)} />
             ))}
+            {choices.candidates.some(c => !c.excluded && !c.onFile?.slug) && (
+              <div key="multi" className="hvi-refer-multi">
+                <fieldset>
+                  <legend>FILE SEVERAL</legend>
+                  {choices.candidates.map(c => (c.excluded || c.onFile?.slug) ? null : (
+                    <label key={c.qid}><input type="checkbox" checked={ticked.has(c.qid)} onChange={() => toggleTick(c)} /> {String(c.title).toUpperCase()}</label>
+                  ))}
+                  <button type="button" disabled={!ticked.size} onClick={fileTicked}>FILE SELECTED ({ticked.size})</button>
+                </fieldset>
+              </div>
+            )}
             <Command key="none" id={`hvi-refer-pick-${choices.candidates.length}`} n={0}
               selected={pick === choices.candidates.length} kbd="×" label="NONE OF THESE"
               sub="CLOSE THE LIST. NOBODY IS FILED." aria-label="None of these: close the list without filing anyone"
@@ -533,9 +565,8 @@ export function ReferralBar({ simRef }) {
       {queue.length > 0 && (
         <div className="hvi-refer-queue" aria-live="polite">
           <div>IN LINE ({queue.length}){choices ? " · WAITING ON YOUR ANSWER ABOVE" : ""}:</div>
-          <ol>{queue.map(q => (
-            <li key={q}>{q.toUpperCase()}<button type="button" aria-label={`Remove ${q} from the line`} onClick={() => setQueue(l => l.filter(x => x !== q))}>×</button></li>
-          ))}</ol>
+          <ol>{queue.map(q => { const label = typeof q === "string" ? q : q.t; return (
+            <li key={label}>{label.toUpperCase()}<button type="button" aria-label={`Remove ${label} from the line`} onClick={() => setQueue(l => l.filter(x => x !== q))}>×</button></li>); })}</ol>
         </div>
       )}
       {log.some(r => r.text !== out?.text) && (
