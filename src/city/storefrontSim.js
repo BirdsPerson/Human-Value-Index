@@ -71,9 +71,9 @@ export const STORE_JOBS = [
 // Who goes, by band (0 top tiers .. 2 the lowest) and by field; the overflow families
 // (sim.js FAMILY: 0 bars, 1 cafes and diners).
 export const STORE_LEISURE_BAND = [
-  { "sams-pizza": 0.5, "goodnight-irenes": 0.9 },
-  { "sams-pizza": 1.2, "goodnight-irenes": 1.2 },
-  { "sams-pizza": 1.4, "goodnight-irenes": 0.8 },
+  { "sams-pizza": 0.3, "goodnight-irenes": 0.5 },
+  { "sams-pizza": 0.6, "goodnight-irenes": 0.6 },
+  { "sams-pizza": 0.7, "goodnight-irenes": 0.4 },
 ];
 export const STORE_LEISURE_FIELD = {
   sport: { "sams-pizza": 0.6 }, music: { "goodnight-irenes": 1.5 }, hospitality: { "goodnight-irenes": 1, "sams-pizza": 1 },

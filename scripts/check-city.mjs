@@ -5,6 +5,7 @@
 // object, warmth/competence, died, breakdown only once the verdict is published; no
 // stratum, no place tendencies), and bare citizens. The sim can read stratum and places
 // (checked separately below), but the live city never receives them.
+import { UNIT_SET } from "../src/city/storefrontSim.js";   // THE MALL: a unit takes nobody until it is let
 import { FAMOUS_FIGURES, slugify, TIERS } from "../src/figures.js";
 import {
   DISTRICTS, PLACES, JOBS, JOB, assignJob, homeOf, schedule, whereAt, machineClock, occupancy,
