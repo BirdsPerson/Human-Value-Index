@@ -76,6 +76,13 @@
   "image": false,
   "note": "No image available; Albert Tom\u00e0s is not a widely documented public figure to me, so this is a generic estimate based on typical Spanish skin tone rather than specific evidence. Low confidence."
  },
+ "alex-rodriguez": {
+  "band": "light brown",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Consistent with his known Dominican heritage and visible skin tone in photo"
+ },
  "alexander-the-great": {
   "band": "fair",
   "basis": "painting",
@@ -2836,6 +2843,13 @@
   "confidence": "high",
   "image": true,
   "note": "Visible skin tone in stage lighting appears medium-brown, consistent with known appearance."
+ },
+ "uma-thurman": {
+  "band": "fair",
+  "basis": "photo",
+  "confidence": "high",
+  "image": true,
+  "note": "Light, fair complexion visible in photo, consistent with known appearance"
  },
  "vasily-blokhin": {
   "band": "fair",
