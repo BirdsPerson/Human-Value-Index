@@ -13,7 +13,7 @@ import { sheetFor, miniFor } from "./spriteBank.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { drawPose, phaseOf } from "./poses.js";
 import { assignAnchors, roleOf } from "./props.js";
-import { SPURS, PLACES, resortPhase } from "./sim.js";
+import { SPURS, PLACES, resortPhase, COAST_DY } from "./sim.js";
 import { APPLICATIONS2 } from "../assembly/content002.js";
 import {
   COAST_LOTS, COAST_ANCHORS, SEA, SEA_Y, TERRAIN, terrainH, BEACH, BOARDWALK, PIER, BREAK, LIFT, PISTES, SLOPE_HUTS, PINES, FOOTHILLS,
@@ -40,7 +40,7 @@ export function drawCoastGround(G, lod, t, night) {
   const { ctx, Q } = G, nf = night ? 0.55 : 1;
   const S = SEA;
   // the shore: sand the width of the district, from the boardwalk's edge down to the water
-  G.poly(rectPts(0, 79.1, 109, S.y0).map(p => Q(p[0], p[1], 0)), shade("#b8a275", nf * 0.9));
+  G.poly(rectPts(0, 70.1 + COAST_DY, 109, S.y0).map(p => Q(p[0], p[1], 0)), shade("#b8a275", nf * 0.9));
   G.poly(rectPts(S.x0, S.y0, S.x1, S.y1).map(p => Q(p[0], p[1], 0)), shade(SEA_C, nf));
   G.poly(rectPts(S.x0, S.y0 + 3.2, S.x1, S.y1).map(p => Q(p[0], p[1], 0.001)), shade(SEA_DEEP, nf));
   if (lod === "far") return;
@@ -201,6 +201,9 @@ export function drawCoastLot(G, lotId, lod, mt, people, prev) {
   else if (pid === "shore-lot") shoreLot(K);
   else if (pid === "slopes" || pid === "summit-lot") mountain(K, pid);
   else if (pid === "foothills") foothills(K);
+  // anything else on this ground the view hands in, painted in the same back-to-front pass (the
+  // Alpine Line's viaduct, its Summit station and its cars on the mountain: CityIso.jsx)
+  for (const e of G.extra || []) put(e.x, e.y, e.draw, e.bias || 0);
 
   for (const { p, a } of present) {
     const [x, y, h, dx, dy, ride] = pathAt(a, K.t);

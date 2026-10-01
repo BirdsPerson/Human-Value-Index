@@ -320,6 +320,86 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   }
 }
 
+// THE LINES (PHASE 2): the Shore and Alpine Lines' double-track viaducts. Clear of every building
+// and prop at all four quarter turns (open ground excepted: the foothills are crossed, the mountain
+// paints its own share); a stop item per stop; every car on its deck through the curves and the
+// tapers, coupled cars never overlapping, spaced by the pitch; cars painted after their deck and
+// never over a building in front of them.
+{
+  const SIM = await import("../src/city/sim.js");
+  const LG = await import("../src/city/lineGeo.js");
+  const G = await import("../src/city/loopGeo.js");
+  const { isoItems } = await import("../src/city/archGeo.js");
+  const { slotForBox, depthOrder, DECK } = await import("../src/city/iso.js");
+  const lines = SIM.linesOn().filter(l => l.id !== "loop");
+  ok(lines.length >= 2, `lines in service besides the Loop: ${lines.map(l => l.name).join(", ")}`);
+  const inside = (a, b) => a.x0 < b.x1 - 1e-9 && b.x0 < a.x1 - 1e-9 && a.y0 < b.y1 - 1e-9 && b.y0 < a.y1 - 1e-9;
+  for (let r = 0; r < 4; r++) {
+    const base = isoItems(r), lp = LG.linePieces(r), loop = G.loopPieces(r);
+    ok(lp.filter(it => it.kind === "ls").length === lines.reduce((n, l) => n + l.stops.length, 0), `r=${r}: a stop item per stop`);
+    let clash = "";
+    for (const it of lp) {
+      for (const b of base) if (!(b.deck && b.top === 0) && inside(it, b)) clash ||= `${it.id} x ${b.id}`;
+      for (const b of loop) if (inside(it, b)) clash ||= `${it.id} x the Loop's ${b.kind}`;
+    }
+    ok(!clash, `r=${r}: the lines' decks, corners, platforms and stairs clear every building, prop and the Loop (${clash || "clear"})`);
+    const ground = new Set(lp.filter(it => !it.mtn).flatMap(it => base.filter(b => b.deck && b.top === 0 && inside(it, b)).map(b => b.id)));
+    ok([...ground].every(id => id === "the-foothills"), `r=${r}: the only open ground a line crosses is the foothills' right of way (${[...ground].join(", ") || "none"})`);
+  }
+  const pitch = SIM.LOOP_LINE.carLen + SIM.LOOP_LINE.carGap;
+  const sat = (A, B) => {
+    for (const P of [A, B]) for (let i = 0; i < 4; i++) {
+      const [ax, ay] = P[i], [bx, by] = P[(i + 1) % 4], nx = by - ay, ny = ax - bx;
+      const pa = A.map(([x, y]) => x * nx + y * ny), pb = B.map(([x, y]) => x * nx + y * ny);
+      if (Math.max(...pa) <= Math.min(...pb) + 1e-9 || Math.max(...pb) <= Math.min(...pa) + 1e-9) return false;
+    }
+    return true;
+  };
+  let off = 0, worst = 0, spacing = 0, overlap = 0, curve = 0, n = 0;
+  const snaps = [];
+  for (const line of lines) for (let i = 0; i < 400; i++) {
+    const mt = 24 * 40 + (i / 400) * line.lap, trains = LG.linePoses(SIM.lineTrainsAt(mt)).filter(t => t.line === line.id);
+    if (i % 8 === 0) snaps.push(...trains);
+    for (const t of trains) t.cars.forEach((c, k) => {
+      n++;
+      const q = G.carCorners(c.pose);
+      for (const [x, y] of q) { if (!LG.onLineDeck(line, x, y, 0.02)) off++; }
+      if (line.centre.corners.some(cr => Math.hypot(c.pose.x - cr.x, c.pose.y - cr.y) < cr.R + 2)) curve++;
+      if (k) {
+        const p = t.cars[k - 1].pose, d = Math.hypot(p.x - c.pose.x, p.y - c.pose.y);
+        worst = Math.max(worst, Math.abs(d - pitch));
+        if (d < 0.75 * pitch || d > pitch + 0.05) spacing++;
+        if (sat(G.carCorners(p), q)) overlap++;
+      }
+    });
+  }
+  ok(curve > 50, `the sample takes cars round the lines' corners (${curve} car-samples of ${n})`);
+  ok(off === 0, `every car body stays on its line's deck, through the corners and the tapers (${off} corners off)`);
+  ok(spacing === 0 && overlap === 0, `coupled cars keep the pitch (worst ${worst.toFixed(3)} off) and never overlap (${spacing}/${overlap})`);
+  ok(lines.every(l => 2 * LG.PLAT_HL >= Math.max(...l.trains.map(t => t.length))), "every line's platforms take its longest train");
+  for (let r = 0; r < 4; r++) {
+    const items = isoItems(r).map(it => ({ kind: it.kind, id: it.id, deck: it.deck, top: it.top, x0: it.x0, y0: it.y0, x1: it.x1, y1: it.y1 }));
+    items.push(...G.loopPieces(r), ...LG.linePieces(r).filter(it => !it.mtn && !items.some(b => b.deck && b.top === 0 && inside(it, b))));
+    const order = depthOrder(items), pos = new Map(order.map((i, k) => [i, k]));
+    let bad = "";
+    for (const t of snaps) for (const c of t.cars) {
+      if (LG.onMountain(c.pose.x, c.pose.y)) continue;   // the mountain paints these with its terrain
+      const B = LG.lineCarBox(c.pose, r, G.CAR_HL, G.CAR_HW);
+      const slot = slotForBox(B, DECK + 0.05 + (c.pose.z || 0), items, order);
+      items.forEach((b, i) => {
+        const k = pos.get(i);
+        if (b.kind === "b" && !(b.deck && b.top === 0)) {
+          if (Math.min(B.x1 - B.y0, b.x1 - b.y0) - Math.max(B.x0 - B.y1, b.x0 - b.y1) <= 1e-6) return;
+          const front = B.x1 <= b.x0 || B.y1 <= b.y0, behind = b.x1 <= B.x0 || b.y1 <= B.y0;
+          if (front && !behind && k <= slot && !bad) bad = `${t.id} car ${c.index} over ${b.id} in front`;
+          if (behind && !front && k > slot && !bad) bad = `${t.id} car ${c.index} under ${b.id} behind`;
+        } else if (b.deck && b.top > 0 && inside(B, b) && k > slot && !bad) bad = `${t.id} car ${c.index} under the deck it rides`;
+      });
+    }
+    ok(!bad, `r=${r}: the lines' cars paint after their deck, never over a building in front (${bad || "ok"})`);
+  }
+}
+
 // Stature: every in-world figure is drawn to scale (sprites.statureOf), never through a
 // room's ceiling; portraits and thumbnails stay uniform.
 {

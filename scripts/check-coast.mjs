@@ -1,5 +1,5 @@
 // THE COAST and THE HEIGHTS (docs/CITY_SPEC.md "The city built outward"): the expansion
-// districts on their own ground, the spurs that reach them, their people's places, and what
+// districts on their own ground, the rail lines that reach them, their people's places, and what
 // they do to the crowding. node scripts/check-coast.mjs
 import * as SIM from "../src/city/sim.js";
 import { rot, rotRect } from "../src/city/iso.js";
@@ -31,44 +31,34 @@ for (const d of EXP) {
 ok(["beach", "boardwalk", "pier", "surf"].every(p => SIM.PLACES[p]?.district === "coast") && ["slopes", "base-lodge"].every(p => SIM.PLACES[p]?.district === "heights"), "the beach, boardwalk, pier and surf; the slopes and the lodge");
 ok(["lifeguard", "boardwalk-vendor", "pier-warden", "surf-instructor", "ski-patrol", "lift-operator", "ski-instructor", "lodge-cook"].every(j => SIM.JOB[j]), "lifeguards, vendors, pier wardens, surf and ski instructors, ski patrol, lift operators, lodge cooks");
 
-// ---- the spurs ------------------------------------------------------------------------------------
+// ---- the lines (PHASE 2: THE SHORE LINE and THE ALPINE LINE replaced the pods) ---------------------
 {
-  // open ground (a field, the Street, the foothills' cleared right of way) may be crossed; a building may not
-  const blocks = SIM.BUILDINGS.filter(b => !SIM.OPEN_LOTS.has(b.id)).map(b => ({ id: b.id, x: b.rect.x + 0.3, y: b.rect.y + 0.3, w: b.rect.w - 0.6, h: b.rect.h - 0.6 }));
-  for (const sp of Object.values(SIM.SPURS)) {
-    ok(SIM.STATIONS[sp.hub] && SIM.DISTRICT[sp.districtId].hub === sp.hub, `${sp.name}: from ${sp.hub}'s station`);
-    const d = SIM.DISTRICT[sp.districtId].rect, [tx, ty] = sp.pts[sp.pts.length - 1];
-    ok(tx > d.x && tx < d.x + d.w && ty > d.y && ty < d.y + d.h, `${sp.name}: its terminal is in ${sp.districtId}`);
-    ok(Math.hypot(sp.pts[0][0] - SIM.STATIONS[sp.hub].gate.x, sp.pts[0][1] - SIM.STATIONS[sp.hub].gate.y) < 10, `${sp.name}: its stop is a short walk from the station's gate`);
-    let hit = "";
-    for (let i = 1; i < sp.pts.length; i++) for (let k = 0; k <= 60; k++) {
-      const x = sp.pts[i - 1][0] + (sp.pts[i][0] - sp.pts[i - 1][0]) * k / 60, y = sp.pts[i - 1][1] + (sp.pts[i][1] - sp.pts[i - 1][1]) * k / 60;
-      for (const b of blocks) if (x > b.x && x < b.x + b.w && y > b.y && y < b.y + b.h) hit ||= b.id;
-    }
-    ok(!hit, `${sp.name}: the track crosses no building (${hit || "clear"})`);
-    ok(sp.hours > 0 && sp.hours < 0.25, `${sp.name}: ${(sp.hours * 60).toFixed(1)} machine minutes end to end`);
+  // open ground: the open lots, and the Coast's and the Heights' (the beach, the mountain, the foothills)
+  const blocks = SIM.BUILDINGS.filter(b => !SIM.OPEN_LOTS.has(b.id) && !G.COAST_LOTS[b.id]).map(b => ({ id: b.id, x: b.rect.x + 0.3, y: b.rect.y + 0.3, w: b.rect.w - 0.6, h: b.rect.h - 0.6 }));
+  const inBlock = (p) => blocks.find(b => p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h);
+  const served = { coast: "shore", heights: "alpine" };
+  for (const [d, id] of Object.entries(served)) {
+    const line = SIM.LINE[id];
+    ok(line && SIM.linesOn().includes(line) && line.stops.some(st => st.districtId === d), `${line?.name}: in service, with stations in ${d}`);
+    ok(line.stops.some(st => SIM.STATIONS[st.districtId] && Math.hypot(st.gate.x - SIM.STATIONS[st.districtId].gate.x, st.gate.y - SIM.STATIONS[st.districtId].gate.y) < 18), `${line.name}: an interchange with the Loop within 18 cells`);
+    ok(line.stops.every(st => !inBlock(st.gate) && !inBlock(st.entrance)), `${line.name}: every stair foot and platform edge is on open ground`);
   }
-  // the track never runs under the Loop's deck or through a station, at any quarter turn
-  for (let r = 0; r < 4; r++) {
-    const deck = loopPieces(r);
-    let clash = "";
-    for (const sp of Object.values(SIM.SPURS)) for (let i = 1; i < sp.pts.length; i++) for (let k = 0; k <= 40; k++) {
-      const [x, y] = [sp.pts[i - 1][0] + (sp.pts[i][0] - sp.pts[i - 1][0]) * k / 40, sp.pts[i - 1][1] + (sp.pts[i][1] - sp.pts[i - 1][1]) * k / 40], [u, v] = rot(x, y, r);
-      for (const p of deck) if (u > p.x0 + 0.05 && u < p.x1 - 0.05 && v > p.y0 + 0.05 && v < p.y1 - 0.05) clash ||= `${sp.id} under ${p.kind}`;
-    }
-    ok(!clash, `r=${r}: the spurs keep clear of the viaduct and its stations (${clash || "clear"})`);
-  }
-  // a trip to and from each expansion district rides its spur, and only the Loop between hubs
+  // the pods stay defined for a day built on network 2 (check-plans reads one), and nobody new rides them
+  ok(Object.values(SIM.SPURS).length === 2, "the pods remain for the days built before the lines");
+  // every trip to and from the Coast or the Heights rides a rail line (or is a short walk all the way)
   const figures = synthRoster(80).slice(0, 80);
-  let pods = 0, trips = 0;
+  let rail = 0, walk = 0, loopOnly = 0, pods = 0, trips = 0;
   for (const s of figures) for (let day = 30; day < 33; day++) for (const g of SIM.schedule(s, day)) {
     if (g.activity !== "commute" || (g.span && (g.span[0] !== g.from || g.span[1] !== g.to))) continue;   // a trip cut at midnight: its other half is tomorrow's
     const a = SIM.PLACES[g.fromPlaceId].district, b = SIM.PLACES[g.placeId].district;
-    if (a === b || (!SIM.SPURS[a] && !SIM.SPURS[b])) continue;
+    if (a === b || (!served[a] && !served[b])) continue;
     trips++;
-    for (let t = g.from; t < g.to; t += 1 / 60) { const w = SIM.whereAt(s, (day - 1) * 24 + t); if (w.leg === "pod") { pods++; break; } }
+    let line = false;
+    for (let t = g.from; t < g.to; t += 1 / 60) { const w = SIM.whereAt(s, (day - 1) * 24 + t); if (w.leg === "pod") pods++; if (w.sub === "riding" && w.line && w.line !== "loop") line = true; }
+    if (line) rail++; else if (g.trip.direct) walk++; else if (g.trip.rail) loopOnly++;
   }
-  ok(trips > 0 && pods === trips, `every trip to or from the Coast or the Heights rides a pod (${pods}/${trips})`);
+  // (from the Heights' west end the Loop's Arts and Campus stations are a walk through the foothills)
+  ok(trips > 0 && rail + walk + loopOnly === trips && rail > trips / 2 && pods === 0, `every trip to or from the Coast or the Heights rides a train (the Shore or the Alpine Line: ${rail}; on foot to the Loop: ${loopOnly}) or walks all the way (${walk}) of ${trips}; ${pods} pod-minutes`);
 }
 
 // ---- the ground: anchors on their own lots, apart, enough of them -------------------------------------
@@ -106,16 +96,6 @@ ok(["lifeguard", "boardwalk-vendor", "pier-warden", "surf-instructor", "ski-patr
   ok(maxH > 5 && maxH <= G.TERRAIN_MAX, `the mountain rises (${maxH.toFixed(1)} storeys, box ${G.TERRAIN_MAX})`);
   ok(bad === 0, `the mountain climbs all the way to the ridge (${bad} dips)`);
   ok(G.PINES.length > 80 && G.PINES.every(([x, y]) => G.onTerrain(x, y) && G.offPiste(x, y) >= 1.6), `pines on the mountain, off the pistes (${G.PINES.length})`);
-  // the shelters stand clear of every building and the Loop, at every turn
-  for (let r = 0; r < 4; r++) {
-    const items = [...isoItems(r).filter(i => i.kind === "b" || i.kind === "y"), ...loopPieces(r)];
-    let clash = "";
-    for (const st of G.SPUR_STOPS) {
-      const R = rotRect({ x: st.box.x0, y: st.box.y0, w: st.box.x1 - st.box.x0, h: st.box.y1 - st.box.y0 }, r);
-      for (const it of items) if (R.x0 < it.x1 - 1e-9 && it.x0 < R.x1 - 1e-9 && R.y0 < it.y1 - 1e-9 && it.y0 < R.y1 - 1e-9) clash ||= `${st.id} x ${it.id || it.kind}`;
-    }
-    ok(!clash, `r=${r}: the spur shelters overlap nothing (${clash || "clear"})`);
-  }
 }
 
 // ---- the crowding: the city built outward relieves the old one -----------------------------------------

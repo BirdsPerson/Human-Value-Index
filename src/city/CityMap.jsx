@@ -1,7 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import TouchGate from "../ui/TouchGate.jsx";
 import { SPRITE_W, SPRITE_H, hashStr, statureOf } from "../sprites.js";
-import { DISTRICTS, PLACES, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, placesOf, placeName, districtCap, activityLine, jobLine, clockAt, whereOf, trainsAt } from "./simApi.js";
+import { DISTRICTS, PLACES, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, placesOf, placeName, districtCap, activityLine, jobLine, clockAt, whereOf, trainsAt, lineTrainsAt, linesOn } from "./simApi.js";
 import { CELL_W, CELL_H, layoutDistricts, FAMILY_COLOR, familyOf, lodFor, roomLabel } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { wantSectors } from "./planClient.js";
@@ -392,6 +392,26 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
         }
       }
       ctx.lineCap = "butt"; ctx.lineJoin = "miter";
+      // THE LINES (PHASE 2): each shuttle's track in its colour, a tick per station, its cars
+      {
+        const S = (p) => { const m = toMap(p); return [(m.x * CELL_W - c.x) * c.z, (m.y * CELL_H - c.y) * c.z]; };
+        for (const line of linesOn().filter(l => l.id !== "loop")) {
+          ctx.strokeStyle = line.color; ctx.globalAlpha = 0.55; ctx.lineWidth = Math.max(1, cw * 0.5);
+          ctx.beginPath(); line.centre.pts.forEach((p, i) => { const [x, y] = S({ x: p[0], y: p[1] }); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke();
+          ctx.globalAlpha = 1; ctx.fillStyle = "#e0fbff";
+          for (const st of line.stops) if (st.dir === "out") { const [x, y] = S(st); ctx.fillRect(x - 2, y - 2, 4, 4); }
+        }
+        const LT = lineTrainsAt(V.reduced ? (C0.mt ?? clockAt(Date.now()).mt) : clockAt(Date.now()).mt).filter(t => t.line !== "loop");
+        for (const t of LT) {
+          const line = linesOn().find(l => l.id === t.line);
+          for (const car of t.cars) {
+            const [ax, ay] = S(line.at(car.s - LINE.carLen / 2)), [bx, by] = S(line.at(car.s + LINE.carLen / 2));
+            if (Math.max(ax, bx) < -20 || Math.min(ax, bx) > V.cssW + 20 || Math.max(ay, by) < -20 || Math.min(ay, by) > V.cssH + 20) continue;
+            ctx.strokeStyle = line.color; ctx.lineWidth = carW;
+            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+          }
+        }
+      }
 
       // subjects: cull to the viewport, sort the visible by depth
       const lod = lodFor(ch);

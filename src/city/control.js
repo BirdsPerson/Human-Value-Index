@@ -13,10 +13,11 @@
 // cutaway draws them); the LIFT is at the west wall (fx < LIFT_X), the EXIT at the east end
 // of the ground floor.
 
-import { BUILDINGS, BUILDING, OPEN_LOTS, STATIONS, PLACES } from "./sim.js";
+import { BUILDINGS, BUILDING, OPEN_LOTS, STATIONS, STOPS, PLACES, linesOn } from "./sim.js";
 import { massingOf } from "./archGeo.js";
 import { PARK_LOTS } from "./parkGeo.js";
-import { stationGeo, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
+import { PLAT_IN, PLAT_OUT, STAIR_W, STAIR_L } from "./loopGeo.js";
+import { stopGeo } from "./lineGeo.js";
 import { rot, BOUNDS, mod4 } from "./iso.js";
 
 export const WALK_SPEED = 3.2;     // cells per real second (sim walkers do ~1: you are keen)
@@ -213,18 +214,20 @@ export function nearestSeat(anchors, taken, px, maxPx) {
 
 // ---- the Loop -------------------------------------------------------------------------------
 const SG = new Map();
-export const stationGeoOf = (id) => { let g = SG.get(id); if (!g && STATIONS[id]) { g = stationGeo(STATIONS[id]); SG.set(id, g); } return g; };
+// Every line's stops (PHASE 2): the Loop's stations and each line's platforms, one per track.
+export const stationGeoOf = (id) => { let g = SG.get(id); if (!g && STOPS[id]) { g = stopGeo(STOPS[id]); SG.set(id, g); } return g; };
+const STOP_IDS = linesOn().flatMap(l => l.stops.map(st => st.id));
 // The foot of a station's stairs, where the street meets the flight.
 export function stairFoot(id) {
   const g = stationGeoOf(id);
-  const [x, y] = g.at(0.2 + STAIR_L + 0.3, PLAT_OUT + STAIR_W / 2);
+  const [x, y] = g.at((g.sd || 1) * (0.2 + STAIR_L + 0.3), PLAT_OUT + STAIR_W / 2);
   return { x, y };
 }
 // A station whose stairs (or gate) are within reach -> station id | null.
 export function stationNear(x, y, reach = STATION_REACH) {
   let best = null, bd = Infinity;
-  for (const id of Object.keys(STATIONS)) {
-    const f = stairFoot(id), g = STATIONS[id].gate;
+  for (const id of STOP_IDS) {
+    const f = stairFoot(id), g = STOPS[id].gate;
     const k = Math.min(Math.hypot(f.x - x, f.y - y), Math.hypot(g.x - x, g.y - y));
     if (k <= reach && k < bd) { best = id; bd = k; }
   }
@@ -235,7 +238,7 @@ export const PLAT_LA = [PLAT_IN + 0.2, PLAT_OUT - 0.12];
 export function platformPoint(id, al, la) { const [x, y] = stationGeoOf(id).at(al, la); return { x, y }; }
 export function platformStep(id, al, la, dx, dy) {
   const g = stationGeoOf(id);
-  const nal = clamp(al + dx * g.d[0] + dy * g.d[1], -PLAT_HL + 0.4, PLAT_HL - 0.4);
+  const nal = clamp(al + dx * g.d[0] + dy * g.d[1], -g.hl + 0.4, g.hl - 0.4);
   const nla = clamp(la + dx * g.n[0] + dy * g.n[1], PLAT_LA[0], PLAT_LA[1]);
   return { al: nal, la: nla };
 }
@@ -289,7 +292,7 @@ export function loadControl(key, storage = safeStorage(), now = Date.now()) {
     const o = JSON.parse(storage?.getItem(STORE_KEY) || "null");
     if (!o || o.key !== key || !(now - (o.t || 0) < STORE_TTL)) return null;
     if (o.mode === "inside" && !BUILDING[o.bId]?.floors[o.floor]) return null;
-    if ((o.mode === "platform" || o.mode === "riding") && !STATIONS[o.stationId] && !o.trainId) return null;
+    if ((o.mode === "platform" || o.mode === "riding") && !STOPS[o.stationId] && !o.trainId) return null;
     return o;
   } catch { return null; }
 }

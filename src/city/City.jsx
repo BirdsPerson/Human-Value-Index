@@ -496,7 +496,7 @@ const LoopPanel = memo(function LoopPanel({ riders, aboard = riders.length, wait
           </div>
         ))}
       {unnamed > 0 && <div className="hvi-city-note">{riders.length ? `AND ${unnamed} MORE` : `${unnamed} ABOARD`}, BOARDED IN DISTRICTS YOU ARE NOT WATCHING. ZOOM IN ON A DISTRICT TO READ ITS PASSENGERS. THEY ARE ON FILE EITHER WAY.</div>}
-      <div className="hvi-city-note" style={{ marginTop: "var(--s3)" }}>{Object.keys(STATIONS).length} STATIONS. ONE PER DISTRICT. ENTER A DISTRICT TO STAND ON ITS PLATFORM.</div>
+      <div className="hvi-city-note" style={{ marginTop: "var(--s3)" }}>{Object.keys(STATIONS).length} LOOP STATIONS, ONE PER DISTRICT ON THE RING; THE SHORE AND ALPINE LINES RUN OUT TO THE COAST AND THE HEIGHTS. ENTER A DISTRICT TO STAND ON ITS PLATFORM.</div>
     </Disclosure>
   );
 });

@@ -4,7 +4,7 @@
 // buildIndex runs once per roster (when the census lands or your own file does), never
 // per frame; searchIndex is a scan of that prepared index per keystroke.
 
-import { PLACES, BUILDING, DISTRICTS, STATIONS, TRAIN, whereAt, keyOf } from "./sim.js";
+import { PLACES, BUILDING, DISTRICTS, STOPS as STATIONS, TRAIN, whereAt, keyOf } from "./sim.js";   // STOPS: every line's platforms, the Loop's stations among them
 import { displayName } from "../figures.js";
 
 const DISTRICT_NAME = Object.fromEntries(DISTRICTS.map(d => [d.id, d.name]));

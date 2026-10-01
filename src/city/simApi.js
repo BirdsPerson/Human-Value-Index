@@ -3,7 +3,7 @@
 
 import * as SIM from "./sim.js";
 
-export const { DISTRICTS, PLACES, JOBS, BUS, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, BUILDINGS, BUILDING, HEADWAY, OPEN_LOTS, GAMES, GAME_VENUE, lotPhase, civicState, LOT_BREAK, LOT_BUILD } = SIM;
+export const { DISTRICTS, PLACES, JOBS, BUS, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, BUILDINGS, BUILDING, HEADWAY, OPEN_LOTS, GAMES, GAME_VENUE, lotPhase, civicState, LOT_BREAK, LOT_BUILD, LINES, LINE, STOPS, linesOn, stationName } = SIM;
 export const DISTRICT = Object.fromEntries(DISTRICTS.map(d => [d.id, d]));
 // Where a rider physically is (whereAt's atDistrictId). v1 called it "bus".
 export const ON_LOOP = "loop";
@@ -73,6 +73,9 @@ export const activityLine = (subject, mt) => SIM.statusLine(subject, mt);
 
 // The Loop, for the renderers: trains now, the platform board, and the PA.
 export const trainsAt = (mt) => SIM.trainsAt(mt);
+// Every line's trains (the Loop's rows and each shuttle's, with `line`), and any stop's board.
+export const lineTrainsAt = (mt) => SIM.lineTrainsAt(mt);
+export const stopTimetable = (stopId, mt, n) => SIM.stopTimetable(stopId, mt, n);
 export const timetable = (stationId, mt, n) => SIM.timetable(stationId, mt, n);
 export const loopEvents = (fromMt, toMt) => SIM.loopEvents(fromMt, toMt);
 // The grounds' fixtures: the game on at a place now, and the PA's kickoff, score and final lines.

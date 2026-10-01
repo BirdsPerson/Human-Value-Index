@@ -20,7 +20,7 @@ export const BILLBOARD_SITES = [
   // rooftops, seen from the Loop and from across the city
   { id: "bb-roof-hab-a", district: "sprawl", kind: "rooftop", host: "hab-a", x: 59.2, y: 49.35, facing: "n", w: 2.6, h0: 8.2, h1: 9.6, audience: "the Loop's riders round the bottom of the ring, the Sprawl" },
   { id: "bb-roof-lofts", district: "archive", kind: "rooftop", host: "lofts", x: 86, y: 35.7, facing: "w", w: 3.4, h0: 6.2, h1: 7.6, audience: "HQ's plaza, the Loop's east side" },
-  { id: "bb-roof-seaview", district: "coast", kind: "rooftop", host: "seaview-flats", x: 40.9, y: 80.1, facing: "n", w: 2.6, h0: 5.2, h1: 6.4, audience: "the Shore Line's riders, the Pit's crowd" },
+  { id: "bb-roof-seaview", district: "coast", kind: "rooftop", host: "seaview-flats", x: 40.9, y: 71.1 + COAST_DY, facing: "n", w: 2.6, h0: 5.2, h1: 6.4, audience: "the Shore Line's riders, the Pit's crowd" },
   { id: "bb-roof-dive", district: "strip", kind: "rooftop", host: "the-dive", x: 90.5, y: 4.6, facing: "s", w: 3.6, h0: 2.5, h1: 3.7, audience: "the Strip's street, the casino's queue" },
   // roadside along the viaduct, at the riders' eye level, in the gutters between stations
   { id: "bb-loop-arts-campus", district: "arts", kind: "loop", x: 26.5, y: 13.55, facing: "s", w: 2.4, h0: 1.55, h1: 2.55, audience: "the Loop between Arts and Campus" },

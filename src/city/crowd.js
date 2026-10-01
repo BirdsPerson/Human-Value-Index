@@ -6,7 +6,11 @@
 // as a dot. They never open a file and are never listed: they are the city's density, not
 // its people. Up close, the district's window loads and the real people replace them.
 // Pure, no DOM: node runs it (scripts/check-plans.mjs).
-import { PLACES, DISTRICTS, TRAINS, CAR_CAP, standInAt, standInWalk, standInPlatform, standInRider } from "./sim.js";
+import { PLACES, DISTRICTS, TRAINS, CAR_CAP, standInAt, standInWalk, standInPlatform, standInRider, standInRiderOn, linesOn, LOOP } from "./sim.js";
+// THE LINES (PHASE 2): every line's platforms in a district, and every line's trains
+const LINE_STOPS = Object.fromEntries(DISTRICTS.map(d => [d.id, linesOn().filter(l => l !== LOOP).flatMap(l => l.stops.filter(st => st.districtId === d.id).map(st => st.id))]));
+const LINE_TRAINS = linesOn().filter(l => l !== LOOP).flatMap(l => l.trains);
+const STATION_D = new Set(DISTRICTS.filter(d => !d.expansion).map(d => d.id));   // a Loop station per Loop district
 import { sampleAt, STEP, SAMPLES } from "./planSplit.js";
 
 const FAMS = ["good", "charm", "harm", "dim"];
@@ -84,10 +88,12 @@ export function crowdAt(summary, h, complete, list, next = null) {
       if (!w) break;
       out.push({ s: standIn(key, famOf(key, mix), (mt) => standInWalk(d.id, i, mt)), w });
     }
-    const nSt = Math.min(PLATFORM_MAX, at("st", d.id) - (held.stn[d.id] || 0));
-    for (let i = 0; i < nSt; i++) {
-      const key = `~stn~${d.id}~${i}`, w = standInPlatform(d.id, i);
-      out.push({ s: standIn(key, famOf(key, mix), () => w), w });
+    for (const sid of [...(STATION_D.has(d.id) ? [d.id] : []), ...LINE_STOPS[d.id]]) {
+      const nSt = Math.min(PLATFORM_MAX, at("st", sid) - (held.stn[sid] || 0));
+      for (let i = 0; i < nSt; i++) {
+        const key = `~stn~${sid}~${i}`, w = standInPlatform(sid, i);
+        out.push({ s: standIn(key, famOf(key, mix), () => w), w });
+      }
     }
   }
   // Riders: a snapshot per car every 30 machine minutes (people board and alight at every
@@ -105,6 +111,17 @@ export function crowdAt(summary, h, complete, list, next = null) {
         }
       });
     });
+    for (const t of LINE_TRAINS) {
+      const cars = summary.car?.[t.id]?.[k];
+      if (!cars) continue;
+      cars.forEach((n0, c) => {
+        const n = Math.min(CAR_CAP * 2, n0 - (held.car[`${t.id}|${c}`] || 0));
+        for (let i = 0; i < n; i++) {
+          const key = `~ride~${t.id}~${c}~${i}`;
+          out.push({ s: standIn(key, famOf(key, mix), (mt) => standInRiderOn(t.id, c, mt)), w: standInRiderOn(t.id, c, T) });
+        }
+      });
+    }
   }
   return out;
 }
@@ -115,6 +132,6 @@ export function summaryCounts(summary, h, next = null) {
   const k = Math.min(SAMPLES - 1, Math.round(h / STEP));
   const loop = summary ? Math.round(sampleAt(summary.loop, h, next?.loop)) : 0;
   const riders = {};
-  for (const t of TRAINS) { const a = summary?.car?.[t.id]?.[k]; if (a) riders[t.id] = a.reduce((x, y) => x + y, 0); }
+  for (const t of [...TRAINS, ...LINE_TRAINS]) { const a = summary?.car?.[t.id]?.[k]; if (a) riders[t.id] = a.reduce((x, y) => x + y, 0); }
   return { districts: get("d"), buildings: get("b"), stations: get("st"), waiting: get("wt"), loop, riders };
 }

@@ -3,7 +3,7 @@
 // The matcher (accents, qualifiers, ranking, the top eight), the deep link's slug, and the
 // find target at work, riding the Loop, at home (asleep at night), and inside a cutaway floor.
 import { baseRoster } from "../src/city/roster.js";
-import { setRoster, whereAt, keyOf, BUILDING, PLACES, TRAIN, trainsAt, machineClock } from "../src/city/sim.js";
+import { setRoster, whereAt, keyOf, BUILDING, PLACES, TRAIN, lineTrainsAt as trainsAt, machineClock } from "../src/city/sim.js";   // every line's trains
 import { roomIn } from "../src/city/simApi.js";
 import { fold, buildIndex, searchIndex, bySlug, findTarget, findLine, whereShort, findHref, asleepAt } from "../src/city/find.js";
 
@@ -77,7 +77,7 @@ for (const e of index) {
       // the camera follows the car they are in: the census point is that car's
       const car = trainsAt(mt).find(tr => tr.id === t.trainId)?.cars[t.car];
       ok(car && Math.hypot(car.x - t.x, car.y - t.y) < 0.05, `riding ${e.key}@${h}: car at (${car?.x},${car?.y}), subject at (${t.x},${t.y})`);
-      ok(/^.+ — ABOARD LOOP \d, CAR \d, BOUND FOR .+\./.test(line), `riding line: ${line}`);
+      ok(/^.+ — ABOARD (LOOP|SHORE LINE|ALPINE LINE|WEST LINE) \d, CAR \d, BOUND FOR .+\./.test(line), `riding line: ${line}`);
     } else if (t.mode === "inside") {
       seen.inside++;
       const b = BUILDING[t.buildingId], f = b?.floors[t.floor];

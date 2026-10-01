@@ -560,11 +560,14 @@ for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["sy
   SIM.clearPlans(); SIM.clearRoster(); SIM.clearSocialSnapshots();
   ok(SIM.setPlan(fx.plan, "fixture"), "a network-2 plan loads");
   const rows = [];
-  for (const k of Object.keys(fx.plan.subjects)) for (let i = 0; i < 24 * 60; i++) {
+  // every rider's train, car and place aboard each machine minute; every waiting and alighting
+  // subject's train, car, platform and boarding time once per trip (how long they stand there
+  // follows the ground they walked, which a layout may move)
+  for (const k of Object.keys(fx.plan.subjects)) { const seen = new Set(); for (let i = 0; i < 24 * 60; i++) {
     const w = SIM.whereAt({ slug: k }, (fx.plan.day - 1) * 24 + i / 60);
     if (w.sub === "riding") rows.push([k, i, "r", w.trainId, w.car, +w.x.toFixed(6), +w.y.toFixed(6)]);
-    else if (w.sub === "waiting" || w.sub === "alighting") rows.push([k, i, w.sub[0], w.trainId, w.car, w.stationId]);
-  }
+    else if (w.sub === "waiting" || w.sub === "alighting") { const t = `${w.sub[0]}|${w.trainId}|${w.car}|${w.stationId}|${w.boardAt}`; if (!seen.has(t)) { seen.add(t); rows.push([k, w.sub[0], w.trainId, w.car, w.stationId, w.boardAt]); } }
+  } }
   ok(rows.length === fx.rows && createHash("sha256").update(JSON.stringify(rows)).digest("hex") === fx.fingerprint, `a day built before the lines keeps every train, car and platform (${rows.length} rider-minutes, fingerprint ${fx.fingerprint.slice(0, 12)})`);
   SIM.clearPlans();
 }

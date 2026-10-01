@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import TouchGate from "../ui/TouchGate.jsx";
 import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
-import { DISTRICTS, BUILDINGS, BUILDING, PLACES, LOOP_LINE, STATIONS, OPEN_LOTS, clockAt, whereOf, trainsAt, roomIn, gameAt } from "./simApi.js";
+import { DISTRICTS, BUILDINGS, BUILDING, PLACES, LOOP_LINE, STOPS, LINE, OPEN_LOTS, clockAt, whereOf, lineTrainsAt, roomIn, gameAt } from "./simApi.js";
 import { SPURS as SPURS_BY_ID } from "./sim.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
@@ -10,7 +10,9 @@ import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox,
 import { wantSectors, summaryOf } from "./planClient.js";
 import { patrolsAt } from "./prefects.js";   // THE PREFECTS: the Overlord's own, on patrol
 import { drawPrefectIso, drawPrefectTops, openPrefect } from "./prefectDraw.js";
-import { loopPieces, trainPoses, carCorners, carBox, stationGeo, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
+import { loopPieces, carCorners, carBox, CORNER_R, DECK_HW, CAR_HL, CAR_HW, PLAT_IN, PLAT_OUT, PLAT_HL, STAIR_W, STAIR_L } from "./loopGeo.js";
+// THE LINES (PHASE 2, lineGeo.js): the Shore and Alpine Lines' viaducts, stops and trains
+import { linePieces, linePoses, stopGeo, lineCarBox, HW as LINE_HW, BOGIE } from "./lineGeo.js";
 import { drawRoom, roomPlan, typeOf, assignAnchors, roleOf, actAt, ORDERED_TYPES } from "./props.js";
 import { casinoHits } from "../casino/cityRooms.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
@@ -28,8 +30,8 @@ import ControlLayer, { TakeControlButton } from "./ControlLayer.jsx";
 import { funnelRoomHits } from "./funnelProps.js";
 import { funnelButtons } from "./funnels.js";
 import { openFunnel } from "./FunnelOverlay.jsx";
-import { COAST_LOTS, COAST_PLACES, SPUR_STOPS, terrainH, onTerrain } from "./coastGeo.js";
-import { drawCoastLot, drawCoastGround, drawSpurTracks, drawSpurStop, drawPod, coastLabel, coastLine } from "./coastDraw.js";
+import { COAST_LOTS, COAST_PLACES, terrainH, onTerrain, TERRAIN } from "./coastGeo.js";
+import { drawCoastLot, drawCoastGround, drawPod, coastLabel, coastLine } from "./coastDraw.js";
 // THE MASTER PLAN's venues (venueGeo.js, venueDraw.js): THE PIT, the tennis club; the estate gardens' trees
 import { VENUE_LOTS, VENUE_PLACES, GARDEN_TREES } from "./venueGeo.js";
 import { drawVenueLot, venueLabel, venueLine } from "./venueDraw.js";
@@ -77,7 +79,8 @@ const DECK_T = 0.16;          // deck slab thickness, storeys
 const CAR_H = 0.62;           // car body height, storeys
 const CAR_Z = DECK + 0.05;    // the car's floor, on the rails
 const CANOPY = DECK + 1.1;    // the station canopy's underside
-const SGEO = Object.fromEntries(Object.values(STATIONS).map(st => [st.id, stationGeo(st)]));
+// every stop's platform and stairs (the Loop's stations and every line's stops)
+const SGEO = new Proxy({}, { get: (_, id) => (STOPS[id] ? stopGeo(STOPS[id]) : undefined) });
 
 // Where the view was when it unmounted (ENTER a building, then Back): the camera, the
 // quarter turn and the open cutaway come back as they were. One per page load.
@@ -118,11 +121,18 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const items = isoItems(r);
       // the viaduct: straight deck pieces, curved corners, a station at every district
       items.push(...loopPieces(r));
-      // the spurs' shelters (the track itself is ground)
-      for (const st of SPUR_STOPS) { const R = rotRect({ x: st.box.x0, y: st.box.y0, w: st.box.x1 - st.box.x0, h: st.box.y1 - st.box.y0 }, r); items.push({ kind: "sp", st, x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1 }); }
+      // THE LINES: a piece over open ground (the foothills) is slotted after that ground like a
+      // walker on it (iso.slotForBox's deck rule); a piece on the mountain is painted by the
+      // mountain, cell by cell (coastDraw.js G.extra); the rest are boxes like the Loop's
+      const lp = linePieces(r), ground = items.filter(i => i.deck && i.top === 0);
+      const overlaps = (a, b) => a.x0 < b.x1 - 1e-9 && b.x0 < a.x1 - 1e-9 && a.y0 < b.y1 - 1e-9 && b.y0 < a.y1 - 1e-9;
+      const onGround = lp.filter(it => !it.mtn && ground.some(g => overlaps(g, it)));
+      items.push(...lp.filter(it => !it.mtn && !onGround.includes(it)));
       const order = depthOrder(items);
+      const lateSlots = new Map();
+      for (const it of onGround.sort((a, b) => (a.x0 + a.x1 + a.y0 + a.y1) - (b.x0 + b.x1 + b.y0 + b.y1))) { const k = slotForBox(it, it.top, items, order); (lateSlots.get(k) || lateSlots.set(k, []).get(k)).push(it); }
       const districts = DISTRICTS.map(d => ({ d, R: rotRect(d.rect, r) }));
-      return { r, items, order, districts };
+      return { r, items, order, districts, lateSlots, mtn: lp.filter(it => it.mtn) };
     }
 
     // ---- census -> occupancy, outdoor subjects, who is in which room -------------------
@@ -351,7 +361,6 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       // the Coast's sea (the district's southern rows) and the spurs' rails
       const hr = ((V.mt % 24) + 24) % 24;
       drawCoastGround(coastG(), lodFor(V.cam.z), V.reduced ? 0 : performance.now() / 1000, nightAt(hr));
-      drawSpurTracks(coastG(), lodFor(V.cam.z), nightAt(hr));
       // the buildings' flat ground: the court slab, the quad, the monolith's plaza
       const hour = ((V.mt % 24) + 24) % 24, env = { lod: lodFor(V.cam.z), night: nightAt(hour) };
       for (const it of g.items) if (it.kind === "b" && it.m && it.m.ground.length) {
@@ -403,7 +412,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         // THE COAST and THE HEIGHTS (coastDraw.js): the beach, the boardwalk, the pier, the break,
         // the mountain and the resort parcels, with whoever is on them
         const pid = COAST_LOTS[b.id];
-        const G = { ...coastG(), hits: top ? [] : V.hits };
+        const G = { ...coastG(), hits: top ? [] : V.hits, extra: mountainExtras(b.id, lod) };
         V.parkSeats.set(pid, drawCoastLot(G, b.id, lod, V.mt, V.park.get(pid) || [], V.parkSeats.get(pid) || null));
         if (selected) poly([P(R.x0, R.y0, 0.02), P(R.x1, R.y0, 0.02), P(R.x1, R.y1, 0.02), P(R.x0, R.y1, 0.02)], null, "#4ade80");
         if (lod !== "far" || selected) {
@@ -607,10 +616,15 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
 
     // A station: the platform on the district side, a glass-roofed canopy on posts, the name
     // board on the roof, stairs down beside the platform. Lit (TRAIN IN) while a train stands.
+    // Every line's stops too (lineGeo.stopGeo): their platforms are shorter (3-car trains), their
+    // fascia in the line's colour, and up the mountain the deck (z) and the stairs' foot are
+    // the ground's.
     function drawStation(it, lod, rank) {
       const g = it.geo, st = g.st, at = g.at;
+      const HL = g.hl || PLAT_HL, PIN = g.pin ?? PLAT_IN, POUT = g.pout ?? PLAT_OUT, Z = g.z || 0, F0 = g.foot || 0;
+      const D = DECK + Z, CAN = CANOPY + Z, accent = g.color || LOOP.cyan;
       const lit = V.trainIn?.has(st.id);
-      if (!onScreen([Q(...at(-PLAT_HL, PLAT_OUT), CANOPY + 0.4), Q(...at(PLAT_HL, PLAT_IN), DECK), Q(...at(0, PLAT_OUT + STAIR_W), 0)])) return;
+      if (!onScreen([Q(...at(-HL, POUT), CAN + 0.4), Q(...at(HL, PIN), D), Q(...at(0, POUT + STAIR_W), F0)])) return;
       const [a0, b0] = rot(0, 0, V.cam.r), [a1, b1] = rot(g.n[0], g.n[1], V.cam.r);
       const outFront = (a1 - a0) + (b1 - b0) > 0;   // the district side faces the viewer
       const rect = (al0, al1, la0, la1) => [at(al0, la0), at(al1, la0), at(al1, la1), at(al0, la1)];
@@ -619,41 +633,137 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         const [s0, s1, s2, s3] = g.stairs;   // s0,s3 at the top (platform end), s1,s2 at the street
         // the stringer under the visible long side, a triangle to the ground
         const side = outFront ? [s3, s2] : [s0, s1];
-        poly([Q(...side[0], DECK), Q(...side[1], 0), Q(...side[0], 0)], shade(LOOP.stair, 0.62));
-        poly([Q(...s0, DECK), Q(...s1, 0), Q(...s2, 0), Q(...s3, DECK)], shade(LOOP.stair, 1.25));
+        poly([Q(...side[0], D), Q(...side[1], F0), Q(...side[0], F0)], shade(LOOP.stair, 0.62));
+        poly([Q(...s0, D), Q(...s1, F0), Q(...s2, F0), Q(...s3, D)], shade(LOOP.stair, 1.25));
         ctx.strokeStyle = "rgba(8,14,10,0.7)"; ctx.lineWidth = 1; ctx.beginPath();
         const n = lod === "near" ? 12 : 6;
-        for (let k = 1; k < n; k++) { const t = k / n, A = Q(...lerp2(s0, s1, t), DECK * (1 - t)), B = Q(...lerp2(s3, s2, t), DECK * (1 - t)); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); }
+        for (let k = 1; k < n; k++) { const t = k / n, A = Q(...lerp2(s0, s1, t), D + (F0 - D) * t), B = Q(...lerp2(s3, s2, t), D + (F0 - D) * t); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); }
         ctx.stroke();
         // handrail on the open side
         const hs = outFront ? [s3, s2] : [s0, s1];
-        const A = Q(...hs[0], DECK + 0.4), B = Q(...hs[1], 0.4);
+        const A = Q(...hs[0], D + 0.4), B = Q(...hs[1], F0 + 0.4);
         ctx.strokeStyle = "rgba(160,190,175,0.7)"; ctx.lineWidth = px1(); ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
       };
       if (!outFront) stairs();
       // supports under the outer edge
-      for (const al of [-PLAT_HL + 1, PLAT_HL - 1]) {
-        const m = at(al, (PLAT_IN + PLAT_OUT) / 2);
-        prism([add(add(m, g.d, -0.15), g.n, 0.15), add(add(m, g.d, 0.15), g.n, 0.15), add(add(m, g.d, 0.15), g.n, -0.15), add(add(m, g.d, -0.15), g.n, -0.15)], 0, DECK - DECK_T, LOOP.pier, 1.1);
+      for (const al of [-HL + 1, HL - 1]) {
+        const m = at(al, (PIN + POUT) / 2), gz = Z ? (onTerrain(m[0], m[1]) ? terrainH(m[0], m[1]) : 0) : 0;
+        prism([add(add(m, g.d, -0.15), g.n, 0.15), add(add(m, g.d, 0.15), g.n, 0.15), add(add(m, g.d, 0.15), g.n, -0.15), add(add(m, g.d, -0.15), g.n, -0.15)], gz, D - DECK_T, LOOP.pier, 1.1);
       }
-      prism(rect(-PLAT_HL, PLAT_HL, PLAT_IN, PLAT_OUT), DECK - DECK_T, DECK + 0.03, lit ? LOOP.platLit : LOOP.plat, 1.3);
+      prism(rect(-HL, HL, PIN, POUT), D - DECK_T, D + 0.03, lit ? LOOP.platLit : LOOP.plat, 1.3);
       // the yellow edge strip on the track side
-      poly([Q(...at(-PLAT_HL, PLAT_IN), DECK + 0.031), Q(...at(PLAT_HL, PLAT_IN), DECK + 0.031), Q(...at(PLAT_HL, PLAT_IN + 0.1), DECK + 0.031), Q(...at(-PLAT_HL, PLAT_IN + 0.1), DECK + 0.031)], LOOP.edge);
-      if (lit) poly(rect(-PLAT_HL + 0.2, PLAT_HL - 0.2, PLAT_IN + 0.12, PLAT_OUT - 0.05).map(p => Q(p[0], p[1], DECK + 0.032)), "rgba(103,232,249,0.16)");
+      poly([Q(...at(-HL, PIN), D + 0.031), Q(...at(HL, PIN), D + 0.031), Q(...at(HL, PIN + 0.1), D + 0.031), Q(...at(-HL, PIN + 0.1), D + 0.031)], LOOP.edge);
+      if (lit) poly(rect(-HL + 0.2, HL - 0.2, PIN + 0.12, POUT - 0.05).map(p => Q(p[0], p[1], D + 0.032)), "rgba(103,232,249,0.16)");
       // canopy: posts on the outer edge, a glazed roof, a lit fascia on the track side
-      const posts = lod === "far" ? [] : [-PLAT_HL + 1.2, -PLAT_HL / 3, PLAT_HL / 3, PLAT_HL - 1.2];
+      const posts = lod === "far" ? [] : [-HL + 1.2, -HL / 3, HL / 3, HL - 1.2];
       ctx.strokeStyle = "#6f7f77"; ctx.lineWidth = Math.max(1, V.cam.z * 0.09);
       ctx.beginPath();
-      for (const al of posts) { const A = Q(...at(al, PLAT_OUT - 0.14), DECK + 0.03), B = Q(...at(al, PLAT_OUT - 0.14), CANOPY); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); }
+      for (const al of posts) { const A = Q(...at(al, POUT - 0.14), D + 0.03), B = Q(...at(al, POUT - 0.14), CAN); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); }
       ctx.stroke();
-      prism(rect(-PLAT_HL + 0.6, PLAT_HL - 0.6, PLAT_IN + 0.18, PLAT_OUT + 0.06), CANOPY, CANOPY + 0.07, LOOP.canopy, 1.6, lod === "far" ? 1 : 0.8);
-      line(at(-PLAT_HL + 0.6, PLAT_IN + 0.18), at(PLAT_HL - 0.6, PLAT_IN + 0.18), CANOPY, lit ? LOOP.cyanHi : "rgba(34,211,238,0.6)", Math.max(1, V.cam.z * (lit ? 0.12 : 0.07)));
-      // the name board over the roof: drawn in the label pass (legible, never overlapped)
-      if (lod !== "far") {
-        const [x, y] = Q(...at(0, (PLAT_IN + PLAT_OUT) / 2), CANOPY + 0.35);
+      prism(rect(-HL + 0.6, HL - 0.6, PIN + 0.18, POUT + 0.06), CAN, CAN + 0.07, LOOP.canopy, 1.6, lod === "far" ? 1 : 0.8);
+      line(at(-HL + 0.6, PIN + 0.18), at(HL - 0.6, PIN + 0.18), CAN, lit ? (g.color ? accent : LOOP.cyanHi) : g.color ? accent : "rgba(34,211,238,0.6)", Math.max(1, V.cam.z * (lit ? 0.12 : 0.07)));
+      // the name board over the roof: drawn in the label pass (legible, never overlapped). A
+      // line's station has a platform per track: one board per station, on its outbound side.
+      if (lod !== "far" && (!g.line || st.dir === "out")) {
+        const [x, y] = Q(...at(0, (PIN + POUT) / 2), CAN + 0.35);
         V.labels.push({ id: `st:${st.id}`, station: true, lit, text: lit ? `${st.name} // TRAIN IN` : st.name, x, y, rank: 1e5 + rank });
       }
       if (outFront) stairs();
+    }
+
+    // ---- THE LINES (PHASE 2): each shuttle's double-track viaduct ------------------------------
+    // The same concrete, piers and rails as the Loop, two tracks wide (closing to one over each
+    // terminal's stub), the line's colour on the fascia. A deck along map points with the deck's
+    // half-width, each track's offset and the ground under it at every point.
+    function pierAt(m, d, lod, z, hw) {
+      const p = [-d[1], d[0]], top = DECK + z - DECK_T, g0 = z > 0 && onTerrain(m[0], m[1]) ? terrainH(m[0], m[1]) : 0;
+      const sq = (a, b, la, lb) => [add(add(m, d, a), p, la), add(add(m, d, b), p, la), add(add(m, d, b), p, lb), add(add(m, d, a), p, lb)];
+      prism(sq(-0.22, 0.22, 0.24, -0.24), g0, top - (lod === "far" ? 0 : 0.14), LOOP.pier, 1.1);
+      if (lod !== "far") prism(sq(-0.26, 0.26, hw * 0.88, -hw * 0.88), top - 0.14, top, LOOP.pier, 1.1);
+    }
+    function lineDeck(pts, nrm, hws, lats, zs, lod, len, color, ends = [false, false]) {
+      const n = pts.length, at = (i, k) => add(pts[i], nrm[i], k), H = (i) => DECK + zs[i];
+      // the slab: its two long sides where they face the viewer, the stub ends, the top
+      for (const sg of [1, -1]) for (let i = 0; i + 1 < n; i++) {
+        const A = at(i, sg * hws[i]), B = at(i + 1, sg * hws[i + 1]), f = facing(A, B, pts[i]);
+        if (f) poly([Q(...A, H(i)), Q(...B, H(i + 1)), Q(...B, H(i + 1) - DECK_T), Q(...A, H(i) - DECK_T)], shade(LOOP.deck, f));
+      }
+      ends.forEach((e, j) => {
+        if (!e) return;
+        const i = j ? n - 1 : 0, A = at(i, hws[i]), B = at(i, -hws[i]), inside = pts[j ? n - 2 : 1], f = facing(A, B, inside);
+        if (f) poly([Q(...A, H(i)), Q(...B, H(i)), Q(...B, H(i) - DECK_T), Q(...A, H(i) - DECK_T)], shade(LOOP.deck, f));
+      });
+      poly([...pts.map((_, i) => Q(...at(i, hws[i]), H(i))), ...pts.map((_, i) => Q(...at(n - 1 - i, -hws[n - 1 - i]), H(n - 1 - i)))], shade(LOOP.deck, 1.12));
+      // dressing: which side faces the viewer
+      const mid = Math.floor(n / 2);
+      const [nu, nv] = (() => { const [a, b] = rot(0, 0, V.cam.r), [e, f] = rot(nrm[mid][0], nrm[mid][1], V.cam.r); return [e - a, f - b]; })();
+      const near = nu + nv > 0 ? 1 : -1;
+      const edge = (sg, k, dz) => pts.map((_, i) => { const q = at(i, sg * (hws[i] - k)); return Q(q[0], q[1], H(i) + dz); });
+      const stroke = (S, col, w) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); S.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.stroke(); };
+      stroke(edge(near, 0, -0.03), color, Math.max(1, V.cam.z * 0.07));
+      if (lod === "far") return;
+      const parapet = (sg) => {
+        const e = pts.map((_, i) => at(i, sg * (hws[i] - 0.04)));
+        for (let i = 0; i + 1 < n; i++) poly([Q(...e[i], H(i)), Q(...e[i + 1], H(i + 1)), Q(...e[i + 1], H(i + 1) + 0.13), Q(...e[i], H(i) + 0.13)], LOOP.parapet);
+        stroke(e.map((q, i) => Q(q[0], q[1], H(i) + 0.13)), "#65756c", 1);
+      };
+      parapet(-near);
+      for (const sg of [1, -1]) {
+        if (lod === "near") {
+          ctx.strokeStyle = LOOP.sleeper; ctx.lineWidth = Math.max(1, V.cam.z * 0.1); ctx.beginPath();
+          const m = Math.max(1, Math.round(len / 0.55));
+          for (let k = 0; k < m; k++) {
+            const t = (k + 0.5) / m * (n - 1), i = Math.min(n - 2, Math.floor(t)), f = t - i;
+            const c = lerp2(pts[i], pts[i + 1], f), nn = nrm[i], la = sg * (lats[i] + (lats[i + 1] - lats[i]) * f), h = H(i) + (H(i + 1) - H(i)) * f;
+            const A = Q(...add(c, nn, la + 0.4), h + 0.01), B = Q(...add(c, nn, la - 0.4), h + 0.01);
+            ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]);
+          }
+          ctx.stroke();
+        }
+        for (const r of [0.26, -0.26]) stroke(pts.map((_, i) => { const q = at(i, sg * lats[i] + r); return Q(q[0], q[1], H(i) + 0.03); }), LOOP.rail, px1());
+      }
+      parapet(near);
+    }
+    function drawLinePiece(it, lod, sub = null) {
+      const p = it.map, d = p.d, nrm = [-d[1], d[0]];
+      const [k0, k1] = sub || [0, 1];
+      const lerpN = (x, y, k) => x + (y - x) * k;
+      const a = lerp2(p.a, p.b, k0), b = lerp2(p.a, p.b, k1);
+      const hwA = lerpN(p.hwA, p.hwB, k0), hwB = lerpN(p.hwA, p.hwB, k1), zA = lerpN(p.zA, p.zB, k0), zB = lerpN(p.zA, p.zB, k1);
+      const m = lerp2(a, b, 0.5);
+      if (!onScreen([Q(...add(a, nrm, hwA), DECK + zA), Q(...add(b, nrm, -hwB), DECK + zB), Q(...add(a, nrm, -hwA), DECK + zA), Q(...add(b, nrm, hwB), DECK + zB), Q(m[0], m[1], 0)])) return;
+      if (p.pillar && k0 <= 0.5 && k1 > 0.5) pierAt(lerp2(p.a, p.b, 0.5), d, lod, (p.zA + p.zB) / 2, Math.max(p.hwA, p.hwB));
+      const line = it.line, L = line.L;
+      lineDeck([a, b], [nrm, nrm], [hwA, hwB], [lerpN(p.latA, p.latB, k0), lerpN(p.latA, p.latB, k1)], [zA, zB], lod, Math.hypot(b[0] - a[0], b[1] - a[1]), line.color, [k0 === 0 && p.ua < 1e-6, k1 === 1 && p.ub > L - 1e-6]);
+    }
+    function drawLineCorner(it, lod) {
+      const c = it.corner, N = lod === "far" ? 4 : 10, R = c.R;
+      const at = (th, rad) => [c.cx + rad * (-c.dout[0] * Math.cos(th) + c.din[0] * Math.sin(th)), c.cy + rad * (-c.dout[1] * Math.cos(th) + c.din[1] * Math.sin(th))];
+      const th = Array.from({ length: N + 1 }, (_, k) => (k / N) * Math.PI / 2);
+      if (!onScreen([Q(...at(0, R + LINE_HW), DECK), Q(...at(Math.PI / 2, R + LINE_HW), DECK), Q(...at(Math.PI / 4, R - LINE_HW), 0)])) return;
+      pierAt(at(Math.PI / 4, R), [(c.dout[0] + c.din[0]) * Math.SQRT1_2, (c.dout[1] + c.din[1]) * Math.SQRT1_2], lod, 0, LINE_HW);
+      const pts = th.map(t => at(t, R)), nrm = th.map(t => [-c.dout[0] * Math.cos(t) + c.din[0] * Math.sin(t), -c.dout[1] * Math.cos(t) + c.din[1] * Math.sin(t)]);
+      lineDeck(pts, nrm, pts.map(() => LINE_HW), pts.map(() => LINE_HW - 0.65), pts.map(() => 0), lod, R * Math.PI / 2, it.line.color);
+    }
+    // The mountain's share (coastDraw.js paints it with the terrain, back to front): the Alpine
+    // Line's deck in short lengths, its Summit platforms, and the cars on it.
+    function mountainExtras(lotId, lod) {
+      const out = [], R = BUILDING[lotId]?.rect;
+      if (!R || !V.geo?.mtn) return out;
+      const inLot = (x, y) => x >= R.x && x <= R.x + R.w && y >= R.y && y <= R.y + R.h;
+      for (const it of V.geo.mtn) {
+        if (it.kind === "lt") {
+          const p = it.map;
+          if (!inLot((p.a[0] + p.b[0]) / 2, (p.a[1] + p.b[1]) / 2)) continue;
+          const n = Math.max(1, Math.ceil(p.len / 0.65));
+          for (let i = 0; i < n; i++) { const m = lerp2(p.a, p.b, (i + 0.5) / n); out.push({ x: m[0], y: m[1], bias: 0.05, draw: () => drawLinePiece(it, lod, [i / n, (i + 1) / n]) }); }
+        } else if (it.kind === "ls") {
+          const [x, y] = it.geo.at(0, (PLAT_IN + PLAT_OUT) / 2);
+          if (inLot(x, y)) out.push({ x, y, bias: 0.08, draw: () => drawStation(it, lod, 0) });
+        }
+      }
+      for (const m of V.mtnCars || []) { const p = m.c.pose; if (inLot(p.x, p.y)) out.push({ x: p.x, y: p.y, bias: 0.1, draw: () => drawCar(m, lod) }); }
+      return out;
     }
 
     // Everything that moves on or under the deck, as boxes to slot into the painter's order:
@@ -662,7 +772,10 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const out = [], r = V.cam.r;
       const night = (() => { const h = ((mt % 24) + 24) % 24; return h >= 19 || h < 6.5; })();
       for (const t of trains) t.cars.forEach((c, i) => {
-        out.push({ kind: "car", t, c, prev: i ? t.cars[i - 1].pose : null, night, riders: V.riders.get(`${t.id}|${c.index}`) || 0, box: carBox(c.pose, r, c.lead && night ? 1.4 : 0), h: CAR_Z });
+        const m = { kind: "car", t, c, prev: i ? t.cars[i - 1].pose : null, night, riders: V.riders.get(`${t.id}|${c.index}`) || 0, box: t.line === "loop" ? carBox(c.pose, r, c.lead && night ? 1.4 : 0) : lineCarBox(c.pose, r, CAR_HL, CAR_HW, c.lead && night ? 1.4 : 0), h: CAR_Z + (c.pose.z || 0), color: LINE[t.line]?.color };
+        // a car on the mountain is painted by the mountain (with the deck under it)
+        if (t.line !== "loop" && onTerrain(c.pose.x, c.pose.y) && c.pose.y < TERRAIN.y1) V.mtnCars.push(m);
+        else out.push(m);
       });
       for (const o of V.outdoors) {
         let x, y, h = 0;
@@ -700,13 +813,14 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     // off; on the stairs (climb 0..1, gate to platform): across the pavement to the foot of
     // the flight, up it, along the platform; otherwise the pavement.
     function streetSpot(w) {
-      if (w.sub === "waiting" || w.sub === "alighting") return [w.x, w.y, DECK];
+      if (w.sub === "waiting" || w.sub === "alighting") return [w.x, w.y, DECK + (STOPS[w.stationId]?.base || 0)];
       if (w.climb > 0 && SGEO[w.stationId]) {
-        const g = SGEO[w.stationId], c = Math.min(1, w.climb), mid = PLAT_OUT + STAIR_W / 2;
-        const foot = g.at(0.2 + STAIR_L, mid), head = g.at(0.2, mid), plat = g.at(0, LOOP_LINE.platformOffset);
-        if (c < 0.25) return [...lerp2([g.st.gate.x, g.st.gate.y], foot, c / 0.25), 0];
-        if (c < 0.9) return [...lerp2(foot, head, (c - 0.25) / 0.65), DECK * (c - 0.25) / 0.65];
-        return [...lerp2(head, plat, (c - 0.9) / 0.1), DECK];
+        const g = SGEO[w.stationId], c = Math.min(1, w.climb), mid = g.pout + STAIR_W / 2;
+        const sd = g.sd || 1, foot = g.at(sd * (0.2 + STAIR_L), mid), head = g.at(sd * 0.2, mid), plat = g.at(0, LOOP_LINE.platformOffset);
+        const top = DECK + g.z, f0 = g.foot;
+        if (c < 0.25) return [...lerp2([g.st.gate.x, g.st.gate.y], foot, c / 0.25), f0];
+        if (c < 0.9) return [...lerp2(foot, head, (c - 0.25) / 0.65), f0 + (top - f0) * (c - 0.25) / 0.65];
+        return [...lerp2(head, plat, (c - 0.9) / 0.1), top];
       }
       return [w.x, w.y, 0];
     }
@@ -715,16 +829,16 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     // stripe. Mid: a window band and the doors, the gangway to the car ahead. Near: each
     // window, riders in them, the cab's windscreen and lamps, roof units.
     function drawCar(m, lod) {
-      const { c, t, night } = m, p = c.pose;
-      const [x, y] = Q(p.x, p.y, CAR_Z);
+      const { c, t, night } = m, p = c.pose, Z = p.z || 0, stripe = m.color || LOOP.stripe;
+      const [x, y] = Q(p.x, p.y, CAR_Z + Z);
       const pad = V.cam.z * 3;
       if (x < -pad || x > V.cssW + pad || y < -pad || y > V.cssH + pad) return;
-      const h0 = CAR_Z, h1 = CAR_Z + CAR_H, H = (k) => h0 + k * CAR_H;
+      const h0 = CAR_Z + Z, h1 = CAR_Z + Z + CAR_H, H = (k) => h0 + k * CAR_H;
       const [FL, FR, BR, BL] = carCorners(p), ctr = [p.x, p.y], dir = [p.dx, p.dy];
       const glass = night ? LOOP.glassNight : LOOP.glassDay;
       // headlight pool on the deck ahead, at night
       if (c.lead && night) {
-        const [gx, gy] = Q(...add(ctr, dir, CAR_HL + 0.9), DECK);
+        const [gx, gy] = Q(...add(ctr, dir, CAR_HL + 0.9), DECK + Z);
         const r = V.cam.z * 1.3, gr = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
         gr.addColorStop(0, "rgba(255,244,200,0.32)"); gr.addColorStop(1, "rgba(255,244,200,0)");
         ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(gx, gy, r, r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
@@ -736,7 +850,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         prism([add(f, pp, 0.22), add(bk, qp, 0.22), add(bk, qp, -0.22), add(f, pp, -0.22)], h0 + 0.08, h1 - 0.1, "#262e2a", 1.1);
       }
       // underframe
-      if (lod !== "far") prism(carCorners(p, CAR_HL - 0.3, CAR_HW - 0.1), DECK + 0.02, h0 + 0.04, "#1a201d", 1);
+      if (lod !== "far") prism(carCorners(p, CAR_HL - 0.3, CAR_HW - 0.1), DECK + Z + 0.02, h0 + 0.04, "#1a201d", 1);
       const faces = [
         { a: FL, b: FR, kind: c.lead ? "cab" : "end" },
         { a: BR, b: FR, kind: "side" },
@@ -751,7 +865,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         quad(F, 0, 1, 0, 1, shade(LOOP.body, f));
         quad(F, 0, 1, 0, 0.13, shade(LOOP.body, f * 0.45));                    // skirt
         if (fc.kind === "side") {
-          quad(F, 0, 1, 0.24, 0.32, LOOP.stripe);                                // the Loop's stripe
+          quad(F, 0, 1, 0.24, 0.32, stripe);                                     // the line's stripe
           if (lod === "far") { if (night) quad(F, 0.08, 0.92, 0.48, 0.72, glass); continue; }
           const doors = [0.27, 0.73];
           if (lod === "mid") {
@@ -1052,7 +1166,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       wantView(t);
       const mt = censusRef.current?.mt != null && V.reduced ? censusRef.current.mt : clockAt(Date.now()).mt;
       V.mt = mt;
-      const trains = trainPoses(trainsAt(mt));
+      const trains = linePoses(lineTrainsAt(mt));
       if (V.find) findStep(mt, trains);
       ctl.step(mt, trains);   // DRIVE YOURSELF: input, moves, its camera
       easeCam();
@@ -1067,16 +1181,23 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       V.trainIn = new Set(trains.filter(t => t.dwell).map(t => t.stationId));
       const slots = new Map();
       const put = (k, m) => (slots.get(k) || slots.set(k, []).get(k)).push(m);
+      V.mtnCars = [];
       for (const m of movers(mt, trains)) put(slotForBox(m.box, m.h, items, order), m);
-      for (const m of slots.get(-1) || []) drawMover(m, lod);
-      for (let k = 0; k < order.length; k++) {
-        const it = items[order[k]];
+      const drawItem = (it, k) => {
         if (it.kind === "b") drawBuilding(it, lod, k);
         else if (it.kind === "y") drawYard(it, lod);
         else if (it.kind === "t") drawDeckPiece(it, lod);
         else if (it.kind === "k") drawCorner(it, lod);
-        else if (it.kind === "sp") drawSpurStop(coastG(), it.st, lod, nightAt(((mt % 24) + 24) % 24), V.labels);
+        else if (it.kind === "lt") drawLinePiece(it, lod);
+        else if (it.kind === "lk") drawLineCorner(it, lod);
         else drawStation(it, lod, k);
+      };
+      const late = V.geo.lateSlots;
+      for (const it of late.get(-1) || []) drawItem(it, -1);
+      for (const m of slots.get(-1) || []) drawMover(m, lod);
+      for (let k = 0; k < order.length; k++) {
+        drawItem(items[order[k]], k);
+        for (const it of late.get(k) || []) drawItem(it, k);
         for (const m of slots.get(k) || []) drawMover(m, lod);
       }
       drawLabels();
@@ -1324,7 +1445,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     }
     SAVED = null;
     sync();
-    if (import.meta.env?.DEV) window.__hviIso = { V, turn, select, zoomAt, fit, tap, draw, startFind, ctl, selfRef };
+    if (import.meta.env?.DEV) window.__hviIso = { V, turn, select, zoomAt, fit, tap, draw, startFind, ctl, selfRef, centreOn };
     return () => {
       SAVED = { cam: { ...(V.camTo ? { ...V.cam, ...V.camTo } : V.cam) }, sel: V.sel, cssW: V.cssW };
       dead = true; sync();

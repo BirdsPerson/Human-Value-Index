@@ -10,7 +10,7 @@
 //   owns(e) / hands()         the canvas's own keys stand down; a drag stops following
 //   start(self) / release()   TAKE CONTROL / RELEASE
 
-import { BUILDING, DISTRICTS, STATIONS, TRAIN, nextArrival } from "./sim.js";
+import { BUILDING, DISTRICTS, STATIONS, STOPS, TRAIN, nextArrivalAt, stationName } from "./sim.js";
 import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { drawPose, fitStature } from "./poses.js";
@@ -21,7 +21,7 @@ import { readPad, pressedSince } from "./gamepad.js";
 import { tableNear, tableGo } from "../chess/park.js";   // PARK CHESS: E at a stone table
 import {
   CTL, publishUi, keysVector, screenToMapDir, stepStreet, stepInside, stateFromTarget, loadControl, saveControl,
-  doorOf, doorNear, groundAt, isClassified, benchNear, stationNear, stairFoot, platformPoint, platformStep,
+  doorOf, doorNear, groundAt, isClassified, benchNear, stationNear, stairFoot, platformPoint, platformStep, stationGeoOf,
   trainIn, nearestCar, entryFloor, roomAt, isExitFloor, nearestSeat, exitPoint, freeSpot, floorsWithRooms,
   PERSON_REACH, BUMP_ENTER, DOOR_REACH, LIFT_X, EXIT_X, PLAT_LA, WALK_SPEED, RUN_SPEED,
 } from "./control.js";
@@ -104,9 +104,9 @@ export function makeIsoControl(K) {
   function alight(tr) {
     const st = CTL.st, id = tr.stationId, car = tr.cars[st.car] || tr.cars[0];
     // step off at the car's door: its place along the platform
-    const al = Math.max(-5.5, Math.min(5.5, alongOf(id, car.pose || car)));
+    const hl = (stationGeoOf(id)?.hl || 6) - 0.5, al = Math.max(-hl, Math.min(hl, alongOf(id, car.pose || car)));
     Object.assign(st, { mode: "platform", stationId: id, al, la: PLAT_LA[0] + 0.1, trainId: null, car: null, alightNext: false, waiting: false });
-    note(`${STATIONS[id].name}. MIND THE GAP. IT IS ALSO ON FILE.`);
+    note(`${stationName(id)}. MIND THE GAP. IT IS ALSO ON FILE.`);
   }
   function alongOf(id, p) { const a = platformPoint(id, 0, 0), b = platformPoint(id, 1, 0); return (p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y); }
 
@@ -203,7 +203,7 @@ export function makeIsoControl(K) {
         if (!tr.dwell || tr.stationId !== st.boardedAt) st.departed = true;
         if (tr.dwell && st.alightNext && st.departed) alight(tr);
         const c = tr.cars[st.car] || tr.cars[0];
-        if (c) { st.x = c.pose ? c.pose.x : c.x; st.y = c.pose ? c.pose.y : c.y; }
+        if (c) { st.x = c.pose ? c.pose.x : c.x; st.y = c.pose ? c.pose.y : c.y; st.z = c.pose?.z || 0; }
       }
     }
     // E and B, from the keys, the pad or the touch buttons
@@ -234,7 +234,7 @@ export function makeIsoControl(K) {
       const g = groundAt(st.x, st.y);
       if (g) { near = { kind: "ground", b: g, label: `STEP INTO ${g.name}` }; return; }
       const sid = stationNear(st.x, st.y);
-      if (sid) { near = { kind: "station", id: sid, label: `CLIMB TO ${STATIONS[sid].name}` }; return; }
+      if (sid) { near = { kind: "station", id: sid, label: `CLIMB TO ${stationName(sid)}` }; return; }
       const bn = benchNear(st.x, st.y);
       if (bn) near = { kind: "bench", bench: bn, label: "SIT ON THE BENCH" };
     } else if (st.mode === "bench") near = { kind: "stand-bench", label: "STAND UP" };
@@ -249,7 +249,7 @@ export function makeIsoControl(K) {
       near = tr ? { kind: "board", tr, label: `BOARD ${tr.name}` } : { kind: "wait", label: st.waiting ? "STOP WAITING" : "WAIT FOR THE LOOP" };
     } else if (st.mode === "riding") {
       const tr = trains.find(t => t.id === st.trainId);
-      if (tr && tr.dwell && (st.departed || tr.stationId !== st.boardedAt)) near = { kind: "alight", tr, label: `ALIGHT: ${STATIONS[tr.stationId].name}` };
+      if (tr && tr.dwell && (st.departed || tr.stationId !== st.boardedAt)) near = { kind: "alight", tr, label: `ALIGHT: ${stationName(tr.stationId)}` };
       else near = { kind: "next", label: st.alightNext ? "STAY ABOARD" : "GET OFF AT THE NEXT STOP" };
     }
     void mt;
@@ -263,8 +263,8 @@ export function makeIsoControl(K) {
       return `${b.name} // ${f.code} ${f.name === rm.placeId ? "" : f.name}${lift}`.replace(/\s+\/\/\s*$/, "");
     }
     if (st.mode === "platform") {
-      const nx = nextArrival(st.stationId, mt), m = Math.max(0, Math.round((nx.arrive - ((mt % 24) + 24) % 24 + 24) % 24 * 60));
-      return `${STATIONS[st.stationId].name} // NEXT: ${TRAIN[nx.trainId]?.name || "THE LOOP"} IN ${m} MIN${st.waiting ? " // WAITING" : ""}`;
+      const nx = nextArrivalAt(st.stationId, mt), m = Math.max(0, Math.round((nx.arrive - ((mt % 24) + 24) % 24 + 24) % 24 * 60));
+      return `${stationName(st.stationId)} // NEXT: ${TRAIN[nx.trainId]?.name || "THE LOOP"} IN ${m} MIN${st.waiting ? " // WAITING" : ""}`;
     }
     if (st.mode === "riding") return `ABOARD ${TRAIN[st.trainId]?.name || "THE LOOP"} // CAR ${(st.car || 0) + 1}${st.alightNext ? " // OFF AT THE NEXT STOP" : ""}`;
     const d = districtAt(st.x, st.y);
@@ -293,8 +293,8 @@ export function makeIsoControl(K) {
   function posOf() {
     const st = CTL.st;
     if (!st) return null;
-    if (st.mode === "platform") { const p = platformPoint(st.stationId, st.al, st.la); return { x: p.x, y: p.y, h: DECK }; }
-    if (st.mode === "riding") return { x: st.x, y: st.y, h: CAR_TOP };
+    if (st.mode === "platform") { const p = platformPoint(st.stationId, st.al, st.la); return { x: p.x, y: p.y, h: DECK + (STOPS[st.stationId]?.base || 0) }; }
+    if (st.mode === "riding") return { x: st.x, y: st.y, h: CAR_TOP + (st.z || 0) };
     if (st.mode === "inside") { const b = BUILDING[st.bId]; return b ? { x: b.pos.x, y: b.pos.y, h: 1 } : null; }
     return { x: st.x, y: st.y, h: 0 };
   }

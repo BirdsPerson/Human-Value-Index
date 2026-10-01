@@ -61,6 +61,7 @@ ok(t0.some((t, i) => Math.abs(t.s - t1[i].s) > 0.01), "trains move between machi
     for (const s of roster) {
       const w = whereAt(s, h);
       if (w.leg !== "ride" || w.trainId == null) continue;
+      if (w.line && w.line !== "loop") continue;   // the 3D view draws the Loop's trains; a rider on another line is drawn at its whereAt point, up on the deck
       riders++;
       const t = tr.find(x => x.id === w.trainId);
       if (!ok(t, `${s.name} rides a train that exists (${w.trainId})`)) continue;

@@ -1173,7 +1173,8 @@ the sectors, the summary, the find index and the civic fold) with `expansion: tr
   among a trip's districts (the window files hold everyone who passes through). whereAt
   reports a pod ride as `sub: "walking"` with `leg: "pod"`, `spur`, `podDir` (views that do
   not know pods draw a walker), and every commute leg a `dir` (out before the Loop, in after).
-  The subway is a later project (ROADMAP b5).
+  The subway is a later project (ROADMAP b5). **Since PHASE 2 step 2 the pods are replaced by
+  THE SHORE LINE and THE ALPINE LINE (rail, below); a day built before keeps its pods.**
 - **Plans at the day boundary.** Days already published keep their city (nobody lives on the
   Coast in them); the first day the builder builds after a deploy is the first with the new
   districts in it (today + 4 at the latest). Old days' windows have no coast or heights files;
@@ -1452,3 +1453,39 @@ The brief: docs/planning/MASTER_PLAN.md, "PHASE 2". Step 1, the line abstraction
   plans built by the new code are byte-identical to the old at 430 and 1,500 subjects over two
   days, whereAt and trainsAt too; a network-2 day built by 44f1b9c (`fixtures/net2-plan-day300.json`)
   keeps every rider's train, car and place aboard, and every platform, minute by minute.
+
+Step 2, THE SHORE LINE and THE ALPINE LINE (rail in place of the pods), layout 3:
+
+- **THE SHORE LINE** (line 1, `S1`-`S6`, teal): its WORKS terminal in the gutter between the Works and
+  the Sprawl (a stub off the Loop's Works station, 12 cells' walk), south down the gutter, round a
+  corner into the street behind the Coast, west: COAST CENTRAL (x 45.5), COAST WEST (the terminal,
+  x 19). **THE ALPINE LINE** (line 2, `A1`-`A6`, red): its CAMPUS terminal in the gutter between
+  Campus and Finance, north through a cleared right of way in the foothills (FOOTHILLS), the
+  village's gap (HEIGHTS VILLAGE), and up the mountain on a ramp to the crest (SUMMIT, the deck
+  level at the crest's height, 3.9 storeys). Six trains of three cars each, 3 machine minutes'
+  layover at a terminal; lap 24 minutes, a train every 4. A terminal's stairs run toward the stub's
+  end (the way to the interchange).
+- **Layout 3**: the Coast three more rows south (`COAST_DY` 12) for the Shore Line's double deck and
+  its platforms in the street between the belt and the seaside rows. Published days keep their
+  segments and pods and are drawn on the new ground (the master plan's rule).
+- **Network 3** (`NET`): every day built from this deploy on. A trip touching the Coast or the
+  Heights rides the lines (or the Loop: from the Heights' west end the Arts and Campus stations are a
+  walk through the foothills; any station within 32 cells is in reach), or walks all the way. A day
+  built on network 2 keeps its pods (`check-plans`: its every train, car and platform unchanged).
+- **Drawn** (`lineGeo.js`, `CityIso.jsx`): each line's double-track viaduct in the Loop's concrete
+  with its colour on the fascia, closing to one track over each terminal's stub; piers; a platform,
+  canopy and stairs per track; cars by their bogies, the line's stripe, riders in the windows. Over
+  the foothills (open ground) the deck is slotted after the ground like a walker on it; on the
+  mountain the mountain paints it (`coastDraw.js` `G.extra`), cell by cell, so a ridge hides it at
+  every quarter turn. The 2D map draws each line, its stations and its cars. DRIVE YOURSELF climbs to,
+  waits on, boards and alights at every line's platforms (`control.js` `stationGeoOf` is any stop's).
+  The 3D view draws the Loop's trains; a rider on another line is drawn at its car's place.
+- **Measured** (synthetic census, machine day 300; machine minutes in transit a day, base 44f1b9c ->
+  step 2): THE BUNKHOUSE 252 -> 206 (725), 249 -> 203 (2,000), 252 -> 210 (5,000); THE SEAWALL ESTATE
+  194 -> 182, 197 -> 184, 203 -> 188; the lowest tier band 199 -> 182, 198 -> 182, 204 -> 187. The
+  pods had no wait, so the homes nearest the old pod terminal lost: SEAVIEW FLATS 197 -> 221 (725),
+  193 -> 211 (5,000), THE SURFSIDE 180 -> 225, 182 -> 222 (its 96 homes are 17 cells from Coast
+  Central). Busiest car at 5,000: Shore 17 seated-equivalents, Alpine 9 (cars of 16); the Loop's
+  busiest is 69 (unchanged by the lines, and its own capacity question). Plan build at 430: 0.34 s
+  -> 0.63 s; plan 106 -> 131 KB.
+

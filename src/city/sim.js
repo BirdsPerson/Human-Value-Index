@@ -40,9 +40,11 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // the ground under a published day moves), and every day built after the deploy is built on
 // the new ground. Version 2: the Heights pulled back behind a band of foothills, the Coast
 // moved south behind a civic and green belt (the bottom row runs to row 74), the Works laid
-// out heavy-in / light-out, the Commons' school away from the Works.
-export const LAYOUT_VERSION = 2;
-export const HEIGHTS_DY = -10, COAST_DY = 9;
+// out heavy-in / light-out, the Commons' school away from the Works. Version 3 (PHASE 2): the
+// Coast three rows further south (COAST_DY 9 -> 12), for the Shore Line's viaduct and its
+// platforms in the street between the belt and the seaside rows; the rail lines replace the pods.
+export const LAYOUT_VERSION = 3;
+export const HEIGHTS_DY = -10, COAST_DY = 12;
 const heightsY = (y) => y + HEIGHTS_DY, coastY = (y) => y + COAST_DY;
 
 // ---- districts --------------------------------------------------------------------
@@ -1421,12 +1423,64 @@ function podLeg(districtId, dir) {
 // decodable, `retired`, until no published day names it).
 // NET: the network a day is built on. 2 = the Loop and the pods (layout 2); 3 = the rail lines.
 // A plan's trips carry what they rode, so a day built on one network is read on the next.
-export let NET = 2;
+export let NET = 3;
 export const LOOP = {
   id: "loop", index: 0, version: 1, kind: "ring", name: "THE LOOP", short: "LOOP", prefix: "L", color: "#22d3ee",
   at: loopAt, length: LOOP_L, stops: STATION_ORDER.map(id => STATIONS[id]), ARR, lap: LAP, headway: HEADWAY, speed: V_TRAIN, trains: TRAINS,
 };
-const SHUTTLES = [];
+// THE SHORE LINE and THE ALPINE LINE (step 2): real rail in place of the pods, each a double-track
+// viaduct on its own timetable. The Shore Line from its Works terminal (in the gutter between the
+// Works and the Sprawl, a short walk from the Loop's Works station) south to the street behind
+// the Coast and west along it; the Alpine Line from its Campus terminal (the gutter between
+// Campus and Finance) north through the foothills and the village, up the mountain to the crest.
+const LINE_DWELL = DWELL, LAYOVER = 3 / 60;
+// The Alpine Line climbs: its deck rises on a ramp from the foot of the mountain to the crest's
+// height (level over the Summit's platform), always over the mountain's own terrain (coastGeo.js
+// terrainH, which sim.js cannot import: the crest along x 54.5 is computed from the same formula
+// here, and check-cityview holds the deck over the ground).
+const ALPINE_X = 54.5, ALPINE_RAMP = 9;
+const ALPINE_CREST = (() => {
+  const T = { y0: -30.5 + HEIGHTS_DY, y1: -11 + HEIGHTS_DY }, x = ALPINE_X;
+  let m = 0;
+  for (let y = T.y1; y >= T.y0; y -= 0.05) {
+    const s = Math.min(1, Math.max(0, (T.y1 - y) / (T.y1 - T.y0)));
+    const bump = 2.6 * Math.exp(-((x - 30) ** 2) / 70) + 3.2 * Math.exp(-((x - 79) ** 2) / 90);
+    const up = Math.min(1, s / 0.8), f = s <= 0.8 ? Math.pow(up, 1.3) : 1 - 0.9 * Math.pow((s - 0.8) / 0.2, 0.9);
+    m = Math.max(m, f * (5.2 + 1.1 * Math.sin(x * 0.19) + 0.5 * Math.sin(x * 0.53 + 1.3) + bump * up));
+  }
+  return Math.ceil(m * 10) / 10;
+})();
+const alpineGround = (y) => ALPINE_CREST * Math.min(1, Math.max(0, (-11 + HEIGHTS_DY - y) / ALPINE_RAMP));
+const SHUTTLES = [
+  shuttle({
+    id: "shore", index: 1, version: 1, nets: [3], name: "THE SHORE LINE", short: "SHORE LINE", prefix: "S", color: "#14b8a6",
+    pts: [[54.5, 44.3], [54.5, coastY(65.5)], [14.4, coastY(65.5)]], R: 4,
+    stations: [
+      { id: "shore-works", name: "WORKS (SHORE LINE)", district: "works" },
+      { id: "coast-central", name: "COAST CENTRAL", district: "coast", at: [45.5, coastY(65.5)] },
+      { id: "coast-west", name: "COAST WEST", district: "coast" },
+    ],
+    cars: [3, 3, 3, 3, 3, 3], speed: V_TRAIN, dwell: LINE_DWELL, layover: LAYOVER,
+  }),
+  shuttle({
+    id: "alpine", index: 2, version: 1, nets: [3], name: "THE ALPINE LINE", short: "ALPINE LINE", prefix: "A", color: "#dc2626",
+    pts: [[ALPINE_X, 14.2], [ALPINE_X, -39.8]], R: 4,
+    stations: [
+      { id: "alpine-campus", name: "CAMPUS (ALPINE LINE)", district: "campus" },
+      { id: "foothills", name: "FOOTHILLS", district: "heights", at: [ALPINE_X, -5.5] },
+      { id: "heights-village", name: "HEIGHTS VILLAGE", district: "heights", at: [ALPINE_X, -16.2] },
+      { id: "summit", name: "SUMMIT", district: "heights" },
+    ],
+    cars: [3, 3, 3, 3, 3, 3], speed: V_TRAIN, dwell: LINE_DWELL, layover: LAYOVER, base: (u) => alpineGround(14.2 - u),
+  }),
+];
+// A stop's street gate (the foot of its stairs) and its entrance (the platform edge beside the
+// track), like the Loop's; the stairs run beside the platform in the direction of travel.
+for (const l of SHUTTLES) for (const st of l.stops) {
+  const at = (along, lat) => ({ x: st.x + st.d.x * along * st.sd + st.n.x * lat, y: st.y + st.d.y * along * st.sd + st.n.y * lat });
+  st.gate = at(0.2 + 3 + 0.4, 1.3 + 0.75 / 2);
+  st.entrance = at(0, PLATFORM_OFF);
+}
 export const LINES = [LOOP, ...SHUTTLES];
 LINES.forEach((l, i) => { if (l.index !== i) throw new Error(`line ${l.id}: index ${l.index} at ${i}`); });
 export const LINE = Object.fromEntries(LINES.map(l => [l.id, l]));
@@ -1437,7 +1491,7 @@ for (const l of SHUTTLES) for (const t of l.trains) { t.carCap = CAR_CAP; t.cap 
 export const lineOf = (stopId) => LINE[STOPS[stopId]?.lineId] || null;
 export const stationName = (stopId) => STOPS[stopId]?.name || null;
 // The lines in service on network `net` (drawn, routed): the Loop always.
-export const linesOn = (net = NET) => LINES.filter(l => l === LOOP || (!l.retired && net >= (l.net || 3)));
+export const linesOn = (net = NET) => LINES.filter(l => l === LOOP || (l.nets || []).includes(net));
 const lineCarArc = (line, k, c, m) => (line === LOOP ? carArc(k, c, m) : m + line.trains[k].length / 2 - c * CAR_PITCH - CAR_LEN / 2);
 const lineState = (line, k, T) => (line === LOOP ? trainState(k, T) : lineTrainState(line, k, T));
 const linePoint = (line, k, c, T) => (line === LOOP ? carPoint(k, c, T) : line.at(lineCarArc(line, k, c, lineState(line, k, T).mid)));
@@ -1604,7 +1658,7 @@ export function commuteHours(from, to, s, seed = SEED) { return from === to ? 0 
 // foot to the door. Or all the way on foot, when that is quicker (a neighbour across the street).
 // Chosen by the nominal time (worst case: every train just missed), from straight-line walking
 // estimates; the legs of the one chosen are laid out on the streets. Deterministic.
-const ACCESS_R = 14, XFER_R = 18, WALK_MAX = 30, WALK_EST = 1.3;
+const ACCESS_R = 32, XFER_R = 18, WALK_MAX = 30, WALK_EST = 1.3;
 const maxTrainLen = () => Math.max(...LINES.map(l => Math.max(...l.trains.map(t => t.length))));
 const stairsDur = (stop) => Math.max(dist(stop.gate, stop.entrance) / V_WALK, 0.02);
 const offDur = (stop) => Math.max((dist(stop.entrance, stop.gate) + maxTrainLen() / 2 + 0.5) / V_WALK, 0.02);
@@ -1624,8 +1678,9 @@ const STATION_LIST = () => remember(`stn|${NET}`, () => {
 function aheadOf(line, i) {
   if (line === LOOP) return line.stops.map((_, j) => j).filter(j => j !== i);
   const out = [], n = line.stops.length;
+  if (line.stops[i].arrival) return out;   // a train arriving at its terminal goes no further: everyone off
   for (let j = (i + 1) % n, steps = 0; steps < n - 1; j = (j + 1) % n, steps++) {
-    out.push(j);
+    if (line.stops[j].stationId !== line.stops[i].stationId) out.push(j);
     const st = line.stops[j];
     if (st.arrival) break;   // the terminal: everyone off
   }
@@ -1657,7 +1712,8 @@ function railRoute(from, to, key, seed) {
         for (const x of here.xfer) for (const q of x.stops) push(`b|${q.id}`, c + offDur(st) + est(st.gate, q.gate) + stairsDur(q), id);
       }
     }
-    const direct = footpath(A, B, ownBlocks(from, to)), dlen = pathLen(direct);
+    // on foot all the way: only worth laying out when it could be short enough
+    const dlen = dist(A, B) <= WALK_MAX || !goal ? pathLen(footpath(A, B, ownBlocks(from, to))) : Infinity;
     if (!goal || (dlen <= WALK_MAX && dlen / V_WALK <= goalCost)) return directRoute(from, to, key, seed);
     // unwind: [{line, a, b}] rides
     const rides = [];
@@ -2118,12 +2174,19 @@ export function standInWalk(districtId, i, machineTime, seed = SEED) {
 }
 // Someone on a platform, along its length.
 export function standInPlatform(stationId, i) {
-  const st = STATIONS[stationId], half = trainLen(4) / 2;
-  const p = platformSpot(st, st.s + (h01(`~p|${stationId}|${i}`) * 2 - 1) * half);
-  const pl = DPLACES[stationId]?.[0] || null;
-  return { placeId: pl, fromPlaceId: pl, fromDistrictId: stationId, districtId: stationId, activity: "commute", progress: 0.5, buildingId: null, floor: null, floorId: null, atDistrictId: stationId, sub: "waiting", leg: "wait", stationId, x: p.x, y: p.y };
+  const st = STOPS[stationId], line = LINE[st.lineId], half = (line === LOOP ? trainLen(4) : Math.max(...line.trains.map(t => t.length))) / 2;
+  const p = stopSpot(st, st.s + (h01(`~p|${stationId}|${i}`) * 2 - 1) * half), d = st.districtId;
+  const pl = DPLACES[d]?.[0] || null;
+  return { placeId: pl, fromPlaceId: pl, fromDistrictId: d, districtId: d, activity: "commute", progress: 0.5, buildingId: null, floor: null, floorId: null, atDistrictId: d, sub: "waiting", leg: "wait", stationId, x: p.x, y: p.y };
 }
 // Someone aboard a car of train k.
+// Someone aboard a car of any line's train (by id).
+export function standInRiderOn(trainId, car, machineTime) {
+  const t = TRAIN[trainId], line = LINE[t.line || "loop"];
+  if (line === LOOP) return standInRider(t.index, car, machineTime);
+  const T = toHours(machineTime), st = lineTrainState(line, t.index, T), p = line.at(lineCarArc(line, t.index, car, st.mid)), to = STOPS[st.nextStationId], pl = DPLACES[to.districtId]?.[0] || null;
+  return { placeId: pl, fromPlaceId: pl, fromDistrictId: STOPS[st.lastStationId || st.nextStationId].districtId, districtId: to.districtId, activity: "commute", progress: 0.5, buildingId: null, floor: null, floorId: null, atDistrictId: "loop", sub: "riding", leg: "ride", stationId: null, trainId, car, line: line.id, x: p.x, y: p.y };
+}
 export function standInRider(k, car, machineTime) {
   const T = toHours(machineTime), p = carPoint(k, car, T), st = trainState(k, T), to = st.nextStationId, pl = DPLACES[to]?.[0] || null;
   return { placeId: pl, fromPlaceId: pl, fromDistrictId: st.lastStationId || to, districtId: to, activity: "commute", progress: 0.5, buildingId: null, floor: null, floorId: null, atDistrictId: "loop", sub: "riding", leg: "ride", stationId: null, trainId: TRAINS[k].id, car, x: p.x, y: p.y };

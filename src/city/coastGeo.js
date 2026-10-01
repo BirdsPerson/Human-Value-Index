@@ -34,6 +34,8 @@ export const SEA = { x0: -3, x1: 112, y0: SEA_Y, y1: 93 + COAST_DY };
 // rising to a ridge (RIDGE of the way north), two peaks, then falling away on the far side to
 // the district's north edge. Heights in storeys.
 export const TERRAIN = { x0: 9, x1: 100, y0: -30.5 + HEIGHTS_DY, y1: -11 + HEIGHTS_DY };
+// THE ALPINE LINE (PHASE 2) runs north up x 54.5 (the old spur's right of way) to the crest
+const ALPINE_X = SPURS.heights.pts[SPURS.heights.pts.length - 1][0];
 export const RIDGE = 0.8;
 export const RIDGE_Y = TERRAIN.y1 - RIDGE * (TERRAIN.y1 - TERRAIN.y0);
 export function terrainH(x, y) {
@@ -163,7 +165,7 @@ export const PINES = (() => {
   for (let i = 0; i < 420; i++) {
     const x = TERRAIN.x0 + 0.8 + frac(i * 0.6180339 + 0.21) * (TERRAIN.x1 - TERRAIN.x0 - 1.6), y = TERRAIN.y0 + 1.2 + frac(i * 0.7548776 + 0.43) * (TERRAIN.y1 - TERRAIN.y0 - 2.4);
     const t = (TERRAIN.y1 - y) / (TERRAIN.y1 - TERRAIN.y0);
-    if (t > 0.8 || offPiste(x, y) < 1.6 || Math.abs(x - LIFT.x) < 1.3) continue;
+    if (t > 0.8 || offPiste(x, y) < 1.6 || Math.abs(x - LIFT.x) < 1.3 || Math.abs(x - ALPINE_X) < 2.4) continue;   // the Alpine Line's right of way up to the Summit
     if (frac(i * 0.4142) > 0.55 + 0.3 * (1 - t)) continue;   // thinner towards the top
     out.push([x, y]);
   }
@@ -321,7 +323,7 @@ export const parcelFace = (p) => (p.phase === "site" ? "site" : p.phase === "bui
 // bridle loop, benches at the viewpoints, the ranger's post. Flat ground (the mountain rises
 // behind the village), the Alpine Line through a cleared right of way.
 const Fh = rect("foothills");
-const FH_CLEAR = 1.8;   // the spur's right of way: no pines within this of its track
+const FH_CLEAR = 3.0;   // the Alpine Line's right of way: no pines within this of its centreline (the deck, the Foothills' platforms and stairs)
 const spurX = SPURS.heights.pts[SPURS.heights.pts.length - 1][0];
 export const FOOTHILLS = (() => {
   const x0 = Fh.x, x1 = Fh.x + Fh.w, y0 = Fh.y, y1 = Fh.y + Fh.h, my = (y0 + y1) / 2;

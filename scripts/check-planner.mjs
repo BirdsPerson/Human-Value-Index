@@ -15,6 +15,8 @@ import { BILLBOARD_SITES, billboardBox } from "../src/city/billboards.js";
 import { isoItems, massingOf } from "../src/city/archGeo.js";
 import { loopPieces } from "../src/city/loopGeo.js";
 import { SPUR_STOPS } from "../src/city/coastGeo.js";
+import { linePieces } from "../src/city/lineGeo.js";
+import { terrainH, onTerrain } from "../src/city/coastGeo.js";
 import { rotRect } from "../src/city/iso.js";
 import { FAMOUS_FIGURES, slugify } from "../src/figures.js";
 import { baseRoster } from "../src/city/roster.js";
@@ -37,7 +39,7 @@ const OLD = JSON.parse(readFileSync(new URL("./fixtures/layout1-ids.json", impor
   ok(JSON.stringify(SIM.HOMES_BY_BAND) === JSON.stringify(OLD.homes), "the homes by tier band are unchanged (homeOf gives everyone the same home)");
   const moved = Object.entries(OLD.stations).filter(([id, [s, gx, gy]]) => { const st = SIM.STATIONS[id]; return !st || st.s !== s || st.gate.x !== gx || st.gate.y !== gy; }).map(([id]) => id);
   ok(!moved.length && SIM.LOOP_LINE.lapHours === OLD.lap, `the Loop's stations and lap are exactly layout 1's: the timetable, every published train (${moved.join(", ") || "unchanged"})`);
-  ok(SIM.LAYOUT_VERSION === 2, "the layout is version 2");
+  ok(SIM.LAYOUT_VERSION >= 3 && SIM.COAST_DY === 12, "the layout is version 3 or later: the Coast three more rows south, for the Shore Line (PHASE 2)");
 }
 
 // ---- 2. the plan's moves, as invariants ----------------------------------------------------------------
@@ -256,7 +258,7 @@ const OLD = JSON.parse(readFileSync(new URL("./fixtures/layout1-ids.json", impor
     ok(under.length === 1 && under[0].k === "box" && bx.x0 >= under[0].x0 && bx.x1 <= under[0].x1 && bx.y0 >= under[0].y0 && bx.y1 <= under[0].y1 && bx.h0 >= under[0].h1, `${b.id}: on ${b.host}'s roof, clear of its tanks and stair heads, above it`);
   }
   for (let r = 0; r < 4; r++) {
-    const items = [...isoItems(r), ...loopPieces(r), ...SPUR_STOPS.map(st => ({ kind: "b", id: st.id, ...rotRect({ x: st.box.x0, y: st.box.y0, w: st.box.x1 - st.box.x0, h: st.box.y1 - st.box.y0 }, r) }))];
+    const items = [...isoItems(r), ...loopPieces(r), ...linePieces(r)];
     let clash = "";
     for (const b of BILLBOARD_SITES) {
       const bx = billboardBox(b), R = rotRect({ x: bx.x0, y: bx.y0, w: bx.x1 - bx.x0, h: bx.y1 - bx.y0 }, r);
@@ -267,8 +269,42 @@ const OLD = JSON.parse(readFileSync(new URL("./fixtures/layout1-ids.json", impor
       }
       for (const o of BILLBOARD_SITES) if (o !== b) { const q = billboardBox(o); if (bx.x0 < q.x1 && q.x0 < bx.x1 && bx.y0 < q.y1 && q.y0 < bx.y1) clash ||= `${b.id} x ${o.id}`; }
     }
-    ok(!clash, `r=${r}: every billboard site clear of buildings, props, the viaduct, its stations and the spur shelters (${clash || "clear"})`);
+    ok(!clash, `r=${r}: every billboard site clear of buildings, props, the viaducts and their stations (${clash || "clear"})`);
   }
+}
+
+// ---- 8. PHASE 2: the lines reach every district, a short walk from its homes --------------------------------
+{
+  const stops = SIM.linesOn().flatMap(l => l.stops);
+  const walkTo = (p) => {
+    let best = Infinity, id = null;
+    for (const st of stops) {
+      const pts = SIM.footpath(p.pos, st.gate, new Set([p.building]));
+      let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      if (L < best) { best = L; id = st.id; }
+    }
+    return { best, id };
+  };
+  // the master plan's rule for a new district: no home more than a 10-cell walk from its station
+  // (from the home's door: its lot's edge); the Coast and the Heights predate it, measured and held
+  const LIMIT = { coast: 17, heights: 31 };
+  const out = [];
+  for (const p of Object.values(SIM.PLACES).filter(p => p.kind === "home" && SIM.DISTRICT[p.district].expansion)) {
+    const { best, id } = walkTo(p), edge = Math.min(p.rect.w, p.rect.h) / 2;
+    out.push(`${p.id} ${best.toFixed(1)}`);
+    const lim = LIMIT[p.district] ?? 10 + edge;
+    ok(best <= lim, `${p.id}: ${best.toFixed(1)} cells' walk to ${id} (limit ${lim.toFixed(1)})`);
+  }
+  console.log(`  homes to the nearest stop (cells, from the middle of the block): ${out.join(", ")}`);
+  // the Alpine Line's deck over the mountain: always above the ground, level over the Summit's platform
+  const A = SIM.LINE.alpine;
+  let under = 0;
+  for (let u = 0; u <= A.L; u += 0.25) { const c = A.centre.at(u); if (onTerrain(c.x, c.y) && A.base(u) + 1.5 - 0.16 < terrainH(c.x, c.y) + 0.6) under++; }
+  ok(under === 0, `the Alpine Line's deck clears the mountain everywhere (${under} points under it)`);
+  const sm = A.stops.filter(st => st.stationId === "summit");
+  ok(sm.every(st => Math.abs(A.base(st.u - 4.8) - A.base(st.u + 4.8)) < 1e-9), "the Summit's platform is level");
+  // a line never retimed in place: every line version at its own index, the network names its lines
+  ok(SIM.LINES.every((l, i) => l.index === i) && new Set(SIM.LINES.map(l => l.id)).size === SIM.LINES.length, "every line (version) has its own id and index");
 }
 
 console.log(fails ? `check-planner: ${fails} of ${checks} FAILED` : `check-planner: ${checks} checks passed`);
