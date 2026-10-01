@@ -9,6 +9,7 @@
 import { TIERS, getTier, slugify } from "../figures.js";
 import { FLOORS as HQ_FLOORS } from "../building.js";
 import { FUNNEL_PLACES, FUNNEL_BUILDINGS, FUNNEL_ARCH, FUNNEL_JOBS, FUNNEL_LEISURE_BAND, FUNNEL_LEISURE_FIELD, FUNNEL_FAMILY } from "./funnelSim.js";
+import { STORE_PLACES, STORE_BUILDINGS, STORE_ARCH, STORE_JOBS, STORE_LEISURE_BAND, STORE_LEISURE_FIELD, STORE_FAMILY, STORE_FIXTURES, UNIT_SET } from "./storefrontSim.js";   // THE MALL (enterprise.js)
 import { VENUE_PLACES, VENUE_BUILDINGS, VENUE_ARCH, VENUE_JOBS, VENUE_LEISURE_BAND, VENUE_LEISURE_FIELD, VENUE_FAMILY, VENUE_FIELD_HINTS, VENUE_FIELD_RULES, VENUE_OPEN_LOTS, VENUE_FIXTURES } from "./venueSim.js";
 import { shuttle, lineTrainState, lineNextArrival, lineRide } from "./lines.js";
 
@@ -240,6 +241,8 @@ PLACE_LIST.push(...FUNNEL_PLACES.map(a => P(...a)));
 // THE MASTER PLAN's venues (venueSim.js): THE PIT, the tennis club, the Dept of Planning, the
 // estate gardens, the foothills
 PLACE_LIST.push(...VENUE_PLACES.map(a => P(...a)));
+// THE MALL (storefrontSim.js): the storefront units, SAM'S PIZZA, GOODNIGHT IRENE'S
+PLACE_LIST.push(...STORE_PLACES.map(a => P(...a)));
 for (const p of PLACE_LIST) DISTRICT[p.district].places.push(p.id);
 
 export const PLACES = Object.fromEntries(PLACE_LIST.map(p => [p.id, p]));
@@ -389,10 +392,18 @@ const BUILDING_LIST = [
 ];
 BUILDING_LIST.push(...FUNNEL_BUILDINGS.map(([id, name, district, floors]) => B(id, name, district, floors)));
 BUILDING_LIST.push(...VENUE_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
+// THE MALL's frontage lots (storefrontSim.js): placed on their own lots, outside the district's
+// grid or hand layout, so nothing already standing moves.
+BUILDING_LIST.push(...STORE_BUILDINGS.map(([id, name, district, floors, lot, frontage]) => ({ ...B(id, name, district, floors, lot), frontage })));
 // Each district is gridded by BUILDING (so a building's rooms stay one block on the map),
 // and a building's cell is split side by side among its distinct places.
+for (const b of BUILDING_LIST.filter(x => x.frontage)) for (const id of new Set(b.floors.flatMap(f => f[2]))) {
+  const p = PLACES[id];
+  p.rect = { ...b.lot };
+  p.pos = { x: b.lot.x + b.lot.w / 2, y: b.lot.y + b.lot.h / 2 };
+}
 for (const d of DISTRICTS) {
-  const blds = BUILDING_LIST.filter(b => b.district === d.id);
+  const blds = BUILDING_LIST.filter(b => b.district === d.id && !b.frontage);
   if (blds.some(b => b.lot)) {
     if (!blds.every(b => b.lot)) throw new Error(`district ${d.id}: lay out every building by hand or none`);
     for (const b of blds) {
@@ -442,6 +453,7 @@ export const ARCH = {
   "hab-a": "projects", "hab-b": "projects", "hab-c": "brownstone", "hab-d": "brownstone", "the-street": "lot", "the-plaza": "lot", "the-pitch": "field",
   ...FUNNEL_ARCH,
   ...VENUE_ARCH,
+  ...STORE_ARCH,
   "surf-shacks": "shacks", "the-seawall": "seawall", "bungalow-row": "bungalow", "seaview-flats": "seaview", "the-surfside": "condo", "lot-shore": "lot", "the-boardwalk": "lot", "the-beach": "lot", "the-pier": "lot", "the-break": "lot",
   "the-bunkhouse": "bunkhouse", "alpine-flats": "alpine", "the-lodge": "lodge", "the-chalets": "chalet", "the-slopes": "lot", "lot-summit": "lot",
   // THE PORT and THE OLD TOWN (PHASE 2 step 3)
@@ -608,6 +620,7 @@ export const JOBS = [
 ];
 JOBS.push(...FUNNEL_JOBS.map(a => J(...a)));
 JOBS.push(...VENUE_JOBS.map(a => J(...a)));
+JOBS.push(...STORE_JOBS.map(a => J(...a)));
 export const JOB = Object.fromEntries(JOBS.map(j => [j.id, j]));
 
 // ---- subject reading --------------------------------------------------------------
@@ -900,6 +913,8 @@ for (const [b, m] of [
   { "the-anchor": 1.2, "port-park": 0.8, "covered-market": 0.5, "cathedral-square": 0.4, "the-old-bell": 0.4, chandlery: 0.3, "bowling-green": 0.3 },
 ].entries()) Object.assign(LEISURE_BY_BAND[b], m);
 for (const [f, w] of Object.entries({ religion: { cathedral: 3 }, history: { "city-museum": 3, cathedral: 1 }, education: { "city-museum": 1.5 }, visual: { "city-museum": 1.5 }, music: { cathedral: 1, "the-old-bell": 1 }, exploration: { chandlery: 1, "the-anchor": 1 }, labor: { "the-anchor": 1.5 }, business: { "covered-market": 1, "high-street": 1 }, writing: { "the-old-bell": 1.5 }, farming: { "covered-market": 1.5 } })) Object.assign(LEISURE_BY_FIELD[f] ||= {}, w);
+STORE_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
+for (const [f, m] of Object.entries(STORE_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
 // the sea and the snow, for the sporting and the idle
 for (const [f, w] of Object.entries({ sport: { surf: 0.8, slopes: 1 }, care: { beach: 1 }, visual: { pier: 1.2, beach: 0.8 }, writing: { pier: 1.5 }, music: { boardwalk: 1 }, finance: { slopes: 1.5 }, business: { slopes: 1 }, screen: { beach: 1.2 } })) Object.assign(LEISURE_BY_FIELD[f] ||= {}, w);
 
@@ -943,7 +958,7 @@ function gamesOn(day, hour) {
   let out = null;
   for (const [id, list] of Object.entries(GAMES)) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
   // the master plan's venues (the Pit's card, the tennis club's fixtures) pull a crowd the same way
-  for (const [id, list] of Object.entries(VENUE_FIXTURES)) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
+  for (const [id, list] of Object.entries({ ...VENUE_FIXTURES, ...STORE_FIXTURES })) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
   return out;
 }
 const TEAMS = ["THE COMPLIANT", "THE ASSESSED"];
@@ -1200,6 +1215,30 @@ export function setSocialSnapshots(byDay) {
   if (changed) memo.clear();
   return changed;
 }
+// ---- THE MALL (enterprise.js, docs/CITY_SPEC.md "THE MALL") -------------------------------------
+// Per machine day, set by the plan builder before it builds the day (and the day before it, whose
+// overnight tail the day carries): who works at a storefront instead of their assigned job, and the
+// businesses' pull on everyone's leisure. Never set in a browser: browsers read the plan.
+// byDay: {day: {ver, work: Map(key -> {place, shift}), shops: (list, total, s) -> list}}
+const ENT = new Map();
+export function setEnterprise(byDay) {
+  let changed = false;
+  for (const [d, e] of Object.entries(byDay || {})) {
+    const day = Number(d);
+    if (!Number.isFinite(day)) continue;
+    if (!e) { if (ENT.delete(day)) changed = true; continue; }
+    if (ENT.get(day)?.ver === e.ver) continue;
+    ENT.set(day, e); changed = true;
+  }
+  if (changed) memo.clear();
+  return changed;
+}
+export function clearEnterprise() { if (ENT.size) { ENT.clear(); memo.clear(); } }
+// The job a subject works on a day: their storefront's, else the one assigned.
+function workOf(s, day, seed) {
+  const w = seed === SEED ? ENT.get(day)?.work?.get(keyOf(s)) : null;
+  return w || JOB[assignJob(s, seed).jobId];
+}
 export function clearSocialSnapshots() { if (SOCIAL.size) { SOCIAL.clear(); memo.clear(); } }
 const socialVer = (day) => SOCIAL.get(day)?.ver ?? "-";
 
@@ -1259,6 +1298,9 @@ function pickLeisure(s, day, i, seed, avoid, hour = null) {
     list = list.flatMap(([id, v]) => { if (!RESORT_PARCELS.has(id)) return [[id, v]]; const o = resortOpenOn(id, day); return o ? [[id, v * RESORT_PULL[o][bandOf(s)]]] : []; });
     total = list.reduce((a, [, v]) => a + v, 0);
   }
+  // THE MALL: the businesses trading that day draw their customers (enterprise.js shopsFor)
+  const ent = seed === SEED ? ENT.get(day) : null;
+  if (ent?.shops) { list = ent.shops(list, total, s, hour); total = list.reduce((a, [, v]) => a + v, 0); }
   // A fixture on at the ground when the visit starts pulls its fans (and the curious) in.
   const on = hour == null ? null : gamesOn(day, hour);
   if (on) { list = list.map(([id, v]) => [id, on.has(id) ? v * GAME_PULL : v]); total = list.reduce((a, [, v]) => a + v, 0); }
@@ -1293,8 +1335,10 @@ for (const [k, id] of FUNNEL_FAMILY) FAMILY[k].push(id);
 // with the galleries, the square and the park with the parks, the cathedral with nothing (it is big)
 FAMILY[0].push("the-anchor", "the-old-bell"); FAMILY[4].push("covered-market", "high-street", "market-row", "chandlery"); FAMILY[2].push("city-museum"); FAMILY[3].push("cathedral-square", "port-park", "bowling-green", "the-close");
 for (const [k, id] of VENUE_FAMILY) FAMILY[k].push(id);
+for (const [k, id] of STORE_FAMILY) FAMILY[k].push(id);
 const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
-const LEISURE_ROOMS = Object.values(PLACES).filter(p => p.kind === "leisure" || p.kind === "mixed").map(p => p.id);
+// (a storefront unit takes visitors only while a business trades in it: enterprise.js, below)
+const LEISURE_ROOMS = Object.values(PLACES).filter(p => (p.kind === "leisure" || p.kind === "mixed") && !UNIT_SET.has(p.id)).map(p => p.id);
 export const OVERFLOW = Object.fromEntries(Object.keys(PLACES).map(id => {
   const fam = (FAMILY.find(f => f.includes(id)) || []).filter(q => q !== id).sort((a, b) => dist2(id, a) - dist2(id, b));
   const rest = LEISURE_ROOMS.filter(q => q !== id && !fam.includes(q)).sort((a, b) => dist2(id, a) - dist2(id, b));
@@ -2012,7 +2056,7 @@ function shiftOf(s, job, seed) {
 // pick(i, avoid, hour) chooses the i-th leisure place for a visit starting about then;
 // capacity allocation overrides it.
 function planStops(s, day, seed, pick) {
-  const key = keyOf(s), job = JOB[assignJob(s, seed).jobId], home = homeOf(s, seed), owl = isOwl(s, seed);
+  const key = keyOf(s), job = workOf(s, day, seed), home = homeOf(s, seed), owl = isOwl(s, seed);
   const r = rng(`${seed}|day|${key}|${day}`);
   const me = h01(`${seed}|me|${key}`);   // personal rhythm: early birds and late risers
   const stops = [];

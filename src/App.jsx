@@ -520,7 +520,7 @@ export default function OverlordAssessment() {
 
   // v9 ROUTES. #file is MY FILE in the command bar: for now the intake screen, which
   // opens on the case file, the breakdown and the appeals desk when one is on record.
-  const isCity = route === "#city" || route.startsWith("#city/") || route.startsWith("#city?") || route.split("?")[0] === "#prefects";
+  const isCity = route === "#city" || route.startsWith("#city/") || route.startsWith("#city?") || route.split("?")[0] === "#prefects" || route.split("?")[0] === "#enterprise";
   const routePath = route.split("?")[0];
   const isFile = routePath === "#intake" || routePath === "#file";
   const isArrivals = routePath === "#arrivals" || routePath === "#pen";

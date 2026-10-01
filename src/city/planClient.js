@@ -71,6 +71,11 @@ export const heldSubject = (key) => known.get(key) || null;
 // ---- days: summaries -----------------------------------------------------------------------------
 const days = new Map();   // day -> {ver, summary} | "loading" | "missing"
 export const summaryOf = (day) => days.get(day)?.summary || null;
+// THE MALL (enterprise.js): each subject's satisfaction for a day, beside their window rows (the
+// figures on file's in the summary). day -> Map(key -> [s, fit, pay, commute, mood, friends, flags])
+const SAT = new Map();
+const satPut = (day, key, row) => { if (!Array.isArray(row)) return; let m = SAT.get(day); if (!m) SAT.set(day, m = new Map()); m.set(key, row); };
+export const satOf = (key, day) => SAT.get(day)?.get(key) || null;
 const MISSING = (at = Date.now()) => ({ missingAt: at });
 const isMissing = (d) => Boolean(d?.missingAt);
 function ensureDay(day) {
@@ -84,6 +89,7 @@ function ensureDay(day) {
       if (!sum || sum.day !== day) { days.set(day, MISSING()); return days.get(day); }
       addPlanRows(day, ver, sum.places || [], sum.onFile, { roster: sum.roster, social: sum.social, n: sum.n });
       for (const key of Object.keys(sum.onFile || {})) hold(key, 0);
+      for (const [key, row] of Object.entries(sum.sat || {})) satPut(day, key, row);
       const v = { ver, summary: sum };
       days.set(day, v);
       emit("hvi-plans");
@@ -113,7 +119,7 @@ function loadWindow(day, sector, w) {
   Promise.all(Array.from({ length: P }, (_, p) => getJson(`/api/plan/${day}/${d.ver}/${sector}/${w}/${p}`).then(f => {
     if (!f || f.day !== day || f.sector !== sector || f.window !== w) throw new Error("wrong window");
     const rows = {};
-    for (const [key, [rec, row]] of Object.entries(f.subjects || {})) if (hold(key, rec)) rows[key] = row;
+    for (const [key, [rec, row, sat]] of Object.entries(f.subjects || {})) { if (hold(key, rec)) rows[key] = row; if (sat) satPut(day, key, sat); }
     addPlanRows(day, d.ver, f.places, rows);
     emit("hvi-sectors");
   }))).then(() => { files.set(id, "ok"); emit("hvi-sectors"); }).catch(() => files.set(id, "missing"));
@@ -190,7 +196,7 @@ function pump() {
     }
     pumpPins(T);
     // Yesterday goes once today is well under way; a quest report looks back 90 real seconds.
-    if (h > 2) for (const d of plannedDays()) if (d < day) { dropPlan(d); days.delete(d); for (const id of [...files.keys()]) if (+id.split("/")[0] === d) files.delete(id); }
+    if (h > 2) for (const d of plannedDays()) if (d < day) { dropPlan(d); days.delete(d); SAT.delete(d); for (const id of [...files.keys()]) if (+id.split("/")[0] === d) files.delete(id); }
   } finally { pumping = false; }
 }
 

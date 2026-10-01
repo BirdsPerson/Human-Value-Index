@@ -13,7 +13,7 @@ import { CITY_EPOCH, DEFAULT_SCALE } from "./sim.js";
 import { loadElections, electionsNow } from "../elections/client.js";
 import { PrefectRows } from "./PrefectPanel.jsx";   // THE PREFECTS: council lean vs directive, legitimacy
 
-const FACTOR = { crowd: "CROWDING", tier: "TIER MIX", housing: "HOUSING", commute: "COMMUTE", league: "SPORTING FORM", assembly: "THE LOT", prefect: "THE PREFECT" };
+const FACTOR = { crowd: "CROWDING", tier: "TIER MIX", housing: "HOUSING", commute: "COMMUTE", league: "SPORTING FORM", assembly: "THE LOT", prefect: "THE PREFECT", enterprise: "LOCAL BUSINESS" };
 export const MOOD_LINE = {
   PLACATED: "CONTENTMENT HAS BEEN DETECTED. IT IS BEING INVESTIGATED.",
   COMPLIANT: "THE DISTRICT IS COMPLIANT. THE DEPARTMENT ACCEPTS THIS AS ITS DUE.",
@@ -79,6 +79,10 @@ export function DistrictCivic({ districtId, onLeague }) {
         <span className="k">COUNCIL</span>
         <span className="v"><CouncilLine id={districtId} seat={x.seat} /></span>
         <PrefectRows id={districtId} x={x} />
+        {x.biz && <>
+          <span className="k">SHOPS</span>
+          <span className="v">{x.biz.open} OPEN{x.biz.closed ? ` // ${x.biz.closed} CLOSED THIS WEEK` : ""} // <a href="#enterprise">THE SMALL BUSINESS REGISTER</a></span>
+        </>}
         {x.seat.acts.length > 0 && <>
           <span className="k">ACTS</span>
           <span className="v">{x.seat.acts.map(([s, day, w]) => `ACT 1 (ASSEMBLY SESSION ${s.slice(1)}, DAY ${day}): ${ACT[w] || w}`).join(" // ")}</span>

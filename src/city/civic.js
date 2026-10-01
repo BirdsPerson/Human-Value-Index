@@ -30,6 +30,7 @@ import { councilLeans, prefectFold } from "./prefects.js";
 import { PREFECT } from "./prefectData.js";   // THE PREFECTS: directive, clash, legitimacy
 import * as L from "./leagues.js";   // THE LEAGUES: four sports, the ladder, the Pit, the Departmental Cup
 import { playerRating, draftOrder, teamName, teamShort } from "./leagues.js";
+import { enterpriseMood, districtBiz } from "./enterprise.js";   // THE MALL: the district's shops
 
 export const CIVIC_V = 1;
 // The league is the Loop's ten districts (its season was drawn before the city grew outward);
@@ -477,6 +478,7 @@ export function civicFold(plan, people, prev = null) {
   for (const id of ALL) {
     const pos = X ? cupPos.indexOf(id) : lg.standing.indexOf(id), fm = X ? L.formOf(allPlayed, id) : form(id);
     const f = factors(stats[id], [...fm].reduce((n, r) => n + (r === "W" ? 3 : r === "L" ? -3 : 0), 0), pos, lot, id);
+    if (plan.ent) f.enterprise = enterpriseMood(plan.ent, id) || 0;   // THE MALL (enterprise.js): thriving shops +, closures -
     // THE PREFECT (prefects.js): today's directive from the mood before its own factor and the
     // council's lean; the clash and the directive's weight become the mood's `prefect` factor.
     // (the Port and the Old Town have no prefect yet: PHASE 2 TODO, one each, their own look and voice)
@@ -503,6 +505,7 @@ export function civicFold(plan, people, prev = null) {
       ? { holder: held[id].holder, name: held[id].name, term: held[id].term, cycle: held[id].cycle, by: held[id].by, approval: s, status: "HELD", lean: leans[id] ?? 0, acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] }
       : { holder: null, term: null, approval: s, status: "VACANT", acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] };
     if (pf) rec.prefect = pf.block;
+    if (plan.ent) rec.biz = districtBiz(plan.ent, id);   // THE MALL: open shops, closures this week
     districts[id] = rec;
   }
   if (X) {

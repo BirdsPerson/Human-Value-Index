@@ -21,6 +21,7 @@ import { funnelMass, FUNNEL_STYLES, FUNNEL_OUT_FRONT } from "./funnelGeo.js";
 import { COAST_LOTS, TERRAIN_MAX } from "./coastGeo.js";
 import { venueMass, VENUE_STYLES, VENUE_OUT_FRONT } from "./venueGeo.js";
 import { westMass, WEST_STYLES, WEST_OUT_FRONT } from "./westGeo.js";
+import { storeMass, STORE_STYLES, STORE_OUT_FRONT } from "./storefrontGeo.js";   // THE MALL
 
 export const KERB = 0.4;    // props and bodies keep this far in from the lot edge (sim KERB)
 
@@ -47,6 +48,7 @@ export const STYLES = {
   ...FUNNEL_STYLES,   // the Arcade, the EB Shop, the EBTV station (funnelGeo.js)
   ...VENUE_STYLES,    // the Dept of Planning (venueGeo.js)
   ...WEST_STYLES,     // the Port and the Old Town (westGeo.js)
+  ...STORE_STYLES,    // THE MALL: the storefront units, SAM'S PIZZA, GOODNIGHT IRENE'S (storefrontGeo.js)
 };
 export const GROUND_STYLES = new Set(["stadium", "field", "lot"]);
 export { HOUSING_TIERS };
@@ -366,6 +368,7 @@ const MASS = {
 Object.assign(MASS, funnelMass({ box, cyl, pt, bx, run, gr }));
 Object.assign(MASS, venueMass({ box, cyl, pt, bx, run, gr }));
 Object.assign(MASS, westMass({ box, cyl, pt, bx, run, gr }));
+Object.assign(MASS, storeMass({ box, cyl, pt, bx, run, gr }));
 
 // -> {style, parts, yard, ground, rise, box} in map cells, or null for open ground.
 const CACHE = new Map();
@@ -399,7 +402,7 @@ export function massingOf(b) {
   return m;
 }
 // How far the front (+y) dressing stands out from the body: stoops, canopies, awnings, a portico's steps.
-export const OUT_FRONT = { bungalow: 0.4, lodge: 0.1, brownstone: 0.55, glass: 0.45, casino: 0.45, cafe: 0.45, market: 0.35, theatre: 0.4, neon: 0.3, diner: 0.3, classical: 0.25, projects: 0.3, gallery: 0.1, hospital: 0.25, school: 0.2, gothic: 0.2, clocktower: 0.2, shed: 0.35, lofts: 0.3, office: 0.2, chapel: 0.2, ...FUNNEL_OUT_FRONT, ...VENUE_OUT_FRONT, ...WEST_OUT_FRONT };
+export const OUT_FRONT = { bungalow: 0.4, lodge: 0.1, brownstone: 0.55, glass: 0.45, casino: 0.45, cafe: 0.45, market: 0.35, theatre: 0.4, neon: 0.3, diner: 0.3, classical: 0.25, projects: 0.3, gallery: 0.1, hospital: 0.25, school: 0.2, gothic: 0.2, clocktower: 0.2, shed: 0.35, lofts: 0.3, office: 0.2, chapel: 0.2, ...FUNNEL_OUT_FRONT, ...VENUE_OUT_FRONT, ...WEST_OUT_FRONT, ...STORE_OUT_FRONT };
 
 export const MASSED = Object.keys(MASS);
 export const massingAll = () => BUILDINGS.map(b => [b, massingOf(b)]);

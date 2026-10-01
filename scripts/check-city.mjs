@@ -396,7 +396,7 @@ for (const r of stress) ok(r.peak <= r.cap * 2, `${r.id} peak ${r.peak} within 2
   ok(flooredBad === 0, "occupancy by building and floor adds up to occupancy by room");
 }
 console.log(`  never visited: ${unused.join(", ") || "none"}`);
-ok(unused.filter(id => !RESORT_PARCELS.has(id)).length <= 3, "nearly every place gets used (the resort parcels wait for session 002)");
+ok(unused.filter(id => !RESORT_PARCELS.has(id) && !UNIT_SET.has(id)).length <= 3, "nearly every place gets used (the resort parcels wait for session 002; a storefront unit takes nobody until a business trades in it)");
 ok(![...RESORT_PARCELS].some(id => !unused.includes(id)), "nobody visits a resort parcel before anything is built on it");
 
 // ---- status copy -------------------------------------------------------------------------------

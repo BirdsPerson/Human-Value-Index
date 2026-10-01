@@ -23,10 +23,12 @@ import * as SIM from "../../src/city/sim.js";
 import { fullRoster } from "../../src/city/roster.js";
 import { splitDay, SECTORS, FORMAT as FORMAT2 } from "../../src/city/planSplit.js";
 import { civicFold, CIVIC_V, setSeats } from "../../src/city/civic.js";
+import { stepEnterprise, simDay, publicBlock, satisfactionDay, satRow, ENT_V } from "../../src/city/enterprise.js";
 
 export const STORE = "hvi-plans";
 export const FORMAT = SIM.PLAN_FORMAT;
 export const LOOKAHEAD = 3;
+export const ENT_LEDGER = "ent/latest";
 export const KEEP_BEHIND = 2;          // days before today kept in the manifest (the tick and quests look back)
 export const MANIFEST = `f${FORMAT}/manifest`;
 export const dayKey = (day, ver) => `f${FORMAT}/day/${day}/${ver}`;
@@ -83,6 +85,9 @@ export function planIo(s = store, { census, snapshots, civic, elections }) {
       if (!r.modified) throw new PlanConflict("manifest changed since it was read");
       return r.etag || (await s().getMetadata(MANIFEST))?.etag;
     },
+    // THE MALL's latest state (src/city/enterprise.js): the register outlives the plans it rides.
+    async entLedger() { return s().get(ENT_LEDGER, { type: "json" }); },
+    async putEntLedger(v) { await s().setJSON(ENT_LEDGER, v); },
     async dropDay(key) { await s().delete(key).catch(() => {}); },
     async list() { return (await s().list({ prefix: `f${FORMAT}/day/` })).blobs.map(b => b.key); },
     async getDay(key) { return s().get(key, { type: "json" }); },
@@ -154,15 +159,23 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
       SIM.setCivic(civic);
       if (opts.memoCap !== 0) SIM.setMemoCap(opts.memoCap ?? Math.max(200000, roster.length * 60));
       SIM.setRoster(roster);
+      const people = new Map(roster.map(s => [SIM.keyOf(s), s]));
+      let ledger = io.entLedger ? await io.entLedger() : null;
       for (const day of missing) {
         if (built.length && clock() - t0 >= budgetMs) break;
         if (day > today + 1 && !snaps[day]) { waiting = day; break; }   // later days wait too: they need this one's snapshot first
         const a = clock();
+        // THE MALL (src/city/enterprise.js): the day's businesses from yesterday's, before the day
+        // is built (who works at a storefront, and the shops' pull on everyone's leisure)
+        const { prevEnt, state: ent } = await enterpriseFor(io, day, { jsons, manifest, people, ledger });
+        SIM.setEnterprise({ [day - 1]: simDay(prevEnt), [day]: simDay(ent) });
         const json = SIM.buildPlan(day);
+        json.ent = ent;
         const ver = versionOf(json), key = dayKey(day, ver);
         const bytes = JSON.stringify(json).length;
         await io.putDay(key, json);   // the day's blob first ...
         jsons.set(day, json);
+        if (io.putEntLedger && !(ledger?.day >= day)) { ledger = { day, state: ent }; await io.putEntLedger(ledger); }
         const entry = { ver, key, roster: json.roster, social: json.social, n: json.n, bytes, at: new Date(clock()).toISOString(), run };
         // ... then the manifest, only over the version we read. On a conflict, re-read: if
         // another builder published this day meanwhile, theirs stands.
@@ -249,6 +262,18 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
 }
 const dayOfKey = (key) => Number(String(key).split("/")[2]);
 
+// THE MALL's state for `day`: stepped from yesterday's (the state yesterday's plan carries, with its
+// trade and its satisfaction), else from the ledger across a gap (no trade counted for the days
+// missed), else a new register. -> {prevEnt: the state yesterday's plan was built with | null, state}
+export async function enterpriseFor(io, day, { jsons, manifest, people, ledger }) {
+  const e1 = manifest?.days?.[day - 1];
+  const prevJson = jsons?.get(day - 1) || (e1 && io.getDay ? await io.getDay(e1.key) : null);
+  const prevEnt = prevJson?.ent?.v === ENT_V ? prevJson.ent : null;
+  const carried = !prevEnt && ledger?.state?.v === ENT_V && ledger.day < day ? ledger.state : null;
+  const state = stepEnterprise(prevEnt || carried, prevEnt ? prevJson : null, people, day);
+  return { prevEnt, state };
+}
+
 // Yesterday's civic block for the fold of `day` (docs/CITY_SPEC.md "The civic fold"): this
 // run's own, else yesterday's published summary, else recomputed from yesterday's plan (the
 // fold's window is two days, so the recompute is the block the chain would have read), else
@@ -278,6 +303,12 @@ export async function publishSplit(io, json, ver, roster, run, clock = Date.now,
   try { parts = splitDay(json, ver, people); } finally { SIM.dropPlan(json.day); }   // the builder reads the sim, never a plan
   const { windows, summary, find } = parts;
   summary.civic = civicFold(json, people, civ.prev || null);
+  // THE MALL: the day's businesses, and every subject's satisfaction beside their window rows
+  // (the figures on file's in the summary: their rows are there too)
+  if (json.ent) summary.enterprise = publicBlock(json.ent, people);
+  const sat = satisfactionDay(json, people, json.ent || null);
+  for (const sector of SECTORS) for (const w of windows[sector]) for (const [k, entry] of Object.entries(w.subjects)) { const x = sat.get(k); if (x) w.subjects[k] = [...entry, satRow(x)]; }
+  summary.sat = Object.fromEntries(Object.keys(summary.onFile || {}).filter(k => sat.has(k)).map(k => [k, satRow(sat.get(k))]));
   civ.out?.set(json.day, summary.civic);
   const files = {}, jobs = [];
   let bytes = 0;

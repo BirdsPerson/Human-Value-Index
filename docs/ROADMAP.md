@@ -39,6 +39,12 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       camera to where they are now (whereAt), highlights and follows them; inside a building
       the cutaway opens on their floor; status line "NAME — PLACE, FLOOR. ACTIVITY." FIND ME
       jumps to the viewer's own subject.
+   b1c. [first step shipped 2026-09-30, docs/CITY_SPEC.md "THE MALL": job SATISFACTION per subject per day;
+      dissatisfied entrepreneurs QUIT and open shops of their trade in 24 storefront units (Heights base,
+      Coast boardwalk east, Strip, Campus, Commons, Sprawl), staffed from the dissatisfied, foot traffic
+      decides, losers close; DEPARTMENT LICENSE 0001 to Shaun White (WHITE'S, the Heights base); SAM'S
+      PIZZA and GOODNIGHT IRENE'S as Coast landmarks; the tram car; #enterprise. Next: players open
+      one with CYCLES (item 5), the EB Shop's storefront, a developer's second mall]
    b1c. **THE MALL** (Scott 2026-09-29: "people can open their own businesses if they want;
       leave it up to them"). A mall of storefront units. Emergent: figures with business/
       entrepreneur fields and the drive for it (competence, network, adaptability) decide on

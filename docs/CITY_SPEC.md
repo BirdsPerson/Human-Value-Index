@@ -1559,3 +1559,103 @@ Screens (PHASE 2): docs/screens/phase2/ (production whole city at the four quart
 the Port, the Old Town, the Shore Line, the Alpine Line and the monolith with the Central Line, by day
 and by night, at 1440 and 390, from the dev build of the same commit).
 
+THE MONOLITH ON THE LINE (Scott 2026-09-30: "it would make sense for the train to run through the
+central building"). DEPT HQ's tower now stands over the Loop at the DEPT HQ station: a black slab
+15 cells long over the viaduct, its soffit at 3 storeys (over the platform's canopy), pylons at its
+north corners beside the deck, the concourse wall on the plaza side (DEPT HQ // THE LOOP STOPS HERE,
+the door), the eye band still sweeping at 9.4. The trains run through the portal under it. Nothing
+in the sim moved: the track, the station, its gate, the timetable, the HQ lot and every published
+day are exactly as they were; only the massing (`archGeo.js` monolith: `seg` base / pylon / tower,
+`m.solid` the concourse) and the painter: the concourse is HQ's body item (a deck under the tower),
+each pylon an item of its own, the tower (`towerItems`) slotted after every deck and car under it
+(iso.slotForBox at its soffit) and drawn after the trains of its slot; `drawBody(..., only)` draws a
+building's parts by segment. DRIVE YOURSELF holds the concourse and the pylons solid (the station's
+stairs come down beside them). `check-cityview`: the tower covers the platform, the soffit clears
+the canopy, the concourse and pylons clear the viaduct, and every car wholly under the tower paints
+before it at all four turns (a car half out of the portal is drawn over the tower's end face).
+## THE MALL: emergent small business (2026-09-30)
+
+Scott: "if people get dissatisfied with their jobs, they should try to open their own businesses...
+Shaun White would be the perfect guy to start a ski shop / snowboard shop at the foot of the
+mountain." ROADMAP b1c. Code: `src/city/enterprise.js` (the rules, pure), `storefrontSim.js` (the
+units and the landmarks as city data, spread into `sim.js` like the funnels), `storefrontGeo.js` /
+`storefrontDraw.js` (massing and drawing), `storefrontProps.js` (the rooms), `enterpriseClient.js`
+(the browser's reading), `EnterprisePanel.jsx` (the BUSINESS card, the register, the file's line).
+Hooks: `sim.js` (places/buildings/jobs spread; FRONTAGE lots laid out apart from the district's grid;
+`setEnterprise`: a storefront worker's job and the shops' pull on leisure, per day), `plans.js` (the
+step before each day is built; `ent` in the plan; the summary's block; satisfaction beside the
+window rows; the `ent/latest` ledger), `civic.js` (the mood factor and the shops per district),
+`CityIso.jsx` (labels, the BUSINESS button, the tram car), `City.jsx` (PA, page, card host, file line),
+`planClient.js` (satisfaction rows), `props.js`, `archGeo.js`, `archDraw.js`. Check: `scripts/check-enterprise.mjs`.
+
+- **SATISFACTION**, per subject per machine day, from that day's plan: 52 + FIT (the job's fields
+  against the record, -14 + 26 x field match + 6 x dimension match, -6 when the record fits nothing
+  about the post; drafted labour -9 + 8 x dimension match; -20..20) + PAY (the rung: -10..10;
+  PROCESSING -16) + COMMUTE (hours in transit on a working day past 2.5, x5, to -15) + MOOD (the work
+  district's crowding, tier mix and housing, the civic fold's own measures, /4, -8..8) + FRIENDS AT WORK
+  (coworkers met off shift that day: none -2, else 3 + 2 each to 10); 0..100. The words: the worst
+  factor names it ("SATISFACTION: 34 // MISFILED. THE DEPARTMENT IS AWARE."). Shown on the subject's
+  file (`EnterpriseLine`), from `[s, fit, pay, commute, mood, friends, flags]` beside each window row
+  (the figures on file's in `summary.sat`). A rest day is not counted.
+- **OPENING.** An entrepreneur: living, not a citizen (players are never moved by the sim), not
+  PROCESSING grade, and a record in business / finance / management (>= 5), or competence >= 70,
+  network >= 65 and adaptability >= 70, or a record that fits a trade. Under 35 on a working day
+  counts one; 35-44 holds the count; 45+ clears it. At 7 the subject QUITS and opens; the longest
+  counts first, at most 2 a day, one business each, cooldown 14 days after a closure. The trade:
+  a name the Department knows (`HINT_TYPE`: Shaun White ski, Kelly Slater surf, Tony Hawk skate,
+  Gordon Ramsay restaurant, Rick Rubin records, Ronnie Fieg sneakers, Criss Angel magic, Stephen
+  King books, the Coppolas wine...), else the strongest trade field (music records/venue,
+  hospitality restaurant/bakery, visual gallery, writing books, screen video/comedy, sport sporting
+  goods/gym, combat gym, computing/engineering repair, finance pawn, farming grocer...), else the top
+  public dimension (physical gym, care cafe, network restaurant, utility repair...). 25 trades, each
+  with the districts it suits; the unit: a vacant one in the first suiting district (ski only at the
+  Heights, surf only on the Coast), else the busiest vacant one. Named in the Overlord's voice:
+  surname + the trade's line + its last word ("WHITE'S. SKI. SNOWBOARD. NO REFUNDS.").
+- **STAFF.** One hand on opening, from the subjects under 50 yesterday who suit the trade best;
+  another after 4 good days (profit > 20), to 3. Their work moves to the shop (the plan says so);
+  nobody is an owner or a hand twice.
+- **TRADE.** Customers are the sim's own leisure visits: each trading unit takes ~3% of a subject's
+  leisure weight x (0.4 + their liking for the trade) x the district's foot traffic, only while it is
+  open (day trades 9-19, evening 12-24). Takings = yesterday's visits x price x fit (1 in a suiting
+  district, 0.7 elsewhere; x 0.8-1.2 by how well the owner knows the trade); costs = rent (Strip 60,
+  Coast/Heights 48, Campus 45, Commons 30, Sprawl 24) + 16 a hand. 5 losing days of the last 7:
+  CLOSED (the owner and hands back to their assigned posts the same day; the unit shows CLOSED.
+  THE DEPARTMENT EXPECTED THIS., then TO LET; re-let from 2 days later). 8 good days: a SECOND
+  LOCATION in a suiting vacant unit.
+- **LICENCE 0001.** Shaun White is on the live census (a referral, no occupation, competence 68,
+  network 62, adaptability 72): he qualifies by name (a record that fits a trade), but the rules
+  need 7 counted days and he would not have been first, so the first day built after the deploy
+  grants DEPARTMENT LICENSE 0001 to him, once: WHITE'S at BASE PARADE, UNIT 4 (nearest the lifts and
+  the Alpine Line). The grant is on his business file; every later licence follows the rules.
+- **THE STOREFRONTS** (24 units, each a one-room building on a FRONTAGE lot clear of everything
+  standing): the Heights' BASE PARADE (4, between ALPINE FLATS and the Alpine Line), the Coast's
+  BOARDWALK EAST (4, a new row east of the pier, each lot running down over its boards), STRIP
+  FRONTAGE (4) and COLLEGE ROW (4) on the north edge of the Strip and Campus, COMMONS PARADE (3) and
+  ESTATE PARADE (5) on the Loop's street. A unit TO LET takes nobody and no overflow.
+- **THE LANDMARKS** (never owned, never close): SAM'S PIZZA at the head of the east boardwalk (an
+  affectionate homage to the Wildwood boardwalk institution: the counter open to the boards, slices
+  in the window, the sign on the roof, the heat shimmering off the ovens, stools on the boards;
+  Pizza Counter Hands drafted, 5) and GOODNIGHT IRENE'S on the corner at the row's east end (homage to
+  the Wildwood brewpub, its palette from the specials archive: #8c1622, #a3a028, #f7f5ec; the long
+  bar, the copper tanks upstairs, the neon, the patio under string lights; bartenders and a brewer;
+  live music Thursday to Saturday nights, a fixture that pulls the crowd). No menus, no prices, no
+  claims. THE TRAM CAR runs the old boardwalk end to end (drawn only); the PA: "WATCH THE TRAM CAR, PLEASE."
+- **In the record.** The state rides each format-1 plan as `ent` (businesses, the closed list, the
+  counts, cooldowns, vacancies, licences), stepped from yesterday's plan before the day is built; a
+  published day never changes. `ent/latest` keeps the register across a gap in the plans (no trade is
+  counted for days missed). `summary.enterprise` = `publicBlock`: the 24 units, the open businesses
+  (owner, trade, staff, takings, profit, visits, status), the last 12 closures, the day's events
+  (~8 KB at 24 open, the same at any census size). The civic fold: `mood.f.enterprise` (a thriving
+  shop +2, an open one +1, a closure in the last 3 days -3; -6..6) and `biz: {open, closed}`.
+- **In the city.** The shopfronts: the trade's awning, a window dressed for the trade (boards, gear,
+  plates, sleeves, frames, spines, rails, gadgets, bottles, goods), the name on the fascia and on a
+  board on the roof, OPEN/CLOSED in the door by the hour; the room: a counter and the trade's racks
+  (`shop-<group>`), the bill TO LET in an empty one. Labels name the business. Tap a storefront:
+  BUSINESS opens its file (owner, trade, licence, opened, premises, staff, takings trend, profit,
+  foot traffic, status); a landmark: LANDMARK. `#enterprise` (and `#city/enterprise`): THE SMALL
+  BUSINESS REGISTER (open, newest openings, closures, TO LET, the landmarks, the rules). The PA
+  every fifth line: openings ("NOW OPEN: ... HAS QUIT AS ... THE DEPARTMENT HAS NOTED THE
+  INITIATIVE."), closures, hires, second locations, the thriving and the struggling.
+- **Measured** (the live census of 667 + the figures on file, 30 machine days from scratch): mean
+  satisfaction 44, about a fifth of working subjects under 35; the first organic openings on day 8,
+  every unit let by day 20, closures from day 14 (a churn of about one a day after that).

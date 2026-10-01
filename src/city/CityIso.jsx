@@ -29,6 +29,8 @@ import { makeIsoControl } from "./controlIso.js";
 import ControlLayer, { TakeControlButton } from "./ControlLayer.jsx";
 import { funnelRoomHits } from "./funnelProps.js";
 import { funnelButtons } from "./funnels.js";
+import { storeLabel, tramAt, drawTram } from "./storefrontDraw.js";   // THE MALL: the storefronts' names, THE TRAM CAR
+import { storeButtons, openBusiness } from "./EnterprisePanel.jsx";
 import { openFunnel } from "./FunnelOverlay.jsx";
 import { COAST_LOTS, COAST_PLACES, terrainH, onTerrain, TERRAIN } from "./coastGeo.js";
 import { drawCoastLot, drawCoastGround, drawPod, coastLabel, coastLine } from "./coastDraw.js";
@@ -411,7 +413,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         const [x, y] = PARK_LOTS[b.id] ? P(R.x0 + 0.6, R.y0 + 0.6, 0.4) : P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, h + 0.5);
         // the grounds' labels carry the fixture: "THE DIAMOND // BOT 5 3-2", "THE BOWL // Q3 14-10"
         const g = PARK_LOTS[b.id] && gameAt(PARK_LOTS[b.id], V.mt);
-        const text = CIVIC_LOTS[b.id] ? civicLabel(b.id, V.mt) : g ? `${b.name} // ${g.label}` : b.name;
+        const text = CIVIC_LOTS[b.id] ? civicLabel(b.id, V.mt) : g ? `${b.name} // ${g.label}` : storeLabel(b.id) || b.name;
         const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
         if (top) drawLabel(L, 1); else V.labels.push(L);
       };
@@ -815,6 +817,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         const h = onTerrain(pf.x, pf.y) ? terrainH(pf.x, pf.y) : 0, [u, v] = rot(pf.x, pf.y, r);
         out.push({ kind: "prefect", pf, u, v, h, civic: sum?.civic?.districts?.[pf.id] || null, box: { x0: u, y0: v, x1: u, y1: v } });
       }
+      // THE TRAM CAR (storefrontDraw.js): the old boardwalk, end to end and back
+      { const tm = tramAt(V.reduced ? 0 : performance.now() / 1000), [u, v] = rot(tm.x, tm.y, r); out.push({ kind: "tram", tm, u, v, h: 0, box: { x0: u - 0.4, y0: v - 0.4, x1: u + 0.4, y1: v + 0.4 } }); }
       ctl.movers(out, r);   // DRIVE YOURSELF: who is within reach, and the avatar itself
       return out;
     }
@@ -956,6 +960,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         drawPrefectIso({ ctx, z: V.cam.z, storey: STOREY, lod, t: V.reduced ? 0 : performance.now() / 1000, night: nightAt(((V.mt % 24) + 24) % 24), hits: V.hits, font: FONT, tops: V.pfTops || (V.pfTops = []) }, { pf: m.pf, x, y, face: ax > x + 0.01 ? 1 : 0 }, m.civic);
       }
       else if (m.kind === "ctl") ctl.drawMover(m, lod);
+      else if (m.kind === "tram") drawTram(coastG(), m.tm, lod, nightAt(((V.mt % 24) + 24) % 24));
       else if (m.kind === "pod") drawPod(coastG(), m.s, m.x, m.y, m.d, m.spur, lod, nightAt(((V.mt % 24) + 24) % 24), V.hits);
       else drawCar(m, lod);
     }
@@ -1509,6 +1514,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         {b
           ? <>
               {funnelButtons(b.id).map(f => <button key={f.label} type="button" className="hvi-city-zb txt" aria-label={f.aria} onClick={() => openFunnel(f.spec)}>{f.label}</button>)}
+              {storeButtons(b.id).map(f => <button key={f.label} type="button" className="hvi-city-zb txt" aria-label={f.aria} onClick={() => openBusiness(f.spec)}>{f.label}</button>)}
               <button type="button" className="hvi-city-zb txt" onClick={() => apiRef.current.enter?.()}>ENTER</button>
               <button type="button" className="hvi-city-zb txt" aria-label="Close the cutaway" onClick={() => apiRef.current.close?.()}>CLOSE</button>
             </>

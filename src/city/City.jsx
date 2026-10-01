@@ -28,6 +28,9 @@ import CityFind from "./CityFind.jsx";
 import { CTL, controlBuildingId } from "./control.js";   // DRIVE YOURSELF
 import FunnelHost from "./FunnelOverlay.jsx";
 import { PrefectHost, PrefectsPage } from "./PrefectPanel.jsx";   // THE PREFECTS
+import { BusinessHost, EnterprisePage, EnterpriseLine } from "./EnterprisePanel.jsx";   // THE MALL
+import { paLines as enterprisePa } from "./enterprise.js";
+import { enterpriseOf } from "./enterpriseClient.js";
 import { prefectPaLines } from "./prefects.js";
 import { buildIndex, bySlug, findHref } from "./find.js";
 import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
@@ -65,6 +68,8 @@ export default function City({ route }) {
   const leaguePage = parsed.districtId === "league";
   // #city/prefects (and #prefects): the twelve prefects and their directives (PrefectPanel.jsx)
   const prefectsPage = parsed.districtId === "prefects" || /^#prefects/.test(route || "");
+  // #city/enterprise (and #enterprise): THE SMALL BUSINESS REGISTER (EnterprisePanel.jsx)
+  const enterprisePage = parsed.districtId === "enterprise" || /^#enterprise/.test(route || "");
   const b = districtId && parsed.buildingId && BUILDING[parsed.buildingId]?.districtId === districtId ? BUILDING[parsed.buildingId] : null;
   // HQ runs its own simulation (the Holding Pen): it has floors, but no view of them to focus.
   const floor = b && b.id !== "hq" && parsed.floor != null && b.floors[parsed.floor] ? parsed.floor : null;
@@ -256,6 +261,8 @@ export default function City({ route }) {
     const record = civicPaLines(civicOf(clock.day), here);
     if (civic.length && k % 5 === 3 && (!here || here === "commons")) setPa(civic[Math.floor(k / 5) % civic.length]);
     else if (record.length && k % 7 === 6) setPa(record[Math.floor(k / 7) % record.length]);
+    else if (k % 5 === 1 && enterprisePa(enterpriseOf(clock.day), here).length) { const el = enterprisePa(enterpriseOf(clock.day), here); setPa(el[Math.floor(k / 5) % el.length]); }
+    else if ((!here || here === "coast") && k % 11 === 8) setPa("THE BOARDWALK // WATCH THE TRAM CAR, PLEASE. WATCH THE TRAM CAR, PLEASE.")
     else if (k % 6 === 4 && prefectPaLines(civicOf(clock.day), here).length) { const pl = prefectPaLines(civicOf(clock.day), here); setPa(pl[Math.floor(k / 6) % pl.length]); }
     else if ((games.length || venues.length) && k % 4 === 1) {
       const all = [...games.map(g => `${GAME_VENUE[g.placeId]}, ${g.name}: ${g.status}. ${SCORE_TAG[g.kind]}`), ...venues];
@@ -317,6 +324,7 @@ export default function City({ route }) {
     <SubjectCard subject={card} onClose={close} where="THE SUBSTRATE" back="Return subject to the Substrate" assignment={`ASSIGNMENT: ${jobLine(card)}`}
       extra={<>
         <SeasonLine subject={card} />
+        <EnterpriseLine subject={card} />
         {card.kind === "figure" && questsFor(card.slug).map(q => (
           <QuestCardPanel key={q.id} quests={quests} q={q} slug={card.slug} buildingId={b?.id || controlBuildingId() || null} />
         ))}
@@ -336,6 +344,7 @@ export default function City({ route }) {
   if (d) crumbs.push({ label: d.name, go: () => go(d.id) });
   if (leaguePage) crumbs.push({ label: "THE LEAGUES" });
   if (prefectsPage) crumbs.push({ label: "THE PREFECTS" });
+  if (enterprisePage) crumbs.push({ label: "THE SMALL BUSINESS REGISTER" });
   if (b) crumbs.push({ label: b.name, go: () => goBuilding(d.id, b.id) });
   if (b && floor != null) { const f = b.floors[floor]; crumbs.push({ label: `${f.code} ${f.name}` }); }
   const three = !d && mode === "stack";
@@ -361,13 +370,14 @@ export default function City({ route }) {
         find={<CityFind index={index} remote={sectors} onPick={onPick} self={selfEntry} caseId={caseId} />} />
       <div className="hvi-city-bar">
         <Breadcrumb crumbs={crumbs} />
-        {!d && !leaguePage && !prefectsPage && <ViewToggle mode={mode} onChange={setMode} />}
+        {!d && !leaguePage && !prefectsPage && !enterprisePage && <ViewToggle mode={mode} onChange={setMode} />}
       </div>
       {findSlug && !findEntry && !findPending && census !== "pending" && (
         <div className="hvi-city-note" role="status">NO SUBJECT ON FILE AS "{findSlug.toUpperCase()}". THE DEPARTMENT HAS CHECKED. TWICE.</div>
       )}
       {leaguePage && <LeagueHub tab={parsed.buildingId} />}
       {prefectsPage && <PrefectsPage />}
+      {enterprisePage && <EnterprisePage />}
       <Frame box title={b ? b.name : d ? d.name : iso ? "THE SUBSTRATE" : street ? "THE SUBSTRATE // STREET LEVEL" : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
         meta={b ? "CROSS-SECTION" : d ? "INTERIOR" : iso ? "DRAG // PINCH // TURN // TAP A BUILDING" : street ? "WALK // TURN // ENTER A DOOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} flush>
         {b
@@ -414,6 +424,7 @@ export default function City({ route }) {
       {cardEl}
       <FunnelHost />
       <PrefectHost />
+      <BusinessHost />
     </div>
   );
 }

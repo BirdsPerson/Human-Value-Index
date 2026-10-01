@@ -22,6 +22,7 @@ import { venueDeco, drawVenueYard, VENUE_STYLES_DRAWN } from "./venueDraw.js";
 import { VENUE_PROPS } from "./venueGeo.js";
 // THE PORT and THE OLD TOWN (PHASE 2 step 3): their facades, the quay's cranes and ship, the slipway
 import { westDeco, drawWestYard, drawWestGround, WEST_STYLES_DRAWN, WEST_PROPS_DRAWN } from "./westDraw.js";
+import { storeDeco, drawStoreGround, drawStoreYard, STORE_MAT, STORE_ROOF, STORE_STYLES_DRAWN, STORE_PROPS_DRAWN } from "./storefrontDraw.js";   // THE MALL
 import { partOrder } from "./archGeo.js";
 
 export const DRAWN_STYLES = new Set(["projects", "brownstone", "lofts", "glass", "office", "monolith", "gothic", "clocktower", "neon", "casino", "diner", "gallery", "theatre", "cafe", "studio", "hall", "classical", "vault", "hospital", "chapel", "market", "school", "shed", "reactor", "stacks", "datahall", "docks", "tanks", "bunker", "prison", "canteen",
@@ -33,6 +34,8 @@ for (const k of VENUE_STYLES_DRAWN) DRAWN_STYLES.add(k);
 for (const k of WEST_STYLES_DRAWN) DRAWN_STYLES.add(k);
 for (const k of WEST_PROPS_DRAWN) DRAWN_PROPS.add(k);
 for (const k of VENUE_PROPS) DRAWN_PROPS.add(k);
+for (const k of STORE_STYLES_DRAWN) DRAWN_STYLES.add(k);
+for (const k of STORE_PROPS_DRAWN) DRAWN_PROPS.add(k);
 
 const MAT = {
   brick: "#8a4a3a", brownstone: "#6d4a36", redbrick: "#94503b", glass: "#3f7598", steel: "#58718a", obsidian: "#141917",
@@ -46,6 +49,7 @@ const ROOF = { brick: "#3c3634", brownstone: "#35302c", redbrick: "#3a3230", gla
   hall: "#7f93a0", limestone: "#8c8674", vaultcon: "#5a605b", market: "#5a4a3a", rust: "#6a4a3a", panel: "#555e64", greenhouse: "#9ed2b4", stone: "#8f8878", tank: "#6a7178", wood: "#5a3e28", stack: "#6a6a6a",
   pastel: "#8a9a9c", pastelpink: "#8a9a9c", pastelyellow: "#8a9a9c", stucco: "#b0564a", weathered: "#55534c", timber: "#e8eef2", logs: "#e8eef2" };   // tin at the sea, terracotta on the flats, snow on the mountain
 Object.assign(MAT, FUNNEL_MAT); Object.assign(ROOF, FUNNEL_ROOF);
+Object.assign(MAT, STORE_MAT); Object.assign(ROOF, STORE_ROOF);
 
 const cache = new Map();
 function shade(hex, f) {
@@ -1409,6 +1413,9 @@ Object.assign(DECO, VENUE.deco); Object.assign(FAR, VENUE.far);
 const WEST_KIT = { ...FUNNEL_KIT, rowFace, rowRoof, clockFace, chapelSpire };
 const WEST = westDeco(WEST_KIT);
 Object.assign(DECO, WEST.deco); Object.assign(FAR, WEST.far);
+// THE MALL (storefrontDraw.js), with the same kit
+const STORE = storeDeco(FUNNEL_KIT);
+Object.assign(DECO, STORE.deco); Object.assign(FAR, STORE.far);
 
 const ORDERS = new Map();
 // G: {ctx, Q, poly, facing, z, r}; env: {lod, night, hour, t, lit, bid (int), name, style}
@@ -1502,6 +1509,8 @@ export function drawArchGround(G, m, env) {
       if (!far) { ctx.fillStyle = g.k === "sand" ? "rgba(120,90,50,0.25)" : "rgba(150,170,190,0.3)"; for (let i = 0; i < 10; i++) { const [x, y] = Q(g.x0 + (g.x1 - g.x0) * frac(i * 0.618 + 0.1), g.y0 + (g.y1 - g.y0) * frac(i * 0.382 + 0.3), 0.012); ctx.fillRect(x, y, Math.max(1, G.z * 0.12), 1); } }
     } else if (g.k === "carpet") {
       rect(g, shade("#9b1c2c", nf), null);
+    } else if (drawStoreGround(G, g, env, shade)) {
+      // THE MALL's boards and patio (storefrontDraw.js)
     } else if (g.k === "playground") {
       rect(g, shade("#3a3f45", nf), null);
       if (!far) for (let i = 0; i < 6; i++) { const x = g.x0 + 0.6 + i * 0.45; G.poly([Q(x, g.y0 + 0.2, 0.012), Q(x + 0.35, g.y0 + 0.2, 0.012), Q(x + 0.35, g.y0 + 0.55, 0.012), Q(x, g.y0 + 0.55, 0.012)], null, "rgba(250,250,250,0.5)"); }
@@ -1749,7 +1758,7 @@ export function drawYardProp(G, p, env) {
       for (let i = 0; i < 2; i++) { const c = { x0: p.x - 0.18 + i * 0.2, y0: p.y - 0.1, x1: p.x + i * 0.2, y1: p.y + 0.1, h0: 0, h1: 0.3 }; for (const f of facesOf(c, G)) G.poly(f.q(0, 1, 0, 0.3), shade(i ? "#2f5a3a" : "#3a3f44", f.sh * nf)); }
       break;
     }
-    default: if (!drawVenueYard(K, p, env) && !drawWestYard(K, p, env, WEST_KIT)) drawFunnelYard(K, p, env, FUNNEL_KIT); break;
+    default: if (!drawVenueYard(K, p, env) && !drawWestYard(K, p, env, WEST_KIT) && !drawStoreYard(K, p, env, FUNNEL_KIT)) drawFunnelYard(K, p, env, FUNNEL_KIT); break;
   }
   K.flush();
 }

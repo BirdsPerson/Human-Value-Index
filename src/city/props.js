@@ -15,6 +15,7 @@
 
 import { lotPhase, resortPhase, machineClock } from "./sim.js";
 import { PLANNING_ROOM_TYPE, PLANNING_LOOK, planningPlans, planningPropDrawers } from "./planning.js";
+import { STORE_ROOM_TYPE, STORE_LOOK, storePlans, storePropDrawers, storeRoomType, storeRoomDrawers } from "./storefrontProps.js";   // THE MALL
 import { FUNNEL_ROOM_TYPE, FUNNEL_LOOK, FUNNEL_ACTS, funnelPlans, funnelPropDrawers, funnelRooms, withTv } from "./funnelProps.js";
 import { floorRoomType, casinoPlans, casinoLook, casinoDraw, casinoLive, casinoProps } from "../casino/cityRooms.js";
 
@@ -49,6 +50,7 @@ export const ROOM_TYPE = {
   "cathedral": "chapel", "cathedral-square": "street", "bowling-green": "park", "the-close": "park", "covered-market": "market", "city-museum": "gallery", "the-old-bell": "bar", "high-street": "market", "market-row": "market",
   "rows-a": "lofts", "rows-b": "lofts", "rows-c": "lofts", "rows-e": "lofts", "flats-high-street": "lofts", "flats-market-row": "lofts", "flats-cathedral": "lofts",
   ...PLANNING_ROOM_TYPE,   // the Dept of Planning's drawing office (planning.js): the advocates at their lecterns
+  ...STORE_ROOM_TYPE,   // THE MALL: storefront units (their trade decides: storeRoomType), SAM'S PIZZA, GOODNIGHT IRENE'S
   ...FUNNEL_ROOM_TYPE,   // the Arcade, the EB Shop, the Union lounge, EBTV's stage, the boardwalk's cabinet (funnelProps.js); last, so it wins
 };
 // LOT 0x6F07 changes with THE ASSEMBLY's decision (sim.lotPhase): scrub and a site read as
@@ -61,6 +63,8 @@ const RESORT_TYPE = { "beach-resort": "lounge", "seaside-towers": "lounge", "ski
 export const typeOf = (placeId, floor = null) => {
   const ft = floorRoomType(placeId, floor);
   if (ft) return ft;
+  const st = storeRoomType(placeId);   // THE MALL: a unit is furnished for what trades in it today
+  if (st) return st;
   if (placeId === "dev-lot") { const p = lotPhase(machineClock().mt); return (p.phase === "built" && LOT_TYPE[p.winner]) || "street"; }
   if (placeId === "shore-lot" || placeId === "summit-lot") { const p = resortPhase(placeId, machineClock().mt); return (p.phase === "built" && RESORT_TYPE[p.winner]) || "street"; }
   return ROOM_TYPE[placeId] || "office";
@@ -81,6 +85,7 @@ const LOOK = {
   ballfield: ["#10202a", "#2f6b2a"], courts: ["#141c24", "#3a4250"], picnic: ["#10202a", "#2a5a24"], soccer: ["#10202a", "#2e7a30"],
 };
 Object.assign(LOOK, FUNNEL_LOOK);
+Object.assign(LOOK, STORE_LOOK);
 Object.assign(LOOK, PLANNING_LOOK);
 
 // ---- plans ----------------------------------------------------------------------------
@@ -297,6 +302,7 @@ const PLANS = {
   },
 };
 funnelPlans(PLANS, { A, M, P, SIDE });
+storePlans(PLANS, { A, M, P, SIDE });
 planningPlans(PLANS, { A, M, P, SIDE });   // the Dept of Planning (planning.js)   // new rooms, and a JETSAM! cabinet in the bars, the diner, the casino
 Object.assign(PLANS, casinoPlans({ A, M, P }));
 Object.assign(LOOK, casinoLook);
@@ -769,6 +775,7 @@ const DRAW = {
 };
 const FUNNEL_ROOMS = funnelRooms();
 Object.assign(DRAW, FUNNEL_ROOMS.DRAW, { boardwalk: DRAW.market });
+Object.assign(DRAW, storeRoomDrawers());   // THE MALL's walls
 DRAW.planning = DRAW.office;   // the Dept of Planning's drawing office: the office's walls
 Object.assign(DRAW, casinoDraw({ R, across }));
 export const DRAWN_TYPES = Object.keys(DRAW);
@@ -1103,6 +1110,7 @@ export const PROP = {
   streetBench: { back(c, X, Y, W, p, t, a) { PROP.parkBench.back(c, X, Y, W, p, t, a); } },
 };
 Object.assign(PROP, funnelPropDrawers({ SIDE }));
+Object.assign(PROP, storePropDrawers());   // THE MALL: shelves by trade, the board rack, the ovens, the tanks
 Object.assign(PROP, planningPropDrawers());   // the advocates, the plan chest   // cabinets, standees, the shop counter, the EBSN desk
 
 // HOUSE EDGE CASINO's floors: ambient light and table furniture (src/casino/cityRooms.js).
