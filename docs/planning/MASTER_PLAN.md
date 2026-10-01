@@ -286,3 +286,33 @@ Build order for the follow-up: (1) line abstraction under the Loop with the Loop
 behaviour change, checked identical; (2) the Shore and Alpine lines as rail replacing the pods;
 (3) THE PORT and THE OLD TOWN with the West Line; (4) THE SUBURBS and THE AIRPORT with the East
 Line; (5) THE FARMLAND and THE ENGINE; (6) THE OUTER RING at the 20k stage.
+
+## Addendum: THE NIGHTLIFE QUARTERS (2026-09-30)
+
+Scott: "nightclubs in a downtown district, more than one; the one near FINANCE higher end (plus
+higher-end restaurants); the one in the LOWER-INCOME district more clubs, dance clubs, other kinds of
+clubs, liquor stores." Code and behaviour: docs/CITY_SPEC.md "THE NIGHTLIFE QUARTERS".
+
+**Where, and why there.** The core has no free land: Finance (x 56-81, y 0-13) is boxed in by Campus,
+the Strip, DEPT HQ and the foothills, and the Sprawl's rows are full. The plan's free land is east of
+the ring. Two new districts take it, appended after the Old Town (ids `uptown`, `downtown`; every
+existing id, lot and station unmoved):
+
+| Quarter | Where (map cells) | Placement rule it follows |
+|---|---|---|
+| UPTOWN | x 113-125, y -1 to 27: the CBD row's east end (Finance, the Strip, then Uptown), running down the ring's east side | its top row faces the Strip across the street; the casino and the Arcade are the next block west; nothing residential beside it (the Archive's lofts face it across the Loop) |
+| DOWNTOWN | x 113-136, y 28.5-46: below Uptown, across the street from the Sprawl's north-east corner | the lower-income side: the Sprawl's projects and estates to the south-west, the Works beyond; heavy nightlife kept off the homes' own streets (a buffer of the ring and the Loop's street) |
+
+- **Crowds on transit (principle 3).** Neither quarter houses anyone, so neither gets a station: every
+  venue door is within 32 cells (the sim's reach on foot to a station, `ACCESS_R`) of the Strip's or
+  the Archive's Loop gate, and closing-time crowds leave by the Loop. `check-nightlife` holds every
+  corner of every venue within that walk. The Archive is the planned EAST LINE's interchange; the
+  Engine Shuttle runs from the Strip: both quarters sit on the way.
+- **What it moves in the plan.** THE SUBURBS (step 4) start at x 140 instead of x 116 (and THE
+  AIRPORT beyond at x 210); THE ENGINE (x 116-180, y -60 to -8) is untouched. The East Line runs
+  between the quarters and the Sprawl, or along y 27-28.5 between Uptown and Downtown.
+- **Separation (principle 1).** Downtown's bass and queues face the ring and the Loop's street, not a
+  home; the nearest homes (Hab D, the Archive Lofts) are across a street and the viaduct. The civic
+  fold charges the neighbours for the noise (the Sprawl -1 when Downtown roars; the Archive -1 at the
+  very loudest).
+- **Not here.** No homes in either quarter; no adult venue of any kind (the site is 16+).

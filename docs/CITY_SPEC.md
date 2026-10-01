@@ -1817,3 +1817,99 @@ the page), `props.js` (room types). Check: `scripts/check-mountain.mjs`.
   from the default NW camera: it sits on the village's flat floor, and no terrain short of lifting the
   storefronts ten storeys clears the towers, so the storefronts are seen from the NE and SW turns
   and up close. Screens: `docs/screens/mountain/` (live = production; night = the same build, `?at=21:30`).
+
+## THE NIGHTLIFE QUARTERS (2026-09-30)
+
+Scott: "nightclubs in a downtown district, more than one; the one near FINANCE higher end (plus
+higher-end restaurants); the one in the LOWER-INCOME district more clubs, dance clubs, other kinds of
+clubs, liquor stores." Placement and its reasons: docs/planning/MASTER_PLAN.md, addendum. Code:
+`src/city/nightlifeSim.js` (the districts, venues, hours, staff, tier weights, the rope, the lineups;
+pure data and functions, spread into `sim.js` like the venues and the Mall), `nightlife.js` (the
+civic factor, the PA, the label), `nightlifeGeo.js` / `nightlifeDraw.js` (massing and drawing),
+`nightlifeProps.js` (the rooms), `nightlifePrefects.js` (the two prefects). Hooks: `sim.js` (spreads;
+the night out and the booked sets in `planStops`; a venue's hours in `pickLeisure`, the overflow chain
+and `planDay`), `archGeo.js` / `archDraw.js` (styles, materials, ground, yard), `props.js` (rooms),
+`civic.js` (the factor; `dayStats` exposes its per-place load), `prefects.js` (`nightPressure` in the
+directive), `prefectData.js` / `prefectDraw.js` (two prefects: heads, uniforms, props), `CityIso.jsx`
+(ground colours, the label), `City.jsx` (the PA). Check: `scripts/check-nightlife.mjs`.
+
+- **UPTOWN** (`uptown`, 0xE100, x 113-125, y -1 to 27; marble and glass): AURUM (the nightclub: a
+  white-marble box under a gold cornice, the glass VIP mezzanine on the roof line, searchlights at
+  night; the forecourt: the red carpet, the velvet rope on brass stanchions, the door supervisor, the
+  queue along the rope after 22:00; inside, the DJ booth and the floor, and upstairs THE MEZZANINE:
+  velvet booths, ice buckets, sparklers, the bottle bar), THE CEILING (a slim glass tower, the lounge
+  on its roof: umbrellas, string lights, the skyline behind the bar), THE BITTERS (black marble and
+  brass, a deco fin; cocktails, EBTV on a small screen), THE CUT (limestone, an oxblood awning,
+  carriage lamps; the grill, white cloths, leather), HINOKI (pale cypress slats, the noren, a gravel
+  bed and a pine; the omakase counter), THE MINOR KEY (deco marble, a bulb-edged marquee with
+  tonight's bill, a JAZZ blade; the bandstand, the piano, supper tables).
+- **DOWNTOWN** (`downtown`, 0xE200, x 113-136, y 28.5-46; brick, murals, roll-down gates): VOLTAGE
+  and STROBE (dance clubs: long brick boxes, neon edging, a mural down the flank, crowd barriers and a
+  queue, the colour wash and STROBE's flash in the blacked-out glass), THE CYPHER (hip-hop: sooty
+  brick, tags, a gate kept a hand's width down), BASEMENT 0x00 (punk: a low front, flyers on every
+  wall, the stairs down lit red at punk tempo; inside, the band at floor level and the pit jumping),
+  KARAOKE BOX (a pink box, a neon microphone, the lyric bar filling as it is sung), EIGHT BALL (the
+  pool hall: green neon, the eight ball on a sign, the tables under their lamps, EBTV over the bar),
+  THE HECKLE (comedy: a bulb marquee with tonight's headliner, the brick wall and the spotlight), THE
+  COOP (chicken and halal, 24 hours: the red-and-yellow counter and the halal cart at the kerb, its
+  umbrella and steam), LIQUOR 24 and CUT-RATE SPIRITS (squat boxes, barred windows, the roll-down
+  gate down after hours).
+- **No adult venues.** The site is 16+: no strip club, nothing like one, by name, type, engine
+  tendency, room or job title. `check-nightlife` refuses any (`FORBIDDEN_TYPES`).
+- **Hours** (machine time, `HOURS`): the clubs 22:00-03:00 uptown (the rope closes early) and
+  22:00-04:00 downtown (BASEMENT from 21:00); the lounge 17:00-01:00, the bar 17:00-02:00, THE CUT
+  17:30-23:30, HINOKI 18:00-23:00, THE MINOR KEY 19:00-01:00; karaoke 20:00-03:00, pool 16:00-03:00,
+  comedy 20:00-01:30; THE COOP always; the liquor stores to 02:00. A venue takes visitors only while it
+  is open when the visit starts (`pickLeisure`), is no overflow while shut (the allocator's chain), a
+  stay ends at closing time, and nobody walks in before the doors (`planDay` holds them at the stay
+  before) or sets out for one they would reach at closing.
+- **The night out** (`sim.js nightStops`): after a day's stops, a subject may go out (6% a weeknight,
+  16% Thursday, 34% Friday, 38% Saturday; night wanderers 1.6x), from 21:54-23:30, to a venue open
+  then, picked by tier band and record (`pickNight`; never an errand or a dinner). Half stay to closing
+  time (the crowd spills out at 03:00 and 04:00), half leave earlier. Nobody on a night shift goes
+  out; a day-shift worker is home by 02:30 (03:30 on Fridays and Saturdays). Stays run past midnight
+  into the next day's overnight tail, as night shifts always have.
+- **The rope at AURUM** (`ropeCheck`, `sim.ropeOf`): the top band (ESSENTIAL INFRASTRUCTURE and
+  RETAINED SPECIALIST) walks in; the middle band waits and is let in about one night in three; the
+  lowest is turned away and goes elsewhere. The mezzanine is the top band's alone, and neither is an
+  overflow for anyone the door turns away. The queue on the pavement is drawn from the hour and the
+  night of the week; the PA: "AURUM // THE ROPE IS UP. TOP TIERS, PROCEED. RETAINED SPECIALISTS, WAIT.
+  EVERYONE ELSE: DOWNTOWN IS THAT WAY."
+- **Tier skew** (`check-nightlife`, synthetic census of 725, machine days 302-308; bands top /
+  middle / lowest): the census 31% / 47% / 22%; uptown's patrons 69% / 30% / 1% (762 visits);
+  downtown's 10% / 59% / 31% (1,022 visits). The rope on a Friday: 223 walk in, 102 wait and are let
+  in, 400 turned away.
+- **The lineups** (`lineupFor(day)`, pure): performers on file (by field, music or comedy on the
+  record; the census's referrals by name; the living and the dead alike) booked into eight sets a
+  night (AURUM's decks 23:00, THE MINOR KEY's bandstand 20:30, THE HECKLE 21:00, THE CYPHER's mic 23:30,
+  VOLTAGE and STROBE's decks, BASEMENT's stage 22:30, an acoustic set on THE CEILING's roof 21:00), the
+  headline rooms first, nobody in two rooms, one room in five dark a night, every name coming round in
+  turn. A booked performer works the set (a work stop at the venue; the evening before kept clear: a
+  ride across the city can take two hours); the set pulls a crowd like a fixture; the PA: "TONIGHT AT
+  THE MINOR KEY: STING, AT THE BANDSTAND, 20:30. ATTENDANCE IS RECORDED. ENJOYMENT IS ESTIMATED." and
+  "NOW AT AURUM: PRINCE ON THE DECKS."; the marquees and AURUM's board show the name. Night 306:
+  PRINCE on AURUM's decks, STING at THE MINOR KEY, JIM JEFFERIES at THE HECKLE, TRAVIS SCOTT at THE
+  CYPHER, JOHN OATES at STROBE, JACK WHITE at BASEMENT 0x00. The field rules gain the bassist and the DJ
+  (music) and the comedian (a `comedy` field).
+- **Staff**: Door Supervisor, Bottle Service Host, Rooftop Lounge Attendant, Mixologist, Steakhouse
+  Chef, Itamae, Supper Club Waiter (uptown); club bartenders, the Cypher's floor host, Door and Sound,
+  Karaoke Host, Pool Hall Attendant, Comedy Club Door, Fry Cook, two Liquor Clerks (downtown): a few
+  each (draft caps), club staff on the night shift.
+- **Life**: the rig dances (`dance`, `dance2`) on the floors, the pit jumps, the karaoke room cheers and
+  claps, the comedy room laughs; neon buzzes and flickers by the house rule, the bass throbs on the
+  pavement in front of an open club at 124 to the minute, the mirror ball's flecks and the beams sweep
+  inside, STROBE flashes, AURUM's searchlights cross over the Strip.
+- **The prefects**: UPT-13 THE MAITRE D' (a silver cloche head, a cream dinner jacket, the guest
+  list: lenient on capital, festivals and decrees first) and DWN-14 THE LICENSING OFFICER (a
+  loudspeaker horn, a hi-vis tabard, the sound meter: curfews and inspections first). `prefects.js`
+  adds `nightPressure` to every prefect's target control: downtown +0.5 (+0.9 on Fridays, +1.4 on
+  Saturdays), uptown -0.3, everyone else 0. On a calm district's mood, downtown's Fridays draw
+  INSPECTIONS and its Saturdays the CURFEW (from 22:00: the clubs may stay open, the street may not);
+  uptown's days draw festival permits and decrees.
+- **The civic fold**: a new mood factor `nightlife` (-3..4), from how full the quarter ran 21:00-24:00
+  (`civic.js dayStats` keeps its per-place load): a busy quarter cheers its own district (up to +4);
+  downtown at a roar costs itself 1 and the Sprawl 1, and the Archive 1 at the very loudest. Absent
+  elsewhere.
+- **At the day boundary**: the two districts appear in days built after the deploy; days already
+  published have no nightlife files and draw nobody there (the Coast's rule).
+- Screens: docs/screens/nightlife/.

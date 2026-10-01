@@ -31,6 +31,7 @@ import { PREFECT } from "./prefectData.js";   // THE PREFECTS: directive, clash,
 import * as L from "./leagues.js";   // THE LEAGUES: four sports, the ladder, the Pit, the Departmental Cup
 import { playerRating, draftOrder, teamName, teamShort } from "./leagues.js";
 import { enterpriseMood, districtBiz } from "./enterprise.js";   // THE MALL: the district's shops
+import { nightlifeMood } from "./nightlife.js";   // THE NIGHTLIFE QUARTERS: the NIGHTLIFE factor
 
 export const CIVIC_V = 1;
 // The league is the Loop's ten districts (its season was drawn before the city grew outward);
@@ -281,6 +282,7 @@ export function dayStats(plan, people) {
       excess: cap ? over / cap : 0, homeOver: hCap ? hOver / hCap : 0,
     };
   }
+  Object.defineProperty(out, "load", { value: load });   // per place, per half hour (the nightlife factor reads it)
   return out;
 }
 
@@ -487,6 +489,7 @@ export function civicFold(plan, people, prev = null) {
     const pos = X ? cupPos.indexOf(id) : lg.standing.indexOf(id), fm = X ? L.formOf(allPlayed, id) : form(id);
     const f = factors(stats[id], [...fm].reduce((n, r) => n + (r === "W" ? 3 : r === "L" ? -3 : 0), 0), pos, lot, id);
     if (plan.ent) f.enterprise = enterpriseMood(plan.ent, id) || 0;   // THE MALL (enterprise.js): thriving shops +, closures -
+    { const nl = nightlifeMood(id, stats.load); if (nl) f.nightlife = nl; }   // THE NIGHTLIFE QUARTERS (nightlife.js): -3..4, the quarters and their neighbours
     // THE PREFECT (prefects.js): today's directive from the mood before its own factor and the
     // council's lean; the clash and the directive's weight become the mood's `prefect` factor.
     // (a district without a prefect has no block: every district has one once phase2Prefects.js covers it)

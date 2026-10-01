@@ -66,8 +66,8 @@ console.log(`population: ${figures.length} figures, ${engine.length} engine, ${c
 
 // ---- catalogue ------------------------------------------------------------------------
 section("catalogue");
-ok(DISTRICTS.length === 14 && LOOP_DISTRICTS.length === 10, `10 districts on the Loop and 4 off it: the Coast, the Heights, the Port, the Old Town (got ${DISTRICTS.length})`);
-const ids = ["hq", "arts", "campus", "finance", "strip", "arena", "commons", "archive", "works", "sprawl", "coast", "heights", "port", "oldtown"];
+ok(DISTRICTS.length === 16 && LOOP_DISTRICTS.length === 10, `10 districts on the Loop and 6 off it: the Coast, the Heights, the Port, the Old Town, Uptown, Downtown (got ${DISTRICTS.length})`);
+const ids = ["hq", "arts", "campus", "finance", "strip", "arena", "commons", "archive", "works", "sprawl", "coast", "heights", "port", "oldtown", "uptown", "downtown"];
 const DISTRICT_IDS = new Set(ids);
 ok(ids.every(id => DISTRICTS.some(d => d.id === id)), "district ids match the contract");
 ok(Object.keys(PLACES).length >= 30, `~35 places (got ${Object.keys(PLACES).length})`);
@@ -164,7 +164,7 @@ section("the loop");
   ok(BUS === LOOP_LINE && V_BUS === V_TRAIN, "v1 names (BUS, V_BUS) still point at the Loop");
   ok(STATION_ORDER.length === LOOP_DISTRICTS.length && LOOP_DISTRICTS.every(d => STATIONS[d.id]?.districtId === d.id), "one station per Loop district");
   // PHASE 2: the rail lines replaced the pods (network 3); a day built on network 2 keeps them (check-plans)
-  ok(NET >= 3 && DISTRICTS.filter(d => d.expansion).every(d => linesOn().some(l => l.id !== "loop" && l.stops.some(st => st.districtId === d.id)) && !STATIONS[d.id]), "every expansion district has stations on a rail line (not on the Loop)");
+  ok(NET >= 3 && DISTRICTS.filter(d => d.expansion && !d.onFoot).every(d => linesOn().some(l => l.id !== "loop" && l.stops.some(st => st.districtId === d.id)) && !STATIONS[d.id]), "every expansion district has stations on a rail line (not on the Loop)");
   for (const id of STATION_ORDER) {
     const st = STATIONS[id], p = LOOP_LINE.at(st.s);
     ok(st.s >= 0 && st.s < L && Math.hypot(p.x - st.x, p.y - st.y) < 1e-9, `${id} station sits on the ring`);

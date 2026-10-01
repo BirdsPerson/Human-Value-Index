@@ -30,7 +30,7 @@ const P = PF.PREFECTS;
 // PHASE 2 (phase2Prefects.js): the Port's and the Old Town's are live; the Suburbs', the Airport's,
 // the Farmland's and the Engine's arrive with their districts (dormant until each exists)
 const NO_PREFECT_YET = new Set();
-eq(P.map(p => p.id).sort(), [...ALL].sort(), "one prefect per district: the Coast, the Heights, the Port and the Old Town included");
+eq(P.map(p => p.id).sort(), [...ALL].sort(), "one prefect per district: the Coast, the Heights, the Port, the Old Town and the nightlife quarters included");
 const { PHASE2_PREFECTS } = await import("../src/city/phase2Prefects.js");
 for (const q of PHASE2_PREFECTS) ok(SIM.DISTRICT[q.id] ? PF.PREFECT[q.id] === q : !PF.PREFECT[q.id], `${q.code}: ${SIM.DISTRICT[q.id] ? "live, its district exists" : "dormant until its district exists"}`);
 // the dormant ones are held to the same uniqueness now, so each district's prefect is ready the day it arrives

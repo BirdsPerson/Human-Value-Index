@@ -13,6 +13,8 @@ import { STORE_PLACES, STORE_BUILDINGS, STORE_ARCH, STORE_JOBS, STORE_LEISURE_BA
 import { VENUE_PLACES, VENUE_BUILDINGS, VENUE_ARCH, VENUE_JOBS, VENUE_LEISURE_BAND, VENUE_LEISURE_FIELD, VENUE_FAMILY, VENUE_FIELD_HINTS, VENUE_FIELD_RULES, VENUE_OPEN_LOTS, VENUE_FIXTURES } from "./venueSim.js";
 import { MOUNTAIN_PLACES, MOUNTAIN_BUILDINGS, MOUNTAIN_ARCH, MOUNTAIN_JOBS, MOUNTAIN_LEISURE_BAND, MOUNTAIN_LEISURE_FIELD, MOUNTAIN_FAMILY, MOUNTAIN_FIXTURES, MOUNTAIN_OPEN_LOTS, MOUNTAIN_SPOTS } from "./mountainSim.js";   // THE MOUNTAIN (mountainGeo.js)
 import { shuttle, lineTrainState, lineNextArrival, lineRide } from "./lines.js";
+// THE NIGHTLIFE QUARTERS (nightlifeSim.js): UPTOWN and DOWNTOWN, their venues, hours, the rope, the lineups
+import { NIGHT_DISTRICTS, NIGHT_PLACES, NIGHT_BUILDINGS, NIGHT_ARCH, NIGHT_JOBS, NIGHT_LEISURE_BAND, NIGHT_LEISURE_FIELD, NIGHT_FAMILY, NIGHT_FIELD_RULES, NIGHT_FIXTURES, NIGHT_SET, HOURS as NIGHT_HOURS, openAt as nightOpenAt, openThrough as nightOpenThrough, closeFor as nightCloseFor, NIGHT_OUT_P, ropeCheck, ROPE_PLACES, gigOf } from "./nightlifeSim.js";
 
 export const SEED = "HVI-SUBSTRATE-01";
 // Day 1 of the Substrate. Machine days count from here.
@@ -93,6 +95,10 @@ export const DISTRICTS = [
   { ...D("port", "THE PORT", "0xCF00", -58, 30, 50, 72, "Containers in, slag out. Every crate is declared. So is every stevedore."), expansion: true },
   { ...D("oldtown", "THE OLD TOWN", "0xD100", -52, -16, 46, 42, "The city before the Substrate. Preserved as a warning. Also as a tourist attraction."), expansion: true },
 ];
+// THE NIGHTLIFE QUARTERS (nightlifeSim.js, docs/planning/MASTER_PLAN.md addendum): UPTOWN at the CBD
+// row's east end, DOWNTOWN beside the Sprawl. Appended after everything else, off the Loop.
+// No homes and no station of their own: each is a walk from Loop stations (onFoot; scripts/check-nightlife.mjs holds the walk).
+DISTRICTS.push(...NIGHT_DISTRICTS.map(([id, name, addr, r, blurb, onFoot]) => ({ ...D(id, name, addr, r.x, r.y, r.w, r.h, blurb), expansion: true, onFoot })));
 export const DISTRICT = Object.fromEntries(DISTRICTS.map(d => [d.id, d]));
 // The Loop's districts (one station each); the expansion districts reach it by spur.
 export const LOOP_DISTRICTS = DISTRICTS.filter(d => !d.expansion);
@@ -249,6 +255,8 @@ PLACE_LIST.push(...VENUE_PLACES.map(a => P(...a)));
 PLACE_LIST.push(...STORE_PLACES.map(a => P(...a)));
 // THE MOUNTAIN (mountainSim.js): the upper mountain, the race course, the mid-mountain and summit lodges
 PLACE_LIST.push(...MOUNTAIN_PLACES.map(a => P(...a)));
+// THE NIGHTLIFE QUARTERS (nightlifeSim.js): the clubs, the bars, the restaurants, the late food, the liquor stores
+PLACE_LIST.push(...NIGHT_PLACES.map(([id, d, kind, cap, name, engine]) => P(id, d, kind, cap, name, engine)));
 for (const p of PLACE_LIST) DISTRICT[p.district].places.push(p.id);
 
 export const PLACES = Object.fromEntries(PLACE_LIST.map(p => [p.id, p]));
@@ -402,6 +410,8 @@ BUILDING_LIST.push(...MOUNTAIN_BUILDINGS.map(([id, name, district, floors, lot])
 // THE MALL's frontage lots (storefrontSim.js): placed on their own lots, outside the district's
 // grid or hand layout, so nothing already standing moves.
 BUILDING_LIST.push(...STORE_BUILDINGS.map(([id, name, district, floors, lot, frontage]) => ({ ...B(id, name, district, floors, lot), frontage })));
+// THE NIGHTLIFE QUARTERS: laid out by hand in their own districts (nightlifeSim.js NIGHT_LOTS)
+BUILDING_LIST.push(...NIGHT_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
 // Each district is gridded by BUILDING (so a building's rooms stay one block on the map),
 // and a building's cell is split side by side among its distinct places.
 for (const b of BUILDING_LIST.filter(x => x.frontage)) for (const id of new Set(b.floors.flatMap(f => f[2]))) {
@@ -449,7 +459,7 @@ for (const p of PLACE_LIST) if (!p.rect) throw new Error(`place ${p.id} is in no
 // exterior from it. Housing styles carry the tier band that lives there, and homeOf follows
 // it: the top tier in the glass tower, the middle tiers in the brownstones and the lofts,
 // the lower three in the projects. A district's default covers anything not listed.
-export const ARCH_BY_DISTRICT = { arts: "gallery", campus: "gothic", finance: "office", strip: "neon", arena: "hall", hq: "monolith", archive: "classical", commons: "civic", works: "shed", sprawl: "projects", coast: "lot", heights: "lot", port: "lot", oldtown: "lot" };
+export const ARCH_BY_DISTRICT = { arts: "gallery", campus: "gothic", finance: "office", strip: "neon", arena: "hall", hq: "monolith", archive: "classical", commons: "civic", works: "shed", sprawl: "projects", coast: "lot", heights: "lot", port: "lot", oldtown: "lot", uptown: "lot", downtown: "lot" };
 export const ARCH = {
   "studio-block": "studio", playhouse: "theatre", "culture-centre": "gallery", "the-grind": "cafe",
   faculty: "gothic", "lab-block": "gothic", "clock-tower": "clocktower",
@@ -465,6 +475,7 @@ export const ARCH = {
   ...VENUE_ARCH,
   ...STORE_ARCH,
   ...MOUNTAIN_ARCH,
+  ...NIGHT_ARCH,
   "surf-shacks": "shacks", "the-seawall": "seawall", "bungalow-row": "bungalow", "seaview-flats": "seaview", "the-surfside": "condo", "lot-shore": "lot", "the-boardwalk": "lot", "the-beach": "lot", "the-pier": "lot", "the-break": "lot",
   "the-bunkhouse": "bunkhouse", "alpine-flats": "alpine", "the-lodge": "lodge", "the-chalets": "chalet", "the-slopes": "lot", "lot-summit": "lot",
   // THE PORT and THE OLD TOWN (PHASE 2 step 3)
@@ -635,6 +646,7 @@ JOBS.push(...FUNNEL_JOBS.map(a => J(...a)));
 JOBS.push(...VENUE_JOBS.map(a => J(...a)));
 JOBS.push(...STORE_JOBS.map(a => J(...a)));
 JOBS.push(...MOUNTAIN_JOBS.map(a => J(...a)));
+JOBS.push(...NIGHT_JOBS.map(a => J(...a)));
 export const JOB = Object.fromEntries(JOBS.map(j => [j.id, j]));
 
 // ---- subject reading --------------------------------------------------------------
@@ -681,6 +693,7 @@ const FIELD_HINTS = {
 
 // Keyword -> field. First hit per rule; order doesn't matter, weights come from source.
 const FIELD_RULES = [
+  ...NIGHT_FIELD_RULES,   // the jazz bassist, the DJ, the comedians (nightlifeSim.js)
   ...VENUE_FIELD_RULES,   // tennis (venueSim.js): before "sport", so a tennis player is read as one
   ["physics-theory", /theoretical physic|physicist|cosmolog|relativity|astronom|astrophysic/],
   ["radiation", /radioactiv|radiochem|nuclear|radiation|radiolog/],
@@ -931,6 +944,9 @@ STORE_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
 for (const [f, m] of Object.entries(STORE_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
 MOUNTAIN_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
 for (const [f, m] of Object.entries(MOUNTAIN_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
+// THE NIGHTLIFE QUARTERS: uptown pulls the top band, downtown the lower two (nightlifeSim.js)
+NIGHT_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
+for (const [f, m] of Object.entries(NIGHT_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
 // the sea and the snow, for the sporting and the idle
 for (const [f, w] of Object.entries({ sport: { surf: 0.8, slopes: 1 }, care: { beach: 1 }, visual: { pier: 1.2, beach: 0.8 }, writing: { pier: 1.5 }, music: { boardwalk: 1 }, finance: { slopes: 1.5 }, business: { slopes: 1 }, screen: { beach: 1.2 } })) Object.assign(LEISURE_BY_FIELD[f] ||= {}, w);
 
@@ -974,7 +990,7 @@ function gamesOn(day, hour) {
   let out = null;
   for (const [id, list] of Object.entries(GAMES)) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
   // the master plan's venues (the Pit's card, the tennis club's fixtures) pull a crowd the same way
-  for (const [id, list] of Object.entries({ ...VENUE_FIXTURES, ...STORE_FIXTURES, ...MOUNTAIN_FIXTURES })) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
+  for (const [id, list] of Object.entries({ ...VENUE_FIXTURES, ...STORE_FIXTURES, ...MOUNTAIN_FIXTURES, ...NIGHT_FIXTURES })) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
   return out;
 }
 const TEAMS = ["THE COMPLIANT", "THE ASSESSED"];
@@ -1299,8 +1315,81 @@ function baseLeisureWeights(s, seed) {
     return { list, total };
   });
 }
+// ---- THE NIGHTLIFE QUARTERS (nightlifeSim.js) -----------------------------------------------------
+// The night out is a leisure stop of its own (index NIGHT_I), picked among the venues open when it
+// starts, by tier band and record. AURUM's rope: the top band walks in; the middle band waits and is
+// let in about one time in three; the lowest is turned away and goes elsewhere (nightlifeSim ropeCheck).
+export const NIGHT_I = 7;
+const NIGHT_EARLY = 0.3;   // a train caught early lands this much before the stop's hour: still open then
+const NIGHT_OUT_SKIP = new Set(["liquor-24", "cut-rate", "the-coop", "the-cut", "hinoki"]);   // a night out is not an errand or a dinner
+export function ropeOf(s, day, seed = SEED) { return ropeCheck(bandOf(s), h01(`${seed}|rope|${keyOf(s)}|${day}`)); }
+function pickNight(s, day, seed, hour) {
+  const band = bandOf(s), f = fieldsOf(s), rope = ropeOf(s, day, seed);
+  const list = [];
+  for (const [id, v] of Object.entries(LEISURE_BY_BAND[band])) {
+    if (!NIGHT_SET.has(id) || NIGHT_OUT_SKIP.has(id) || !nightOpenAt(id, hour) || !nightOpenAt(id, hour - NIGHT_EARLY)) continue;
+    if (ROPE_PLACES.has(id) && rope === "REFUSED") continue;   // turned away at the rope: elsewhere tonight
+    let w = v;
+    for (const [field, fw] of Object.entries(f)) w += (LEISURE_BY_FIELD[field]?.[id] || 0) * fw / 10;
+    list.push([id, w * Math.sqrt(PLACES[id].cap)]);
+  }
+  if (!list.length) return null;
+  const total = list.reduce((a, [, v]) => a + v, 0);
+  let r = h01(`${seed}|nightpick|${keyOf(s)}|${day}`) * total;
+  for (const [id, v] of list) if ((r -= v) <= 0) return id;
+  return list[list.length - 1][0];
+}
+// After a day's stops are laid: a booked set is worked (the performer's work stop at the venue,
+// whatever else the night held), else perhaps a night out, more on Fridays and Saturdays, staying
+// to closing time or near it (the crowd spills out at close). Nobody on a night shift goes out.
+function nightStops(s, day, seed, stops, pick, owl) {
+  const key = keyOf(s);
+  // a stay at a venue ends at its closing time (the restaurant at 23:30, the club at 04:00)
+  for (let k = stops.length - 1; k >= 0; k--) {
+    const st = stops[k];
+    if (st.activity !== "leisure" || !NIGHT_HOURS[st.placeId]) continue;
+    st.to = Math.min(st.to, nightCloseFor(st.placeId, st.from));
+    if (st.to - st.from < 0.5) stops.splice(k, 1);
+  }
+  const gig = gigOf(key, day);
+  if (gig) {
+    const a = gig.from - 0.4, b = gig.to + 0.1;
+    // the evening before a set is kept clear (a ride across the city can take two hours): work is cut
+    // short half an hour before, leisure three hours before; the performer arrives early, and waits
+    for (let k = stops.length - 1; k >= 0; k--) {
+      const st = stops[k], lead = st.activity === "work" ? 0.5 : 3;
+      if (st.to <= a - lead || st.from >= b + 0.3) continue;
+      if (st.from < a - lead - 0.5) st.to = a - lead; else stops.splice(k, 1);
+    }
+    stops.push({ placeId: gig.venue, from: a, to: b, activity: "work", gig: true });
+    stops.sort((x, y) => x.from - y.from);
+    return;
+  }
+  if (h01(`${seed}|nightout|${key}|${day}`) >= (NIGHT_OUT_P[weekdayOf(day)] || 0.06) * (owl ? 1.6 : 1)) return;
+  if (stops.some(st => st.activity === "work" && st.to > 23.3)) return;
+  const r1 = h01(`${seed}|nightout-t|${key}|${day}`), r2 = h01(`${seed}|nightout-l|${key}|${day}`);
+  let from = 21.9 + r1 * 1.6;
+  const last = stops[stops.length - 1];
+  if (last) {
+    if (last.activity === "leisure" && last.to > from - 0.35) last.to = Math.max(last.from + 0.5, from - 0.35);
+    from = Math.max(from, last.to + 0.35);
+  }
+  if (from > 24.6) return;
+  const placeId = pick(NIGHT_I, undefined, from);
+  const o = placeId && NIGHT_HOURS[placeId];
+  if (!o) return;
+  // a day-shift worker is home by half past two: the morning's commute must not meet the night's
+  const big = weekdayOf(day) === 5 || weekdayOf(day) === 6;   // Friday and Saturday nights run later
+  const close = Math.min(o[1] - o[0] >= 24 ? from + 1.5 : o[1], shiftOf(s, workOf(s, day, seed), seed) === "day" ? (big ? 27.5 : 26.5) : 28);
+  const to = r2 < 0.5 ? close - r2 * 0.3 : Math.min(close, from + 1.5 + r2 * 3);
+  if (to - from < 0.75) return;
+  stops.push({ placeId, i: NIGHT_I, from, to, activity: "leisure", night: true });
+}
 function pickLeisure(s, day, i, seed, avoid, hour = null) {
+  if (i === NIGHT_I) return pickNight(s, day, seed, hour ?? 22);
   let { list, total } = leisureWeights(s, seed, day);
+  // THE NIGHTLIFE QUARTERS: a venue takes visitors only while it is open when the visit starts
+  if (hour != null) { const n = list.length; list = list.filter(([id]) => !NIGHT_HOURS[id] || (nightOpenAt(id, hour) && nightOpenAt(id, hour - NIGHT_EARLY))); if (list.length !== n) total = list.reduce((a, [, v]) => a + v, 0); }
   // The lot takes visitors only once something is being built on it, and who comes follows
   // what it is: the site crew from the lower bands, golfers from the top, farmers from the rest.
   const lot = lotOpenOn(day);
@@ -1353,6 +1442,7 @@ FAMILY[0].push("the-anchor", "the-old-bell"); FAMILY[4].push("covered-market", "
 for (const [k, id] of VENUE_FAMILY) FAMILY[k].push(id);
 for (const [k, id] of STORE_FAMILY) FAMILY[k].push(id);
 for (const [k, id] of MOUNTAIN_FAMILY) FAMILY[k].push(id);
+for (const [k, id] of NIGHT_FAMILY) FAMILY[k].push(id);
 const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
 // (a storefront unit takes visitors only while a business trades in it: enterprise.js, below)
 const LEISURE_ROOMS = Object.values(PLACES).filter(p => (p.kind === "leisure" || p.kind === "mixed") && !UNIT_SET.has(p.id)).map(p => p.id);
@@ -1397,14 +1487,15 @@ function allocFor(day, seed) {
     const groups = nOnFile < 0 ? [plans] : [plans.slice(0, nOnFile), plans.slice(nOnFile)];
     for (const group of groups) {
       for (const { stops } of group) for (const st of stops) if (st.activity !== "leisure") add(st.placeId, bucket(st.from), Math.max(bucket(st.from) + 1, bucket(st.to)));
-      for (const { key, stops } of group) {
+      for (const { s, key, stops } of group) {
         let prevTo = null;
         for (const st of stops) {
           if (st.activity === "leisure") {
             const a = bucket(Math.min(st.from, prevTo ?? st.from) - 0.25), b = Math.max(a + 1, bucket(st.to + 0.25));
             let p = st.placeId;
             if (!fits(p, a, b)) {
-              const chain = (OVERFLOW[p] || []).filter(q => parcelOpen(q, day));
+              // (a club is no overflow at noon; the rope and the mezzanine are not an overflow for whoever the door turns away)
+              const chain = (OVERFLOW[p] || []).filter(q => parcelOpen(q, day) && nightOpenThrough(q, st.from - NIGHT_EARLY, st.to) && (!ROPE_PLACES.has(q) || (q === "aurum-vip" ? bandOf(s) === 0 : ropeOf(s, day, seed) !== "REFUSED")));
               p = chain.find(q => fits(q, a, b)) || [p, ...chain].reduce((best, q) => (peakOf(q, a, b) < peakOf(best, a, b) ? q : best), p);
               if (p !== st.placeId) moved.set(`${key}|${st.i}`, p);
             }
@@ -2216,6 +2307,7 @@ function planStops(s, day, seed, pick) {
       stops.push(work);
     }
   }
+  nightStops(s, day, seed, stops, pick, owl);   // THE NIGHTLIFE QUARTERS: the booked sets, the night out
   return { stops, key, home };
 }
 
@@ -2236,7 +2328,20 @@ function planDay(s, day, seed, raw = false) {
     if (st.to - st.from < 0.25) continue;
     // First stop: leave home in time to arrive on time even if the train was just missed.
     // Later stops: leave as soon as free (never a gap; the saved time goes onto the stay).
-    const depart = free === -Infinity ? st.from - commuteHours(cur, st.placeId, s, seed) : free;
+    let depart = free === -Infinity ? st.from - commuteHours(cur, st.placeId, s, seed) : free;
+    // THE NIGHTLIFE QUARTERS: nobody walks into a venue before it opens (the stay before runs on,
+    // or they leave home later) and nobody sets out for one they would reach at closing time
+    if (NIGHT_HOURS[st.placeId] && st.activity === "leisure") {
+      const trip = (d) => (cur === st.placeId ? 0 : planTrip(cur, st.placeId, key, seed, t0 + d).total);
+      const early = st.from - (depart + trip(depart)), prev = segs[segs.length - 1];
+      if (early > 0.02) {
+        // the stay before runs on, to its own closing time if it is a venue too
+        const ext = free === -Infinity ? early : Math.min(early, Math.max(0, (NIGHT_HOURS[prev.placeId] && prev.activity === "leisure" ? nightCloseFor(prev.placeId, prev.from) : Infinity) - prev.to));
+        if (free !== -Infinity) { prev.to += ext; free = prev.to; }
+        depart += ext;
+      }
+      if (nightCloseFor(st.placeId, st.from) - (depart + trip(depart)) < 0.3) continue;
+    }
     const c = cur === st.placeId ? 0 : go(cur, st.placeId, depart);
     const arrive = depart + c;
     const seg = { from: arrive, to: Math.max(st.to, arrive + 0.25), placeId: st.placeId, activity: st.activity };

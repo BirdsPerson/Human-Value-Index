@@ -208,6 +208,15 @@ const HEAD = {
     G.rect(GR.head, 8, 2 + b, 23, 11 + b, p.metal);
     G.rect(GR.head, 13, 12 + b, 18, 12 + b, p.dark);
   },
+  cloche(G, p, b) {           // THE MAITRE D' (uptown): a silver serving cloche, a knob on top, a slot for an eye
+    G.oval(GR.head, 15.5, 9 + b, 6, 3.6, p.metal);
+    G.rect(GR.head, 9, 11 + b, 22, 12 + b, p.trim);
+    G.rect(GR.head, 15, 3 + b, 16, 5 + b, p.metal);
+  },
+  horn(G, p, b) {             // THE LICENSING OFFICER (downtown): a loudspeaker horn, its mouth to one side
+    G.rect(GR.head, 10, 6 + b, 15, 11 + b, p.metal);
+    G.rect(GR.head, 16, 3 + b, 22, 13 + b, p.trim);
+  },
 };
 const HEAD_DETAIL = {
   visor(G, p, b, f) { G.fill(12, 7 + b, 19, 8 + b, p.lens); G.hl(12 + (f ? 1 : 0), 19, 7 + b, p.accent); for (let x = 12 + (f ? 1 : 0); x <= 19; x += 3) G.px(x, 8 + b, p.dark); G.hl(12, 19, 11 + b, p.trim); },
@@ -228,6 +237,8 @@ const HEAD_DETAIL = {
   scanner(G, p, b, f) { G.hl(11, 20, (f ? 10 : 7) + b, p.lens, true); G.vl(9, 5 + b, 12 + b, shade(p.trim, 0.8)); G.hl(14, 17, 2 + b, p.accent); G.px(9, 7 + b, p.lens); G.px(22, 7 + b, p.lens); G.px(9, 10 + b, p.accent); G.px(22, 10 + b, p.accent); },
   boater(G, p, b) { G.hl(11, 20, 4 + b, p.accent); G.hl(7, 24, 5 + b, shade(p.trim, 0.85)); G.fill(13, 8 + b, 14, 9 + b, p.lens); G.fill(17, 8 + b, 18, 9 + b, p.lens); for (let x = 12; x <= 19; x += 2) G.px(x, 11 + b, p.dark); G.px(10, 12 + b, p.trim, true); G.px(21, 11 + b, p.trim, true); G.px(21, 12 + b, p.trim, true); },
   monitor(G, p, b, f) { G.fill(10, 4 + b, 21, 9 + b, "#052e16"); G.hl(11, 16, 5 + b, p.lens); G.hl(11, 14, 7 + b, p.lens); if (!f) G.fill(16, 7 + b, 17, 8 + b, p.lens); G.px(21, 10 + b, p.accent); G.px(22, 10 + b, p.lens); G.hl(9, 22, 11 + b, shade(p.metal, 0.75)); },
+  cloche(G, p, b) { G.hl(12, 19, 9 + b, p.dark); G.fill(14, 9 + b, 17, 9 + b, p.lens); G.px(14, 9 + b, "#fff7d6"); G.hl(12, 14, 7 + b, "#f4f4f5"); G.px(15, 3 + b, p.trim); },
+  horn(G, p, b, f) { G.fill(18, 6 + b, 21, 11 + b, p.dark); G.fill(19, 7 + b, 20, 10 + b, p.lens); G.px(19, 7 + b, "#ffe4e6"); G.hl(11, 14, 8 + b, p.dark); G.px(12, 10 + b, p.accent); if (f) G.px(22, 8 + b, p.lens, true); },
 };
 
 // ---- torsos: the uniform ---------------------------------------------------------------------------
@@ -250,6 +261,10 @@ const TORSO = {
   farmland(G, p, b) { G.fill(12, 21 + b, 19, 30 + b, p.accent); G.vl(12, 16 + b, 20 + b, p.accent); G.vl(19, 16 + b, 20 + b, p.accent); G.px(12, 21 + b, p.trim); G.px(19, 21 + b, p.trim); G.fill(14, 24 + b, 17, 26 + b, shade(p.accent, 0.75)); for (let x = 10; x <= 21; x += 3) G.vl(x, 16 + b, 19 + b, shade(p.body, 1.3)); },
   engine(G, p, b) { G.vl(15, 16 + b, 22 + b, p.trim); G.vl(16, 16 + b, 22 + b, p.trim); G.fill(15, 23 + b, 16, 24 + b, "#f8fafc"); G.fill(12, 26 + b, 19, 29 + b, shade(p.body, 0.78)); G.hl(12, 19, 15 + b, shade(p.body, 1.3)); },
   hq(G, p, b) { G.fill(14, 16 + b, 17, 19 + b, "#f8fafc"); G.vl(15, 16 + b, 24 + b, p.trim); G.vl(16, 16 + b, 24 + b, p.trim); G.px(15, 16 + b, "#f8fafc"); G.hl(11, 20, 15 + b, p.metal); },
+  // the dinner jacket: black lapels, a white shirt-front, a bow tie, a gold pocket square
+  uptown(G, p, b) { G.fill(14, 16 + b, 17, 27 + b, "#f8fafc"); G.vl(13, 16 + b, 24 + b, p.dark); G.vl(18, 16 + b, 24 + b, p.dark); G.hl(14, 17, 16 + b, p.dark); G.px(15, 17 + b, p.accent); G.px(16, 17 + b, p.accent); G.fill(19, 19 + b, 20, 19 + b, p.trim); for (let y = 21; y <= 27; y += 3) G.px(15, y + b, p.dark); },
+  // the hi-vis tabard: two reflective bands, LICENSING across the back (a stripe), a radio on the chest
+  downtown(G, p, b) { G.fill(11, 16 + b, 20, 29 + b, shade(p.trim, 0.9)); G.hl(10, 21, 21 + b, "#e2e8f0"); G.hl(10, 21, 25 + b, "#e2e8f0"); G.vl(15, 16 + b, 29 + b, p.body); G.fill(12, 17 + b, 13, 19 + b, p.dark); G.px(12, 17 + b, p.lens); },
 };
 
 // ---- props: held in the hands ------------------------------------------------------------------------
@@ -275,6 +290,8 @@ function paintProp(G, look, f) {
     case "wand": G.rect(GR.prop, hr, hy + 1, hr + 1, hy + 3, pal.dark); G.rect(GR.prop, hr - 1, hy + 4, hr + 2, hy + 10, "#111827"); break;
     case "pitchfork": G.rect(GR.prop, hr + 1, 5 + b, hr + 1, 45, "#92400e"); G.rect(GR.prop, hr - 1, 4 + b, hr + 3, 4 + b, pal.metal); for (const dx of [-1, 1, 3]) G.rect(GR.prop, hr + dx, 2 + b, hr + dx, 3 + b, pal.metal); break;
     case "ticket": G.rect(GR.prop, hl - 3, hy - 3, hl - 1, 44, "#f8fafc"); break;
+    case "guestlist": G.rect(GR.prop, hl - 4, hy - 6, hl, hy + 1, "#7f1d1d"); break;
+    case "meter": G.rect(GR.prop, hr, hy - 3, hr + 4, hy + 2, "#facc15"); G.rect(GR.prop, hr + 1, hy - 6, hr + 1, hy - 4, pal.metal); break;
     default:
   }
 }
@@ -297,6 +314,8 @@ function propDetail(G, look, f) {
     case "wand": G.fill(hr, hy + 5, hr + 1, hy + 9, f ? shade(pal.lens, 0.6) : pal.lens); break;
     case "pitchfork": G.px(hr + 1, 4 + b, "#d6d3d1"); break;
     case "ticket": G.hl(hl - 3, hl - 1, hy - 3, pal.lens); for (let y = hy - 1; y <= 42; y += 2) G.px(hl - 2 - (y % 4 === 1 ? 0 : 1), y, "#64748b"); break;
+    case "guestlist": G.fill(hl - 3, hy - 5, hl - 1, hy, "#fef3c7"); G.hl(hl - 3, hl - 1, hy - 3, pal.trim); G.px(hl - 2, hy - 1, INK); break;
+    case "meter": G.fill(hr + 1, hy - 2, hr + 3, hy, "#0f172a"); G.px(hr + 1 + (f ? 2 : 0), hy - 2, "#ef4444"); G.px(hr + 2, hy + 1, INK); break;
     default:
   }
 }

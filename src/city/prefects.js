@@ -38,6 +38,7 @@ import * as SIM from "./sim.js";
 import { compat } from "./social.js";
 import { councilSitting } from "./councilCalendar.js";
 import { PREFECT, PREFECTS, DIRECTIVES, DIRECTIVE_IDS } from "./prefectData.js";
+import { nightPressure } from "./nightlifeSim.js";   // THE NIGHTLIFE QUARTERS: downtown draws curfews and inspections first
 
 export { PREFECT, PREFECTS, DIRECTIVES, DIRECTIVE_IDS };
 export const LEAN_GAIN = 2.2, ABSTAIN = 0.05;
@@ -107,7 +108,7 @@ export const polarization = (lean, raw0) => clamp(Math.abs(lean || 0) + Math.max
 // -> {directive, intensity, target}
 export function chooseDirective(id, day, raw0, lean) {
   const p = PREFECT[id], T = p.temper;
-  let C = T.strict - (lean != null ? lean / 40 : 0);
+  let C = T.strict - (lean != null ? lean / 40 : 0) + nightPressure(id, SIM.weekdayOf(day));
   if (raw0 <= -45) C += T.unrest === "clamp" ? 1.6 : -2;
   else if (raw0 <= -15) C += T.unrest === "clamp" ? 0.8 : -0.8;
   else if (raw0 >= 45) C += T.content === "probe" ? 1 : -0.8;

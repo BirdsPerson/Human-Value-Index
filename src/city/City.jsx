@@ -44,6 +44,7 @@ import { tennisAt, tennisEvents } from "./tennis.js";
 import { planningLines } from "./planning.js";
 import { raceAt, raceEvents, racerName } from "./race.js";   // THE WEEKEND RACE on THE GAUNTLET
 import { HeightsPage } from "./HeightsPage.jsx";   // #heights: the trail map, the trails' status, the race
+import { nightPa } from "./nightlife.js";   // THE NIGHTLIFE QUARTERS: TONIGHT AT ..., the rope, closing time
 import { paLines as chessPa } from "../chess/park.js";   // PARK CHESS: results, the game on, the ladder
 import { actsNow } from "./acts.js";
 import { ensurePlans, knownSubjects, summaryOf, completeAt, checkDay, wantSectors, findBySlug, pinSubject, unpinSubject } from "./planClient.js";
@@ -267,6 +268,8 @@ export default function City({ route }) {
     }
     // PARK CHESS (src/chess/park.js): a result, the game on at a board, the ladder; with the venues
     { const ch = chessPa(mt, here || null); if (ch.length) venues.push(ch[Math.floor(k / 4) % ch.length]); }
+    // THE NIGHTLIFE QUARTERS (nightlife.js): tonight's bill, the rope, last call and closing time
+    { const nl = nightPa(mt, here || null); if (nl.length) venues.push(nl[Math.floor(k / 4) % nl.length]); }
     // the civic record (civic.js): this district's mood and team inside one; swings and the table on the map
     const record = civicPaLines(civicOf(clock.day), here);
     if (civic.length && k % 5 === 3 && (!here || here === "commons")) setPa(civic[Math.floor(k / 5) % civic.length]);

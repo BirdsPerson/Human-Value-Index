@@ -1021,7 +1021,8 @@ for (const n of process.argv.includes("--no-20k") ? [430, 5000] : [430, 5000, 20
   const ms = performance.now() - t;
   const bytes = JSON.stringify(b).length;
   sizes.push([n, bytes, Math.round(ms)]);
-  ok(bytes / DIST.length < 1100, `${n}: ${bytes} bytes, ${Math.round(bytes / DIST.length)} per district`);
+  const nd = Object.keys(b.districts || {}).length || DIST.length;   // every district in the block (the nightlife quarters too)
+  ok(bytes / nd < 1100, `${n}: ${bytes} bytes, ${Math.round(bytes / nd)} per district`);
 }
 ok(sizes[sizes.length - 1][1] < sizes[0][1] * 1.4, `the block does not grow with the census (${sizes.map(s => s[1]).join(" / ")} bytes)`);
 SIM.setRoster(roster);

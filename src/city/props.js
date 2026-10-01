@@ -16,6 +16,7 @@
 import { lotPhase, resortPhase, machineClock } from "./sim.js";
 import { PLANNING_ROOM_TYPE, PLANNING_LOOK, planningPlans, planningPropDrawers } from "./planning.js";
 import { STORE_ROOM_TYPE, STORE_LOOK, storePlans, storePropDrawers, storeRoomType, storeRoomDrawers } from "./storefrontProps.js";   // THE MALL
+import { NIGHT_ROOM_TYPE, NIGHT_LOOK, nightPlans, nightPropDrawers, nightRoomDrawers, nightLive } from "./nightlifeProps.js";   // THE NIGHTLIFE QUARTERS
 import { FUNNEL_ROOM_TYPE, FUNNEL_LOOK, FUNNEL_ACTS, funnelPlans, funnelPropDrawers, funnelRooms, withTv } from "./funnelProps.js";
 import { floorRoomType, casinoPlans, casinoLook, casinoDraw, casinoLive, casinoProps } from "../casino/cityRooms.js";
 
@@ -54,6 +55,7 @@ export const ROOM_TYPE = {
   "rows-a": "lofts", "rows-b": "lofts", "rows-c": "lofts", "rows-e": "lofts", "flats-high-street": "lofts", "flats-market-row": "lofts", "flats-cathedral": "lofts",
   ...PLANNING_ROOM_TYPE,   // the Dept of Planning's drawing office (planning.js): the advocates at their lecterns
   ...STORE_ROOM_TYPE,   // THE MALL: storefront units (their trade decides: storeRoomType), SAM'S PIZZA, GOODNIGHT IRENE'S
+  ...NIGHT_ROOM_TYPE,   // THE NIGHTLIFE QUARTERS: the clubs, the bars, the restaurants, the late food, the liquor stores
   ...FUNNEL_ROOM_TYPE,   // the Arcade, the EB Shop, the Union lounge, EBTV's stage, the boardwalk's cabinet (funnelProps.js); last, so it wins
 };
 // LOT 0x6F07 changes with THE ASSEMBLY's decision (sim.lotPhase): scrub and a site read as
@@ -90,6 +92,7 @@ const LOOK = {
 Object.assign(LOOK, FUNNEL_LOOK);
 Object.assign(LOOK, STORE_LOOK);
 Object.assign(LOOK, PLANNING_LOOK);
+Object.assign(LOOK, NIGHT_LOOK);
 
 // ---- plans ----------------------------------------------------------------------------
 // A module is {w (in sprite widths), ax (where the person stands in it, 0..1), prop, a}.
@@ -306,6 +309,7 @@ const PLANS = {
 };
 funnelPlans(PLANS, { A, M, P, SIDE });
 storePlans(PLANS, { A, M, P, SIDE });
+nightPlans(PLANS, { A, M, P, SIDE });   // THE NIGHTLIFE QUARTERS
 planningPlans(PLANS, { A, M, P, SIDE });   // the Dept of Planning (planning.js)   // new rooms, and a JETSAM! cabinet in the bars, the diner, the casino
 Object.assign(PLANS, casinoPlans({ A, M, P }));
 Object.assign(LOOK, casinoLook);
@@ -779,6 +783,7 @@ const DRAW = {
 const FUNNEL_ROOMS = funnelRooms();
 Object.assign(DRAW, FUNNEL_ROOMS.DRAW, { boardwalk: DRAW.market });
 Object.assign(DRAW, storeRoomDrawers());   // THE MALL's walls
+Object.assign(DRAW, nightRoomDrawers());   // THE NIGHTLIFE QUARTERS' walls
 DRAW.planning = DRAW.office;   // the Dept of Planning's drawing office: the office's walls
 Object.assign(DRAW, casinoDraw({ R, across }));
 export const DRAWN_TYPES = Object.keys(DRAW);
@@ -874,6 +879,7 @@ const LIVE = {
   },
 };
 Object.assign(LIVE, FUNNEL_ROOMS.LIVE, LIVE.market ? { boardwalk: LIVE.market } : {}); withTv(LIVE);   // EBTV on the telly in the bars and the diner
+Object.assign(LIVE, nightLive());   // THE NIGHTLIFE QUARTERS: the beams, the strobe, the stage light; EBTV in the bars
 
 // ---- furniture ---------------------------------------------------------------------------
 // PROP[name] = {back, front}: back is drawn before the row's people, front after them.
@@ -1114,6 +1120,7 @@ export const PROP = {
 };
 Object.assign(PROP, funnelPropDrawers({ SIDE }));
 Object.assign(PROP, storePropDrawers());   // THE MALL: shelves by trade, the board rack, the ovens, the tanks
+Object.assign(PROP, nightPropDrawers());   // THE NIGHTLIFE QUARTERS: the decks, the booths, the tables, the screen
 Object.assign(PROP, planningPropDrawers());   // the advocates, the plan chest   // cabinets, standees, the shop counter, the EBSN desk
 
 // HOUSE EDGE CASINO's floors: ambient light and table furniture (src/casino/cityRooms.js).

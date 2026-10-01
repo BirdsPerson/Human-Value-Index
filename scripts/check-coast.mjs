@@ -15,11 +15,12 @@ const over = (a, b) => a.x < b.x + b.w - 1e-9 && b.x < a.x + a.w - 1e-9 && a.y <
 
 // ---- the land ----------------------------------------------------------------------------------
 const EXP = SIM.DISTRICTS.filter(d => d.expansion);
-ok(EXP.map(d => d.id).join() === "coast,heights,port,oldtown" && SIM.DISTRICTS.slice(-4).every(d => d.expansion), "the districts off the Loop, appended after the ten (a sector is a district, in order): the Coast, the Heights, the Port, the Old Town");
+ok(EXP.map(d => d.id).join() === "coast,heights,port,oldtown,uptown,downtown" && SIM.DISTRICTS.slice(-6).every(d => d.expansion), "the districts off the Loop, appended after the ten (a sector is a district, in order): the Coast, the Heights, the Port, the Old Town, Uptown, Downtown");
 for (const d of SIM.DISTRICTS) for (const e of SIM.DISTRICTS) if (d !== e) ok(!over(d.rect, e.rect), `${d.id} and ${e.id} do not overlap`);
 ok(SIM.DISTRICT.coast.rect.y >= Math.max(...SIM.LOOP_DISTRICTS.map(d => d.rect.y + d.rect.h)) + 2, "the Coast lies south of everything, past a street");
 ok(SIM.DISTRICT.heights.rect.y + SIM.DISTRICT.heights.rect.h <= Math.min(...SIM.LOOP_DISTRICTS.map(d => d.rect.y)) - 2, "the Heights lie north of everything, past a street");
-for (const d of EXP) {
+// (the nightlife quarters house nobody: they are a walk from the Loop's stations, scripts/check-nightlife.mjs)
+for (const d of EXP.filter(x => !x.onFoot)) {
   const r = d.rect;
   for (const b of SIM.BUILDINGS.filter(x => x.district === d.id)) ok(b.rect.x >= r.x && b.rect.y >= r.y && b.rect.x + b.rect.w <= r.x + r.w && b.rect.y + b.rect.h <= r.y + r.h, `${b.id} inside ${d.id}`);
   const kinds = new Set(d.places.map(p => SIM.PLACES[p].kind));

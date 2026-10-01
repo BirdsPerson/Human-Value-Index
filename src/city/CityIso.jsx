@@ -30,6 +30,7 @@ import ControlLayer, { TakeControlButton } from "./ControlLayer.jsx";
 import { funnelRoomHits } from "./funnelProps.js";
 import { funnelButtons } from "./funnels.js";
 import { storeLabel, tramAt, drawTram } from "./storefrontDraw.js";   // THE MALL: the storefronts' names, THE TRAM CAR
+import { nightLine } from "./nightlife.js";   // THE NIGHTLIFE QUARTERS: hours, tonight's bill, the rope
 import { storeButtons, openBusiness } from "./EnterprisePanel.jsx";
 import { openFunnel } from "./FunnelOverlay.jsx";
 import { COAST_LOTS, COAST_PLACES, terrainH, onTerrain, TERRAIN } from "./coastGeo.js";
@@ -55,7 +56,7 @@ import { drawChessTables } from "../chess/tableDraw.js";   // PARK CHESS: the st
 // Labels go on top of the finished scene, nearest first, never over each other. A tap asks
 // the same order front to back, so what you see on top is what you get.
 
-const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316", coast: "#3a3322", heights: "#2a3440", port: "#1a1c20", oldtown: "#1d1913" };
+const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316", coast: "#3a3322", heights: "#2a3440", port: "#1a1c20", oldtown: "#1d1913", uptown: "#1c1a16", downtown: "#18141a" };
 const LOT_FILL = { "the-green": "#123a18", "the-allotment": "#1a2e12", "the-street": "#20241f", "the-plaza": "#24261f", "estate-gardens": "#15401c", "port-park": "#15401c", "cathedral-square": "#3a3630", "bowling-green": "#1d4a22", "the-close": "#173f1c" };
 const OUTDOOR_PLACES = new Set(["park", "the-street", "the-plaza", "allotment", "estate-gardens", "port-park", "cathedral-square", "bowling-green", "the-close"]);
 const PANEL_BG = "#060a06";
@@ -1053,6 +1054,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         : CIVIC_LOTS[b.id] ? civicLine(b.id, mt, V.occ[b.id] || 0)
         : COAST_LOTS[b.id] ? coastLine(b.id, mt, V.occ[b.id] || 0)
         : VENUE_LOTS[b.id] ? venueLine(b.id, mt, V.occ[b.id] || 0)
+        : nightLine(b.id, mt, V.occ[b.id] || 0) ? nightLine(b.id, mt, V.occ[b.id] || 0)
         : PARK_LOTS[b.id] ? `${V.occ[b.id] || 0} ${b.id === "the-bowl" ? "IN THE BOWL" : "ON THE GROUND"} // ${game ? game.short : PARK_LOTS[b.id] === "rec-park" ? "LEISURE IN PROGRESS. IT IS BEING ENJOYED." : "NO FIXTURE. PRACTICE IS PERMITTED."}`
         : `${V.occ[b.id] || 0} INSIDE // ${nF} FLOOR${nF === 1 ? "" : "S"}`;
       ctx.fillText(fitText(sub, pr.w - 20 - closeW), x0 + 10, y0 + 24);

@@ -19,6 +19,7 @@
 
 import { DISTRICT } from "./sim.js";
 import { PHASE2_PREFECTS } from "./phase2Prefects.js";
+import { NIGHT_PREFECTS } from "./nightlifePrefects.js";
 
 export const DIRECTIVES = {
   permits:     { name: "FESTIVAL PERMITS",          short: "PERMITS",     control: -2, mood: 3,  desc: "SANCTIONED FUN IS ISSUED BY THE HOUR." },
@@ -275,5 +276,7 @@ export const PREFECTS = [
 // PHASE 2 (phase2Prefects.js): the Port's and the Old Town's, and the four that arrive with their
 // districts (the Suburbs, the Airport, the Farmland, the Engine): only a district that exists has one.
 PREFECTS.push(...PHASE2_PREFECTS.filter(p => DISTRICT[p.id]));
+// THE NIGHTLIFE QUARTERS: UPTOWN's and DOWNTOWN's (nightlifePrefects.js)
+PREFECTS.push(...NIGHT_PREFECTS);
 export const PREFECT = Object.fromEntries(PREFECTS.map(p => [p.id, p]));
 export const prefectTitle = (p) => `PREFECT ${p.code} // ${p.name}`;
