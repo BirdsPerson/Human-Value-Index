@@ -1554,3 +1554,8 @@ the line's deck, platforms and stairs, and every Central Line car wholly under t
 before it at all four turns (a car half out of the portal is drawn over the tower's end face). The
 junctions are interchanges on foot (HQ NORTH to the Loop's DEPT HQ station 1.5 cells; HQ SOUTH to
 the Shore Line 5); the Central Line does not share the Loop's track.
+
+Screens (PHASE 2): docs/screens/phase2/ (production whole city at the four quarter turns and at 390;
+the Port, the Old Town, the Shore Line, the Alpine Line and the monolith with the Central Line, by day
+and by night, at 1440 and 390, from the dev build of the same commit).
+
