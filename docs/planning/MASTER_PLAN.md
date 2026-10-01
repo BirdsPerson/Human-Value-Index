@@ -196,7 +196,13 @@ best of three, the board only counts up, the PA); the planning lines (every moti
 marked as reconstruction); the billboard sites at four turns. `check-cityview`, `check-coast`,
 `check-control`, `check-city` (capacity), `check-quests` and `check-plans` all run on layout 2.
 
-## PHASE 2: growth in every direction, and rail to reach it (planned, not built)
+## PHASE 2: growth in every direction, and rail to reach it
+
+**Status (2026-10-01): steps 1-3 built and live**, with one addition: THE CENTRAL LINE across the core
+through a portal in the monolith (Scott: "it would make sense for the train to run through the
+central building"). What was built and measured: docs/CITY_SPEC.md "PHASE 2". Still to come: (4) THE
+SUBURBS and THE AIRPORT with the East Line, (5) THE FARMLAND (the West Line's next version) and THE
+ENGINE, (6) THE OUTER RING; and the Port's and the Old Town's prefects.
 
 Scott, 2026-09-30: "make sure we're extending in lots of different directions, planning where
 things should best be located; the train track needs to extend to different parts of the city;
