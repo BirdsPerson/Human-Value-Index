@@ -60,12 +60,13 @@ for (let i = 0; i < 300; i++) {
 const withTendencies = { slug: "t", name: "Tendency Subject", tier: "TOLERATED GENERALIST", died: "1900-01-01", places: ["concert hall", "library"], stratum: { domain: "arts", occupation: "COMPOSER" } };
 const citizens = Array.from({ length: 60 }, (_, i) => ({ slug: `citizen-${i}`, name: `Citizen ${i}`, tier: randTier(), score: 500, warmth: Math.round(R() * 100), competence: Math.round(R() * 100), kind: "citizen" }));
 const ALL = [...figures, ...engine, ...citizens];
+const HEAVY = new Set(["works", "port"]);   // PROCESSING: the Works, and the Port since the reclamation line moved there
 console.log(`population: ${figures.length} figures, ${engine.length} engine, ${citizens.length} citizens = ${ALL.length}`);
 
 // ---- catalogue ------------------------------------------------------------------------
 section("catalogue");
-ok(DISTRICTS.length === 12 && LOOP_DISTRICTS.length === 10, `10 districts on the Loop and 2 expansion districts (got ${DISTRICTS.length})`);
-const ids = ["hq", "arts", "campus", "finance", "strip", "arena", "commons", "archive", "works", "sprawl", "coast", "heights"];
+ok(DISTRICTS.length === 14 && LOOP_DISTRICTS.length === 10, `10 districts on the Loop and 4 off it: the Coast, the Heights, the Port, the Old Town (got ${DISTRICTS.length})`);
+const ids = ["hq", "arts", "campus", "finance", "strip", "arena", "commons", "archive", "works", "sprawl", "coast", "heights", "port", "oldtown"];
 const DISTRICT_IDS = new Set(ids);
 ok(ids.every(id => DISTRICTS.some(d => d.id === id)), "district ids match the contract");
 ok(Object.keys(PLACES).length >= 30, `~35 places (got ${Object.keys(PLACES).length})`);
@@ -86,7 +87,7 @@ const expect = [
   ["marie-curie", j => j.jobId === "radiant-systems-engineer", "Curie runs radiant systems at the Works"],
   ["mother-teresa", j => j.district === "commons" && j.place === "ward", "Mother Teresa on the Commons ward"],
   ["peter-thiel", j => j.district === "finance", "Thiel in Finance"],
-  ["genghis-khan", j => j.district === "works" && j.rank === 0, "Genghis Khan at the Works, lowest grade"],
+  ["genghis-khan", j => HEAVY.has(j.district) && j.rank === 0, "Genghis Khan in heavy industry (the Works or the Port), lowest grade"],
   ["george-orwell", j => j.district === "strip", "Orwell (a writer) on the Strip"],
 ];
 for (const [slug, test, msg] of expect) { const j = assignJob(bySlug[slug]); console.log("  " + show(bySlug[slug])); ok(test(j), msg); }
@@ -118,7 +119,7 @@ for (const s of ALL) {
   perJob[j.jobId] = (perJob[j.jobId] || 0) + 1;
   const tier = typeof s.tier === "string" ? s.tier : s.tier.label;
   if (lowLabels.has(tier)) {
-    ok(j.district === "works", `${s.slug} (${tier}) works at the Works`);
+    ok(HEAVY.has(j.district), `${s.slug} (${tier}) works in heavy industry (the Works, or the Port since PHASE 2)`);
     if (tier === "SOYLENT GREEN") ok(j.rank === 0, `${s.slug} SOYLENT GREEN at the lowest grade`);
   }
   ok(PLACES[homeOf(s)]?.kind === "home", `${s.slug} has a home`);
@@ -134,7 +135,7 @@ for (const s of ALL) for (const day of [1, 2, 7]) {
   for (const g of sc) { if (Math.abs(g.from - t) > 1e-9 || g.to < g.from) good = false; t = g.to; }
   ok(good && Math.abs(t - 24) < 1e-9, `${s.slug} day ${day} schedule covers the day`);
   const tier = typeof s.tier === "string" ? s.tier : s.tier.label;
-  if (lowLabels.has(tier)) for (const g of sc) if (g.activity === "work") ok(PLACES[g.placeId].district === "works", `${s.slug} shift at the Works`);
+  if (lowLabels.has(tier)) for (const g of sc) if (g.activity === "work") ok(HEAVY.has(PLACES[g.placeId].district), `${s.slug} shift in heavy industry (the Works or the Port)`);
 }
 
 // ---- determinism ----------------------------------------------------------------------------

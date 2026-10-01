@@ -20,6 +20,8 @@ import { rot, STOREY } from "./iso.js";
 import { funnelDeco, drawFunnelYard, FUNNEL_MAT, FUNNEL_ROOF, FUNNEL_STYLES_DRAWN, FUNNEL_PROPS } from "./funnelDraw.js";
 import { venueDeco, drawVenueYard, VENUE_STYLES_DRAWN } from "./venueDraw.js";
 import { VENUE_PROPS } from "./venueGeo.js";
+// THE PORT and THE OLD TOWN (PHASE 2 step 3): their facades, the quay's cranes and ship, the slipway
+import { westDeco, drawWestYard, drawWestGround, WEST_STYLES_DRAWN, WEST_PROPS_DRAWN } from "./westDraw.js";
 import { partOrder } from "./archGeo.js";
 
 export const DRAWN_STYLES = new Set(["projects", "brownstone", "lofts", "glass", "office", "monolith", "gothic", "clocktower", "neon", "casino", "diner", "gallery", "theatre", "cafe", "studio", "hall", "classical", "vault", "hospital", "chapel", "market", "school", "shed", "reactor", "stacks", "datahall", "docks", "tanks", "bunker", "prison", "canteen",
@@ -28,6 +30,8 @@ export const DRAWN_PROPS = new Set(["hoop", "fence", "bench", "tree", "lamp", "d
 for (const k of FUNNEL_STYLES_DRAWN) DRAWN_STYLES.add(k);
 for (const k of FUNNEL_PROPS) DRAWN_PROPS.add(k);
 for (const k of VENUE_STYLES_DRAWN) DRAWN_STYLES.add(k);
+for (const k of WEST_STYLES_DRAWN) DRAWN_STYLES.add(k);
+for (const k of WEST_PROPS_DRAWN) DRAWN_PROPS.add(k);
 for (const k of VENUE_PROPS) DRAWN_PROPS.add(k);
 
 const MAT = {
@@ -1391,6 +1395,10 @@ Object.assign(DECO, FUNNEL.deco); Object.assign(FAR, FUNNEL.far);
 // the Dept of Planning (venueDraw.js), with the same kit
 const VENUE = venueDeco(FUNNEL_KIT);
 Object.assign(DECO, VENUE.deco); Object.assign(FAR, VENUE.far);
+// the Port and the Old Town (westDraw.js), with the kit and the row houses' own faces
+const WEST_KIT = { ...FUNNEL_KIT, rowFace, rowRoof, clockFace, chapelSpire };
+const WEST = westDeco(WEST_KIT);
+Object.assign(DECO, WEST.deco); Object.assign(FAR, WEST.far);
 
 const ORDERS = new Map();
 // G: {ctx, Q, poly, facing, z, r}; env: {lod, night, hour, t, lit, bid (int), name, style}
@@ -1438,6 +1446,7 @@ export function drawArchGround(G, m, env) {
   const rect = (g, fill, stroke) => G.poly([Q(g.x0, g.y0, 0.01), Q(g.x1, g.y0, 0.01), Q(g.x1, g.y1, 0.01), Q(g.x0, g.y1, 0.01)], fill, stroke);
   const nf = env.night ? 0.7 : 1;
   for (const g of m.ground) {
+    if (drawWestGround(G, g, env, shade)) continue;
     if (g.k === "court") {
       rect(g, shade("#3a4450", nf), null);
       if (far) continue;
@@ -1727,7 +1736,7 @@ export function drawYardProp(G, p, env) {
       for (let i = 0; i < 2; i++) { const c = { x0: p.x - 0.18 + i * 0.2, y0: p.y - 0.1, x1: p.x + i * 0.2, y1: p.y + 0.1, h0: 0, h1: 0.3 }; for (const f of facesOf(c, G)) G.poly(f.q(0, 1, 0, 0.3), shade(i ? "#2f5a3a" : "#3a3f44", f.sh * nf)); }
       break;
     }
-    default: if (!drawVenueYard(K, p, env)) drawFunnelYard(K, p, env, FUNNEL_KIT); break;
+    default: if (!drawVenueYard(K, p, env) && !drawWestYard(K, p, env, WEST_KIT)) drawFunnelYard(K, p, env, FUNNEL_KIT); break;
   }
   K.flush();
 }

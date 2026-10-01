@@ -155,7 +155,8 @@ export function shuttle(spec) {
   });
   ARR.push(t);
   const lap = t, headway = lap / spec.cars.length;
-  const trains = spec.cars.map((cars, k) => ({ id: `${spec.prefix}${k + 1}`, index: k, line: spec.id, name: `${spec.short} ${k + 1}`, cars }));
+  // a later version of a line numbers its trains on from the last (idBase): train ids stay unique
+  const trains = spec.cars.map((cars, k) => ({ id: `${spec.prefix}${k + 1 + (spec.idBase || 0)}`, index: k, line: spec.id, name: `${spec.short} ${k + 1 + (spec.idBase || 0)}`, cars }));
   return { ...spec, kind: "shuttle", centre: C, L, length: Lo + Li, lat, base, at, stations, stops, ARR, lap, headway, trains };
 }
 

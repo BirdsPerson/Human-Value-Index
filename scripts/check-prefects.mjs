@@ -27,7 +27,9 @@ const ALL = SIM.DISTRICTS.map(d => d.id);
 
 // ---- 1. twelve, one per district, no two alike ---------------------------------------------------
 const P = PF.PREFECTS;
-eq(P.map(p => p.id).sort(), [...ALL].sort(), "one prefect per district, the Coast and the Heights included");
+// PHASE 2 step 3: the Port and the Old Town have no prefect yet (a TODO: their own look and voice)
+const NO_PREFECT_YET = new Set(["port", "oldtown"]);
+eq(P.map(p => p.id).sort(), ALL.filter(id => !NO_PREFECT_YET.has(id)).sort(), "one prefect per district, the Coast and the Heights included (the Port and the Old Town: not yet)");
 ok(P.length === 12, "twelve prefects");
 for (const k of ["code", "name", "signoff", "style", "why"]) ok(new Set(P.map(p => p[k])).size === P.length, `no two share a ${k}`);
 for (const k of ["head", "prop"]) ok(new Set(P.map(p => p.look[k])).size === P.length, `no two share a ${k}`);
@@ -156,6 +158,7 @@ ok(new Set(allLines).size === allLines.length, "no line is shared between prefec
   const leansSeen = [];
   for (const id of ALL) {
     const x = b.districts[id];
+    if (NO_PREFECT_YET.has(id)) { ok(!x.prefect, `${id}: no prefect yet, no prefect block`); continue; }
     ok(x.prefect && PF.DIRECTIVES[x.prefect.directive], `${id}: a prefect block with a directive`);
     if (seats[id]) {
       ok(x.seat.status === "HELD" && Number.isInteger(x.seat.lean) && x.seat.lean >= -100 && x.seat.lean <= 100, `${id}: a held seat carries a lean (${x.seat.lean})`);

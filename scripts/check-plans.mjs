@@ -555,20 +555,23 @@ for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["sy
   const mts = Array.from({ length: 300 }, (_, i) => (D - 1) * 24 + i * 0.137);
   ok(mts.every(mt => JSON.stringify(SIM.lineTrainsAt(mt).filter(t => t.line === "loop").map(({ line, ...t }) => t)) === JSON.stringify(SIM.trainsAt(mt))), "every line's trains include the Loop's, exactly trainsAt's");
   ok(mts.every(mt => Object.keys(SIM.STATIONS).every(id => JSON.stringify(SIM.nextArrivalAt(id, mt)) === JSON.stringify(SIM.nextArrival(id, mt)))), "a Loop stop's next train is the Loop's own timetable");
-  // a day published on network 2 (the Loop and the pods, commit 44f1b9c), read by this code
-  const fx = JSON.parse(readFileSync(new URL("./fixtures/net2-plan-day300.json", import.meta.url), "utf8"));
-  SIM.clearPlans(); SIM.clearRoster(); SIM.clearSocialSnapshots();
-  ok(SIM.setPlan(fx.plan, "fixture"), "a network-2 plan loads");
-  const rows = [];
-  // every rider's train, car and place aboard each machine minute; every waiting and alighting
-  // subject's train, car, platform and boarding time once per trip (how long they stand there
-  // follows the ground they walked, which a layout may move)
-  for (const k of Object.keys(fx.plan.subjects)) { const seen = new Set(); for (let i = 0; i < 24 * 60; i++) {
-    const w = SIM.whereAt({ slug: k }, (fx.plan.day - 1) * 24 + i / 60);
-    if (w.sub === "riding") rows.push([k, i, "r", w.trainId, w.car, +w.x.toFixed(6), +w.y.toFixed(6)]);
-    else if (w.sub === "waiting" || w.sub === "alighting") { const t = `${w.sub[0]}|${w.trainId}|${w.car}|${w.stationId}|${w.boardAt}`; if (!seen.has(t)) { seen.add(t); rows.push([k, w.sub[0], w.trainId, w.car, w.stationId, w.boardAt]); } }
-  } }
-  ok(rows.length === fx.rows && createHash("sha256").update(JSON.stringify(rows)).digest("hex") === fx.fingerprint, `a day built before the lines keeps every train, car and platform (${rows.length} rider-minutes, fingerprint ${fx.fingerprint.slice(0, 12)})`);
+  // a day published on network 2 (the Loop and the pods, commit 44f1b9c) and one on network 3 (the
+  // Shore Line's first version and the Alpine Line, commit 5218e14), read by this code: every
+  // rider's train, car and place aboard each machine minute; every waiting and alighting subject's
+  // train, car, platform and boarding time once per trip (how long they stand there follows the
+  // ground they walked, which a layout may move). Adding a line never changes a published train.
+  for (const [file, label] of [["net2-plan-day300.json", "network 2 (the pods)"], ["net3-plan-day300.json", "network 3 (the Shore Line v1, the Alpine Line)"]]) {
+    const fx = JSON.parse(readFileSync(new URL(`./fixtures/${file}`, import.meta.url), "utf8"));
+    SIM.clearPlans(); SIM.clearRoster(); SIM.clearSocialSnapshots();
+    ok(SIM.setPlan(fx.plan, `fixture-${file}`), `a day built on ${label} loads`);
+    const rows = [];
+    for (const k of Object.keys(fx.plan.subjects)) { const seen = new Set(); for (let i = 0; i < 24 * 60; i++) {
+      const w = SIM.whereAt({ slug: k }, (fx.plan.day - 1) * 24 + i / 60);
+      if (w.sub === "riding") rows.push([k, i, "r", w.trainId, w.car, +w.x.toFixed(6), +w.y.toFixed(6)]);
+      else if (w.sub === "waiting" || w.sub === "alighting") { const t = `${w.sub[0]}|${w.trainId}|${w.car}|${w.stationId}|${w.boardAt}`; if (!seen.has(t)) { seen.add(t); rows.push([k, w.sub[0], w.trainId, w.car, w.stationId, w.boardAt]); } }
+    } }
+    ok(rows.length === fx.rows && createHash("sha256").update(JSON.stringify(rows)).digest("hex") === fx.fingerprint, `a day built on ${label} keeps every train, car and platform (${rows.length} rows, fingerprint ${fx.fingerprint.slice(0, 12)})`);
+  }
   SIM.clearPlans();
 }
 console.log(`check-plans: ${checks} checks passed`);

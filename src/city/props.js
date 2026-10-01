@@ -42,6 +42,12 @@ export const ROOM_TYPE = {
   // THE MASTER PLAN (2026-09-30): the Pit's floor and locker rooms read as the gym (the ring
   // and the bags), the tennis club's cutaway is its clubhouse cafe, the Dept of Planning an office
   "pit": "gym", "tennis": "cafe", "estate-gardens": "park", "foothills": "park",
+  // PHASE 2 step 3: the Works' light industry, the Port and the Old Town, furnished from what exists
+  "workshops": "foundry", "parts-depot": "docks",
+  "container-quay": "docks", "shipyard": "foundry", "customs-house": "office", "bonded-warehouse": "docks", "chandlery": "market", "the-anchor": "bar", "port-park": "park",
+  "tenement-a": "hab", "tenement-b": "hab", "tenement-c": "hab", "tenement-d": "hab", "dockers-terrace": "lofts", "pilots-terrace": "lofts",
+  "cathedral": "chapel", "cathedral-square": "street", "bowling-green": "park", "the-close": "park", "covered-market": "market", "city-museum": "gallery", "the-old-bell": "bar", "high-street": "market", "market-row": "market",
+  "rows-a": "lofts", "rows-b": "lofts", "rows-c": "lofts", "rows-e": "lofts", "flats-high-street": "lofts", "flats-market-row": "lofts", "flats-cathedral": "lofts",
   ...PLANNING_ROOM_TYPE,   // the Dept of Planning's drawing office (planning.js): the advocates at their lecterns
   ...FUNNEL_ROOM_TYPE,   // the Arcade, the EB Shop, the Union lounge, EBTV's stage, the boardwalk's cabinet (funnelProps.js); last, so it wins
 };

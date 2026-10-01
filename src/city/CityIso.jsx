@@ -50,10 +50,12 @@ import { drawChessTables } from "../chess/tableDraw.js";   // PARK CHESS: the st
 // Labels go on top of the finished scene, nearest first, never over each other. A tap asks
 // the same order front to back, so what you see on top is what you get.
 
-const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316", coast: "#3a3322", heights: "#2a3440" };
-const LOT_FILL = { "the-green": "#123a18", "the-allotment": "#1a2e12", "the-street": "#20241f", "the-plaza": "#24261f", "estate-gardens": "#15401c" };
-const OUTDOOR_PLACES = new Set(["park", "the-street", "the-plaza", "allotment", "estate-gardens"]);
+const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316", coast: "#3a3322", heights: "#2a3440", port: "#1a1c20", oldtown: "#1d1913" };
+const LOT_FILL = { "the-green": "#123a18", "the-allotment": "#1a2e12", "the-street": "#20241f", "the-plaza": "#24261f", "estate-gardens": "#15401c", "port-park": "#15401c", "cathedral-square": "#3a3630", "bowling-green": "#1d4a22", "the-close": "#173f1c" };
+const OUTDOOR_PLACES = new Set(["park", "the-street", "the-plaza", "allotment", "estate-gardens", "port-park", "cathedral-square", "bowling-green", "the-close"]);
 const PANEL_BG = "#060a06";
+// yard props that still read from afar (the Port's cranes and ships among them)
+const FAR_PROPS = new Set(["tree", "watchtower", "containers", "ambulance", "conveyor", "gantry", "ship", "hull", "tcrane"]);
 const clampN = (v, a, b) => (v < a ? a : v > b ? b : v);
 const shade = (hex, f) => {
   const n = parseInt(hex.slice(1), 16);
@@ -386,7 +388,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const [x, y] = Q(it.p.x, it.p.y, 0);
       const pad = V.cam.z * 8;
       if (x < -pad || x > V.cssW + pad || y < -pad || y > V.cssH + pad * 1.5) return;
-      if (lod === "far" && it.p.k !== "tree" && it.p.k !== "watchtower" && it.p.k !== "containers" && it.p.k !== "ambulance" && it.p.k !== "conveyor") return;
+      if (lod === "far" && !FAR_PROPS.has(it.p.k)) return;
       const hour = ((V.mt % 24) + 24) % 24;
       drawYardProp(archG(), it.p, { lod, night: nightAt(hour), hour, t: V.reduced ? 0 : performance.now() / 1000 });
     }

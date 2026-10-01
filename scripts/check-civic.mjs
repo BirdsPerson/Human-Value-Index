@@ -785,11 +785,11 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
     ok((await decl("HVI-D000MISS", D)).status === 404, "no file, no filing");
     // limits: per device, per address, per case per cycle
     const dev = "ab".repeat(16);
-    const onDev = cz.filter(s => s !== A).slice(0, 3);
+    const onDev = cz.filter(s => s !== A && s !== B).slice(0, 3);
     const rd = [];
     for (const s of onDev) rd.push(await decl(caseOf(tagOf(s)), dOf.get(s.slug).find(x => sl[x]?.length), { ip: "dip-dev", device: dev }));
     ok(rd[0].status === 200 && rd[1].status === 200 && rd[2].status === 429, `${EL.LIMITS.casesPerDevice} files declare from one device, no more`);
-    const onIp = cz.filter(s => s !== A && !onDev.includes(s)).slice(0, EL.LIMITS.casesPerIp + 1);
+    const onIp = cz.filter(s => s !== A && s !== B && !onDev.includes(s)).slice(0, EL.LIMITS.casesPerIp + 1);
     const ri = [];
     for (const s of onIp) ri.push(await decl(caseOf(tagOf(s)), dOf.get(s.slug).find(x => sl[x]?.length), { ip: "dip-ip" }));
     ok(ri.slice(0, -1).every(x => x.status === 200) && ri.at(-1).status === 429, `${EL.LIMITS.casesPerIp} files declare from one address, no more`);

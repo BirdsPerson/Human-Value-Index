@@ -27,7 +27,8 @@ const frac = (v) => ((v % 1) + 1) % 1;
 // ---- the sea -------------------------------------------------------------------------------------
 // The coast's southern rows are water from SEA_Y (the beach's edge) to the district's end.
 export const SEA_Y = 86 + COAST_DY;
-export const SEA = { x0: -3, x1: 112, y0: SEA_Y, y1: 93 + COAST_DY };
+// (PHASE 2 step 3: the sea runs on west under the Port's quay and its yard)
+export const SEA = { x0: -62, x1: 112, y0: SEA_Y, y1: 93 + COAST_DY };
 
 // ---- the mountain ------------------------------------------------------------------------------
 // One terrain over the slopes and the parcel beside them: flat at the village's back (y -11),

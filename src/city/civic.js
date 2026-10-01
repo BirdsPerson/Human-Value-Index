@@ -26,7 +26,8 @@
 import * as SIM from "./sim.js";
 import { displayName } from "../figures.js";
 import { seatsOn } from "./councilCalendar.js";
-import { councilLeans, prefectFold } from "./prefects.js";   // THE PREFECTS: directive, clash, legitimacy
+import { councilLeans, prefectFold } from "./prefects.js";
+import { PREFECT } from "./prefectData.js";   // THE PREFECTS: directive, clash, legitimacy
 import * as L from "./leagues.js";   // THE LEAGUES: four sports, the ladder, the Pit, the Departmental Cup
 import { playerRating, draftOrder, teamName, teamShort } from "./leagues.js";
 
@@ -478,8 +479,9 @@ export function civicFold(plan, people, prev = null) {
     const f = factors(stats[id], [...fm].reduce((n, r) => n + (r === "W" ? 3 : r === "L" ? -3 : 0), 0), pos, lot, id);
     // THE PREFECT (prefects.js): today's directive from the mood before its own factor and the
     // council's lean; the clash and the directive's weight become the mood's `prefect` factor.
-    const pf = prefectFold(id, day, clamp(sum(f), -100, 100), held[id] ? leans[id] ?? 0 : null, prev?.v === CIVIC_V ? prev.districts?.[id]?.prefect : null);
-    f.prefect = pf.factor;
+    // (the Port and the Old Town have no prefect yet: PHASE 2 TODO, one each, their own look and voice)
+    const pf = PREFECT[id] ? prefectFold(id, day, clamp(sum(f), -100, 100), held[id] ? leans[id] ?? 0 : null, prev?.v === CIVIC_V ? prev.districts?.[id]?.prefect : null) : null;
+    if (pf) f.prefect = pf.factor;
     const raw = clamp(sum(f), -100, 100);
     const was = prev?.v === CIVIC_V && Number.isFinite(prev.districts?.[id]?.mood?.raw) ? prev.districts[id].mood.raw : raw;
     const s = Math.round(0.6 * raw + 0.4 * was) || 0;   // no -0: the block is plain JSON
@@ -500,7 +502,7 @@ export function civicFold(plan, people, prev = null) {
     rec.seat = held[id]
       ? { holder: held[id].holder, name: held[id].name, term: held[id].term, cycle: held[id].cycle, by: held[id].by, approval: s, status: "HELD", lean: leans[id] ?? 0, acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] }
       : { holder: null, term: null, approval: s, status: "VACANT", acts: lot ? [["A001", lot.closeDay, lot.winner]] : [] };
-    rec.prefect = pf.block;
+    if (pf) rec.prefect = pf.block;
     districts[id] = rec;
   }
   if (X) {

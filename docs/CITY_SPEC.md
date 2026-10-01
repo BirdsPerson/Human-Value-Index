@@ -1489,3 +1489,47 @@ Step 2, THE SHORE LINE and THE ALPINE LINE (rail in place of the pods), layout 3
   busiest is 69 (unchanged by the lines, and its own capacity question). Plan build at 430: 0.34 s
   -> 0.63 s; plan 106 -> 131 KB.
 
+
+Step 3, THE PORT, THE OLD TOWN and THE WEST LINE (layout 4, network 4):
+
+- **THE PORT** (`port`, 0xCF00, x -58..-8, y 30..102; the sea runs on west under its quay): the
+  CONTAINER QUAY (stacks, two ship-to-shore gantries, a container ship at the berth), THE SHIPYARD
+  (the fabrication shed, a hull on the slipway, a tower crane), the CUSTOMS HOUSE (portico, clock
+  tower), the BONDED WAREHOUSE, THE CHANDLERY (shops under flats), THE ANCHOR (the dockers' pub);
+  heavy industry moved here from the Works: the FOUNDRY and the RECLAMATION LINE (ids kept,
+  `sim.MOVED_FROM`), twenty rows south of the nearest home, PORT PARK (the green buffer) between.
+  Worker housing round PORT TOWN station: TENEMENT ROWS A-D (110 each, tiers 3-5), DOCKERS' and
+  PILOTS' TERRACES (80 each, tiers 1-2). Jobs: stevedores, crane operators, shipwrights, customs
+  officers, bonded clerks, the chandler, the publican (and the foundry's and the line's, moved).
+- **THE OLD TOWN** (`oldtown`, 0xD100, x -52..-6, y -16..26): the CATHEDRAL OF THE FIRST UPLOAD
+  (nave, transepts, the west front's towers, the crossing spire), CATHEDRAL SQUARE, the MUSEUM OF
+  THE CITY (portico and dome), THE COVERED MARKET (a barrel vault, the stalls), THE OLD BELL (a
+  tavern), THE BOWLING GREEN, THE CLOSE (a lawn between the rows); brownstone rows (CANAL, CHAPEL,
+  BELL, GUILD: 140 each) and shops under flats (THE HIGH STREET, MARKET ROW: 60 flats each, shops
+  below), CATHEDRAL WALK-UPS (60): tiers 1-2. Jobs: vergers, market traders, museum guides,
+  shopkeepers, the publican.
+- **The Works keeps light industry**: THE WORKSHOPS and the PARTS DEPOT where the foundry and the
+  reclamation line stood; THE PIT stays.
+- **THE WEST LINE** (line 4, `W1`-`W6`, purple): its ARENA terminal just west of the Loop's Arena
+  station (a four-cell walk), west along the street between the Old Town and the Port, north up
+  x -24 (OLD TOWN CATHEDRAL), west along y 2 to OLD TOWN MARKET (the Farmland later: a new version).
+  **THE SHORE LINE version 2** (line 3, `S7`-`S14`): on past Coast West to PORT QUAY and north to PORT
+  TOWN. Version 1 (line 1) is `retired` from network 4 and still decodes every day published on
+  network 3 (`check-plans`: a network-3 day built by 5218e14 keeps every train, car and platform).
+- **The day boundary**: a trip published before the move to or from the foundry or the reclamation
+  line rode the Loop from the Works: it is read with its old district (`MOVED_FROM`), walked at the
+  pace that fits its times (`check-planner` holds it apart: at most 40 cells a machine minute, never
+  a jump); a walk built since to or from a moved place carries plan flag 8 | 32.
+- **Drawn** (`westGeo.js` massing, `westDraw.js` facades and the quay's gantries, ship, hull and
+  crane, the berth's water and the slipway): styles tenement, terrace, walkup, shopflats, tavern,
+  customs, museum, cathedral, covered, quay, shipyard; the open lots port-park, cathedral-square,
+  bowling-green, the-close. The 3D view's `SPAN` grew to 100 so the whole city fits at rest.
+- **Not yet**: the Port's and the Old Town's PREFECTS (each needs its own look and voice: TODO;
+  the fold, the patrol and the panels skip a district without one; `check-prefects` names them).
+- **Measured** (synthetic census, machine day 300). Homes 1,902 -> 3,242 (+600 the Port, +740 the Old
+  Town). Crowding, the ten core districts' factors summed (all fourteen in brackets): 725 -1 -> -1;
+  2,000 -47 -> -20 (-53 -> -27); 5,000 -166 -> -114 (-208 -> -176). Machine minutes in transit a day,
+  step 2 -> step 3: THE BUNKHOUSE 203 -> 264 (2,000), 210 -> 249 (5,000), because its PROCESSING-grade
+  workers now ride to the reclamation line in the Port; THE SEAWALL 184 -> 192, 188 -> 199; the
+  lowest band 182 -> 199, 187 -> 201 (base 44f1b9c: 198, 204). The Port's own homes sit 8-12 cells
+  from Port Town, the Old Town's 4-12 from its two stations.

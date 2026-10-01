@@ -36,7 +36,8 @@ const OLD = JSON.parse(readFileSync(new URL("./fixtures/layout1-ids.json", impor
   ok(SIM.DISTRICTS.slice(0, OLD.districts.length).map(d => d.id).join() === OLD.districts.join(), "the districts keep their order (a sector is a district, in order)");
   const capMoved = Object.entries(OLD.caps).filter(([id, c]) => SIM.PLACES[id].cap !== c).map(([id]) => id);
   ok(!capMoved.length, `no place's capacity moved (${capMoved.join(", ") || "none"})`);
-  ok(JSON.stringify(SIM.HOMES_BY_BAND) === JSON.stringify(OLD.homes), "the homes by tier band are unchanged (homeOf gives everyone the same home)");
+  // PHASE 2 step 3: the new districts' homes are appended to their bands (a new day draws everyone again)
+  ok(OLD.homes.every((band, k) => JSON.stringify(SIM.HOMES_BY_BAND[k].slice(0, band.length)) === JSON.stringify(band)), "the homes by tier band keep layout 1's, in order (the Port's and the Old Town's appended)");
   const moved = Object.entries(OLD.stations).filter(([id, [s, gx, gy]]) => { const st = SIM.STATIONS[id]; return !st || st.s !== s || st.gate.x !== gx || st.gate.y !== gy; }).map(([id]) => id);
   ok(!moved.length && SIM.LOOP_LINE.lapHours === OLD.lap, `the Loop's stations and lap are exactly layout 1's: the timetable, every published train (${moved.join(", ") || "unchanged"})`);
   ok(SIM.LAYOUT_VERSION >= 3 && SIM.COAST_DY === 12, "the layout is version 3 or later: the Coast three more rows south, for the Shore Line (PHASE 2)");
@@ -69,7 +70,7 @@ const OLD = JSON.parse(readFileSync(new URL("./fixtures/layout1-ids.json", impor
   const schoolHeavy = Math.min(...["foundry", "radiant-core", "reclamation-line", "holding-cells", "barracks"].map(id => gapTo(B[id].rect, [B.schoolhouse.rect])));
   ok(schoolHeavy > 15, `the schoolhouse stands ${schoolHeavy.toFixed(1)} cells from the nearest heavy works (layout 1: 5, the barracks)`);
   // every home within twenty cells (a twenty-minute walk) of green ground (layout 1: Hab A-D 27-42, the Heights 35-55)
-  const greens = ["the-green", "the-allotment", "rec-ground", "estate-gardens", "the-foothills", "the-beach"].map(id => B[id].rect);
+  const greens = ["the-green", "the-allotment", "rec-ground", "estate-gardens", "the-foothills", "the-beach", "port-park", "cathedral-square", "bowling-green", "the-close"].map(id => B[id].rect);
   const far = [...new Set(Object.values(P).filter(p => p.kind === "home").map(p => p.building))].filter(id => id !== "lofts" && gapTo(B[id].rect, greens) > 20);
   ok(!far.length, `every home but the Archive Lofts has green within twenty cells (${far.join(", ") || "all"})`);
   // green space: every district with homes has open green ground of its own or next door
@@ -86,26 +87,31 @@ const OLD = JSON.parse(readFileSync(new URL("./fixtures/layout1-ids.json", impor
   ok(fresh.layout === SIM.LAYOUT_VERSION && plan.layout == null, "a plan names the layout it was built on (layout 1's did not)");
   const worst = (json) => {
     SIM.clearPlans(); SIM.setPlan(json, `v-${json.layout || 1}`);
-    let w = 0, eg = "", n = 0;
+    let w = 0, eg = "", n = 0, mw = 0;
     for (const s of roster) {
       let prev = null;
       for (let m = 0; m < 24 * 60; m++) {   // the day itself: at 00:00 the next day's plan takes over (the boundary)
         const T = (plan.day - 1) * 24 + m / 60, p = SIM.whereAt(s, T);
+        // (a trip to or from a place that has since moved district, PHASE 2 step 3's foundry and
+        // reclamation line, is walked at whatever pace fits its published times: held apart, below)
+        const moved = [p, prev].some(q => q && (SIM.MOVED_FROM[q.placeId] || SIM.MOVED_FROM[q.fromPlaceId]));
         if (prev && p.sub !== "riding" && prev.sub !== "riding") {
           const d = Math.hypot(p.x - prev.x, p.y - prev.y);
           n++;
-          if (d > w) { w = d; eg = `${SIM.keyOf(s)} at ${(m / 60).toFixed(2)}: ${prev.placeId}${prev.sub ? "/" + prev.sub : ""} -> ${p.placeId}${p.sub ? "/" + p.sub : ""}`; }
+          if (moved) { if (d > mw) mw = d; }
+          else if (d > w) { w = d; eg = `${SIM.keyOf(s)} at ${(m / 60).toFixed(2)}: ${prev.placeId}${prev.sub ? "/" + prev.sub : ""} -> ${p.placeId}${p.sub ? "/" + p.sub : ""}`; }
         }
         prev = p;
       }
     }
-    return { w, eg, n };
+    return { w, eg, n, mw };
   };
   const now = worst(fresh), old = worst(plan);
   // a pod moves 6 cells a machine minute; entering or leaving a room crosses at most its lot
   ok(now.w < 16, `layout 2's own day: the biggest move in a machine minute is ${now.w.toFixed(1)} cells (${now.eg})`);
   console.log(`  day boundary: layout 2's day worst ${now.w.toFixed(2)} cells a machine minute over ${now.n} samples; layout 1's published day on layout 2's ground worst ${old.w.toFixed(2)}`);
-  ok(old.w <= Math.max(now.w, 12) + 1e-9, `layout 1's published day on layout 2's ground: the biggest move in a machine minute is ${old.w.toFixed(1)} cells (${old.eg}); nobody jumps across the city`);
+  ok(old.w <= Math.max(now.w, 12) + 1e-9, `layout 1's published day on today's ground: the biggest move in a machine minute is ${old.w.toFixed(1)} cells (${old.eg}); nobody jumps across the city`);
+  ok(old.mw <= 40, `a published trip to the foundry or the reclamation line (moved to the Port) is walked fast to fit its times, never a jump (${old.mw.toFixed(1)} cells a machine minute at most)`);
   SIM.clearPlans();
 }
 
