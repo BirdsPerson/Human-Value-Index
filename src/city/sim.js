@@ -1549,9 +1549,10 @@ function podLeg(districtId, dir) {
 // line is never retimed in place (a change is a new version at a new index; the old one stays
 // decodable, `retired`, until no published day names it).
 // NET: the network a day is built on. 2 = the Loop and the pods (layout 2); 3 = the Shore and Alpine
-// Lines (layout 3); 4 = the Shore Line to the Port (version 2) and the West Line (layout 4).
+// Lines (layout 3); 4 = the Shore Line to the Port (version 2) and the West Line (layout 4); 5 = the
+// Central Line across the core, through the monolith.
 // A plan's trips carry what they rode, so a day built on one network is read on the next.
-export let NET = 4;
+export let NET = 5;
 export const LOOP = {
   id: "loop", index: 0, version: 1, kind: "ring", name: "THE LOOP", short: "LOOP", prefix: "L", color: "#22d3ee",
   at: loopAt, length: LOOP_L, stops: STATION_ORDER.map(id => STATIONS[id]), ARR, lap: LAP, headway: HEADWAY, speed: V_TRAIN, trains: TRAINS,
@@ -1591,7 +1592,7 @@ const SHUTTLES = [
     cars: [3, 3, 3, 3, 3, 3], speed: V_TRAIN, dwell: LINE_DWELL, layover: LAYOVER,
   }),
   shuttle({
-    id: "alpine", index: 2, version: 1, nets: [3, 4], name: "THE ALPINE LINE", short: "ALPINE LINE", prefix: "A", color: "#dc2626",
+    id: "alpine", index: 2, version: 1, nets: [3, 4, 5], name: "THE ALPINE LINE", short: "ALPINE LINE", prefix: "A", color: "#dc2626",
     pts: [[ALPINE_X, 14.2], [ALPINE_X, -39.8]], R: 4,
     stations: [
       { id: "alpine-campus", name: "CAMPUS (ALPINE LINE)", district: "campus" },
@@ -1605,7 +1606,7 @@ const SHUTTLES = [
   // Port, PORT QUAY, then north to PORT TOWN. A new version, never a retiming: version 1 keeps
   // running for any day published on network 3 until it retires.
   shuttle({
-    id: "shore2", index: 3, version: 2, nets: [4], name: "THE SHORE LINE", short: "SHORE LINE", prefix: "S", idBase: 6, color: "#14b8a6",
+    id: "shore2", index: 3, version: 2, nets: [4, 5], name: "THE SHORE LINE", short: "SHORE LINE", prefix: "S", idBase: 6, color: "#14b8a6",
     pts: [[54.5, 44.3], [54.5, coastY(65.5)], [-30, coastY(65.5)], [-30, 36]], R: 4,
     stations: [
       { id: "shore-works", name: "WORKS (SHORE LINE)", district: "works" },
@@ -1620,7 +1621,7 @@ const SHUTTLES = [
   // street between the Old Town and the Port, north into the Old Town (CATHEDRAL) and west to the
   // MARKET (the Farmland later: a new version).
   shuttle({
-    id: "west", index: 4, version: 1, nets: [4], name: "THE WEST LINE", short: "WEST LINE", prefix: "W", color: "#a855f7",
+    id: "west", index: 4, version: 1, nets: [4, 5], name: "THE WEST LINE", short: "WEST LINE", prefix: "W", color: "#a855f7",
     pts: [[-3, 29], [-24, 29], [-24, 2], [-46.5, 2]], R: 4,
     stations: [
       { id: "west-arena", name: "ARENA (WEST LINE)", district: "arena" },
@@ -1628,6 +1629,22 @@ const SHUTTLES = [
       { id: "oldtown-market", name: "OLD TOWN MARKET", district: "oldtown" },
     ],
     cars: [3, 3, 3, 3, 3, 3], speed: V_TRAIN, dwell: LINE_DWELL, layover: LAYOVER,
+  }),
+  // THE CENTRAL LINE (Scott 2026-09-30: "it would make sense for the train to run through the
+  // central building"): across the core on the city's axis, inside the ring. From HQ NORTH (beside
+  // the Loop's DEPT HQ station, the Alpine Line's Campus terminal across the street) south through
+  // the Department's plaza and through a portal in the monolith (DEPT HQ CENTRAL, its platform under
+  // the tower) to HQ SOUTH (beside the Shore Line's Works terminal, under the Loop). The Heights and
+  // the Coast meet through the core instead of riding round the ring. Two-car trains, its own clock.
+  shuttle({
+    id: "central", index: 5, version: 1, nets: [5], name: "THE CENTRAL LINE", short: "CENTRAL LINE", prefix: "C", color: "#facc15",
+    pts: [[54.5, 18.4], [54.5, 41.0]], R: 4, taper: [6.5, 9], platHL: 2.9,
+    stations: [
+      { id: "hq-north", name: "HQ NORTH (CENTRAL LINE)", district: "hq" },
+      { id: "hq-central", name: "DEPT HQ CENTRAL", district: "hq", at: [54.5, 29.5] },
+      { id: "hq-south", name: "HQ SOUTH (CENTRAL LINE)", district: "hq" },
+    ],
+    cars: [2, 2, 2, 2], speed: V_TRAIN, dwell: LINE_DWELL, layover: LAYOVER,
   }),
 ];
 // A stop's street gate (the foot of its stairs) and its entrance (the platform edge beside the
@@ -1698,8 +1715,12 @@ function spotIn(placeId, key, seed) {
 // Leg durations follow the path's length, so walking pace never changes.
 export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch", "lot-6f07", "the-assembly", "the-boardwalk", "the-beach", "the-pier", ...VENUE_OPEN_LOTS, "port-park", "cathedral-square", "bowling-green", "the-close"]);
 const KERB = 0.4, CORNER = 0.3;   // the street view's footprints are the lot less 0.4
+// A lot that is mostly open ground with one solid thing on it: walkers cross the ground and go
+// round the thing. DEPT HQ's plaza, since the Central Line's stations stand in it (PHASE 2): the
+// monolith in its middle (archGeo.js), and the Department watches whoever crosses.
+export const WALK_BLOCK = { hq: { x: 50.9, y: 27.6, w: 7.2, h: 3.8 } };
 const FOOT = (() => {
-  const blocks = BUILDINGS.filter(b => !OPEN_LOTS.has(b.id)).map(b => ({ id: b.id, x0: b.rect.x + KERB, y0: b.rect.y + KERB, x1: b.rect.x + b.rect.w - KERB, y1: b.rect.y + b.rect.h - KERB }));
+  const blocks = BUILDINGS.filter(b => !OPEN_LOTS.has(b.id)).map(b => { const r = WALK_BLOCK[b.id]; return r ? { id: b.id, x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h } : { id: b.id, x0: b.rect.x + KERB, y0: b.rect.y + KERB, x1: b.rect.x + b.rect.w - KERB, y1: b.rect.y + b.rect.h - KERB }; });
   const inside = (p) => blocks.some(o => p.x > o.x0 && p.x < o.x1 && p.y > o.y0 && p.y < o.y1);
   const nodes = [];
   for (const o of blocks) for (const [x, y] of [[o.x0 - CORNER, o.y0 - CORNER], [o.x1 + CORNER, o.y0 - CORNER], [o.x1 + CORNER, o.y1 + CORNER], [o.x0 - CORNER, o.y1 + CORNER]]) {

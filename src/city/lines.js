@@ -84,8 +84,8 @@ export function centreline(pts, R) {
 // hour), dwell, layover (hours standing at a terminal before leaving), base?: (u) -> storeys
 // under the deck (a line up a mountain)}.
 export function shuttle(spec) {
-  const C = centreline(spec.pts, spec.R), L = C.L;
-  const lat = (u) => TRACK * smooth((u - TAPER[0]) / (TAPER[1] - TAPER[0])) * smooth((L - u - TAPER[0]) / (TAPER[1] - TAPER[0]));
+  const C = centreline(spec.pts, spec.R), L = C.L, TP = spec.taper || TAPER;   // a short line closes its tracks over a shorter taper
+  const lat = (u) => TRACK * smooth((u - TP[0]) / (TP[1] - TP[0])) * smooth((L - u - TP[0]) / (TP[1] - TP[0]));
   const base = spec.base || (() => 0);
   // Each track is measured along itself (the outer track round a corner is longer than the inner),
   // so a train keeps the line's speed on either. Tables of u -> arc along the outbound track

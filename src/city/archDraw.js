@@ -743,16 +743,14 @@ function officeFace(K, p, faces) {
 function monolithFace(K, p, faces) {
   const { ctx, G } = K;
   if (p.mat === "plinth") return;
-  if (p.win === "concourse") {
-    // the concourse under the tower: lit glass, the station's way in, the Department's name
+  if (p.win === "leg") {
+    // a leg of the portal: the obsidian's seams and lit edge, the lit soffit, the door on the west leg
     for (const f of faces) {
-      G.poly(f.q(0.04, 0.96, 0.15, p.h1 - 0.35, 0.01), K.night ? "rgba(134,239,172,0.28)" : "rgba(22,163,74,0.18)");
-      K.line(f.F(0, p.h1), f.F(1, p.h1), "rgba(74,222,128,0.5)", 1);
-      if (f.s === "s") { door(K, f, 0.5, 1.4, 1.1, "#020403", { lit: true }); if (K.lod !== "far") faceText(K, f, 0.5, p.h1 - 0.2, "DEPT HQ // THE LOOP STOPS HERE", 0.12, "rgba(134,239,172,0.8)"); }
+      K.line(f.F(0, p.h0), f.F(0, p.h1), "rgba(74,222,128,0.35)", 1);
+      if (f.s === "s" && p.door) door(K, f, 0.5, 0.5, 1.0, "#020403", { lit: true });
     }
     return;
   }
-  if (p.win === "none" && !p.eye) { for (const f of faces) K.line(f.F(0, p.h0), f.F(0, p.h1), "rgba(74,222,128,0.35)", 1); return; }   // a pylon
   for (const f of faces) {
     // the portal: the tower's underside lit where the Loop runs through it
     if (p.portal) { const A = f.F(0, p.h0, 0.01), B = f.F(1, p.h0, 0.01); K.line(A, B, K.night ? "#86efac" : "rgba(74,222,128,0.8)", Math.max(1, K.z * 0.08)); }

@@ -126,28 +126,27 @@ const MASS = {
     ground: [], yard: [3, 6, 9].map(x => pt("flag", x, 4.5, 0.06)),
   }),
   // A black slab with one eye. The plaza is watched.
-  // THE MONOLITH ON THE LINE (Scott 2026-09-30: "it would make sense for the train to run through
-  // the central building"): the tower stands over the Loop at the DEPT HQ station, the trains run
-  // through a portal under it, the platform in its concourse. The track, the station and the
-  // timetable are where they always were: the tower moved north over them, out of its plaza (the
-  // lot is the sim's and stays). Parts (map cells from the lot's corner; the lot starts 2 rows south
-  // of the station's gate): the concourse wall on the plaza side (the body the painter and DRIVE
-  // YOURSELF hold solid), a pylon at each north corner beside the viaduct, and the tower itself from
-  // above the canopy to the roof (seg "tower": painted after the trains under it).
+  // THE MONOLITH, in the centre of its plaza where it always stood, and THE CENTRAL LINE through
+  // it (Scott 2026-09-30: "it would make sense for the train to run through the central building";
+  // and not moved). A portal through its short axis: the line's viaduct, DEPT HQ CENTRAL's platforms
+  // and stairs run between two narrow legs; the tower stands on them from above the canopy to the
+  // roof, the eye band over the portal. Parts: the west leg (the body the painter and DRIVE YOURSELF
+  // hold solid; HQ's door), the east leg (seg "pylon": an item of its own), the tower (seg "tower":
+  // painted after the trains under it).
   monolith: (W, H) => {
-    const cx = W / 2, cy = H / 2, x0 = cx - 7.5, x1 = cx + 7.5, yN = -5.7, yS = -0.2, SOFFIT = 3.0;
+    const cx = W / 2, cy = H / 2, SOFFIT = 3.0, gap = [cx - 2.7, cx + 2.75];
     return {
       rise: 11.5,
       parts: [
-        box(x0, -2.4, x1, yS, 0, SOFFIT, "obsidian", { win: "concourse", door: "s", seg: "base" }),
-        box(x0, yN, x0 + 1.4, yN + 0.55, 0, SOFFIT, "obsidian", { win: "none", seg: "pylon" }),
-        box(x1 - 1.4, yN, x1, yN + 0.55, 0, SOFFIT, "obsidian", { win: "none", seg: "pylon" }),
-        box(x0, yN, x1, yS, SOFFIT, 11.5, "obsidian", { win: "none", eye: 9.4, seg: "tower", portal: true }),
+        box(cx - 3.6, cy - 1.9, gap[0], cy + 1.9, 0, SOFFIT, "obsidian", { win: "leg", door: "s", seg: "base" }),
+        box(gap[1], cy - 1.9, cx + 3.6, cy + 1.9, 0, SOFFIT, "obsidian", { win: "leg", seg: "pylon" }),
+        box(cx - 3.6, cy - 1.9, cx + 3.6, cy + 1.9, SOFFIT, 11.5, "obsidian", { win: "none", eye: 9.4, seg: "tower", portal: true }),
       ],
-      solid: { x0, y0: -2.4, x1, y1: yS },
+      solid: { x0: cx - 3.6, y0: cy - 1.9, x1: gap[0], y1: cy + 1.9 },
       ground: [gr("plaza", 2, 2, W - 2, H - 2, { dark: true })],
       yard: [pt("camera", 4, 4, 0.08), pt("camera", W - 4, 4, 0.08), pt("camera", 4, H - 4, 0.08), pt("camera", W - 4, H - 4, 0.08), pt("camera", cx - 9, cy, 0.08), pt("camera", cx + 9, cy, 0.08),
-        ...Array.from({ length: 9 }, (_, i) => pt("bollard", cx - 6 + i * 1.5, cy + 5, 0.08)), ...Array.from({ length: 9 }, (_, i) => pt("bollard", cx - 6 + i * 1.5, cy - 5, 0.08))],
+        // the bollards stand back from the Central Line's viaduct
+        ...Array.from({ length: 9 }, (_, i) => pt("bollard", cx - 6 + i * 1.5, cy + 5, 0.08)).filter(p => Math.abs(p.x - cx) > 2.5), ...Array.from({ length: 9 }, (_, i) => pt("bollard", cx - 6 + i * 1.5, cy - 5, 0.08)).filter(p => Math.abs(p.x - cx) > 2.5)],
     };
   },
   // Stone, pointed windows, ivy; a turret at each end.

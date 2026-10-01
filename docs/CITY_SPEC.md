@@ -1534,17 +1534,23 @@ Step 3, THE PORT, THE OLD TOWN and THE WEST LINE (layout 4, network 4):
   lowest band 182 -> 199, 187 -> 201 (base 44f1b9c: 198, 204). The Port's own homes sit 8-12 cells
   from Port Town, the Old Town's 4-12 from its two stations.
 
-THE MONOLITH ON THE LINE (Scott 2026-09-30: "it would make sense for the train to run through the
-central building"). DEPT HQ's tower now stands over the Loop at the DEPT HQ station: a black slab
-15 cells long over the viaduct, its soffit at 3 storeys (over the platform's canopy), pylons at its
-north corners beside the deck, the concourse wall on the plaza side (DEPT HQ // THE LOOP STOPS HERE,
-the door), the eye band still sweeping at 9.4. The trains run through the portal under it. Nothing
-in the sim moved: the track, the station, its gate, the timetable, the HQ lot and every published
-day are exactly as they were; only the massing (`archGeo.js` monolith: `seg` base / pylon / tower,
-`m.solid` the concourse) and the painter: the concourse is HQ's body item (a deck under the tower),
-each pylon an item of its own, the tower (`towerItems`) slotted after every deck and car under it
-(iso.slotForBox at its soffit) and drawn after the trains of its slot; `drawBody(..., only)` draws a
-building's parts by segment. DRIVE YOURSELF holds the concourse and the pylons solid (the station's
-stairs come down beside them). `check-cityview`: the tower covers the platform, the soffit clears
-the canopy, the concourse and pylons clear the viaduct, and every car wholly under the tower paints
-before it at all four turns (a car half out of the portal is drawn over the tower's end face).
+THE CENTRAL LINE through the monolith (Scott 2026-09-30: "it would make sense for the train to
+run through the central building"; and the monolith stays where it is). DEPT HQ's monolith stands in
+the centre of its plaza as it always did; a portal now runs through its short axis between two
+narrow legs, the tower standing on them from above the canopy (3 storeys) to the roof, the eye band
+still sweeping at 9.4 over the portal. THE CENTRAL LINE (line 5, `C1`-`C4`, yellow, two-car trains,
+a train every 3.7 machine minutes; network 5) runs across the core on the city's axis (x 54.5),
+inside the ring: HQ NORTH (beside the Loop's DEPT HQ station, the Alpine Line's Campus terminal across
+the street), DEPT HQ CENTRAL (its platforms under the tower), HQ SOUTH (beside the Shore Line's Works
+terminal, under the Loop). The Heights and the Coast meet through the core instead of riding round
+the ring (at 2,000 subjects it carries 392 rides a day). The Loop, its stations and its timetable are
+untouched; the HQ lot is the sim's and stays; DEPT HQ's plaza is crossed on foot (`sim.WALK_BLOCK`:
+only the monolith is solid). Painter: the west leg is HQ's body item (a deck under the tower), the
+east leg an item of its own, the tower (`archGeo.towerItems`) slotted after every deck and car under
+it (iso.slotForBox at the soffit) and drawn after the trains of its slot; `drawBody(..., only)` draws
+a building's parts by segment. DRIVE YOURSELF holds the legs solid. `check-cityview`: the monolith
+stands in its own plaza, the tower over DEPT HQ CENTRAL, the soffit clears the canopy, the legs clear
+the line's deck, platforms and stairs, and every Central Line car wholly under the tower paints
+before it at all four turns (a car half out of the portal is drawn over the tower's end face). The
+junctions are interchanges on foot (HQ NORTH to the Loop's DEPT HQ station 1.5 cells; HQ SOUTH to
+the Shore Line 5); the Central Line does not share the Loop's track.

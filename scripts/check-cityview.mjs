@@ -203,7 +203,7 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   const { baseRoster } = await import("../src/city/roster.js");
   const roster = baseRoster();
   SIM.setRoster(roster);
-  const solid = SIM.BUILDINGS.filter(b => !SIM.OPEN_LOTS.has(b.id)).map(b => ({ id: b.id, x0: b.rect.x + 0.4, y0: b.rect.y + 0.4, x1: b.rect.x + b.rect.w - 0.4, y1: b.rect.y + b.rect.h - 0.4 }));
+  const solid = SIM.BUILDINGS.filter(b => !SIM.OPEN_LOTS.has(b.id)).map(b => { const r = SIM.WALK_BLOCK[b.id]; return r ? { id: b.id, x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h } : { id: b.id, x0: b.rect.x + 0.4, y0: b.rect.y + 0.4, x1: b.rect.x + b.rect.w - 0.4, y1: b.rect.y + b.rect.h - 0.4 }; });   // HQ: its plaza is crossed, the monolith is not
   const T0 = 24 * 40;
   let n = 0, bad = 0, eg = "";
   for (let m = 0; m < 24 * 60; m += 3) for (const sub of roster) {
@@ -317,20 +317,6 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
       });
     }
     ok(!bad, `r=${r}: cars paint after their deck, never over a building in front (${bad || "ok"})`);
-    // THE MONOLITH ON THE LINE: its tower paints after every car under it (the trains run through
-    // the portal, hidden by the tower's faces, seen through its openings)
-    const { towerItems } = await import("../src/city/archGeo.js");
-    let under = 0, wrong = "";
-    for (const tw of towerItems(r)) {
-      const ts = slotForBox(tw, tw.top, items, order);
-      for (const trains of snaps) for (const t of trains) for (const c of t.cars) {
-        const B = G.carBox(c.pose, r);
-        if (!(B.x0 >= tw.x0 - 1e-9 && B.x1 <= tw.x1 + 1e-9 && B.y0 >= tw.y0 - 1e-9 && B.y1 <= tw.y1 + 1e-9)) continue;   // wholly in the portal (a car half out is drawn over the tower's end face)
-        under++;
-        if (slotForBox(B, DECK + 0.05, items, order) > ts && !wrong) wrong = `${t.id} car ${c.index}`;
-      }
-    }
-    ok(under > 0 && !wrong, `r=${r}: the trains run under the monolith's tower, painted before it (${under} car-samples wholly under it; ${wrong || "ok"})`);
   }
 }
 
@@ -411,6 +397,20 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
       });
     }
     ok(!bad, `r=${r}: the lines' cars paint after their deck, never over a building in front (${bad || "ok"})`);
+    // THE CENTRAL LINE through the monolith: its tower paints after every car wholly under it (seen
+    // through the portal's openings, hidden by its faces above the soffit)
+    const { towerItems } = await import("../src/city/archGeo.js");
+    let under = 0, wrong = "";
+    for (const tw of towerItems(r)) {
+      const ts = slotForBox(tw, tw.top, items, order);
+      for (const t of snaps) for (const c of t.cars) {
+        const B = LG.lineCarBox(c.pose, r, G.CAR_HL, G.CAR_HW);
+        if (!(B.x0 >= tw.x0 - 1e-9 && B.x1 <= tw.x1 + 1e-9 && B.y0 >= tw.y0 - 1e-9 && B.y1 <= tw.y1 + 1e-9)) continue;
+        under++;
+        if (slotForBox(B, DECK + 0.05, items, order) > ts && !wrong) wrong = `${t.id} car ${c.index}`;
+      }
+    }
+    ok(under > 0 && !wrong, `r=${r}: the Central Line's trains run through the monolith, painted before its tower (${under} car-samples wholly under it; ${wrong || "ok"})`);
   }
 }
 
@@ -597,13 +597,15 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
     const L = b.rect, K = A.KERB - 1e-9;
     const inLot = (o) => o.x0 >= L.x + K && o.y0 >= L.y + K && o.x1 <= L.x + L.w - K && o.y1 <= L.y + L.h - K;
     if (m.solid) {
-      // THE MONOLITH ON THE LINE: its tower stands over the Loop at the DEPT HQ station (the trains
-      // run through the portal under it); the concourse and the pylons stand clear of the deck
-      const tw = m.parts.find(p => p.seg === "tower"), st = SIM.STATIONS[b.district], LG = await import("../src/city/loopGeo.js");
-      const g = LG.stationGeo(st), xs = g.lot.map(q => q[0]), ys = g.lot.map(q => q[1]);
-      ok(tw && tw.x0 <= Math.min(...xs) + 1e-9 && tw.x1 >= Math.max(...xs) - 1e-9 && tw.y0 <= st.y - LG.DECK_HW && tw.y1 >= Math.max(...ys), `${b.id}: the tower stands over the Loop and its station's platform`);
+      // THE MONOLITH and THE CENTRAL LINE through it: the tower stands in the plaza over DEPT HQ
+      // CENTRAL, its soffit over the canopy; the legs stand clear of the line's deck, platforms, stairs
+      const tw = m.parts.find(p => p.seg === "tower"), LG = await import("../src/city/lineGeo.js");
+      const cen = SIM.STOPS["central:hq-central:out"];
+      ok(inLot(m.box), `${b.id}: the monolith stands in its own plaza (not moved)`);
+      ok(tw && cen && cen.x > tw.x0 && cen.x < tw.x1 && cen.y > tw.y0 && cen.y < tw.y1, `${b.id}: the tower stands over DEPT HQ CENTRAL`);
       ok(tw.h0 >= 2.9, `${b.id}: the portal clears the canopy (soffit ${tw.h0} storeys)`);
-      for (const p of m.parts.filter(q => q !== tw)) ok(LG.loopPieces(0).every(it => { const R = rotRect({ x: p.x0, y: p.y0, w: p.x1 - p.x0, h: p.y1 - p.y0 }, 0); return !(R.x0 < it.x1 - 1e-9 && it.x0 < R.x1 - 1e-9 && R.y0 < it.y1 - 1e-9 && it.y0 < R.y1 - 1e-9); }), `${b.id}: its ${p.seg} stands clear of the viaduct and the station`);
+      const lp = LG.linePieces(0);
+      for (const p of m.parts.filter(q => q !== tw)) { const R = rotRect({ x: p.x0, y: p.y0, w: p.x1 - p.x0, h: p.y1 - p.y0 }, 0); ok(lp.every(it => !(R.x0 < it.x1 - 1e-9 && it.x0 < R.x1 - 1e-9 && R.y0 < it.y1 - 1e-9 && it.y0 < R.y1 - 1e-9)), `${b.id}: its ${p.seg} leg stands clear of the Central Line's deck, platforms and stairs`); }
     } else ok(inLot(m.box), `${b.id}: the body (and its stoops, canopies, awnings) stays off the pavement`);
     for (const g of m.ground) ok(g.x0 >= L.x - 1e-9 && g.y0 >= L.y - 1e-9 && g.x1 <= L.x + L.w + 1e-9 && g.y1 <= L.y + L.h + 1e-9, `${b.id}: ground ${g.k} inside the lot`);
     const over = (a, c) => a.x0 < c.x1 - 1e-9 && c.x0 < a.x1 - 1e-9 && a.y0 < c.y1 - 1e-9 && c.y0 < a.y1 - 1e-9;

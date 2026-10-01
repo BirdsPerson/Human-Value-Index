@@ -14,7 +14,8 @@ import { TRACK, EDGE } from "./lines.js";
 import { stationGeo, carPose as loopCarPose, trainPoses as loopTrainPoses } from "./loopGeo.js";
 import { terrainH, onTerrain, TERRAIN } from "./coastGeo.js";
 
-export const PLAT_HL = 4.8;          // a line's platform half-length (its trains are 3 cars, 8.2 cells)
+export const PLAT_HL = 4.8;          // a line's platform half-length (its trains are 3 cars, 8.2 cells; a line may set its own, platHL)
+const PLAT_HL_DEFAULT = PLAT_HL;
 export const PLAT_IN = EDGE, PLAT_OUT = 1.3, STAIR_W = 0.75, STAIR_L = 3;
 export const BOGIE = 0.85;
 export const PIECE = 3;
@@ -62,7 +63,7 @@ export function stopGeo(stop) {
   if (g) return g;
   if (stop.lineId === "loop") g = { ...stationGeo(stop), hl: 6, pin: 0.65, pout: 1.3, z: 0, foot: 0 };
   else {
-    const n = [stop.n.x, stop.n.y], d = [stop.d.x, stop.d.y];
+    const n = [stop.n.x, stop.n.y], d = [stop.d.x, stop.d.y], PLAT_HL = LINES[stop.line].platHL || PLAT_HL_DEFAULT;
     const at = (along, lat) => [stop.x + d[0] * along + n[0] * lat, stop.y + d[1] * along + n[1] * lat];
     const sd = stop.sd || 1;   // the stairs' way along the platform (toward the stub's end, at a terminal)
     const lot = [at(-PLAT_HL, PLAT_IN), at(PLAT_HL, PLAT_IN), at(PLAT_HL, PLAT_OUT), at(-PLAT_HL, PLAT_OUT)];
