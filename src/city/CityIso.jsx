@@ -21,7 +21,7 @@ import { PARK_LOTS, PARK_PLACES, fieldRole } from "./parkGeo.js";
 import { drawParkLot } from "./parkDraw.js";
 import { CIVIC_LOTS, CIVIC_PLACES } from "./civicGeo.js";
 import { drawCivicLot, civicLabel, civicLine } from "./civicDraw.js";
-import { isoItems } from "./archGeo.js";
+import { isoItems, towerItems } from "./archGeo.js";
 import { drawBody, drawYardProp, drawArchGround, doorAt } from "./archDraw.js";
 import { findTarget, findLine } from "./find.js";
 // DRIVE YOURSELF (controlIso.js, ControlLayer.jsx): the viewer's own citizen, steered
@@ -134,7 +134,11 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const lateSlots = new Map();
       for (const it of onGround.sort((a, b) => (a.x0 + a.x1 + a.y0 + a.y1) - (b.x0 + b.x1 + b.y0 + b.y1))) { const k = slotForBox(it, it.top, items, order); (lateSlots.get(k) || lateSlots.set(k, []).get(k)).push(it); }
       const districts = DISTRICTS.map(d => ({ d, R: rotRect(d.rect, r) }));
-      return { r, items, order, districts, lateSlots, mtn: lp.filter(it => it.mtn) };
+      // the monolith's tower over the track: after every deck and car under it, drawn after the
+      // movers of its slot (the trains run through the portal beneath it)
+      const topSlots = new Map();
+      for (const it of towerItems(r)) { const k = slotForBox(it, it.top, items, order); (topSlots.get(k) || topSlots.set(k, []).get(k)).push(it); }
+      return { r, items, order, districts, lateSlots, topSlots, mtn: lp.filter(it => it.mtn) };
     }
 
     // ---- census -> occupancy, outdoor subjects, who is in which room -------------------
@@ -385,6 +389,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     const coastG = () => ({ ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, t: V.reduced ? 0 : performance.now() / 1000, hits: V.hits, w: V.cssW, h: V.cssH });
     const archG = () => { AG ||= { ctx, Q, poly, facing, z: 0, r: 0 }; AG.z = V.cam.z; AG.r = V.cam.r; return AG; };
     function drawYard(it, lod) {
+      if (it.p.k === "pylon") { const hour = ((V.mt % 24) + 24) % 24; drawBody(archG(), it.b, it.m, { lod, night: nightAt(hour), hour, t: 0, lit: 0.45, bid: bidOf(it.b.id), name: it.b.name, style: it.m.style }, new Set([it.p.part])); return; }
       const [x, y] = Q(it.p.x, it.p.y, 0);
       const pad = V.cam.z * 8;
       if (x < -pad || x > V.cssW + pad || y < -pad || y > V.cssH + pad * 1.5) return;
@@ -488,8 +493,11 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       if (!it.m) { label(); return; }
       // HQ's census is classified: its windows keep office hours, not a head count.
       const lit = b.id === "hq" ? 0.45 : Math.min(1, (V.occ[b.id] || 0) / (CAP[b.id] * 0.55));
+      if (!it.m.parts.length) { label(); return; }
       const hour = ((V.mt % 24) + 24) % 24;
-      drawBody(archG(), b, it.m, { lod, night: nightAt(hour), hour, t: V.reduced ? 0 : performance.now() / 1000, lit, bid: bidOf(b.id), name: b.name, style: it.m.style });
+      // the monolith on the line: here only its concourse (its pylons and its tower take their own
+      // places in the painter's order), the whole of it when it is lifted out over the veil
+      drawBody(archG(), b, it.m, { lod, night: nightAt(hour), hour, t: V.reduced ? 0 : performance.now() / 1000, lit, bid: bidOf(b.id), name: b.name, style: it.m.style }, it.m.solid && !top ? new Set(["base"]) : null);
       if (selected) poly(hull, null, "#4ade80");
       // up close: whoever is walking in or out, at the front door (when it faces us)
       if (lod === "near" && !top) {
@@ -1195,12 +1203,16 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         else drawStation(it, lod, k);
       };
       const late = V.geo.lateSlots;
+      const tops = V.geo.topSlots;
+      const drawTower = (it) => { const hour = ((mt % 24) + 24) % 24; drawBody(archG(), it.b, it.m, { lod, night: nightAt(hour), hour, t: V.reduced ? 0 : performance.now() / 1000, lit: 0.45, bid: bidOf(it.b.id), name: it.b.name, style: it.m.style }, new Set(["tower"])); };
       for (const it of late.get(-1) || []) drawItem(it, -1);
       for (const m of slots.get(-1) || []) drawMover(m, lod);
+      for (const it of tops.get(-1) || []) drawTower(it);
       for (let k = 0; k < order.length; k++) {
         drawItem(items[order[k]], k);
         for (const it of late.get(k) || []) drawItem(it, k);
         for (const m of slots.get(k) || []) drawMover(m, lod);
+        for (const it of tops.get(k) || []) drawTower(it);
       }
       drawLabels();
       drawPrefectTops(ctx, V.pfTops, FONT); V.pfTops = [];   // THE PREFECTS: designations over everything

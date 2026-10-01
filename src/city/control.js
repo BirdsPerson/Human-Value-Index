@@ -47,7 +47,9 @@ export function solids() {
     if (OPEN_LOTS.has(b.id)) continue;
     const m = massingOf(b);
     if (!m) continue;
-    SOLIDS.push({ id: b.id, x0: m.box.x0, y0: m.box.y0, x1: m.box.x1, y1: m.box.y1 });
+    const o = m.solid || m.box;   // the monolith on the line: its concourse (the trains run under the tower)
+    SOLIDS.push({ id: b.id, x0: o.x0, y0: o.y0, x1: o.x1, y1: o.y1 });
+    if (m.solid) for (const p of m.parts) if (p.seg === "pylon") SOLIDS.push({ id: b.id, x0: p.x0, y0: p.y0, x1: p.x1, y1: p.y1 });
   }
   return SOLIDS;
 }

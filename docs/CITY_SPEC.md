@@ -1533,3 +1533,18 @@ Step 3, THE PORT, THE OLD TOWN and THE WEST LINE (layout 4, network 4):
   workers now ride to the reclamation line in the Port; THE SEAWALL 184 -> 192, 188 -> 199; the
   lowest band 182 -> 199, 187 -> 201 (base 44f1b9c: 198, 204). The Port's own homes sit 8-12 cells
   from Port Town, the Old Town's 4-12 from its two stations.
+
+THE MONOLITH ON THE LINE (Scott 2026-09-30: "it would make sense for the train to run through the
+central building"). DEPT HQ's tower now stands over the Loop at the DEPT HQ station: a black slab
+15 cells long over the viaduct, its soffit at 3 storeys (over the platform's canopy), pylons at its
+north corners beside the deck, the concourse wall on the plaza side (DEPT HQ // THE LOOP STOPS HERE,
+the door), the eye band still sweeping at 9.4. The trains run through the portal under it. Nothing
+in the sim moved: the track, the station, its gate, the timetable, the HQ lot and every published
+day are exactly as they were; only the massing (`archGeo.js` monolith: `seg` base / pylon / tower,
+`m.solid` the concourse) and the painter: the concourse is HQ's body item (a deck under the tower),
+each pylon an item of its own, the tower (`towerItems`) slotted after every deck and car under it
+(iso.slotForBox at its soffit) and drawn after the trains of its slot; `drawBody(..., only)` draws a
+building's parts by segment. DRIVE YOURSELF holds the concourse and the pylons solid (the station's
+stairs come down beside them). `check-cityview`: the tower covers the platform, the soffit clears
+the canopy, the concourse and pylons clear the viaduct, and every car wholly under the tower paints
+before it at all four turns (a car half out of the portal is drawn over the tower's end face).

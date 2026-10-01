@@ -743,7 +743,19 @@ function officeFace(K, p, faces) {
 function monolithFace(K, p, faces) {
   const { ctx, G } = K;
   if (p.mat === "plinth") return;
+  if (p.win === "concourse") {
+    // the concourse under the tower: lit glass, the station's way in, the Department's name
+    for (const f of faces) {
+      G.poly(f.q(0.04, 0.96, 0.15, p.h1 - 0.35, 0.01), K.night ? "rgba(134,239,172,0.28)" : "rgba(22,163,74,0.18)");
+      K.line(f.F(0, p.h1), f.F(1, p.h1), "rgba(74,222,128,0.5)", 1);
+      if (f.s === "s") { door(K, f, 0.5, 1.4, 1.1, "#020403", { lit: true }); if (K.lod !== "far") faceText(K, f, 0.5, p.h1 - 0.2, "DEPT HQ // THE LOOP STOPS HERE", 0.12, "rgba(134,239,172,0.8)"); }
+    }
+    return;
+  }
+  if (p.win === "none" && !p.eye) { for (const f of faces) K.line(f.F(0, p.h0), f.F(0, p.h1), "rgba(74,222,128,0.35)", 1); return; }   // a pylon
   for (const f of faces) {
+    // the portal: the tower's underside lit where the Loop runs through it
+    if (p.portal) { const A = f.F(0, p.h0, 0.01), B = f.F(1, p.h0, 0.01); K.line(A, B, K.night ? "#86efac" : "rgba(74,222,128,0.8)", Math.max(1, K.z * 0.08)); }
     // seams
     if (K.lod !== "far") {
       ctx.strokeStyle = "rgba(74,222,128,0.12)"; ctx.lineWidth = 1; ctx.beginPath();
@@ -764,8 +776,8 @@ function monolithFace(K, p, faces) {
     const c = f.F(tp, (e0 + e1) / 2, 0.02);
     glow(K, c[0], c[1], K.z * (K.night ? 3.2 : 2), K.night ? "rgba(134,239,172,0.7)" : "rgba(134,239,172,0.45)");
     G.poly(f.q(Math.max(0, tp - 0.06), Math.min(1, tp + 0.06), e0 + 0.08, e1 - 0.08, 0.02), "#dcfce7");
-    if (f.s === "s" && K.lod !== "far") faceText(K, f, 0.5, 1.2, "DEPARTMENT", 0.22, "rgba(74,222,128,0.55)");
-    if (f.s === "s") door(K, f, 0.5, 1.6, 1.0, "#020403", {});
+    if (f.s === "s" && K.lod !== "far") faceText(K, f, 0.5, p.portal ? p.h0 + 1.2 : 1.2, "DEPARTMENT", 0.22, "rgba(74,222,128,0.55)");
+    if (f.s === "s" && !p.portal) door(K, f, 0.5, 1.6, 1.0, "#020403", {});
   }
 }
 function monolithRoof(K, p) {
@@ -1402,7 +1414,9 @@ Object.assign(DECO, WEST.deco); Object.assign(FAR, WEST.far);
 
 const ORDERS = new Map();
 // G: {ctx, Q, poly, facing, z, r}; env: {lod, night, hour, t, lit, bid (int), name, style}
-export function drawBody(G, b, m, env) {
+// only: a set of part segments to draw (the monolith on the line draws its concourse, its pylons
+// and its tower at different places in the painter's order); null draws every part.
+export function drawBody(G, b, m, env, only = null) {
   const K = kit(G, env);
   const key = `${b.id}|${G.r}`;
   let order = ORDERS.get(key);
@@ -1410,6 +1424,7 @@ export function drawBody(G, b, m, env) {
   const deco = DECO[m.style] || {};
   for (const i of order) {
     const p = m.parts[i];
+    if (only && !only.has(p.seg ?? "base") && !only.has(i)) continue;
     if (p.k === "cyl") {
       if (p.cool) { coolingTower(K, p); continue; }
       const bands = p.mat === "stack" ? [[p.h1 - 0.7, p.h1 - 0.45, "#e5e5e5"], [p.h1 - 1.2, p.h1 - 0.95, "#e5e5e5"]] : p.warn ? [[0.2, 0.35, "#eab308"]] : null;

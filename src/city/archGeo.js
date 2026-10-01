@@ -126,11 +126,25 @@ const MASS = {
     ground: [], yard: [3, 6, 9].map(x => pt("flag", x, 4.5, 0.06)),
   }),
   // A black slab with one eye. The plaza is watched.
+  // THE MONOLITH ON THE LINE (Scott 2026-09-30: "it would make sense for the train to run through
+  // the central building"): the tower stands over the Loop at the DEPT HQ station, the trains run
+  // through a portal under it, the platform in its concourse. The track, the station and the
+  // timetable are where they always were: the tower moved north over them, out of its plaza (the
+  // lot is the sim's and stays). Parts (map cells from the lot's corner; the lot starts 2 rows south
+  // of the station's gate): the concourse wall on the plaza side (the body the painter and DRIVE
+  // YOURSELF hold solid), a pylon at each north corner beside the viaduct, and the tower itself from
+  // above the canopy to the roof (seg "tower": painted after the trains under it).
   monolith: (W, H) => {
-    const cx = W / 2, cy = H / 2;
+    const cx = W / 2, cy = H / 2, x0 = cx - 7.5, x1 = cx + 7.5, yN = -5.7, yS = -0.2, SOFFIT = 3.0;
     return {
       rise: 11.5,
-      parts: [box(cx - 4.4, cy - 2.6, cx + 4.4, cy + 2.6, 0, 0.3, "plinth"), box(cx - 3.6, cy - 1.9, cx + 3.6, cy + 1.9, 0.3, 11.5, "obsidian", { win: "none", eye: 9.4 })],
+      parts: [
+        box(x0, -2.4, x1, yS, 0, SOFFIT, "obsidian", { win: "concourse", door: "s", seg: "base" }),
+        box(x0, yN, x0 + 1.4, yN + 0.55, 0, SOFFIT, "obsidian", { win: "none", seg: "pylon" }),
+        box(x1 - 1.4, yN, x1, yN + 0.55, 0, SOFFIT, "obsidian", { win: "none", seg: "pylon" }),
+        box(x0, yN, x1, yS, SOFFIT, 11.5, "obsidian", { win: "none", eye: 9.4, seg: "tower", portal: true }),
+      ],
+      solid: { x0, y0: -2.4, x1, y1: yS },
       ground: [gr("plaza", 2, 2, W - 2, H - 2, { dark: true })],
       yard: [pt("camera", 4, 4, 0.08), pt("camera", W - 4, 4, 0.08), pt("camera", 4, H - 4, 0.08), pt("camera", W - 4, H - 4, 0.08), pt("camera", cx - 9, cy, 0.08), pt("camera", cx + 9, cy, 0.08),
         ...Array.from({ length: 9 }, (_, i) => pt("bollard", cx - 6 + i * 1.5, cy + 5, 0.08)), ...Array.from({ length: 9 }, (_, i) => pt("bollard", cx - 6 + i * 1.5, cy - 5, 0.08))],
@@ -379,6 +393,8 @@ export function massingOf(b) {
     const out = OUT_FRONT[style] || 0;
     box.y1 += out;
     m = { style, parts, yard, ground, rise: raw.rise, box };
+    // a body whose parts stand apart (the monolith on the line): what is solid on the street
+    if (raw.solid) m.solid = sh(raw.solid);
   }
   CACHE.set(b.id, m);
   return m;
@@ -412,6 +428,21 @@ export function partOrder(parts, rot, r) {
 // The iso view's boxes at a quarter turn, as CityIso.buildGeo slots them: each building's
 // body (its massing box, or the lot less its inset for a field or open ground) and each
 // yard prop on its own. {kind: "b" | "y", b, R: turned rect, h, m?, p?} with x0..y1 = R.
+// The parts that stand over the track (the monolith's tower): boxes the view slots after every deck
+// and car under them (iso.slotForBox at the soffit's height), drawn after the trains in their slot.
+export function towerItems(r) {
+  const out = [];
+  for (const b of BUILDINGS) {
+    const m = massingOf(b);
+    if (!m?.solid) continue;
+    m.parts.forEach((p, i) => {
+      if (p.seg !== "tower") return;
+      const Y = rotRect({ x: p.x0, y: p.y0, w: p.x1 - p.x0, h: p.y1 - p.y0 }, r);
+      out.push({ kind: "hb", b, m, part: i, id: `${b.id}:tower`, over: true, top: p.h0, R: Y, x0: Y.x0, y0: Y.y0, x1: Y.x1, y1: Y.y1 });
+    });
+  }
+  return out;
+}
 export function isoItems(r) {
   const items = [];
   for (const b of BUILDINGS) {
@@ -420,11 +451,20 @@ export function isoItems(r) {
     // after it; the mountain's box stands as tall as the terrain, for the tap
     const coast = COAST_LOTS[b.id], open = OPEN_LOTS.has(b.id) || Boolean(coast);
     let foot;
-    if (m) foot = { x: m.box.x0, y: m.box.y0, w: m.box.x1 - m.box.x0, h: m.box.y1 - m.box.y0 };
+    if (m?.solid) foot = { x: m.solid.x0, y: m.solid.y0, w: m.solid.x1 - m.solid.x0, h: m.solid.y1 - m.solid.y0 };
+    else if (m) foot = { x: m.box.x0, y: m.box.y0, w: m.box.x1 - m.box.x0, h: m.box.y1 - m.box.y0 };
     else { const [ix, iy] = insetOf(b); foot = { x: b.rect.x + ix, y: b.rect.y + iy, w: b.rect.w - 2 * ix, h: b.rect.h - 2 * iy }; }
     const R = rotRect(foot, r);
     const h = coast === "slopes" || coast === "summit-lot" ? TERRAIN_MAX : coast ? 0.4 : open ? 0.05 : PARK_LOTS[b.id] ? 1 : m ? m.rise : 1;
-    items.push({ kind: "b", b, id: b.id, m, R, h, x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1, ...(open ? { deck: true, top: 0 } : {}) });
+    // the monolith on the line: its body item is the concourse (a deck under the tower, so the tower
+    // paints after it), each pylon an item of its own, the tower over the track: towerItems()
+    const tower = m?.solid ? m.parts.find(p => p.seg === "tower") : null;
+    items.push({ kind: "b", b, id: b.id, m, R, h, x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1, ...(open ? { deck: true, top: 0 } : tower ? { deck: true, top: tower.h0 } : {}) });
+    if (m?.solid) m.parts.forEach((p, i) => {
+      if (p.seg !== "pylon") return;
+      const Y = rotRect({ x: p.x0, y: p.y0, w: p.x1 - p.x0, h: p.y1 - p.y0 }, r);
+      items.push({ kind: "y", b, id: `${b.id}:pylon${i}`, p: { k: "pylon", part: i }, m, R: Y, x0: Y.x0, y0: Y.y0, x1: Y.x1, y1: Y.y1 });
+    });
     if (m) for (const p of m.yard) {
       const Y = rotRect({ x: p.x0, y: p.y0, w: p.x1 - p.x0, h: p.y1 - p.y0 }, r);
       items.push({ kind: "y", b, id: `${b.id}:${p.k}${p.i}`, p, m, R: Y, x0: Y.x0, y0: Y.y0, x1: Y.x1, y1: Y.y1 });
