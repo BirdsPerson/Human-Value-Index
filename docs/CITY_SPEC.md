@@ -2033,3 +2033,46 @@ Screens (PHASE 2 steps 4-5): docs/screens/phase2b/ (`prod-*`: production, the wh
 quarter turns and at 390, the Farmland and the Engine at 1440 and every new district at 390, with the
 prefects on patrol; the rest from the dev build of the same commit: the Suburbs, the Airport, the
 Farmland and the Engine by day and by night at 1440, `?at=12:00` / `?at=21:30`).
+
+## PLAYABLE SPORTS (2026-10-05)
+
+Scott: the city's sports should be playable, at NES feel (Tecmo Bowl, NES Tennis), with
+controllers. Phase 1 is exhibitions only: no result reaches a league, the ladder, the Cup, a file
+or any score.
+
+### Tennis
+
+- **Where**: `#tennis[?vs=<key>][&fmt=short]` (`src/play/tennis/Tennis.jsx`). Entries: the Pit
+  panel's TENNIS CLUB line (PLAY AN EXHIBITION), and DRIVE YOURSELF: E inside the club's fence
+  (`venueGeo.js TENNIS.fence`) offers PLAY TENNIS: AN EXHIBITION (`controlIso.js`, kind `tennis`).
+- **The game**: singles, one end each (you are always the near end; ends do not change), a 256 x 240
+  canvas scaled by whole device pixels, behind-the-baseline three-quarter view. A swings (a high ball
+  is smashed), B lobs, DOWN + B slices; the d-pad held at contact aims (LEFT / RIGHT the lines, UP
+  deep, DOWN short); contact 6-8 frames into the swing is cleanest. Serve: A tosses, A again just
+  under the top (the height sets pace and accuracy), LEFT / RIGHT aim; second serves are safer. Lets
+  are not called; a net cord is a fault or the point.
+- **Scoring** (`score.js`): 15/30/40, deuce and advantage, ONE SET (six by two, a tiebreak to seven
+  by two at six-all, its serve order 1-2-2) or FIRST TO 4 (games, no margin, no tiebreak).
+- **Opponents** (`roster.js`): the club's tennis players on file (`tennis.js TENNIS_ON_FILE`: Serena
+  Williams 98, Venus Williams 93, John McEnroe 92, Arthur Ashe 91; `check-tennis` holds the slugs and
+  ratings equal), then THE CLUB PRO (62) and A LINE JUDGE ON A DAY OFF (40). The rating sets the CPU's
+  speed, reaction delay, accuracy, power and how often it leaves a ball going out (`cpuProfile`). The
+  CPU reads the ball the moment it is struck (plays the flight forward on a copy) and runs to the
+  earliest point after the bounce it can reach. The living never speak (a Department line of what
+  they do at the start and end); Ashe, dead, has three written lines.
+- **Faces**: the head cut from the file photo (`/api/sprite/<slug>`; the regulars and you from the
+  procedural photo; your own file's photo and kit when this browser holds a case, else SUBJECT in
+  grey); bodies drawn procedurally.
+- **Input** (`input.js`): keys (arrows / WASD, Z or J = A, X or K = B, Enter or Esc = pause), a pad
+  through `city/gamepad.js` (A, B or the left face button, Start; also chooses on the picker and
+  rematches), touch (an eight-way pad, A, B, START) on coarse pointers.
+- **Determinism and the record** (`sim.js`): a fixed 60 Hz step, a seeded mulberry32, only + - * /
+  and sqrt. A match is `{version, seed, fmt, opp, inputLog, result}` with the human's input one
+  bitmask a frame (UP 1, DOWN 2, LEFT 4, RIGHT 8, A 16, B 32), run-length encoded. Pause never reaches
+  the sim. At the whistle the browser replays the record and says whether it reproduced; the last
+  five records are kept in `localStorage["hvi-tennis-exhibitions"]`. No server endpoint yet: a later
+  check can `replay(rec, profileOf(rec.opp))` and compare.
+- **Sound** (`audio.js`): WebAudio blips; MUTE kept in `localStorage["hvi-tennis-muted"]`.
+- **Check**: `scripts/check-tennis.mjs` (scoring units, purity, a bot's recorded match replayed twice
+  to the same result, a doctored log refused, the roster, a stronger CPU beating a weaker one).
+- **Not yet**: changing ends, lets, doubles, counting results, a server replay check, other viewers.

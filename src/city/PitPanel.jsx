@@ -28,7 +28,7 @@ export default function PitPanel({ districtId = null }) {
         const t0 = (b.day - 1) * 24 + b.from, done = mt >= t0 + SLOT_H - 0.06, now = on && on.bout.id === b.id;
         return <div key={b.id} className="hvi-civic-fx">{hhmm(b.from)} {billLine(b)}{done ? ` // ${resultLine(b)}` : now ? " // IN PROGRESS" : ""}</div>;
       })}
-      <div className="hvi-civic-fx">THE TENNIS CLUB // {m ? m.status : nextTennis || "NO FIXTURE"}</div>
+      <div className="hvi-civic-fx">THE TENNIS CLUB // {m ? m.status : nextTennis || "NO FIXTURE"} // <a href="#tennis">PLAY AN EXHIBITION</a></div>
     </Disclosure>
   );
 }

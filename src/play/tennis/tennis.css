@@ -1,0 +1,61 @@
+/* THE TENNIS CLUB, playable. The terminal's own tokens round a 256 x 240 picture scaled by whole
+   device pixels. The scoreboard is the club's board: Fira Mono, tabular, the server's dot. */
+.tn-p { margin: 0 0 var(--s3); }
+.tn-small { font-size: var(--t-xs); color: var(--fg-mute); margin: var(--s2) 0; }
+.tn-notice { color: var(--warn); font-size: var(--t-xs); letter-spacing: 0.04em; margin: 0 0 var(--s3); }
+.tn-big { font-size: var(--t-m); font-weight: 700; letter-spacing: 0.04em; margin: 0 0 var(--s2); }
+.tn-big.win { color: var(--accent); }
+.tn-big.lose { color: var(--harm); }
+.tn-tell { font-size: var(--t-xs); color: var(--fg-dim); margin: var(--s2) 0; }
+.tn-tell.act::before { content: "> "; color: var(--fg-mute); }
+.tn-tell.say { color: var(--fg); }
+
+.tn-opps { list-style: none; margin: 0 0 var(--s3); padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s1) var(--s3); }
+.tn-opp { display: flex; width: 100%; align-items: center; gap: var(--s2); min-height: 56px; padding: 2px var(--s1); color: var(--fg); background: none; border: var(--bw) solid transparent; font: inherit; text-align: left; cursor: pointer; }
+.tn-opp:hover, .tn-opp:focus-visible, .tn-opp.sel { border-color: var(--line-hi); background: var(--panel-hi); outline: none; }
+.tn-opp .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tn-opp .tag { display: block; font-size: var(--t-xs); color: var(--fg-mute); }
+.tn-opp .rt { color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.tn-face { flex: none; image-rendering: pixelated; border: var(--bw) solid var(--line); background: var(--panel); }
+.tn-fmt { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.tn-chip { min-height: var(--hit-min); padding: 0 var(--s3); font: inherit; font-size: var(--t-xs); letter-spacing: 0.04em; color: var(--fg-dim); background: none; border: var(--bw) solid var(--line); cursor: pointer; }
+.tn-chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.tn-chip:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.tn-keys { display: grid; grid-template-columns: max-content 1fr; gap: 2px var(--s3); margin: 0; font-size: var(--t-xs); }
+.tn-keys dt { color: var(--accent); font-weight: 700; }
+.tn-keys dd { margin: 0; color: var(--fg-dim); }
+
+.tn-board { border-collapse: collapse; margin: 0 0 var(--s2); font-variant-numeric: tabular-nums; font-size: var(--t-s); background: var(--panel); border: var(--bw) solid var(--line-hi); }
+.tn-board th { text-align: left; font-weight: 400; color: var(--fg-dim); padding: 2px var(--s3) 2px var(--s1); white-space: nowrap; }
+.tn-board tr.srv th { color: var(--fg); }
+.tn-board .dot { display: inline-block; width: 1.5ch; color: var(--warn); }
+.tn-board td { padding: 2px var(--s2); text-align: center; min-width: 2ch; border-left: var(--bw) solid var(--line); }
+.tn-board td.set { color: var(--fg-mute); }
+.tn-board td.gm { color: var(--fg); font-weight: 700; }
+.tn-board td.pt { color: var(--accent); min-width: 3ch; }
+
+.tn-stage { width: 100%; display: flex; justify-content: center; }
+.tn-screen { position: relative; border: var(--bw) solid var(--line-hi); box-sizing: content-box; }
+.tn-screen canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+.tn-call { text-align: center; min-height: 1.5em; margin: 0 0 var(--s1); color: var(--fg); font-weight: 700; letter-spacing: 0.08em; font-size: var(--t-s); }
+.tn-pause { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s2); padding: var(--s3); text-align: center; background: rgba(10, 15, 10, 0.86); font-size: var(--t-xs); color: var(--fg-dim); }
+.tn-pause b { font-size: var(--t-l); color: var(--fg); letter-spacing: 0.1em; }
+
+.tn-touch { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--s3); margin: var(--s3) 0; user-select: none; -webkit-user-select: none; }
+.tn-dpad { position: relative; width: 132px; height: 132px; touch-action: none; border-radius: 50%; border: var(--bw) solid var(--line-hi); background: var(--panel); }
+.tn-dpad span { position: absolute; width: 0; height: 0; border: 9px solid transparent; }
+.tn-dpad .u { left: 57px; top: 10px; border-bottom-color: var(--fg-dim); }
+.tn-dpad .d { left: 57px; bottom: 10px; border-top-color: var(--fg-dim); }
+.tn-dpad .l { top: 57px; left: 10px; border-right-color: var(--fg-dim); }
+.tn-dpad .r { top: 57px; right: 10px; border-left-color: var(--fg-dim); }
+.tn-start { justify-self: center; min-height: var(--hit-min); padding: 0 var(--s3); font: inherit; font-size: var(--t-xs); color: var(--fg-dim); background: none; border: var(--bw) solid var(--line); touch-action: manipulation; }
+.tn-ab { display: flex; gap: var(--s3); align-items: flex-end; }
+.tn-ab button { width: 64px; height: 64px; border-radius: 50%; font: inherit; font-weight: 700; font-size: var(--t-l); touch-action: none; border: var(--bw) solid var(--line-hi); background: var(--panel); color: var(--fg); }
+.tn-ab .a { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); margin-bottom: 24px; }
+.tn-ab button:active { filter: brightness(1.3); }
+@media (max-width: 420px) {
+  .tn-board { font-size: var(--t-xs); }
+  .tn-dpad { width: 120px; height: 120px; }
+  .tn-dpad .u, .tn-dpad .d { left: 51px; }
+  .tn-dpad .l, .tn-dpad .r { top: 51px; }
+}
