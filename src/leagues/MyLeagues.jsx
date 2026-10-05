@@ -62,16 +62,16 @@ export default function MyLeagues({ caseId }) {
               : `YOUR CITIZEN, ${d.name}, MAY ENTER ONE OR TWO: THE FOUR LEAGUES OR THE TENNIS LADDER. ENTRANTS ARE DRAFTED AMONG THE ATHLETES AT THEIR OWN RATING, BY THE SAME SNAKE AND THE SAME CAP. ON THE LADDER, THE BOTTOM RUNGS.`}
           </div>
           <div className="hvi-note">NEXT DRAFT: SEASON {d.season}, MACHINE DAY {d.draftDay} ({when(d.draftAt)}). ENTRIES AND WITHDRAWALS FOR IT CLOSE AT MACHINE DAY {d.closeDay} ({when(d.closeAt)}); AFTER THAT THEY COUNT FOR THE ONE AFTER.</div>
-          <div className="ui-chips" role="group" aria-label="Sports to enter" style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "var(--s2) 0" }}>
-            {d.sports.map(sp => <Chip key={sp} pressed={pick.includes(sp)} onClick={() => toggle(sp)} disabled={busy}>{LABEL[sp]} {d.preview?.[sp]}</Chip>)}
-          </div>
           {d.record && (
             <div className="hvi-note">
               ATHLETIC RECORD ON FILE: {LEVEL_NAME[d.record.level]}{recList.length ? ` // ${recList.join(", ")}` : ""}.
             </div>
           )}
+          <div className="ui-chips" role="group" aria-label="Sports to enter" style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "var(--s2) 0" }}>
+            {d.sports.map(sp => <Chip key={sp} pressed={pick.includes(sp)} onClick={() => toggle(sp)} disabled={busy}>{LABEL[sp]} {d.preview?.[sp]}</Chip>)}
+          </div>
           <div className="hvi-note" style={{ opacity: 0.8 }}>
-            RATED FROM YOUR FILE: 0.45 x PHYSICAL ({f.physical ?? "UNASSESSED: 50"}) + 0.25 x COMPETENCE ({f.competence ?? 50}) + 0.10 x ADAPTABILITY ({f.adaptability ?? 50}){d.ath ? `, +4 FOR THE ATHLETICS YOUR FILE RECORDS${d.named?.length ? `, +3 MORE IN ${d.named.map(sp => LABEL[sp]).join(" AND ")}` : ""}` : ". YOUR FILE RECORDS NO ATHLETICS; TELL THE OFFICER AT YOUR NEXT VISIT"}{d.record ? `. OR THE FLOOR OF THE ATHLETIC RECORD ON FILE, WHICHEVER IS HIGHER: ${LEVEL_NAME[d.record.level]} ${LEVEL_FLOOR[d.record.level]}, +${PLAYED_BONUS} IN A SPORT PLAYED AT THAT LEVEL${d.record.track ? `, +${TRACK_BONUS} IN FOOTBALL, SOCCER AND BASKETBALL FOR TRACK` : ""}; NEVER OVER ${SELF_CAP}` : ""}. THE STARS ON FILE ARE RATED IN THE 80S AND 90S. THE DEPARTMENT DOES NOT GRADE ON A CURVE.
+            {d.record ? "RATED: THE HIGHER OF YOUR FILE, " : "RATED FROM YOUR FILE: "}0.45 x PHYSICAL ({f.physical ?? "UNASSESSED: 50"}) + 0.25 x COMPETENCE ({f.competence ?? 50}) + 0.10 x ADAPTABILITY ({f.adaptability ?? 50}){d.ath ? `, +4 FOR THE ATHLETICS YOUR FILE RECORDS${d.named?.length ? `, +3 MORE IN ${d.named.map(sp => LABEL[sp]).join(" AND ")}` : ""}` : d.record ? "" : ". YOUR FILE RECORDS NO ATHLETICS; TELL THE OFFICER AT YOUR NEXT VISIT"}{d.record ? `, AND THE FLOOR OF THE ATHLETIC RECORD ON FILE: ${LEVEL_NAME[d.record.level]} ${LEVEL_FLOOR[d.record.level]}, +${PLAYED_BONUS} IN EACH SPORT PLAYED AT THAT LEVEL${d.record.track ? `, +${TRACK_BONUS} IN FOOTBALL, SOCCER AND BASKETBALL FOR TRACK` : ""}, NEVER OVER ${SELF_CAP}` : ""}. THE STARS ON FILE ARE RATED IN THE 80S AND 90S. THE DEPARTMENT DOES NOT GRADE ON A CURVE.
           </div>
           <ButtonRow stackOnMobile>
             <Button variant={same ? "secondary" : "primary"} disabled={busy || !pick.length || same} onClick={() => file(pick)}>{entered.length ? "Change the entry" : "Enter the draft"}</Button>
