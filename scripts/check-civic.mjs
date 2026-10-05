@@ -445,6 +445,38 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   ok(!LE.inputsOf(fileOf([{ at: "x", competence: 50, breakdown: {}, transcript: [{ role: "agent", text: "Were you a varsity athlete? Did you play football?" }] }])).ath, "the officer's questions are not the subject's record");
   eq(LE.ratingsOf(inp, ["baseball", "tennis"]), { baseball: L.entrantRating(inp, "baseball"), tennis: L.entrantRating(inp, "tennis") }, "the stored ratings are the formula's");
   ok(L.entrantRating(inp, "baseball") === Math.round(0.45 * 62 + 0.25 * 58 + 0.10 * 66) + 7 && L.entrantRating(inp, "basketball") === Math.round(0.45 * 62 + 0.25 * 58 + 0.10 * 66) + 4, "a named sport +7, another +4");
+  // -- THE ATHLETIC RECORD (admin-set on the case): floors, sport bonuses, track, cap 72, never PRO
+  const low = { physical: 40, competence: 40, adaptability: 40, ath: false, named: [] };
+  const FLOORS = { none: 0, varsity: 60, standout: 66, college: 72 };
+  eq(L.LEVEL_FLOOR, FLOORS, "the floors: varsity 60, varsity standout 66, college 72");
+  ok(L.SELF_CAP === 72 && L.PLAYED_BONUS === 3 && L.TRACK_BONUS === 1, "+3 a sport played at the level, +1 for track, cap 72");
+  for (const level of ["varsity", "standout", "college"]) for (const sp of L.ENTRY_SPORTS) for (const played of [[], [sp]]) for (const track of [false, true]) {
+    const recd = { level, played: L.SPORTS.includes(sp) ? played : [], track };
+    const want = Math.min(72, FLOORS[level] + (recd.played.includes(sp) ? 3 : 0) + (track && ["football", "soccer", "basketball"].includes(sp) ? 1 : 0));
+    ok(L.recordFloor(recd, sp) === want && L.entrantRating(low, sp, recd) === Math.max(L.fileRating(low, sp), want), `${level} ${sp}${recd.played.length ? " played" : ""}${track ? " track" : ""}: floor ${want}`);
+  }
+  ok(L.recordFloor({ level: "standout", played: ["baseball"], track: true }, "baseball") === 69, "track does not reach baseball");
+  ok(L.recordFloor({ level: "standout", played: [], track: true }, "tennis") === 66 && L.recordFloor({ level: "standout", played: ["soccer"], track: true }, "tennis") === 66, "tennis takes the level's floor only");
+  ok(L.entrantRating(low, "soccer", { level: "college", played: ["soccer"], track: true }) === 72, "college + played + track: capped at 72, never past the pros");
+  ok(L.entrantRating({ physical: 100, competence: 100, adaptability: 100, ath: true, named: ["soccer"] }, "soccer", { level: "varsity", played: ["soccer"] }) === 87, "a record never lowers what the file earns (the file's own ceiling 87 stands)");
+  ok(L.entrantRating({ ...low, ath: true, named: ["basketball"] }, "basketball", { level: "standout", played: ["basketball"], track: true }) === 70, "the interview's bonus and the floor: the higher counts, never the sum");
+  ok(L.entrantRating(low, "soccer", null) === L.fileRating(low, "soccer") && L.entrantRating(low, "soccer", { level: "none" }) === L.fileRating(low, "soccer"), "no record: the file alone");
+  for (const bad of [{ level: "pro" }, { level: "PRO", played: ["soccer"] }, { level: "olympic" }, { level: "college", played: ["cricket"] }, { level: "college", note: "free text" }, { level: "college", track: "yes" }, "college", [1]]) ok(L.cleanRecord(bad) === null, `not a record: ${JSON.stringify(bad)}`);
+  for (const sp of L.ENTRY_SPORTS) ok(L.entrantRating(low, sp, { level: "pro", played: L.SPORTS, track: true }) === L.fileRating(low, sp), `${sp}: a PRO record earns nothing`);
+  eq(L.cleanRecord({ level: "none", played: ["soccer"], track: true }), { level: "none", played: [], track: false }, "no level: nothing played, no track");
+  eq(Object.fromEntries(L.ENTRY_SPORTS.map(sp => [sp, L.entrantRating({ physical: 52, competence: 50, adaptability: 50, ath: false, named: [] }, sp, { level: "standout", played: ["basketball", "soccer", "baseball"], track: true })])), { baseball: 69, basketball: 70, football: 67, soccer: 70, tennis: 66 }, "a varsity standout in basketball, soccer and baseball who ran track: 69 / 70 / 67 / 70 / 66");
+  const withRec = { ...rec, athleticRecord: { level: "standout", played: ["soccer", "basketball"], track: true, by: "operator", at: "x" } };
+  eq(LE.inputsOf(withRec).record, { level: "standout", played: ["basketball", "soccer"], track: true }, "inputsOf reads the case's admin-set record");
+  eq(LE.inputsOf({ ...rec, athleticRecord: { level: "pro", played: ["soccer"] } }).record, { level: "none", played: [], track: false }, "a PRO record on a case reads as none");
+  eq(LE.ratingsOf(LE.inputsOf(withRec), ["soccer", "baseball"]), { soccer: 70, baseball: Math.max(66, L.fileRating(inp, "baseball")) }, "the stored ratings take the record's floor");
+  // -- no public path writes it: the record is read from the case, never from a request
+  {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const dir = new URL("../netlify/functions/", import.meta.url);
+    const writers = readdirSync(dir).filter(f => /\.m?js$/.test(f) && /athleticRecord/.test(readFileSync(new URL(f, dir), "utf8")));
+    ok(!writers.length, `no function touches athleticRecord (${writers})`);
+    ok(!/record/i.test(readFileSync(new URL("leagues.js", dir), "utf8").split("\n").filter(l => /setEntry\(/.test(l)).join("")), "/api/leagues passes no record to setEntry");
+  }
 
   // -- the pools: in the sports entered, among the athletes, at their rating; the census's row gives way
   SIM.clearPlans(); SIM.setRoster(roster);
@@ -504,6 +536,9 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
     eq(dr.order, base365.leagues.sports[sp].draft.order, `${sp}: entries change no draft order`);
   }
   eq(C.civicFold(clone(P4.get(365)), peopleOf(clone(roster)), clone(c364)), b, "draft day with entrants is deterministic");
+  C.setEntries({ 14: ENT.map(e => ({ ...e, record: { level: "standout", played: ["soccer"], track: true } })) });
+  eq(C.civicFold(clone(P4.get(365)), peopleOf(clone(roster)), clone(c364)).leagues.sports, b.leagues.sports, "a snapshot carrying records drafts by its frozen ratings, deterministically");
+  C.setEntries({ 14: ENT });
   eq(C.civicFold(P4.get(365), people, null).leagues.sports, b.leagues.sports, "the census alone and the snapshot draw the same drafts");
   for (const d of [366, 368]) for (const id of DIST) eq(C.civicFold(P4.get(d), people, null).districts[id].teams, ch.get(d).districts[id].teams, `day ${d} ${id}: without yesterday, the same teams (entrants included)`);
   C.setEntries({});
@@ -586,6 +621,22 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   let threw = false; try { await LE.entriesRecord(store, []); } catch { threw = true; }
   ok(threw, "an unreadable snapshot builds nothing");
   await store.delete(LE.KEYS.snap(999));
+  // the athletic record: set on the case, it re-rates the standing entry (MY FILE) and rides the snapshot
+  const S1 = S0 + 2, close1 = LE.closeMs(S1);
+  cases.set("HVI-TESTJK22", fileOf([{ at: "a", competence: 50, breakdown: { physical: 52, adaptability: 50, threat: 0, care: 80 }, transcript: [] }]));
+  r = await LE.setEntry(io, { caseId: "HVI-TESTJK22", sports: ["basketball", "soccer"], record: { level: "college", played: ["soccer"] }, ip: "4.4.4.4", now: close1 - 3e6 });
+  ok(r.status === 200 && r.body.season === S1 + 1 && r.body.entry.r.soccer === L.fileRating(LE.inputsOf(cases.get("HVI-TESTJK22")), "soccer"), "a record in the request is ignored: the public cannot file one");
+  me = await LE.myEntry(io, "HVI-TESTJK22", close1 - 2e6);
+  ok(me.body.record === null && me.body.entry.r.basketball < 60, "no record on the case: none shown, the file's rating");
+  cases.set("HVI-TESTJK22", { ...cases.get("HVI-TESTJK22"), athleticRecord: { level: "standout", played: ["basketball", "soccer", "baseball"], track: true, by: "operator", at: "x" } });
+  me = await LE.myEntry(io, "HVI-TESTJK22", close1 - 1e6);
+  eq([me.body.record, me.body.entry.r, me.body.preview], [{ level: "standout", played: ["baseball", "basketball", "soccer"], track: true }, { basketball: 70, soccer: 70 }, { baseball: 69, basketball: 70, football: 67, soccer: 70, tennis: 66 }], "the record set on the case: shown, and the standing entry re-rated");
+  const snapR = await LE.freezeSeason(store, S1, close1 + 1000);
+  eq(snapR.entries.find(e => e.key === "citizen-jk22"), { key: "citizen-jk22", sports: ["basketball", "soccer"], r: { basketball: 70, soccer: 70 }, record: { level: "standout", played: ["baseball", "basketball", "soccer"], track: true } }, "the snapshot carries the record and the ratings it drew");
+  cases.set("HVI-TESTJK22", { ...cases.get("HVI-TESTJK22"), athleticRecord: { level: "varsity", played: [], track: false } });
+  await LE.myEntry(io, "HVI-TESTJK22", close1 + 2000);
+  eq((await store.get(LE.KEYS.snap(S1 + 1), { type: "json" })).entries.find(e => e.key === "citizen-jk22").r, { basketball: 70, soccer: 70 }, "a record changed after the close: the frozen snapshot keeps its ratings");
+  ok(!JSON.stringify(raw()).includes("HVI-TEST"), "still no case number in the store");
   // rate limits: revisions per draft, and the address's
   const codes = [];
   for (let i = 0; i < LE.LIMITS.revisions + 2; i++) codes.push((await LE.setEntry(io, { caseId: "HVI-TESTCD34", sports: i % 2 ? ["tennis"] : ["soccer"], ip: "2.2.2.2", now: after + 1e6 + i })).status);

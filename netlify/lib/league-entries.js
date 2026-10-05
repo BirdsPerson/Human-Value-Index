@@ -7,11 +7,11 @@
 //
 // Store hvi-leagues:
 //   e/<entryKey>     one per file: {key (its citizen), sports, inputs {physical, competence,
-//                    adaptability, ath, named, assessedAt}, r {sport: rating}, since, at, rev, revSeason,
+//                    adaptability, ath, named, record, assessedAt}, r {sport: rating}, since, at, rev, revSeason,
 //                    ip}. CAS. entryKey is a salted hash of the case number (a case number is a
 //                    credential; the store never holds one). sports [] is a withdrawn entry.
 //   snap/s<NNN>      season NNN's (1-based) entries, frozen once: {season, closeAt, frozenAt,
-//                    entries: [{key, sports, r}]}. onlyIfNew. Written by the plan builder when it first
+//                    entries: [{key, sports, r, record}]}. onlyIfNew. Written by the plan builder when it first
 //                    folds a day of that season, or by the first write here after the season's
 //                    entries close, whichever comes first; read by every fold after, so a season's
 //                    drafts are always drawn from the same list.
@@ -20,6 +20,12 @@
 // folds up to three days ahead). An entry or withdrawal before that counts for that season's draft;
 // after it, for the next. Entering is free; no stakes. Every function takes the store (or io), so
 // scripts/check-civic.mjs runs it in memory.
+//
+// THE ATHLETIC RECORD (Scott 2026-10-05): admin-set on the case (`athleticRecord {level, played,
+// track, by, at}` in hvi-cases), by the operator with scripts/set-athletic-record.mjs; never written
+// through any public API. inputsOf reads it; the rating takes its floor (src/leagues/record.js). A
+// changed record re-rates a standing entry like a new assessment does (myEntry); a snapshot already
+// frozen keeps the record it was frozen with.
 import { createHash } from "node:crypto";
 import * as SIM from "../../src/city/sim.js";
 import * as L from "../../src/city/leagues.js";
@@ -65,9 +71,14 @@ export function inputsOf(rec) {
   const last = lastOf(rec);
   if (!last) return null;
   const b = last.breakdown || {};
-  return { physical: n0(b.physical), competence: n0(last.competence), adaptability: n0(b.adaptability), ...L.athleticsOf(athleticsText(rec)), assessedAt: last.at || null };
+  return { physical: n0(b.physical), competence: n0(last.competence), adaptability: n0(b.adaptability), ...L.athleticsOf(athleticsText(rec)), record: recordOnFile(rec), assessedAt: last.at || null };
 }
-export const ratingsOf = (inputs, sports = L.ENTRY_SPORTS) => Object.fromEntries(sports.map(sp => [sp, L.entrantRating(inputs, sp)]));
+// The admin-set ATHLETIC RECORD on the case, canonical ({level: "none"} when there is none or it is
+// malformed).
+export const recordOnFile = (rec) => L.cleanRecord(rec?.athleticRecord ? { level: rec.athleticRecord.level, played: rec.athleticRecord.played, track: rec.athleticRecord.track } : null) || L.cleanRecord(null);
+export const ratingsOf = (inputs, sports = L.ENTRY_SPORTS) => Object.fromEntries(sports.map(sp => [sp, L.entrantRating(inputs, sp, inputs?.record)]));
+// The record on an entry's inputs, canonical.
+const entryRecord = (e) => L.cleanRecord(e?.inputs?.record) || L.cleanRecord(null);
 export function cleanSports(list) {
   if (!Array.isArray(list)) return null;
   const s = [...new Set(list.map(x => String(x || "").toLowerCase()))];
@@ -89,7 +100,7 @@ export async function freezeSeason(store, season, now = Date.now()) {
   for (const e of recs) {
     if (seen.has(e.key)) continue;
     seen.add(e.key);
-    entries.push({ key: e.key, sports: e.sports, r: Object.fromEntries(e.sports.map(sp => [sp, e.r?.[sp]])) });
+    entries.push({ key: e.key, sports: e.sports, r: Object.fromEntries(e.sports.map(sp => [sp, e.r?.[sp]])), record: entryRecord(e) });
   }
   entries.sort((a, b) => (a.key < b.key ? -1 : 1));
   const snap = { season: season + 1, closeAt: new Date(closeMs(season)).toISOString(), frozenAt: new Date(now).toISOString(), entries };
@@ -103,7 +114,7 @@ async function freezeClosed(store, now) {
   if (s >= ENTRIES_FROM) await freezeSeason(store, s, now);
 }
 // The plan builder: freeze the seasons of the days it is about to fold (from ENTRIES_FROM), then
-// every snapshot on record. -> {season (1-based): [{key, sports, r}]} for civic.js setEntries. Strict:
+// every snapshot on record. -> {season (1-based): [{key, sports, r, record}]} for civic.js setEntries. Strict:
 // a failed read throws (the builder builds nothing rather than draft without the entries).
 export async function entriesRecord(store, days = [], now = Date.now()) {
   const seasons = [...new Set(days.map(d => L.seasonOf(d)))].filter(s => s >= ENTRIES_FROM).sort((a, b) => a - b);
@@ -121,7 +132,8 @@ export async function entriesRecord(store, days = [], now = Date.now()) {
 // ---- MY FILE ------------------------------------------------------------------------------------------
 // io: {store, getCase, hitLimit, block?: async () => today's civic block | null, now?}.
 // -> {status, body}: the panel's state. body: {key, name, season (the next draft's, 1-based),
-// closeAt, draftAt, draftDay, entry: {sports, r} | null, preview {sport: rating}, ath, eligible,
+// closeAt, draftAt, draftDay, entry: {sports, r} | null, preview {sport: rating}, ath, record (the
+// admin-set ATHLETIC RECORD, or null), eligible,
 // refused, drafted: [{season, sports}], lines: [{sport, text}]}
 export async function myEntry(io, caseId, now = Date.now()) {
   const { store } = io;
@@ -131,7 +143,7 @@ export async function myEntry(io, caseId, now = Date.now()) {
   const s = await targetSeason(store, now);
   let cur = await store.get(KEYS.entry(entryKey(caseId)), { type: "json" });
   // a new assessment re-rates a standing entry (a harm finding withdraws it), before the next freeze
-  if (cur?.sports?.length && (inHarm(rec) || (inputs && cur.inputs?.assessedAt !== inputs.assessedAt))) {
+  if (cur?.sports?.length && (inHarm(rec) || (inputs && (cur.inputs?.assessedAt !== inputs.assessedAt || !L.sameRecord(entryRecord(cur), inputs.record))))) {
     cur = await refreshEntry(store, caseId, rec, now);
   }
   const entry = cur?.sports?.length ? { sports: cur.sports, r: cur.r } : null;
@@ -157,7 +169,8 @@ export async function myEntry(io, caseId, now = Date.now()) {
     body: {
       key, name: L.entrantName(key), season: s + 1, closeAt: new Date(closeMs(s)).toISOString(), draftAt: new Date(draftMs(s)).toISOString(), draftDay: L.seasonStart(s),
       closeDay: L.entryCloseDay(s), sports: L.ENTRY_SPORTS, max: L.ENTRY_MAX_SPORTS,
-      entry, preview: inputs ? ratingsOf(inputs) : null, ath: Boolean(inputs?.ath), named: inputs?.named || [],
+      entry, preview: inputs ? ratingsOf(inputs) : null, ath: Boolean(inputs?.ath),
+      record: inputs?.record?.level && inputs.record.level !== "none" ? inputs.record : null, named: inputs?.named || [],
       file: inputs ? { physical: inputs.physical, competence: inputs.competence, adaptability: inputs.adaptability } : null,
       eligible: Boolean(inputs) && !inHarm(rec), refused: !inputs ? "unassessed" : inHarm(rec) ? "harm" : null,
       drafted, lines,
@@ -189,7 +202,7 @@ export async function setEntry(io, { caseId, sports, ip, now = Date.now() }) {
     const cur = await store.getWithMetadata(KEYS.entry(ek), { type: "json" });
     const prev = cur?.data || null;
     const had = prev?.sports || [];
-    if (had.join() === want.join() && (!want.length || prev?.inputs?.assessedAt === inputs?.assessedAt)) {
+    if (had.join() === want.join() && (!want.length || (prev?.inputs?.assessedAt === inputs?.assessedAt && L.sameRecord(entryRecord(prev), inputs?.record)))) {
       return { status: 200, body: { entry: want.length ? { sports: prev.sports, r: prev.r } : null, season: s + 1, unchanged: true } };
     }
     const revs = prev?.revSeason === s + 1 ? prev.rev || 0 : 0;

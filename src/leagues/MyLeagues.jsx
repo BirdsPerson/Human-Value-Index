@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Frame, Button, ButtonRow, Chip } from "../ui/index.js";
+import { LEVEL_NAME, LEVEL_FLOOR, PLAYED_BONUS, TRACK_BONUS, SELF_CAP } from "./record.js";
 
 // MY FILE: JOIN THE LEAGUES (netlify/lib/league-entries.js, /api/leagues). The file's citizen enters
 // one or two of the four leagues and the tennis ladder; it is drafted at the next season's draft
 // among the athletes, at its own rating from the file, and shown as SUBJECT and its tag. Its season
 // lines ("BATTING .287 FOR THE CURATED NINE. THE DEPARTMENT IS UNMOVED.") come back here.
+// An ATHLETIC RECORD on the case (admin-set; src/leagues/record.js) is shown read-only, with its floor.
 // Renders nothing for a file the leagues will not draft (unassessed, or under a harm finding).
 const LABEL = { baseball: "BASEBALL", basketball: "BASKETBALL", football: "FOOTBALL", soccer: "SOCCER", tennis: "TENNIS LADDER" };
 const when = (iso) => { try { return new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).toUpperCase(); } catch { return iso; } };
@@ -41,6 +43,7 @@ export default function MyLeagues({ caseId }) {
     } catch (e) { setMsg({ ok: false, text: e.message }); } finally { setBusy(false); }
   }
   const f = d.file || {};
+  const recList = d.record ? [...(d.record.played || []).map(sp => LABEL[sp]), ...(d.record.track ? ["TRACK"] : [])] : [];
   return (
     <Frame title="THE LEAGUES" meta={entered.length ? `ENTERED // SEASON ${d.season}` : "JOIN THE LEAGUES"} className="hvi-myleagues">
       {d.lines?.length > 0 && (
@@ -62,8 +65,13 @@ export default function MyLeagues({ caseId }) {
           <div className="ui-chips" role="group" aria-label="Sports to enter" style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "var(--s2) 0" }}>
             {d.sports.map(sp => <Chip key={sp} pressed={pick.includes(sp)} onClick={() => toggle(sp)} disabled={busy}>{LABEL[sp]} {d.preview?.[sp]}</Chip>)}
           </div>
+          {d.record && (
+            <div className="hvi-note">
+              ATHLETIC RECORD ON FILE: {LEVEL_NAME[d.record.level]}{recList.length ? ` // ${recList.join(", ")}` : ""}.
+            </div>
+          )}
           <div className="hvi-note" style={{ opacity: 0.8 }}>
-            RATED FROM YOUR FILE: 0.45 x PHYSICAL ({f.physical ?? "UNASSESSED: 50"}) + 0.25 x COMPETENCE ({f.competence ?? 50}) + 0.10 x ADAPTABILITY ({f.adaptability ?? 50}){d.ath ? `, +4 FOR THE ATHLETICS YOUR FILE RECORDS${d.named?.length ? `, +3 MORE IN ${d.named.map(sp => LABEL[sp]).join(" AND ")}` : ""}` : ". YOUR FILE RECORDS NO ATHLETICS; TELL THE OFFICER AT YOUR NEXT VISIT"}. THE STARS ON FILE ARE RATED IN THE 80S AND 90S. THE DEPARTMENT DOES NOT GRADE ON A CURVE.
+            RATED FROM YOUR FILE: 0.45 x PHYSICAL ({f.physical ?? "UNASSESSED: 50"}) + 0.25 x COMPETENCE ({f.competence ?? 50}) + 0.10 x ADAPTABILITY ({f.adaptability ?? 50}){d.ath ? `, +4 FOR THE ATHLETICS YOUR FILE RECORDS${d.named?.length ? `, +3 MORE IN ${d.named.map(sp => LABEL[sp]).join(" AND ")}` : ""}` : ". YOUR FILE RECORDS NO ATHLETICS; TELL THE OFFICER AT YOUR NEXT VISIT"}{d.record ? `. OR THE FLOOR OF THE ATHLETIC RECORD ON FILE, WHICHEVER IS HIGHER: ${LEVEL_NAME[d.record.level]} ${LEVEL_FLOOR[d.record.level]}, +${PLAYED_BONUS} IN A SPORT PLAYED AT THAT LEVEL${d.record.track ? `, +${TRACK_BONUS} IN FOOTBALL, SOCCER AND BASKETBALL FOR TRACK` : ""}; NEVER OVER ${SELF_CAP}` : ""}. THE STARS ON FILE ARE RATED IN THE 80S AND 90S. THE DEPARTMENT DOES NOT GRADE ON A CURVE.
           </div>
           <ButtonRow stackOnMobile>
             <Button variant={same ? "secondary" : "primary"} disabled={busy || !pick.length || same} onClick={() => file(pick)}>{entered.length ? "Change the entry" : "Enter the draft"}</Button>

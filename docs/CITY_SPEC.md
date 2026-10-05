@@ -1379,7 +1379,21 @@ the PA), `simApi.js` (boards and PA). Check: `scripts/check-civic.mjs` section 3
   0.10 adaptability from the file's latest assessment (an unassessed body is the rubric's neutral 50),
   + 4 when the subject's own words (or the commendations) record athletics (`athleticsOf`: varsity,
   lettered, played X, X team...), + 3 more in a sport they named; ceiling 87, below the stars on file. No
-  record in sport: that is the athletes'. **The draft**: an entrant joins the pools of the sports entered
+  record in sport: that is the athletes'. **The athletic record** (Scott 2026-10-05: three years varsity
+  basketball, a division winner every year and the South Jersey finals, varsity soccer and baseball, the
+  school's #1 in the 400 and the long jump; the formula put him in the low 50s, under the city's
+  non-athletes): an ADMIN-SET field on the case (`hvi-cases` `athleticRecord {level, played, track, by,
+  at}`), written only by the operator (`scripts/set-athletic-record.mjs <case> --level
+  <varsity|standout|college|none> --sports a,b [--track] [--dry-run]`, under the case's etag), never by
+  a public API (`src/leagues/record.js`). It sets a floor: HIGH SCHOOL VARSITY 60, VARSITY STANDOUT 66
+  (multi-sport, a captain, a school record or #1, a title-contending team), COLLEGE 72; + 3 in each league
+  sport played at that level; + 1 in football, soccer and basketball for track & field; the floor never
+  passes 72 (the pros on file are drafted in the 80s and 90s). PRO is not a level. The rating is the
+  higher of the file's formula and the floor (the interview bonus and the floor never add; a record never
+  lowers the file's rating). A changed record re-rates a standing entry (MY FILE) until the close; the
+  snapshot carries each entry's record with its ratings. MY FILE shows it read-only ("ATHLETIC RECORD ON
+  FILE: VARSITY STANDOUT // BASKETBALL, SOCCER, BASEBALL, TRACK"); the public path to athletics stays the
+  interview's bonus. **The draft**: an entrant joins the pools of the sports entered
   among the athletes (g 2) at their own rating, the census's row for that citizen giving way and the
   pool keeping its size (the lowest of the rest drops), at most 20 entrants a league a season; placed by
   the same snake and cap. The ladder: below the seeded ten, at most six, challenging up. Shown as

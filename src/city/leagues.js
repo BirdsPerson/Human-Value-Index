@@ -107,19 +107,14 @@ export function entrySeasonAt(mt) {
   while ((entryCloseDay(s) - 1) * 24 <= mt) s++;
   return s;
 }
-// The rating, 0..99, from the file and nothing else: the same body-and-competence scale the figures
-// are drafted on (playerRating: 0.45 physical + 0.35 competence), with adaptability taking a share of
-// competence's weight; an unassessed body counts as the rubric's neutral 50. A bonus only when the
-// file records athletics in the subject's own words (or the Department's commendations): ATH_BONUS,
-// and SPORT_BONUS more for the sport they named. Never a record in sport: that is for the athletes on
-// file. Ceiling 80 + 7 = 87; the named stars are drafted in the 80s and 90s.
-export const ATH_BONUS = 4, SPORT_BONUS = 3;
-const num = (v, d) => (typeof v === "number" && Number.isFinite(v) ? clamp(v, 0, 100) : d);
-export function entrantRating(x, sport) {
-  const base = 0.45 * num(x?.physical, 50) + 0.25 * num(x?.competence, 50) + 0.10 * num(x?.adaptability, 50);
-  const bonus = x?.ath ? ATH_BONUS + (Array.isArray(x.named) && x.named.includes(sport) ? SPORT_BONUS : 0) : 0;
-  return clamp(Math.round(base) + bonus, 0, 99);
-}
+// The rating (src/leagues/record.js, which MY FILE previews with): the file's formula (0.45 physical
+// + 0.25 competence + 0.10 adaptability, an unassessed body the rubric's neutral 50, + ATH_BONUS when
+// the file records athletics in the subject's own words or the commendations, + SPORT_BONUS more for
+// the sport they named; ceiling 87), or the floor of the case's admin-set ATHLETIC RECORD (varsity 60,
+// varsity standout 66, college 72; +3 in a sport played at that level, +1 for track in football,
+// soccer and basketball; never over 72), whichever is higher. Never a record in sport and never PRO:
+// those are for the athletes on file, drafted in the 80s and 90s.
+export { ATH_BONUS, SPORT_BONUS, LEVELS, LEVEL_NAME, LEVEL_FLOOR, PLAYED_BONUS, TRACK_BONUS, SELF_CAP, TRACK_SPORTS, cleanRecord, sameRecord, recordFloor, fileRating, entrantRating } from "../leagues/record.js";
 const SPORT_WORDS = "baseball|softball|basketball|football|soccer|tennis|hockey|lacrosse|volleyball|rugby|wrestling|track|cross[- ]country|swimming|golf";
 const ATH_RE = new RegExp(`\\b(varsity|athlet(e|es|ic|ics)|lettered|letterman|team captain|captained|all[- ](state|county|conference|american)|played (\\w+ ){0,3}(${SPORT_WORDS})|(${SPORT_WORDS})( and \\w+)? (team|player|season|scholarship|career|captain))\\b`, "i");
 const NAMED = { baseball: /\b(baseball|softball)\b/i, basketball: /\bbasketball\b/i, football: /\bfootball\b/i, soccer: /\bsoccer\b/i, tennis: /\btennis\b/i };
