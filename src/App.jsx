@@ -262,7 +262,7 @@ const MENU = [
   { key: "2", label: "VISIT THE CITY", note: "EVERY HUMAN ON FILE, HOUSED BY SCORE", go: "#city" },
   { key: "3", label: "PLAY A GAME", note: "TENNIS, GOLF, CHESS, THE CASINO", go: "#play" },
   { key: "4", label: "THE ASSEMBLY", note: "VOTE ON WHAT THE MACHINE DOES NEXT", go: "#assembly" },
-  { key: "5", label: "SEE THE SCORES", note: `${FAMOUS_FIGURES.length} FAMOUS HUMANS, RANKED`, go: "#scores" },
+  { key: "5", label: "SEE THE SCORES", note: "THE FAMOUS, RANKED", go: "#scores" },
 ];
 // The rest of the building, for the visitor who has found their feet.
 const MORE = [
