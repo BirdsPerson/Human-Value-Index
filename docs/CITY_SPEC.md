@@ -2006,3 +2006,8 @@ elevator, the fields, the orchards), `civicGeo.js` / `civicDraw.js` (THE COMMUNI
   network-7 day (`fixtures/net7-plan-day300.json`, built by 018ffd3). check-city measures "nearly every
   place gets used" over the production-sized census too (840), and the morning rush as the peak quarter
   in 07:00-07:45 at 1.7x the 06:30 count (the far districts' commuters leave earlier).
+
+Screens (PHASE 2 steps 4-5): docs/screens/phase2b/ (`prod-*`: production, the whole city at the four
+quarter turns and at 390, the Farmland and the Engine at 1440 and every new district at 390, with the
+prefects on patrol; the rest from the dev build of the same commit: the Suburbs, the Airport, the
+Farmland and the Engine by day and by night at 1440, `?at=12:00` / `?at=21:30`).
