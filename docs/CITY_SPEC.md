@@ -1744,3 +1744,9 @@ the page), `props.js` (room types). Check: `scripts/check-mountain.mjs`.
 - **Day boundary.** Published days keep their places; the first day built after the deploy is the
   first with anyone on the upper mountain. No layout or network change: every id, the Loop and the
   lines are as they were.
+- **The flanks and the Base Parade.** The district's strips beside THE SLOPES and the parcel (x -4..9,
+  100..111, up to the village's back) are laid as flat snow with the district floor
+  (`drawMountainApron`). The Base Parade (x 37-51, y -18) stays behind the Finance towers
+  from the default NW camera: it sits on the village's flat floor, and no terrain short of lifting the
+  storefronts ten storeys clears the towers, so the storefronts are seen from the NE and SW turns
+  and up close. Screens: `docs/screens/mountain/` (live = production; night = the same build, `?at=21:30`).

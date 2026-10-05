@@ -18,7 +18,7 @@ export const NAV = [
 // Which tab a location belongs to. INTAKE (#arrivals, once #pen) has no tab of its own.
 export function navKeyFor(route = "") {
   const path = route.split("?")[0];
-  if (path === "#city" || path.startsWith("#city/")) return "city";
+  if (path === "#city" || path.startsWith("#city/") || path === "#heights" || path === "#enterprise" || path === "#prefects") return "city";
   if (path === "#cube") return "cube";
   if (path === "#file" || path === "#intake") return "file";
   if (path === "#pen" || path === "#arrivals") return null;
