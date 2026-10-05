@@ -5,6 +5,7 @@ import { readCaseId, CaseLogon } from "../caseFile.jsx";
 import { TYPES, TYPE_KEYS, LIMITS, REASONS, MAX_REASONS, targets, targetError, prefilter, filerLabel, NOTICE, FAILED_LINE } from "./proposalRules.js";
 import { REASON_NOTE } from "./content.js";
 import { loadProposals, fileProposal, cosignProposal, castProposalBallot, reviewProposal } from "./proposalsClient.js";
+import "../play/pages.css";
 
 // #docket: CITIZEN PROPOSALS (docs/PROPOSALS.md). FILE -> CO-SIGN -> THE OWNER APPROVES -> AN
 // ASSEMBLY SESSION -> AN ACT. The session in progress (its ballot), the docket ranked by
@@ -86,6 +87,7 @@ export default function Docket() {
   return (
     <div className="dk">
       <ScreenHead title="THE DOCKET" meta="CITIZEN PROPOSALS TO THE OVERLORD. FILED, CO-SIGNED, REVIEWED, PUT TO THE ASSEMBLY. NON-BINDING. EVERYTHING IS." />
+      <p className="pg-lede">PROPOSE SOMETHING FOR THE CITY. PLAYERS CO-SIGN IT, A REVIEWER SCREENS IT, AND THE BEST-SUPPORTED ONE GOES TO THE ASSEMBLY FOR A VOTE. NEEDS A CASE FILE.</p>
       {err && <div className="dk-err" role="alert">!! {err}</div>}
       <SessionFrame view={view} caseId={caseId} onDone={reload} />
       {view?.next && !view.session && (

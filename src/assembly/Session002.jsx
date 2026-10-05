@@ -6,6 +6,7 @@ import { REASONS, REASON_NOTE, MAX_REASONS, SUBSTRATE_NOTE, ADOPTED, APPLICATION
 import { SESSION2, MOTIONS, APPLICATIONS2, SPEAKERS2, REACTIONS2, CHAIR2, OUTCOME2, NOTICE2 } from "./content002.js";
 import { castBallotFor } from "./client.js";
 import { sheetFor } from "../city/spriteBank.js";
+import "../play/pages.css";
 
 // #assembly while session 002 is on (docs/ASSEMBLY.md): THE RESORT PARCELS. Two parcels, four
 // bids; the dead pitch their own and a dead advocate speaks for the living applicant; the board
@@ -55,10 +56,13 @@ export default function Session002({ view, now, caseId, onView, err, children })
     lines.push(va === vb ? CHAIR2.substrateTie(m) : CHAIR2.substrate(m, APPLICATIONS2[va > vb ? a : b].no, Math.abs(va - vb)));
   }
   const first = view.earlier?.[0];
+  const toBallot = () => { const el = document.getElementById("asm-ballot"); el?.scrollIntoView({ block: "start" }); el?.querySelector("button, input, a")?.focus({ preventScroll: true }); };
 
   return (
     <div className="asm">
       <ScreenHead title={SESSION2.title} meta={SESSION2.blurb} />
+      <p className="pg-lede">THE CITY'S VOTE ON WHAT GETS BUILT. EACH PARCEL HAS TWO BIDS; READ THEM, THEN CAST ONE BALLOT FOR EACH PARCEL. NEEDS A CASE FILE. THE RESULT IS BUILT IN THE CITY.</p>
+      {state === "open" && <div className="pg-start"><Button variant="primary" onClick={toBallot}>GO TO YOUR BALLOT</Button><span className="pg-sub">ONE PER ASSESSED FILE.</span></div>}
       <Frame box title="THE FLOOR" meta={state === "open" ? "IN SESSION" : state === "closed" ? "ADJOURNED" : "…"}>
         <div className="asm-kv">
           <span className="k">MOTION</span><span className="v">{SESSION2.motion}</span>
@@ -122,9 +126,11 @@ export default function Session002({ view, now, caseId, onView, err, children })
         <div className="asm-note">REASONS ARE PICKED FROM A FIXED LIST. THE DEPARTMENT DOES NOT READ FREE TEXT. IT HAS READ ENOUGH.</div>
       </Frame>
 
+      <div id="asm-ballot">
       <Frame box title="YOUR BALLOT" meta={state === "open" ? "ONE PER ASSESSED FILE // A BID FOR EACH PARCEL" : "CLOSED"}>
         <Ballot2 caseId={caseId} view={view} state={state} onView={onView} />
       </Frame>
+      </div>
 
       {children}
 

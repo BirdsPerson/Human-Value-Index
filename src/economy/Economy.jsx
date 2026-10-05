@@ -6,6 +6,7 @@ import { Frame, Button, ButtonRow, PaLine, ScreenHead } from "../ui/index.js";
 import { readCaseId, CaseLogon } from "../caseFile.jsx";
 import { useEconomy, ApartmentCard, WalletCard, IndustryBoard, LegalFine } from "./Panels.jsx";
 import { CLOSED_LINE, fmt } from "./rules.js";
+import "../play/pages.css";
 
 export default function Economy() {
   const [caseId, setCaseId] = useState(() => readCaseId());
@@ -17,6 +18,8 @@ export default function Economy() {
   return (
     <div className="ec">
       <ScreenHead title="THE TREASURY" meta="CYCLES: ISSUED DAILY, WORTH NOTHING, COUNTED CAREFULLY." />
+      <p className="pg-lede">A PLAY ECONOMY. EVERY CASE FILE GETS 1,000 FREE CYCLES A DAY TO PUT INTO THE CITY'S INDUSTRIES, WHICH RISE AND FALL WITH THE CITY. NO REAL MONEY GOES IN OR COMES OUT.</p>
+      {!caseId && <div className="pg-start"><Button variant="primary" href="#intake">GET A CASE FILE</Button><span className="pg-sub">ALREADY HAVE ONE? ENTER IT BELOW.</span></div>}
       {st && !st.open && <PaLine tag="TREASURY>" text={CLOSED_LINE} />}
 
       <Frame box title="THE WALLET" meta={st?.open && st?.wallet ? `${fmt(st.wallet.balance)} CYCLES` : st && !st.open ? "CLOSED" : undefined}>

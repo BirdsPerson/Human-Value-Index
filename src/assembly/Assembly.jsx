@@ -6,6 +6,7 @@ import { SESSION, APPLICATIONS, ADVOCATES, REASONS, REASON_NOTE, MAX_REASONS, RE
 import { loadAssembly, castBallot } from "./client.js";
 import Session002 from "./Session002.jsx";
 import { ProposalPanel } from "./Docket.jsx";   // citizen proposals (docs/PROPOSALS.md)
+import "../play/pages.css";
 
 // #assembly: THE ASSEMBLY, session 001 (docs/ASSEMBLY.md). The applications (filings), the
 // debate (dead advocates, pre-written), the board, the ballot (assessed files only, reasons
@@ -108,6 +109,7 @@ export default function Assembly() {
   return (
     <div className="asm">
       <ScreenHead title={SESSION.title} meta={SESSION.blurb} />
+      <p className="pg-lede">THE CITY'S VOTE ON WHAT GETS BUILT. READ THE TWO BIDS, THEN CAST ONE BALLOT. NEEDS A CASE FILE. THE RESULT IS BUILT IN THE CITY.</p>
       <Frame box title="THE FLOOR" meta={state === "open" ? "IN SESSION" : state === "closed" ? "ADJOURNED" : "…"}>
         <div className="asm-kv">
           <span className="k">MOTION</span><span className="v">{SESSION.motion}</span>

@@ -6,6 +6,7 @@ import { loadCasino, casinoAct } from "./client.js";
 import { Roulette, Blackjack, Baccarat } from "./Tables.jsx";
 import Poker from "./Poker.jsx";
 import CSS from "./casino.css?inline";
+import "../play/pages.css";
 
 // #casino[/roulette|blackjack|baccarat|poker][?room=high]: HOUSE EDGE CASINO, on the Strip.
 // Play chips only (docs/CASINO.md). The server holds the chips, the shoe, the wheel and the
@@ -69,6 +70,8 @@ export default function Casino({ route }) {
   return (
     <div className="cz">
       <ScreenHead title="HOUSE EDGE CASINO" meta={HOUSE_LINE} />
+      <p className="pg-lede">ROULETTE, BLACKJACK, BACCARAT AND HOLD'EM WITH FREE PLAY CHIPS: 1,000 A DAY, WORTH NOTHING. NO REAL MONEY GOES IN OR COMES OUT, AND THERE ARE NO PRIZES.{caseId ? "" : " IT NEEDS A CASE FILE; THE ASSESSMENT GIVES YOU ONE."}</p>
+      {!caseId && <div className="pg-start"><Button variant="primary" href="#intake">GET A CASE FILE</Button><span className="pg-sub">ALREADY HAVE ONE? ENTER IT BELOW.</span></div>}
       <Frame box title="THE CAGE" meta="PLAY CHIPS ONLY">
         {!caseId && (
           <>

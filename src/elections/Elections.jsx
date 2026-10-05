@@ -6,6 +6,7 @@ import { DISTRICTS, DISTRICT } from "../city/sim.js";
 import { TITLE, BLURB, NOTICE, RULES, FIELD, CHAIR, WRITEIN } from "./content.js";
 import WriteIn from "./WriteIn.jsx";
 import { loadElections, castVote } from "./client.js";
+import "../play/pages.css";
 
 // #elections: THE COUNCIL ELECTIONS (docs/CITY_SPEC.md "Council elections"). Every district's
 // race: the candidates (filings for the living, a reconstructed line for the dead), the
@@ -101,6 +102,7 @@ export default function Elections() {
   return (
     <div className="el">
       <ScreenHead title={TITLE} meta={BLURB} />
+      <p className="pg-lede">THE CITY COUNCIL: ONE SEAT PER DISTRICT, VOTED ON BY ANYONE WITH A CASE FILE. THE CANDIDATES ARE FIGURES ON FILE; THE LIVING MAKE NO STATEMENTS. IT IS A GAME. NOTHING HERE IS A REAL ELECTION.</p>
       <Frame box title="THE POLLS" meta={state === "open" ? `CYCLE ${view.cycle} // OPEN` : state === "closed" ? `CYCLE ${view.cycle} // CLOSED` : "…"}>
         <div className="el-kv">
           <span className="k">SEATS</span><span className="v">{ids.length ? `${ids.length} DISTRICTS, ONE SEAT EACH` : "…"}</span>

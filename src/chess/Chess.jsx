@@ -9,6 +9,7 @@ import { standings, resultsToday, resultLine, gameAt, TABLE, shortName, LADDER_D
 import { loadChess, chessAct, figureMove } from "./client.js";
 import { Piece, PIECE_NAME } from "./pieces.jsx";
 import CSS from "./chess.css?inline";
+import "../play/pages.css";
 
 // #chess[?vs=<slug>][&table=<id>]: PARK CHESS (docs/CITY_SPEC.md "Park chess"). Sit across a figure
 // at a stone table and play a real game: every rule (src/chess/rules.js), the figure's engine in a
@@ -65,13 +66,21 @@ function Picker({ vsMissing, table }) {
   const [all, setAll] = useState(false);
   const list = useMemo(() => opponents(), []);
   const shown = all ? list : list.slice(0, 14);
+  const easiest = useMemo(() => list.reduce((a, c) => (c.rating < a.rating ? c : a), list[0]), [list]);
   const mt = machineClock().mt;
   const at = table && TABLE[table] ? gameAt(table, mt) : null;
   return (
     <>
       {vsMissing && <p className="ch-err" role="alert">NO FIGURE ON FILE BY THAT NAME SITS AT THE TABLES. THE DEPARTMENT DOES NOT SEAT EVERYONE.</p>}
       {table && TABLE[table] && <p className="ch-p">{TABLE[table].name}. {at ? `${shortName(at.white)} V ${shortName(at.black)} ARE MID-GAME; PICK SOMEONE ELSE TO SIT ACROSS.` : "THE TABLE IS FREE. THE PARK IS CLOSED; THE DEPARTMENT LETS YOU PLAY ANYWAY."}</p>}
-      <Frame box title="SIT ACROSS A FIGURE" meta={`${list.length} ON FILE`}>
+      <p className="pg-lede">CHESS AGAINST A FIGURE ON FILE, AT A STONE TABLE IN THE PARK. CLICK OR TAP A PIECE, THEN ITS SQUARE; TAB AND ENTER WORK TOO. NO TIMER.</p>
+      <div className="pg-start">
+        <Button variant="primary" href={`#chess?vs=${easiest.slug}${table ? `&table=${table}` : ""}`}>PLAY NOW</Button>
+        <span className="pg-sub">AGAINST {easiest.name.toUpperCase()}, THE GENTLEST GAME ON FILE ({easiest.rating}).</span>
+      </div>
+      <details className="pg-more">
+      <summary>CHOOSE WHO TO PLAY ({list.length} ON FILE)</summary>
+      <div className="pg-more-body">
         <p className="ch-p">THE CHESS PLAYERS ON FILE FIRST, THEN EVERYONE ELSE THE DEPARTMENT WILL SEAT. STRENGTH FOLLOWS THE FILE. SOME TALK AT THE TABLE; SOME PLAY IN SILENCE.</p>
         <ul className="ch-opps">
           {shown.map(c => (
@@ -85,7 +94,8 @@ function Picker({ vsMissing, table }) {
           ))}
         </ul>
         {!all && list.length > shown.length && <ButtonRow><Button onClick={() => setAll(true)}>Show all {list.length}</Button></ButtonRow>}
-      </Frame>
+      </div>
+      </details>
     </>
   );
 }
@@ -249,7 +259,7 @@ function Game({ card, table, caseId, gate, setCaseId, onFiled }) {
               <div className="ch-status" aria-live="polite">
                 {over ? <span className={result.res === "W" ? "ch-win" : result.res === "L" ? "ch-lose" : ""}>{result.res === "W" ? `YOU BEAT ${figName}` : result.res === "L" ? `${figName} WINS` : "DRAWN"} // {REASON[result.reason] || result.reason}</span>
                   : thinking ? <span>{figName} IS THINKING{style.depth >= 4 ? ". AT LENGTH." : "."}</span>
-                  : <span>{myTurn ? "YOUR MOVE" : "…"}{st.check ? " // CHECK" : ""}</span>}
+                  : <span>{myTurn ? "YOUR MOVE" : "…"}{st.check ? " // CHECK" : ""}{myTurn && sans.length > 0 ? ` // ${figName} PLAYED ${sans[sans.length - 1]}` : ""}</span>}
               </div>
               {talk.length > 0 && <ul className="ch-talk">{talk.map((t, i) => <li key={i} className={t.kind}>{t.kind === "say" ? `${figName}: “${t.text}”` : t.text}</li>)}</ul>}
               <ol className="ch-moves" aria-label="Moves">{pairs.map(([n, a, b]) => <li key={n}><span className="n">{n}.</span> <span>{a}</span> <span>{b}</span></li>)}</ol>
