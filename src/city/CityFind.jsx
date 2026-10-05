@@ -42,7 +42,7 @@ export default memo(function CityFind({ index, remote = false, onPick, self, cas
     <div className="hvi-city-find" role="search">
       <div className="hvi-city-find-box">
         <label htmlFor={`${id}-in`} className="p">FIND &gt;</label>
-        <input ref={inputRef} id={`${id}-in`} className="ui-input" type="search" value={q} placeholder="A NAME IN THE CENSUS" autoComplete="off" spellCheck={false}
+        <input ref={inputRef} id={`${id}-in`} className="ui-input" type="search" value={q} placeholder="ANY NAME" autoComplete="off" spellCheck={false}
           enterKeyHint="search" role="combobox" aria-expanded={shown && rows.length > 0} aria-controls={`${id}-lb`} aria-autocomplete="list"
           aria-activedescendant={shown && rows[act] ? `${id}-o${act}` : undefined}
           onChange={(ev) => { setQ(ev.target.value); setOpen(true); setAct(0); }}
@@ -64,7 +64,7 @@ export default memo(function CityFind({ index, remote = false, onPick, self, cas
         ? <button type="button" className="hvi-city-zb txt hvi-city-findme" onClick={() => pick(self)} aria-label="Find me: fly to your own file in the city">FIND ME</button>
         : caseId
           ? <button type="button" className="hvi-city-zb txt hvi-city-findme" disabled>FILE NOT IN THE CENSUS YET</button>
-          : <a className="hvi-city-zb txt hvi-city-findme" href="#intake">NO FILE. SIT FOR INTAKE.</a>}
+          : <a className="hvi-city-zb txt hvi-city-findme" href="#intake" aria-label="You have no file. Get evaluated to join the city.">GET EVALUATED</a>}
       <span className="sr-only" role="status">{status}</span>
     </div>
   );

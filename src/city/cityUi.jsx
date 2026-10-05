@@ -15,7 +15,6 @@ const css = `
   .hvi-city-census { min-width: 0; }
   .hvi-city-pa { display: flex; gap: 1ch; align-items: baseline; margin: var(--s1) 0 0; color: var(--fg-dim); min-height: calc(var(--lh) * var(--t-xs)); font-size: var(--t-xs); }
   /* on a phone the PA wraps: hold two lines so the page does not jump as it types */
-  @media (max-width: 720px) { .hvi-city-pa { min-height: calc(2 * var(--lh) * var(--t-xs)); } }
   .hvi-city-pa .tag { color: var(--accent); flex: none; white-space: pre; }
   .hvi-city-pa > :last-child { min-width: 0; }
   .hvi-city-note { color: var(--fg-mute); font-size: var(--t-xs); margin: 0 0 var(--s3); }
@@ -82,10 +81,13 @@ const css = `
   .hvi-city-find-list .w { text-transform: uppercase; font-size: var(--t-xs); color: var(--fg-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hvi-city-findme { flex: none; text-decoration: none; white-space: nowrap; }
   .hvi-city-findme:disabled { color: var(--fg-mute); border-color: var(--line); cursor: default; }
+  /* Phones: the find and its button share one line, and the PA is one line, so the city
+     itself starts above the fold. */
   @media (max-width: 720px) {
-    .hvi-city-find { flex-wrap: wrap; }
-    .hvi-city-find-box { flex-basis: 100%; }
-    .hvi-city-findme { width: 100%; }
+    .hvi-city-findme { max-width: 15ch; white-space: normal; line-height: 1.2; text-align: center; }
+    .hvi-city-pa { min-height: 0 !important; white-space: nowrap; overflow: hidden; }
+    .hvi-city-pa > :last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hvi-city-census { flex: 1 1 100%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   }
   /* the find's status: over the top of the stage, the [x] and FOLLOW keys at its end */
   .hvi-city-found { display: flex; align-items: center; gap: var(--s2); padding: var(--s1) 0 var(--s1) var(--s2); background: var(--bg); border-bottom: var(--bw) solid var(--accent); font-size: var(--t-xs); color: var(--fg); min-height: var(--hit-min); }
