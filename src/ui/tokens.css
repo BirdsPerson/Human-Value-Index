@@ -25,7 +25,7 @@
 
   /* type: Fira Mono only. Five steps; nothing else. */
   --mono: 'Fira Mono', ui-monospace, Menlo, Consolas, monospace;
-  --t-xs: 12px;           /* meta, labels, the floor */
+  --t-xs: 13px;           /* meta, labels, the floor (12px all-caps was too small to read) */
   --t-s: 14px;            /* body */
   --t-m: 16px;            /* inputs (no iOS zoom), primary rows, verdicts */
   --t-l: 20px;            /* screen headings */
@@ -68,4 +68,10 @@
   --sans: var(--mono);
 
   color-scheme: dark;
+}
+
+/* Phones: body text is 16px, the floor 14px. Small all-caps monospace is the hardest
+   thing on the site to read on a phone, and the phone is where most visitors arrive. */
+@media (max-width: 720px) {
+  :root { --t-xs: 14px; --t-s: 16px; --t-m: 17px; }
 }

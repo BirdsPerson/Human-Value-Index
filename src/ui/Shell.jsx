@@ -1,7 +1,7 @@
 // The app shell: a one-line sticky header on every screen (the block-letter banner on
 // the menu only), and on phones a bottom command bar within thumb reach:
-// MENU · CITY · CUBE · MY FILE. A screen can put one context action (APPEAL) in the
-// CUBE slot with useBarAction(). Desktop hides the bar; the header carries the same links.
+// MENU · CITY · PLAY · MY FILE. A screen can put one context action (APPEAL) in the
+// PLAY slot with useBarAction(). Desktop hides the bar; the header carries the same links.
 
 import { useEffect, useState } from "react";
 import { BANNER } from "../term.jsx";
@@ -11,7 +11,7 @@ import { useCurrentBarAction } from "./barAction.js";
 export const NAV = [
   { key: "menu", label: "MENU", glyph: "▣", href: "#" },
   { key: "city", label: "CITY", glyph: "▦", href: "#city" },
-  { key: "cube", label: "CUBE", glyph: "◈", href: "#cube" },
+  { key: "play", label: "PLAY", glyph: "◈", href: "#play" },
   { key: "file", label: "MY FILE", glyph: "▤", href: "#file" },
 ];
 
@@ -19,7 +19,7 @@ export const NAV = [
 export function navKeyFor(route = "") {
   const path = route.split("?")[0];
   if (path === "#city" || path.startsWith("#city/") || path === "#heights" || path === "#enterprise" || path === "#prefects") return "city";
-  if (path === "#cube") return "cube";
+  if (path === "#play" || path === "#tennis" || path === "#golf" || path === "#chess" || path === "#casino" || path.startsWith("#casino/")) return "play";
   if (path === "#file" || path === "#intake") return "file";
   if (path === "#pen" || path === "#arrivals") return null;
   return "menu";
@@ -95,7 +95,7 @@ export function AppHeader({ banner = false, active = null, onNav }) {
 export function CommandBar({ active = null, onNav }) {
   const action = useCurrentBarAction();
   useKeyboardFlag();
-  const items = action ? NAV.map(n => (n.key === "cube" ? { ...n, ctx: action } : n)) : NAV;
+  const items = action ? NAV.map(n => (n.key === "play" ? { ...n, ctx: action } : n)) : NAV;
   return (
     <>
       <div className="ui-bar-pad" aria-hidden="true" />

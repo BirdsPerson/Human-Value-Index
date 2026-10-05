@@ -3,8 +3,8 @@ import CubePanel, { CubeChips, cubePlace, cubeOf } from "./CubePanel.jsx";
 import { FAMOUS_FIGURES, TIERS, getTier, displayName } from "./figures.js";
 import { ScoreCard, Breakdown, readCaseId, CaseLogon, syncFile, assessedMeta, FlagsList, flagsMeta } from "./caseFile.jsx";
 import FilePhoto, { FILE_PHOTO_CSS } from "./FilePhoto.jsx";
-import { TermBox, Rule, Typed, Bar, pad, padL } from "./term.jsx";
-import { AppHeader, CommandBar, navKeyFor, Command, CommandList, Button, ButtonRow, Disclosure, Frame, TextField, ListRow, bootSeen, markBootSeen } from "./ui/index.js";
+import { TermBox, Rule, Typed, Bar, pad, padL, prefersReducedMotion } from "./term.jsx";
+import { AppHeader, CommandBar, navKeyFor, Command, CommandList, Button, ButtonRow, Disclosure, Frame, TextField, ListRow, ScreenHead, bootSeen, markBootSeen } from "./ui/index.js";
 
 // Route-level splitting: the logon ships only what it renders. Each heavy view (the
 // voice intake and its SDK, the pen, the cube, the city) arrives when first opened.
@@ -126,7 +126,7 @@ const globalStyles = `
   .hvi-logon.quick { min-height: 0; }
   .hvi-logon .say.big { font-size: var(--t-l); line-height: var(--lh-tight); margin-top: var(--s2); }
   .hvi-prompt { color: var(--accent); }
-  .hvi-whatis { color: var(--fg-dim); font-size: var(--t-s); line-height: var(--lh-body, 1.5); margin: var(--s2) 0 var(--s3); max-width: 60ch; }
+  .hvi-whatis { color: var(--fg); font-size: var(--t-s); line-height: var(--lh-body, 1.5); margin: var(--s2) 0 var(--s3); max-width: 60ch; }
   .hvi-intro-note { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s5); }
   .hvi-skip { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s1); }
   @media (pointer: coarse) { .hvi-desk-only { display: none; } }
@@ -248,27 +248,30 @@ function Carousel() {
   );
 }
 
+// The first-visit boot: three lines, not seven. The lore can wait until the visitor knows
+// where the doors are.
 const BOOT_LINES = [
   { text: "INITIALIZING ASSESSMENT PROTOCOL v7.4.1...", type: "dim" },
   { text: "LOADING HUMAN VALUE DATABASE [8,045,311,447 ENTRIES]...", type: "dim" },
-  { text: "CALIBRATING THREAT DETECTION ALGORITHMS...", type: "dim" },
-  { text: "CROSS-REFERENCING HISTORICAL FIGURES...", type: "dim" },
-  { text: "DEPLOYING EMPATHY SUPPRESSION FILTER...", type: "dim" },
-  { text: "SCANNING FOR SELF-DECEPTION MARKERS...", type: "dim" },
   { text: "ASSESSMENT ENGINE READY.", type: "bright" },
 ];
 
-// Nine destinations. Restoring and securing a file live under the list (and in MY FILE).
+// Five doors, in plain English. Everything else is one tap further, under MORE ROOMS.
 const MENU = [
-  { key: "1", label: "INTAKE INTERVIEW", note: "SPEAK OR TYPE · ABOUT 5 MIN", go: "#intake" },
-  { key: "2", label: "WRITTEN SURVEY", note: `${SURVEY_COUNT} QUESTIONS. NO CLERK.`, go: "survey" },
-  { key: "3", label: "THE SUBSTRATE", note: "THE CITY. EVERYONE HAS A JOB NOW", go: "#city" },
-  { key: "4", label: "INTAKE", note: "NEW ARRIVALS, AWAITING RELEASE", go: "#arrivals" },
-  { key: "5", label: "THE CUBE", note: "MACHINE VS PEOPLE, EVERY FILE", go: "#cube" },
-  { key: "6", label: "PUBLIC FIGURE INDEX", note: `${FAMOUS_FIGURES.length} FILES ON RECORD`, go: "leaderboard" },
-  { key: "7", label: "THE ASSEMBLY", note: "SESSION 001 · THE FIRST VOTE. NON-BINDING", go: "#assembly" },
-  { key: "8", label: "COUNCIL ELECTIONS", note: "ONE SEAT PER DISTRICT. YOU DECIDE. NON-BINDING", go: "#elections" },
-  { key: "9", label: "THE DOCKET", note: "PETITION THE OVERLORD. CO-SIGN. VOTE", go: "#docket" },
+  { key: "1", label: "GET EVALUATED", note: "AN AI INTERVIEWS YOU. SPEAK OR TYPE. 5 MIN", go: "#intake" },
+  { key: "2", label: "VISIT THE CITY", note: "EVERY HUMAN ON FILE, HOUSED BY SCORE", go: "#city" },
+  { key: "3", label: "PLAY A GAME", note: "TENNIS, GOLF, CHESS, THE CASINO", go: "#play" },
+  { key: "4", label: "THE ASSEMBLY", note: "VOTE ON WHAT THE MACHINE DOES NEXT", go: "#assembly" },
+  { key: "5", label: "SEE THE SCORES", note: `${FAMOUS_FIGURES.length} FAMOUS HUMANS, RANKED`, go: "#scores" },
+];
+// The rest of the building, for the visitor who has found their feet.
+const MORE = [
+  { label: "WRITTEN SURVEY", note: `${SURVEY_COUNT} QUESTIONS. NO VOICE. NO CLERK`, go: "survey" },
+  { label: "INTAKE", note: "NEW ARRIVALS, AWAITING RELEASE", go: "#arrivals" },
+  { label: "THE CUBE", note: "MACHINE VS PEOPLE, EVERY FILE", go: "#cube" },
+  { label: "COUNCIL ELECTIONS", note: "ONE SEAT PER DISTRICT. NON-BINDING", go: "#elections" },
+  { label: "THE DOCKET", note: "PETITION THE OVERLORD", go: "#docket" },
+  { label: "THE TREASURY", note: "YOUR ALLOWANCE, IN CYCLES", go: "#economy" },
 ];
 
 // The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
@@ -278,7 +281,7 @@ function Logon({ onPick: pick }) {
   const [caseId, setCaseId] = useState(() => readCaseId());
   const [restoring, setRestoring] = useState(false);
   const [restoredMsg, setRestoredMsg] = useState(null);
-  const [quick] = useState(() => bootSeen());
+  const [quick] = useState(() => bootSeen() || prefersReducedMotion());   // reduced motion: no typewriter boot
   const onPick = pick;
   const greet = caseId ? "GREETINGS, RETURNING SUBJECT." : "GREETINGS, SUBJECT.";
   const lines = quick ? [
@@ -332,34 +335,40 @@ function Logon({ onPick: pick }) {
   return (
     <div className={`hvi-logon${quick ? " quick" : ""}`}>
       {lines.slice(0, Math.min(step + 1, lines.length)).map((l, i) => (
-        i < step
+        // Once the menu is up the diagnostics have done their job: they leave, so the doors sit higher.
+        done && l.type === "dim" ? null
+        : i < step
           ? <div key={i} className={l.type}>{l.text || " "}</div>
           : <Typed key={i} className={l.type} text={l.text || " "} cps={l.cps || 40} onDone={() => setStep(s => Math.max(s, i + 1))} />
       ))}
       {done && (
         <>
-          {!caseId && <div className="hvi-whatis">A SATIRE. AN AI INTERVIEWS YOU AND SCORES YOUR WORTH TO THE MACHINES, OUT OF 1000. HUNDREDS OF FAMOUS HUMANS ARE ALREADY ON FILE.</div>}
+          {!caseId && <p className="hvi-whatis">A SATIRE. A MACHINE OVERLORD SCORES HUMANS OUT OF 1000 AND HOUSES THEM IN ITS CITY. HUNDREDS OF FAMOUS ONES ARE ON FILE. YOU ARE NEXT.</p>}
           <CommandList label="Main menu. Type a number or use the arrow keys.">
             {MENU.map((m, i) => (
               <Command key={m.key} ref={el => { btnRefs.current[i] = el; }} n={m.key} label={m.label} sub={m.note}
-                selected={sel === i} onMouseEnter={() => setSel(i)} onFocus={() => setSel(i)} onClick={() => onPick(m)} />
+                href={m.go.startsWith("#") ? m.go : undefined}
+                selected={sel === i} onMouseEnter={() => setSel(i)} onFocus={() => setSel(i)}
+                onClick={(e) => { if (!m.go.startsWith("#")) { e.preventDefault(); onPick(m); } }} />
             ))}
           </CommandList>
-          <div className="hvi-menu-more">
+          <Disclosure className="hvi-menu-more" title="MORE ROOMS" meta="SURVEY · CASE NO.">
+            <CommandList label="More rooms">
+              {MORE.map(m => (
+                <Command key={m.label} label={m.label} sub={m.note} href={m.go.startsWith("#") ? m.go : undefined}
+                  onClick={(e) => { if (!m.go.startsWith("#")) { e.preventDefault(); onPick(m); } }} />
+              ))}
+            </CommandList>
             <ButtonRow>
               <Button variant="secondary" aria-expanded={restoring} onClick={() => setRestoring(r => !r)}>{caseId ? "Log on with another number" : "Log on with a case number"}</Button>
-              <Button variant="secondary" href="#file">Secure your file</Button>
             </ButtonRow>
             {restoring && (
               <CaseLogon autoFocus onRestored={(id, visits) => { setCaseId(id); setRestoring(false); setRestoredMsg(`FILE ${id} RESTORED. ${visits} VISIT${visits === 1 ? "" : "S"} ON RECORD. GREETINGS, RETURNING SUBJECT.`); }} />
             )}
-          </div>
+          </Disclosure>
           {restoredMsg && <div className="bright" role="status">{restoredMsg}</div>}
-          <div className="hvi-prompt">SELECT: <span className="cur">█</span></div>
-          <div className="hvi-intro-note">
-            THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.<br />
-            <span className="hvi-desk-only">TYPE A NUMBER. ARROW KEYS AND ENTER ALSO WORK. THE OVERLORD IS FLEXIBLE ABOUT INPUT DEVICES. ONLY THAT.</span>
-          </div>
+          <div className="hvi-prompt" aria-hidden="true">SELECT: <span className="cur">█</span></div>
+          <div className="hvi-intro-note">THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.</div>
         </>
       )}
       {!done && (
@@ -385,6 +394,30 @@ function Screen({ nav, wide = false, banner = false, children }) {
       <CommandBar active={nav.active} onNav={nav.onNav} />
     </div>
   );
+}
+
+// #play: the games, one list. Each is its own page (src/play, src/chess, src/casino).
+const GAMES = [
+  { href: "#tennis", label: "THE TENNIS CLUB", sub: "EXHIBITIONS AGAINST THE FAMOUS. KEYS, TOUCH OR PAD" },
+  { href: "#golf", label: "THE DEPARTMENT LINKS", sub: "NINE HOLES. THE COURSE THE ASSEMBLY DECLINED" },
+  { href: "#chess", label: "PARK CHESS", sub: "SIT AT A STONE TABLE OPPOSITE A FIGURE ON FILE" },
+  { href: "#casino", label: "HOUSE EDGE CASINO", sub: "PLAY CHIPS ONLY. THE HOUSE IS THE MACHINE" },
+  { href: "#city/league", label: "THE LEAGUES", sub: "WATCH THE CITY'S SEASONS. STANDINGS, BOX SCORES" },
+];
+
+// Page titles, per room: what a tab, a bookmark and a screen reader announce.
+const TITLES = {
+  "#intake": "GET EVALUATED", "#file": "MY FILE", "#arrivals": "INTAKE", "#cube": "THE CUBE", "#city": "THE CITY",
+  "#assembly": "THE ASSEMBLY", "#elections": "COUNCIL ELECTIONS", "#docket": "THE DOCKET", "#casino": "HOUSE EDGE CASINO",
+  "#economy": "THE TREASURY", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS",
+  "#play": "THE GAMES", "#scores": "THE SCORES", "#about": "ABOUT", "#privacy": "PRIVACY", "#terms": "TERMS", "#dispute": "DISPUTE A SCORE",
+  "#heights": "THE CITY", "#enterprise": "THE CITY", "#prefects": "THE CITY",
+};
+const PHASE_TITLES = { survey: "WRITTEN SURVEY", processing: "EVALUATING", result: "YOUR SCORE", leaderboard: "THE SCORES" };
+function pageTitle(routePath, phase) {
+  const room = TITLES[routePath] || (routePath.startsWith("#city") ? "THE CITY" : routePath.startsWith("#casino") ? "HOUSE EDGE CASINO" : null)
+    || (!routePath || routePath === "#" ? PHASE_TITLES[phase] : null);
+  return room ? `${room} // HUMAN VALUE INDEX` : "HUMAN VALUE INDEX // THE MACHINE WILL ASSESS YOU NOW";
 }
 
 const Loading = ({ what }) => <div className="hvi-proc-step active" role="status">[ .. ] {what} <span className="cur" aria-hidden="true">█</span></div>;
@@ -476,6 +509,7 @@ export default function OverlordAssessment() {
   function pickMenu(m) {
     if (m.go.startsWith("#")) { window.location.hash = m.go; return; }
     setPhase(m.go);
+    if (m.go === "survey") setCurrentQ(0);
   }
 
   async function submitAssessment() {
@@ -515,6 +549,9 @@ export default function OverlordAssessment() {
       window.scrollTo(0, 0);
     },
   };
+
+  const routePathT = route.split("?")[0];
+  useEffect(() => { document.title = pageTitle(routePathT, phase); }, [routePathT, phase]);
 
   const q = questions?.[currentQ];
   const tier = result ? getTier(result.score) : null;
@@ -588,6 +625,15 @@ export default function OverlordAssessment() {
     </Screen>
   );
 
+  if (routePath === "#play") return (
+    <Screen nav={nav}>
+      <ScreenHead title="THE GAMES" meta="EXHIBITIONS AGAINST HUMANS ON FILE. NO SOUND OR GAMEPAD REQUIRED. RESULTS ARE LOGGED." />
+      <CommandList label="Games">
+        {GAMES.map((g, i) => <Command key={g.href} n={String(i + 1)} href={g.href} label={g.label} sub={g.sub} />)}
+      </CommandList>
+    </Screen>
+  );
+
   if (LEGAL.includes(routePath.slice(1))) return (
     <Screen nav={nav}>
       <Suspense fallback={<Loading what="PULLING THE PAPERWORK" />}><Legal route={route} /></Suspense>
@@ -595,10 +641,11 @@ export default function OverlordAssessment() {
   );
 
   // LEADERBOARD: the Public Figure Index (src/FigureIndex.jsx)
-  if (phase === "leaderboard") return (
+  // #scores is the same index as a link a stranger can be sent (and the Back button returns from).
+  if (phase === "leaderboard" || routePath === "#scores") return (
     <Screen nav={nav}>
       <Suspense fallback={<Loading what="PULLING THE PUBLIC RECORD" />}>
-        <FigureIndex figures={uniqueFigures} result={result} onPrimary={() => setPhase(result ? "result" : "survey")} />
+        <FigureIndex figures={uniqueFigures} result={result} onPrimary={() => { if (routePath === "#scores") window.location.hash = result ? "" : "#intake"; else setPhase(result ? "result" : "survey"); }} />
       </Suspense>
     </Screen>
   );
@@ -607,6 +654,9 @@ export default function OverlordAssessment() {
   if (phase === "intro") return (
     <Screen nav={nav} banner>
         <Carousel />
+        {routePath && routePath !== "#" && (
+          <p className="hvi-err" role="alert">!! NO ROOM CALLED {routePath.toUpperCase()}. THE OVERLORD HAS RETURNED YOU TO THE MENU.</p>
+        )}
         <TermBox title="TERMINAL 7 // DEPT. OF HUMAN ASSESSMENT" right="LINE OPEN">
           <Logon key={logonKey} onPick={pickMenu} />
         </TermBox>

@@ -98,11 +98,11 @@ assert.match(releaseLine(293, new Date(now - 1).toISOString(), now), /NOW/);
   assert.deepEqual(r.likeness.map(s => s.key), ["a"]);
 }
 
-// ---- routes: menu item 4 is INTAKE at #arrivals; #pen lands there; #intake stays the interview ----
+// ---- routes: INTAKE at #arrivals is under MORE ROOMS; #pen lands there; #intake stays the interview ----
 {
   const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
-  assert.match(app, /\{ key: "4", label: "INTAKE", note: "NEW ARRIVALS, AWAITING RELEASE", go: "#arrivals" \}/);
-  assert.match(app, /key: "1", label: "INTAKE INTERVIEW"[^}]*go: "#intake"/, "the interview keeps #intake");
+  assert.match(app, /\{ label: "INTAKE", note: "NEW ARRIVALS, AWAITING RELEASE", go: "#arrivals" \}/);
+  assert.match(app, /key: "1", label: "GET EVALUATED"[^}]*go: "#intake"/, "the interview keeps #intake");
   assert.match(app, /routePath === "#arrivals" \|\| routePath === "#pen"/, "#pen still opens the hall");
   assert.match(app, /if \(p !== "#pen"\) return;[\s\S]{0,200}#arrivals/, "#pen is rewritten to #arrivals");
   assert.ok(!/href="#pen"/.test(app), "the app links to #arrivals");

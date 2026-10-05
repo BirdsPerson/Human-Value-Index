@@ -7,6 +7,9 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 400 var(--t-s)/var(--lh) var(--mono);
   font-variant-ligatures: none; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: var(--focus); outline-offset: 2px; }
+/* A bare link in running text: the accent, never the browser's blue or visited purple
+   (the purple failed contrast on --bg). */
+a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-offset: 3px; }
 [id] { scroll-margin-top: calc(var(--head-h) + var(--safe-t) + var(--s2)); }
 
 /* ---------- shell: header ---------- */

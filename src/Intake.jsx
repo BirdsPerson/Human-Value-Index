@@ -649,11 +649,10 @@ export default function Intake({ view = "intake" }) {
           <div className="hvi-hint">About five minutes, spoken or typed. Your score arrives at the end. The Officer is not your friend, but it is an excellent listener. It has to be.</div>
           {error && errLine(error)}
           {startCmds(false)}
+          {/* Age line: 16+, the same as docs/legal/terms.md §5 and privacy.md "Children". */}
           <div className="hvi-note">
-            MICROPHONE REQUESTED FOR VOICE // THE TRANSCRIPT IS SCORED, NOT YOUR VOICE.<br />
-            PRIVATE INDIVIDUALS MAY SUBMIT ONLY THEMSELVES. THE OVERLORD HAS ENOUGH OF THEM.<br />
-            {/* Age line: 16+, the same as docs/legal/terms.md §5 and privacy.md "Children". */}
-            SUBJECTS MUST BE 16 OR OLDER. BEGINNING MEANS YOU ACCEPT THE <a href="#terms">TERMS</a> AND HAVE READ THE <a href="#privacy">PRIVACY NOTICE</a>.
+            VOICE USES YOUR MICROPHONE. THE TRANSCRIPT IS SCORED, NOT YOUR VOICE. SUBMIT ONLY YOURSELF. 16 OR OLDER.
+            BEGINNING MEANS YOU ACCEPT THE <a href="#terms">TERMS</a> AND HAVE READ THE <a href="#privacy">PRIVACY NOTICE</a>.
           </div>
         </Frame>
         {onRecord && shown && (
@@ -661,7 +660,8 @@ export default function Intake({ view = "intake" }) {
             <ListRow href="#file" label="YOUR FILE ON RECORD" value={shown.score} tag={shown.tier} tagOptional tone={getTier(shown.score).color} />
           </CommandList>
         )}
-        {caseFrame(true)}
+        {/* A first visit has no case number yet: only the way back in for one issued elsewhere. */}
+        {caseId ? caseFrame(true) : caseActions()}
         {onRecord && !shown && (
           <Frame title="APPEALS DESK" id="hvi-appeal">
             <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} />

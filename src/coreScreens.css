@@ -92,8 +92,10 @@
 .hvi-cube-wait { display: flex; align-items: center; justify-content: center; color: var(--fg-mute); font-size: var(--t-xs); }
 
 /* ---------- logon menu ---------- */
-.hvi-logon .ui-cmd-list { margin: var(--s4) 0 var(--s2); }
-.hvi-menu-more { margin: 0 0 var(--s2); }
+.hvi-logon .ui-cmd-list { margin: var(--s4) 0 0; }
+/* MORE ROOMS continues the door list: its own top rule would double the last door's. */
+.hvi-logon .hvi-menu-more { border-top: 0; margin: 0 0 var(--s2); }
+.hvi-menu-more .ui-cmd-list { margin: 0 0 var(--s2); }
 .hvi-menu-more .ui-btn-row { margin: 0; }
 .hvi-menu-case { color: var(--fg-mute); font-size: var(--t-xs); margin: var(--s2) 0; }
 .hvi-logon .hvi-prompt { margin-top: var(--s2); }
