@@ -2,7 +2,7 @@
 
 > The Department keeps files. This is the list of what is in them, who else holds a copy, and how to have yours shredded.
 
-Last updated: 2026-09-30. Operator: [Iridescent](https://iridescent-studio.netlify.app), the games and media studio that publishes the Human Value Index. Contact: the [request form](#dispute).
+Last updated: 2026-10-05. Operator: [Iridescent](https://iridescent-studio.netlify.app), the games and media studio that publishes the Human Value Index. Contact: the [request form](#dispute).
 
 ## The short version
 
@@ -31,6 +31,8 @@ Last updated: 2026-09-30. Operator: [Iridescent](https://iridescent-studio.netli
 
 **Proposals, co-signatures and Assembly ballots.** A proposal's type, place, title and description are published on the docket with a four-character tag made from a one-way hash of your case number ("FILED BY SUBJECT 7F3A"), never the case number or its characters. Before it is stored, the text is sent once to Anthropic for an automated content check; a refused proposal is not stored. Co-signatures and ballots are stored under one-way, salted hashes of the case number, with a salted hash of your IP address and of a random device id kept in your browser (hvi-device), to enforce the per-address and per-device limits. Only counts are shown publicly. Purging your file does not remove a published proposal's text, which carries no link back to you beyond the tag.
 
+**The Treasury (CYCLES).** If your file draws the daily allowance, the Department keeps a ledger for it: your CYCLES balance, every disbursement, your citizen's daily spending, your positions in the district industries and their daily returns. It is stored under a one-way, salted hash of your case number (never the case number itself), with a salted hash of your IP address, of the random device id in your browser (hvi-device) and, if the file is secured, of the email account, to enforce one allowance per citizen. The ledger is held in a Supabase (Postgres) database that only the Department's server can read. Nothing in it is shown publicly except totals per industry. Your citizen's assigned apartment is computed from your tier when you look at it; it is not stored.
+
 **Disputes and correction requests.** If you file a request, the Department stores what you enter (your name, your relationship to the subject, the file, what is wrong and your email address) and emails a copy to the operator's own inbox so a human can review it.
 
 **Your IP address.** Used only to rate-limit requests (to stop abuse and runaway costs). It is stored as a one-way, salted hash inside hourly, daily and monthly counters, which are deleted 7 days after the period they count. The hosting provider also sees IP addresses in its request logs.
@@ -51,10 +53,11 @@ No analytics, advertising or tracking scripts are used. (The "Analytics" screen 
 | Anthropic (USA) | Interview transcripts, typed messages, survey answers, file-photo descriptions, referred names | The AI models that interview and score |
 | ElevenLabs (USA) | Voice audio and transcript (voice interviews only) | Speech recognition and the voice Officer. ElevenLabs uses Google's Gemini model to write the Officer's lines |
 | Resend (USA) | Your email address and the sign-in email; dispute copies to the operator | Sends email |
+| Supabase (USA) | The Treasury's ledger: hashed case number, hashed IP / device / email account, CYCLES entries and positions | Stores the play-currency ledger (Postgres, us-east-1) |
 | Google Fonts | Your IP address and browser details | Delivers the terminal typeface |
 | Wikipedia / Wikidata | Names of public figures being referred (no data about you) | The public record |
 
-Each provider keeps the data it receives under its own published policy, and sets its own retention for it; the site does not control those schedules. Anthropic does not train its models on data sent through its commercial API by default. The one provider setting the site controls is ElevenLabs voice retention, set to 30 days. Their policies: [Anthropic](https://www.anthropic.com/legal/privacy), [ElevenLabs](https://elevenlabs.io/privacy-policy), [Resend](https://resend.com/legal/privacy-policy), [Netlify](https://www.netlify.com/privacy/), [Google Fonts](https://developers.google.com/fonts/faq/privacy).
+Each provider keeps the data it receives under its own published policy, and sets its own retention for it; the site does not control those schedules. Anthropic does not train its models on data sent through its commercial API by default. The one provider setting the site controls is ElevenLabs voice retention, set to 30 days. Their policies: [Anthropic](https://www.anthropic.com/legal/privacy), [ElevenLabs](https://elevenlabs.io/privacy-policy), [Resend](https://resend.com/legal/privacy-policy), [Netlify](https://www.netlify.com/privacy/), [Supabase](https://supabase.com/privacy), [Google Fonts](https://developers.google.com/fonts/faq/privacy).
 
 ## How long it is kept
 
@@ -67,11 +70,12 @@ A sweep runs once a day and deletes whatever has passed these limits.
 - **Sessions:** 30 days, or until you log out. Expired sessions are deleted within a day.
 - **Dispute requests:** **2 years** after they are filed, then deleted. The copy emailed to the operator's inbox is deleted on the same 2-year schedule.
 - **Casino chips:** the play-chip balance and any table in progress are stored under the case number, and deleted with the file (purged or expired). The weekly casino board shows only the last four characters of a case number.
+- **The Treasury's ledger (CYCLES):** kept while the file exists, and deleted with it: purging your file, or its expiry 24 months after your last visit, deletes every ledger entry, position, allowance claim and wallet record for the case. Per-industry totals and daily returns, which hold no case, are kept.
 - **Rate-limit counters:** hashed, and deleted **7 days** after the hour, day or month they count.
 
 ## Purge your file
 
-Use **PURGE MY FILE** below. It deletes the case file on this browser (transcripts, scores, verdicts, photo, history), removes its public card, and detaches it from your email. If that was the last file on your email address, the address and your sign-in are deleted too.
+Use **PURGE MY FILE** below. It deletes the case file on this browser (transcripts, scores, verdicts, photo, history), its casino chips and its Treasury ledger (CYCLES, positions, claims), removes its public card, and detaches it from your email. If that was the last file on your email address, the address and your sign-in are deleted too.
 
 If the file is secured to an email address, you must be signed in with that address to purge it. If it is not, holding the case number is enough, the same as for viewing it. Copies already held by a provider (ElevenLabs' 30-day recordings, provider logs) expire on their own schedule. A file you never purge is deleted anyway 24 months after your last visit.
 

@@ -9,3 +9,4 @@ __pycache__/
 docs/calibration/.tmp-*
 DESK_ANSWERS.md
 dist/
+supabase/.temp/

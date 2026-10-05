@@ -10,6 +10,7 @@ import { readCaseId, writeCaseId, readLastResult, writeLastResult, ScoreCard, Br
 import { Frame, Button, ButtonRow, Disclosure, TextField, Command, CommandList, ListRow } from "./ui/components.jsx";
 import { useBarAction } from "./ui/barAction.js";
 import { QuestLog } from "./QuestLog.jsx";
+import { FileEconomy } from "./economy/FileEconomy.jsx";
 import { visitCount, causeOf, DEPARTMENT_CAUSES } from "./movement.js";
 import { FileMovement } from "./caseFile.jsx";
 import MySeat from "./elections/MySeat.jsx";
@@ -572,6 +573,7 @@ export default function Intake({ view = "intake" }) {
           {questSeen && <QuestLog caseId={caseId} />}
         </Disclosure>
       )}
+      {caseId && <FileEconomy caseId={caseId} />}
       <Disclosure id="hvi-appeal" title="APPEAL A SECTION" meta={appealSel.length ? `${appealSel.length} MARKED` : ""}>
         <AppealPanel selected={appealSel} toggle={toggleAppeal} onFile={(m) => begin(m, appealSel)} breakdown={r.breakdown} />
       </Disclosure>

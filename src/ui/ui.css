@@ -24,6 +24,9 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 400 var(--t-s)/
 .ui-head-case { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ui-head-case b { color: var(--fg-dim); font-weight: 500; }
 .ui-head-ok { color: var(--accent); flex: none; display: none; }
+.ui-head-econ { flex: none; color: var(--warn); text-decoration: none; white-space: nowrap; }
+.ui-head-econ .tray { color: var(--accent); }
+@media (hover: hover) { .ui-head-econ:hover { text-decoration: underline; text-underline-offset: 4px; } }
 /* The block-letter banner: the menu only. Scales to the width so it never scrolls. */
 .ui-banner { color: var(--accent); white-space: pre; overflow: hidden; line-height: 1.05; margin: var(--s4) 0 var(--s2);
   font-size: min(14px, calc((100vw - 2 * var(--gutter)) / 42)); }

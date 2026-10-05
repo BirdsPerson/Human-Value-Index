@@ -2,11 +2,13 @@
 // the case number. A file secured to an email needs that account's session; an unsecured
 // file needs only the case number (the same credential that reads it, /api/file).
 // Deletes: the case record (transcripts, scores, verdicts, photo, history), its public pen
-// card, its account link, its league entry, and the account itself when that was its last file.
+// card, its account link, its league entry, its CYCLES ledger (every entry, position and claim),
+// and the account itself when that was its last file.
 import { isCaseId } from "../lib/intake.js";
 import { getCase, deleteCase, removePenCard, hitLimit } from "../lib/store.js";
 import { deleteWallet, dropFromBoard } from "../lib/casino-store.js";
 import { deleteChess } from "../lib/chess-store.js";
+import { purgeLedger } from "../lib/economy-db.js";
 import { getStore } from "@netlify/blobs";
 import { dropEntry, STORE as LEAGUES_STORE } from "../lib/league-entries.js";
 import { requireAccount, caseOwner, detachCase, revokeSession, clearCookie } from "../lib/auth.js";
@@ -39,6 +41,8 @@ export default async (req, context) => {
       const s = await requireAccount(req);
       if (!s || s.key !== owner) return json(401, { error: "This file is secured to an email address. Sign in with that address first, then purge." });
     }
+    // The Treasury's ledger first: if it is down, nothing is deleted and the purge can be retried.
+    await purgeLedger(caseId);
     await deleteCase(caseId);
     await removePenCard(caseId);
     await Promise.all([deleteWallet(caseId), dropFromBoard(caseId)]).catch(err => console.warn("purge: casino wallet", err?.message));

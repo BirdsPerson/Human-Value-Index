@@ -1,0 +1,75 @@
+/* THE TREASURY. The terminal's own tokens; gold (--warn) means CYCLES, as it means chips at the
+   casino; --accent a gain, --harm a loss. Nothing else is coloured. */
+.ec-p { margin: 0 0 var(--s3); }
+.ec-p a, .ec-fine a { color: var(--fg-dim); }
+.ec-dim { color: var(--fg-mute); }
+.ec-strong { color: var(--fg); font-weight: 700; }
+.ec-up { color: var(--accent); }
+.ec-down { color: var(--harm); }
+.ec-flat { color: var(--fg-dim); }
+.ec-err { color: var(--harm); margin: var(--s2) 0; }
+.ec-fine { font-size: var(--t-xs); color: var(--fg-mute); margin: var(--s3) 0 0; }
+.ec-ubi { color: var(--warn); letter-spacing: 0.02em; }
+.ec-kv { display: grid; grid-template-columns: 15ch minmax(0, 1fr); column-gap: 1ch; row-gap: var(--s1); margin: 0 0 var(--s3); align-items: baseline; }
+.ec-kv .k { color: var(--fg-mute); font-size: var(--t-xs); }
+.ec-kv .v { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 420px) { .ec-kv { grid-template-columns: 1fr; row-gap: 0; } .ec-kv .k { margin-top: var(--s2); } }
+
+.ec-bal { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 1ch; margin: 0 0 var(--s3); }
+.ec-bal-n { font-size: var(--t-xl); line-height: var(--lh-tight); color: var(--warn); font-weight: 700; letter-spacing: 0.02em; }
+.ec-bal-u { color: var(--warn); font-size: var(--t-xs); letter-spacing: 0.08em; }
+.ec-bal-x { flex-basis: 100%; color: var(--fg-mute); font-size: var(--t-xs); }
+.ec-tray, .ec-pos, .ec-led { border-top: var(--bw) dashed var(--line); padding-top: var(--s3); margin-top: var(--s3); }
+.ec-tray-h { font-size: var(--t-xs); color: var(--fg-mute); letter-spacing: 0.06em; margin: 0 0 var(--s2); }
+
+.ec-pos-row, .ec-led-row { display: grid; align-items: baseline; column-gap: 1ch; padding: 2px 0; }
+.ec-pos-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+.ec-pos-row .n { color: var(--fg); }
+.ec-pos-row .v { color: var(--warn); text-align: right; }
+.ec-pos-row .pl { text-align: right; min-width: 6ch; }
+.ec-pos-row .lk { grid-column: 1 / -1; font-size: var(--t-xs); color: var(--fg-mute); }
+.ec-led-row { grid-template-columns: 6ch minmax(0, 1fr) auto; font-size: var(--t-xs); }
+.ec-led-row .d { color: var(--fg-mute); }
+.ec-led-row .w { color: var(--fg-dim); min-width: 0; overflow-wrap: anywhere; }
+.ec-led-row .a { text-align: right; }
+
+/* the board: five columns on a desk, two lines per industry on a phone */
+.ec-board-head, .ec-ind-row { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.2fr) 8ch 9ch 8ch; column-gap: var(--s3); align-items: center; }
+.ec-board-head { font-size: var(--t-xs); color: var(--fg-mute); padding: 0 var(--s2) var(--s1); border-bottom: var(--bw) solid var(--line); letter-spacing: 0.04em; }
+.ec-board-head span:nth-child(n+3), .ec-ind-row .y, .ec-ind-row .ind { text-align: right; }
+.ec-ind { border-bottom: var(--bw) solid var(--line); }
+.ec-ind.on { background: var(--panel); }
+.ec-ind-row { width: 100%; background: none; border: 0; color: var(--fg); font: inherit; text-align: left; padding: var(--s2); min-height: var(--hit); cursor: pointer; }
+.ec-ind-row:hover { background: var(--panel-hi); }
+.ec-ind-row:focus-visible { outline: var(--focus); outline-offset: -2px; }
+.ec-ind-row .n { display: flex; flex-direction: column; min-width: 0; letter-spacing: 0.04em; }
+.ec-ind-row .n small { color: var(--fg-mute); font-size: var(--t-xs); letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ec-mine { color: var(--warn); font-weight: 400; font-size: var(--t-xs); }
+.ec-ind-row .sh { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.ec-bar { flex: 1 1 auto; height: 8px; background: var(--fg-ghost); position: relative; min-width: 40px; }
+.ec-bar > span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--fg-dim); }
+.ec-bar > span.crowd { background: var(--warn); }
+.ec-ind-row .pct { font-size: var(--t-xs); color: var(--fg-dim); white-space: nowrap; }
+.ec-spark { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; justify-self: end; }
+.ec-spark i { display: block; width: 5px; background: currentColor; }
+.ec-spark i.ec-up { color: var(--accent); }
+.ec-spark i.ec-down { color: var(--harm); }
+.ec-spark i.ec-flat { color: var(--fg-mute); }
+.ec-order { padding: 0 var(--s2) var(--s3); }
+.ec-amt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0 0 var(--s2); }
+.ec-amt input { font: inherit; font-size: var(--t-m); background: var(--bg); color: var(--warn); border: var(--bw) solid var(--line-hi); padding: 0 var(--s2); height: var(--hit-min); width: 12ch; }
+.ec-amt input:focus { outline: var(--focus); }
+.ec-comm { list-style: none; margin: 0; padding: 0; }
+.ec-comm li { padding: var(--s1) 0; border-bottom: var(--bw) dashed var(--line); }
+.ec-comm li::before { content: "> "; color: var(--fg-mute); }
+
+@media (max-width: 640px) {
+  .ec-board-head { display: none; }
+  .ec-ind-row { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "n y ind" "sh sh sp"; row-gap: var(--s1); }
+  .ec-ind-row .n { grid-area: n; }
+  .ec-ind-row .y { grid-area: y; }
+  .ec-ind-row .ind { grid-area: ind; font-size: var(--t-xs); }
+  .ec-ind-row .ind::before { content: "IND "; color: var(--fg-mute); }
+  .ec-ind-row .sh { grid-area: sh; }
+  .ec-ind-row .ec-spark { grid-area: sp; }
+}

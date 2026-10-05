@@ -1,5 +1,6 @@
 // Retention, as the privacy notice states it (docs/legal/privacy.md "How long it is kept"):
-//   case files        24 months after the subject's last activity (visit, appeal, directive)
+//   case files        24 months after the subject's last activity (visit, appeal, directive),
+//                     with the casino wallet and the Treasury's ledger rows for the case
 //   dispute requests  24 months after filing
 //   rate-limit counters 7 days after their window closes; legacy raw-IP keys at once
 //   sign-in links / sessions  once expired
@@ -10,6 +11,7 @@ import { getStore } from "@netlify/blobs";
 import { isCaseId } from "./intake.js";
 import { deleteCase, removePenCard } from "./store.js";
 import { deleteWallet } from "./casino-store.js";
+import { purgeLedger } from "./economy-db.js";
 import { caseOwner, detachCase } from "./auth.js";
 import { YOUR_CAUSES, causeOf } from "../../src/movement.js";
 
@@ -125,6 +127,7 @@ export async function prune({ now = Date.now(), dryRun = false, budgetMs = BUDGE
       const owner = await caseOwner(id);
       if (owner) await detachCase(owner, id);
       await deleteWallet(id);   // the casino's chips go with the file
+      await purgeLedger(id);    // and the Treasury's ledger (CYCLES, positions, claims)
       await deleteCase(id);
     } catch (err) { report.errors++; console.error("prune case failed", err?.name); } }));
     last = chunk[chunk.length - 1];

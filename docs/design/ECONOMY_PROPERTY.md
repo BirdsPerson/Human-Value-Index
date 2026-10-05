@@ -1,6 +1,6 @@
 # ECONOMY + PROPERTY — design for review (2026-10-05)
 
-Status: **DESIGN, NOTHING BUILT.** Scott reviews this page first. ROADMAP items 5 (Economy v1), b1c
+Status: **SLICE 1 BUILT (2026-10-05)**, see "As built: slice 1" at the end. Slices 2-4 are design. ROADMAP items 5 (Economy v1), b1c
 (THE MALL), b5 (civic machine), e (economy -> unrest). Inspired by Internet City (one shared city, a
 plot per player, centre dear and edge free, build and dress your building, the storefront carries
 your brand and links, idle harvest, leaderboards, rivals, a market), moved into the Substrate.
@@ -197,3 +197,40 @@ device, mirrored trades) go to the owner review. Rate limits on every write, as 
 4. **Rent strike** as the first unrest event? Recommend: yes.
 5. **The numbers:** UBI 1,000, an OUTER flat 9,000, a building 40,000, CORE x6. Recommend: ship
    these and tune from the first month's ledger.
+
+## As built: slice 1 (2026-10-05)
+
+Scott approved slice 1 on 2026-10-05: UBI 1,000 per real day per assessed case, the assigned
+apartment by tier, the citizen's ~300/day auto-spend, a 7-day tray, no purchase / cash-out /
+transfer, a free Supabase project for the ledger. Moguls, property, shops, uploads and boards wait.
+
+- **The ledger:** Supabase project `hvi-ledger` (ref `tdjdlfrtnmfbzieulrqu`, us-east-1, Free plan,
+  in its own free organisation "Human Value Index"). Schema: `supabase/migrations/`. Double entry
+  (`econ_txns` + `econ_entries`, append-only by trigger; balances maintained under row locks in
+  id order; citizen accounts never below zero), one UBI per case per day (`econ_ubi_claims` primary
+  key), positions (`econ_investments`, the value is the `inv:<hash>:<industry>` account), the daily
+  `econ_returns` with the summary each was read from. RLS on, no policies, no grants to anon or
+  authenticated: Netlify Functions call `econ_*` with the service role (`SUPABASE_URL`,
+  `SUPABASE_SERVICE_ROLE_KEY`, production secrets). A txn touching two cases is refused by the
+  database itself. Case numbers never reach it: a salted hash (`HVI_IP_SALT`, as the proposals).
+- **Code:** `src/economy/rules.js` (numbers, industries, the yield, herding, lines),
+  `netlify/lib/economy-db.js` (Supabase or the in-memory twin), `netlify/lib/economy.js`,
+  `netlify/functions/economy.js` (`/api/economy`: collect / buy / sell, nothing else),
+  `netlify/functions/econ-close.js` (hourly; closes each real day once), `src/economy/` (#economy,
+  MY FILE's WALLET and MY APARTMENT, the header's balance chip). Check: `scripts/check-economy.mjs`
+  (`HVI_ECON_PG=1` runs it against a real Postgres too).
+- **UBI:** no daily close needed: COLLECT posts every waiting day (at most 7, from the file's third
+  day) in one txn, each day +1,000 and the citizen's own spending (260-340, fixed by case and day).
+  Older days are never minted ("RETURNED TO THE COMMONS"). Enrolment on first COLLECT: 4 new wallets
+  per IP hash per week, 2 per device id, 1 per secured email; owner cases exempt.
+- **The industry index**, from the last machine day of the real day (60 machine days to a real day):
+  I = 0.5 mood + 0.25 foot traffic (the far view's counts) + 0.25 storefront takings, each the
+  industry's figure over the seven's mean (an industry with no storefronts is neutral on takings).
+  Yield and herding exactly as section 4; credit = trunc(value x ppm / 1e6). No summary: I = 1.
+- **Closed state:** with no ledger configured the board and the apartment still read and every
+  write answers THE TREASURY IS NOT YET OPEN.
+- **Slice 2 needs:** properties / tenancies tables and the Department's stock per ring, rent and
+  upkeep in the daily close (multi-case txns: tenant -> landlord, the reason for Postgres), THE
+  MARKET with the +-20% band, Prefect inspections and evictions, NPC moguls, the Assembly docket
+  for big builds, the `prop` mood factor in the civic fold (the close publishing an `econ` block the
+  next plan reads), and lifting the one-case-per-txn rule only for those formula-priced legs.

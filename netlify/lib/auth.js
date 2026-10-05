@@ -64,6 +64,7 @@ export async function upsertAccount(email, now = Date.now()) {
 export const getAccount = async key => (key ? (await accounts().get(key, { type: "json" })) || null : null);
 
 const ownerCases = () => new Set([OWNER_CASE, ...String(process.env.HVI_OWNER_CASES || "").split(",").map(s => s.trim()).filter(Boolean)]);
+export const isOwnerCase = id => ownerCases().has(id);
 export const isOwnerAccount = account => Boolean(account?.owner || account?.cases?.some(c => ownerCases().has(c)));
 
 // A case belongs to at most one account: a `case:<id>` marker is written onlyIfNew.

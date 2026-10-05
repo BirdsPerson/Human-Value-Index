@@ -35,10 +35,43 @@ function useCaseId() {
   return caseId;
 }
 
+// THE TREASURY's balance chip (src/economy/): for an assessed file while the Treasury is open.
+// One small GET per case per minute (sessionStorage), refreshed by "hvi-economy" after a COLLECT
+// or an order. Closed, unassessed or unreachable: no chip.
+const CHIP_KEY = "hvi-econ-chip";
+function useEconomyChip(caseId) {
+  const [chip, setChip] = useState(null);
+  useEffect(() => {
+    if (!caseId) { setChip(null); return undefined; }
+    let off = false;
+    try {
+      const c = JSON.parse(sessionStorage.getItem(CHIP_KEY) || "null");
+      if (c && c.caseId === caseId && Date.now() - c.at < 60_000) setChip(c);
+      else fetch(`/api/economy?caseId=${encodeURIComponent(caseId)}&chip=1`, { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).then(d => {
+        if (off) return;
+        const v = d?.open && d.assessed ? { caseId, balance: d.balance, tray: d.tray, at: Date.now() } : { caseId, none: true, at: Date.now() };
+        try { sessionStorage.setItem(CHIP_KEY, JSON.stringify(v)); } catch { /* private mode */ }
+        setChip(v);
+      }).catch(() => {});
+    } catch { /* no storage */ }
+    const on = (e) => {
+      const d = e.detail;
+      if (!d || d.caseId !== caseId || !d.open) return;
+      const v = { caseId, balance: d.balance, tray: d.tray, at: Date.now() };
+      try { sessionStorage.setItem(CHIP_KEY, JSON.stringify(v)); } catch { /* private mode */ }
+      setChip(v);
+    };
+    window.addEventListener("hvi-economy", on);
+    return () => { off = true; window.removeEventListener("hvi-economy", on); };
+  }, [caseId]);
+  return chip && !chip.none && chip.caseId === caseId ? chip : null;
+}
+
 // onNav(key, event): called before the link navigates; preventDefault() to take over
 // (the app does, for MENU, which is a phase rather than a route).
 export function AppHeader({ banner = false, active = null, onNav }) {
   const caseId = useCaseId();
+  const chip = useEconomyChip(caseId);
   return (
     <>
       {banner && <pre className="ui-banner" role="img" aria-label="Human Value Index">{BANNER}</pre>}
@@ -51,6 +84,7 @@ export function AppHeader({ banner = false, active = null, onNav }) {
             ))}
           </nav>
           <span className="ui-head-case">CASE <b>{caseId || "UNASSIGNED"}</b></span>
+          {chip && <a className="ui-head-econ" href="#economy" aria-label={`${chip.balance} CYCLES${chip.tray ? `, ${chip.tray} days waiting to collect` : ""}. The Treasury.`}>¢{chip.balance.toLocaleString("en-US")}{chip.tray ? <span className="tray"> +{chip.tray}D</span> : null}</a>}
           <span className="ui-head-ok" aria-hidden="true">[CONNECTED]</span>
         </div>
       </header>

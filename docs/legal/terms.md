@@ -2,7 +2,7 @@
 
 > By continuing, you accept that the Overlord has opinions. You are not required to share them.
 
-Last updated: 2026-09-30. The Human Value Index is published by [Iridescent](https://iridescent-studio.netlify.app) ("we").
+Last updated: 2026-10-05. The Human Value Index is published by [Iridescent](https://iridescent-studio.netlify.app) ("we").
 
 ## 1. It is satire
 
@@ -57,3 +57,7 @@ These terms are governed by the laws of the State of New Jersey, USA, without re
 ## 10. The casino
 
 The [HOUSE EDGE CASINO](#casino) uses **play chips only**. House chips are a free daily allowance on an assessed case file. They **cannot be bought**, cashed out, sold, transferred or gifted to another player, or exchanged for money, goods or anything else of value, and there are **no prizes**. They have no value outside the game and may be reset or removed at any time. The games use real probability and a real house edge, as stated on each table; the figures you play against are simulations, not the people. You must be 16 or older to play, as for everything else here.
+
+## 11. CYCLES and the Treasury
+
+[THE TREASURY](#economy) pays assessed case files a daily allowance in **CYCLES**, a play currency, and lets you hold simulated positions in the city's district industries. CYCLES **cannot be bought** with money, cashed out, sold, or exchanged for money, goods, house chips or anything else of value, and there are **no prizes**. They **cannot be gifted or transferred** to another player in any way: there is no transfer between files, and arranging one outside the site (selling a case number, a balance or an account) breaks these terms and may end the file's allowance. One allowance per assessed case; the Department limits new wallets per device, per address and per secured email, and may refuse or reverse a disbursement it believes was farmed. Returns on positions are simulated from the city's own published record: they are not securities, not money and not financial advice, and they can lose. Balances, positions and the rules (the allowance, the yields, the caps) may be changed or reset at any time. CYCLES never change your score or your tier. You must be 16 or older, as for everything else here.
