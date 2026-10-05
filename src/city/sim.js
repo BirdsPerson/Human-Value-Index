@@ -944,9 +944,16 @@ STORE_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
 for (const [f, m] of Object.entries(STORE_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
 MOUNTAIN_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
 for (const [f, m] of Object.entries(MOUNTAIN_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
-// THE NIGHTLIFE QUARTERS: uptown pulls the top band, downtown the lower two (nightlifeSim.js)
-NIGHT_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
-for (const [f, m] of Object.entries(NIGHT_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
+// THE NIGHTLIFE QUARTERS: uptown pulls the top band, downtown the lower two (nightlifeSim.js).
+// At NIGHT_PULL of their listed strength in the everyday leisure draw, as THE MALL's landmarks and
+// the Phase 2 districts were made lighter: at full pull AURUM and THE MINOR KEY took twelve of the
+// roster's top-two haunts, where social.js sends friends to find each other, and a club shut by
+// day wastes that pull (friend co-location with the feedback on fell to 60 vs 53: check-social).
+// The night out (pickNight) draws among the venues alone, so a uniform scale leaves it unchanged.
+const NIGHT_PULL = 0.7;
+const nightScaled = (m) => Object.fromEntries(Object.entries(m).map(([id, v]) => [id, v * NIGHT_PULL]));
+NIGHT_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], nightScaled(m)));
+for (const [f, m] of Object.entries(NIGHT_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...nightScaled(m) };
 // the sea and the snow, for the sporting and the idle
 for (const [f, w] of Object.entries({ sport: { surf: 0.8, slopes: 1 }, care: { beach: 1 }, visual: { pier: 1.2, beach: 0.8 }, writing: { pier: 1.5 }, music: { boardwalk: 1 }, finance: { slopes: 1.5 }, business: { slopes: 1 }, screen: { beach: 1.2 } })) Object.assign(LEISURE_BY_FIELD[f] ||= {}, w);
 
