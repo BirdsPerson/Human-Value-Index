@@ -33,8 +33,10 @@ export const HINTS = {
   "babe-ruth": { skin: "fair", hair_style: "short", hair_color: "dark_brown" },
   "adam-sandler": { skin: "light_tan", hair_style: "curly", hair_color: "dark_brown", facial_hair: "stubble" },
 };
+// A file sprite whose prop crosses the head: the head's own box, [x, y, w, h] (looks.js headFrom).
+export const CROPS = { "babe-ruth": [10, 1, 10, 12] };
 const BUNDLED = new Set(["jfk", "babe-ruth"]);
 export const golfers = () => GOLFERS.map(([slug, name, rating, shirt, pants, why]) => ({
-  slug, name, rating, shirt, pants, why, hint: HINTS[slug] || null, sprite: BUNDLED.has(slug) ? `/sprites/${slug}.png` : `/api/sprite/${slug}`,
+  slug, name, rating, shirt, pants, why, hint: HINTS[slug] || null, crop: CROPS[slug] || null, sprite: BUNDLED.has(slug) ? `/sprites/${slug}.png` : `/api/sprite/${slug}`,
 }));
 export const golferBySlug = (slug) => golfers().find(g => g.slug === slug) || null;

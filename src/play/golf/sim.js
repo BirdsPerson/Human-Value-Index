@@ -97,7 +97,7 @@ export function newRound(cfg) {
   const mode = cfg.mode === "match" && cfg.cpu ? "match" : "stroke";
   if (mode === "match") players.push(mk(cfg.cpu, "cpu"));
   const st = {
-    v: VERSION, cfg: { seed, course, mode, start, count, player: cfg.player || null, cpu: mode === "match" ? cfg.cpu : null },
+    v: VERSION, cfg: { seed, course, mode, start, count, player: cfg.player || null, cpu: mode === "match" ? cfg.cpu : null, ...(cfg.easy ? { easy: true } : {}) },
     rng: fnv(`golf|${seed}`), mode, course, holes: Array.from({ length: count }, (_, i) => start + i), hi: 0,
     players, cur: 0, honor: players.map((_, i) => i), phase: "intro", t: 0, tick: 0, prev: 0, hold: 0,
     aim: 0, club: 0, meter: null, fl: null, ball: null, wind: null, msg: "", tone: "", ev: [], plan: null, result: null,
@@ -261,14 +261,17 @@ export function step(st, bits = 0) {
 
 function beginMeter(st) {
   st.phase = "meter"; st.t = 0;
-  st.meter = { stage: 1, m: 0, k: 0, rise: CLUBS[st.club].putt ? RISE_PUTT : RISE, power: null, acc: null };
+  // EASY SWING (cfg.easy, the player's side only): the marker climbs a third slower
+  const easy = st.cfg.easy && st.players[st.cur].kind === "human";
+  st.meter = { stage: 1, m: 0, k: 0, rise: Math.round((CLUBS[st.club].putt ? RISE_PUTT : RISE) * (easy ? 1.5 : 1)), power: null, acc: null };
   st.ev.push("swing");
 }
 
 // The meter's reading -> the shot.
 function strike(st) {
   const P = st.players[st.cur], h = holeOf(st), c = CLUBS[st.club], m = st.meter;
-  const a = Math.max(-1.25, Math.min(1.25, -m.acc / ACC_ZONE));     // early (marker above the line): a < 0, a hook
+  // early (marker above the line): a < 0, a hook. EASY SWING keeps two fifths of the miss.
+  const a = Math.max(-1.25, Math.min(1.25, (-m.acc / ACC_ZONE) * (st.cfg.easy && P.kind === "human" ? 0.4 : 1)));
   P.prev = { x: P.x, y: P.y, lie: P.lie };
   P.strokes++;
   st.ev.push(Math.abs(a) > 1 ? "shank" : "hit");
@@ -371,7 +374,7 @@ function penalty(st, kind, x, y) {
     if (s === "ob" || s === "water") { px = P.prev.x; py = P.prev.y; }
     P.x = Math.round(px * 100) / 100; P.y = Math.round(py * 100) / 100;
     P.lie = surfaceAt(h, P.x, P.y);
-    st.msg = "IN THE WATER. +1. THE POND WAS DISCLOSED.";
+    st.msg = "IN THE WATER. +1. THE WATER WAS DISCLOSED.";
   }
   st.tone = "harm";
   st.ball = { x: P.x, y: P.y, z: 0 };

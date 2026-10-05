@@ -163,6 +163,13 @@ function playBot(seed, fmt, key, cap = 60 * 60 * 40) {
     if (st.sc.winner === 0) strong++;
   }
   assert.ok(strong >= 2, `98 beats 40 (${strong}/3)`);
+  // the first-timer's opponent (PLAY NOW): weaker than the floor of the scale. A rating-30 CPU,
+  // the slowest cpuProfile makes, takes more points off it than off the line judge.
+  const easy = R.profileOf(R.EASIEST);
+  assert.ok(easy && easy.speed < S.cpuProfile(0).speed && easy.react > S.cpuProfile(0).react, "the new member is slower than the scale's floor");
+  const ptsOff = (cpu) => { let w = 0, t = 0; for (const seed of [4, 5, 6]) { const st = S.newMatch({ seed, fmt: "short", cpu, auto: S.cpuProfile(30) }); while (st.phase !== "over" && st.frame < 60 * 60 * 60) S.step(st, 0); w += st.won[0]; t += st.won[0] + st.won[1]; } return w / t; };
+  const vsEasy = ptsOff(easy), vsJudge = ptsOff(R.profileOf("line-judge"));
+  assert.ok(vsEasy > vsJudge, `more points off the new member (${vsEasy.toFixed(2)}) than off the line judge (${vsJudge.toFixed(2)})`);
   ok("strength");
 }
 

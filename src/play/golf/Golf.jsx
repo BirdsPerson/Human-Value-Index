@@ -10,6 +10,7 @@ import { golfers, golferBySlug } from "./roster.js";
 import { lookFor, paintCard } from "./looks.js";
 import * as sfx from "./audio.js";
 import "./golf.css";
+import "../pages.css";
 
 // #golf[?vs=<slug>]: THE DEPARTMENT LINKS (docs/CITY_SPEC.md "PLAYABLE SPORTS / Golf"). The course
 // APPLICATION 001 proposed for LOT 0x6F07, which THE ASSEMBLY declined in favour of the farm, played
@@ -45,7 +46,7 @@ function spriteUrl(g) {
   if (!SPRITE_URL.has(g.slug)) SPRITE_URL.set(g.slug, fetch(`/api/figure/${g.slug}`).then(r => (r.ok ? r.json() : null)).then(j => j?.subject?.sprite || null).catch(() => null));
   return SPRITE_URL.get(g.slug);
 }
-const lookOfGolfer = (g) => spriteUrl(g).then(url => lookFor({ url, hint: g.hint, shirt: g.shirt, pants: g.pants }));
+const lookOfGolfer = (g) => spriteUrl(g).then(url => lookFor({ url, hint: g.hint, crop: g.crop, shirt: g.shirt, pants: g.pants }));
 const lookOfMe = (p) => lookFor({ url: p.look?.url || null, spec: p.look?.spec || null, hint: { skin: "tan", hair_style: "short", hair_color: "brown" }, shirt: p.color?.shirt, pants: p.color?.pants });
 
 // The figure as they will play: their face on the standard outfit, 32x48 at 1x.
@@ -67,21 +68,26 @@ function GolfCard({ g }) {
 export default function Golf({ route }) {
   const { vs, course: course0 } = useMemo(() => parseRoute(route), [route]);
   const [course, setCourse] = useState(course0 || "open");
-  const [count, setCount] = useState(18);
+  const [count, setCount] = useState(9);
   const [start, setStart] = useState(0);
+  const [easy, setEasy] = useState(true);
   const [game, setGame] = useState(null);
   const [rounds, setRounds] = useState(loadRounds);
   const [muted, setMuted] = useState(sfx.isMuted());
   const field = useMemo(() => golfers(), []);
   const holes = COURSES[course], par = parOf(holes), yards = holes.reduce((a, h) => a + h.yards, 0);
   const pre = vs ? golferBySlug(vs) : null;
+  const playRef = useRef(null);
+  useEffect(() => { if (!game && !pre) playRef.current?.focus({ preventScroll: true }); }, [game, pre]);
 
-  // demo: the Department's caddie plays the SUBJECT's side with perfect timing (an attract mode)
-  const begin = (g, demo = false) => {
+  // demo: the Department's caddie plays the SUBJECT's side with perfect timing (an attract mode).
+  // o: overrides for PLAY NOW (the open's front nine, easy swing).
+  const begin = (g, demo = false, o = {}) => {
     sfx.unlock();
     const seed = (Math.floor(Math.random() * 0xfffffffe) + 1) >>> 0;
     const p = me();
-    setGame({ key: seed, cfg: { seed, course, mode: g ? "match" : "stroke", start, count, player: demo ? { name: "THE CADDIE", color: { shirt: "#7c7c7c", pants: "#000000" } } : { name: p.name, color: p.color }, cpu: g ? { slug: g.slug, name: g.name, rating: g.rating, color: { shirt: g.shirt, pants: g.pants } } : null }, demo, looks: [demo ? lookFor({ hint: { skin: "light_tan", hair_style: "short", hair_color: "grey" }, shirt: "#7c7c7c", pants: "#000000" }) : lookOfMe(p), ...(g ? [lookOfGolfer(g)] : [])] });
+    const c = { course, start, count, easy, ...o };
+    setGame({ key: seed, cfg: { seed, course: c.course, mode: g ? "match" : "stroke", start: c.start, count: c.count, ...(c.easy && !demo ? { easy: true } : {}), player: demo ? { name: "THE CADDIE", color: { shirt: "#7c7c7c", pants: "#000000" } } : { name: p.name, color: p.color }, cpu: g ? { slug: g.slug, name: g.name, rating: g.rating, color: { shirt: g.shirt, pants: g.pants } } : null }, demo, looks: [demo ? lookFor({ hint: { skin: "light_tan", hair_style: "short", hair_color: "grey" }, shirt: "#7c7c7c", pants: "#000000" }) : lookOfMe(p), ...(g ? [lookOfGolfer(g)] : [])] });
   };
   const done = (rec) => { saveRound(rec); setRounds(loadRounds()); };
   const toggleMute = () => { sfx.setMuted(!muted); setMuted(!muted); };
@@ -99,61 +105,76 @@ export default function Golf({ route }) {
         </>
       ) : (
         <>
-          <Frame box title={course === "open" ? "THE DEPARTMENT OPEN // EIGHTEEN FAMOUS HOLES" : "LOT 0x6F07 // APPLICATION 001"} meta={course === "open" ? "RE-SURVEYED" : "DENIED"}>
-            <div className="gf-opts" role="group" aria-label="Course">
-              {["open", "links"].map(k => (
-                <button key={k} type="button" className="gf-opt" aria-pressed={course === k} onClick={() => setCourse(k)}>{COURSE_NAME[k]}</button>
-              ))}
+          <p className="pg-lede">GOLF ON FAMOUS HOLES, AGAINST THE COURSE OR A FIGURE ON FILE. LEFT AND RIGHT AIM. EACH SHOT IS THREE PRESSES OF SPACE (SWING ON A PHONE): START, POWER, THEN ON THE LINE. SOUND IS OPTIONAL.</p>
+          <div className="pg-start">
+            <Button variant="primary" ref={playRef} onClick={() => begin(pre, false, pre ? {} : { course: "open", start: 0, count: 9, easy: true })}>{pre ? `PLAY ${pre.name}` : "PLAY NOW"}</Button>
+            <span className="pg-sub">{pre ? `MATCH PLAY, ${count} HOLES${easy ? ", EASY SWING" : ""}.` : "THE FRONT NINE OF THE DEPARTMENT OPEN, EASY SWING ON."}</span>
+          </div>
+          <details className="pg-more" open={Boolean(pre)}>
+            <summary>COURSE, HOLES AND EASY SWING</summary>
+            <div className="pg-more-body">
+              <div className="gf-opts" role="group" aria-label="Course">
+                {["open", "links"].map(k => (
+                  <button key={k} type="button" className="gf-opt" aria-pressed={course === k} onClick={() => setCourse(k)}>{COURSE_NAME[k]}</button>
+                ))}
+              </div>
+              {course === "open"
+                ? <p className="gf-p">EIGHTEEN OF THE WORLD'S MOST FAMOUS HOLES, RE-SURVEYED BY THE DEPARTMENT FROM THE PUBLIC RECORD: PAR {par.front + par.back}, {yards.toLocaleString("en-US")} YARDS. THE CLIFFS, THE CREEKS AND THE ISLAND ARE WHERE THEY ARE.</p>
+                : <p className="gf-p">APPLICATION 001 PROPOSED A GOLF COURSE FOR LOT 0x6F07. THE ASSEMBLY VOTED FOR THE FARM. THE DEPARTMENT KEPT THE DRAWINGS: PAR {par.front + par.back}, {yards.toLocaleString("en-US")} YARDS. PLAY THEM HERE, WHERE THEY DO NOT EXIST.</p>}
+              <div className="gf-opts" role="group" aria-label="Holes">
+                {[[0, 9, "FRONT NINE"], [9, 9, "BACK NINE"], [0, 18, "18 HOLES"]].map(([s, c, l]) => (
+                  <button key={l} type="button" className="gf-opt" aria-pressed={start === s && count === c} onClick={() => { setStart(s); setCount(c); }}>{l}</button>
+                ))}
+              </div>
+              <div className="gf-opts">
+                <button type="button" className="pg-toggle" aria-pressed={easy} onClick={() => setEasy(!easy)}>EASY SWING</button>
+                <span className="gf-p dim">A SLOWER METER, AND A MISSED LINE CURVES LESS. YOUR SIDE ONLY.</span>
+              </div>
+              <ButtonRow>
+                <Button variant="primary" onClick={() => begin(null)}>STROKE PLAY, ALONE</Button>
+                <Button variant="secondary" onClick={() => begin(null, true)}>WATCH THE CADDIE PLAY</Button>
+              </ButtonRow>
             </div>
-            {course === "open"
-              ? <p className="gf-p">EIGHTEEN OF THE WORLD'S MOST FAMOUS HOLES, RE-SURVEYED BY THE DEPARTMENT AND DRAWN FROM THE PUBLIC RECORD: PAR {par.front + par.back}, {yards.toLocaleString("en-US")} YARDS. THE CLIFFS, THE CREEKS AND THE ISLAND ARE WHERE THEY ARE. THE DEPARTMENT ADDED ITS NOTES.</p>
-              : <p className="gf-p">APPLICATION 001 PROPOSED AN 18-HOLE GOLF COURSE FOR LOT 0x6F07. THE ASSEMBLY VOTED FOR THE FARM. THE DEPARTMENT KEPT THE DRAWINGS: EIGHTEEN HOLES, PAR {par.front + par.back}, {yards.toLocaleString("en-US")} YARDS. YOU MAY PLAY THEM HERE, WHERE THEY DO NOT EXIST.</p>}
-            <p className="gf-p dim">EXHIBITION ONLY. NO STANDINGS, NO CUP POINTS, NO PRIZES. THE CARD STAYS IN THIS BROWSER.</p>
-            <div className="gf-opts" role="group" aria-label="Holes">
-              {[[0, 18, "18 HOLES"], [0, 9, "FRONT NINE"], [9, 9, "BACK NINE"]].map(([s, c, l]) => (
-                <button key={l} type="button" className="gf-opt" aria-pressed={start === s && count === c} onClick={() => { setStart(s); setCount(c); }}>{l}</button>
-              ))}
+          </details>
+          <details className="pg-more" open={Boolean(pre)}>
+            <summary>PLAY A MATCH AGAINST A FIGURE ({field.length} ON FILE)</summary>
+            <div className="pg-more-body">
+              <p className="gf-p">HOLE BY HOLE; THE LOWER SCORE TAKES THE HOLE. STRENGTH FOLLOWS THE FIGURE'S GOLF RATING. THE FIGURES PLAY IN SILENCE. THE HOLES AND EASY SWING ABOVE APPLY.</p>
+              <ul className="gf-opps">
+                {field.map(g => (
+                  <li key={g.slug}>
+                    <button type="button" className="gf-opp" onClick={() => begin(g)} aria-label={`Play ${g.name}, golf rating ${g.rating}`}>
+                      <GolfCard g={g} />
+                      <span className="nm"><b>{g.name}</b><span className="why">{g.why}</span></span>
+                      <span className="rt">{g.rating}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <ButtonRow>
-              <Button variant="primary" onClick={() => begin(null)}>STROKE PLAY, ALONE</Button>
-              <Button variant="secondary" onClick={() => begin(null, true)}>WATCH THE CADDIE PLAY</Button>
-              {pre && <Button variant="primary" onClick={() => begin(pre)}>{`MATCH V ${pre.name}`}</Button>}
-            </ButtonRow>
-          </Frame>
-          <Frame box title="A MATCH AGAINST A FIGURE" meta={`${field.length} ON FILE`}>
-            <p className="gf-p">MATCH PLAY: HOLE BY HOLE, LOWER SCORE TAKES THE HOLE. STRENGTH FOLLOWS THE FIGURE'S GOLF RATING. THE FIGURES PLAY IN SILENCE.</p>
-            <ul className="gf-opps">
-              {field.map(g => (
-                <li key={g.slug}>
-                  <button type="button" className="gf-opp" onClick={() => begin(g)}>
-                    <GolfCard g={g} />
-                    <span className="nm"><b>{g.name}</b><span className="why">{g.why}</span></span>
-                    <span className="rt">{g.rating}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </Frame>
+          </details>
           <Rounds rounds={rounds} />
+          <p className="gf-p dim">EXHIBITION ONLY. NO STANDINGS, NO CUP POINTS, NO PRIZES. THE CARD STAYS IN THIS BROWSER.</p>
         </>
       )}
-      <Controls />
+      <details className="pg-more">
+        <summary>HOW TO PLAY</summary>
+        <div className="pg-more-body"><Controls /></div>
+      </details>
     </div>
   );
 }
 
 function Controls() {
   return (
-    <Frame title="CONTROLS" meta="KEYS // PAD // TOUCH">
-      <dl className="gf-keys">
-        <dt>AIM</dt><dd>LEFT / RIGHT (ARROWS, D-PAD, STICK). HOLD TO AIM FASTER.</dd>
-        <dt>SWING</dt><dd>SPACE OR Z (PAD: A / CROSS). PRESS TO START, PRESS FOR POWER, PRESS ON THE RED LINE. EARLY HOOKS, LATE SLICES.</dd>
-        <dt>CLUB</dt><dd>X OR DOWN: SHORTER. UP: LONGER. (PAD: B / CIRCLE, BUMPERS.)</dd>
-        <dt>PAUSE</dt><dd>ENTER (PAD: START).</dd>
-        <dt>THE GREEN</dt><dd>THE ARROWS ON THE GREEN POINT DOWNHILL. DARKER IS STEEPER. THE PUTTER'S METER IS SLOWER.</dd>
-        <dt>THE WINDOW</dt><dd>TOP RIGHT: THE HOLE FROM ABOVE, YOUR AIM, THE PIN AND THE WIND. CLOSE TO THE GREEN IT SHOWS THE GREEN.</dd>
-      </dl>
-    </Frame>
+    <dl className="gf-keys">
+      <dt>AIM</dt><dd>LEFT / RIGHT (ARROWS, D-PAD, STICK, OR THE ARROW BUTTONS ON A PHONE). HOLD TO AIM FASTER.</dd>
+      <dt>SWING</dt><dd>SPACE OR Z (PAD: A / CROSS; PHONE: SWING). PRESS TO START, PRESS FOR POWER, PRESS ON THE RED LINE. EARLY HOOKS, LATE SLICES.</dd>
+      <dt>CLUB</dt><dd>X OR DOWN: SHORTER. UP: LONGER. (PAD: B / CIRCLE, BUMPERS. PHONE: CLUB.)</dd>
+      <dt>PAUSE</dt><dd>ENTER (PAD: START; PHONE: II).</dd>
+      <dt>THE GREEN</dt><dd>THE ARROWS ON THE GREEN POINT DOWNHILL. DARKER IS STEEPER. THE PUTTER'S METER IS SLOWER.</dd>
+      <dt>THE WINDOW</dt><dd>TOP RIGHT: THE HOLE FROM ABOVE, YOUR AIM, THE PIN AND THE WIND. CLOSE TO THE GREEN IT SHOWS THE GREEN.</dd>
+    </dl>
   );
 }
 
@@ -183,6 +204,8 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
   const [card, setCard] = useState(null);
   const [scale, setScale] = useState({ css: W, k: 1 });
   const [pad, setPad] = useState(null);
+  const [say, setSay] = useState("");   // the screen reader's line: the hole, then each shot's verdict
+  const coarse = useMemo(() => { try { return window.matchMedia("(pointer: coarse)").matches; } catch { return false; } }, []);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
   const togglePause = () => { pausedRef.current = !pausedRef.current; setPaused(pausedRef.current); };
@@ -205,7 +228,7 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
     const looks = [];
     (lookP || []).forEach((p, i) => Promise.resolve(p).then(l => { if (l) { l.card = paintCard(l); looks[i] = l; } }).catch(() => {}));
     const keys = new Set();
-    let raf = 0, last = performance.now(), acc = 0, frame = 0, prevStart = false, phase = st.phase, hi = st.hi, recorded = false;
+    let raf = 0, last = performance.now(), acc = 0, frame = 0, prevStart = false, phase = st.phase, hi = st.hi, recorded = false, said = "";
     const ctx = canvas.current.getContext("2d");
     const kd = (e) => {
       if (typing(e)) return;
@@ -249,8 +272,11 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
         for (const e of st.ev) sfx.play(e);
         st.ev.length = 0;
       }
+      if (st.msg !== said) { said = st.msg; if (said) setSay(said); }
       if (st.phase !== phase || st.hi !== hi) {
         phase = st.phase; hi = st.hi;
+        if (phase === "intro") { const r = cardOf(st).rows[hi]; if (r) setSay(`HOLE ${r.n}. PAR ${r.par}. ${r.yards} YARDS. WIND ${st.wind?.mph ?? 0} MPH.`); }
+        if (phase === "holeEnd") { const c = cardOf(st); setSay(`HOLE DONE. THRU ${c.played}: ${toParText(c.toPar[0])}.`); }
         if (phase === "holeEnd" || phase === "done" || phase === "intro") setCard(cardOf(st));
         if (phase === "done" && !recorded) {
           recorded = true;
@@ -278,7 +304,8 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
         <canvas ref={canvas} width={W} height={H} style={{ width: scale.css, height: (scale.css * H) / W }}
           aria-label="Golf: the golfer from behind with the hole running away to the horizon, the hole from above in the corner window, the swing meter along the bottom." role="img" />
       </div>
-      <div className="gf-status" aria-live="polite">{pad ? `CONTROLLER: ${pad.toUpperCase()}` : "KEYS: ARROWS AIM // SPACE SWINGS // X CLUB // ENTER PAUSES"}{muted ? " // MUTED" : ""}</div>
+      <div className="gf-status">{pad ? `CONTROLLER: ${pad.toUpperCase()}` : coarse ? "\u25C0 \u25B6 AIM // SWING, THREE TAPS // CLUB // II PAUSES" : "KEYS: ARROWS AIM // SPACE SWINGS // X CLUB // ENTER PAUSES"}{muted ? " // MUTED" : ""}{cfg.easy ? " // EASY SWING" : ""}</div>
+      <p className="sr-only" aria-live="polite" aria-atomic="true">{say}</p>
       <div className="gf-touch" aria-label="Touch controls">
         <button type="button" className="gf-tb" aria-label="Aim left" {...hold(BTN.L)}>&#9664;</button>
         <button type="button" className="gf-tb" aria-label="Aim right" {...hold(BTN.R)}>&#9654;</button>

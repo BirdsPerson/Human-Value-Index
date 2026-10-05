@@ -17,9 +17,15 @@ export const OPPONENTS = [
     spec: { skin: "light_tan", hair_style: "short", hair_color: "blonde", build: "average", top_color: "green", bottom_color: "white", facial_hair: "none", accessory: "cap" } },
   { key: "line-judge", name: "A LINE JUDGE ON A DAY OFF", rating: 40, died: null, regular: true, note: "HAS CALLED TWELVE THOUSAND BALLS. HAS HIT ELEVEN.", kit: ["#1f2f5a", "#8a8a8a"],
     spec: { skin: "porcelain", hair_style: "side_part", hair_color: "white", build: "average", top_color: "navy", bottom_color: "grey", facial_hair: "none", accessory: "none" } },
+  // the first-timer's opponent: slower than the scale goes (cpuProfile floors at rating 30), late to
+  // the ball, loose with it. A point is there to be won.
+  { key: "new-member", name: "A NEW MEMBER", rating: 20, died: null, regular: true, easy: true, note: "JOINED THIS MORNING. HAS READ THE RULES ONCE.", kit: ["#e6e6e6", "#3c8a46"],
+    profile: { rating: 20, sk: 0, speed: 3.4, react: 34, acc: 0.3, power: 0.3, judge: 0.3, reach: 0.9 },
+    spec: { skin: "tan", hair_style: "curly", hair_color: "dark_brown", build: "average", top_color: "white", bottom_color: "green", facial_hair: "none", accessory: "none" } },
 ];
 export const OPP_BY_KEY = new Map(OPPONENTS.map(o => [o.key, o]));
-export const profileOf = (key) => { const o = OPP_BY_KEY.get(key); return o ? cpuProfile(o.rating) : null; };
+export const profileOf = (key) => { const o = OPP_BY_KEY.get(key); return o ? (o.profile ? { ...o.profile } : cpuProfile(o.rating)) : null; };
+export const EASIEST = "new-member";
 export const spriteOf = (o) => (o.spec ? null : `/api/sprite/${o.key}`);
 
 // The dead: written lines only, about the game, never the opponent.

@@ -158,5 +158,11 @@ ok(JSON.stringify(oa.st.result) !== JSON.stringify(a.st.result), "the open is an
 const la = autoplay({ ...cfg, course: "links" });
 ok(JSON.stringify(la.st.result) === JSON.stringify(a.st.result) && JSON.stringify(la.log) === JSON.stringify(a.log), "no course named: the links, tick for tick");
 ok(replay({ ...cfg }, a.log).tick === a.st.tick, "old links rounds (no course in cfg) still replay");
+// EASY SWING: off is the round exactly; on replays from its own log, and is kept in the record's cfg
+const fa = autoplay({ ...cfg, easy: false });
+ok(JSON.stringify(fa.st.result) === JSON.stringify(a.st.result) && JSON.stringify(fa.log) === JSON.stringify(a.log), "easy: false is the round, tick for tick");
+const ea = autoplay({ ...cfg, easy: true }), erp = replay({ ...cfg, easy: true }, ea.log);
+ok(ea.st.phase === "done" && ea.st.cfg.easy === true && !a.st.cfg.easy, "an easy round finishes and says so in its cfg");
+ok(JSON.stringify(erp.result) === JSON.stringify(ea.st.result) && erp.tick === ea.st.tick, "an easy round replays tick for tick");
 
 console.log(`check-golf: ${n} checks passed. 9 holes by the bot: ${a.st.result.total[0]} (${toParText(a.st.result.toPar[0])}); ${cfg.cpu.name}: ${a.st.result.total[1]}. The open, 18 by the bot: ${oa.st.result.total[0]} (${toParText(oa.st.result.toPar[0])}).`);

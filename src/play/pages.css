@@ -1,0 +1,48 @@
+/* The games and civic pages (tennis, golf, chess, casino, the Assembly, the docket, the elections,
+   the treasury): one way to open, one reading size. Scoped to each page's root class, so the
+   global tokens (src/ui/tokens.css) stay as they are everywhere else.
+
+   .pg-lede   the page's one plain-English line: what this is, what to press
+   .pg-start  the obvious first button(s) under it
+   .pg-more   everything else, folded: <details class="pg-more"><summary>...</summary>...</details> */
+
+.tn, .gf, .ch, .cz, .asm, .dk, .el, .ec { font-size: var(--t-s); }
+
+.pg-lede { margin: 0 0 var(--s3); max-width: 64ch; font-size: var(--t-m); line-height: var(--lh); color: var(--fg); text-transform: none; letter-spacing: 0; }
+.pg-start { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); margin: 0 0 var(--s5); }
+.pg-start .pg-sub { color: var(--fg-mute); font-size: var(--t-xs); }
+
+.pg-more { margin: 0 0 var(--s4); border: var(--bw) solid var(--line); }
+.pg-more > summary { display: flex; align-items: center; gap: var(--s2); min-height: var(--hit); padding: 0 var(--s3); cursor: pointer; list-style: none; color: var(--fg-dim); letter-spacing: 0.06em; }
+.pg-more > summary::-webkit-details-marker { display: none; }
+.pg-more > summary::before { content: "+"; color: var(--accent); font-weight: 700; width: 1ch; }
+.pg-more[open] > summary::before { content: "\2212"; }
+.pg-more > summary:hover { color: var(--fg); background: var(--panel-hi); }
+.pg-more > summary:focus-visible { outline: var(--focus); outline-offset: -2px; color: var(--fg); }
+.pg-more > .pg-more-body { padding: 0 var(--s3) var(--s3); }
+
+/* a toggle that reads as a switch: [x] EASY SWING */
+.pg-toggle { display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--hit-min); padding: 0 var(--s3); font: inherit; color: var(--fg-dim); background: none; border: var(--bw) solid var(--line); cursor: pointer; letter-spacing: 0.04em; }
+.pg-toggle[aria-pressed="true"] { color: var(--fg); border-color: var(--accent); }
+.pg-toggle::before { content: "[ ]"; color: var(--fg-mute); }
+.pg-toggle[aria-pressed="true"]::before { content: "[x]"; color: var(--accent); }
+.pg-toggle:focus-visible { outline: var(--focus); outline-offset: 2px; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* every control on these pages shows where the keyboard is */
+:is(.tn, .gf, .ch, .cz, .asm, .dk, .el, .ec) :is(a, button, summary, input, select, [tabindex]):focus-visible { outline: var(--focus); outline-offset: 2px; }
+
+/* phones: body text at 16, the floor at 14 */
+@media (max-width: 600px) {
+  .tn, .gf, .ch, .cz, .asm, .dk, .el, .ec { --t-xs: 14px; --t-s: 16px; --t-m: 17px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.tn, .gf, .ch, .cz, .asm, .dk, .el, .ec) *, :is(.tn, .gf, .ch, .cz, .asm, .dk, .el, .ec) *::before, :is(.tn, .gf, .ch, .cz, .asm, .dk, .el, .ec) *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* the start button reads as the one thing to press: inverse video, a full row on a phone */
+.pg-start .ui-btn.primary { min-height: var(--hit); padding: 0 var(--s4); background: var(--accent); color: var(--accent-ink); font-size: var(--t-m); letter-spacing: 0.06em; }
+.pg-start .ui-btn.primary:hover { background: var(--fg); }
+@media (max-width: 600px) { .pg-start .ui-btn.primary { width: 100%; justify-content: center; } }

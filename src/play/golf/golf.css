@@ -14,7 +14,7 @@
 .gf-opp .nm b { font-weight: 700; letter-spacing: 0.04em; }
 .gf-opp .why { font-size: var(--t-xs); color: var(--fg-mute); overflow-wrap: anywhere; }
 .gf-opp .rt { font-variant-numeric: tabular-nums; color: var(--warn); font-weight: 700; }
-.gf-sprite { flex: none; width: 32px; height: 48px; display: inline-flex; align-items: center; justify-content: center; background-repeat: no-repeat; background-size: auto 100%; background-position: 0 0; image-rendering: pixelated; border: var(--bw) solid var(--line); background-color: var(--panel); color: var(--fg-mute); font-size: var(--t-xs); }
+.gf-sprite { flex: none; width: 64px; height: 96px; display: inline-flex; align-items: center; justify-content: center; background-repeat: no-repeat; background-size: auto 100%; background-position: 0 0; image-rendering: pixelated; border: var(--bw) solid var(--line); background-color: var(--panel); color: var(--fg-mute); font-size: var(--t-xs); }
 
 .gf-play { margin: 0 0 var(--s4); }
 .gf-stage { display: flex; justify-content: center; background: #000; border: var(--bw) solid var(--line); padding: var(--s2) 0; }
@@ -34,6 +34,7 @@
 .gf-keys dd { margin: 0; color: var(--fg-dim); }
 
 .gf-card-wrap { overflow-x: auto; }
+
 .gf-card { border-collapse: collapse; font-size: var(--t-xs); font-variant-numeric: tabular-nums; margin: 0 0 var(--s3); min-width: 100%; }
 .gf-card th, .gf-card td { padding: 2px 6px; text-align: center; border: var(--bw) solid var(--line); }
 .gf-card th[scope="row"] { text-align: left; color: var(--fg-dim); font-weight: 400; white-space: nowrap; }
@@ -42,3 +43,12 @@
 .gf-card td.o { color: var(--harm); }
 .gf-rounds { list-style: none; margin: 0; padding: 0; font-size: var(--t-xs); color: var(--fg-dim); display: grid; gap: 2px; }
 .gf-rounds li::before { content: "> "; color: var(--fg-mute); }
+
+/* a phone: each nine fits the width, no sideways scroll */
+@media (max-width: 600px) {
+  .gf-sprite { width: 48px; height: 72px; }
+  .gf-card { table-layout: fixed; width: 100%; font-size: 13px; }
+  .gf-card th, .gf-card td { padding: 2px 0; }
+  .gf-card th[scope="row"], .gf-card thead th:first-child { width: 7.5ch; padding-left: 2px; overflow: hidden; text-overflow: clip; }
+  .gf-card thead th:last-child, .gf-card td:last-child { width: 4ch; }
+}.gf-opts .gf-p { margin: 0; align-self: center; }

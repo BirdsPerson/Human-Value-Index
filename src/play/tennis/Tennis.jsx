@@ -6,12 +6,13 @@ import { DEFAULT_SPEC, AVATAR_ENUMS, CLOTH } from "../../avatar.js";
 import { readPad, GLYPHS } from "../../city/gamepad.js";
 import { newMatch, step, rleEncode, resultOf, replay, serverOfMatch, VERSION, BTN } from "./sim.js";
 import { FORMATS } from "./score.js";
-import { OPPONENTS, OPP_BY_KEY, profileOf, spriteOf, talkFor } from "./roster.js";
+import { OPPONENTS, OPP_BY_KEY, EASIEST, profileOf, spriteOf, talkFor } from "./roster.js";
 import { draw, drawCutaway, headFrom, faceBox, speakerAt, W, H } from "./render.js";
 import { createShow } from "./show.js";
 import { createInput } from "./input.js";
 import * as SFX from "./audio.js";
 import CSS from "./tennis.css?inline";
+import "../pages.css";
 
 // #tennis[?vs=<key>][&fmt=short]: THE TENNIS CLUB, playable (docs/CITY_SPEC.md "PLAYABLE SPORTS",
 // Tennis). Phase 1: exhibitions only. Nothing here reaches the ladder, the Cup, a league or a file:
@@ -59,7 +60,7 @@ export default function Tennis({ route }) {
   const [opp, setOpp] = useState(() => (vs && OPP_BY_KEY.get(vs)) || null);
   const [match, setMatch] = useState(null);   // {seed, key: n}
   const [done, setDone] = useState(null);
-  const start = (o) => { SFX.unlock(); setOpp(o); setDone(null); setMatch({ seed: seedNow(), n: Date.now() }); };
+  const start = (o, f) => { SFX.unlock(); if (f) setFmt(f); setOpp(o); setDone(null); setMatch({ seed: seedNow(), n: Date.now() }); };
   return (
     <div className="tn">
       <ScreenHead title="THE TENNIS CLUB" meta="THE SHOW COURT // EXHIBITION // NOTHING IS AT STAKE. EVERYTHING IS RECORDED." />
@@ -67,7 +68,7 @@ export default function Tennis({ route }) {
         ? <Match key={match.n} seed={match.seed} fmt={fmt} opp={opp} me={me} onDone={setDone} onQuit={() => setMatch(null)} />
         : done
           ? <Done done={done} me={me} onAgain={() => start(opp)} onPick={() => { setDone(null); setMatch(null); }} />
-          : <Picker fmt={fmt} setFmt={setFmt} pre={opp?.key || null} onPick={start} />}
+          : <Picker fmt={fmt} setFmt={setFmt} pre={vs ? opp?.key || null : null} onPick={start} />}
     </div>
   );
 }
@@ -76,10 +77,15 @@ function seedNow() {
 }
 
 // ---- choosing ------------------------------------------------------------------------------------
+// One line, one button: PLAY NOW is a short match against the easiest member. The rest is folded.
 function Picker({ fmt, setFmt, pre, onPick }) {
   const [sel, setSel] = useState(() => Math.max(0, OPPONENTS.findIndex(o => o.key === pre)));
-  const refs = useRef([]);
-  // a controller can choose too: up / down, A or Start
+  const [more, setMore] = useState(Boolean(pre));
+  const refs = useRef([]), playRef = useRef(null);
+  const quick = () => onPick(OPP_BY_KEY.get(EASIEST), "short");
+  useEffect(() => { if (!pre) playRef.current?.focus({ preventScroll: true }); }, [pre]);
+  // a controller can choose too: A or Start plays now; with the list open, up / down picks
+  const moreRef = useRef(more); moreRef.current = more;
   useEffect(() => {
     let raf, prev = null, held = 0;
     const tick = () => {
@@ -87,61 +93,71 @@ function Picker({ fmt, setFmt, pre, onPick }) {
       const p = readPad();
       if (!p.connected) { prev = null; return; }
       const dir = p.y > 0.5 ? 1 : p.y < -0.5 ? -1 : 0;
-      if (dir && held <= 0) { setSel(s => { const n = (s + dir + OPPONENTS.length) % OPPONENTS.length; refs.current[n]?.focus(); return n; }); held = 14; } else if (!dir) held = 0; else held--;
-      if (prev && ((p.held.act && !prev.act) || (p.held.start && !prev.start))) setSel(s => { onPick(OPPONENTS[s]); return s; });
+      if (moreRef.current && dir && held <= 0) { setSel(s => { const n = (s + dir + OPPONENTS.length) % OPPONENTS.length; refs.current[n]?.focus(); return n; }); held = 14; } else if (!dir) held = 0; else held--;
+      if (prev && ((p.held.act && !prev.act) || (p.held.start && !prev.start))) { if (moreRef.current) setSel(s => { onPick(OPPONENTS[s]); return s; }); else quick(); }
       prev = p.held;
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [onPick]);
+  }, [onPick]);   // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      <p className="tn-notice"><b>EXHIBITION.</b> {NOTICE} NOT ON THE LADDER, NOT IN THE CUP, NOT ON YOUR FILE. THE DEPARTMENT KEEPS THE TAPE ANYWAY.</p>
-      <Frame box title="CHOOSE AN OPPONENT" meta={`${OPPONENTS.length} ON COURT`}>
-        <p className="tn-p">THE CLUB'S PLAYERS ON FILE, THEN TWO OF THE CLUB'S OWN. SPEED, REACH AND NERVE FOLLOW THE RATING.</p>
-        <ul className="tn-opps">
-          {OPPONENTS.map((o, i) => (
-            <li key={o.key}>
-              <button type="button" ref={el => { refs.current[i] = el; }} className={`tn-opp${i === sel ? " sel" : ""}`} onClick={() => onPick(o)} onFocus={() => setSel(i)}>
-                <Face spec={o.spec} url={spriteOf(o)} />
-                <span className="nm">{o.name}<span className="tag">{o.regular ? o.note : "ON FILE // A CLUB PLAYER. RATED BY THE CLUB, NOT BY THE DEPARTMENT."}</span></span>
-                <span className="rt">{o.rating}</span>
+      <p className="pg-lede">TENNIS AGAINST THE COMPUTER. ARROW KEYS MOVE, Z SWINGS, Z TWICE SERVES. A CONTROLLER WORKS, AND PHONES GET A PAD ON SCREEN. SOUND IS OPTIONAL.</p>
+      <div className="pg-start">
+        <Button variant="primary" ref={playRef} onClick={quick}>PLAY NOW</Button>
+        <span className="pg-sub">FIRST TO 4 GAMES, AGAINST THE EASIEST MEMBER OF THE CLUB.</span>
+      </div>
+      <details className="pg-more" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
+        <summary>CHOOSE AN OPPONENT AND MATCH LENGTH ({OPPONENTS.length} ON COURT)</summary>
+        <div className="pg-more-body">
+          <div className="tn-fmt" role="radiogroup" aria-label="Match length">
+            {Object.values(FORMATS).map(f => (
+              <button key={f.id} type="button" role="radio" aria-checked={fmt === f.id} className={`tn-chip${fmt === f.id ? " on" : ""}`} onClick={() => setFmt(f.id)}>
+                {f.id === "set" ? "ONE SET, TIEBREAK AT 6-ALL" : "FIRST TO 4 GAMES"}
               </button>
-            </li>
-          ))}
-        </ul>
-        <div className="tn-fmt" role="radiogroup" aria-label="Format">
-          {Object.values(FORMATS).map(f => (
-            <button key={f.id} type="button" role="radio" aria-checked={fmt === f.id} className={`tn-chip${fmt === f.id ? " on" : ""}`} onClick={() => setFmt(f.id)}>
-              {f.id === "set" ? "ONE SET, TIEBREAK AT 6-ALL" : "FIRST TO 4 GAMES"}
-            </button>
-          ))}
+            ))}
+          </div>
+          <p className="tn-small">THEN PICK WHO TO PLAY; THE MATCH STARTS AT ONCE. SPEED, REACH AND NERVE FOLLOW THE RATING.</p>
+          <ul className="tn-opps">
+            {OPPONENTS.map((o, i) => (
+              <li key={o.key}>
+                <button type="button" ref={el => { refs.current[i] = el; }} className={`tn-opp${i === sel ? " sel" : ""}`} onClick={() => onPick(o)} onFocus={() => setSel(i)} aria-label={`Play ${o.name}, rated ${o.rating}`}>
+                  <Face spec={o.spec} url={spriteOf(o)} />
+                  <span className="nm">{o.name}<span className="tag">{o.regular ? o.note : "ON FILE // A CLUB PLAYER. RATED BY THE CLUB, NOT BY THE DEPARTMENT."}</span></span>
+                  <span className="rt">{o.rating}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
-      </Frame>
-      <Controls />
+      </details>
+      <details className="pg-more">
+        <summary>HOW TO PLAY</summary>
+        <div className="pg-more-body"><Controls /></div>
+      </details>
+      <p className="tn-notice"><b>EXHIBITION.</b> {NOTICE} NOT ON THE LADDER, NOT IN THE CUP, NOT ON YOUR FILE. THE DEPARTMENT KEEPS THE TAPE ANYWAY.</p>
     </>
   );
 }
 
 function Controls() {
   return (
-    <Frame title="CONTROLS" meta="KEYS // PAD // TOUCH">
-      <dl className="tn-keys">
-        <dt>MOVE</dt><dd>ARROWS / WASD // STICK OR D-PAD</dd>
-        <dt>A</dt><dd>Z OR J // PAD A: SWING. A HIGH BALL IS SMASHED.</dd>
-        <dt>B</dt><dd>X OR K // PAD B: LOB. HOLD DOWN FOR A SLICE.</dd>
-        <dt>AIM</dt><dd>HOLD A DIRECTION AS YOU HIT: LEFT / RIGHT FOR THE LINES, UP DEEP, DOWN SHORT.</dd>
-        <dt>SERVE</dt><dd>A TOSSES. A AGAIN JUST UNDER THE TOP OF THE TOSS (THE GREEN BAND BESIDE YOU). LEFT / RIGHT AIMS.</dd>
-        <dt>PAUSE</dt><dd>ENTER // START</dd>
-        <dt>CAMERA</dt><dd>BETWEEN POINTS THE BROADCAST MAY FIND SOMEONE IN THE STAND. A OR B (OR A TAP) RETURNS TO THE MATCH.</dd>
-      </dl>
-      <p className="tn-small">THE SAME LEGEND SITS UNDER THE COURT DURING PLAY, IN YOUR CONTROLLER'S OWN BUTTONS.</p>
-    </Frame>
+    <dl className="tn-keys">
+      <dt>MOVE</dt><dd>ARROWS / WASD // STICK OR D-PAD // THE ROUND PAD ON A PHONE</dd>
+      <dt>A</dt><dd>Z OR J // PAD A: SWING. A HIGH BALL IS SMASHED.</dd>
+      <dt>B</dt><dd>X OR K // PAD B: LOB. HOLD DOWN FOR A SLICE.</dd>
+      <dt>AIM</dt><dd>HOLD A DIRECTION AS YOU HIT: LEFT / RIGHT FOR THE LINES, UP DEEP, DOWN SHORT.</dd>
+      <dt>SERVE</dt><dd>A TOSSES. A AGAIN AS THE BALL DROPS INTO THE GREEN BAND BESIDE YOU. LEFT / RIGHT AIMS.</dd>
+      <dt>PAUSE</dt><dd>ENTER / ESC // START</dd>
+      <dt>CAMERA</dt><dd>BETWEEN POINTS THE BROADCAST MAY FIND SOMEONE IN THE STAND. A OR B (OR A TAP) RETURNS TO THE MATCH. TURN IT OFF UNDER THE COURT.</dd>
+    </dl>
   );
 }
 
 // ---- the legend under the court: what each button does, in the hands you are using ---------------
 const LEGEND_KEY = "hvi-tennis-legend", CUTS_KEY = "hvi-tennis-cutaways";
+// a reduced-motion setting starts the crowd cameras off (the viewer can still turn them on)
+const REDUCED = () => { try { return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches); } catch { return false; } };
 const readFlag = (k, dflt) => { try { const v = localStorage.getItem(k); return v === null ? dflt : v === "1"; } catch { return dflt; } };
 const writeFlag = (k, v) => { try { localStorage.setItem(k, v ? "1" : "0"); } catch { /* the tab remembers */ } };
 export function legendRows(mode, family) {
@@ -222,8 +238,8 @@ function Match({ seed, fmt, opp, me, onDone, onQuit }) {
   const [scale, setScale] = useState(1);
   const [pad, setPad] = useState(null);
   const [touch, setTouch] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer: coarse)").matches));
-  const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, true));
-  const [cutsOn, setCutsOn] = useState(() => readFlag(CUTS_KEY, true));
+  const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, !touch));
+  const [cutsOn, setCutsOn] = useState(() => readFlag(CUTS_KEY, !REDUCED()));
   const [over, setOver] = useState(null);   // {bubble, cut}: the broadcast's words on the picture
   const [tell] = useState(() => talkFor(opp, "start", seed % 3));
   const pausedRef = useRef(false), mutedRef = useRef(muted);
@@ -254,7 +270,7 @@ function Match({ seed, fmt, opp, me, onDone, onQuit }) {
     const log = [];
     const input = createInput(); inputRef.current = input;
     // the broadcast: its own generator, reads the match, never writes it (show.js)
-    const show = createShow({ seed, names, opp: opp.key, cutaways: readFlag(CUTS_KEY, true), st });
+    const show = createShow({ seed, names, opp: opp.key, cutaways: readFlag(CUTS_KEY, !REDUCED()), st });
     showRef.current = show;
     const looks = [lookOf({ spec: me.spec, kit: me.spec ? [CLOTH[me.spec.top_color], CLOTH[me.spec.bottom_color]] : ["#e6e6e6", "#3d3d3d"] }), lookOf({ spec: opp.spec, kit: opp.kit })];
     // heads: the file photos' faces, when they load
@@ -337,7 +353,7 @@ function Match({ seed, fmt, opp, me, onDone, onQuit }) {
           ))}
         </tbody>
       </table>
-      <div className="tn-call" aria-live="polite">{hud?.call ? `${hud.call}${hud.tb && hud.call !== "TIEBREAK" ? " // TIEBREAK" : ""}` : " "}</div>
+      <div className="tn-call" aria-live="polite" aria-atomic="true">{hud?.call ? `${hud.call}${hud.tb && hud.call !== "TIEBREAK" ? " // TIEBREAK" : ""}` : " "}{hud?.call && <span className="sr-only">. Games: {names[0]} {hud.rows[0].games}, {names[1]} {hud.rows[1].games}.</span>}</div>
       <div className="tn-stage" ref={wrapRef}>
         <div className="tn-screen" style={{ width: W * scale, height: H * scale }}>
           <canvas ref={canvasRef} width={W} height={H} style={{ width: W * scale, height: H * scale }} aria-label={`Tennis: ${names[0]} versus ${names[1]}`} role="img" onClick={() => showRef.current?.skip()} />
@@ -363,9 +379,9 @@ function Match({ seed, fmt, opp, me, onDone, onQuit }) {
           )}
         </div>
       </div>
+      {touch && <TouchPad input={inputRef} onStart={() => togglePause()} />}
       <Legend mode={mode} family={pad} open={legendOpen} onToggle={toggleLegend} />
       {tell && <p className={`tn-tell ${tell.kind}`}>{tell.kind === "say" ? `${opp.name}: "${tell.text}"` : tell.text}</p>}
-      {touch && <TouchPad input={inputRef} onStart={() => togglePause()} />}
       <ButtonRow>
         <Button onClick={() => togglePause()}>{paused ? "Resume" : "Pause"}</Button>
         <Button onClick={() => { const m = !muted; setMutedS(m); SFX.setMuted(m); if (!m) SFX.unlock(); }}>{muted ? "Sound on" : "Mute"}</Button>

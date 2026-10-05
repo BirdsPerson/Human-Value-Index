@@ -12,11 +12,13 @@ export const shade = (h, k) => { const [r, g, b] = rgb(h); return hex(r * k, g *
 const near = (a, b, tol = 60) => { const p = rgb(a), q = rgb(b); return Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) < tol; };
 
 // The head off a 32x48 sprite sheet: the opaque box in the top rows, centred on the crown.
-export function headFrom(sheet) {
+// crop: [x, y, w, h], for a sprite whose prop crosses the head (roster.js CROPS).
+export function headFrom(sheet, crop = null) {
   if (!sheet) return null;
   try {
     const c = document.createElement("canvas"); c.width = 32; c.height = 48;
     const x = c.getContext("2d"); x.drawImage(sheet, 0, 0, 32, 48, 0, 0, 32, 48);
+    if (crop) { const o = document.createElement("canvas"); o.width = crop[2]; o.height = crop[3]; o.getContext("2d").drawImage(c, crop[0], crop[1], crop[2], crop[3], 0, 0, crop[2], crop[3]); return o; }
     const d = x.getImageData(0, 0, 32, 14).data;
     let x0 = 32, x1 = -1, y0 = 14;
     for (let y = 0; y < 13; y++) for (let i = 0; i < 32; i++) if (d[(y * 32 + i) * 4 + 3] > 0) { x0 = Math.min(x0, i); x1 = Math.max(x1, i); y0 = Math.min(y0, y); }
@@ -49,13 +51,13 @@ export const hairOf = (head, skin) => commonest(head, 0, 3, skin);
 
 // A golfer on the course: {head, skin, hair, shirt, pants, cap, glove, generic}
 // src: {url} (a file sprite), {spec} (a procedural file photo), else {hint} (avatar fields).
-export async function lookFor({ url = null, spec = null, hint = null, shirt, pants }) {
+export async function lookFor({ url = null, spec = null, hint = null, shirt, pants, crop = null }) {
   let sheet = null;
   if (url) { try { sheet = await loadSprite(url, { sector: null }); } catch { sheet = null; } }
   const generic = !sheet;
   const sp = spec || { ...DEFAULT_SPEC, ...(hint || {}) };
   if (!sheet) sheet = paintAvatar(sp, 1);
-  const head = headFrom(sheet);
+  const head = headFrom(sheet, generic ? null : crop);
   let skin = generic || spec ? AVATAR_ENUMS.skin[sp.skin] : head && skinOf(head);
   skin = skin || AVATAR_ENUMS.skin.tan;
   let hair = generic || spec ? (sp.hair_style === "bald" ? skin : AVATAR_ENUMS.hair_color[sp.hair_color]) : head && hairOf(head, skin);
