@@ -159,9 +159,32 @@ const css = `
   /* the key under the map */
   .hvi-city-key { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s4); margin: var(--s3) 0 var(--s2); font-size: var(--t-xs); color: var(--fg-dim); }
   .hvi-city-key .k { white-space: nowrap; }
+  .hvi-city-key .lead { color: var(--fg-mute); white-space: normal; }
   .hvi-city-key .dot { display: inline-block; width: 7px; height: 7px; margin-right: 0.8ch; vertical-align: 1px; background: var(--tone); }
   .hvi-city-key .dot.hollow { background: none; box-shadow: inset 0 0 0 1px var(--tone); }
-  .hvi-city-help { color: var(--fg-mute); font-size: var(--t-xs); margin: 0 0 var(--s4); max-width: 80ch; }
+  .hvi-city-help { color: var(--fg-dim); font-size: var(--t-xs); margin: var(--s3) 0 var(--s4); max-width: 80ch; }
+  .hvi-city-help kbd { font: inherit; color: var(--fg); border: var(--bw) solid var(--line-hi); padding: 0 0.4ch; }
+
+  /* first visit: what this is, and the one thing to do */
+  .hvi-city-hint { position: absolute; left: var(--s2); top: var(--s5); z-index: 24; max-width: min(40ch, calc(100% - 2 * var(--s2))); padding: var(--s2) var(--s3) var(--s3);
+    background: rgba(6, 10, 6, 0.94); border: var(--bw) solid var(--accent); font-size: var(--t-xs); color: var(--fg); line-height: 1.45; }
+  .hvi-city-hint p { margin: 0 0 var(--s2); }
+  .hvi-city-hint b { color: var(--accent); }
+  .hvi-city-hint .do { color: var(--accent); font-weight: 700; }
+  /* on a phone it sits above the city instead of over it */
+  @media (max-width: 720px) {
+    .hvi-city-hint { position: static; max-width: none; border-width: 0 0 var(--bw); padding: var(--s2); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+    .hvi-city-hint p { margin: 0; flex: 1 1 100%; }
+    .hvi-city-hint .do { flex: 1 1 0; }
+  }
+  /* the phone's TAP TO EXPLORE sits low, so the city it covers is still the first thing seen */
+  .hvi-city-stage .ui-gate-veil { align-items: flex-end; padding-bottom: var(--s3); }
+
+  /* NOW: what the picture shows, as text (the PA above is decorative and hidden from readers) */
+  .hvi-city-now { margin: 0 0 var(--s4); padding: 0; list-style: none; font-size: var(--t-xs); color: var(--fg-dim); }
+  .hvi-city-now li { padding: 2px 0; }
+  .hvi-city-now li::before { content: "> "; color: var(--accent); }
+  .hvi-city-now-h { font-size: var(--t-xs); color: var(--accent); letter-spacing: 0.06em; margin: 0 0 var(--s1); }
 
   /* directories */
   .hvi-city-list { columns: 2 30ch; column-gap: var(--s5); margin: var(--s2) 0 var(--s4); }
@@ -241,6 +264,7 @@ export function MapKey() {
   ];
   return (
     <div className="hvi-city-key" role="note" aria-label="Map key">
+      <span className="k lead">EACH PERSON IS COLOURED BY THEIR VERDICT:</span>
       {items.map(([l, c, hollow]) => (
         <span key={l} className="k"><span className={`dot${hollow ? " hollow" : ""}`} style={{ "--tone": c }} aria-hidden="true" />{l}</span>
       ))}

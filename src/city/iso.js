@@ -54,9 +54,13 @@ export function unproject(sx, sy, cam) {
 export function screenToMap(sx, sy, cam) { const [u, v] = unproject(sx, sy, cam); return unrot(u, v, cam.r); }
 
 // Screen extent of the whole city at zoom 1 (for fitting), for rotation r.
+// The districts' own corners, not the bounding rectangle's: the city is not a rectangle, and
+// the rectangle's empty corners left a first visit looking at a small city in a big black frame.
 export function cityExtent(r) {
-  const R = rotRect({ x: BOUNDS.x0, y: BOUNDS.y0, w: BOUNDS.x1 - BOUNDS.x0, h: BOUNDS.y1 - BOUNDS.y0 }, r);
-  const pts = [[R.x0, R.y0], [R.x1, R.y0], [R.x1, R.y1], [R.x0, R.y1]].map(([u, v]) => [u - v, (u + v) / 2]);
+  const pts = DISTRICTS.flatMap(d => {
+    const m = 1, x0 = d.rect.x - m, y0 = d.rect.y - m, x1 = d.rect.x + d.rect.w + m, y1 = d.rect.y + d.rect.h + m;
+    return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => rot(x, y, r));
+  }).map(([u, v]) => [u - v, (u + v) / 2]);
   const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
   // the mountain stands above the ground's extent: its high points' rise
   let top = Math.min(...ys) - 6 * STOREY;

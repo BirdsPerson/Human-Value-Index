@@ -38,7 +38,7 @@ import { drawCoastLot, drawCoastGround, drawPod, coastLabel, coastLine } from ".
 import { drawEastLot, drawSky, EAST_LOT_FILL } from "./eastDraw.js";
 import { drawFarmLot, FARM_LOT_FILL } from "./farmDraw.js";   // THE FARMLAND's fields and orchards   // THE SUBURBS' parks, THE AIRPORT's airfield and its aircraft
 // THE MOUNTAIN (mountainGeo.js): everyone on it placed once a frame, the bands' labels where they belong
-import { skiersIn, SKI_PLACES, LABEL_AT } from "./mountainGeo.js";
+import { skiersIn, SKI_PLACES, LABEL_AT, PEAKS } from "./mountainGeo.js";
 import { raceAt, lastRace } from "./race.js";   // THE WEEKEND RACE: the racer on THE GAUNTLET, the board
 // THE MASTER PLAN's venues (venueGeo.js, venueDraw.js): THE PIT, the tennis club; the estate gardens' trees
 import { VENUE_LOTS, VENUE_PLACES, GARDEN_TREES } from "./venueGeo.js";
@@ -103,6 +103,14 @@ const SGEO = new Proxy({}, { get: (_, id) => (STOPS[id] ? stopGeo(STOPS[id]) : u
 let SAVED = null;
 
 export default memo(CityIso);
+// The overview's four landmarks, named in plain words: [id, label, map x, map y, height in storeys].
+const LANDMARKS = [
+  ["hq", "DEPARTMENT HQ", 54.5, 29.5, 15],
+  ["coast", "THE BOARDWALK", 36.25, 89.5, 2],
+  ["heights", "THE MOUNTAIN", PEAKS[0].x, PEAKS[0].y, PEAKS[0].h + 3],
+  ["strip", "THE STRIP", 102.25, 4.5, 6],
+];
+const HINT_KEY = "hvi-city-hint-seen";
 function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = null }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
@@ -110,6 +118,10 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
   const [sel, setSel] = useState(null);
   // FIND: { line, following } for the status strip; the camera work is in the loop (V.find).
   const [found, setFound] = useState(null);
+  // First visit: one line on what this is and the one thing to do. Gone for good once read.
+  const [hint, setHint] = useState(() => { try { return !localStorage.getItem(HINT_KEY); } catch { return true; } });
+  const dropHintRef = useRef(null);
+  const dropHint = () => { setHint(false); try { localStorage.setItem(HINT_KEY, "1"); } catch { /* private window: it comes back next visit */ } };
   const onOpenRef = useRef(onOpen); onOpenRef.current = onOpen;
   const onEnterRef = useRef(onEnter); onEnterRef.current = onEnter;
   const setSelRef = useRef(setSel); setSelRef.current = setSel;
@@ -345,7 +357,10 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     function resize() {
       const cssW = Math.max(280, Math.floor(wrap.clientWidth));
       const dpr = Math.min(3, window.devicePixelRatio || 1);
-      const cssH = Math.round(clampN(cssW * 0.62, 360, Math.min(780, window.innerHeight * 0.74)));
+      // a phone is taller than it is wide: give the city most of the screen, not a letterbox
+      const cssH = Math.round(cssW < 640
+        ? clampN(cssW * 0.95, 340, Math.max(340, window.innerHeight * 0.6))
+        : clampN(cssW * 0.62, 360, Math.min(780, window.innerHeight * 0.74)));
       const first = V.cssW === 0;
       if (!first && cssW === V.cssW && cssH === V.cssH && dpr === V.dpr) return;
       const was = first ? 1 : V.cam.z / V.fitZ;
@@ -426,7 +441,9 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         // the grounds' labels carry the fixture: "THE DIAMOND // BOT 5 3-2", "THE BOWL // Q3 14-10"
         const g = PARK_LOTS[b.id] && gameAt(PARK_LOTS[b.id], V.mt);
         const text = CIVIC_LOTS[b.id] ? civicLabel(b.id, V.mt) : g ? `${b.name} // ${g.label}` : storeLabel(b.id) || b.name;
-        const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
+        // an empty unit says TO LET on its own glass: its label only comes up close, and last
+        const minor = / \/\/ TO LET$/.test(text);
+        const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank: minor ? rank - 1e7 : rank, minor };
         if (top) drawLabel(L, 1); else if (selected || !behindMountain(b.id, b.pos.x, b.pos.y, h + 0.5, V.cam.r)) V.labels.push(L);
       };
       if (COAST_LOTS[b.id]) {
@@ -996,9 +1013,15 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
 
     // ---- labels: one pass on top, nearest first, none over another --------------------------
     // They fade in over a zoom range instead of all switching on at once.
-    function labelAlpha(L) { return L.selected || lodFor(V.cam.z) === "near" ? 1 : clampN((V.cam.z - 5.8) / 1.2, 0, 1); }
+    // A landmark is the other way about: up at the overview, gone once the streets have names.
+    function labelAlpha(L) {
+      if (L.landmark) return clampN((V.fitZ * 1.9 - V.cam.z) / (V.fitZ * 0.5), 0, 1);
+      if (L.minor && !L.selected) return clampN((V.cam.z - 16) / 2, 0, 1);
+      return L.selected || lodFor(V.cam.z) === "near" ? 1 : clampN((V.cam.z - 5.8) / 1.2, 0, 1);
+    }
+    // never under 10px: a label nobody can read is clutter
     function labelBox(L) {
-      const fs = clampN(Math.round(V.cam.z * 0.95), 8, 13);
+      const fs = L.landmark ? 12 : clampN(Math.round(V.cam.z * 0.95), 10, 13);
       ctx.font = `${fs}px ${FONT}`;
       const w = ctx.measureText(L.text).width + 6;
       return { fs, x0: Math.round(L.x - w / 2), y0: Math.round(L.y - fs - 3), w: Math.round(w), h: fs + 4 };
@@ -1008,7 +1031,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       ctx.font = `${box.fs}px ${FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
       ctx.fillStyle = "rgba(6,10,6,0.86)"; ctx.fillRect(box.x0, box.y0, box.w, box.h);
       if (L.station) { ctx.fillStyle = L.lit ? "#67e8f9" : "rgba(34,211,238,0.55)"; ctx.fillRect(box.x0, box.y0 + box.h - 1, box.w, 1); }
-      ctx.fillStyle = L.station ? (L.lit ? "#e0fbff" : "#67e8f9") : L.selected ? "#4ade80" : "#a7d7b5"; ctx.fillText(L.text, Math.round(L.x), Math.round(L.y));
+      if (L.landmark) { ctx.strokeStyle = "rgba(74,222,128,0.7)"; ctx.lineWidth = 1; ctx.strokeRect(box.x0 + 0.5, box.y0 + 0.5, box.w - 1, box.h - 1); }
+      ctx.fillStyle = L.station ? (L.lit ? "#e0fbff" : "#67e8f9") : L.selected || L.landmark ? "#4ade80" : "#a7d7b5"; ctx.fillText(L.text, Math.round(L.x), Math.round(L.y));
       ctx.globalAlpha = 1;
     }
     function drawLabels() {
@@ -1240,6 +1264,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         for (const it of tops.get(k) || []) drawTower(it);
       }
       drawSky(archG(), lod, mt, nightAt(((mt % 24) + 24) % 24));   // THE AIRPORT's aircraft on finals and climbing out, over everything
+      // the overview's landmarks: where to look first (they fade as the street labels come up)
+      if (V.cam.z < V.fitZ * 1.9 && !V.sel) for (const [id, text, x, y, h] of LANDMARKS) { const [lx, ly] = Q(x, y, h); V.labels.push({ id: `lm:${id}`, text, x: lx, y: ly, landmark: true, rank: 1e9 }); }
       drawLabels();
       drawPrefectTops(ctx, V.pfTops, FONT); V.pfTops = [];   // THE PREFECTS: designations over everything
       ctl.overlay();   // DRIVE YOURSELF: YOU
@@ -1423,6 +1449,18 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const [x, y] = local(e);
       zoomAt(x, y, Math.exp(-e.deltaY * 0.0015));
     }
+    // the keyboard's building order: the ones on screen, by distance from the view's centre
+    let keyIds = null, keyAt = "";
+    function keyOrder() {
+      const at = `${V.cam.r}|${Math.round(V.cam.ox / 40)}|${Math.round(V.cam.oy / 40)}|${Math.round(V.cam.z)}`;
+      if (keyIds && (keyAt === at || V.sel)) return keyIds;
+      keyAt = at;
+      const cx = V.cssW / 2, cy = V.cssH / 2;
+      keyIds = BUILDINGS.map(b => { const [x, y] = Q(b.pos.x, b.pos.y, 0); return { id: b.id, x, y }; })
+        .filter(p => p.x > 0 && p.x < V.cssW && p.y > 0 && p.y < V.cssH)
+        .sort((a, c) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(c.x - cx, c.y - cy)).map(p => p.id);
+      return keyIds;
+    }
     function onKey(e) {
       if (ctl.owns(e)) return;   // DRIVE YOURSELF: its keys are read on the window
       if (e.key === "q" || e.key === "Q") { turn(-1); e.preventDefault(); }
@@ -1432,6 +1470,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       else if (e.key === "Escape" && V.find) { e.preventDefault(); apiRef.current.endFind(); }
       else if (e.key === "Escape" && V.sel) select(null);
       else if (e.key === "Enter" && V.sel) apiRef.current.enter();
+      // [ and ]: the buildings one by one, nearest the middle of the view first, for anyone without a pointer
+      else if (e.key === "[" || e.key === "]") {
+        const ids = keyOrder(), i = ids.indexOf(V.sel), n = ids.length;
+        if (n) select(ids[(i < 0 ? (e.key === "]" ? 0 : n - 1) : i + (e.key === "]" ? 1 : -1) + n) % n]);
+        e.preventDefault();
+      }
       else if (e.key.startsWith("Arrow")) {
         hands(); unfollow();
         const d = 40;
@@ -1441,6 +1485,10 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       } else return;
     }
     canvas.addEventListener("pointerdown", onDown);
+    // a hand on the city has understood the hint
+    const seen = () => dropHintRef.current?.();
+    canvas.addEventListener("pointerdown", seen, { once: true });
+    canvas.addEventListener("wheel", seen, { once: true, passive: true });
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerup", onUp);
     canvas.addEventListener("pointercancel", onUp);
@@ -1495,6 +1543,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       ro ? ro.disconnect() : window.removeEventListener("resize", resize);
       mq?.removeEventListener?.("change", onMotion);
       canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointerdown", seen);
+      canvas.removeEventListener("wheel", seen);
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerup", onUp);
       canvas.removeEventListener("pointercancel", onUp);
@@ -1506,6 +1556,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  dropHintRef.current = hint ? dropHint : null;
   // A new find (or the same one picked again: n) flies the camera; null ends it.
   useEffect(() => { apiRef.current.find?.(find); }, [find]);
 
@@ -1521,13 +1572,20 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
           <button type="button" className="hvi-city-zb" aria-label="Stop finding" onClick={() => apiRef.current.endFind?.()}>×</button>
         </div>
       )}
+      {hint && !found && !b && (
+        <div className="hvi-city-hint" role="note" aria-label="What you are looking at">
+          <p><b>THE SUBSTRATE.</b> A CITY THAT RUNS ITSELF. EVERYONE IN IT IS ON FILE, ON A SCHEDULE, IN REAL TIME.</p>
+          <p className="do">TAP ANY BUILDING TO SEE WHO IS INSIDE.</p>
+          <button type="button" className="hvi-city-zb txt" onClick={dropHint}>UNDERSTOOD</button>
+        </div>
+      )}
       <ControlLayer onRelease={() => apiRef.current.release?.()} />
-      <TouchGate>
+      <TouchGate label="TAP TO EXPLORE" hint="DRAG · PINCH">
         <canvas ref={canvasRef} tabIndex={0} className="hvi-city-canvas" role="img"
-          aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag to pan, pinch to zoom, click then wheel to zoom, Q and E to turn. Select a building to open its cutaway: every floor and room, and who is in it. The district directory below lists every district by keyboard." />
+          aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag or use the arrow keys to move, pinch or plus and minus to zoom, Q and E to turn. Tap a building, or press ] and [ to step through the buildings in view, to open its cutaway: every floor and room, and who is in it; Enter goes inside. The list under the city says what is happening now, and the district directory lists every district." />
       </TouchGate>
       <div className="hvi-city-zoom" role="toolbar" aria-label="City view controls">
-        <span className="hint" title={b ? b.name : undefined}>{b ? b.name : "TAP A BUILDING"}</span>
+        {b && <span className="hint" title={b.name}>{b.name}</span>}
         <button type="button" className="hvi-city-zb" aria-label="Turn left" onClick={() => apiRef.current.turn?.(-1)}><TurnIcon dir={-1} /></button>
         <button type="button" className="hvi-city-zb" aria-label="Turn right" onClick={() => apiRef.current.turn?.(1)}><TurnIcon dir={1} /></button>
         <button type="button" className="hvi-city-zb" aria-label="Zoom in" onClick={() => apiRef.current.zoom?.(1.4)}>+</button>
