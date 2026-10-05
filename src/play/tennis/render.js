@@ -378,9 +378,25 @@ function react(ctx, kind, age, box, ox, oy, P) {
   const { cx, y0, skin } = box, sk = skin || "#c68c5e";
   const mouthY = y0 + 9;
   if (kind === "cheer") {
-    const w = (age >> 3) & 1;
-    R(cx - 10 - w, y0 - 2, 2, 16, sk); R(cx + 8 + w, y0 - 2, 2, 16, sk);
-    R(cx - 11 - w, y0 - 4, 4, 3, sk); R(cx + 7 + w, y0 - 4, 4, 3, sk);
+    // both arms up: a sleeve from the shoulder out to the elbow, the forearm up past the head, an
+    // open hand; outlined like the photo. The hands pump on a beat.
+    const w = (age >> 3) & 1, sl = box.shirt || "#8a8a8a", ink = "#141414";
+    const limb = (pts, c) => {
+      for (let k = 1; k < pts.length; k++) {
+        const [ax, ay] = pts[k - 1], [bx, by] = pts[k], n = Math.max(Math.abs(bx - ax), Math.abs(by - ay)) || 1;
+        for (let i = 0; i <= n; i++) { const x = Math.round(ax + ((bx - ax) * i) / n), y = Math.round(ay + ((by - ay) * i) / n); R(x - 1, y - 1, 4, 4, ink); }
+      }
+      for (let k = 1; k < pts.length; k++) {
+        const [ax, ay] = pts[k - 1], [bx, by] = pts[k], n = Math.max(Math.abs(bx - ax), Math.abs(by - ay)) || 1;
+        for (let i = 0; i <= n; i++) { const x = Math.round(ax + ((bx - ax) * i) / n), y = Math.round(ay + ((by - ay) * i) / n); R(x, y, 2, 2, typeof c === "function" ? c(k) : c); }
+      }
+    };
+    for (const sd of [-1, 1]) {
+      const sh = [cx + sd * 7 - (sd < 0 ? 1 : 0), y0 + 17], el = [cx + sd * 12 - (sd < 0 ? 1 : 0), y0 + 9], hd = [cx + sd * (10 + w) - (sd < 0 ? 1 : 0), y0 - 1 - w];
+      limb([sh, el, hd], (k) => (k === 1 ? sl : sk));
+      const hx = hd[0] - 1, hy = hd[1] - 3;
+      R(hx - 1, hy - 1, 5, 5, ink); R(hx, hy, 3, 3, sk); R(hx + (sd < 0 ? 0 : 2), hy - 1, 1, 1, sk);   // the hand, a thumb out
+    }
     R(cx - 1, mouthY, 3, 2, "#3a1a1a");
   } else if (kind === "clap") {
     const k = ((age >> 2) & 3);
@@ -403,7 +419,7 @@ function react(ctx, kind, age, box, ox, oy, P) {
 
 // The face's place in a 32 x 48 file photo: the head's top row, its centre column, its colour.
 export function faceBox(sheet) {
-  const box = { cx: 16, y0: 2, skin: null };
+  const box = { cx: 16, y0: 2, skin: null, shirt: null };
   if (!sheet) return box;
   try {
     const c = document.createElement("canvas"); c.width = 32; c.height = 48;
@@ -420,6 +436,13 @@ export function faceBox(sheet) {
       const k = `#${[d[o], d[o + 1], d[o + 2]].map(v => v.toString(16).padStart(2, "0")).join("")}`; n.set(k, (n.get(k) || 0) + 1);
     }
     let bn = 0; for (const [k, v] of n) if (v > bn) { bn = v; box.skin = k; }
+    // the shirt: the commonest colour across the chest, for a raised arm's sleeve
+    const cd = x.getImageData(0, 0, 32, 34).data, m = new Map();
+    for (let y = Math.min(33, y0 + 18); y < Math.min(34, y0 + 22); y++) for (let i = box.cx - 6; i <= box.cx + 6; i++) {
+      const o = (y * 32 + i) * 4; if (cd[o + 3] < 200 || cd[o] + cd[o + 1] + cd[o + 2] < 60) continue;
+      const k = `#${[cd[o], cd[o + 1], cd[o + 2]].map(v => v.toString(16).padStart(2, "0")).join("")}`; if (k === box.skin) continue; m.set(k, (m.get(k) || 0) + 1);
+    }
+    let sn = 0; for (const [k, v] of m) if (v > sn) { sn = v; box.shirt = k; }
   } catch { /* the default box */ }
   return box;
 }

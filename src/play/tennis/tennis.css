@@ -89,3 +89,5 @@
   .tn-lower b { font-size: var(--t-xs); }
   .tn-legend-rows { grid-template-columns: 1fr; }
 }
+/* the picker's faces: 2x, as golf's; 1.5x on a phone */
+@media (max-width: 600px) { .tn-opp .tn-face { width: 48px !important; height: 72px !important; } }

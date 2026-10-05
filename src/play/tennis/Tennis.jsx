@@ -6,7 +6,7 @@ import { DEFAULT_SPEC, AVATAR_ENUMS, CLOTH } from "../../avatar.js";
 import { readPad, GLYPHS } from "../../city/gamepad.js";
 import { newMatch, step, rleEncode, resultOf, replay, serverOfMatch, VERSION, BTN } from "./sim.js";
 import { FORMATS } from "./score.js";
-import { OPPONENTS, OPP_BY_KEY, EASIEST, profileOf, spriteOf, talkFor } from "./roster.js";
+import { OPPONENTS, OPP_BY_KEY, EASIEST, profileOf, spriteOf, pendingSpec, talkFor } from "./roster.js";
 import { draw, drawCutaway, headFrom, faceBox, speakerAt, W, H } from "./render.js";
 import { createShow } from "./show.js";
 import { createInput } from "./input.js";
@@ -41,12 +41,12 @@ function useMe() {
 }
 
 // A file photo, frame 0, at 1x (the chess tables' size).
-function Face({ spec, url, size = 1 }) {
+function Face({ spec, url, size = 1, pending = null }) {
   const ref = useRef(null);
   useEffect(() => {
     let off = false;
     const put = (sheet) => { const c = ref.current; if (off || !c) return; const x = c.getContext("2d"); x.imageSmoothingEnabled = false; x.clearRect(0, 0, 32, 48); if (sheet) x.drawImage(sheet, 0, 0, 32, 48, 0, 0, 32, 48); };
-    if (url) loadSprite(url, { sector: null }).then(img => put(img || paintAvatar(DEFAULT_SPEC, 1))); else put(paintAvatar(spec || DEFAULT_SPEC, 1));
+    if (url) loadSprite(url, { sector: null }).then(img => put(img || paintAvatar(pending || DEFAULT_SPEC, 1))); else put(paintAvatar(spec || DEFAULT_SPEC, 1));
     return () => { off = true; };
   }, [spec, url]);
   return <canvas ref={ref} width={32} height={48} className="tn-face" style={{ width: 32 * size, height: 48 * size }} aria-hidden="true" />;
@@ -122,7 +122,7 @@ function Picker({ fmt, setFmt, pre, onPick }) {
             {OPPONENTS.map((o, i) => (
               <li key={o.key}>
                 <button type="button" ref={el => { refs.current[i] = el; }} className={`tn-opp${i === sel ? " sel" : ""}`} onClick={() => onPick(o)} onFocus={() => setSel(i)} aria-label={`Play ${o.name}, rated ${o.rating}`}>
-                  <Face spec={o.spec} url={spriteOf(o)} />
+                  <Face spec={o.spec} url={spriteOf(o)} pending={pendingSpec(o, DEFAULT_SPEC)} size={2} />
                   <span className="nm">{o.name}<span className="tag">{o.regular ? o.note : "ON FILE // A CLUB PLAYER. RATED BY THE CLUB, NOT BY THE DEPARTMENT."}</span></span>
                   <span className="rt">{o.rating}</span>
                 </button>
@@ -276,7 +276,7 @@ function Match({ seed, fmt, opp, me, onDone, onQuit }) {
     // heads: the file photos' faces, when they load
     const sheet = (spec, url) => (url ? loadSprite(url, { sector: null }) : Promise.resolve(paintAvatar(spec || DEFAULT_SPEC, 1)));
     sheet(me.spec, me.url).then(s => { const h = headFrom(s); if (h) { looks[0].head = h; looks[0].skin = me.spec ? looks[0].skin : skinOf(h) || looks[0].skin; } });
-    sheet(opp.spec, spriteOf(opp)).then(s => { const h = headFrom(s); if (h) { looks[1].head = h; if (!opp.spec) looks[1].skin = skinOf(h) || looks[1].skin; } });
+    sheet(opp.spec, spriteOf(opp)).catch(() => null).then(s => s || (pendingSpec(opp, DEFAULT_SPEC) ? paintAvatar(pendingSpec(opp, DEFAULT_SPEC), 1) : null)).then(s => { const h = headFrom(s); if (h) { looks[1].head = h; if (!opp.spec) looks[1].skin = skinOf(h) || looks[1].skin; } });
     // the stand's faces, fetched one ahead of the camera
     const art = new Map();
     const fetchArt = (s) => {

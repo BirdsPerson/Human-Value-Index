@@ -7,10 +7,11 @@
 // written in the Department's hand. The dead may say a pre-written line at the start and the end.
 import { cpuProfile } from "./sim.js";
 
-// kit: [shirt, shorts] (avatar CLOTH colours). spec: a regular's procedural file photo.
+// kit: [shirt, shorts] (avatar CLOTH colours). spec: a regular's procedural file photo. hint: avatar
+// fields for a figure whose likeness is not drawn yet (pendingSpec).
 export const OPPONENTS = [
-  { key: "serena-williams", name: "SERENA WILLIAMS", rating: 98, died: null, kit: ["#d977a8", "#262626"] },
-  { key: "venus-williams", name: "VENUS WILLIAMS", rating: 93, died: null, kit: ["#e0c040", "#e6e6e6"] },
+  { key: "serena-williams", name: "SERENA WILLIAMS", rating: 98, died: null, kit: ["#d977a8", "#262626"], hint: { skin: "brown", hair_style: "bun", hair_color: "black", top_color: "pink", bottom_color: "black" } },
+  { key: "venus-williams", name: "VENUS WILLIAMS", rating: 93, died: null, kit: ["#e0c040", "#e6e6e6"], hint: { skin: "brown", hair_style: "ponytail", hair_color: "black", top_color: "yellow", bottom_color: "white" } },
   { key: "john-mcenroe", name: "JOHN MCENROE", rating: 92, died: null, kit: ["#e6e6e6", "#1f2f5a"] },
   { key: "arthur-ashe", name: "ARTHUR ASHE", rating: 91, died: "1993-02-06", kit: ["#e6e6e6", "#e6e6e6"] },
   { key: "club-pro", name: "THE CLUB PRO", rating: 62, died: null, regular: true, note: "HITTING PARTNER GRADE. PAID BY THE HOUR. THE HOUR IS LOGGED.", kit: ["#3c8a46", "#e6e6e6"],
@@ -27,6 +28,9 @@ export const OPP_BY_KEY = new Map(OPPONENTS.map(o => [o.key, o]));
 export const profileOf = (key) => { const o = OPP_BY_KEY.get(key); return o ? (o.profile ? { ...o.profile } : cpuProfile(o.rating)) : null; };
 export const EASIEST = "new-member";
 export const spriteOf = (o) => (o.spec ? null : `/api/sprite/${o.key}`);
+// The file photo to paint while a figure's likeness is pending (/api/sprite answers 404): their
+// hint over the default, near enough to themselves; null for everyone else.
+export const pendingSpec = (o, base) => (o?.hint ? { ...base, ...o.hint } : null);
 
 // The dead: written lines only, about the game, never the opponent.
 const LINES = {
