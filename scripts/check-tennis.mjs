@@ -9,6 +9,11 @@
 //   roster       the playable figures are the club's tennis players on file (city/tennis.js),
 //                slug for slug, rating for rating; the living carry no lines
 //   strength     a stronger CPU beats a weaker one, the CPU playing itself
+//   broadcast    show.js (crowd, officials, cutaways) is render-only: a match played with the
+//                cutaways on (some skipped mid-shot, some left to run) logs the same masks, ends in
+//                the same state and replays to the same result as the match with them off; the
+//                stand holds no one barred (chess/roster.js barred()), not today's opponent, and
+//                no caption quotes anyone; the living get only the neutral lines
 // Run: node scripts/check-tennis.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -82,7 +87,7 @@ const game = (sc, w) => { let o; for (let k = 0; k < 4; k++) o = SC.addPoint(sc,
 }
 
 // ---- purity --------------------------------------------------------------------------------------
-for (const f of ["sim.js", "score.js"]) {
+for (const f of ["sim.js", "score.js", "show.js", "gallery.js"]) {
   const src = readFileSync(new URL(`../src/play/tennis/${f}`, import.meta.url), "utf8").replace(/\/\/.*$/gm, "");
   for (const bad of ["Math.random", "Date.now", "performance", "Math.sin", "Math.cos", "Math.atan", "Math.pow", "Math.exp", "Math.hypot", "document", "window"]) assert.ok(!src.includes(bad), `${f} uses ${bad}`);
 }
@@ -159,6 +164,71 @@ function playBot(seed, fmt, key, cap = 60 * 60 * 40) {
   }
   assert.ok(strong >= 2, `98 beats 40 (${strong}/3)`);
   ok("strength");
+}
+
+// ---- broadcast ---------------------------------------------------------------------------------
+{
+  const SH = await import("../src/play/tennis/show.js");
+  const G = await import("../src/play/tennis/gallery.js");
+  const { barred } = await import("../src/chess/roster.js");
+  const { FAMOUS_FIGURES, slugify } = await import("../src/figures.js");
+  const names = ["SUBJECT", "A LINE JUDGE ON A DAY OFF"];
+  // The page's loop, headless: one 60 Hz slot at a time; the broadcast decides whether the sim
+  // steps. During a cutaway a viewer's hands (not the bot's) are on the pad: every other cutaway
+  // is skipped with A, held through the release; the rest run their length.
+  function playShow(seed, fmt, key, cutaways) {
+    const st = S.newMatch({ seed, fmt, cpu: R.profileOf(key) });
+    const show = SH.createShow({ seed, names, opp: key, cutaways, st });
+    const masks = [];
+    let slots = 0;
+    while (st.phase !== "over" && slots < 60 * 60 * 60) {
+      slots++;
+      let m;
+      if (show.busy()) { const age = show.cutAge(), n = show.state.cuts; m = n % 2 && age >= 40 && age < 70 ? S.BTN.A : 0; }
+      else m = bot(st);
+      if (show.slot(st, m)) { masks.push(m); S.step(st, m); show.observe(st); }
+    }
+    return { st, masks, show, slots };
+  }
+  for (const [seed, fmt, key] of [[12345, "short", "line-judge"], [2024, "short", "club-pro"]]) {
+    const off = playShow(seed, fmt, key, false), on = playShow(seed, fmt, key, true);
+    assert.equal(off.show.state.cuts, 0, "cutaways off: none shown");
+    assert.ok(on.show.state.cuts >= 2, `cutaways on: some shown (${on.show.state.cuts})`);
+    assert.ok(on.show.state.skips >= 1, "some cutaways skipped with a button");
+    assert.ok(on.slots > on.masks.length, "the match was held during the cutaways");
+    assert.deepEqual(on.masks, off.masks, "the same masks reach the sim, cutaways or not");
+    assert.deepEqual(S.resultOf(on.st), S.resultOf(off.st), "the same result, cutaways or not");
+    assert.equal(JSON.stringify({ ...on.st, ev: [] }), JSON.stringify({ ...off.st, ev: [] }), "the same final state, cutaways or not");
+    const rec = { version: S.VERSION, seed, fmt, opp: key, inputLog: S.rleEncode(on.masks), result: S.resultOf(on.st) };
+    assert.deepEqual(S.replay(rec, R.profileOf(key)), rec.result, "the cutaway match replays from its log");
+    if (seed === 12345) assert.deepEqual(rec.result, playBot(12345, "short", "line-judge").rec.result, "and equals the bare bot match");
+  }
+  // the chair's words
+  {
+    const st = S.newMatch({ seed: 1, fmt: "set", cpu: R.profileOf("club-pro") });
+    st.sc.gameServer = 0; st.sc.pts = [3, 3];
+    assert.equal(SH.spoken(st, names, "AD IN"), "ADVANTAGE SUBJECT.");
+    assert.equal(SH.spoken(st, names, "AD OUT"), "ADVANTAGE A LINE JUDGE ON A DAY OFF.");
+    assert.equal(SH.spoken(st, names, "15-LOVE"), "FIFTEEN-LOVE.");
+    assert.equal(SH.spoken(st, names, "30-ALL"), "THIRTY-ALL.");
+    st.lastWinner = 1; assert.equal(SH.spoken(st, names, "GAME AND SET"), "GAME AND SET, A LINE JUDGE ON A DAY OFF.");
+  }
+  // who may be in the stand, and what may be said
+  for (const opp of ["serena-williams", "arthur-ashe", "club-pro"]) {
+    const pool = G.spectators(opp), slugs = new Set(pool.map(p => p.slug));
+    assert.ok(!slugs.has(opp), `${opp} is on court, not in the stand`);
+    for (const f of FAMOUS_FIGURES) if (barred(f)) assert.ok(!slugs.has(slugify(f.name)), `${f.name} is barred from the stand`);
+    assert.ok(pool.length > 30, "a full stand");
+    for (const f of FAMOUS_FIGURES) assert.equal(G.barred(f), barred(f), `the stand's bar is the park's: ${f.name}`);
+    for (const p of pool) {
+      for (const note of G.allNotesFor(p)) {
+        assert.ok(!/["\u201c\u201d]|\bSAYS?\b|\bSAID\b/.test(note), `no quotes: ${p.slug}: ${note}`);
+        assert.ok(!note.includes("{"), `filled: ${note}`);
+        if (!p.died) assert.ok(G.LIVING_NOTES.map(l => l.replace("{T}", p.tier || "UNASSIGNED")).includes(note) || p.tennis, `${p.slug} is living: neutral lines only (${note})`);
+      }
+    }
+  }
+  ok("broadcast");
 }
 
 console.log(`check-tennis: ${n} groups OK`);

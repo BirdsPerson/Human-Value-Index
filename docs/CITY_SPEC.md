@@ -2075,7 +2075,37 @@ or any score.
 - **Sound** (`audio.js`): WebAudio blips; MUTE kept in `localStorage["hvi-tennis-muted"]`.
 - **Check**: `scripts/check-tennis.mjs` (scoring units, purity, a bot's recorded match replayed twice
   to the same result, a doctored log refused, the roster, a stronger CPU beating a weaker one).
-- **Not yet**: changing ends, lets, doubles, counting results, a server replay check, other viewers.
+- **The event** (2026-10-05, Scott: "more detail, like the actual event"; "we need an umpire"):
+  the far stand and both side stands seat a pixel crowd whose heads follow the ball, that claps
+  after a point and stands for a game, an ace or a rally of six; sponsor-free boards (THE
+  DEPARTMENT OF LEISURE, APPLAUSE IS MONITORED, QUIET, HVI); a grained hard court with wear behind
+  the baselines; shadows under everyone. Officials: THE CHAIR (ADJUDICATOR UNIT 40-LOVE, a
+  Department official, not a person) on a high chair at the net, its visor's eye scanning with the
+  ball, leaning to a lit microphone as it calls ("FIFTEEN-LOVE", "DEUCE", "ADVANTAGE <NAME>",
+  "GAME AND SET, <NAME>", "<NAME> TO SERVE. PLAY.") in a speech box on the picture; eight line
+  judges who stand and put an arm out for OUT / FAULT (the one nearest the bounce); a net judge
+  who raises a hand for NET; four ball kids who run for the dead ball and carry it off.
+- **The broadcast** (`show.js`, `gallery.js`, render only): roughly every 3-5 points, between
+  points, never in a rally or a serve, the picture cuts to a close-up in the stand: the face from
+  its file photo in a seat, doing something (cheer, clap, yawn, hot dog, watch), with a lower
+  third ("IN ATTENDANCE: ALBERT EINSTEIN" / "HAS NOT CLAPPED SINCE 1955.") and sometimes THE
+  CHAIR itself. A or B (or a tap) returns to the match; CROWD CAMERAS on/off is kept in
+  `localStorage["hvi-tennis-cutaways"]`. Who: every figure on file not barred by the park's rule
+  (`chess/roster.js barred()`: documented harm, SOYLENT GREEN, threat 80+; copied in gallery.js,
+  held equal by the check) plus the club's tennis players not on court today, three times as
+  likely. Nobody in the stand speaks or is quoted; spectators who are alive get neutral lines
+  about being there; others may get a Department gag, never about how they died (a short list
+  gets plain lines only). The match is held during a cutaway (no step, nothing logged) and waits
+  for A/B to be let go after one; the broadcast has its own seeded generator and never writes the
+  sim, so `check-tennis` plays the same bot match with cutaways on (some skipped) and off and
+  requires the same masks, the same final state and the same replay.
+- **Controls on screen**: a legend under the court in the hands in use (keyboard keys, the
+  connected pad's own glyphs via `gamepad.js GLYPHS`, or the touch pad), with the serve timing
+  and aim hints; collapsible, kept in `localStorage["hvi-tennis-legend"]`; repeated on the pause
+  screen. When you serve, a toss meter beside you shows the ball against the green band where the
+  hit is best.
+- **Not yet**: changing ends, lets, doubles, counting results, a server replay check, other viewers,
+  figures referred after the bundle in the stand.
 
 ### Golf: THE DEPARTMENT LINKS (`#golf`, 2026-10-05)
 
