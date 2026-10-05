@@ -2104,14 +2104,46 @@ or any score.
   speaks, living or dead; the Department's lines are about the game.
 - **You**: your own file when this browser has a case (`SUBJECT <last four>`, shirt and trousers from
   your avatar), else SUBJECT. WATCH THE CADDIE PLAY runs the bot on your side (attract mode; not kept).
+- **THE DEPARTMENT OPEN** (2026-10-05, the default course; the links stay one click away):
+  eighteen famous real holes as one par-72 course (6,946 yards), data only in
+  `src/play/golf/holes/famous.js` (one compact object per hole with a `// source:` URL: par,
+  yardage, bends, fairway width profile, bunkers, ponds, sea/creek/cross bands, the island, OB lines
+  and roads, tree kind and density, green size, fall and pin, scene, elevation feel, gallery side).
+  `course.js` builds each hole's geometry from it deterministically (`buildFamous`, `famousSurface`,
+  `frameOf`); 50-100 more holes is more data. In-world name + "AFTER: <COURSE> NO. <N>" + one
+  Department note per hole; no tournament marks, no quotes, no copied course art. The holes:
+  Pebble Beach 7, Oakmont 3, Augusta National 13, Carnoustie 6, Royal Troon 8, Pebble Beach 8,
+  Merion East 11, Bethpage Black 4, Augusta National 12 (out 36); Riviera 10, Pine Valley 7,
+  Cypress Point 16, Whistling Straits 18, Pebble Beach 18, TPC Sawgrass 17 and 18, St Andrews Old
+  17 and 18 (in 36). A round's cfg names its course (`course: "open"`); a cfg without one is the
+  links, so every round kept before replays unchanged. On the Open only, the caddie's lay-up steps
+  back off water and sand (`safeLayup`) and trees have their own heights (gorse is low).
 - **Screen**: 256x224 canvas, integer scale in device pixels, imageSmoothing off, 5x7 bitmap font,
-  NES palette: golfer and meter left (the swing follows the meter), hole from above right, a close
-  view within 70 yards (slope arrows point downhill, darker is steeper). WebAudio blips, mute kept.
+  NES palette, framed like the cartridge golf games (Fighting Golf): the golfer large, from behind,
+  on the left; the hole runs away from him to a horizon (sky bands, drifting clouds, a far tree
+  line, dunes or the sea, chosen per hole and per view direction). The turf is a stretched-depth
+  floor (a row d yards out sits sqrt(K/d) rows under the horizon) sampled from a lazily filled
+  half-yard raster of the hole: mowing stripes, speckled rough, bunker lips (far edge shadowed,
+  near edge lit), waste sand with scrub, water with a shimmer, five tree sprites (pine, oak,
+  Monterey cypress, palm, gorse), a gallery round each green, a flag that streams with the wind.
+  The top-down hole is a picture-in-picture window (top right) with the aim, the pin, the balls and
+  the wind. After contact the camera follows the ball down the hole; on the green it drops low
+  behind the putter and slope arrows are drawn on the turf (and in the window). The render keeps
+  only its own camera and trail; the sim never sees it. WebAudio blips, mute kept.
+- **Looks** (`looks.js`): every golfer is their file's face (frame 0 head, as the tennis club cuts
+  it; `/api/figure/<slug>` names the sprite, so a pending likeness is never fetched as a 404) on
+  one standard outfit (polo, trousers, cap, one white glove) recoloured from the figure's kit; skin
+  and hair are read off the head. A figure with no likeness yet gets a head painted by `avatar.js`
+  from `roster.js` HINTS (pending on 2026-10-05: Nicklaus, McIlroy, Mickelson, Daly, Murray). The
+  player is their own case's sprite or procedural photo. Portrait top left, front-view cards on the
+  hole card and in the picker.
 - **Input**: keys (arrows, Space/Z swing, X club, Enter/Esc pause; a press shorter than a tick still
   counts), `src/city/gamepad.js` (d-pad/stick, A/cross swing, B/circle and RB shorter club, LB longer,
   Start pauses), touch pad on phones (aim, CLUB, pause, SWING, 56 px).
-- **Ways in**: `#golf`, `#golf?vs=<slug>` (offers the match); THE ASSEMBLY's APPLICATION 001 frame;
+- **Ways in**: `#golf`, `#golf?vs=<slug>` (offers the match), `#golf?course=open|links`; THE ASSEMBLY's APPLICATION 001 frame;
   THE LEAGUES hub (an exhibitions line).
 - Check: `scripts/check-golf.mjs` (course shape, the scripted round twice and its replay identical,
-  holed ball ends the hole, OB and water penalties, score v par, a 97 beats a 20).
+  holed ball ends the hole, OB and water penalties, score v par, a 97 beats a 20; the Open: 18
+  holes, par 72, names/credits/notes/sources, builds the same, the bot holes every hole on four
+  seeds, a match replays tick for tick, a round naming no course is the links tick for tick).
 - **Not yet**: a server that verifies a submitted log; spectators; the course in the city map.

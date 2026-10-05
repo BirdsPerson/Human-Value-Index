@@ -9,6 +9,7 @@
 // to the golfer's right. The renderer flips y.
 
 import { GOLF } from "../../city/civicGeo.js";
+import { FAMOUS } from "./holes/famous.js";
 
 export const COURSE_SEED = 0x6f07;
 
@@ -160,6 +161,7 @@ export const PAR = { front: COURSE.slice(0, 9).reduce((a, h) => a + h.par, 0), b
 
 // What the ball lies on: "water" | "bunker" | "green" | "fringe" | "tee" | "ob" | "trees" | "fairway" | "rough"
 export function surfaceAt(h, x, y) {
+  if (h.famous) return famousSurface(h, x, y);
   for (const w of h.water) if (Math.hypot(x - w.x, y - w.y) <= w.r) return "water";
   for (const b of h.bunkers) if (Math.hypot(x - b.x, y - b.y) <= b.r) return "bunker";
   const dg = Math.hypot(x - h.green.x, y - h.green.y);
@@ -174,6 +176,13 @@ export function surfaceAt(h, x, y) {
   return "rough";
 }
 export const treeAt = (h, x, y) => h.trees.some(t => Math.hypot(x - t.x, y - t.y) <= t.r);
+// How high the branches reach over a point (0: no tree). The links' trees are all TREE_TOP.
+export const TREE_TOP = 11;
+export function treeTop(h, x, y) {
+  let top = 0;
+  for (const t of h.trees) if (Math.hypot(x - t.x, y - t.y) <= t.r) top = Math.max(top, t.h ?? TREE_TOP);
+  return top;
+}
 // The green's fall at a point, yards/s^2 of pull on a rolling ball (downhill). Zero off the green
 // and fringe.
 export function slopeAt(h, x, y) {
@@ -181,3 +190,137 @@ export function slopeAt(h, x, y) {
   if (Math.hypot(u, v) > h.green.r + 2.5) return [0, 0];
   return [s.bx + s.w * Math.sin(u * s.k + s.ph), s.by + s.w * Math.cos(v * s.k + s.ph * 0.7)];
 }
+
+// ---- THE DEPARTMENT OPEN: famous holes, built from holes/famous.js ---------------------------------
+// The centre line in the hole's own frame: -> {along, lat (+ right), d}. Past either end the line
+// runs on straight, so "along" keeps counting behind the green and before the tee.
+export function frameOf(pts, x, y) {
+  let best = Infinity, along = 0, lat = 0, acc = 0;
+  const last = pts.length - 1;
+  for (let i = 1; i <= last; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
+    const vx = bx - ax, vy = by - ay, L = Math.hypot(vx, vy), ux = vx / L, uy = vy / L;
+    const raw = (x - ax) * ux + (y - ay) * uy;
+    const t = i === 1 && i === last ? raw : i === 1 ? Math.min(L, raw) : i === last ? Math.max(0, raw) : Math.max(0, Math.min(L, raw));
+    const px = ax + ux * t, py = ay + uy * t, d = Math.hypot(x - px, y - py);
+    if (d < best) { best = d; along = acc + t; lat = (x - px) * uy - (y - py) * ux; }
+    acc += L;
+  }
+  return { along, lat, d: best };
+}
+// The point at (along, lat) in the hole's frame.
+function framePoint(pts, along, lat) {
+  const [x, y] = pointAlong(pts, Math.max(0, Math.min(lineLength(pts) - 0.01, along)));
+  const [ux, uy] = headingAt(pts, along);
+  const over = along > lineLength(pts) ? along - lineLength(pts) : along < 0 ? along : 0;
+  return [x + ux * over + uy * lat, y + uy * over - ux * lat];
+}
+function headingAt(pts, along) {
+  let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i], L = Math.hypot(bx - ax, by - ay);
+    if (along <= acc + L || i === pts.length - 1) return [(bx - ax) / L, (by - ay) / L];
+    acc += L;
+  }
+  return [0, 1];
+}
+const TREE_KIND = { pine: { r: [3, 1.5], h: 14 }, oak: { r: [4, 2], h: 12 }, cypress: { r: [4, 2], h: 10 }, palm: { r: [2, 1], h: 15 }, gorse: { r: [2, 1], h: 2.5 } };
+
+function buildFamous(n, d) {
+  const rand = rngOf(fnv(`open|${d.id}`));
+  // the centre line: north from the tee, turning at each knot, exactly d.yards long
+  const knots = [...d.bend, [1, 0]];
+  const pts = [[0, 0]];
+  let head = 0, x = 0, y = 0, prev = 0;
+  for (const [at, deg] of knots) {
+    const L = (at - prev) * d.yards;
+    x += Math.sin(head) * L; y += Math.cos(head) * L;
+    pts.push([r2(x), r2(y)]);
+    head += (deg * Math.PI) / 180; prev = at;
+  }
+  const [gx, gy] = pts[pts.length - 1];
+  const [gr, [fdeg, fmag], [pdeg, pfr]] = d.green;
+  const [ux, uy] = headingAt(pts, d.yards);
+  // round the green: 0 short, 90 right, 180 long, 270 left
+  const around = (deg, dist) => { const a = (deg * Math.PI) / 180; return [gx - ux * Math.cos(a) * dist + uy * Math.sin(a) * dist, gy - uy * Math.cos(a) * dist - ux * Math.sin(a) * dist]; };
+  const green = { x: gx, y: gy, r: gr };
+  const [pnx, pny] = around(pdeg, pfr * gr);
+  const pin = { x: r2(pnx), y: r2(pny) };
+  const [fx, fy] = around(fdeg, 1);
+  const fall = [fx - gx, fy - gy];
+  const slope = { bx: r2(fall[0] * fmag), by: r2(fall[1] * fmag), w: r2(0.05 + rand() * 0.08), k: r2(0.15 + rand() * 0.2), ph: r2(rand() * 6.28) };
+  const bunkers = [], water = [], trees = [], decor = [], z = [];
+  for (const hz of d.haz) {
+    const [k] = hz;
+    if (k === "b") { const [px, py] = framePoint(pts, hz[1], hz[2]); bunkers.push({ x: r2(px), y: r2(py), r: hz[3] }); }
+    else if (k === "w") { const [px, py] = framePoint(pts, hz[1], hz[2]); water.push({ x: r2(px), y: r2(py), r: hz[3] }); }
+    else if (k === "gb") { const [px, py] = around(hz[1], gr + hz[2] + 1.2); bunkers.push({ x: r2(px), y: r2(py), r: hz[2] }); }
+    else if (k === "gw") { const [px, py] = around(hz[1], gr + hz[2] + 3.2); water.push({ x: r2(px), y: r2(py), r: hz[2] }); }
+    else if (k === "t") { const [px, py] = framePoint(pts, hz[1], hz[2]); trees.push({ x: r2(px), y: r2(py), r: hz[3], h: 12, k: "cypress", fixed: true }); }
+    else if (k === "island") { const [px, py] = around(hz[3], 1); z.push({ k, a0: hz[1], collar: hz[2], dx: px - gx, dy: py - gy, half: hz[4] }); }
+    else z.push({ k, a: hz.slice(1) });
+  }
+  const fw = d.fw ? { from: d.fw[0], w: d.fw[1] } : null;
+  const corridor = d.corridor || 50;
+  const h = {
+    n, par: d.par, yards: d.yards, pts, green, pin, slope,
+    fwHalf: fw ? Math.max(...fw.w) : 0, fwStart: fw ? fw.from : Infinity, corridor,
+    tee: { x: 0, y: 0, w: 7, h: 5 }, bunkers, water, trees, decor,
+    top: Math.max(...pts.map(p => p[1])) + gr + 40, bottom: -14,
+    famous: true, id: d.id, name: d.name, after: d.after, note: d.note, scene: d.scene, elev: d.elev || 0, gallery: d.gallery ?? 0,
+    fw, z, treeKind: d.trees[0],
+  };
+  // trees: along both edges of the corridor (the kind and how thick are the hole's), and more
+  // behind them for the view (decor: out of bounds, never in play)
+  const [kind, dens] = d.trees;
+  const tk = TREE_KIND[kind];
+  if (tk) for (let s = 10; s < d.yards + 30; s += 12 + rand() * 12) for (const side of [-1, 1]) {
+    if (rand() < dens) { const [px, py] = framePoint(pts, s + (rand() - 0.5) * 6, side * (corridor - 3 - rand() * 9)); trees.push({ x: r2(px), y: r2(py), r: r2(tk.r[0] + rand() * tk.r[1]), h: tk.h, k: kind }); }
+    if (rand() < dens + 0.2) { const [px, py] = framePoint(pts, s + (rand() - 0.5) * 8, side * (corridor + 4 + rand() * 30)); decor.push({ x: r2(px), y: r2(py), r: r2(tk.r[0] + rand() * tk.r[1]), h: tk.h, k: kind }); }
+  }
+  const wet = (t) => { const s = surfaceAt({ ...h, trees: [] }, t.x, t.y); return s === "water" || s === "bunker" || s === "green" || s === "fringe" || s === "fairway"; };
+  h.trees = trees.filter(t => t.fixed || (Math.hypot(t.x - gx, t.y - gy) > gr + t.r + 6 && Math.hypot(t.x, t.y) > 14 && !wet(t)));
+  h.decor = decor.filter(t => { const s = surfaceAt({ ...h, trees: [] }, t.x, t.y); return s !== "water" && Math.hypot(t.x - gx, t.y - gy) > gr + 14; });
+  return h;
+}
+const fwHalfAt = (fw, along, end) => {
+  const w = fw.w, f = Math.max(0, Math.min(1, (along - fw.from) / Math.max(1, end - fw.from))) * (w.length - 1), i = Math.floor(f);
+  return i >= w.length - 1 ? w[w.length - 1] : w[i] + (w[i + 1] - w[i]) * (f - i);
+};
+function famousSurface(h, x, y) {
+  for (const w of h.water) if (Math.hypot(x - w.x, y - w.y) <= w.r) return "water";
+  const g = h.green, dg = Math.hypot(x - g.x, y - g.y), nearGreen = dg <= g.r + 2.5;
+  const { along: a, lat: l, d } = frameOf(h.pts, x, y);
+  for (const zn of h.z) {
+    const q = zn.a;
+    if (zn.k === "sea") { if (!nearGreen && a >= q[1] && a <= q[2] && q[0] * l > q[3]) return "water"; }
+    else if (zn.k === "cross") { if (!nearGreen && a >= q[0] && a <= q[1] && l >= (q[3] ?? -1e9) && l <= (q[4] ?? 1e9)) return q[2] === "w" ? "water" : "bunker"; }
+    else if (zn.k === "island") {
+      if (a >= zn.a0 && dg > g.r + 2.5 + zn.collar) {
+        // the staff path: a strip out from the green toward zn.dx, zn.dy
+        const t = Math.max(0, (x - g.x) * zn.dx + (y - g.y) * zn.dy);
+        if (!(t > 0 && Math.hypot(x - g.x - zn.dx * t, y - g.y - zn.dy * t) <= zn.half)) return "water";
+      }
+    }
+  }
+  for (const b of h.bunkers) if (Math.hypot(x - b.x, y - b.y) <= b.r) return "bunker";
+  for (const zn of h.z) if (zn.k === "pews") { const q = zn.a; if (a >= q[0] && a <= q[1] && l >= q[2] && l <= q[3]) return (a - q[0]) % 9 < 1.6 ? "rough" : "bunker"; }
+  if (dg <= g.r) return "green";
+  if (nearGreen) return "fringe";
+  if (Math.abs(x - h.tee.x) <= h.tee.w / 2 && Math.abs(y - h.tee.y) <= h.tee.h / 2) return "tee";
+  if (y < h.bottom || y > h.top || d > h.corridor) return "ob";
+  for (const zn of h.z) {
+    const q = zn.a;
+    if (zn.k === "ob" && a >= q[2] && a <= q[3] && q[0] * l > q[1]) return "ob";
+    if (zn.k === "obback" && a > h.yards + g.r + q[0]) return "ob";
+  }
+  for (const t of h.trees) if (Math.hypot(x - t.x, y - t.y) <= t.r) return "trees";
+  if (h.fw && a >= h.fw.from && a <= h.yards - g.r && Math.abs(l) <= fwHalfAt(h.fw, a, h.yards - g.r)) return "fairway";
+  return "rough";
+}
+export { fwHalfAt };
+
+export const OPEN = FAMOUS.map((d, i) => buildFamous(i + 1, d));
+export const COURSES = { links: COURSE, open: OPEN };
+export const COURSE_NAME = { links: "THE DEPARTMENT LINKS", open: "THE DEPARTMENT OPEN" };
+export const parOf = (holes) => ({ front: holes.slice(0, 9).reduce((a, h) => a + h.par, 0), back: holes.slice(9).reduce((a, h) => a + h.par, 0) });

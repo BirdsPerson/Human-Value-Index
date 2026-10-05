@@ -6,10 +6,16 @@
 //   rules        a holed ball ends the hole; out of bounds costs a stroke and plays again from the
 //                spot; water costs a stroke and drops the ball dry; score against par on the card
 //   cpu          a stronger figure scores lower than a weaker one over a few rounds
+//   the open     THE DEPARTMENT OPEN (holes/famous.js): eighteen famous holes, par 72, each with a
+//                name, an after-credit, a note and a source; it builds the same every time; the bot
+//                holes every hole on several seeds; a match on it replays tick for tick; the links
+//                play exactly as before when a round names no course
 // Run: node scripts/check-golf.mjs
 import assert from "node:assert/strict";
-import { COURSE, PAR, surfaceAt } from "../src/play/golf/course.js";
-import { newRound, step, autoplay, replay, cardOf, toParText, BTN, CLUBS, RISE_PUTT, PUTT_MAX, FRIC, holeOf } from "../src/play/golf/sim.js";
+import { readFileSync } from "node:fs";
+import { COURSE, PAR, OPEN, COURSES, parOf, surfaceAt } from "../src/play/golf/course.js";
+import { FAMOUS } from "../src/play/golf/holes/famous.js";
+import { newRound, step, autoplay, replay, cardOf, toParText, BTN, CLUBS, RISE_PUTT, PUTT_MAX, FRIC, holeOf, MAX_STROKES } from "../src/play/golf/sim.js";
 import { GOLFERS } from "../src/play/golf/roster.js";
 
 let n = 0;
@@ -112,4 +118,45 @@ const strong = avg(97), weak = avg(20);
 ok(strong < weak - 4, `a 97 beats a 20 over nine holes (${strong} v ${weak})`);
 ok(GOLFERS.every(g => g[2] >= 0 && g[2] <= 99), "ratings 0..99");
 
-console.log(`check-golf: ${n} checks passed. 9 holes by the bot: ${a.st.result.total[0]} (${toParText(a.st.result.toPar[0])}); ${cfg.cpu.name}: ${a.st.result.total[1]}.`);
+
+// ---- THE DEPARTMENT OPEN
+ok(OPEN.length === 18 && COURSES.open === OPEN && COURSES.links === COURSE, "the open: eighteen holes, both courses on file");
+const op = parOf(OPEN);
+ok(op.front + op.back === 72, `the open: par 72, got ${op.front} + ${op.back}`);
+const srcText = readFileSync(new URL("../src/play/golf/holes/famous.js", import.meta.url), "utf8");
+ok((srcText.match(/\/\/ source: https?:\/\//g) || []).length === FAMOUS.length, "the open: every hole names its source");
+ok(new Set(FAMOUS.map(d => d.id)).size === FAMOUS.length, "the open: ids are unique");
+for (const h of OPEN) {
+  const d = FAMOUS[h.n - 1];
+  ok(h.name && h.after && h.note && /NO\. \d+$/.test(h.after), `open ${h.n}: a name, an after-credit, a note`);
+  ok(!/MASTERS|AMEN CORNER/.test(`${h.name} ${h.note}`), `open ${h.n}: no tournament marks in the name or note`);
+  ok(h.yards === d.yards && Math.abs(h.pts.slice(1).reduce((a, p, i) => a + Math.hypot(p[0] - h.pts[i][0], p[1] - h.pts[i][1]), 0) - d.yards) < 0.6, `open ${h.n}: the centre line is ${d.yards} yards`);
+  ok(surfaceAt(h, h.pin.x, h.pin.y) === "green", `open ${h.n}: the pin is on the green`);
+  ok(surfaceAt(h, 0, 0) === "tee", `open ${h.n}: the tee is the tee`);
+  ok(h.par === 3 ? h.yards < 250 : h.par === 4 ? h.yards >= 300 && h.yards < 530 : h.yards >= 480, `open ${h.n}: ${h.yards} yards fits par ${h.par}`);
+}
+ok(surfaceAt(OPEN[14], OPEN[14].green.x, OPEN[14].green.y - OPEN[14].green.r - 12) === "water", "the island green: water short of it");
+ok(surfaceAt(OPEN[14], OPEN[14].green.x + OPEN[14].green.r + 12, OPEN[14].green.y) === "water", "the island green: water beside it");
+const again2 = await import("../src/play/golf/course.js?again2");
+ok(JSON.stringify(again2.OPEN) === JSON.stringify(OPEN), "the open builds the same every time");
+// the bot holes every hole, on several seeds (wind changes), never picking up
+const worst = OPEN.map(() => 0);
+for (const seed of [3, 17, 2024, 0xfeed]) {
+  const { st } = autoplay({ seed, course: "open", mode: "stroke", count: 18, start: 0, player: { name: "BOT" } });
+  ok(st.phase === "done" && st.result.holes.length === 18, `the open: the bot finishes eighteen (seed ${seed})`);
+  st.result.holes.forEach((r, i) => { worst[i] = Math.max(worst[i], r.s[0]); });
+}
+OPEN.forEach((h, i) => ok(worst[i] < MAX_STROKES && worst[i] <= h.par + 3, `open ${h.n} ${h.id}: holeable by the bot (worst ${worst[i]} on par ${h.par})`));
+// a match on the open: twice the same, and the log replays it
+const ocfg = { ...cfg, course: "open", count: 18 };
+const oa = autoplay(ocfg), ob = autoplay(ocfg);
+ok(JSON.stringify(oa.log) === JSON.stringify(ob.log) && JSON.stringify(oa.st.result) === JSON.stringify(ob.st.result), "the open: the same inputs and result, twice");
+const orp = replay(ocfg, oa.log);
+ok(JSON.stringify(orp.result) === JSON.stringify(oa.st.result) && orp.tick === oa.st.tick, "the open: the log alone replays the round tick for tick");
+ok(JSON.stringify(oa.st.result) !== JSON.stringify(a.st.result), "the open is another course");
+// a round that names no course is the links, exactly
+const la = autoplay({ ...cfg, course: "links" });
+ok(JSON.stringify(la.st.result) === JSON.stringify(a.st.result) && JSON.stringify(la.log) === JSON.stringify(a.log), "no course named: the links, tick for tick");
+ok(replay({ ...cfg }, a.log).tick === a.st.tick, "old links rounds (no course in cfg) still replay");
+
+console.log(`check-golf: ${n} checks passed. 9 holes by the bot: ${a.st.result.total[0]} (${toParText(a.st.result.toPar[0])}); ${cfg.cpu.name}: ${a.st.result.total[1]}. The open, 18 by the bot: ${oa.st.result.total[0]} (${toParText(oa.st.result.toPar[0])}).`);

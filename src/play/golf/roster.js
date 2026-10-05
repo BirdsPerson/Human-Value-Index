@@ -5,7 +5,10 @@
 //
 // Content rule: the living appear and play; they never speak and are never quoted. Nobody here
 // says anything. The "why" lines are the Department's, about the game.
-// [slug, name, rating, shirt, trousers, why, sprite]
+// [slug, name, rating, shirt, trousers, why]
+// HINTS: a head for a figure whose file has no likeness drawn yet (/api/sprite/<slug> answers 404
+// "Likeness pending"): avatar.js fields, near enough to the figure. Used only until the file's own
+// sprite exists; then the file's face is cut and used (looks.js).
 export const GOLFERS = [
   ["tiger-woods", "TIGER WOODS", 97, "#d82800", "#000000", "FIFTEEN MAJORS. TIED AT THE CEILING; THE DEPARTMENT DECLINES TO SETTLE IT."],
   ["jack-nicklaus", "JACK NICKLAUS", 97, "#f8b800", "#0058f8", "EIGHTEEN MAJORS. TIED AT THE CEILING; THE DEPARTMENT DECLINES TO SETTLE IT."],
@@ -18,8 +21,20 @@ export const GOLFERS = [
   ["babe-ruth", "BABE RUTH", 46, "#0000bc", "#fcfcfc", "714 HOME RUNS, AND GOLF ALL WINTER. SWINGS FOR THE FENCES ON A COURSE WITHOUT ANY."],
   ["adam-sandler", "ADAM SANDLER", 38, "#f8b800", "#7c7c7c", "PLAYED A HOCKEY PLAYER WHO DRIVES LIKE A SLAPSHOT (HAPPY GILMORE, 1996). THE DEPARTMENT RATES THE PUTTING."],
 ];
+export const HINTS = {
+  "tiger-woods": { skin: "brown", hair_style: "buzz", hair_color: "black" },
+  "jack-nicklaus": { skin: "fair", hair_style: "side_part", hair_color: "blonde" },
+  "rory-mcilroy": { skin: "fair", hair_style: "curly", hair_color: "dark_brown" },
+  "phil-mickelson": { skin: "light_tan", hair_style: "short", hair_color: "brown" },
+  "john-daly": { skin: "fair", hair_style: "long", hair_color: "blonde", facial_hair: "stubble" },
+  "michael-jordan": { skin: "deep", hair_style: "bald", hair_color: "black" },
+  "bill-murray": { skin: "fair", hair_style: "side_part", hair_color: "grey", facial_hair: "stubble" },
+  "jfk": { skin: "fair", hair_style: "side_part", hair_color: "auburn" },
+  "babe-ruth": { skin: "fair", hair_style: "short", hair_color: "dark_brown" },
+  "adam-sandler": { skin: "light_tan", hair_style: "curly", hair_color: "dark_brown", facial_hair: "stubble" },
+};
 const BUNDLED = new Set(["jfk", "babe-ruth"]);
 export const golfers = () => GOLFERS.map(([slug, name, rating, shirt, pants, why]) => ({
-  slug, name, rating, shirt, pants, why, sprite: BUNDLED.has(slug) ? `/sprites/${slug}.png` : `/api/sprite/${slug}`,
+  slug, name, rating, shirt, pants, why, hint: HINTS[slug] || null, sprite: BUNDLED.has(slug) ? `/sprites/${slug}.png` : `/api/sprite/${slug}`,
 }));
 export const golferBySlug = (slug) => golfers().find(g => g.slug === slug) || null;

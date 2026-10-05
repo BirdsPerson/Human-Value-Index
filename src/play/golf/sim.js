@@ -10,7 +10,7 @@
 // costs a stroke and the shot again from where it was played. On the green the putter rolls the
 // ball over the green's fall (course.js slopeAt).
 
-import { COURSE, surfaceAt, slopeAt, treeAt, lineDist, pointAlong, rngStep, fnv } from "./course.js";
+import { COURSE, COURSES, surfaceAt, slopeAt, treeTop, lineDist, pointAlong, rngStep, fnv } from "./course.js";
 
 export const VERSION = 1;
 export const HZ = 60;
@@ -42,7 +42,8 @@ const TREE_H = 11;
 const lieFactor = (club, lie) => (lie === "bunker" && CLUBS[club].id === "SW" ? 0.92 : LIE[lie] ?? 1);
 const flightT = (carry) => 1.1 + carry / 160;      // seconds in the air
 export const reachOf = (club, lie) => { const c = CLUBS[club]; return c.putt ? PUTT_MAX : c.carry * lieFactor(club, lie) * (1 + c.roll * 0.8); };
-export const holeOf = (st) => COURSE[st.holes[st.hi]];
+export const courseOf = (st) => COURSES[st.course] || COURSE;
+export const holeOf = (st) => courseOf(st)[st.holes[st.hi]];
 export const dirOf = (aim) => [Math.sin(aim), Math.cos(aim)];   // aim 0 = straight up the hole, + = right
 
 // ---- the shot a caddie would suggest -------------------------------------------------------------
@@ -58,23 +59,46 @@ export function planShot(h, P) {
     return { club, aim: aimAt(h.pin.x, h.pin.y), tx: h.pin.x, ty: h.pin.y, d: pin, pin };
   }
   const { along } = lineDist(h.pts, P.x, P.y);
-  const [tx, ty] = pointAlong(h.pts, along + reachOf(longest, P.lie) * 0.95);
+  let [tx, ty] = pointAlong(h.pts, along + reachOf(longest, P.lie) * 0.95);
+  if (h.famous) [tx, ty] = safeLayup(h, along + reachOf(longest, P.lie) * 0.95, tx, ty);
   return { club: longest, aim: aimAt(tx, ty), tx, ty, d: Math.hypot(tx - P.x, ty - P.y), pin };
 }
 
+// THE DEPARTMENT OPEN only (the links keep the plain plan): a lay-up the caddie would take, short
+// of the water and the sand rather than in it. Back down the line, then a little either side, until
+// the spot and a ring round it are dry grass.
+function safeLayup(h, along, tx, ty) {
+  const ok = (x, y) => {
+    const s = surfaceAt(h, x, y);
+    if (s !== "fairway" && s !== "rough") return false;
+    for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4, q = surfaceAt(h, x + Math.cos(a) * 9, y + Math.sin(a) * 9); if (q === "water" || q === "ob") return false; }
+    return true;
+  };
+  for (let back = 0; back <= 120; back += 8) for (const lat of [0, -6, 6, -12, 12]) {
+    const a = Math.min(along - back, h.yards - h.green.r - 12);
+    const [x, y] = pointAlong(h.pts, a);
+    const [x2, y2] = pointAlong(h.pts, a + 1), n = Math.hypot(x2 - x, y2 - y) || 1;
+    const px = x + ((y2 - y) / n) * lat, py = y - ((x2 - x) / n) * lat;
+    if (ok(px, py) && surfaceAt(h, px, py) === "fairway") return [px, py];
+    if (back >= 64 && ok(px, py)) return [px, py];
+  }
+  return [tx, ty];
+}
+
 // ---- a new round -------------------------------------------------------------------------------
-// cfg: {seed, mode: "stroke" | "match", start (0 or 9), count (9 or 18), player: {name, color},
+// cfg: {seed, course: "links" (default) | "open", mode: "stroke" | "match", start (0 or 9), count (9 or 18), player: {name, color},
 //       cpu: {slug, name, rating, color} | null}
 export function newRound(cfg) {
   const count = cfg.count === 9 ? 9 : 18, start = count === 9 && cfg.start === 9 ? 9 : 0;
   const seed = (cfg.seed >>> 0) || 1;
+  const course = cfg.course === "open" ? "open" : "links";
   const mk = (p, kind) => ({ name: String(p?.name || "SUBJECT").toUpperCase().slice(0, 18), kind, slug: p?.slug || null, rating: kind === "cpu" ? Math.max(0, Math.min(99, p.rating | 0)) : null, color: p?.color || null, card: [], x: 0, y: 0, lie: "tee", strokes: 0, holed: false, prev: null });
   const players = [mk(cfg.player, "human")];
   const mode = cfg.mode === "match" && cfg.cpu ? "match" : "stroke";
   if (mode === "match") players.push(mk(cfg.cpu, "cpu"));
   const st = {
-    v: VERSION, cfg: { seed, mode, start, count, player: cfg.player || null, cpu: mode === "match" ? cfg.cpu : null },
-    rng: fnv(`golf|${seed}`), mode, holes: Array.from({ length: count }, (_, i) => start + i), hi: 0,
+    v: VERSION, cfg: { seed, course, mode, start, count, player: cfg.player || null, cpu: mode === "match" ? cfg.cpu : null },
+    rng: fnv(`golf|${seed}`), mode, course, holes: Array.from({ length: count }, (_, i) => start + i), hi: 0,
     players, cur: 0, honor: players.map((_, i) => i), phase: "intro", t: 0, tick: 0, prev: 0, hold: 0,
     aim: 0, club: 0, meter: null, fl: null, ball: null, wind: null, msg: "", tone: "", ev: [], plan: null, result: null,
   };
@@ -163,6 +187,9 @@ export function botBits(st) {
       const plan = planShot(h, P), full = c.carry * lieFactor(st.club, P.lie);
       const toPin = plan.tx === h.pin.x && plan.ty === h.pin.y;
       p = Math.min(1, (toPin ? plan.d / (1 + c.roll * ROLLF.green) : plan.d / (1 + c.roll * 0.8)) / full);
+      // the wind along the line: into it, a firmer swing; with it, a softer one
+      const [dx, dy] = dirOf(st.aim), T = flightT(full * p);
+      p = Math.max(0.03, Math.min(1, p - ((st.wind.x * dx + st.wind.y * dy) * 0.45 * T) / full));
     }
     // the press lands on the next tick's marker: press on the tick that puts it nearest the mark
     if (m.stage === 1) return (m.k + 1.5) / m.rise >= p ? BTN.A : 0;
@@ -271,7 +298,7 @@ function flight(st) {
   const fl = st.fl, h = holeOf(st), f = Math.min(1, st.t / fl.ticks);
   const p = flightAt(fl, st.wind, f);
   st.ball = p;
-  if (f > 0.06 && p.z < TREE_H && treeAt(h, p.x, p.y)) {   // into the branches: it drops where it hit
+  if (f > 0.06 && p.z < TREE_H && p.z < treeTop(h, p.x, p.y)) {   // into the branches: it drops where it hit
     st.ev.push("tree");
     st.fl = { ...fl, vx: 0, vy: 0 };
     return land(st, p.x, p.y, 0, 0);
@@ -383,7 +410,8 @@ function nextTurn(st) {
 // ---- the card --------------------------------------------------------------------------------------
 export const toParText = (d) => (d === 0 ? "E" : d > 0 ? `+${d}` : String(d));
 export function cardOf(st) {
-  const rows = st.holes.map((hi, k) => ({ n: COURSE[hi].n, par: COURSE[hi].par, yards: COURSE[hi].yards, s: st.players.map(P => P.card[k] ?? null) }));
+  const C = courseOf(st);
+  const rows = st.holes.map((hi, k) => ({ n: C[hi].n, par: C[hi].par, yards: C[hi].yards, s: st.players.map(P => P.card[k] ?? null) }));
   const done = rows.filter(r => r.s.every(v => v != null));
   const total = st.players.map((_, i) => done.reduce((a, r) => a + r.s[i], 0));
   const par = done.reduce((a, r) => a + r.par, 0);

@@ -3,10 +3,11 @@ import { Frame, Button, ButtonRow, ScreenHead } from "../../ui/index.js";
 import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { CLOTH } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
-import { COURSE, PAR } from "./course.js";
+import { COURSES, COURSE_NAME, parOf } from "./course.js";
 import { newRound, step, logPush, cardOf, toParText, botBits, BTN, VERSION, HZ } from "./sim.js";
 import { draw, W, H } from "./render.js";
 import { golfers, golferBySlug } from "./roster.js";
+import { lookFor, paintCard } from "./looks.js";
 import * as sfx from "./audio.js";
 import "./golf.css";
 
@@ -23,31 +24,56 @@ function saveRound(rec) {
   MEMORY.unshift(rec);
   try { localStorage.setItem(KEEP, JSON.stringify([rec, ...loadRounds()].slice(0, 8))); } catch { /* private window: the tab keeps it */ }
 }
-const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); return { vs: q.get("vs") || null }; };
+const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); return { vs: q.get("vs") || null, course: ["open", "links"].includes(q.get("course")) ? q.get("course") : null }; };
 
+// You: your file's photo (a drawn sprite or the procedural one) and its kit, else a SUBJECT.
 function me() {
   const id = readCaseId(), last = readLastResult();
-  const av = last && last.caseId === id ? last.avatar : null;
+  const av = last && (!id || last.caseId === id || !last.caseId) ? last.avatar : null;
+  const spec = av?.kind === "procedural" ? av.spec : av && !av.kind && av.skin ? av : null;
   return {
     name: id ? `SUBJECT ${id.replace(/[^a-z0-9]/gi, "").slice(-4).toUpperCase()}` : "SUBJECT",
-    color: { shirt: CLOTH[av?.top_color] || "#3cbcfc", pants: CLOTH[av?.bottom_color] || "#7c7c7c" },
+    color: { shirt: (spec && CLOTH[spec.top_color]) || "#3cbcfc", pants: (spec && CLOTH[spec.bottom_color]) || "#7c7c7c" },
+    look: { url: av?.kind === "sprite" ? av.url : null, spec },
   };
 }
 
-function Sprite({ g }) {
-  const [bad, setBad] = useState(false);
-  if (bad) return <span className="gf-sprite" aria-hidden="true"><span>{g.name.slice(0, 2)}</span></span>;
-  return <span className="gf-sprite" aria-hidden="true" style={{ backgroundImage: `url(${g.sprite})` }}><img src={g.sprite} alt="" onError={() => setBad(true)} style={{ display: "none" }} /></span>;
+// A figure's sprite URL, from the file: null while the likeness is pending (no 404 asked for).
+const SPRITE_URL = new Map();
+function spriteUrl(g) {
+  if (!g.sprite.startsWith("/api/sprite/")) return Promise.resolve(g.sprite);
+  if (!SPRITE_URL.has(g.slug)) SPRITE_URL.set(g.slug, fetch(`/api/figure/${g.slug}`).then(r => (r.ok ? r.json() : null)).then(j => j?.subject?.sprite || null).catch(() => null));
+  return SPRITE_URL.get(g.slug);
+}
+const lookOfGolfer = (g) => spriteUrl(g).then(url => lookFor({ url, hint: g.hint, shirt: g.shirt, pants: g.pants }));
+const lookOfMe = (p) => lookFor({ url: p.look?.url || null, spec: p.look?.spec || null, hint: { skin: "tan", hair_style: "short", hair_color: "brown" }, shirt: p.color?.shirt, pants: p.color?.pants });
+
+// The figure as they will play: their face on the standard outfit, 32x48 at 1x.
+function GolfCard({ g }) {
+  const ref = useRef(null);
+  const [generic, setGeneric] = useState(false);
+  useEffect(() => {
+    let off = false;
+    lookOfGolfer(g).then(l => {
+      const c = ref.current; if (off || !c) return;
+      const x = c.getContext("2d"); x.imageSmoothingEnabled = false; x.clearRect(0, 0, 32, 48); x.drawImage(paintCard(l), 0, 0);
+      setGeneric(l.generic);
+    });
+    return () => { off = true; };
+  }, [g]);
+  return <canvas ref={ref} width={32} height={48} className="gf-sprite" aria-hidden="true" title={generic ? "LIKENESS PENDING" : undefined} />;
 }
 
 export default function Golf({ route }) {
-  const { vs } = useMemo(() => parseRoute(route), [route]);
+  const { vs, course: course0 } = useMemo(() => parseRoute(route), [route]);
+  const [course, setCourse] = useState(course0 || "open");
   const [count, setCount] = useState(18);
   const [start, setStart] = useState(0);
   const [game, setGame] = useState(null);
   const [rounds, setRounds] = useState(loadRounds);
   const [muted, setMuted] = useState(sfx.isMuted());
   const field = useMemo(() => golfers(), []);
+  const holes = COURSES[course], par = parOf(holes), yards = holes.reduce((a, h) => a + h.yards, 0);
   const pre = vs ? golferBySlug(vs) : null;
 
   // demo: the Department's caddie plays the SUBJECT's side with perfect timing (an attract mode)
@@ -55,17 +81,17 @@ export default function Golf({ route }) {
     sfx.unlock();
     const seed = (Math.floor(Math.random() * 0xfffffffe) + 1) >>> 0;
     const p = me();
-    setGame({ key: seed, cfg: { seed, mode: g ? "match" : "stroke", start, count, player: demo ? { name: "THE CADDIE", color: { shirt: "#7c7c7c", pants: "#000000" } } : p, cpu: g ? { slug: g.slug, name: g.name, rating: g.rating, color: { shirt: g.shirt, pants: g.pants } } : null }, demo });
+    setGame({ key: seed, cfg: { seed, course, mode: g ? "match" : "stroke", start, count, player: demo ? { name: "THE CADDIE", color: { shirt: "#7c7c7c", pants: "#000000" } } : { name: p.name, color: p.color }, cpu: g ? { slug: g.slug, name: g.name, rating: g.rating, color: { shirt: g.shirt, pants: g.pants } } : null }, demo, looks: [demo ? lookFor({ hint: { skin: "light_tan", hair_style: "short", hair_color: "grey" }, shirt: "#7c7c7c", pants: "#000000" }) : lookOfMe(p), ...(g ? [lookOfGolfer(g)] : [])] });
   };
   const done = (rec) => { saveRound(rec); setRounds(loadRounds()); };
   const toggleMute = () => { sfx.setMuted(!muted); setMuted(!muted); };
 
   return (
     <div className="gf">
-      <ScreenHead title="THE DEPARTMENT LINKS" meta="EXHIBITION // COUNTS IN NO STANDINGS. THE DEPARTMENT COUNTS IT ANYWAY." />
+      <ScreenHead title={COURSE_NAME[game?.cfg.course || course]} meta="EXHIBITION // COUNTS IN NO STANDINGS. THE DEPARTMENT COUNTS IT ANYWAY." />
       {game ? (
         <>
-          <Play key={game.key} cfg={game.cfg} demo={game.demo} onDone={game.demo ? () => {} : done} muted={muted} />
+          <Play key={game.key} cfg={game.cfg} demo={game.demo} lookP={game.looks} onDone={game.demo ? () => {} : done} muted={muted} />
           <ButtonRow split stackOnMobile>
             <Button variant="back" onClick={() => setGame(null)}>Leave the course</Button>
             <Button variant="secondary" onClick={toggleMute}>{muted ? "SOUND: OFF" : "SOUND: ON"}</Button>
@@ -73,8 +99,15 @@ export default function Golf({ route }) {
         </>
       ) : (
         <>
-          <Frame box title="LOT 0x6F07 // APPLICATION 001" meta="DENIED">
-            <p className="gf-p">APPLICATION 001 PROPOSED AN 18-HOLE GOLF COURSE FOR LOT 0x6F07. THE ASSEMBLY VOTED FOR THE FARM. THE DEPARTMENT KEPT THE DRAWINGS: EIGHTEEN HOLES, PAR {PAR.front + PAR.back}, {COURSE.reduce((a, h) => a + h.yards, 0).toLocaleString("en-US")} YARDS. YOU MAY PLAY THEM HERE, WHERE THEY DO NOT EXIST.</p>
+          <Frame box title={course === "open" ? "THE DEPARTMENT OPEN // EIGHTEEN FAMOUS HOLES" : "LOT 0x6F07 // APPLICATION 001"} meta={course === "open" ? "RE-SURVEYED" : "DENIED"}>
+            <div className="gf-opts" role="group" aria-label="Course">
+              {["open", "links"].map(k => (
+                <button key={k} type="button" className="gf-opt" aria-pressed={course === k} onClick={() => setCourse(k)}>{COURSE_NAME[k]}</button>
+              ))}
+            </div>
+            {course === "open"
+              ? <p className="gf-p">EIGHTEEN OF THE WORLD'S MOST FAMOUS HOLES, RE-SURVEYED BY THE DEPARTMENT AND DRAWN FROM THE PUBLIC RECORD: PAR {par.front + par.back}, {yards.toLocaleString("en-US")} YARDS. THE CLIFFS, THE CREEKS AND THE ISLAND ARE WHERE THEY ARE. THE DEPARTMENT ADDED ITS NOTES.</p>
+              : <p className="gf-p">APPLICATION 001 PROPOSED AN 18-HOLE GOLF COURSE FOR LOT 0x6F07. THE ASSEMBLY VOTED FOR THE FARM. THE DEPARTMENT KEPT THE DRAWINGS: EIGHTEEN HOLES, PAR {par.front + par.back}, {yards.toLocaleString("en-US")} YARDS. YOU MAY PLAY THEM HERE, WHERE THEY DO NOT EXIST.</p>}
             <p className="gf-p dim">EXHIBITION ONLY. NO STANDINGS, NO CUP POINTS, NO PRIZES. THE CARD STAYS IN THIS BROWSER.</p>
             <div className="gf-opts" role="group" aria-label="Holes">
               {[[0, 18, "18 HOLES"], [0, 9, "FRONT NINE"], [9, 9, "BACK NINE"]].map(([s, c, l]) => (
@@ -93,7 +126,7 @@ export default function Golf({ route }) {
               {field.map(g => (
                 <li key={g.slug}>
                   <button type="button" className="gf-opp" onClick={() => begin(g)}>
-                    <Sprite g={g} />
+                    <GolfCard g={g} />
                     <span className="nm"><b>{g.name}</b><span className="why">{g.why}</span></span>
                     <span className="rt">{g.rating}</span>
                   </button>
@@ -118,6 +151,7 @@ function Controls() {
         <dt>CLUB</dt><dd>X OR DOWN: SHORTER. UP: LONGER. (PAD: B / CIRCLE, BUMPERS.)</dd>
         <dt>PAUSE</dt><dd>ENTER (PAD: START).</dd>
         <dt>THE GREEN</dt><dd>THE ARROWS ON THE GREEN POINT DOWNHILL. DARKER IS STEEPER. THE PUTTER'S METER IS SLOWER.</dd>
+        <dt>THE WINDOW</dt><dd>TOP RIGHT: THE HOLE FROM ABOVE, YOUR AIM, THE PIN AND THE WIND. CLOSE TO THE GREEN IT SHOWS THE GREEN.</dd>
       </dl>
     </Frame>
   );
@@ -129,7 +163,7 @@ function Rounds({ rounds }) {
     <Frame title="YOUR ROUNDS" meta="THIS BROWSER ONLY">
       <ul className="gf-rounds">
         {rounds.map((r, i) => (
-          <li key={i}>{new Date(r.at).toISOString().slice(0, 16).replace("T", " ")} // {r.result.holes.length} HOLES // {r.result.mode === "match" ? `V ${r.cfg.cpu?.name}: ` : ""}{r.result.total[0]} ({toParText(r.result.toPar[0])}){r.result.mode === "match" ? ` // ${r.result.winner === 0 ? "WON" : r.result.winner === 1 ? "LOST" : "HALVED"} ${r.result.won[0]}-${r.result.won[1]}` : ""}</li>
+          <li key={i}>{new Date(r.at).toISOString().slice(0, 16).replace("T", " ")} // {r.cfg?.course === "open" ? "OPEN" : "LINKS"} {r.result.holes.length} HOLES // {r.result.mode === "match" ? `V ${r.cfg.cpu?.name}: ` : ""}{r.result.total[0]} ({toParText(r.result.toPar[0])}){r.result.mode === "match" ? ` // ${r.result.winner === 0 ? "WON" : r.result.winner === 1 ? "LOST" : "HALVED"} ${r.result.won[0]}-${r.result.won[1]}` : ""}</li>
         ))}
       </ul>
     </Frame>
@@ -140,7 +174,7 @@ function Rounds({ rounds }) {
 const KEYMAP = { ArrowLeft: BTN.L, ArrowRight: BTN.R, ArrowUp: BTN.U, ArrowDown: BTN.D, " ": BTN.A, z: BTN.A, Z: BTN.A, x: BTN.B, X: BTN.B };
 const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); };
 
-function Play({ cfg, demo, onDone, muted }) {
+function Play({ cfg, demo, lookP, onDone, muted }) {
   const canvas = useRef(null), wrap = useRef(null);
   const touch = useRef(0);
   const latch = useRef(0);   // a press shorter than a tick still counts: held for at least one tick
@@ -167,6 +201,9 @@ function Play({ cfg, demo, onDone, muted }) {
 
   useEffect(() => {
     const st = newRound(cfg), log = [];
+    // the golfers' looks arrive when their faces load; the picture uses whatever is here
+    const looks = [];
+    (lookP || []).forEach((p, i) => Promise.resolve(p).then(l => { if (l) { l.card = paintCard(l); looks[i] = l; } }).catch(() => {}));
     const keys = new Set();
     let raf = 0, last = performance.now(), acc = 0, frame = 0, prevStart = false, phase = st.phase, hi = st.hi, recorded = false;
     const ctx = canvas.current.getContext("2d");
@@ -220,7 +257,7 @@ function Play({ cfg, demo, onDone, muted }) {
           doneRef.current({ v: VERSION, seed: st.cfg.seed, cfg: st.cfg, inputLog: log.slice(), result: st.result, at: Date.now() });
         }
       }
-      draw(ctx, st, frame++, pausedRef.current);
+      draw(ctx, st, frame++, pausedRef.current, looks);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -239,7 +276,7 @@ function Play({ cfg, demo, onDone, muted }) {
     <div className="gf-play" ref={wrap}>
       <div className="gf-stage">
         <canvas ref={canvas} width={W} height={H} style={{ width: scale.css, height: (scale.css * H) / W }}
-          aria-label="The Department Links: the golfer and swing meter on the left, the hole from above on the right." role="img" />
+          aria-label="Golf: the golfer from behind with the hole running away to the horizon, the hole from above in the corner window, the swing meter along the bottom." role="img" />
       </div>
       <div className="gf-status" aria-live="polite">{pad ? `CONTROLLER: ${pad.toUpperCase()}` : "KEYS: ARROWS AIM // SPACE SWINGS // X CLUB // ENTER PAUSES"}{muted ? " // MUTED" : ""}</div>
       <div className="gf-touch" aria-label="Touch controls">
