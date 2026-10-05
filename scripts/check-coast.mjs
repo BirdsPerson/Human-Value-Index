@@ -15,7 +15,7 @@ const over = (a, b) => a.x < b.x + b.w - 1e-9 && b.x < a.x + a.w - 1e-9 && a.y <
 
 // ---- the land ----------------------------------------------------------------------------------
 const EXP = SIM.DISTRICTS.filter(d => d.expansion);
-ok(EXP.map(d => d.id).join() === "coast,heights,port,oldtown,uptown,downtown" && SIM.DISTRICTS.slice(-6).every(d => d.expansion), "the districts off the Loop, appended after the ten (a sector is a district, in order): the Coast, the Heights, the Port, the Old Town, Uptown, Downtown");
+ok(EXP.map(d => d.id).join() === "coast,heights,port,oldtown,uptown,downtown,suburbs,airport" && SIM.DISTRICTS.slice(-8).every(d => d.expansion), "the districts off the Loop, appended after the ten (a sector is a district, in order): the Coast, the Heights, the Port, the Old Town, Uptown, Downtown, the Suburbs, the Airport");
 for (const d of SIM.DISTRICTS) for (const e of SIM.DISTRICTS) if (d !== e) ok(!over(d.rect, e.rect), `${d.id} and ${e.id} do not overlap`);
 ok(SIM.DISTRICT.coast.rect.y >= Math.max(...SIM.LOOP_DISTRICTS.map(d => d.rect.y + d.rect.h)) + 2, "the Coast lies south of everything, past a street");
 ok(SIM.DISTRICT.heights.rect.y + SIM.DISTRICT.heights.rect.h <= Math.min(...SIM.LOOP_DISTRICTS.map(d => d.rect.y)) - 2, "the Heights lie north of everything, past a street");
@@ -24,11 +24,11 @@ for (const d of EXP.filter(x => !x.onFoot)) {
   const r = d.rect;
   for (const b of SIM.BUILDINGS.filter(x => x.district === d.id)) ok(b.rect.x >= r.x && b.rect.y >= r.y && b.rect.x + b.rect.w <= r.x + r.w && b.rect.y + b.rect.h <= r.y + r.h, `${b.id} inside ${d.id}`);
   const kinds = new Set(d.places.map(p => SIM.PLACES[p].kind));
-  ok(kinds.has("home") && (kinds.has("leisure") || kinds.has("mixed")), `${d.id}: homes and public places`);
+  ok((kinds.has("home") || d.id === "airport") && (kinds.has("leisure") || kinds.has("mixed")), `${d.id}: homes and public places (the Airport: jobs and visitors, no homes)`);
   ok(SIM.JOBS.filter(j => j.district === d.id).length >= 3, `${d.id}: jobs (${SIM.JOBS.filter(j => j.district === d.id).map(j => j.title).join(", ")})`);
   const homes = d.places.filter(p => SIM.PLACES[p].kind === "home");
   // the resorts house every band; the Port the docks' tiers, the Old Town the middle (the master plan)
-  const bands = { coast: [0, 1, 2], heights: [0, 1, 2], port: [1, 2], oldtown: [1] }[d.id];
+  const bands = { coast: [0, 1, 2], heights: [0, 1, 2], port: [1, 2], oldtown: [1], suburbs: [1, 2], airport: [] }[d.id];
   ok(bands.every(band => homes.some(h => SIM.HOMES_BY_BAND[band].includes(h))), `${d.id}: housing for tier bands ${bands.join(", ")}`);
 }
 ok(["beach", "boardwalk", "pier", "surf"].every(p => SIM.PLACES[p]?.district === "coast") && ["slopes", "base-lodge"].every(p => SIM.PLACES[p]?.district === "heights"), "the beach, boardwalk, pier and surf; the slopes and the lodge");

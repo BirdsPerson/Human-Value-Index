@@ -1927,3 +1927,38 @@ directive), `prefectData.js` / `prefectDraw.js` (two prefects: heads, uniforms, 
 - **At the day boundary**: the two districts appear in days built after the deploy; days already
   published have no nightlife files and draw nobody there (the Coast's rule).
 - Screens: docs/screens/nightlife/.
+## PHASE 2 step 4: THE SUBURBS, THE AIRPORT and THE EAST LINE (2026-10-05)
+
+Layout 5, network 7 (docs/planning/MASTER_PLAN.md "PHASE 2" step 4). `src/city/eastSim.js` (the data),
+`eastGeo.js` (massing), `eastDraw.js` (facades, ground, the parks, the airfield, the aircraft),
+`airport.js` (the flight schedule), `scripts/check-east.mjs`.
+
+- **THE SUBURBS** (`suburbs`, 0xE300, x 140-198, y 30-100), past the nightlife quarters: ten estates
+  round three East Line stations. Detached houses round curving cul-de-sacs (MAPLE CLOSE, LARCHMONT,
+  BIRCH CRESCENT, ORCHARD WAY, CEDAR LOOP, FOXGLOVE DRIVE: the middle band, tiers 1-2) and starter
+  townhouses round shared courts (WILLOW BEND, ASPEN ROW, PRIMROSE COURT, HAWTHORN RISE: the lowest
+  band's tier 3 alone, `sim.HOME_ONLY_TIERS`). EASTGATE MALL and its food court, RIDGEMONT HIGH (the
+  track, the Friday night game), the clinic; NORTH PARK, THE VILLAGE GREEN and SOUTH PARK (the pond):
+  every home within twenty cells of one, within ten (plus half its block) of a platform. 890 homes.
+- **THE AIRPORT** (`airport`, 0xE400, x 202-286, y 54-94): jobs and visitors, no homes. THE DEPARTURES
+  HALL (the city's door: its toolbar offers ARRIVALS, `#arrivals`), security, the airfield (runway
+  09/27 along its north side, the taxiway, four stands), the control tower, the hangars, the airport
+  hotel. The aircraft are clock math (`airport.js`): an arrival every half hour 05:00-22:30, in from
+  the east and out to the east (never west of the airport: never over the Suburbs or the core), forty
+  minutes on the stand, no movements in the curfew; every viewer sees the same aircraft.
+- **THE EAST LINE** (`east`, line 6, version 1, nets [7]): ARCHIVE (EAST LINE) in the street between
+  Downtown and the Sprawl's north-east corner (an interchange 17.9 cells from the Loop's Archive gate,
+  within `XFER_R`), east along y 48.5 (SUBURBS NORTH), south down the street between the estates and
+  the mall (SUBURBS MALL), east to SUBURBS SOUTH and AIRPORT TERMINAL at the departures hall's doors.
+  Ten three-car trains, a train every 5.1 machine minutes. Published days keep their trains:
+  check-plans holds a network-6 day (`fixtures/net6-plan-day300.json`, built by 3d6a2c0).
+- **Leisure** at half its listed strength (`EAST_PULL`), as the Port's, the Old Town's and THE MALL's
+  landmarks: the roster's haunts stay where friends find each other. The general jobs (the mall, the
+  ground crew, the mechanics, the tower) draft a few each, so the core's rooms keep their staff.
+- **Estates' doors.** A cul-de-sac's or a court's way in is its street mouth (`massingOf(b).entry`,
+  `control.js doorOf`), not a house's front door inside the estate.
+- **Measured** (5,000, synthetic census, days 300-302): homes 3,242 -> 4,132; crowding (the civic
+  fold's factor, summed) core -98 -> -77, all -152 -> -125; busiest car of the day: the East Line 14-17,
+  the Loop 16-19, the Shore Line 20-27, the Central Line 14-15, the Alpine Line 10-12, the West Line 9.
+  Plan about 1,600 KB, built in about 4 s.
+- The prefects SUB-17 THE COVENANT OFFICER and AIR-18 THE SCREENER take their seats (phase2Prefects.js).

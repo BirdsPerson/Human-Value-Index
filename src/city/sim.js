@@ -11,6 +11,8 @@ import { FLOORS as HQ_FLOORS } from "../building.js";
 import { FUNNEL_PLACES, FUNNEL_BUILDINGS, FUNNEL_ARCH, FUNNEL_JOBS, FUNNEL_LEISURE_BAND, FUNNEL_LEISURE_FIELD, FUNNEL_FAMILY } from "./funnelSim.js";
 import { STORE_PLACES, STORE_BUILDINGS, STORE_ARCH, STORE_JOBS, STORE_LEISURE_BAND, STORE_LEISURE_FIELD, STORE_FAMILY, STORE_FIXTURES, UNIT_SET } from "./storefrontSim.js";   // THE MALL (enterprise.js)
 import { VENUE_PLACES, VENUE_BUILDINGS, VENUE_ARCH, VENUE_JOBS, VENUE_LEISURE_BAND, VENUE_LEISURE_FIELD, VENUE_FAMILY, VENUE_FIELD_HINTS, VENUE_FIELD_RULES, VENUE_OPEN_LOTS, VENUE_FIXTURES } from "./venueSim.js";
+// PHASE 2 step 4 (eastSim.js): THE SUBURBS and THE AIRPORT
+import { EAST_DISTRICTS, EAST_PLACES, EAST_BUILDINGS, EAST_OPEN_LOTS, EAST_ARCH, EAST_HOUSING, EAST_JOBS, EAST_LEISURE_BAND, EAST_LEISURE_FIELD, EAST_FAMILY, EAST_FIXTURES, SUBURB_HOUSES, SUBURB_STARTERS } from "./eastSim.js";
 import { MOUNTAIN_PLACES, MOUNTAIN_BUILDINGS, MOUNTAIN_ARCH, MOUNTAIN_JOBS, MOUNTAIN_LEISURE_BAND, MOUNTAIN_LEISURE_FIELD, MOUNTAIN_FAMILY, MOUNTAIN_FIXTURES, MOUNTAIN_OPEN_LOTS, MOUNTAIN_SPOTS } from "./mountainSim.js";   // THE MOUNTAIN (mountainGeo.js)
 import { shuttle, lineTrainState, lineNextArrival, lineRide } from "./lines.js";
 // THE NIGHTLIFE QUARTERS (nightlifeSim.js): UPTOWN and DOWNTOWN, their venues, hours, the rope, the lineups
@@ -48,8 +50,9 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // Coast three rows further south (COAST_DY 9 -> 12), for the Shore Line's viaduct and its
 // platforms in the street between the belt and the seaside rows; the rail lines replace the pods.
 // Version 4: THE PORT and THE OLD TOWN to the west (the foundry and the reclamation line moved to
-// the Port; the Works keeps light industry), the Shore Line to the Port, the West Line.
-export const LAYOUT_VERSION = 4;
+// the Port; the Works keeps light industry), the Shore Line to the Port, the West Line. Version 5:
+// THE SUBURBS and THE AIRPORT to the east, on THE EAST LINE (eastSim.js).
+export const LAYOUT_VERSION = 5;
 export const HEIGHTS_DY = -10, COAST_DY = 12;
 const heightsY = (y) => y + HEIGHTS_DY, coastY = (y) => y + COAST_DY;
 
@@ -99,6 +102,10 @@ export const DISTRICTS = [
 // row's east end, DOWNTOWN beside the Sprawl. Appended after everything else, off the Loop.
 // No homes and no station of their own: each is a walk from Loop stations (onFoot; scripts/check-nightlife.mjs holds the walk).
 DISTRICTS.push(...NIGHT_DISTRICTS.map(([id, name, addr, r, blurb, onFoot]) => ({ ...D(id, name, addr, r.x, r.y, r.w, r.h, blurb), expansion: true, onFoot })));
+// PHASE 2 step 4 (eastSim.js): THE SUBURBS east of the nightlife quarters (x 140 on), family
+// housing round three East Line stations; THE AIRPORT beyond them, jobs and no homes. Appended after
+// the quarters (a sector is a district, in order).
+DISTRICTS.push(...EAST_DISTRICTS.map(([id, name, addr, r, blurb]) => ({ ...D(id, name, addr, r.x, r.y, r.w, r.h, blurb), expansion: true })));
 export const DISTRICT = Object.fromEntries(DISTRICTS.map(d => [d.id, d]));
 // The Loop's districts (one station each); the expansion districts reach it by spur.
 export const LOOP_DISTRICTS = DISTRICTS.filter(d => !d.expansion);
@@ -257,6 +264,8 @@ PLACE_LIST.push(...STORE_PLACES.map(a => P(...a)));
 PLACE_LIST.push(...MOUNTAIN_PLACES.map(a => P(...a)));
 // THE NIGHTLIFE QUARTERS (nightlifeSim.js): the clubs, the bars, the restaurants, the late food, the liquor stores
 PLACE_LIST.push(...NIGHT_PLACES.map(([id, d, kind, cap, name, engine]) => P(id, d, kind, cap, name, engine)));
+// THE SUBURBS and THE AIRPORT (eastSim.js)
+PLACE_LIST.push(...EAST_PLACES.map(a => P(...a)));
 for (const p of PLACE_LIST) DISTRICT[p.district].places.push(p.id);
 
 export const PLACES = Object.fromEntries(PLACE_LIST.map(p => [p.id, p]));
@@ -407,6 +416,7 @@ const BUILDING_LIST = [
 BUILDING_LIST.push(...FUNNEL_BUILDINGS.map(([id, name, district, floors]) => B(id, name, district, floors)));
 BUILDING_LIST.push(...VENUE_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
 BUILDING_LIST.push(...MOUNTAIN_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
+BUILDING_LIST.push(...EAST_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
 // THE MALL's frontage lots (storefrontSim.js): placed on their own lots, outside the district's
 // grid or hand layout, so nothing already standing moves.
 BUILDING_LIST.push(...STORE_BUILDINGS.map(([id, name, district, floors, lot, frontage]) => ({ ...B(id, name, district, floors, lot), frontage })));
@@ -459,7 +469,7 @@ for (const p of PLACE_LIST) if (!p.rect) throw new Error(`place ${p.id} is in no
 // exterior from it. Housing styles carry the tier band that lives there, and homeOf follows
 // it: the top tier in the glass tower, the middle tiers in the brownstones and the lofts,
 // the lower three in the projects. A district's default covers anything not listed.
-export const ARCH_BY_DISTRICT = { arts: "gallery", campus: "gothic", finance: "office", strip: "neon", arena: "hall", hq: "monolith", archive: "classical", commons: "civic", works: "shed", sprawl: "projects", coast: "lot", heights: "lot", port: "lot", oldtown: "lot", uptown: "lot", downtown: "lot" };
+export const ARCH_BY_DISTRICT = { arts: "gallery", campus: "gothic", finance: "office", strip: "neon", arena: "hall", hq: "monolith", archive: "classical", commons: "civic", works: "shed", sprawl: "projects", coast: "lot", heights: "lot", port: "lot", oldtown: "lot", uptown: "lot", downtown: "lot", suburbs: "lot", airport: "lot" };
 export const ARCH = {
   "studio-block": "studio", playhouse: "theatre", "culture-centre": "gallery", "the-grind": "cafe",
   faculty: "gothic", "lab-block": "gothic", "clock-tower": "clocktower",
@@ -476,6 +486,7 @@ export const ARCH = {
   ...STORE_ARCH,
   ...MOUNTAIN_ARCH,
   ...NIGHT_ARCH,
+  ...EAST_ARCH,
   "surf-shacks": "shacks", "the-seawall": "seawall", "bungalow-row": "bungalow", "seaview-flats": "seaview", "the-surfside": "condo", "lot-shore": "lot", "the-boardwalk": "lot", "the-beach": "lot", "the-pier": "lot", "the-break": "lot",
   "the-bunkhouse": "bunkhouse", "alpine-flats": "alpine", "the-lodge": "lodge", "the-chalets": "chalet", "the-slopes": "lot", "lot-summit": "lot",
   // THE PORT and THE OLD TOWN (PHASE 2 step 3)
@@ -486,7 +497,7 @@ export const ARCH = {
 };
 // Housing: which tiers (TIER_ORDER index, 0 = ESSENTIAL INFRASTRUCTURE) live in each style.
 export const HOUSING_TIERS = { glass: [0], brownstone: [1, 2], lofts: [1, 2], projects: [3, 4, 5], condo: [0], bungalow: [1, 2], seaview: [1, 2], shacks: [3, 4, 5], seawall: [3, 4, 5], chalet: [0], alpine: [1, 2], bunkhouse: [3, 4, 5],
-  tenement: [3, 4, 5], terrace: [1, 2], walkup: [1, 2], shopflats: [1, 2] };
+  tenement: [3, 4, 5], terrace: [1, 2], walkup: [1, 2], shopflats: [1, 2], ...EAST_HOUSING };
 export const BUILDINGS = BUILDING_LIST.map(b => {
   const td = b.floors;   // top-down
   const gIdx = td.findIndex(f => f[0] === "G");
@@ -647,6 +658,7 @@ JOBS.push(...VENUE_JOBS.map(a => J(...a)));
 JOBS.push(...STORE_JOBS.map(a => J(...a)));
 JOBS.push(...MOUNTAIN_JOBS.map(a => J(...a)));
 JOBS.push(...NIGHT_JOBS.map(a => J(...a)));
+JOBS.push(...EAST_JOBS.map(a => J(...a)));   // THE SUBURBS and THE AIRPORT (eastSim.js)
 export const JOB = Object.fromEntries(JOBS.map(j => [j.id, j]));
 
 // ---- subject reading --------------------------------------------------------------
@@ -896,13 +908,18 @@ export const jobOf = (s, seed = SEED) => assignJob(s, seed);
 // PHASE 2 step 3: the Old Town's rows and flats and the Port's terraces join the middle band, the
 // Port's tenements the lowest (appended: a subject keeps its draw, the new homes take their share).
 export const HOMES_BY_BAND = [["penthouses", "surfside", "chalets"],
-  ["block-c", "block-d", "archive-lofts", "bungalows", "seaview", "alpine-flats", "rows-a", "rows-b", "rows-c", "rows-e", "flats-high-street", "flats-market-row", "flats-cathedral", "dockers-terrace", "pilots-terrace"],
-  ["block-a", "block-b", "shacks", "seawall", "bunkhouse", "tenement-a", "tenement-b", "tenement-c", "tenement-d"]];
-const BAND_CAP = HOMES_BY_BAND.map(b => b.reduce((n, id) => n + PLACES[id].cap, 0));
+  ["block-c", "block-d", "archive-lofts", "bungalows", "seaview", "alpine-flats", "rows-a", "rows-b", "rows-c", "rows-e", "flats-high-street", "flats-market-row", "flats-cathedral", "dockers-terrace", "pilots-terrace", ...SUBURB_HOUSES],
+  ["block-a", "block-b", "shacks", "seawall", "bunkhouse", "tenement-a", "tenement-b", "tenement-c", "tenement-d", ...SUBURB_STARTERS]];
+// PHASE 2 step 4: the Suburbs' houses join the middle band, its starter townhouses the lowest band
+// for its top tier alone (tier 3: family housing for tiers 1-3, MASTER_PLAN "PHASE 2"). A home
+// listed here is offered only to these tiers; the band's other tiers draw over the rest of it.
+export const HOME_ONLY_TIERS = Object.fromEntries(SUBURB_STARTERS.map(id => [id, [3]]));
+const bandHomes = (k, t) => HOMES_BY_BAND[k].filter(id => !HOME_ONLY_TIERS[id] || HOME_ONLY_TIERS[id].includes(t));
+const BAND_FOR = TIER_ORDER.map((_, t) => { const k = t === 0 ? 0 : t <= 2 ? 1 : 2, band = bandHomes(k, t); return { band, cap: band.reduce((n, id) => n + PLACES[id].cap, 0) }; });
 export function homeOf(s, seed = SEED) {
   const t = Math.max(0, tierIdx(s));
-  const k = t === 0 ? 0 : t <= 2 ? 1 : 2, band = HOMES_BY_BAND[k];
-  let r = h01(`${seed}|home|${keyOf(s)}`) * BAND_CAP[k];
+  const { band, cap } = BAND_FOR[t];
+  let r = h01(`${seed}|home|${keyOf(s)}`) * cap;
   for (const id of band) if ((r -= PLACES[id].cap) < 0) return id;
   return band[band.length - 1];
 }
@@ -954,6 +971,13 @@ const NIGHT_PULL = 0.7;
 const nightScaled = (m) => Object.fromEntries(Object.entries(m).map(([id, v]) => [id, v * NIGHT_PULL]));
 NIGHT_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], nightScaled(m)));
 for (const [f, m] of Object.entries(NIGHT_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...nightScaled(m) };
+// THE SUBURBS and THE AIRPORT (eastSim.js), at EAST_PULL of their listed strength: like the Port's
+// and the Old Town's, the nightlife quarters' and THE MALL's landmarks, a new district's leisure is
+// kept moderate, so the roster's haunts stay where friends find each other (check-social).
+const EAST_PULL = 0.5;
+const eastScaled = (m) => Object.fromEntries(Object.entries(m).map(([id, v]) => [id, v * EAST_PULL]));
+EAST_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], eastScaled(m)));
+for (const [f, m] of Object.entries(EAST_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...eastScaled(m) };
 // the sea and the snow, for the sporting and the idle
 for (const [f, w] of Object.entries({ sport: { surf: 0.8, slopes: 1 }, care: { beach: 1 }, visual: { pier: 1.2, beach: 0.8 }, writing: { pier: 1.5 }, music: { boardwalk: 1 }, finance: { slopes: 1.5 }, business: { slopes: 1 }, screen: { beach: 1.2 } })) Object.assign(LEISURE_BY_FIELD[f] ||= {}, w);
 
@@ -997,7 +1021,7 @@ function gamesOn(day, hour) {
   let out = null;
   for (const [id, list] of Object.entries(GAMES)) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
   // the master plan's venues (the Pit's card, the tennis club's fixtures) pull a crowd the same way
-  for (const [id, list] of Object.entries({ ...VENUE_FIXTURES, ...STORE_FIXTURES, ...MOUNTAIN_FIXTURES, ...NIGHT_FIXTURES })) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
+  for (const [id, list] of Object.entries({ ...VENUE_FIXTURES, ...STORE_FIXTURES, ...MOUNTAIN_FIXTURES, ...NIGHT_FIXTURES, ...EAST_FIXTURES })) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
   return out;
 }
 const TEAMS = ["THE COMPLIANT", "THE ASSESSED"];
@@ -1450,6 +1474,7 @@ for (const [k, id] of VENUE_FAMILY) FAMILY[k].push(id);
 for (const [k, id] of STORE_FAMILY) FAMILY[k].push(id);
 for (const [k, id] of MOUNTAIN_FAMILY) FAMILY[k].push(id);
 for (const [k, id] of NIGHT_FAMILY) FAMILY[k].push(id);
+for (const [k, id] of EAST_FAMILY) FAMILY[k].push(id);
 const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
 // (a storefront unit takes visitors only while a business trades in it: enterprise.js, below)
 const LEISURE_ROOMS = Object.values(PLACES).filter(p => (p.kind === "leisure" || p.kind === "mixed") && !UNIT_SET.has(p.id)).map(p => p.id);
@@ -1751,9 +1776,9 @@ function podLeg(districtId, dir) {
 // Central Line across the core, through the monolith; 6 = the Loop's version 2 (three times the trains)
 // and every trip planned over every line in service, a trip between two Loop districts included (until
 // 5 those always rode the Loop, the long way round a one-way ring if need be: now the Central Line, a
-// walk, or the Loop, whichever is quickest).
+// walk, or the Loop, whichever is quickest); 7 = THE EAST LINE to the Suburbs and the Airport (layout 5).
 // A plan's trips carry what they rode, so a day built on one network is read on the next.
-export let NET = 6;
+export let NET = 7;
 export const LOOP = {
   id: "loop", index: 0, version: LOOP_VERSION, kind: "ring", name: "THE LOOP", short: "LOOP", prefix: "L", color: "#22d3ee",
   at: loopAt, length: LOOP_L, stops: STATION_ORDER.map(id => STATIONS[id]), ARR, lap: LAP, headway: HEADWAY, speed: V_TRAIN, trains: TRAINS,
@@ -1793,7 +1818,7 @@ const SHUTTLES = [
     cars: [3, 3, 3, 3, 3, 3], speed: V_TRAIN, dwell: LINE_DWELL, layover: LAYOVER,
   }),
   shuttle({
-    id: "alpine", index: 2, version: 1, nets: [3, 4, 5, 6], name: "THE ALPINE LINE", short: "ALPINE LINE", prefix: "A", color: "#dc2626",
+    id: "alpine", index: 2, version: 1, nets: [3, 4, 5, 6, 7], name: "THE ALPINE LINE", short: "ALPINE LINE", prefix: "A", color: "#dc2626",
     pts: [[ALPINE_X, 14.2], [ALPINE_X, -39.8]], R: 4,
     stations: [
       { id: "alpine-campus", name: "CAMPUS (ALPINE LINE)", district: "campus" },
@@ -1807,7 +1832,7 @@ const SHUTTLES = [
   // Port, PORT QUAY, then north to PORT TOWN. A new version, never a retiming: version 1 keeps
   // running for any day published on network 3 until it retires.
   shuttle({
-    id: "shore2", index: 3, version: 2, nets: [4, 5, 6], name: "THE SHORE LINE", short: "SHORE LINE", prefix: "S", idBase: 6, color: "#14b8a6",
+    id: "shore2", index: 3, version: 2, nets: [4, 5, 6, 7], name: "THE SHORE LINE", short: "SHORE LINE", prefix: "S", idBase: 6, color: "#14b8a6",
     pts: [[54.5, 44.3], [54.5, coastY(65.5)], [-30, coastY(65.5)], [-30, 36]], R: 4,
     stations: [
       { id: "shore-works", name: "WORKS (SHORE LINE)", district: "works" },
@@ -1822,7 +1847,7 @@ const SHUTTLES = [
   // street between the Old Town and the Port, north into the Old Town (CATHEDRAL) and west to the
   // MARKET (the Farmland later: a new version).
   shuttle({
-    id: "west", index: 4, version: 1, nets: [4, 5, 6], name: "THE WEST LINE", short: "WEST LINE", prefix: "W", color: "#a855f7",
+    id: "west", index: 4, version: 1, nets: [4, 5, 6, 7], name: "THE WEST LINE", short: "WEST LINE", prefix: "W", color: "#a855f7",
     pts: [[-3, 29], [-24, 29], [-24, 2], [-46.5, 2]], R: 4,
     stations: [
       { id: "west-arena", name: "ARENA (WEST LINE)", district: "arena" },
@@ -1838,7 +1863,7 @@ const SHUTTLES = [
   // the tower) to HQ SOUTH (beside the Shore Line's Works terminal, under the Loop). The Heights and
   // the Coast meet through the core instead of riding round the ring. Two-car trains, its own clock.
   shuttle({
-    id: "central", index: 5, version: 1, nets: [5, 6], name: "THE CENTRAL LINE", short: "CENTRAL LINE", prefix: "C", color: "#facc15",
+    id: "central", index: 5, version: 1, nets: [5, 6, 7], name: "THE CENTRAL LINE", short: "CENTRAL LINE", prefix: "C", color: "#facc15",
     pts: [[54.5, 18.4], [54.5, 41.0]], R: 4, taper: [6.5, 9], platHL: 2.9,
     stations: [
       { id: "hq-north", name: "HQ NORTH (CENTRAL LINE)", district: "hq" },
@@ -1846,6 +1871,23 @@ const SHUTTLES = [
       { id: "hq-south", name: "HQ SOUTH (CENTRAL LINE)", district: "hq" },
     ],
     cars: [2, 2, 2, 2], speed: V_TRAIN, dwell: LINE_DWELL, layover: LAYOVER,
+  }),
+  // THE EAST LINE (PHASE 2 step 4): from its Archive terminal south-east of the Loop's Archive
+  // station (in the street between Downtown and the Sprawl's north-east corner), east along y 48.5
+  // into the Suburbs (SUBURBS NORTH), south down the street between the estates and the mall
+  // (SUBURBS MALL), then east (SUBURBS SOUTH) to the Airport, its terminal at the departures hall's
+  // doors (AIRPORT TERMINAL).
+  shuttle({
+    id: "east", index: 6, version: 1, nets: [7], name: "THE EAST LINE", short: "EAST LINE", prefix: "E", color: "#f97316",
+    pts: [[109.5, 48.5], [168.5, 48.5], [168.5, 86], [232, 86]], R: 4,
+    stations: [
+      { id: "east-archive", name: "ARCHIVE (EAST LINE)", district: "archive" },
+      { id: "suburbs-north", name: "SUBURBS NORTH", district: "suburbs", at: [153.5, 48.5] },
+      { id: "suburbs-mall", name: "SUBURBS MALL", district: "suburbs", at: [168.5, 62] },
+      { id: "suburbs-south", name: "SUBURBS SOUTH", district: "suburbs", at: [182, 86] },
+      { id: "airport-terminal", name: "AIRPORT TERMINAL", district: "airport" },
+    ],
+    cars: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3], speed: V_TRAIN, dwell: LINE_DWELL, layover: LAYOVER,
   }),
 ];
 // A stop's street gate (the foot of its stairs) and its entrance (the platform edge beside the
@@ -1914,7 +1956,7 @@ function spotIn(placeId, key, seed) {
 // passable (you leave through your own walls, that is what doors are for), and the open
 // lots (the Green, the Street, the Plaza, the Allotment) are ground anyone may cross.
 // Leg durations follow the path's length, so walking pace never changes.
-export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch", "lot-6f07", "the-assembly", "the-boardwalk", "the-beach", "the-pier", ...VENUE_OPEN_LOTS, "port-park", "cathedral-square", "bowling-green", "the-close", ...MOUNTAIN_OPEN_LOTS]);
+export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch", "lot-6f07", "the-assembly", "the-boardwalk", "the-beach", "the-pier", ...VENUE_OPEN_LOTS, "port-park", "cathedral-square", "bowling-green", "the-close", ...MOUNTAIN_OPEN_LOTS, ...EAST_OPEN_LOTS]);
 const KERB = 0.4, CORNER = 0.3;   // the street view's footprints are the lot less 0.4
 // A lot that is mostly open ground with one solid thing on it: walkers cross the ground and go
 // round the thing. DEPT HQ's plaza, since the Central Line's stations stand in it (PHASE 2): the

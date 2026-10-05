@@ -30,7 +30,7 @@ const count = (d, t) => N.NIGHT_PLACES.filter(p => p[1] === d && p[6] === t).len
 ok(count("uptown", "nightclub") >= 1 && ["rooftop-lounge", "steakhouse", "sushi-counter", "cocktail-bar", "jazz-supper-club"].every(t => count("uptown", t) === 1), "uptown: the nightclub (and its mezzanine), a rooftop lounge, a steakhouse, a sushi counter, a cocktail bar, a jazz supper club");
 ok(count("downtown", "dance-club") === 2 && count("downtown", "liquor-store") === 2 && ["hip-hop-club", "punk-basement", "karaoke", "pool-hall", "comedy-club", "late-night-food"].every(t => count("downtown", t) === 1), "downtown: two dance clubs, hip-hop, a punk basement, karaoke, a pool hall, comedy, late-night food, two liquor stores");
 ok(N.NIGHT_PLACE_IDS.every(id => SIM.PLACES[id] && SIM.PLACES[id].building && (SIM.PLACES[id].kind === "mixed" || SIM.PLACES[id].kind === "leisure")), "every venue is a place in a building, open to visitors");
-ok(SIM.DISTRICT.uptown?.expansion && SIM.DISTRICT.downtown?.expansion && SIM.DISTRICTS.slice(-2).map(d => d.id).join() === "uptown,downtown", "UPTOWN and DOWNTOWN appended after every other district (a sector is a district, in order)");
+ok(SIM.DISTRICT.uptown?.expansion && SIM.DISTRICT.downtown?.expansion && SIM.DISTRICTS.map(d => d.id).indexOf("uptown") === 14 && SIM.DISTRICTS[15].id === "downtown", "UPTOWN and DOWNTOWN appended after the Old Town, sectors 14 and 15 (a sector is a district, in order; PHASE 2's later districts after them)");
 ok(SIM.JOBS.filter(j => j.district === "uptown").length >= 5 && SIM.JOBS.filter(j => j.district === "downtown").length >= 8, "staff for both quarters");
 
 // ---- 2. the ground: inside their districts, clear of everything, a walk from the Loop -------------------

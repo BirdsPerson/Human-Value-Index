@@ -53,6 +53,11 @@ export const ROOM_TYPE = {
   "tenement-a": "hab", "tenement-b": "hab", "tenement-c": "hab", "tenement-d": "hab", "dockers-terrace": "lofts", "pilots-terrace": "lofts",
   "cathedral": "chapel", "cathedral-square": "street", "bowling-green": "park", "the-close": "park", "covered-market": "market", "city-museum": "gallery", "the-old-bell": "bar", "high-street": "market", "market-row": "market",
   "rows-a": "lofts", "rows-b": "lofts", "rows-c": "lofts", "rows-e": "lofts", "flats-high-street": "lofts", "flats-market-row": "lofts", "flats-cathedral": "lofts",
+  // PHASE 2 step 4: THE SUBURBS and THE AIRPORT, furnished from what exists
+  "maple-close": "lofts", larchmont: "lofts", "birch-crescent": "lofts", "orchard-way": "lofts", "foxglove-drive": "lofts", "cedar-loop": "lofts",
+  "willow-bend": "hab", "aspen-row": "hab", "hawthorn-rise": "hab", "primrose-court": "hab",
+  "north-park": "park", "central-green": "picnic", "south-park": "park", eastgate: "market", "food-court": "diner", "high-school": "school", "school-field": "ballfield", clinic: "ward",
+  departures: "cafe", "security-hall": "office", airfield: "street", "control-tower": "office", hangars: "docks", "airport-hotel": "bar",
   ...PLANNING_ROOM_TYPE,   // the Dept of Planning's drawing office (planning.js): the advocates at their lecterns
   ...STORE_ROOM_TYPE,   // THE MALL: storefront units (their trade decides: storeRoomType), SAM'S PIZZA, GOODNIGHT IRENE'S
   ...NIGHT_ROOM_TYPE,   // THE NIGHTLIFE QUARTERS: the clubs, the bars, the restaurants, the late food, the liquor stores

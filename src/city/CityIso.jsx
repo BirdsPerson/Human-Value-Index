@@ -35,6 +35,7 @@ import { storeButtons, openBusiness } from "./EnterprisePanel.jsx";
 import { openFunnel } from "./FunnelOverlay.jsx";
 import { COAST_LOTS, COAST_PLACES, terrainH, onTerrain, TERRAIN } from "./coastGeo.js";
 import { drawCoastLot, drawCoastGround, drawPod, coastLabel, coastLine } from "./coastDraw.js";
+import { drawEastLot, drawSky, EAST_LOT_FILL } from "./eastDraw.js";   // THE SUBURBS' parks, THE AIRPORT's airfield and its aircraft
 // THE MOUNTAIN (mountainGeo.js): everyone on it placed once a frame, the bands' labels where they belong
 import { skiersIn, SKI_PLACES, LABEL_AT } from "./mountainGeo.js";
 import { raceAt, lastRace } from "./race.js";   // THE WEEKEND RACE: the racer on THE GAUNTLET, the board
@@ -56,9 +57,9 @@ import { drawChessTables } from "../chess/tableDraw.js";   // PARK CHESS: the st
 // Labels go on top of the finished scene, nearest first, never over each other. A tap asks
 // the same order front to back, so what you see on top is what you get.
 
-const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316", coast: "#3a3322", heights: "#2a3440", port: "#1a1c20", oldtown: "#1d1913", uptown: "#1c1a16", downtown: "#18141a" };
-const LOT_FILL = { "the-green": "#123a18", "the-allotment": "#1a2e12", "the-street": "#20241f", "the-plaza": "#24261f", "estate-gardens": "#15401c", "port-park": "#15401c", "cathedral-square": "#3a3630", "bowling-green": "#1d4a22", "the-close": "#173f1c" };
-const OUTDOOR_PLACES = new Set(["park", "the-street", "the-plaza", "allotment", "estate-gardens", "port-park", "cathedral-square", "bowling-green", "the-close"]);
+const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: "#1c0e14", arena: "#141c10", hq: "#10221a", archive: "#16160f", commons: "#121a0f", works: "#1c0e0a", sprawl: "#131316", coast: "#3a3322", heights: "#2a3440", port: "#1a1c20", oldtown: "#1d1913", uptown: "#1c1a16", downtown: "#18141a", suburbs: "#16201a", airport: "#1a1d1f" };
+const LOT_FILL = { "the-green": "#123a18", "the-allotment": "#1a2e12", "the-street": "#20241f", "the-plaza": "#24261f", "estate-gardens": "#15401c", "port-park": "#15401c", "cathedral-square": "#3a3630", "bowling-green": "#1d4a22", "the-close": "#173f1c", ...EAST_LOT_FILL };
+const OUTDOOR_PLACES = new Set(["park", "the-street", "the-plaza", "allotment", "estate-gardens", "port-park", "cathedral-square", "bowling-green", "the-close", "north-park", "central-green", "south-park", "airfield", "school-field"]);
 const PANEL_BG = "#060a06";
 // a label whose anchor the mountain hides at this turn is not written over the mountain (cached: the ground never moves)
 const HIDDEN = new Map();
@@ -67,7 +68,7 @@ const behindMountain = (id, x, y, h, r) => { const k = `${id}|${r}`; let v = HID
 const MJOB = new Map();
 const mountainJob = (s) => { const k = s.slug || s.name; let j = MJOB.get(k); if (j === undefined) { try { j = jobOf(s)?.jobId || null; } catch { j = null; } MJOB.set(k, j); } return j; };
 // yard props that still read from afar (the Port's cranes and ships among them)
-const FAR_PROPS = new Set(["tree", "watchtower", "containers", "ambulance", "conveyor", "gantry", "ship", "hull", "tcrane"]);
+const FAR_PROPS = new Set(["tree", "watchtower", "containers", "ambulance", "conveyor", "gantry", "ship", "hull", "tcrane", "car", "tug"]);
 const clampN = (v, a, b) => (v < a ? a : v > b ? b : v);
 const shade = (hex, f) => {
   const n = parseInt(hex.slice(1), 16);
@@ -479,6 +480,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       if (OPEN_LOTS.has(b.id)) {
         const pts = [P(R.x0, R.y0, 0), P(R.x1, R.y0, 0), P(R.x1, R.y1, 0), P(R.x0, R.y1, 0)];
         poly(pts, LOT_FILL[b.id] || "#20241f", selected ? "#4ade80" : "rgba(74,222,128,0.3)");
+        // the Suburbs' parks and the Airport's airfield (eastDraw.js): paths, trees, the pond, the runway, parked aircraft
+        if (EAST_LOT_FILL[b.id]) drawEastLot(archG(), b, lod, V.mt, nightAt(((V.mt % 24) + 24) % 24));
         if (lod !== "far" && b.id === "estate-gardens") {
           // the estate gardens (the master plan): a path down the middle, trees either side
           const r = b.rect, my = r.y + r.h / 2, [a0, a1] = rot(r.x + 0.4, my, V.geo.r), [b0, b1] = rot(r.x + r.w - 0.4, my, V.geo.r);
@@ -1234,6 +1237,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         for (const m of slots.get(k) || []) drawMover(m, lod);
         for (const it of tops.get(k) || []) drawTower(it);
       }
+      drawSky(archG(), lod, mt, nightAt(((mt % 24) + 24) % 24));   // THE AIRPORT's aircraft on finals and climbing out, over everything
       drawLabels();
       drawPrefectTops(ctx, V.pfTops, FONT); V.pfTops = [];   // THE PREFECTS: designations over everything
       ctl.overlay();   // DRIVE YOURSELF: YOU

@@ -66,8 +66,8 @@ console.log(`population: ${figures.length} figures, ${engine.length} engine, ${c
 
 // ---- catalogue ------------------------------------------------------------------------
 section("catalogue");
-ok(DISTRICTS.length === 16 && LOOP_DISTRICTS.length === 10, `10 districts on the Loop and 6 off it: the Coast, the Heights, the Port, the Old Town, Uptown, Downtown (got ${DISTRICTS.length})`);
-const ids = ["hq", "arts", "campus", "finance", "strip", "arena", "commons", "archive", "works", "sprawl", "coast", "heights", "port", "oldtown", "uptown", "downtown"];
+ok(DISTRICTS.length === 18 && LOOP_DISTRICTS.length === 10, `10 districts on the Loop and 8 off it: the Coast, the Heights, the Port, the Old Town, Uptown, Downtown, the Suburbs, the Airport (got ${DISTRICTS.length})`);
+const ids = ["hq", "arts", "campus", "finance", "strip", "arena", "commons", "archive", "works", "sprawl", "coast", "heights", "port", "oldtown", "uptown", "downtown", "suburbs", "airport"];
 const DISTRICT_IDS = new Set(ids);
 ok(ids.every(id => DISTRICTS.some(d => d.id === id)), "district ids match the contract");
 ok(Object.keys(PLACES).length >= 30, `~35 places (got ${Object.keys(PLACES).length})`);

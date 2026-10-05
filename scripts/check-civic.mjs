@@ -1078,8 +1078,10 @@ for (const n of process.argv.includes("--no-20k") ? [430, 5000] : [430, 5000, 20
   const ms = performance.now() - t;
   const bytes = JSON.stringify(b).length;
   sizes.push([n, bytes, Math.round(ms)]);
-  const nd = Object.keys(b.districts || {}).length || DIST.length;   // every district in the block (the nightlife quarters too)
-  ok(bytes / nd < 1100, `${n}: ${bytes} bytes, ${Math.round(bytes / nd)} per district`);
+  // the league's ten (teams and all) within 1,100 bytes each; every other district's record its own small share
+  const core = JSON.stringify({ ...b, districts: Object.fromEntries(DIST.map(id => [id, b.districts[id]])) }).length;
+  const rest = Math.max(0, ...Object.keys(b.districts).filter(id => !DIST.includes(id)).map(id => JSON.stringify(b.districts[id]).length));
+  ok(core / DIST.length < 1100 && rest < 520, `${n}: ${bytes} bytes; the league's ten ${Math.round(core / DIST.length)} each, the largest other district ${rest}`);
 }
 ok(sizes[sizes.length - 1][1] < sizes[0][1] * 1.4, `the block does not grow with the census (${sizes.map(s => s[1]).join(" / ")} bytes)`);
 SIM.setRoster(roster);

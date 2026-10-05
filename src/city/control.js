@@ -114,12 +114,14 @@ export function doorOf(b) {
   let d = null;
   const m = OPEN_LOTS.has(b.id) ? null : massingOf(b);
   if (m) {
-    const p = m.parts.find(q => q.k === "box" && q.door);
+    const p = m.entry ? null : m.parts.find(q => q.k === "box" && q.door);
     const t = DOOR_T[m.style] ?? 0.5, off = m.style === "brownstone" ? 0.75 : 0.45;
     if (p) {
       const F = { s: [[p.x0, p.y1], [p.x1, p.y1], [0, 1]], e: [[p.x1, p.y1], [p.x1, p.y0], [1, 0]], n: [[p.x1, p.y0], [p.x0, p.y0], [0, -1]], w: [[p.x0, p.y0], [p.x0, p.y1], [-1, 0]] }[p.door];
       const [a, c, n] = F;
       d = { x: a[0] + (c[0] - a[0]) * t + n[0] * off, y: a[1] + (c[1] - a[1]) * t + n[1] * off, nx: n[0], ny: n[1] };
+    } else if (m.entry) {
+      d = { x: m.entry.x, y: m.entry.y, nx: m.entry.nx ?? 0, ny: m.entry.ny ?? 1 };   // the estate's street mouth (eastGeo.js)
     } else {
       // no drawn door (the vault, the reactor, the tanks): the middle of the south face
       d = { x: (m.box.x0 + m.box.x1) / 2, y: m.box.y1 + off, nx: 0, ny: 1 };

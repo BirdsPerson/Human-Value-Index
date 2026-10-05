@@ -77,7 +77,7 @@ for (const e of index) {
       // the camera follows the car they are in: the census point is that car's
       const car = trainsAt(mt).find(tr => tr.id === t.trainId)?.cars[t.car];
       ok(car && Math.hypot(car.x - t.x, car.y - t.y) < 0.05, `riding ${e.key}@${h}: car at (${car?.x},${car?.y}), subject at (${t.x},${t.y})`);
-      ok(/^.+ — ABOARD (LOOP|SHORE LINE|ALPINE LINE|WEST LINE|CENTRAL LINE) \d+, CAR \d, BOUND FOR .+\./.test(line), `riding line: ${line}`);
+      ok(/^.+ — ABOARD (LOOP|SHORE LINE|ALPINE LINE|WEST LINE|CENTRAL LINE|EAST LINE) \d+, CAR \d, BOUND FOR .+\./.test(line), `riding line: ${line}`);
     } else if (t.mode === "inside") {
       seen.inside++;
       const b = BUILDING[t.buildingId], f = b?.floors[t.floor];

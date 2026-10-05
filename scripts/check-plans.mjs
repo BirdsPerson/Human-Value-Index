@@ -562,7 +562,7 @@ for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["sy
   // ground they walked, which a layout may move). Adding a line never changes a published train.
   // and one on network 5 (the Loop's version 1: five trains; commit b54a241): the Loop's version 2 runs
   // version 1's five where they always ran and adds trains between them, so its riders never move
-  for (const [file, label] of [["net2-plan-day300.json", "network 2 (the pods)"], ["net3-plan-day300.json", "network 3 (the Shore Line v1, the Alpine Line)"], ["net5-plan-day300.json", "network 5 (the Loop's version 1)"]]) {
+  for (const [file, label] of [["net2-plan-day300.json", "network 2 (the pods)"], ["net3-plan-day300.json", "network 3 (the Shore Line v1, the Alpine Line)"], ["net5-plan-day300.json", "network 5 (the Loop's version 1)"], ["net6-plan-day300.json", "network 6 (the Loop's version 2, before the East Line; commit 3d6a2c0)"]]) {
     const fx = JSON.parse(readFileSync(new URL(`./fixtures/${file}`, import.meta.url), "utf8"));
     SIM.clearPlans(); SIM.clearRoster(); SIM.clearSocialSnapshots();
     ok(SIM.setPlan(fx.plan, `fixture-${file}`), `a day built on ${label} loads`);

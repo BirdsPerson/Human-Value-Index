@@ -26,6 +26,8 @@ export const FUNNEL_OF = {
   "the-arcade": { kind: "arcade", campaign: "the-arcade", button: "PLAY" },
   "eb-shop": { kind: "shop", campaign: "eb-shop", button: "SHOP" },
   "studio-block": { kind: "ebtv", campaign: "ebtv-station", button: "WATCH" },
+  // THE AIRPORT's departures hall is the city's door (PHASE 2 step 4): new arrivals, INTAKE
+  "departures-hall": { kind: "arrivals", campaign: "departures-hall", button: "ARRIVALS" },
 };
 // Cabinets standing elsewhere, by place: the game and the campaign their links carry.
 export const CABINET_PLACES = {
@@ -103,6 +105,7 @@ export function funnelButtons(buildingId) {
   const f = FUNNEL_OF[buildingId];
   if (f?.kind === "arcade") out.push({ label: "PLAY", aria: "Play: the Arcade's cabinets", spec: { kind: "arcade" } });
   if (f?.kind === "shop") out.push({ label: "SHOP", aria: "Shop the EB Shop's live stock", spec: { kind: "shop", campaign: f.campaign } });
+  if (f?.kind === "arrivals") out.push({ label: "ARRIVALS", aria: "INTAKE: the new arrivals, awaiting release", spec: { kind: "arrivals", go: "#arrivals" } });
   if (f?.kind === "ebtv") out.push({ label: "WATCH", aria: "Watch Electric Basement TV live", spec: { kind: "ebtv", campaign: f.campaign } });
   const c = CABINET_BUILDINGS[buildingId];
   if (c) out.push({ label: "JETSAM!", aria: "Play JETSAM! on the cabinet here", spec: { kind: "game", slug: "jetsam", campaign: c } });

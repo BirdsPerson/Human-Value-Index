@@ -11,6 +11,7 @@ import { machineClock } from "./sim.js";
 //   spec: {kind: "game", slug, campaign} | {kind: "arcade"} | {kind: "shop", campaign} | {kind: "ebtv", campaign}
 
 export function openFunnel(spec) {
+  if (typeof window !== "undefined" && spec?.go) { window.location.hash = spec.go; return; }   // a door to another page (the departures hall: #arrivals)
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("hvi-funnel", { detail: spec }));
 }
 export function countFunnel(campaign, kind, url = null) {

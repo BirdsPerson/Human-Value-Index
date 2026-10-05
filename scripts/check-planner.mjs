@@ -70,7 +70,7 @@ const OLD = JSON.parse(readFileSync(new URL("./fixtures/layout1-ids.json", impor
   const schoolHeavy = Math.min(...["foundry", "radiant-core", "reclamation-line", "holding-cells", "barracks"].map(id => gapTo(B[id].rect, [B.schoolhouse.rect])));
   ok(schoolHeavy > 15, `the schoolhouse stands ${schoolHeavy.toFixed(1)} cells from the nearest heavy works (layout 1: 5, the barracks)`);
   // every home within twenty cells (a twenty-minute walk) of green ground (layout 1: Hab A-D 27-42, the Heights 35-55)
-  const greens = ["the-green", "the-allotment", "rec-ground", "estate-gardens", "the-foothills", "the-beach", "port-park", "cathedral-square", "bowling-green", "the-close"].map(id => B[id].rect);
+  const greens = ["the-green", "the-allotment", "rec-ground", "estate-gardens", "the-foothills", "the-beach", "port-park", "cathedral-square", "bowling-green", "the-close", "north-park", "village-green", "south-park"].map(id => B[id].rect);
   const far = [...new Set(Object.values(P).filter(p => p.kind === "home").map(p => p.building))].filter(id => id !== "lofts" && gapTo(B[id].rect, greens) > 20);
   ok(!far.length, `every home but the Archive Lofts has green within twenty cells (${far.join(", ") || "all"})`);
   // green space: every district with homes has open green ground of its own or next door
