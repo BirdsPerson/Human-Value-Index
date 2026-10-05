@@ -6,7 +6,8 @@
   python3 scripts/sprites.py --reprocess --all     # re-run post-processing on cached raws, zero credits
   python3 scripts/sprites.py --selftest            # offline asserts, no network
 
-Per name: Higgsfield nano_banana_pro (1k, 2:3, ~2 credits) -> raw PNG cached in
+Per name: Nano Banana Pro via Gemini API (default with a key, ~$0.134) or Higgsfield
+(HVI_SPRITE_BACKEND, see gemini_image.py; 1k, 2:3, ~2 credits) -> raw PNG cached in
 ~/.cache/hvi-sprites/<slug>.png -> chroma key -> crop -> 16-colour palette ->
 mode-downsample to fit 30x45 -> derived walk frame -> 1px outline ->
 public/sprites/<slug>.png (64x48) + manifest.json + 8x preview in docs/sprite-previews/
@@ -30,6 +31,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sprite_spec as SPEC  # noqa: E402  the one design-system source
 import sprite_qa as QA  # noqa: E402  nothing ships without passing the gate
+import gemini_image as GEM  # noqa: E402  HVI_SPRITE_BACKEND: gemini (default with a key) | higgsfield
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "public" / "sprites"
@@ -134,18 +136,26 @@ def generate(name, dest, look=None, attempt=1, skin=None):
     # after a failed QA gate: a different background and an insistence on one clothed person.
     band = skin or QA.skin_of(slug(name))
     prompt = SPEC.single_prompt(SPEC.with_skin(SPEC.normalize_look(look or LOOKS.get(slug(name), GENERIC_LOOK)), band), attempt)
+    job_id = draw_raw(prompt, dest, "1k", name)
+    (dest.with_suffix(".json")).write_text(json.dumps({"name": name, "job_id": job_id, "prompt": prompt}, indent=2))
+
+
+def draw_raw(prompt, dest, resolution="1k", label="image", timeout=900):
+    """One 2:3 image -> dest via the active backend (gemini_image.backend()). Returns a job id."""
+    if GEM.backend() == "gemini":
+        return GEM.generate(prompt, dest, aspect="2:3", size=resolution.upper(), label=label)
     cmd = ["higgsfield", "generate", "create", MODEL, "--prompt", prompt,
-           "--resolution", "1k", "--aspect_ratio", "2:3", "--wait", "--json"]
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+           "--resolution", resolution, "--aspect_ratio", "2:3", "--wait", "--json"]
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if res.returncode != 0:
-        raise RuntimeError(f"higgsfield failed for {name}: {res.stderr.strip() or res.stdout.strip()}")
+        raise RuntimeError(f"higgsfield failed for {label}: {(res.stderr or res.stdout).strip()[:300]}")
     jobs = json.loads(res.stdout)
     job = jobs[0] if isinstance(jobs, list) else jobs
     if job.get("status") != "completed" or not job.get("result_url"):
-        raise RuntimeError(f"higgsfield job not completed for {name}: {job.get('status')}")
+        raise RuntimeError(f"higgsfield job not completed for {label}: {job.get('status')}")
     dest.parent.mkdir(parents=True, exist_ok=True)
     urllib.request.urlretrieve(job["result_url"], dest)
-    (dest.with_suffix(".json")).write_text(json.dumps({"name": name, "job_id": job["id"], "prompt": prompt}, indent=2))
+    return job.get("id")
 
 
 # ---------- processing ----------

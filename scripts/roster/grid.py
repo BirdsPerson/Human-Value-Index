@@ -1,5 +1,5 @@
 #!/opt/homebrew/bin/python3
-"""Sixteen sprites from one Higgsfield image: the roster engine's cheap sprite path.
+"""Sixteen sprites from one image (Gemini or Higgsfield, see sprites.draw_raw): the roster engine's cheap sprite path.
 
     python3 scripts/roster/grid.py cohort.json out.json   # [{slug, look}] x <=16 -> results
 
@@ -12,9 +12,7 @@ paid raw: that job then processes and uploads it for free. A cell that fails val
 is deleted from the cache so the same job regenerates that one figure on its own.
 """
 import json
-import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -44,18 +42,8 @@ def grid_prompt(looks):
 
 
 def generate_grid(looks, dest):
-    cmd = ["higgsfield", "generate", "create", S.MODEL, "--prompt", grid_prompt(looks),
-           "--resolution", "4k", "--aspect_ratio", "2:3", "--wait", "--json"]
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=1500)
-    if res.returncode != 0:
-        raise RuntimeError(f"higgsfield failed: {(res.stderr or res.stdout).strip()[:300]}")
-    job = json.loads(res.stdout)
-    job = job[0] if isinstance(job, list) else job
-    if job.get("status") != "completed" or not job.get("result_url"):
-        raise RuntimeError(f"higgsfield job not completed: {job.get('status')}")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    urllib.request.urlretrieve(job["result_url"], dest)
-    return job.get("id")
+    # 4k on both backends: the gutter finder and cell padding are tuned to a 4k sheet (gemini 4K ~$0.24).
+    return S.draw_raw(grid_prompt(looks), dest, "4k", "grid", timeout=1500)
 
 
 def figure_mask(rgb):

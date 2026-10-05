@@ -12,7 +12,6 @@ Nothing is published from here; publishing is a separate, deliberate step.
 import json
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -134,16 +133,7 @@ def grids():
 
 def single(look, dest):
     prompt = SPEC.SINGLE_PROMPT.format(look=SPEC.normalize_look(look))   # one-off 2026-09-26 redraw; new work uses sprites.generate (skin-aware)
-    cmd = ["higgsfield", "generate", "create", S.MODEL, "--prompt", prompt,
-           "--resolution", "1k", "--aspect_ratio", "2:3", "--wait", "--json"]
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
-    if res.returncode != 0:
-        raise RuntimeError((res.stderr or res.stdout).strip()[:200])
-    job = json.loads(res.stdout)
-    job = job[0] if isinstance(job, list) else job
-    if job.get("status") != "completed":
-        raise RuntimeError(f"status {job.get('status')}")
-    urllib.request.urlretrieve(job["result_url"], dest)
+    S.draw_raw(prompt, dest, "1k", "single")
 
 
 def singles(only=None, attempts=2):
