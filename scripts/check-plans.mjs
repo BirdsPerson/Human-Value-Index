@@ -560,7 +560,9 @@ for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["sy
   // rider's train, car and place aboard each machine minute; every waiting and alighting subject's
   // train, car, platform and boarding time once per trip (how long they stand there follows the
   // ground they walked, which a layout may move). Adding a line never changes a published train.
-  for (const [file, label] of [["net2-plan-day300.json", "network 2 (the pods)"], ["net3-plan-day300.json", "network 3 (the Shore Line v1, the Alpine Line)"]]) {
+  // and one on network 5 (the Loop's version 1: five trains; commit b54a241): the Loop's version 2 runs
+  // version 1's five where they always ran and adds trains between them, so its riders never move
+  for (const [file, label] of [["net2-plan-day300.json", "network 2 (the pods)"], ["net3-plan-day300.json", "network 3 (the Shore Line v1, the Alpine Line)"], ["net5-plan-day300.json", "network 5 (the Loop's version 1)"]]) {
     const fx = JSON.parse(readFileSync(new URL(`./fixtures/${file}`, import.meta.url), "utf8"));
     SIM.clearPlans(); SIM.clearRoster(); SIM.clearSocialSnapshots();
     ok(SIM.setPlan(fx.plan, `fixture-${file}`), `a day built on ${label} loads`);
@@ -571,6 +573,34 @@ for (const [label, roster] of [["production-shaped 430", synthRoster(430)], ["sy
       else if (w.sub === "waiting" || w.sub === "alighting") { const t = `${w.sub[0]}|${w.trainId}|${w.car}|${w.stationId}|${w.boardAt}`; if (!seen.has(t)) { seen.add(t); rows.push([k, w.sub[0], w.trainId, w.car, w.stationId, w.boardAt]); } }
     } }
     ok(rows.length === fx.rows && createHash("sha256").update(JSON.stringify(rows)).digest("hex") === fx.fingerprint, `a day built on ${label} keeps every train, car and platform (${rows.length} rows, fingerprint ${fx.fingerprint.slice(0, 12)})`);
+  }
+  // THE LOOP'S VERSION 2: version 1's five trains keep their ids, cars and timetable to the last bit;
+  // the new ones run between them, every platform sees a train LOOP_SPLIT times as often
+  {
+    const V1 = [4, 3, 4, 4, 3], H1 = SIM.LOOP_LINE.lapHours / V1.length;
+    ok(SIM.LOOP_VERSION === 2 && SIM.TRAINS.slice(0, 5).every((t, k) => t.id === `L${k + 1}` && t.cars === V1[k]), "the Loop's version 1 trains keep their ids (L1-L5), indices and cars");
+    ok(SIM.TRAINS.length > 5 && SIM.TRAINS.slice(5).every((t, k) => t.id === `L${k + 6}`), `version 2 adds trains L6-L${SIM.TRAINS.length}`);
+    // the old timetable, as version 1 computed it: train k's middle at T (ARR, DWELL and the speed unchanged)
+    let moved = 0;
+    for (let i = 0; i < 2000; i++) {
+      const T = (D - 1) * 24 + i * 0.0123, now = SIM.trainsAt(T);
+      for (let k = 0; k < 5; k++) {
+        const tau = ((T - k * H1) % SIM.LOOP_LINE.lapHours + SIM.LOOP_LINE.lapHours) % SIM.LOOP_LINE.lapHours;
+        const st = SIM.LOOP.stops.reduce((a, s, j) => (SIM.LOOP.ARR[j] <= tau ? j : a), 0), stop = SIM.LOOP.stops[st], dt = tau - SIM.LOOP.ARR[st];
+        const mid = dt < SIM.DWELL ? stop.s : stop.s + (dt - SIM.DWELL) * SIM.V_TRAIN, m = ((mid % SIM.LOOP_LINE.length) + SIM.LOOP_LINE.length) % SIM.LOOP_LINE.length;
+        if (Math.abs(now[k].mid - m) > 1e-9) moved++;
+      }
+    }
+    ok(moved === 0, `version 1's five trains run exactly version 1's timetable (${moved} of 10,000 positions moved)`);
+    const gaps = [];
+    for (const id of SIM.STATION_ORDER) { const b = SIM.timetable(id, (D - 1) * 24 + 7, SIM.TRAINS.length + 1); for (let i = 1; i < b.length; i++) gaps.push(b[i].arrive - b[i - 1].arrive); }
+    ok(gaps.every(g => g >= SIM.LOOP_GAPS.min - 1e-9 && g <= SIM.HEADWAY + 1e-9) && SIM.HEADWAY < H1 / 2.5, `every station sees a train every ${(SIM.LOOP_GAPS.min * 60).toFixed(2)}-${(SIM.HEADWAY * 60).toFixed(2)} machine minutes (version 1: ${(H1 * 60).toFixed(2)})`);
+    // no train reaches a platform before the one ahead has cleared it
+    let tight = Infinity;
+    for (let m = 0; m < 24 * 60; m += 0.25) { const tr = SIM.trainsAt((D - 1) * 24 + m / 60).map(t => ({ m: t.mid, h: t.length / 2 })).sort((a, b) => a.m - b.m); tr.forEach((x, i) => { const y = tr[(i + 1) % tr.length]; tight = Math.min(tight, ((y.m - x.m) % SIM.LOOP_LINE.length + SIM.LOOP_LINE.length) % SIM.LOOP_LINE.length - x.h - y.h); }); }
+    ok(tight > 0.5, `the Loop's trains never close up (closest ${tight.toFixed(2)} cells apart)`);
+    const seen = new Set(); for (const id of SIM.STATION_ORDER) for (const a of SIM.timetable(id, (D - 1) * 24 + 7, SIM.TRAINS.length)) seen.add(a.trainId);
+    ok(seen.size === SIM.TRAINS.length, "every train calls at every station in a lap");
   }
   SIM.clearPlans();
 }

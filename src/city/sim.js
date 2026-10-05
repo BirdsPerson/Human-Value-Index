@@ -1457,7 +1457,18 @@ const PLATFORM_MIN = 0.1;           // reach the platform this long before the t
 // Off the car and onto the platform, before the doors close. Longer than one census
 // period (the views sample once a machine minute), so every alighter is seen alighting.
 const ALIGHT = DWELL * 0.8;
-const TRAIN_CARS = [4, 3, 4, 4, 3];
+// THE LOOP'S VERSIONS. Version 1: five trains [4, 3, 4, 4, 3], one every LAP / 5. Version 2 (PHASE 2,
+// capacity: at 5,000 subjects version 1's busiest car carried two to three times the 1.5x-seated
+// limit of 24): every gap between version 1's trains split in LOOP_SPLIT, a new four-car train in
+// each new slot. Version 1's five keep their ids (L1-L5), their indices (0-4: a published plan's k),
+// their cars and their offsets exactly (k x LAP / 5), so every train of every day published on
+// version 1 runs where it always ran and is drawn there; the new trains (L6 on) run between them,
+// empty on those days. A line is never retimed in place: version 2's timetable is version 1's
+// with trains added, and the first day built after the deploy is the first planned on it.
+// check-plans holds a network-5 day (fixtures/net5-plan-day300.json) train by train, car by car.
+export const LOOP_VERSION = 2;
+const TRAIN_CARS_V1 = [4, 3, 4, 4, 3], LOOP_SPLIT = 3, NEW_CARS = 4;
+const TRAIN_CARS = [...TRAIN_CARS_V1, ...TRAIN_CARS_V1.flatMap(() => Array(LOOP_SPLIT - 1).fill(NEW_CARS))];
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 // Stations. n: unit normal from the track towards the district (the platform side).
@@ -1491,8 +1502,34 @@ const ARR = [];
 // The Loop's stations are its stops (line 0): the same fields every line's stops carry.
 for (const st of Object.values(STATIONS)) Object.assign(st, { stationId: st.id, lineId: "loop", line: 0, dwell: DWELL, base: 0 });
 const LAP = ARR[ARR.length - 1];
-export const HEADWAY = LAP / TRAIN_CARS.length;   // every platform sees a train this often
+const HEADWAY_V1 = LAP / TRAIN_CARS_V1.length;
 const trainLen = (n) => n * CAR_LEN + (n - 1) * CAR_GAP;
+// Each train's place in the timetable (hours into the lap). Version 1's at k x HEADWAY_V1 (the same
+// expression as ever, so the same machine hours to the last bit); in each gap between two of them,
+// LOOP_SPLIT - 1 new ones. A train carries whoever reached the platforms since the one before it,
+// so each slot is sized to the cars of the train it brings in (a three-car train gets the shorter
+// gap ahead of it), but never so short that a train reaches a platform before the one ahead has
+// cleared it by LOOP_CLEAR cells.
+const LOOP_CLEAR = 1.1;
+const minGap = (front, back) => DWELL + ((trainLen(front) + trainLen(back)) / 2 + LOOP_CLEAR) / V_TRAIN;
+const OFF = TRAIN_CARS.slice();
+const SLOTS = [];   // [hours into the lap, train index], in order round the lap
+TRAIN_CARS_V1.forEach((carsK, i) => {
+  const next = TRAIN_CARS_V1[(i + 1) % TRAIN_CARS_V1.length], ks = Array.from({ length: LOOP_SPLIT - 1 }, (_, r) => TRAIN_CARS_V1.length + i * (LOOP_SPLIT - 1) + r);
+  const cars = [...ks.map(k => TRAIN_CARS[k]), next], fronts = [carsK, ...ks.map(k => TRAIN_CARS[k])];
+  const mins = cars.map((c, r) => minGap(fronts[r], c));
+  let g = cars.map(c => HEADWAY_V1 * c / cars.reduce((a, b) => a + b, 0));
+  const low = g.map((x, r) => x < mins[r]);
+  if (low.some(Boolean)) { const fixed = mins.reduce((a, m, r) => a + (low[r] ? m : 0), 0), w = cars.reduce((a, c, r) => a + (low[r] ? 0 : c), 0); g = g.map((x, r) => (low[r] ? mins[r] : (HEADWAY_V1 - fixed) * cars[r] / w)); }
+  OFF[i] = i * HEADWAY_V1;
+  SLOTS.push([OFF[i], i]);
+  let at = OFF[i];
+  ks.forEach((k, r) => { at += g[r]; OFF[k] = at; SLOTS.push([at, k]); });
+});
+const GAPS = SLOTS.map(([o], q) => mod((SLOTS[(q + 1) % SLOTS.length][0] - o), LAP));
+// The longest wait at a platform (what a trip plans for, and the board's "EVERY N MIN").
+export const HEADWAY = Math.max(...GAPS);
+export const LOOP_GAPS = { min: Math.min(...GAPS), max: HEADWAY, v1: HEADWAY_V1 };
 export const TRAINS = TRAIN_CARS.map((cars, k) => ({ id: `L${k + 1}`, index: k, name: `LOOP ${k + 1}`, cars, carCap: CAR_CAP, cap: cars * CAR_CAP, length: trainLen(cars) }));
 export const TRAIN = Object.fromEntries(TRAINS.map(t => [t.id, t]));
 
@@ -1502,7 +1539,7 @@ const platformSpot = (st, s) => { const p = loopAt(s); return { x: p.x + st.n.x 
 
 // Train k at machine hour T: the arc of its middle, and whether it stands at a platform.
 function trainState(k, T) {
-  const tau = mod(T - k * HEADWAY, LAP);
+  const tau = mod(T - OFF[k], LAP);
   let i = STATION_ORDER.length - 1;
   while (i > 0 && ARR[i] > tau) i--;
   const st = STATIONS[STATION_ORDER[i]], dt = tau - ARR[i];
@@ -1522,18 +1559,20 @@ export function trainsAt(machineTime) {
   });
 }
 
-// The first train to reach a station at or after machine hour t -> {trainId, k, arrive, depart}.
+// The first train to reach a station at or after machine hour t -> {trainId, k, arrive, depart, j}
+// (j counts the slots from machine hour 0: the PA's key).
 export function nextArrival(stationId, t) {
-  const i = STATIONS[stationId].index;
-  const j = Math.ceil((toHours(t) - ARR[i]) / HEADWAY - 1e-9);
-  const arrive = ARR[i] + j * HEADWAY, k = mod(j, TRAINS.length);
-  return { trainId: TRAINS[k].id, k, stationId, arrive, depart: arrive + DWELL };
+  const i = STATIONS[stationId].index, x = toHours(t) - ARR[i];
+  let n = Math.floor(x / LAP), q = SLOTS.findIndex(([o]) => n * LAP + o >= x - 1e-9);
+  if (q < 0) { n++; q = 0; }
+  const k = SLOTS[q][1], arrive = ARR[i] + n * LAP + SLOTS[q][0];
+  return { trainId: TRAINS[k].id, k, stationId, arrive, depart: arrive + DWELL, j: n * SLOTS.length + q };
 }
 // The platform board: the next n trains at a station from machine hour t.
 export function timetable(stationId, t, n = 4) {
   const out = [];
   let a = nextArrival(stationId, t);
-  for (let i = 0; i < n; i++) { out.push(a); a = nextArrival(stationId, a.arrive + HEADWAY / 2); }
+  for (let i = 0; i < n; i++) { out.push(a); a = nextArrival(stationId, a.arrive + LOOP_GAPS.min / 2); }
   return out;
 }
 const rideHours = (a, b) => mod(STATIONS[b].lapOffset - STATIONS[a].lapOffset, LAP);
@@ -1557,8 +1596,8 @@ export function loopEvents(from, to) {
   const a = toHours(from), b = toHours(to), out = [];
   for (const id of STATION_ORDER) {
     const i = STATIONS[id].index, name = DISTRICT[id].name;
-    for (let j = Math.ceil((a - ARR[i] - DWELL) / HEADWAY - 1e-9); ARR[i] + j * HEADWAY < b; j++) {
-      const k = mod(j, TRAINS.length), arrive = ARR[i] + j * HEADWAY, tn = TRAINS[k].name;
+    for (let x = nextArrival(id, a - DWELL); x.arrive < b; x = nextArrival(id, x.arrive + LOOP_GAPS.min / 2)) {
+      const k = x.k, j = x.j, arrive = x.arrive, tn = TRAINS[k].name;
       const pick = (list, kind) => list[fnv(`pa|${kind}|${id}|${j}`) % list.length](name, tn);
       if (arrive >= a && arrive < b) out.push({ t: arrive, kind: "arrive", trainId: TRAINS[k].id, stationId: id, text: pick(PA.arrive, "a") });
       if (arrive + DWELL >= a && arrive + DWELL < b) out.push({ t: arrive + DWELL, kind: "depart", trainId: TRAINS[k].id, stationId: id, text: pick(PA.depart, "d") });
@@ -1569,7 +1608,7 @@ export function loopEvents(from, to) {
 
 export const LOOP_LINE = {
   loop: { ...RING }, length: LOOP_L, at: loopAt, stations: STATIONS, order: STATION_ORDER,
-  lapHours: LAP, headway: HEADWAY, dwell: DWELL, speed: V_TRAIN, carLen: CAR_LEN, carGap: CAR_GAP, carCap: CAR_CAP, platformOffset: PLATFORM_OFF,
+  lapHours: LAP, headway: HEADWAY, version: LOOP_VERSION, dwell: DWELL, speed: V_TRAIN, carLen: CAR_LEN, carGap: CAR_GAP, carCap: CAR_CAP, platformOffset: PLATFORM_OFF,
   // v1 name: the stops, keyed by district, with the same {s, x, y, gate} shape.
   stops: STATIONS,
 };
@@ -1611,11 +1650,14 @@ function podLeg(districtId, dir) {
 // decodable, `retired`, until no published day names it).
 // NET: the network a day is built on. 2 = the Loop and the pods (layout 2); 3 = the Shore and Alpine
 // Lines (layout 3); 4 = the Shore Line to the Port (version 2) and the West Line (layout 4); 5 = the
-// Central Line across the core, through the monolith.
+// Central Line across the core, through the monolith; 6 = the Loop's version 2 (three times the trains)
+// and every trip planned over every line in service, a trip between two Loop districts included (until
+// 5 those always rode the Loop, the long way round a one-way ring if need be: now the Central Line, a
+// walk, or the Loop, whichever is quickest).
 // A plan's trips carry what they rode, so a day built on one network is read on the next.
-export let NET = 5;
+export let NET = 6;
 export const LOOP = {
-  id: "loop", index: 0, version: 1, kind: "ring", name: "THE LOOP", short: "LOOP", prefix: "L", color: "#22d3ee",
+  id: "loop", index: 0, version: LOOP_VERSION, kind: "ring", name: "THE LOOP", short: "LOOP", prefix: "L", color: "#22d3ee",
   at: loopAt, length: LOOP_L, stops: STATION_ORDER.map(id => STATIONS[id]), ARR, lap: LAP, headway: HEADWAY, speed: V_TRAIN, trains: TRAINS,
 };
 // THE SHORE LINE and THE ALPINE LINE (step 2): real rail in place of the pods, each a double-track
@@ -1653,7 +1695,7 @@ const SHUTTLES = [
     cars: [3, 3, 3, 3, 3, 3], speed: V_TRAIN, dwell: LINE_DWELL, layover: LAYOVER,
   }),
   shuttle({
-    id: "alpine", index: 2, version: 1, nets: [3, 4, 5], name: "THE ALPINE LINE", short: "ALPINE LINE", prefix: "A", color: "#dc2626",
+    id: "alpine", index: 2, version: 1, nets: [3, 4, 5, 6], name: "THE ALPINE LINE", short: "ALPINE LINE", prefix: "A", color: "#dc2626",
     pts: [[ALPINE_X, 14.2], [ALPINE_X, -39.8]], R: 4,
     stations: [
       { id: "alpine-campus", name: "CAMPUS (ALPINE LINE)", district: "campus" },
@@ -1667,7 +1709,7 @@ const SHUTTLES = [
   // Port, PORT QUAY, then north to PORT TOWN. A new version, never a retiming: version 1 keeps
   // running for any day published on network 3 until it retires.
   shuttle({
-    id: "shore2", index: 3, version: 2, nets: [4, 5], name: "THE SHORE LINE", short: "SHORE LINE", prefix: "S", idBase: 6, color: "#14b8a6",
+    id: "shore2", index: 3, version: 2, nets: [4, 5, 6], name: "THE SHORE LINE", short: "SHORE LINE", prefix: "S", idBase: 6, color: "#14b8a6",
     pts: [[54.5, 44.3], [54.5, coastY(65.5)], [-30, coastY(65.5)], [-30, 36]], R: 4,
     stations: [
       { id: "shore-works", name: "WORKS (SHORE LINE)", district: "works" },
@@ -1682,7 +1724,7 @@ const SHUTTLES = [
   // street between the Old Town and the Port, north into the Old Town (CATHEDRAL) and west to the
   // MARKET (the Farmland later: a new version).
   shuttle({
-    id: "west", index: 4, version: 1, nets: [4, 5], name: "THE WEST LINE", short: "WEST LINE", prefix: "W", color: "#a855f7",
+    id: "west", index: 4, version: 1, nets: [4, 5, 6], name: "THE WEST LINE", short: "WEST LINE", prefix: "W", color: "#a855f7",
     pts: [[-3, 29], [-24, 29], [-24, 2], [-46.5, 2]], R: 4,
     stations: [
       { id: "west-arena", name: "ARENA (WEST LINE)", district: "arena" },
@@ -1698,7 +1740,7 @@ const SHUTTLES = [
   // the tower) to HQ SOUTH (beside the Shore Line's Works terminal, under the Loop). The Heights and
   // the Coast meet through the core instead of riding round the ring. Two-car trains, its own clock.
   shuttle({
-    id: "central", index: 5, version: 1, nets: [5], name: "THE CENTRAL LINE", short: "CENTRAL LINE", prefix: "C", color: "#facc15",
+    id: "central", index: 5, version: 1, nets: [5, 6], name: "THE CENTRAL LINE", short: "CENTRAL LINE", prefix: "C", color: "#facc15",
     pts: [[54.5, 18.4], [54.5, 41.0]], R: 4, taper: [6.5, 9], platHL: 2.9,
     stations: [
       { id: "hq-north", name: "HQ NORTH (CENTRAL LINE)", district: "hq" },
@@ -1801,7 +1843,29 @@ function crosses(a, b, o) {
   }
   return t1 - t0 > 1e-9;
 }
-const clear = (a, b, skip) => !FOOT.blocks.some(o => !skip.has(o.id) && crosses(a, b, o));
+// The blocks by a coarse grid (FOOT_CELL cells a side), so a leg only tests the blocks near it: the
+// city grew to hundreds of blocks and every footpath tests every corner it can see.
+const FOOT_CELL = 8, FOOT_GRID = new Map(), FOOT_SEEN = new Uint32Array(FOOT.blocks.length);
+let FOOT_STAMP = 0;
+FOOT.blocks.forEach((o, i) => {
+  for (let gx = Math.floor(o.x0 / FOOT_CELL); gx <= Math.floor(o.x1 / FOOT_CELL); gx++) for (let gy = Math.floor(o.y0 / FOOT_CELL); gy <= Math.floor(o.y1 / FOOT_CELL); gy++) {
+    const k = gx * 65536 + gy; let l = FOOT_GRID.get(k); if (!l) FOOT_GRID.set(k, (l = [])); l.push(i);
+  }
+});
+function clear(a, b, skip) {
+  if (++FOOT_STAMP === 0xffffffff) { FOOT_SEEN.fill(0); FOOT_STAMP = 1; }
+  const gx0 = Math.floor(Math.min(a.x, b.x) / FOOT_CELL), gx1 = Math.floor(Math.max(a.x, b.x) / FOOT_CELL), gy0 = Math.floor(Math.min(a.y, b.y) / FOOT_CELL), gy1 = Math.floor(Math.max(a.y, b.y) / FOOT_CELL);
+  for (let gx = gx0; gx <= gx1; gx++) for (let gy = gy0; gy <= gy1; gy++) {
+    const l = FOOT_GRID.get(gx * 65536 + gy);
+    if (l) for (const i of l) {
+      if (FOOT_SEEN[i] === FOOT_STAMP) continue;
+      FOOT_SEEN[i] = FOOT_STAMP;
+      const o = FOOT.blocks[i];
+      if (!skip.has(o.id) && crosses(a, b, o)) return false;
+    }
+  }
+  return true;
+}
 // -> [a, ...corners, b]: the shortest street path from a to b, the buildings in `skip` passable.
 export function footpath(a, b, skip = new Set()) {
   if (clear(a, b, skip)) return [a, b];
@@ -1811,18 +1875,32 @@ export function footpath(a, b, skip = new Set()) {
     FOOT.adj = N.map(() => []);
     for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (clear(N[i], N[j], none)) { const d = dist(N[i], N[j]); FOOT.adj[i].push([j, d]); FOOT.adj[j].push([i, d]); }
   }
-  // Dijkstra over the corners, a and b joined to every corner they can see.
+  // Dijkstra over the corners, a and b joined to every corner they can see. Whether a corner sees a
+  // or b is only tested when it could matter (the straight line is a lower bound): the same answer
+  // as testing every corner first, without testing the whole city for every walk.
   const D = new Array(n).fill(Infinity), prev = new Array(n).fill(-1), done = new Array(n).fill(false);
-  for (let i = 0; i < n; i++) if (clear(a, N[i], skip)) D[i] = dist(a, N[i]);
-  const toB = N.map(p => (clear(p, b, skip) ? dist(p, b) : Infinity));
+  const Dg = new Float64Array(n).fill(Infinity), prevG = new Int32Array(n).fill(-1);   // by the corners only
+  const direct = new Float64Array(n), seen = new Uint8Array(n);   // seen from a: 0 untested, 1 yes, 2 no
+  for (let i = 0; i < n; i++) direct[i] = dist(a, N[i]);
+  const keyOfNode = (k) => (seen[k] === 2 ? Dg[k] : Math.min(Dg[k], direct[k]));
+  // a binary heap of [key, corner] (the lower corner first on a tie, as a scan in order would take it)
+  const H = [];
+  const less = (x, y) => x[0] < y[0] || (x[0] === y[0] && x[1] < y[1]);
+  const push = (e) => { H.push(e); let c = H.length - 1; while (c > 0) { const p = (c - 1) >> 1; if (!less(H[c], H[p])) break; [H[c], H[p]] = [H[p], H[c]]; c = p; } };
+  const pop = () => { const top = H[0], e = H.pop(); if (H.length) { H[0] = e; let c = 0; for (;;) { const l = 2 * c + 1, r = l + 1; let m = c; if (l < H.length && less(H[l], H[m])) m = l; if (r < H.length && less(H[r], H[m])) m = r; if (m === c) break; [H[c], H[m]] = [H[m], H[c]]; c = m; } } return top; };
+  for (let i = 0; i < n; i++) push([direct[i], i]);
   let best = Infinity, last = -1;
-  for (;;) {
-    let i = -1;
-    for (let k = 0; k < n; k++) if (!done[k] && D[k] < Infinity && (i < 0 || D[k] < D[i])) i = k;
-    if (i < 0 || D[i] >= best) break;
+  while (H.length) {
+    const [ki, i] = pop();
+    if (done[i] || ki !== keyOfNode(i)) continue;   // finished, or a stale entry
+    if (ki >= best) break;
+    if (seen[i] !== 2 && direct[i] <= Dg[i]) {
+      if (seen[i] === 1 || clear(a, N[i], skip)) { seen[i] = 1; D[i] = direct[i]; prev[i] = -1; }
+      else { seen[i] = 2; if (Dg[i] < Infinity) push([Dg[i], i]); continue; }
+    } else { D[i] = Dg[i]; prev[i] = prevG[i]; }
     done[i] = true;
-    if (D[i] + toB[i] < best) { best = D[i] + toB[i]; last = i; }
-    for (const [j, d] of FOOT.adj[i]) if (D[i] + d < D[j]) { D[j] = D[i] + d; prev[j] = i; }
+    if (D[i] + dist(N[i], b) < best && clear(N[i], b, skip)) { best = D[i] + dist(N[i], b); last = i; }
+    for (const [j, d] of FOOT.adj[i]) if (!done[j] && D[i] + d < Dg[j]) { Dg[j] = D[i] + d; prevG[j] = i; const k = keyOfNode(j); if (k === Dg[j]) push([k, j]); }
   }
   if (last < 0) return [a, b];   // boxed in (never, with streets between every block)
   const out = [b];
@@ -1858,10 +1936,11 @@ function legsIn(fromPt, fromDistrict, B, to, dB) {
   if (!sp) return [walkLeg(fromPt, B, dB, ownBlocks(to))];
   return [walkLeg(fromPt, sp.stopAt, fromDistrict, NONE), podLeg(dB, "in"), walkLeg(sp.termAt, B, dB, ownBlocks(to))];
 }
-// The Loop's districts: a trip between two of them is the Loop's, on every network.
+// The Loop's districts: a trip between two of them is the Loop's on networks 2-5 (from 6, routed
+// over every line like any other).
 const LOOP_SET = new Set(LOOP_DISTRICTS.map(d => d.id));
 function route(from, to, key, seed, net = NET) {
-  if (net >= 3 && PLACES[from].district !== PLACES[to].district && !(LOOP_SET.has(PLACES[from].district) && LOOP_SET.has(PLACES[to].district))) return railRoute(from, to, key, seed);
+  if (net >= 3 && PLACES[from].district !== PLACES[to].district && (net >= 6 || !(LOOP_SET.has(PLACES[from].district) && LOOP_SET.has(PLACES[to].district)))) return railRoute(from, to, key, seed);
   // a trip published before a place moved district is laid out from its old one (MOVED_FROM)
   const moved = net === 2 && (MOVED_FROM[from] || MOVED_FROM[to]);
   return remember(`${moved ? "rtm" : "rt"}|${seed}|${key}|${from}|${to}`, () => {
@@ -1926,38 +2005,59 @@ function aheadOf(line, i) {
   }
   return out;
 }
+// The network as a graph, once per network: from boarding at each stop (standing at its entrance),
+// the quickest way to alight at every other (rides, alighting, the street to another line's platform
+// at an interchange, its stairs), with the path. A trip is then the best of (on foot to a boarding
+// stop near its start) + (that stop to an alighting stop near its end) + (on foot to the door): the
+// same answer as a search per trip (the costs never depend on the trip), at a fraction of the work.
+const est = (a, b) => (dist(a, b) * WALK_EST) / V_WALK;
+const RAIL_GRAPH = () => remember(`rg|${NET}`, () => {
+  const stations = STATION_LIST(), stops = stations.flatMap(x => x.stops);
+  const out = new Map();
+  for (const st of stops) {
+    const line = LINE[st.lineId], here = stations.find(x => x.line === line && x.stationId === st.stationId);
+    out.set(`b|${st.id}`, aheadOf(line, st.index).map(j => [`a|${line.stops[j].id}`, PLATFORM_MIN + line.headway + lineRideOf(line, st.index, j) + ALIGHT]));
+    out.set(`a|${st.id}`, here.xfer.flatMap(x => x.stops.map(q => [`b|${q.id}`, offDur(st) + est(st.gate, q.gate) + stairsDur(q)])));
+  }
+  const from = new Map();
+  for (const st of stops) {
+    const best = new Map([[`b|${st.id}`, 0]]), prev = new Map([[`b|${st.id}`, null]]), done = new Set();
+    for (;;) {
+      let id = null, c = Infinity;
+      for (const [k, v] of best) if (!done.has(k) && (v < c - 1e-12 || (Math.abs(v - c) <= 1e-12 && k < id))) { id = k; c = v; }
+      if (id === null) break;
+      done.add(id);
+      for (const [n, w] of out.get(id)) if (c + w < (best.get(n) ?? Infinity) - 1e-12) { best.set(n, c + w); prev.set(n, id); }
+    }
+    const alight = new Map([...best].filter(([k]) => k[0] === "a").map(([k, v]) => [k.slice(2), v]));
+    from.set(st.id, { alight, prev });
+  }
+  return { stations, from };
+});
 function railRoute(from, to, key, seed) {
   return remember(`rt3|${seed}|${key}|${from}|${to}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
     const dA = PLACES[from].district, dB = PLACES[to].district;
-    const stations = STATION_LIST();
+    const { stations, from: G } = RAIL_GRAPH();
     const near = (p, d) => stations.filter(x => x.districtId === d || x.stops.some(st => dist(st.gate, p) <= ACCESS_R));
-    const est = (a, b) => (dist(a, b) * WALK_EST) / V_WALK;
-    // Dijkstra over boarding at a stop (cost: hours until standing at its entrance)
-    const best = new Map(), prev = new Map(), heap = [];
-    const push = (id, c, p) => { if (c < (best.get(id) ?? Infinity) - 1e-12) { best.set(id, c); prev.set(id, p); heap.push([c, id]); } };
-    for (const x of near(A, dA)) for (const st of x.stops) push(`b|${st.id}`, est(A, st.gate) + stairsDur(st), null);
-    const exits = new Map(near(B, dB).flatMap(x => x.stops.map(st => [st.id, x])));
-    let goal = null, goalCost = Infinity;
-    while (heap.length) {
-      heap.sort((a, b) => b[0] - a[0] || (a[1] < b[1] ? 1 : -1));
-      const [c, id] = heap.pop();
-      if (c > (best.get(id) ?? Infinity) + 1e-12 || c >= goalCost) continue;
-      const [kind, sid] = [id.slice(0, 1), id.slice(2)], st = STOPS[sid], line = LINE[st.lineId];
-      if (kind === "b") {
-        for (const j of aheadOf(line, st.index)) push(`a|${line.stops[j].id}`, c + PLATFORM_MIN + line.headway + lineRideOf(line, st.index, j) + ALIGHT, id);
-      } else {
-        if (exits.has(sid)) { const g = c + offDur(st) + est(st.gate, B); if (g < goalCost) { goalCost = g; goal = id; } }
-        const here = stations.find(x => x.line === line && x.stationId === st.stationId);
-        for (const x of here.xfer) for (const q of x.stops) push(`b|${q.id}`, c + offDur(st) + est(st.gate, q.gate) + stairsDur(q), id);
+    const exits = near(B, dB).flatMap(x => x.stops).map(st => [st.id, offDur(st) + est(st.gate, B)]);
+    let goalCost = Infinity, gs = null, gt = null;
+    for (const x of near(A, dA)) for (const s of x.stops) {
+      const c0 = est(A, s.gate) + stairsDur(s), D = G.get(s.id).alight;
+      for (const [t, c1] of exits) {
+        const d = D.get(t);
+        if (d === undefined) continue;
+        const g = c0 + d + c1;
+        if (g < goalCost - 1e-12 || (Math.abs(g - goalCost) <= 1e-12 && `${s.id}|${t}` < `${gs}|${gt}`)) { goalCost = g; gs = s.id; gt = t; }
       }
     }
+    const goal = gs !== null;
     // on foot all the way: only worth laying out when it could be short enough
     const dlen = dist(A, B) <= WALK_MAX || !goal ? pathLen(footpath(A, B, ownBlocks(from, to))) : Infinity;
     if (!goal || (dlen <= WALK_MAX && dlen / V_WALK <= goalCost)) return directRoute(from, to, key, seed);
     // unwind: [{line, a, b}] rides
-    const rides = [];
-    for (let id = goal; id; ) {
+    const rides = [], prev = G.get(gs).prev;
+    for (let id = `a|${gt}`; id; ) {
       const a = prev.get(id), sb = STOPS[id.slice(2)], sa = STOPS[a.slice(2)];
       rides.unshift({ line: LINE[sa.lineId].index, a: sa.index, b: sb.index });
       id = prev.get(a);

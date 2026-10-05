@@ -10,7 +10,7 @@ import { FAMOUS_FIGURES, slugify, TIERS } from "../src/figures.js";
 import {
   DISTRICTS, PLACES, JOBS, JOB, assignJob, homeOf, schedule, whereAt, machineClock, occupancy,
   statusLine, SEED, toHours, BUS, V_WALK, V_BUS, SHIFT_HOURS, fieldsOf,
-  LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, trainsAt, nextArrival, timetable, loopEvents, HEADWAY, DWELL, V_TRAIN, CAR_CAP,
+  LOOP_LINE, LOOP_GAPS, STATIONS, STATION_ORDER, TRAINS, TRAIN, trainsAt, nextArrival, timetable, loopEvents, HEADWAY, DWELL, V_TRAIN, CAR_CAP,
   BUILDINGS, BUILDING, isOwl, setRoster, clearRoster, LOOP_DISTRICTS, SPURS, hubOf, V_POD, RESORT_PARCELS, STOPS, lineTrainsAt, linesOn, NET,
 } from "../src/city/sim.js";
 import { FLOORS as HQ_FLOORS } from "../src/building.js";
@@ -184,13 +184,14 @@ section("the loop");
   let hwBad = 0, platBad = 0;
   for (const id of STATION_ORDER) {
     const board = timetable(id, 24 * 9 + 6.2, 12);
-    for (let i = 1; i < board.length; i++) if (Math.abs(board[i].arrive - board[i - 1].arrive - HEADWAY) > 1e-9) hwBad++;
+    // the Loop's version 2: a train every LOOP_GAPS.min..max (a shorter gap ahead of a three-car train)
+    for (let i = 1; i < board.length; i++) { const g = board[i].arrive - board[i - 1].arrive; if (g < LOOP_GAPS.min - 1e-9 || g > HEADWAY + 1e-9) hwBad++; }
     for (const a of board) {
       const tr = trainsAt(a.arrive + DWELL / 2).find(t => t.id === a.trainId);
       if (!tr.dwell || tr.stationId !== id || Math.abs(tr.mid - STATIONS[id].s) > 1e-6) platBad++;
     }
   }
-  ok(hwBad === 0, `every station sees a train every ${(HEADWAY * 60).toFixed(1)} machine minutes`);
+  ok(hwBad === 0, `every station sees a train every ${(LOOP_GAPS.min * 60).toFixed(1)}-${(HEADWAY * 60).toFixed(1)} machine minutes`);
   ok(platBad === 0, "the timetabled train is standing at the platform when the board says");
   // trains move continuously, in station order, and never run into each other
   let worstT = 0, orderBad = 0, closest = Infinity, dwellStops = 0;
@@ -216,7 +217,9 @@ section("the loop");
   ok(closest > 1, "trains never overlap");
   const ev = loopEvents(24 * 50 + 7, 24 * 50 + 8);
   const arrivals = ev.filter(e => e.kind === "arrive").length;
-  ok(Math.abs(arrivals - STATION_ORDER.length / HEADWAY) <= STATION_ORDER.length, `PA: ~${Math.round(STATION_ORDER.length / HEADWAY)} arrivals an hour (${arrivals})`);
+  // (the Loop's version 2: the gaps differ, so count by the trains a lap)
+  const perHour = STATION_ORDER.length * TRAINS.length / LOOP_LINE.lapHours;
+  ok(Math.abs(arrivals - perHour) <= STATION_ORDER.length, `PA: ~${Math.round(perHour)} arrivals an hour (${arrivals})`);
   ok(ev.every(e => e.text && e.text === e.text.toUpperCase() && !e.text.includes("—")), "PA lines are in the house voice");
   ok(JSON.stringify(ev) === JSON.stringify(loopEvents(24 * 50 + 7, 24 * 50 + 8)), "PA is deterministic");
   for (const e of ev.slice(0, 3)) console.log(`  PA ${e.t.toFixed(3)} ${e.text}`);

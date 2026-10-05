@@ -1608,6 +1608,38 @@ building's parts by segment. DRIVE YOURSELF holds the concourse and the pylons s
 stairs come down beside them). `check-cityview`: the tower covers the platform, the soffit clears
 the canopy, the concourse and pylons clear the viaduct, and every car wholly under the tower paints
 before it at all four turns (a car half out of the portal is drawn over the tower's end face).
+THE LOOP'S VERSION 2 (capacity; network 6). At 5,000 subjects version 1's busiest car carried 43-57
+riders over a machine week (days 300-306, synthetic census, `scripts/bench-phase2.mjs`: exact loads
+from each plan's rides) against the 1.5x-seated limit of 24.
+
+- **More trains, never a retiming** (`sim.js` `LOOP_VERSION` 2): version 1's five trains (L1-L5: 4, 3,
+  4, 4, 3 cars) keep their ids, indices (a published plan's `k`), cars and offsets to the last bit
+  (`k x LAP / 5`); in each gap between two of them two new four-car trains (L6-L15). So every train of
+  every day published on version 1 runs where it always ran and is drawn there, and the new ones run
+  empty through those days. The first day built after the deploy is the first planned on version 2.
+  `check-plans` holds a network-5 day built by b54a241 (`fixtures/net5-plan-day300.json`: every
+  rider's train, car and place aboard, minute by minute) and version 1's five against version 1's own
+  timetable formula at 2,000 instants.
+- **Sized by the plan builder's car counts.** A train carries whoever reached the platforms since the
+  one before it, so each new slot is sized to the cars of the train it brings in: the gap ahead of a
+  three-car train is the shorter (2.58 machine minutes, against 2.99 and 2.85), never so short that a
+  train reaches a platform before the one ahead has cleared it (`LOOP_CLEAR` 1.1 cells; the dwell and
+  the train lengths bound the Loop at three trains per version-1 gap). `HEADWAY` is the longest wait
+  (3.0 min, was 8.6); `LOOP_GAPS` the range.
+- **Network 6: every trip over every line.** Until network 5 a trip between two Loop districts always
+  rode the Loop, the long way round a one-way ring if need be; from 6 it is planned like any other
+  (`railRoute`: the Loop, the Central Line, a walk, whichever is quickest), flag 32 in the plan.
+- **Routing at scale.** `railRoute` reads the network as a graph built once per network (from boarding
+  at each stop, the quickest way to alight at every other, with the path), and `footpath` tests only the
+  blocks near a leg (a grid) and only the corners that could matter (checked identical to the old search
+  on 3,000 walks). Plan build at 5,000: 19 s -> 8 s; at 725: 2.8 s -> 1.2 s.
+- **Measured** (5,000, synthetic census, busiest car of the day, `scripts/bench-phase2.mjs`): the Loop
+  43-51 (days 300-302, version 1) -> 17-24 (days 300-306, version 2), under the 1.5x-seated limit of 24
+  every day. With the Loop relieved the other lines, days 300-306: the Shore Line 22-29 (its next
+  version is the next capacity step), the Central Line 11-16, the Alpine Line 9-14, the West Line 7-9.
+  Machine minutes in transit a day by tier band (top, middle, lowest): 210-218, 215-219, 197-200. Plan
+  about 1,500 KB; build about 3 s.
+
 ## THE MALL: emergent small business (2026-09-30)
 
 Scott: "if people get dissatisfied with their jobs, they should try to open their own businesses...

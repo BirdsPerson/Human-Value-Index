@@ -200,9 +200,11 @@ marked as reconstruction); the billboard sites at four turns. `check-cityview`, 
 
 **Status (2026-10-01): steps 1-3 built and live**, with one addition: THE CENTRAL LINE across the core
 through a portal in the monolith (Scott: "it would make sense for the train to run through the
-central building"). What was built and measured: docs/CITY_SPEC.md "PHASE 2". Still to come: (4) THE
-SUBURBS and THE AIRPORT with the East Line, (5) THE FARMLAND (the West Line's next version) and THE
-ENGINE, (6) THE OUTER RING; and the Port's and the Old Town's prefects.
+central building"). What was built and measured: docs/CITY_SPEC.md "PHASE 2". Since then: THE LOOP'S
+VERSION 2 (network 6: three times the trains, version 1's five untouched; the busiest car at 5,000 from
+43-57 to 17-24 a day). Still to come: (4) THE SUBURBS and THE AIRPORT with the East Line, (5) THE FARMLAND
+(the West Line's next version) and THE ENGINE, (6) THE OUTER RING; and the Port's and the Old Town's
+prefects.
 
 Scott, 2026-09-30: "make sure we're extending in lots of different directions, planning where
 things should best be located; the train track needs to extend to different parts of the city;
