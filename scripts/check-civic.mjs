@@ -398,7 +398,13 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
     const ms = performance.now() - t;
     const bytes = JSON.stringify(blk).length;
     (globalThis.__lgSizes ||= []).push([n, bytes, Math.round(ms)]);
-    ok(bytes / DIST.length < 2800, `leagues, ${n}: ${bytes} bytes, ${Math.round(bytes / DIST.length)} per district`);
+    // as the summary's bound below: the league's ten (their teams) and the leagues block within the old
+    // bound, every other district (the Coast, the Heights, PHASE 2's, the nightlife quarters) a small
+    // record of its own (the two quarters took the census-wide block past 28000: 2026-10-05)
+    const others = Object.keys(blk.districts).filter(id => !DIST.includes(id));
+    const core = JSON.stringify({ ...blk, districts: Object.fromEntries(DIST.map(id => [id, blk.districts[id]])) }).length;
+    const rest = Math.max(0, ...others.map(id => JSON.stringify(blk.districts[id]).length));
+    ok(core / DIST.length < 2800 && rest < 520, `leagues, ${n}: ${bytes} bytes; the league's ten ${Math.round(core / DIST.length)} per district, the largest other ${rest}`);
   }
   const zs = globalThis.__lgSizes;
   ok(zs[zs.length - 1][1] < zs[0][1] * 1.3, `the leagues' block does not grow with the census (${zs.map(x => x[1]).join(" / ")} bytes)`);
