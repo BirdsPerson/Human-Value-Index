@@ -52,6 +52,32 @@ const peopleOf = (roster) => new Map(roster.map(s => [SIM.keyOf(s), s]));
 const D0 = 250, DAYS = [D0, D0 + 1, D0 + 2, D0 + 3, D0 + 4];
 ok(C.seasonOf(252) === 8 && C.seasonOf(253) === 9 && C.seasonStart(9) === 253, "season 10 starts on day 253");
 
+// ---- 0. THE SEASON CALENDAR (src/city/seasons.js; Scott 2026-10-05: a season lasts one real month) --
+// 28-day seasons before the cutover (published history, untouched); from season 23 (0-based 22, machine
+// day 617) every season is 1800 machine days, 30 real days. One definition: civic, leagues, race agree.
+{
+  const SN = await import("../src/city/seasons.js"), Lg = await import("../src/city/leagues.js"), R = await import("../src/city/race.js");
+  ok(SN.LONG_FROM === 22 && SN.seasonStart(22) === 617 && SN.seasonStart(23) === 2417, "season 23 (the first long one) opens machine day 617; season 24 opens day 2417");
+  ok(C.seasonOf === SN.seasonOf && Lg.seasonOf === SN.seasonOf && R.seasonOf === SN.seasonOf && C.seasonStart === SN.seasonStart && Lg.seasonStart === SN.seasonStart, "civic, leagues and the mountain read the one season calendar");
+  for (let s = 0; s < 40; s++) {
+    const len = SN.seasonStart(s + 1) - SN.seasonStart(s);
+    ok(len === (s < SN.LONG_FROM ? 28 : 1800) && SN.seasonDays(s) === len, `season ${s + 1} is ${len} machine days (${s < SN.LONG_FROM ? "before" : "from"} the cutover)`);
+    ok(SN.seasonOf(SN.seasonStart(s)) === s && SN.seasonOf(SN.seasonStart(s + 1) - 1) === s && (s === 0 || SN.seasonOf(SN.seasonStart(s) - 1) === s - 1), `seasonOf(seasonStart(${s})) === ${s}, and its last day is still season ${s + 1}`);
+  }
+  for (let d = 1; d < 617; d++) if (SN.seasonOf(d) !== Math.floor((d - 1) / 28)) ok(false, `day ${d}: the short seasons are unchanged`);
+  ok(SN.seasonDays(22) * 24 * 3600 * 1000 / SIM.DEFAULT_SCALE === 30 * 86400000, "a long season is 30 real days");
+  // a long season's leagues: every regular round, then the playoffs on the season's last scored slots
+  const rating = Object.fromEntries(DIST.map((id, i) => [id, 40 + 3 * i]));
+  for (const s of [22, 23, 25]) for (const sp of Lg.SPORTS) {
+    const s0 = SN.seasonStart(s), s1 = SN.seasonStart(s + 1), all = Lg.sportSeason(sp, s, s1, rating);
+    const reg = all.filter(m => m.stage === "regular"), fin = all.filter(m => m.stage === "final");
+    let last = s1 - 1; while (!Lg.slotsOn(sp, last).length) last--;
+    ok(reg.length === Lg.SPORT[sp].longRounds * 5 && fin.length === 1 && fin[0].day === last && all[all.length - 1] === fin[0], `season ${s + 1} ${sp}: ${Lg.SPORT[sp].longRounds} rounds, the final on day ${last - s0 + 1} of ${s1 - s0}, the season's last league slot`);
+    ok(new Set(all.map(m => m.k)).size === Lg.matchdays(sp, s) && all.every(m => m.day >= s0 && m.day < s1), `season ${s + 1} ${sp}: ${Lg.matchdays(sp, s)} matchdays, all inside the season`);
+    if (!Lg.SPORT[sp].finalOnly) ok(all.filter(m => m.stage === "semi").length === 2, `season ${s + 1} ${sp}: two semi-finals`);
+  }
+}
+
 // ---- 1. deterministic, chained, recomputable ---------------------------------------------------
 const roster = synthRoster(430);
 SIM.clearPlans(); SIM.clearSocialSnapshots(); SIM.setCivic(null);

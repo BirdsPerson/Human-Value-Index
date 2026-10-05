@@ -122,7 +122,7 @@ function SportTab({ block, h, sport }) {
   const asc = L.LEADERS[sport].find(c => c[0] === key)?.[4];
   const players = stats ? Object.values(stats.players).sort((a, b) => ((asc ? a[key] - b[key] : (b[key] ?? -1) - (a[key] ?? -1))) || b.r - a.r) : [];
   const pts = L.positionPoints(sport, done);
-  const md = L.slotsOn(sport, block.day)[0];
+  const md = L.slotsOn(sport, block.day)[0], season = block.leagues.season - 1, R = L.roundsOf(sport, season), long = L.isLong(season);
   const board = L.draftBoard(lg.draft, V.rosters[sport], S.n);
   const draftLine = (p) => `${pad(`${p.round}.${String(p.pick).padStart(2, "0")}`, 6)}${pad(teamShort(p.team), 11)}${pad(up(p.player[1]).slice(0, 22), 23)}${padL(p.player[2], 3)}${p.holder !== p.team ? `  TO ${teamShort(p.holder)}` : ""}\n`;
   const results = done.filter(m => m.day < block.day || m.to <= h).slice(-10).reverse();
@@ -133,9 +133,9 @@ function SportTab({ block, h, sport }) {
         {`${pad("POS", 4)}${pad("TEAM", 13)}${padL("P", 3)}${padL("W-D-L", 8)}${padL("PTS", 5)}${padL("CUP", 5)}  FORM\n`}
         {table.map(r => `${pad(String(r.pos), 4)}${pad(teamShort(r.id), 13)}${padL(r.p, 3)}${padL(`${r.w}-${r.d}-${r.l}`, 8)}${padL(r.pts, 5)}${padL(pts[r.id], 5)}  ${r.form || "-"}\n`).join("")}
       </pre>
-      <div className="hvi-civic-line">{mvp ? <>{fin ? "MVP" : "MVP RACE"}: <b>{up(mvp.name)}</b> ({teamShort(mvp.team)}). </> : null}{S.finalOnly ? `${S.rounds} ROUNDS, THEN THE TOP TWO MEET IN THE BOWL GAME.` : `${S.rounds} ROUNDS${S.rounds > 9 ? " (EVERY PAIR TWICE)" : S.rounds < 9 ? " OF THE CIRCLE" : " (EVERY PAIR ONCE)"}, THEN 1ST V 4TH AND 2ND V 3RD, THEN THE FINAL.`} WIN 3, DRAW 1.</div>
+      <div className="hvi-civic-line">{mvp ? <>{fin ? "MVP" : "MVP RACE"}: <b>{up(mvp.name)}</b> ({teamShort(mvp.team)}). </> : null}{S.finalOnly ? `${R} ROUNDS, THEN THE TOP TWO MEET IN THE BOWL GAME.` : `${R} ROUNDS${R % 9 ? " OF THE CIRCLE" : R === 9 ? " (EVERY PAIR ONCE)" : R === 18 ? " (EVERY PAIR TWICE)" : ` (EVERY PAIR ${R / 9} TIMES)`}, THEN 1ST V 4TH AND 2ND V 3RD, THEN THE FINAL.`} WIN 3, DRAW 1.{long ? ` THE SEASON RUNS ONE REAL MONTH (${L.LONG_SEASON_DAYS} MACHINE DAYS); EXHIBITIONS FILL THE SLOTS BETWEEN MATCHDAYS. THE PLAYOFFS TAKE THE LAST ${S.finalOnly ? "SLOT" : "TWO SLOTS"} OF THE SEASON.` : ""}</div>
 
-      <div className="hvi-city-room-h">TODAY{md ? ` // MATCHDAY ${md.md + 1} OF ${L.matchdays(sport)}` : ""}</div>
+      <div className="hvi-city-room-h">TODAY{md ? ` // MATCHDAY ${md.md + 1} OF ${L.matchdays(sport, season)}` : ""}</div>
       {today.length ? today.map(m => { const x = matchText(m, h, block); return <MatchRow key={`${m.k}.${m.j}`} m={m} x={x} rosters={V.rosters[sport]} open={open} setOpen={setOpen} />; })
         : <div className="hvi-city-note">NO {S.name} TODAY. {S.ground} IS OPEN FOR SUPERVISED FUN.</div>}
       {S.kind !== "hoops" && today.length > 1 && <div className="hvi-city-note">ONE TIE IS PLAYED ON THE BOARD AT {S.ground}. THE REST ARE PLAYED BEHIND CLOSED DOORS AT A DEPARTMENT FACILITY; RESULTS ARE RELEASED AT THE WHISTLE.</div>}

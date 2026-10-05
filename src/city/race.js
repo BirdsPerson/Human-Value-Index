@@ -12,7 +12,7 @@
 //               the course's par x (1 + (100 - rating) / 180) x the day's form (+-3%) x the run's luck (+-5%); a straddled gate
 //               (more likely the lower the rating, and in the slalom) is DNF. Total of both runs, lowest wins.
 //   STANDINGS   World Cup points by place (100 80 60 50 45 40 36 32 29 26 24 22) over the season (the
-//               leagues' 28-day season): THE MOUNTAIN STANDINGS, ladder-style, top first.
+//               leagues' season, seasons.js: one real month from season 23): THE MOUNTAIN STANDINGS, ladder-style, top first.
 //   THE CUP     the leagues module (leagues.js cupTable) takes fixed kinds (four leagues, the tennis
 //               ladder, the Pit). The hook: raceTop3(season, T) gives the standings' top three, keyed
 //               like the ladder's; CUP_HOOK says how it would score (IND_PTS, 3/2/1) once cupTable reads
@@ -23,6 +23,8 @@
 // skier or boarder on file, + 8 a mountaineer, + 6 a skater, + 5 a hockey player, + 4 a racing driver.
 
 import { SEED, weekdayOf } from "./sim.js";
+import { seasonOf, seasonStart } from "./seasons.js";   // the leagues' season: one calendar
+export { seasonOf };
 import { RACE_HOURS } from "./mountainGeo.js";
 
 function fnv(str) {
@@ -52,7 +54,6 @@ export const RACERS = [
 export const RACER = Object.fromEntries(RACERS.map(r => [r[0], r]));
 export const KINDS = { SL: { name: "SLALOM", par: 46, dnf: 1 }, GS: { name: "GIANT SLALOM", par: 71, dnf: 0.6 } };
 export const POINTS = [100, 80, 60, 50, 45, 40, 36, 32, 29, 26, 24, 22];
-export const SEASON_DAYS = 28;   // the leagues' season (leagues.js)
 export const CUP_HOOK = { kind: "ski", pts: [3, 2, 1], from: null };   // from: the season the Cup starts counting it (null: not yet)
 export const START = RACE_HOURS[0] + 0.05, GAP = 0.075, DESCENT = 0.065;   // machine hours: the first start, a start every 4.5 minutes, the run on the course
 
@@ -123,9 +124,8 @@ export function nextRace(mt) {
 }
 
 // THE MOUNTAIN STANDINGS: the season's points (races decided by mt). -> [{slug, pts, wins, podiums, races}]
-export const seasonOf = (day) => Math.floor((day - 1) / SEASON_DAYS);
 export function standings(mt) {
-  const day = Math.floor(mt / 24) + 1, s0 = seasonOf(day) * SEASON_DAYS + 1;
+  const day = Math.floor(mt / 24) + 1, s0 = seasonStart(seasonOf(day));
   const rows = Object.fromEntries(RACERS.map(r => [r[0], { slug: r[0], pts: 0, wins: 0, podiums: 0, races: 0 }]));
   for (let d = s0; d <= day; d++) {
     const r = raceOn(d);

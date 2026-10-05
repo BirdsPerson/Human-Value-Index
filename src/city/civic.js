@@ -12,7 +12,7 @@
 //   LEAGUE   one team per district (its workforce), nine players drafted at the start of each
 //            season (athletes first, then those who play at the Diamond, the Courts, the Bowl
 //            and the Pitch), rated from physical, competence and sport fields. A season is
-//            28 machine days on the existing GAMES fixtures: a single round robin (45
+//            28 machine days (the mixed league ran only in the short seasons; seasons.js) on the existing GAMES fixtures: a single round robin (45
 //            fixtures), two semi-finals, a final, then exhibitions (the old generic sides).
 //            Each result is the scoreboard's own final (sim.js gameAt) with the side that won
 //            it given to the team better on the day (rating + a hashed day's luck), so the
@@ -138,16 +138,18 @@ export const teamRating = (roster) => (roster?.length ? Math.round(roster.reduce
 
 // ---- the calendar ---------------------------------------------------------------------------
 // Every fixture on the GAMES timetable that keeps a score (practice does not), in day order.
-export const SEASON_DAYS = 28, REGULAR = (DIST.length * (DIST.length - 1)) / 2;   // 45
+// The season calendar is seasons.js (one definition: 28-day seasons through season 22, then one real
+// month each); the mixed league only ever ran in short seasons.
+export { SEASON_DAYS, seasonOf, seasonStart, seasonDays } from "./seasons.js";
+import { seasonOf, seasonStart, seasonDays } from "./seasons.js";
+export const REGULAR = (DIST.length * (DIST.length - 1)) / 2;   // 45
 const byWeekday = Array.from({ length: 8 }, (_, wd) => Object.entries(SIM.GAMES)
   .flatMap(([placeId, list]) => list.filter(g => !g.practice && g.days.includes(wd)).map(g => ({ placeId, from: g.from, to: g.to, kind: g.kind, name: g.name })))
   .sort((a, b) => a.from - b.from || (a.placeId < b.placeId ? -1 : 1)));
 const PER_WEEK = byWeekday.reduce((n, l) => n + l.length, 0);
-export const seasonOf = (day) => Math.floor((day - 1) / SEASON_DAYS);
-export const seasonStart = (season) => season * SEASON_DAYS + 1;
 // -> [{day, k (the fixture's number in its season), placeId, from, to, kind, name}]
 export function fixturesOn(day) {
-  const i = (day - 1) - seasonOf(day) * SEASON_DAYS, wd = SIM.weekdayOf(day);
+  const i = day - seasonStart(seasonOf(day)), wd = SIM.weekdayOf(day);
   let k = Math.floor(i / 7) * PER_WEEK;
   for (let w = 1; w < wd; w++) k += byWeekday[w].length;
   return byWeekday[wd].map((g, j) => ({ day, k: k + j, ...g }));
@@ -420,7 +422,7 @@ function leaguesOn(plan, people, prev, day, season) {
     v = { rosters: prevRosters(), drafts: Object.fromEntries(L.SPORTS.map(sp => [sp, P.sports[sp].draft])), tennis: P.tennis.seed, pit: P.pit.dist, last: P.cup.last || null };
   } else {
     const subjects = Object.keys(plan.subjects || {}).map(k => people.get(k) || { slug: k, name: k });
-    const lastDay = chained && (prev.leagues || prev.league)?.season === season && (prev.leagues || prev.league).day === SEASON_DAYS;
+    const lastDay = chained && (prev.leagues || prev.league)?.season === season && (prev.leagues || prev.league).day === seasonDays(season - 1);
     if (lastDay && prev.leagues) {
       // draft day, the chain whole: each league's end from yesterday's rosters
       const pv = { rosters: prevRosters(), tennis: prev.leagues.tennis.seed, pit: prev.leagues.pit.dist };
@@ -464,7 +466,7 @@ export function civicFold(plan, people, prev = null) {
       drafted = prev.league.draft || null;
     } else {
       const subjects = Object.keys(plan.subjects || {}).map(k => people.get(k) || { slug: k, name: k });
-      if (season >= DRAFT_FROM && chained && prev.league.season === season && prev.league.day === SEASON_DAYS) {
+      if (season >= DRAFT_FROM && chained && prev.league.season === season && prev.league.day === seasonDays(season - 1)) {
         // draft day, the chain whole: last season's end is yesterday's table and champion
         ({ rosters, draft: drafted } = draftFrom(season, subjects, prev.league.table, prev.league.champion));
       } else ({ rosters, draft: drafted } = seasonRosters(season, subjects));
@@ -523,12 +525,12 @@ export function civicFold(plan, people, prev = null) {
     const sports = {};
     for (const sp of L.SPORTS) {
       const fin = X.played[sp].find(m => m.stage === "final");
-      sports[sp] = { stage: X.today[sp][0]?.stage || L.stageOf(sp, mdBefore(sp, day)), table: X.standings[sp], champion: fin ? L.winnerOf(fin) : null, draft: X.v.drafts[sp] };
+      sports[sp] = { stage: X.today[sp][0]?.stage || L.stageOf(sp, mdBefore(sp, day), season), table: X.standings[sp], champion: fin ? L.winnerOf(fin) : null, draft: X.v.drafts[sp] };
     }
     return {
       v: CIVIC_V, day,
       leagues: {
-        season: season + 1, day: day - seasonStart(season) + 1, days: SEASON_DAYS, sports,
+        season: season + 1, day: day - seasonStart(season) + 1, days: seasonDays(season), sports,
         tennis: { seed: X.v.tennis, ladder: X.ladder.ladder },
         pit: { dist: X.v.pit, rank: X.pit.rank.map(x => x.key) },
         cup: { table: X.cup.map(r => [r.id, r.pts]), last: X.v.last || null },
@@ -540,7 +542,7 @@ export function civicFold(plan, people, prev = null) {
   return {
     v: CIVIC_V, day,
     league: {
-      season: season + 1, day: day - seasonStart(season) + 1, days: SEASON_DAYS,
+      season: season + 1, day: day - seasonStart(season) + 1, days: seasonDays(season),
       stage: lg.today[0]?.stage || (lg.played.length ? stageOf(lg.played[lg.played.length - 1].k + 1) : "regular"),
       table: lg.standing, today: lg.today.map(strip), recent: lg.played.slice(-6).map(strip),
       champion: lg.final ? winnerOf(lg.final) : null,

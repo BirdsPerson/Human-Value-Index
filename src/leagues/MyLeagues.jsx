@@ -9,6 +9,16 @@ import { LEVEL_NAME, LEVEL_FLOOR, PLAYED_BONUS, TRACK_BONUS, SELF_CAP } from "./
 // An ATHLETIC RECORD on the case (admin-set; src/leagues/record.js) is shown read-only, with its floor.
 // Renders nothing for a file the leagues will not draft (unassessed, or under a harm finding).
 const LABEL = { baseball: "BASEBALL", basketball: "BASKETBALL", football: "FOOTBALL", soccer: "SOCCER", tennis: "TENNIS LADDER" };
+// How long until iso, in real time: "IN 29 DAYS, 14 HOURS", "IN 3 HOURS, 12 MINUTES", "NOW". A season
+// runs one real month (src/city/seasons.js), so the next draft is usually days away, not hours.
+const unit = (n, w) => `${n} ${w}${n === 1 ? "" : "S"}`;
+export function untilText(iso, now = Date.now()) {
+  const ms = new Date(iso).getTime() - now;
+  if (!Number.isFinite(ms)) return "";
+  if (ms <= 60000) return "NOW";
+  const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
+  return `IN ${d ? `${unit(d, "DAY")}${h ? `, ${unit(h, "HOUR")}` : ""}` : h ? `${unit(h, "HOUR")}${mm ? `, ${unit(mm, "MINUTE")}` : ""}` : unit(mm, "MINUTE")}`;
+}
 const when = (iso) => { try { return new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).toUpperCase(); } catch { return iso; } };
 async function call(caseId, sports) {
   const r = sports
@@ -61,7 +71,7 @@ export default function MyLeagues({ caseId }) {
               ? `${d.name} IS ENTERED: ${entered.map(sp => `${LABEL[sp]} (RATING ${d.entry.r?.[sp]})`).join(", ")}. IT STAYS ENTERED EVERY SEASON UNTIL YOU WITHDRAW.`
               : `YOUR CITIZEN, ${d.name}, MAY ENTER ONE OR TWO: THE FOUR LEAGUES OR THE TENNIS LADDER. ENTRANTS ARE DRAFTED AMONG THE ATHLETES AT THEIR OWN RATING, BY THE SAME SNAKE AND THE SAME CAP. ON THE LADDER, THE BOTTOM RUNGS.`}
           </div>
-          <div className="hvi-note">NEXT DRAFT: SEASON {d.season}, MACHINE DAY {d.draftDay} ({when(d.draftAt)}). ENTRIES AND WITHDRAWALS FOR IT CLOSE AT MACHINE DAY {d.closeDay} ({when(d.closeAt)}); AFTER THAT THEY COUNT FOR THE ONE AFTER.</div>
+          <div className="hvi-note">NEXT DRAFT: SEASON {d.season}, MACHINE DAY {d.draftDay} ({when(d.draftAt)}, {untilText(d.draftAt)}). ENTRIES AND WITHDRAWALS FOR IT CLOSE AT MACHINE DAY {d.closeDay} ({when(d.closeAt)}, {untilText(d.closeAt)}); AFTER THAT THEY COUNT FOR THE ONE AFTER. A SEASON RUNS ONE REAL MONTH.</div>
           {d.record && (
             <div className="hvi-note">
               ATHLETIC RECORD ON FILE: {LEVEL_NAME[d.record.level]}{recList.length ? ` // ${recList.join(", ")}` : ""}.

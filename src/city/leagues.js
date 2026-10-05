@@ -54,14 +54,17 @@ export const teamName = (id) => TEAMS[id]?.[0] || String(id || "").toUpperCase()
 export const teamShort = (id) => TEAMS[id]?.[1] || String(id || "").toUpperCase();
 
 // ---- the sports ------------------------------------------------------------------------------------
-// n: the roster; rounds: the regular season's rounds of the circle (9 = every pair once, 18 = twice);
+// n: the roster; rounds: a short (28-day) season's regular rounds of the circle (9 = every pair once,
+// 18 = twice); longRounds: a long season's (seasons.js: one real month), today's rate of league rounds
+// per real hour kept (rounds x 64, to whole home-and-away circles where it isn't one), spread evenly
+// over the month with exhibitions between, the playoffs on the season's last slots;
 // finalOnly: the top two meet in the final (the Bowl has four Sundays: three rounds and THE BOWL GAME).
 export const SPORTS = ["baseball", "basketball", "football", "soccer"];
 export const SPORT = {
-  baseball: { venue: "ball-field", kind: "ball", n: 9, rounds: 9, name: "BASEBALL", suffix: "NINE", ground: "THE DIAMOND" },
-  basketball: { venue: "courts", kind: "hoops", n: 5, rounds: 18, name: "BASKETBALL", suffix: "FIVE", ground: "THE COURTS" },
-  football: { venue: "stadium", kind: "gridiron", n: 11, rounds: 3, finalOnly: true, name: "FOOTBALL", suffix: "ELEVEN", ground: "THE BOWL" },
-  soccer: { venue: "pitch", kind: "soccer", n: 11, rounds: 6, name: "SOCCER", suffix: "F.C.", ground: "THE ESTATE PITCH" },
+  baseball: { venue: "ball-field", kind: "ball", n: 9, rounds: 9, longRounds: 576, name: "BASEBALL", suffix: "NINE", ground: "THE DIAMOND" },
+  basketball: { venue: "courts", kind: "hoops", n: 5, rounds: 18, longRounds: 1152, name: "BASKETBALL", suffix: "FIVE", ground: "THE COURTS" },
+  football: { venue: "stadium", kind: "gridiron", n: 11, rounds: 3, longRounds: 198, finalOnly: true, name: "FOOTBALL", suffix: "ELEVEN", ground: "THE BOWL" },
+  soccer: { venue: "pitch", kind: "soccer", n: 11, rounds: 6, longRounds: 378, name: "SOCCER", suffix: "F.C.", ground: "THE ESTATE PITCH" },
 };
 export const SPORT_AT = Object.fromEntries(SPORTS.map(s => [SPORT[s].venue, s]));
 // THE CURATED NINE, THE CURATED FIVE, THE CURATED ELEVEN, CURATED F.C. (FULLY COMPLIANT)
@@ -70,9 +73,9 @@ export const MATCHES_PER_DAY = DIST.length / 2;   // a round: five
 export const HOOP_LEN = 0.7;                      // a game to 21 at the Courts (sim.js gameAt)
 export const POS_PTS = [10, 8, 6, 5, 4, 3, 2, 1, 0, 0];   // the Cup: points by final position
 export const IND_PTS = [3, 2, 1];                          // the ladder's and the Pit's top three
-export const SEASON_DAYS = 28;
-export const seasonOf = (day) => Math.floor((day - 1) / SEASON_DAYS);
-export const seasonStart = (season) => season * SEASON_DAYS + 1;
+// The season calendar (28-day seasons through season 22, one real month from season 23): seasons.js.
+export { SEASON_DAYS, LONG_SEASON_DAYS, LONG_FROM, seasonOf, seasonStart, seasonDays, isLong } from "./seasons.js";
+import { seasonOf, seasonStart, isLong } from "./seasons.js";
 
 // A player's rating, 0..99: the body, the competence, and a record in sport.
 const SPORT_FIELDS = ["sport", "soccer", "gridiron", "combat", "coaching"];
@@ -295,16 +298,49 @@ const SLOTS = Object.fromEntries(SPORTS.map(sp => {
   const byWd = Array.from({ length: 8 }, (_, wd) => list.filter(g => g.days.includes(wd)).map(g => ({ from: g.from, to: g.to, name: g.name })).sort((a, b) => a.from - b.from));
   return [sp, { byWd, perWeek: byWd.reduce((n, l) => n + l.length, 0) }];
 }));
-export const matchdays = (sport) => SLOTS[sport].perWeek * (SEASON_DAYS / 7);
-// The sport's matchdays on a day: -> [{md (0-based in the season), day, from, to, name}]
-export function slotsOn(sport, day) {
-  const S = SLOTS[sport], i = (day - 1) - seasonOf(day) * SEASON_DAYS, wd = SIM.weekdayOf(day);
-  let md = Math.floor(i / 7) * S.perWeek;
-  for (let w = 1; w < wd; w++) md += S.byWd[w].length;
-  return S.byWd[wd].map((g, j) => ({ md: md + j, day, ...g }));
+// The sport's scored slots on days [d0, d1), counted by weekday (a season need not start on a Monday).
+function slotsBetween(sport, d0, d1) {
+  const S = SLOTS[sport], n = Math.max(0, d1 - d0), w = Math.floor(n / 7);
+  let k = w * S.perWeek;
+  for (let d = d0 + w * 7; d < d1; d++) k += S.byWd[SIM.weekdayOf(d)].length;
+  return k;
 }
-export function stageOf(sport, md) {
-  const R = SPORT[sport].rounds;
+// The regular season's rounds, and the playoff matchdays after them (the semis, then the final).
+export const roundsOf = (sport, season) => (isLong(season) ? SPORT[sport].longRounds : SPORT[sport].rounds);
+const playoffMds = (sport) => (SPORT[sport].finalOnly ? 1 : 2);
+// A season's matchdays: a short season numbers every scored slot (the ones after the final are
+// exhibitions); a long season numbers only its league matchdays, the regular rounds and the playoffs.
+export const matchdays = (sport, season) => (isLong(season) ? roundsOf(sport, season) + playoffMds(sport) : slotsBetween(sport, seasonStart(season), seasonStart(season + 1)));
+// A long season's calendar: its scored slots M; the regular round i sits on slot floor(i * (M - P) / R),
+// the playoffs on the last P slots, so the final is the season's last scored slot.
+const LONG_CAL = new Map();
+function longCal(sport, season) {
+  const key = `${sport}|${season}`;
+  if (!LONG_CAL.has(key)) {
+    LONG_CAL.set(key, { M: slotsBetween(sport, seasonStart(season), seasonStart(season + 1)), R: roundsOf(sport, season), P: playoffMds(sport) });
+    if (LONG_CAL.size > 32) LONG_CAL.delete(LONG_CAL.keys().next().value);
+  }
+  return LONG_CAL.get(key);
+}
+// slot n (0-based in a long season) -> its matchday, or null for an exhibition
+function longMd(sport, season, n) {
+  const { M, R, P } = longCal(sport, season), span = M - P;
+  if (n >= span) return n < M ? R + (n - span) : null;
+  const i = Math.ceil((n * R) / span);
+  return i < R && Math.floor((i * span) / R) === n ? i : null;
+}
+// The sport's league matchdays on a day: -> [{md (0-based in the season), day, from, to, name}]. A
+// short season lists every scored slot (md past the final: an exhibition); a long season lists only
+// the slots that are league matchdays (the rest are exhibitions: the board's generic sides).
+export function slotsOn(sport, day) {
+  const S = SLOTS[sport], season = seasonOf(day), wd = SIM.weekdayOf(day);
+  const n0 = slotsBetween(sport, seasonStart(season), day);
+  const list = S.byWd[wd].map((g, j) => ({ md: n0 + j, day, ...g }));
+  if (!isLong(season)) return list;
+  return list.map(x => ({ ...x, md: longMd(sport, season, x.md) })).filter(x => x.md != null);
+}
+export function stageOf(sport, md, season = 0) {
+  const R = roundsOf(sport, season);
   if (md < R) return "regular";
   if (SPORT[sport].finalOnly) return md === R ? "final" : "off";
   return md === R ? "semi" : md === R + 1 ? "final" : "off";
@@ -391,7 +427,7 @@ export function sportSeason(sport, season, until, rating) {
   let semis = [];
   const end = Math.min(until, seasonStart(season + 1));
   for (let day = seasonStart(season); day < end; day++) for (const slot of slotsOn(sport, day)) {
-    const stage = stageOf(sport, slot.md), feat = featuredOf(sport, slot.md, stage);
+    const stage = stageOf(sport, slot.md, season), feat = featuredOf(sport, slot.md, stage);
     let pairs;
     if (stage === "regular") pairs = roundOf(season, sport, slot.md);
     else if (stage === "semi") { const t = order(tableOf(played)); pairs = [[t[0], t[3]], [t[1], t[2]]]; }
@@ -512,7 +548,8 @@ export function ladderRun(seed, season, T) {
     stats[wk].w++; stats[lk].l++; stats[m.a].aces += m.aces[0]; stats[m.b].aces += m.aces[1];
     matches.push(m);
   };
-  for (let day = seasonStart(season); day < seasonStart(season + 1); day++) {
+  const lastDay = Math.min(seasonStart(season + 1) - 1, Math.floor(T / 24) + 1);
+  for (let day = seasonStart(season); day <= lastDay; day++) {
     const d0 = day - 1, wd = SIM.weekdayOf(day);
     for (const f of TENNIS_FIXTURES) {
       if (!f.days.includes(wd)) continue;
@@ -551,7 +588,8 @@ export function ladderRun(seed, season, T) {
 export function pitRun(season, T) {
   const rec = Object.fromEntries(FIGHTERS.map(([k, n, , r]) => [k, { key: k, name: n, r, w: 0, l: 0, d: 0, stops: 0, pts: 0 }]));
   const bouts = [];
-  for (let day = seasonStart(season); day < seasonStart(season + 1); day++) {
+  const lastDay = Math.min(seasonStart(season + 1) - 1, Math.floor(T / 24) + 1);
+  for (let day = seasonStart(season); day <= lastDay; day++) {
     for (const b of cardFor(day) || []) {
       if ((day - 1) * 24 + b.from + SLOT_H > T) continue;
       const [a, c] = b.sides.map(s => s.key);

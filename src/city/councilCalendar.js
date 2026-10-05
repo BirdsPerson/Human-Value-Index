@@ -4,7 +4,7 @@
 import * as SIM from "./sim.js";
 
 export const ELECTION_MS = 3 * 24 * 3600 * 1000;
-export const TERM_SEASONS = 15, TERM_DAYS = TERM_SEASONS * 28;   // 420 machine days
+export const TERM_SEASONS = 15, TERM_DAYS = TERM_SEASONS * 28;   // 420 machine days: fifteen of the SHORT (28-day) seasons; fixed, not tied to the season calendar (seasons.js)
 export const MS_PER_DAY = (24 * 3600 * 1000) / SIM.DEFAULT_SCALE;   // one machine day in real ms (24 min)
 export const TERM_MS = TERM_DAYS * MS_PER_DAY;                     // 7 real days
 export const SEAT_LAG = 4;

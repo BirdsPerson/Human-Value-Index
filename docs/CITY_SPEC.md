@@ -1338,7 +1338,29 @@ the PA), `simApi.js` (boards and PA). Check: `scripts/check-civic.mjs` section 3
   the team better on the day (rating + 50 x hashed luck). Formats (the calendar decides): baseball 16
   matchdays: 9 rounds, semis, final; basketball 28: 18 rounds (every pair twice), semis, final;
   soccer 8: 6 rounds of the circle, semis, final; football 4: 3 rounds, then THE BOWL GAME (1st v
-  2nd). Win 3, draw 1; playoffs never draw (the Department's tiebreak).
+  2nd). Win 3, draw 1; playoffs never draw (the Department's tiebreak). (These are the short
+  seasons'; the long seasons' formats are below.)
+- **The season length: one real month from season 23** (Scott 2026-10-05: "a season should last one
+  real month"). One calendar, `src/city/seasons.js` (`seasonOf`, `seasonStart`, `seasonDays`,
+  `LONG_FROM`), re-exported by `leagues.js` and `civic.js` and read by `race.js` (the mountain
+  standings); no other module defines a season. Seasons 1-22 are 28 machine days (11h12m real) and
+  stay so: every day of them was published. From season 23 (0-based `LONG_FROM` 22, machine day 617,
+  2026-10-06 06:24 UTC / 02:24 EDT) every season is a fixed 1800 machine days = 30 real days (not
+  calendar months): season 24 opens day 2417 (2026-11-05 06:24 UTC), season 25 day 4217, and so on.
+  The cutover was the first boundary no plan had published (the builder publishes today + 3 machine
+  days; on 2026-10-05 20:30 UTC it had published through day 595). 1800 is not a multiple of 7, so a
+  long season starts on any weekday: the calendar counts a season's scored slots by weekday from its
+  first day (`slotsBetween`), which reproduces every short season's matchdays exactly.
+  **Long-season formats** (`SPORT[sp].longRounds`, `roundsOf`): today's rate of league rounds per
+  real hour kept, 64 x the short season's rounds rounded to whole home-and-away circles where it
+  isn't one: baseball 576 rounds (every pair 64 times), basketball 1152 (128), football 198 (22), then
+  THE BOWL GAME; soccer 378 (42). The rounds are spread evenly over the season's scored slots (round i
+  on slot floor(i x (M - P) / R)), the slots between them are exhibitions (the board's generic sides),
+  and the playoffs (semis, then the final; the Bowl Game alone) take the season's last scored slots,
+  so the final is the season's last league fixture and the Cup is decided on its last day or two. A
+  long season's `matchdays(sport, season)` counts league matchdays only (the hub's MATCHDAY x OF y).
+  Cost at the end of a long season: about 10 ms a sport to replay its matches, under 100 ms for a
+  sport's season stats (node). The ladder and the Pit replay only to the hour asked for.
 - **Individual.** THE TENNIS LADDER (`ladderRun`): seeded each season (the tennis players on file,
   the club's regulars, then athletes; 10 rungs); the show court's match (tennis.js) counts, and Ladder
   Night adds three challenges one or two rungs up; a winning challenger takes the rung. THE PIT
@@ -1348,7 +1370,7 @@ the PA), `simApi.js` (boards and PA). Check: `scripts/check-civic.mjs` section 3
 - **THE DEPARTMENTAL CUP** (`cupTable`, `positionPoints`): per league 10 8 6 5 4 3 2 1 0 0 by
   position (the playoffs decide the top; teams level on points, difference and scored share; nothing
   before a ball is played), plus 3/2/1 for the ladder's and the Pit's top three. Decided at the last
-  final whistle (the Bowl Game, the season's last Sunday); the next season records it
+  final whistle (the season's last league fixture); the next season records it
   (`leagues.cup.last`). The mood's `league` factor (label SPORTING FORM) is now the Cup form: the last
   five results across the district's four teams (W +3, L -3) plus Cup first +4 / last -4, clamped
   +-19.
