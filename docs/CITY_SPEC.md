@@ -1659,3 +1659,88 @@ window rows; the `ent/latest` ledger), `civic.js` (the mood factor and the shops
 - **Measured** (the live census of 667 + the figures on file, 30 machine days from scratch): mean
   satisfaction 44, about a fifth of working subjects under 35; the first organic openings on day 8,
   every unit let by day 20, closures from day 14 (a churn of about one a day after that).
+
+## THE MOUNTAIN: the Heights to the summit (2026-09-30)
+
+Scott: "mountains can be very tall; Killington is over 4,000 feet; many trails that wind and
+intersect, some much more difficult; some have slalom gates for competition; a lodge at the bottom;
+render the whole mountain up to the top; at least one lodge up there too." Code: `src/city/mountainSim.js`
+(places, bands, jobs, leisure, the race fixture: spread into `sim.js` like the venues),
+`mountainGeo.js` (the terrain, trails, lifts, lodges, gates, park, guns, cats, weather and status,
+the network and every skier's place at a machine moment; pure), `mountainDraw.js` (the iso painter),
+`race.js` (THE WEEKEND RACE; pure), `trailMap.js` + `HeightsPage.jsx` (`#heights`). Hooks:
+`coastGeo.js` (TERRAIN / terrainH are the mountain's; the bands are coast lots), `coastDraw.js` (every
+mountain lot, the parcel's ground too, painted by `drawMountainBand`), `archGeo.js` (a band's box is
+as tall as its ground), `iso.js` (`cityExtent` takes in the summit; `hiddenByTerrain`), `CityIso.jsx`
+(the crowd once a frame, labels the mountain hides left off, the racer, the board), `City.jsx` (PA,
+the page), `props.js` (room types). Check: `scripts/check-mountain.mjs`.
+
+- **Scale.** A storey is the city's: the Meridian is 14. PEAK PERFORMANCE stands 50 storeys over the
+  village (4,370 FT on the board, the village 1,165 FT: 3,200 FT of vertical at 64 feet a storey);
+  MIDDLE MANAGEMENT (the east peak) 43, THE GLASS CEILING (the west shoulder) 32. Tree line 30.
+- **The ground.** The Heights runs on north to row -125 and wider (x -5 to 112). One heightfield:
+  flat at the village's back (y -21), THE SLOPES' gentle apron (the learners' ground, x 9-100 as
+  before), then the massif: the crest from the west shoulder over the summit and a col to the east
+  peak, three spurs south off it, the bowl under the summit and the col, gullies (faded near the
+  crests, so every ridge climbs to its peak), the north face falling away, the flanks easing out to
+  the district's edges. Graded benches under the summit lodge, the mid-mountain lodge and THE UPPER
+  BASE. THE ALPINE LINE (the PHASE 2 agent's, untouched) climbs a cut up x 54.5: the ground under its
+  deck stays at most 0.35 storeys under the deck's base (`ALPINE`, held by check-mountain against
+  `lineGeo.baseAt`).
+- **The bands** (sim buildings, open ground, painted by the mountain): THE SLOPES (unchanged rect, now
+  open ground), PARCEL 0xBE06 (unchanged, still THE ASSEMBLY's; its faces draw on the new ground),
+  THE UPPER MOUNTAIN (y -58..-40.5: the upper trails, THE RACE COURSE), THE MID-MOUNTAIN LODGE
+  (-82..-58), THE SUMMIT LODGE (-125..-82). A building with a lot is now its lot (identical for every
+  other building); the mountain's places arrive at their own spots (`MOUNTAIN_SPOTS`): THE UPPER
+  BASE by the Alpine Line's SUMMIT, the race's finish, the lodges' doors, the patrol hut.
+- **Places and jobs.** `upper-mountain` (36), `race-course` (30), `mid-lodge` (40), `summit-lodge`
+  (36), `summit-patrol` (8); Summit Patrol, Summit Bartender, Summit Lodge Cook, Mid-Mountain Cook,
+  Night Groomer, Snowmaker, Race Official. The lodges are buildings with floors (THE CAFETERIA, THE SUN
+  DECK; THE SUMMIT BAR, THE OBSERVATION DECK, THE PATROL HUT): their cutaways open.
+- **Trails** (21): GREEN CIRCLE: COMPLIANCE, ORIENTATION, THE PAPER TRAIL (cat track from the summit),
+  THE GRACE PERIOD, THE COOL-DOWN. BLUE SQUARE: THE PERFORMANCE REVIEW, QUARTERLY TARGETS, MANDATORY FUN,
+  OPEN DOOR POLICY, CORE COMPETENCY, THE LONG MEMO, THE SANDBOX (terrain park: kickers, rails, THE
+  PIPELINE halfpipe). BLACK DIAMOND: THE AUDIT, HOSTILE TAKEOVER (moguls), DOWNSIZING, ZERO TOLERANCE
+  (moguls), THE REDACTED WOODS (glades), THE GAUNTLET (the race course, gates). DOUBLE BLACK:
+  TERMINATION GLADES, EXIT INTERVIEW, NON-COMPLIANCE CHUTES. Each runs from a lift's top to a lift's
+  foot, the base, or into another trail; they wind (Catmull-Rom through their control points) and
+  cross. Drawn as groomed ribbons through the forest, each piece painted after the ground under it;
+  the rating's colour faint down the middle, signs at the heads, corduroy and moguls up close.
+- **Lifts** (7): THE ASCENT (gondola, base to the summit lodge, a mid-station at THE UPPER BASE), THE
+  INDUCTION, THE COMPLIANCE EXPRESS (to the mid-mountain lodge), THE STARTING GATE (the race course),
+  THE PROMOTION (to MIDDLE MANAGEMENT), THE ESCALATION (out of the bowl to the col), THE HEADCOUNT (to
+  THE GLASS CEILING). Cars by machine time (every viewer the same), parked out of hours; towers stand
+  between the trails; the upper lifts close at 16:00-16:30, the lower run under the lights to 21:00.
+- **Weather and status** (`weatherOn(day)`): CLEAR, FRESH SNOW, WIND (the gondola and the summit chairs
+  on hold), WHITEOUT (the upper mountain closed), COLD (the guns run all night). A trail is open when
+  the lift that feeds it runs; at night they close for GROOMING: three cats work their rounds 21:30-
+  06:30 with their headlamps; the guns blow at night.
+- **Skiers.** Whoever the plan puts at `slopes`, `upper-mountain` or `race-course` skis: from their
+  home (the base, THE UPPER BASE, the finish) a cycle of walk, queue, ride (the very car the lift is
+  carrying), the trails down, picked by hash among the open trails within their rating (`skiSkill`:
+  0.4 physical + 0.3 adaptability + 0.3 competence, +20 for a skier or boarder on file; greens under 40,
+  blues, blacks from 62, doubles from 78); boarders by hash (Shaun White always). A rider beyond their
+  comfort may stumble (the rig's `stumble`, non-graphic). Ski patrol on duty ski the mountain with the
+  cross on their jacket; lift crews, instructors and race officials stand at their posts.
+- **THE WEEKEND RACE** (`race.js`): Saturdays 13:00-15:00, SLALOM one week, GIANT SLALOM the next, on
+  THE GAUNTLET (start house, gates, finish arch, the board at the finish and at the base). The field:
+  the skiers and boarders on file first (Shaun White on his board, Tenzing Norgay), then the athletes
+  on file the Department enters (12, ratings from their records); Lindsey Vonn, Mikaela Shiffrin and
+  the rest of `SKI_ON_FILE` join when they are on file. Two runs, run 2 in reverse order; time = par x
+  (1 + (100 - rating)/180) x the day's form x the run's luck; a straddled gate is DNF. The racer on the
+  course is drawn by projection with a bib, the race course's visitors line it, the PA calls every
+  start and finish and the result. THE MOUNTAIN STANDINGS: World Cup points over the leagues' season.
+  The Departmental Cup: `leagues.cupTable` takes fixed kinds, so the hook is documented
+  (`race.CUP_HOOK`, `raceTop3`) and scores nothing until a directive sets `from`; no published table
+  changes.
+- **`#heights`**: the trail map (the mountain drawn at a fixed turn, trails in their colours, the
+  double blacks dashed, glades dotted, lifts, lodges, peaks with their elevations, what the mountain
+  hides from that side left off), trail status, lifts, lodges, the race (live, or the last), the
+  standings.
+- **The painter.** Each band paints its share back to front by u + v: ground cells (culled to what the
+  screen can show; LOD by zoom: 2.6, 1.5, 1 cell), trail pieces after the ground under them, pines
+  (bucketed), towers, rope lengths, cars, lodges, stations, gates, the park, guns, cats, people. A
+  label whose anchor the mountain hides at the current turn is left off (`iso.hiddenByTerrain`).
+- **Day boundary.** Published days keep their places; the first day built after the deploy is the
+  first with anyone on the upper mountain. No layout or network change: every id, the Loop and the
+  lines are as they were.

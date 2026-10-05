@@ -6,6 +6,7 @@
 // painter draws in ascending depth.
 
 import { DISTRICTS } from "./sim.js";
+import { EXTENT_PTS, terrainH, onMountain } from "./mountainGeo.js";   // THE MOUNTAIN: the fit takes in the summit; it hides what is behind it
 
 export const MARGIN = 3;
 export const BOUNDS = (() => {
@@ -57,7 +58,10 @@ export function cityExtent(r) {
   const R = rotRect({ x: BOUNDS.x0, y: BOUNDS.y0, w: BOUNDS.x1 - BOUNDS.x0, h: BOUNDS.y1 - BOUNDS.y0 }, r);
   const pts = [[R.x0, R.y0], [R.x1, R.y0], [R.x1, R.y1], [R.x0, R.y1]].map(([u, v]) => [u - v, (u + v) / 2]);
   const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-  return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys) - 6 * STOREY, y1: Math.max(...ys) };
+  // the mountain stands above the ground's extent: its high points' rise
+  let top = Math.min(...ys) - 6 * STOREY;
+  for (const [x, y, h] of EXTENT_PTS) { const [u, v] = rot(x, y, r); top = Math.min(top, (u + v) / 2 - h * STOREY); }
+  return { x0: Math.min(...xs), x1: Math.max(...xs), y0: top, y1: Math.max(...ys) };
 }
 
 // Level of detail by zoom (px per map cell). Far: silhouettes and lit windows as dots.
@@ -138,4 +142,17 @@ export function inPoly(x, y, pts) {
     if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
   }
   return inside;
+}
+
+// Is a point (map cells, h storeys) hidden from the viewer by the mountain at quarter turn r? The
+// line of sight runs towards the viewer (+u +v) rising 1/STOREY storeys a cell: the ground over it hides it.
+const TOWARD = [[1, 1], [1, -1], [-1, -1], [-1, 1]];
+export function hiddenByTerrain(x, y, h, r) {
+  const [dx, dy] = TOWARD[mod4(r)];
+  for (let t = 0.6; t < 160; t += 0.8) {
+    const px = x + dx * t, py = y + dy * t;
+    if (!onMountain(px, py)) { if (t > 4) break; continue; }
+    if (terrainH(px, py) > h + t / STOREY + 0.25) return true;
+  }
+  return false;
 }

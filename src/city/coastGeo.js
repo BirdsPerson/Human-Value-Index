@@ -13,13 +13,19 @@
 // piste, a chair up the lift, a surfer on a wave): its place at time t is pathAt(anchor, t).
 
 import { PLACES, SPURS, COAST_DY, HEIGHTS_DY } from "./sim.js";
+import { MTN, terrainH as mtnH, onMountain } from "./mountainGeo.js";
 
 export const COAST_LOTS = {
   "the-beach": "beach", "the-boardwalk": "boardwalk", "the-pier": "pier", "the-break": "surf", "lot-shore": "shore-lot",
   "the-slopes": "slopes", "lot-summit": "summit-lot",
+  // THE MOUNTAIN (mountainGeo.js): the bands above the slopes, to the summit
+  "the-upper-mountain": "upper-mountain", "the-mid-lodge": "mid-lodge", "the-summit-lodge": "summit-lodge",
   "the-foothills": "foothills",   // the master plan's buffer between the CBD and the mountain
 };
-export const COAST_PLACES = Object.values(COAST_LOTS);
+// The lodges' people are inside (their cutaways); the rest are on the ground, drawn by the lot.
+export const COAST_PLACES = Object.values(COAST_LOTS).filter(p => p !== "mid-lodge" && p !== "summit-lodge");
+// The lots painted by the mountain (mountainDraw.js), the resort parcel's ground among them.
+export const MOUNTAIN_LOT_PLACES = new Set(["slopes", "summit-lot", "upper-mountain", "mid-lodge", "summit-lodge"]);
 const rect = (id) => PLACES[id].rect;
 const A = (id, x, y, kind, act, role = "patron", extra = {}) => ({ id, x, y, h: 0, kind, act, role, look: null, ring: null, ...extra });
 const frac = (v) => ((v % 1) + 1) % 1;
@@ -31,25 +37,13 @@ export const SEA_Y = 86 + COAST_DY;
 export const SEA = { x0: -62, x1: 112, y0: SEA_Y, y1: 93 + COAST_DY };
 
 // ---- the mountain ------------------------------------------------------------------------------
-// One terrain over the slopes and the parcel beside them: flat at the village's back (y -11),
-// rising to a ridge (RIDGE of the way north), two peaks, then falling away on the far side to
-// the district's north edge. Heights in storeys.
-export const TERRAIN = { x0: 9, x1: 100, y0: -30.5 + HEIGHTS_DY, y1: -11 + HEIGHTS_DY };
-// THE ALPINE LINE (PHASE 2) runs north up x 54.5 (the old spur's right of way) to the crest
-const ALPINE_X = SPURS.heights.pts[SPURS.heights.pts.length - 1][0];
-export const RIDGE = 0.8;
-export const RIDGE_Y = TERRAIN.y1 - RIDGE * (TERRAIN.y1 - TERRAIN.y0);
-export function terrainH(x, y) {
-  const T = TERRAIN;
-  if (x < T.x0 || x > T.x1 || y < T.y0 || y > T.y1) return 0;
-  const s = Math.min(1, Math.max(0, (T.y1 - y) / (T.y1 - T.y0)));
-  const bump = 2.6 * Math.exp(-((x - 30) ** 2) / 70) + 3.2 * Math.exp(-((x - 79) ** 2) / 90);
-  const up = Math.min(1, s / RIDGE), f = s <= RIDGE ? Math.pow(up, 1.3) : 1 - 0.9 * Math.pow((s - RIDGE) / (1 - RIDGE), 0.9);
-  return f * (5.2 + 1.1 * Math.sin(x * 0.19) + 0.5 * Math.sin(x * 0.53 + 1.3) + bump * up);
-}
-export const TERRAIN_MAX = 10;
-export const onTerrain = (x, y) => x >= TERRAIN.x0 && x <= TERRAIN.x1 && y >= TERRAIN.y0 && y <= TERRAIN.y1;
-
+// THE MOUNTAIN (2026-09-30) is mountainGeo.js: one terrain from the village's back (y -21) to the
+// north face (y -113), the summit 48 storeys up. RIDGE_Y is the old front ridge's row, where the
+// resort parcel's faces (session 002) set their lifts' tops and the preserve's lookout.
+export const TERRAIN = MTN;
+export const terrainH = mtnH;
+export const onTerrain = onMountain;
+export const RIDGE_Y = -36.6;
 // ---- THE BEACH ------------------------------------------------------------------------------------
 const Bc = rect("beach");
 export const BEACH = (() => {
@@ -130,17 +124,7 @@ function surfAnchors() {
   return out;
 }
 
-// ---- THE SLOPES --------------------------------------------------------------------------------------
-const Sl = rect("slopes");
-// The chairlift up the west side; three pistes down: green (the easy one, winding), blue, black.
-const TOP = RIDGE_Y + 0.4;   // the pistes start just below the ridge
-export const LIFT = { x: Sl.x + 6.5, y0: Sl.y + Sl.h - 0.8, y1: TOP, gap: 0.3, spacing: 1.6, speed: 0.55 };   // speed: cells a real second
-export const PISTES = [
-  { id: "green", col: "#4ade80", pts: [[Sl.x + 9, TOP + 0.2], [Sl.x + 15, TOP + 3], [Sl.x + 11, TOP + 6.5], [Sl.x + 17, TOP + 10.5], [Sl.x + 13, Sl.y + Sl.h - 1.2]] },
-  { id: "blue", col: "#3b82f6", pts: [[Sl.x + 22, TOP + 0.1], [Sl.x + 27, TOP + 4], [Sl.x + 24, TOP + 9], [Sl.x + 29, Sl.y + Sl.h - 1.2]] },
-  { id: "black", col: "#111827", pts: [[Sl.x + 37, TOP + 0.1], [Sl.x + 39, TOP + 5], [Sl.x + 36, TOP + 10], [Sl.x + 40, Sl.y + Sl.h - 1.2]] },
-];
-export const SLOPE_HUTS = { base: { x: LIFT.x + 1.4, y: LIFT.y0 - 0.2 }, top: { x: LIFT.x + 1.4, y: LIFT.y1 + 0.3 }, patrol: { x: Sl.x + 20, y: TOP + 0.3 } };
+// ---- moving anchors ------------------------------------------------------------------------------------
 const segLen = (pts) => { let n = 0; for (let i = 1; i < pts.length; i++) n += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return n; };
 export function alongPts(pts, k) {
   let want = segLen(pts) * Math.min(1, Math.max(0, k));
@@ -151,68 +135,30 @@ export function alongPts(pts, k) {
   }
   return [...pts[pts.length - 1], 0, 1];
 }
-// Distance from a point to a piste's line (for grooming the snow and keeping the pines off it).
-export function offPiste(x, y) {
-  let best = Infinity;
-  for (const p of PISTES) for (let i = 1; i < p.pts.length; i++) {
-    const [ax, ay] = p.pts[i - 1], [bx, by] = p.pts[i], vx = bx - ax, vy = by - ay, t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy)));
-    best = Math.min(best, Math.hypot(x - ax - vx * t, y - ay - vy * t));
-  }
-  return best;
-}
-// The pines: on the slopes and the parcel, off the pistes, clear of the lift line.
-export const PINES = (() => {
-  const out = [];
-  for (let i = 0; i < 420; i++) {
-    const x = TERRAIN.x0 + 0.8 + frac(i * 0.6180339 + 0.21) * (TERRAIN.x1 - TERRAIN.x0 - 1.6), y = TERRAIN.y0 + 1.2 + frac(i * 0.7548776 + 0.43) * (TERRAIN.y1 - TERRAIN.y0 - 2.4);
-    const t = (TERRAIN.y1 - y) / (TERRAIN.y1 - TERRAIN.y0);
-    if (t > 0.8 || offPiste(x, y) < 1.6 || Math.abs(x - LIFT.x) < 1.3 || Math.abs(x - ALPINE_X) < 2.4) continue;   // the Alpine Line's right of way up to the Summit
-    if (frac(i * 0.4142) > 0.55 + 0.3 * (1 - t)) continue;   // thinner towards the top
-    out.push([x, y]);
-  }
-  return out;
-})();
-function slopesAnchors() {
-  const out = [];
-  const H = SLOPE_HUTS;
-  out.push(A("liftop-base", H.base.x - 0.2, H.base.y + 0.7, "stand", "signal", "staff", { look: [LIFT.x, LIFT.y0] }));
-  out.push(A("liftop-top", H.top.x - 0.2, H.top.y + 0.8, "stand", "signal", "staff", { look: [LIFT.x, LIFT.y1] }));
-  out.push(A("patrol0", H.patrol.x + 1.2, H.patrol.y + 0.9, "stand", "view", "staff", { look: [H.patrol.x + 3, H.patrol.y + 6] }));
-  out.push(A("patrol1", H.patrol.x - 1.0, H.patrol.y + 1.0, "stand", "whistle", "staff", { look: [H.patrol.x, H.patrol.y + 6] }));
-  out.push(A("instructor", Sl.x + 20, Sl.y + Sl.h - 1.3, "stand", "coach", "staff", { look: [Sl.x + 22, Sl.y + Sl.h - 1.3] }));
-  // skiers: twelve on each piste, spread down it, at their own pace
-  PISTES.forEach((p, pi) => { for (let k = 0; k < 12; k++) out.push(A(`ski${p.id}${k}`, p.pts[0][0], p.pts[0][1], "stand", "view", "patron", { ski: true, path: { kind: "piste", piste: pi, period: 26 + pi * 4 + (k % 4) * 3, phase: frac(k / 12 + pi * 0.11) } })); });
-  // riders on the chairs, going up
-  for (let k = 0; k < 12; k++) out.push(A(`chair${k}`, LIFT.x - LIFT.gap, LIFT.y0, "seat", "sit", "patron", { chair: k, path: { kind: "lift", slot: k * 2 } }));
-  // the queue at the bottom, and the learners with the instructor
-  for (let k = 0; out.length < PLACES.slopes.cap; k++) out.push(A(`queue${k}`, LIFT.x - 1.3 - (k % 3) * 0.6, LIFT.y0 + 0.2 - Math.floor(k / 3) * 0.55, "stand", k % 2 ? "cheer" : "view", "patron", { look: [LIFT.x, LIFT.y0 - 2] }));
-  return out;
-}
-// A chairlift's loop: chairs spaced along the cable, up the west side, down the east.
-export function liftChair(slot, t, L = LIFT) {
+// A chairlift's loop (the resort parcel's lifts, session 002): chairs up the west side, down the east.
+export function liftChair(slot, t, L) {
   const len = L.y0 - L.y1, lap = 2 * len, n = Math.floor(lap / L.spacing);
   const s = ((slot / n) * lap + t * L.speed) % lap;
   return s < len ? { x: L.x - L.gap, y: L.y0 - s, up: true } : { x: L.x + L.gap, y: L.y1 + (s - len), up: false };
 }
-export const liftChairs = (L = LIFT) => Math.floor((2 * (L.y0 - L.y1)) / L.spacing);
+export const liftChairs = (L) => Math.floor((2 * (L.y0 - L.y1)) / L.spacing);
 // Where a moving anchor is at time t (real seconds; 0 = at rest). -> [x, y, h, dx, dy, riding]
 export function pathAt(a, t) {
   const p = a.path;
   if (!p) return [a.x, a.y, a.h || 0, 0, 1];
-  if (p.kind === "piste" || p.kind === "line") {
-    const k = frac(t / p.period + p.phase), pts = p.kind === "piste" ? PISTES[p.piste].pts : p.pts;
+  if (p.kind === "line") {
+    const k = frac(t / p.period + p.phase), pts = p.pts;
     const [x, y, dx, dy] = alongPts(pts, k), wig = Math.sin(k * 40 + p.phase * 9) * (p.wig ?? 0.45);
     const X = x - dy * wig, Y = y + dx * wig;
     return [X, Y, terrainH(X, Y) + (p.h || 0), dx, dy];
   }
-  if (p.kind === "lift") { const c = liftChair(p.slot, t, p.lift || LIFT); return [c.x, c.y, terrainH(c.x, c.y) + 1.05, 0, c.up ? -1 : 1]; }
+  if (p.kind === "lift") { const c = liftChair(p.slot, t, p.lift); return [c.x, c.y, terrainH(c.x, c.y) + 1.05, 0, c.up ? -1 : 1]; }
   if (p.kind === "wave") {
     const k = frac(t / p.period + p.phase), ride = k < 0.6, f = ride ? k / 0.6 : (k - 0.6) / 0.4;
     const y = ride ? p.y0 + (p.y1 - p.y0) * f : p.y1 + (p.y0 - p.y1) * f, x = p.x + (ride ? f : 1 - f) * p.drift;
     return [x, y, 0, ride ? 1 : -1, 0, ride];
   }
-  if (p.kind === "bob") return [a.x, a.y, a.h || 0, 0, 1];
-  return [a.x, a.y, 0, 0, 1];
+  return [a.x, a.y, a.h || 0, 0, 1];
 }
 
 // ---- the resort parcels (THE ASSEMBLY, session 002) ------------------------------------------------------
@@ -358,7 +304,7 @@ function foothillsAnchors() {
   return out;
 }
 
-export const COAST_ANCHORS = { beach: beachAnchors(), boardwalk: boardwalkAnchors(), pier: pierAnchors(), surf: surfAnchors(), slopes: slopesAnchors(), foothills: foothillsAnchors(), "shore-lot": [], "summit-lot": [] };
+export const COAST_ANCHORS = { beach: beachAnchors(), boardwalk: boardwalkAnchors(), pier: pierAnchors(), surf: surfAnchors(), foothills: foothillsAnchors(), "shore-lot": [], "summit-lot": [] };
 
 // ---- the spurs as the painter sees them ----------------------------------------------------------------
 // The track is flat on the ground (drawn with the ground); the two shelters stand, as boxes.

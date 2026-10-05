@@ -13,11 +13,12 @@ import { sheetFor, miniFor } from "./spriteBank.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { drawPose, phaseOf } from "./poses.js";
 import { assignAnchors, roleOf } from "./props.js";
-import { SPURS, PLACES, resortPhase, COAST_DY } from "./sim.js";
+import { SPURS, PLACES, BUILDING, resortPhase, COAST_DY } from "./sim.js";
+import { drawMountainBand, drawMountainApron } from "./mountainDraw.js";   // THE MOUNTAIN: every band of it, the parcel's ground too
 import { APPLICATIONS2 } from "../assembly/content002.js";
 import {
-  COAST_LOTS, COAST_ANCHORS, SEA, SEA_Y, TERRAIN, terrainH, BEACH, BOARDWALK, PIER, BREAK, LIFT, PISTES, SLOPE_HUTS, PINES, FOOTHILLS,
-  liftChair, liftChairs, pathAt, offPiste, SHORE, SUMMIT, SHELTER,
+  COAST_LOTS, COAST_ANCHORS, SEA, SEA_Y, terrainH, BEACH, BOARDWALK, PIER, BREAK, FOOTHILLS, MOUNTAIN_LOT_PLACES,
+  liftChair, liftChairs, pathAt, SHORE, SUMMIT, SHELTER,
   PARCEL_ANCHORS, PARCEL_SITE, parcelFace, BEACH_RESORT, TOWERS, LIFTS2, RUNS2, SKI_LODGE, CANNONS, PRESERVE,
 } from "./coastGeo.js";
 
@@ -43,6 +44,7 @@ export function drawCoastGround(G, lod, t, night) {
   G.poly(rectPts(0, 70.1 + COAST_DY, 109, S.y0).map(p => Q(p[0], p[1], 0)), shade("#b8a275", nf * 0.9));
   G.poly(rectPts(S.x0, S.y0, S.x1, S.y1).map(p => Q(p[0], p[1], 0)), shade(SEA_C, nf));
   G.poly(rectPts(S.x0, S.y0 + 3.2, S.x1, S.y1).map(p => Q(p[0], p[1], 0.001)), shade(SEA_DEEP, nf));
+  drawMountainApron(G, night);
   if (lod === "far") return;
   // swell lines moving in, and the foam at the edge washing up and back
   ctx.lineWidth = Math.max(1, G.z * 0.07);
@@ -199,11 +201,11 @@ export function drawCoastLot(G, lotId, lod, mt, people, prev) {
   else if (pid === "pier") pier(K);
   else if (pid === "surf") surf(K);
   else if (pid === "shore-lot") shoreLot(K);
-  else if (pid === "slopes" || pid === "summit-lot") mountain(K, pid);
+  else if (pid === "summit-lot") parcelFace2(K);
   else if (pid === "foothills") foothills(K);
   // anything else on this ground the view hands in, painted in the same back-to-front pass (the
   // Alpine Line's viaduct, its Summit station and its cars on the mountain: CityIso.jsx)
-  for (const e of G.extra || []) put(e.x, e.y, e.draw, e.bias || 0);
+  if (MOUNTAIN_LOT_PLACES.has(pid)) for (const e of G.extra || []) put(e.x, e.y, e.draw, e.bias || 0);
 
   for (const { p, a } of present) {
     const [x, y, h, dx, dy, ride] = pathAt(a, K.t);
@@ -216,6 +218,10 @@ export function drawCoastLot(G, lotId, lod, mt, people, prev) {
     else if (a.path) put(x, y, () => folk(K, p, x, y, h, a.act, dx > 0 ? 1 : -1, {}), 0.03);
     else put(x, y, () => folk(K, p, x, y, a.h, a.act, look, { rod: a.rod, chair: a.kind === "seat", hat: a.hat }), 0.03);
   }
+  // THE MOUNTAIN's bands (and the parcel's ground): the terrain, the pines, the trails, the lifts,
+  // the lodges and the skiers, painted with whatever this lot put in (mountainDraw.js)
+  if (MOUNTAIN_LOT_PLACES.has(pid)) { drawMountainBand(G, BUILDING[lotId].rect, lod, mt, G.crowd, { items, clear: pid === "summit-lot" ? parcelClear(face) : null }); return { at, face }; }
+  for (const e of G.extra || []) put(e.x, e.y, e.draw, e.bias || 0);
   items.sort((a, b) => a.k - b.k);
   for (const it of items) it.draw();
   return { at, face };
@@ -553,101 +559,15 @@ function sign(K, S, rows, h = null) {
   }, 0.01);
 }
 
-// ---- THE MOUNTAIN: the slopes and the summit parcel, one terrain ------------------------------------------------
-// The lot's own share of the terrain as quads back to front, shaded by which way they face;
-// the pistes groomed; the pines; the lift and its chairs (the slopes only); walls of rock on
-// the mountain's outer edges where they face the viewer.
-function mountain(K, pid) {
-  const { G, lod, put, nf, night } = K, c = G.ctx;
-  const L = PLACES[pid].rect;
-  const step = lod === "far" ? 3.25 : lod === "mid" ? 1.625 : 1.3;
-  const nx = Math.max(1, Math.round(L.w / step)), ny = Math.max(1, Math.round(L.h / step)), sx = L.w / nx, sy = L.h / ny;
-  const [ou, ov] = rot(0, 0, G.r), [eu, ev] = rot(1, 0, G.r), [fu, fv] = rot(0, 1, G.r);
-  const toward = [(eu - ou) + (ev - ov), (fu - ou) + (fv - ov)];   // how +x and +y map onto the viewer's depth
-  const snow = night ? "#8fa2b6" : SNOW, piste = night ? "#a3b5c8" : PISTE;
-  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
-    const x0 = L.x + i * sx, x1 = x0 + sx, y0 = L.y + j * sy, y1 = y0 + sy, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    const h00 = terrainH(x0, y0), h10 = terrainH(x1, y0), h11 = terrainH(x1, y1), h01 = terrainH(x0, y1);
-    const gx = ((h10 + h11) - (h00 + h01)) / (2 * sx), gy = ((h01 + h11) - (h00 + h10)) / (2 * sy);
-    const lean = -(gx * toward[0] + gy * toward[1]);   // rising away from the viewer: faces them
-    const f = Math.max(0.72, Math.min(1.12, 0.94 + lean * 0.28));
-    const steep = Math.hypot(gx, gy) > 1.15;
-    const groomed = pid === "slopes" ? offPiste(cx, cy) < 1.1 : K.face === "ski-resort" && distPolys(cx, cy, RUNS2) < 1.1;
-    const col = steep ? ROCK : groomed ? piste : snow;
-    put(cx, cy, () => G.poly([G.Q(x0, y0, h00), G.Q(x1, y0, h10), G.Q(x1, y1, h11), G.Q(x0, y1, h01)], shade(col, f * (night ? 0.9 : 1)), lod === "near" ? "rgba(120,140,160,0.12)" : null), -0.2);
-  }
-  // rock walls on the terrain's outer edges (west, east, north) where they face the viewer
-  const edges = [];
-  if (L.x === TERRAIN.x0) edges.push([[L.x, L.y + L.h], [L.x, L.y], [L.x + 1, L.y + L.h / 2]]);
-  if (L.x + L.w >= TERRAIN.x1 - 1e-6) edges.push([[L.x + L.w, L.y], [L.x + L.w, L.y + L.h], [L.x + L.w - 1, L.y + L.h / 2]]);
-  edges.push([[L.x, L.y], [L.x + L.w, L.y], [L.x + L.w / 2, L.y + 1]]);
-  for (const [a, b, inside] of edges) {
-    if (!G.facing(a, b, inside)) continue;
-    const n = Math.max(2, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
-    for (let k = 0; k < n; k++) {
-      const p = [a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n], q = [a[0] + (b[0] - a[0]) * (k + 1) / n, a[1] + (b[1] - a[1]) * (k + 1) / n];
-      put((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, () => G.poly([G.Q(p[0], p[1], terrainH(p[0] + 1e-6 * (inside[0] - p[0]), p[1] + 1e-6 * (inside[1] - p[1]))), G.Q(q[0], q[1], terrainH(q[0] + 1e-6 * (inside[0] - q[0]), q[1] + 1e-6 * (inside[1] - q[1]))), G.Q(q[0], q[1], 0), G.Q(p[0], p[1], 0)], shade("#5a6068", (G.facing(a, b, inside) || 1) * nf)), 0.3);
-    }
-  }
-  // the pines
-  const clearOf = parcelClear(K.face);
-  if (lod !== "far") for (const [x, y] of PINES) {
-    if (x < L.x || x >= L.x + L.w || (pid !== "slopes" && clearOf(x, y))) continue;
-    put(x, y, () => {
-      const h = terrainH(x, y), s = lod === "near" ? 1 : 0.8;
-      for (let k = 0; k < 3; k++) {
-        // the tiers' bases are level on screen at every quarter turn
-        const hb = h + 0.15 + k * 0.4 * s, w = (0.5 - k * 0.12) * s * G.z * 1.4, [ax, ay] = G.Q(x, y, hb + 0.65 * s), [mx, my] = G.Q(x, y, hb);
-        c.fillStyle = k === 2 && !night ? "#eef3f6" : shade("#1f4d2e", nf); c.beginPath(); c.moveTo(ax, ay); c.lineTo(mx - w, my); c.lineTo(mx + w, my); c.closePath(); c.fill();
-      }
-    }, 0.02);
-  }
-  if (pid !== "slopes") {
-    // the summit parcel: vacant until session 002 decides it (a sign on the slope), then a site,
-    // then the resort or the preserve
-    if (K.face === "site") return site(K, "summit-lot");
-    if (K.face === "ski-resort") return skiResort(K);
-    if (K.face === "mountain-lodge") return preserve(K);
-    if (lod !== "far") sign(K, SUMMIT.sign, parcelSign(K, "RESORT PARCEL 0xBE06"), terrainH(SUMMIT.sign.a[0], SUMMIT.sign.a[1]));
-    return;
-  }
-  if (lod === "far") {
-    // the lift as a line, the pistes as their colours
-    put(LIFT.x, (LIFT.y0 + LIFT.y1) / 2, () => { const A = G.Q(LIFT.x, LIFT.y0, terrainH(LIFT.x, LIFT.y0) + 1.3), B = G.Q(LIFT.x, LIFT.y1, terrainH(LIFT.x, LIFT.y1) + 1.3); c.strokeStyle = "#374151"; c.lineWidth = 1; c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]); c.stroke(); }, 0.5);
-    return;
-  }
-  // piste markers: a pole every few cells, the piste's colour on top
-  for (const p of PISTES) for (let i = 1; i < p.pts.length; i++) {
-    const [ax, ay] = p.pts[i - 1], [bx, by] = p.pts[i], n = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / 2.6));
-    for (let k = 0; k < n; k++) { const x = ax + (bx - ax) * k / n + 1.2, y = ay + (by - ay) * k / n; put(x, y, () => { const h = terrainH(x, y); K.vline(x, y, h, h + 0.55, "#1f2937", 1); const [mx, my] = G.Q(x, y, h + 0.55); c.fillStyle = p.col; c.fillRect(Math.round(mx) - 1, Math.round(my) - 2, 3, 3); }, 0.02); }
-  }
-  // the huts: the lift's base and top stations, the patrol hut (red cross)
-  for (const [key, H] of Object.entries(SLOPE_HUTS)) put(H.x, H.y, () => {
-    const h = terrainH(H.x, H.y);
-    G.prism(rectPts(H.x - 0.6, H.y - 0.45, H.x + 0.6, H.y + 0.45), h, h + 0.8, key === "patrol" ? "#b91c1c" : "#7a5232", 1.15);
-    G.prism(rectPts(H.x - 0.7, H.y - 0.55, H.x + 0.7, H.y + 0.55), h + 0.8, h + 0.9, "#e8eef2", 1.3);
-    if (key === "patrol" && lod === "near") { const [mx, my] = G.Q(H.x, H.y + 0.46, h + 0.45); c.fillStyle = "#f5f5f5"; c.fillRect(mx - G.z * 0.08, my - G.z * 0.25, G.z * 0.16, G.z * 0.5); c.fillRect(mx - G.z * 0.25, my - G.z * 0.08, G.z * 0.5, G.z * 0.16); }
-  }, 0.02);
-  // the lift: pylons, the two cables, every chair (riders are drawn on theirs by the anchors)
-  const Lf = LIFT, pyl = [];
-  for (let y = Lf.y0 - 0.4; y > Lf.y1; y -= 3.2) pyl.push(y);
-  pyl.push(Lf.y1 + 0.2);
-  for (const y of pyl) put(Lf.x, y, () => {
-    const h = terrainH(Lf.x, y);
-    K.vline(Lf.x, y, h, h + 1.45, "#6b7280", Math.max(1.5, G.z * 0.1));
-    const A = G.Q(Lf.x - Lf.gap - 0.1, y, h + 1.45), B = G.Q(Lf.x + Lf.gap + 0.1, y, h + 1.45);
-    c.strokeStyle = "#6b7280"; c.lineWidth = Math.max(1, G.z * 0.08); c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]); c.stroke();
-  }, 0.1);
-  for (const side of [-1, 1]) put(Lf.x + side * Lf.gap, (Lf.y0 + Lf.y1) / 2, () => {
-    c.strokeStyle = "rgba(55,65,81,0.9)"; c.lineWidth = 1; c.beginPath();
-    for (let k = 0; k <= 24; k++) { const y = Lf.y0 + (Lf.y1 - Lf.y0) * k / 24, [a, b] = G.Q(Lf.x + side * Lf.gap, y, terrainH(Lf.x, y) + 1.4); if (k) c.lineTo(a, b); else c.moveTo(a, b); }
-    c.stroke();
-  }, 0.4);
-  const n = liftChairs();
-  for (let k = 0; k < n; k++) {
-    const ch = liftChair(k, K.t || 0), h = terrainH(ch.x, ch.y) + 1.05;
-    put(ch.x, ch.y, () => chairSeat(K, ch.x, ch.y, h), 0.025);
-  }
+// ---- the resort parcel on the mountain (PARCEL 0xBE06): vacant until session 002 decides it (a sign on
+// the slope), then a site, then the resort or the preserve. Its ground is the mountain's (mountainDraw.js).
+function parcelFace2(K) {
+  const { G, lod } = K;
+  if (K.face === "site") return site(K, "summit-lot");
+  if (K.face === "ski-resort") return skiResort(K);
+  if (K.face === "mountain-lodge") return preserve(K);
+  if (lod !== "far") sign(K, SUMMIT.sign, parcelSign(K, "RESORT PARCEL 0xBE06"), terrainH(SUMMIT.sign.a[0], SUMMIT.sign.a[1]));
+  void G;
 }
 // ---- THE FOOTHILLS (the master plan, 2026-09-30) --------------------------------------------------------------
 // The buffer between the city and the mountain: forest floor, the trail winding through the pines,

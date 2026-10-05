@@ -40,6 +40,9 @@ export const ROOM_TYPE = {
   "beach": "picnic", "boardwalk": "market", "pier": "street", "surf": "park", "shore-lot": "street",
   "surfside": "suite", "bungalows": "lofts", "seaview": "lofts", "shacks": "hab", "seawall": "hab",
   "slopes": "park", "base-lodge": "cafe", "summit-lot": "street", "chalets": "suite", "alpine-flats": "lofts", "bunkhouse": "hab",
+  // THE MOUNTAIN (mountainSim.js): the upper trails and the race course read as the slopes' ground,
+  // the mid-mountain lodge a cafeteria, the summit lodge a bar, the patrol hut the ward's first aid
+  "upper-mountain": "picnic", "race-course": "park", "mid-lodge": "cafe", "summit-lodge": "bar", "summit-patrol": "ward",
   // THE MASTER PLAN (2026-09-30): the Pit's floor and locker rooms read as the gym (the ring
   // and the bags), the tennis club's cutaway is its clubhouse cafe, the Dept of Planning an office
   "pit": "gym", "tennis": "cafe", "estate-gardens": "park", "foothills": "park",

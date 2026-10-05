@@ -2,11 +2,11 @@ import { memo, useEffect, useRef, useState } from "react";
 import TouchGate from "../ui/TouchGate.jsx";
 import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
 import { DISTRICTS, BUILDINGS, BUILDING, PLACES, LOOP_LINE, STOPS, LINE, OPEN_LOTS, clockAt, whereOf, lineTrainsAt, roomIn, gameAt } from "./simApi.js";
-import { SPURS as SPURS_BY_ID } from "./sim.js";
+import { SPURS as SPURS_BY_ID, jobOf } from "./sim.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FONT } from "./cityUi.jsx";
-import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4, LOD_NEAR, LOD_MID, BOUNDS } from "./iso.js";
+import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4, LOD_NEAR, LOD_MID, BOUNDS, hiddenByTerrain } from "./iso.js";
 import { wantSectors, summaryOf } from "./planClient.js";
 import { patrolsAt } from "./prefects.js";   // THE PREFECTS: the Overlord's own, on patrol
 import { drawPrefectIso, drawPrefectTops, openPrefect } from "./prefectDraw.js";
@@ -34,6 +34,9 @@ import { storeButtons, openBusiness } from "./EnterprisePanel.jsx";
 import { openFunnel } from "./FunnelOverlay.jsx";
 import { COAST_LOTS, COAST_PLACES, terrainH, onTerrain, TERRAIN } from "./coastGeo.js";
 import { drawCoastLot, drawCoastGround, drawPod, coastLabel, coastLine } from "./coastDraw.js";
+// THE MOUNTAIN (mountainGeo.js): everyone on it placed once a frame, the bands' labels where they belong
+import { skiersIn, SKI_PLACES, LABEL_AT } from "./mountainGeo.js";
+import { raceAt, lastRace } from "./race.js";   // THE WEEKEND RACE: the racer on THE GAUNTLET, the board
 // THE MASTER PLAN's venues (venueGeo.js, venueDraw.js): THE PIT, the tennis club; the estate gardens' trees
 import { VENUE_LOTS, VENUE_PLACES, GARDEN_TREES } from "./venueGeo.js";
 import { drawVenueLot, venueLabel, venueLine } from "./venueDraw.js";
@@ -56,6 +59,12 @@ const GROUND = { arts: "#141224", campus: "#0f1c14", finance: "#0e1820", strip: 
 const LOT_FILL = { "the-green": "#123a18", "the-allotment": "#1a2e12", "the-street": "#20241f", "the-plaza": "#24261f", "estate-gardens": "#15401c", "port-park": "#15401c", "cathedral-square": "#3a3630", "bowling-green": "#1d4a22", "the-close": "#173f1c" };
 const OUTDOOR_PLACES = new Set(["park", "the-street", "the-plaza", "allotment", "estate-gardens", "port-park", "cathedral-square", "bowling-green", "the-close"]);
 const PANEL_BG = "#060a06";
+// a label whose anchor the mountain hides at this turn is not written over the mountain (cached: the ground never moves)
+const HIDDEN = new Map();
+const behindMountain = (id, x, y, h, r) => { const k = `${id}|${r}`; let v = HIDDEN.get(k); if (v === undefined) { v = hiddenByTerrain(x, y, h, r); HIDDEN.set(k, v); } return v; };
+// a subject's post on the mountain (the patrol skis; the lift crews stand at the lifts)
+const MJOB = new Map();
+const mountainJob = (s) => { const k = s.slug || s.name; let j = MJOB.get(k); if (j === undefined) { try { j = jobOf(s)?.jobId || null; } catch { j = null; } MJOB.set(k, j); } return j; };
 // yard props that still read from afar (the Port's cranes and ships among them)
 const FAR_PROPS = new Set(["tree", "watchtower", "containers", "ambulance", "conveyor", "gantry", "ship", "hull", "tcrane"]);
 const clampN = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -150,7 +159,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const c = censusRef.current;
       if (!c || c.v === V.censusV) return;
       V.censusV = c.v;
-      const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map([...PARK_PLACES, ...CIVIC_PLACES, ...COAST_PLACES, ...VENUE_PLACES].map(id => [id, []])), doors = new Map();
+      const occ = {}, inside = new Map(), outdoors = [], riders = new Map(), park = new Map([...PARK_PLACES, ...CIVIC_PLACES, ...COAST_PLACES, ...SKI_PLACES, ...VENUE_PLACES].map(id => [id, []])), doors = new Map();
       for (const { s, w } of c.list || []) {
         if (!w) continue;
         if (ctl.skipSelf(s)) continue;   // DRIVE YOURSELF: the scheduled self steps out while you drive it
@@ -388,7 +397,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     // The kit archDraw draws with: map cells in, turned and projected by the camera.
     let AG = null;
     // ...and the one the Coast and the Heights draw with (coastDraw.js)
-    const coastG = () => ({ ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, t: V.reduced ? 0 : performance.now() / 1000, hits: V.hits, w: V.cssW, h: V.cssH });
+    const coastG = () => ({ ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, cam: V.cam, t: V.reduced ? 0 : performance.now() / 1000, hits: V.hits, w: V.cssW, h: V.cssH });
     const archG = () => { AG ||= { ctx, Q, poly, facing, z: 0, r: 0 }; AG.z = V.cam.z; AG.r = V.cam.r; return AG; };
     function drawYard(it, lod) {
       if (it.p.k === "pylon") { const hour = ((V.mt % 24) + 24) % 24; drawBody(archG(), it.b, it.m, { lod, night: nightAt(hour), hour, t: 0, lit: 0.45, bid: bidOf(it.b.id), name: it.b.name, style: it.m.style }, new Set([it.p.part])); return; }
@@ -415,20 +424,20 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         const g = PARK_LOTS[b.id] && gameAt(PARK_LOTS[b.id], V.mt);
         const text = CIVIC_LOTS[b.id] ? civicLabel(b.id, V.mt) : g ? `${b.name} // ${g.label}` : storeLabel(b.id) || b.name;
         const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
-        if (top) drawLabel(L, 1); else V.labels.push(L);
+        if (top) drawLabel(L, 1); else if (selected || !behindMountain(b.id, b.pos.x, b.pos.y, h + 0.5, V.cam.r)) V.labels.push(L);
       };
       if (COAST_LOTS[b.id]) {
         // THE COAST and THE HEIGHTS (coastDraw.js): the beach, the boardwalk, the pier, the break,
         // the mountain and the resort parcels, with whoever is on them
         const pid = COAST_LOTS[b.id];
-        const G = { ...coastG(), hits: top ? [] : V.hits, extra: mountainExtras(b.id, lod) };
+        const G = { ...coastG(), hits: top ? [] : V.hits, extra: mountainExtras(b.id, lod), crowd: V.crowd, lookup: (slug) => V.bySlug?.get(slug) || null };
         V.parkSeats.set(pid, drawCoastLot(G, b.id, lod, V.mt, V.park.get(pid) || [], V.parkSeats.get(pid) || null));
         if (selected) poly([P(R.x0, R.y0, 0.02), P(R.x1, R.y0, 0.02), P(R.x1, R.y1, 0.02), P(R.x0, R.y1, 0.02)], null, "#4ade80");
         if (lod !== "far" || selected) {
-          const tall = it.h > 2, [x, y] = tall ? P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, it.h * 0.9) : P(R.x0 + 0.6, R.y0 + 0.6, 0.6);
+          const la = LABEL_AT[b.id], tall = it.h > 2, [x, y] = la ? Q(la[0], la[1], la[2]) : tall ? P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, it.h * 0.9) : P(R.x0 + 0.6, R.y0 + 0.6, 0.6);
           const text = coastLabel(b.id, V.mt) || b.name;
           const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
-          if (top) drawLabel(L, 1); else V.labels.push(L);
+          if (top) drawLabel(L, 1); else if (selected || !behindMountain(b.id, la ? la[0] : b.pos.x, la ? la[1] : b.pos.y, la ? la[2] : 0.6, V.cam.r)) V.labels.push(L);
         }
         return;
       }
@@ -678,7 +687,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       // line's station has a platform per track: one board per station, on its outbound side.
       if (lod !== "far" && (!g.line || st.dir === "out")) {
         const [x, y] = Q(...at(0, (PIN + POUT) / 2), CAN + 0.35);
-        V.labels.push({ id: `st:${st.id}`, station: true, lit, text: lit ? `${st.name} // TRAIN IN` : st.name, x, y, rank: 1e5 + rank });
+        const sm = at(0, (PIN + POUT) / 2);
+        if (!behindMountain(`st:${st.id}`, sm[0], sm[1], (g.z || 0) + CAN, V.cam.r)) V.labels.push({ id: `st:${st.id}`, station: true, lit, text: lit ? `${st.name} // TRAIN IN` : st.name, x, y, rank: 1e5 + rank });
       }
       if (outFront) stairs();
     }
@@ -1197,6 +1207,9 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const slots = new Map();
       const put = (k, m) => (slots.get(k) || slots.set(k, []).get(k)).push(m);
       V.mtnCars = [];
+      // THE MOUNTAIN: every skier, rider and patroller placed once a frame; each band draws its own
+      const race = raceAt(mt);
+      V.crowd = { skiers: skiersIn(Object.fromEntries(SKI_PLACES.map(id => [id, V.park.get(id) || []])), mt, (s) => mountainJob(s), race), lodges: V.occ, race, lastRace: race ? null : lastRace(mt) };
       for (const m of movers(mt, trains)) put(slotForBox(m.box, m.h, items, order), m);
       const drawItem = (it, k) => {
         if (it.kind === "b") drawBuilding(it, lod, k);

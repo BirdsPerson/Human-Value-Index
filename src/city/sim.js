@@ -11,6 +11,7 @@ import { FLOORS as HQ_FLOORS } from "../building.js";
 import { FUNNEL_PLACES, FUNNEL_BUILDINGS, FUNNEL_ARCH, FUNNEL_JOBS, FUNNEL_LEISURE_BAND, FUNNEL_LEISURE_FIELD, FUNNEL_FAMILY } from "./funnelSim.js";
 import { STORE_PLACES, STORE_BUILDINGS, STORE_ARCH, STORE_JOBS, STORE_LEISURE_BAND, STORE_LEISURE_FIELD, STORE_FAMILY, STORE_FIXTURES, UNIT_SET } from "./storefrontSim.js";   // THE MALL (enterprise.js)
 import { VENUE_PLACES, VENUE_BUILDINGS, VENUE_ARCH, VENUE_JOBS, VENUE_LEISURE_BAND, VENUE_LEISURE_FIELD, VENUE_FAMILY, VENUE_FIELD_HINTS, VENUE_FIELD_RULES, VENUE_OPEN_LOTS, VENUE_FIXTURES } from "./venueSim.js";
+import { MOUNTAIN_PLACES, MOUNTAIN_BUILDINGS, MOUNTAIN_ARCH, MOUNTAIN_JOBS, MOUNTAIN_LEISURE_BAND, MOUNTAIN_LEISURE_FIELD, MOUNTAIN_FAMILY, MOUNTAIN_FIXTURES, MOUNTAIN_OPEN_LOTS, MOUNTAIN_SPOTS } from "./mountainSim.js";   // THE MOUNTAIN (mountainGeo.js)
 import { shuttle, lineTrainState, lineNextArrival, lineRide } from "./lines.js";
 
 export const SEED = "HVI-SUBSTRATE-01";
@@ -79,7 +80,10 @@ export const DISTRICTS = [
   { ...D("coast", "THE COAST", "0xAD00", 0, coastY(68), 109, 22, "Sand, surf and a boardwalk. Leisure at the water's edge, supervised by lifeguards who are also supervised."), expansion: true, hub: "works" },
   // The Heights (master plan): pulled back ten rows, its southern band THE FOOTHILLS (forest,
   // trails), so the mountain no longer stands against Finance's towers and the casino.
-  { ...D("heights", "THE HEIGHTS", "0xBE00", 8, heightsY(-31), 93, 38, "Snow, slopes and a lodge. Altitude is a privilege. Descent is mandatory."), expansion: true, hub: "campus" },
+  // THE MOUNTAIN (2026-09-30): the district runs on north over the whole mountain to the summit
+  // and its north face (rows -125 to -41), and wider (x -5 to 112) for the massif's flanks
+  // (mountainSim.js); the village, the foothills and the slopes unmoved.
+  { ...D("heights", "THE HEIGHTS", "0xBE00", -5, heightsY(-115), 117, 122, "Snow, slopes and a lodge. Altitude is a privilege. Descent is mandatory."), expansion: true, hub: "campus" },
   // PHASE 2 (docs/planning/MASTER_PLAN.md): growth to the west, each district on a rail line.
   // THE PORT: the waterfront round the south-west corner, where heavy industry belongs (the
   // foundry and the reclamation line moved here from the Works), worker housing inland behind a
@@ -243,6 +247,8 @@ PLACE_LIST.push(...FUNNEL_PLACES.map(a => P(...a)));
 PLACE_LIST.push(...VENUE_PLACES.map(a => P(...a)));
 // THE MALL (storefrontSim.js): the storefront units, SAM'S PIZZA, GOODNIGHT IRENE'S
 PLACE_LIST.push(...STORE_PLACES.map(a => P(...a)));
+// THE MOUNTAIN (mountainSim.js): the upper mountain, the race course, the mid-mountain and summit lodges
+PLACE_LIST.push(...MOUNTAIN_PLACES.map(a => P(...a)));
 for (const p of PLACE_LIST) DISTRICT[p.district].places.push(p.id);
 
 export const PLACES = Object.fromEntries(PLACE_LIST.map(p => [p.id, p]));
@@ -392,6 +398,7 @@ const BUILDING_LIST = [
 ];
 BUILDING_LIST.push(...FUNNEL_BUILDINGS.map(([id, name, district, floors]) => B(id, name, district, floors)));
 BUILDING_LIST.push(...VENUE_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
+BUILDING_LIST.push(...MOUNTAIN_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
 // THE MALL's frontage lots (storefrontSim.js): placed on their own lots, outside the district's
 // grid or hand layout, so nothing already standing moves.
 BUILDING_LIST.push(...STORE_BUILDINGS.map(([id, name, district, floors, lot, frontage]) => ({ ...B(id, name, district, floors, lot), frontage })));
@@ -432,6 +439,9 @@ for (const d of DISTRICTS) {
     });
   });
 }
+// THE MOUNTAIN's places arrive at their own spots on their bands (mountainSim.js MOUNTAIN_SPOTS);
+// the bands stay the buildings' lots (BUILDINGS: a building with a lot is its lot).
+for (const [id, r] of Object.entries(MOUNTAIN_SPOTS)) { PLACES[id].rect = { ...r }; PLACES[id].pos = { x: r.x + r.w / 2, y: r.y + r.h / 2 }; }
 for (const p of PLACE_LIST) if (!p.rect) throw new Error(`place ${p.id} is in no building`);
 // Architecture (the building design pass, 2026-09-29: "different buildings that look
 // differently, like big low-income housing projects versus high-income high-rises"). Every
@@ -454,6 +464,7 @@ export const ARCH = {
   ...FUNNEL_ARCH,
   ...VENUE_ARCH,
   ...STORE_ARCH,
+  ...MOUNTAIN_ARCH,
   "surf-shacks": "shacks", "the-seawall": "seawall", "bungalow-row": "bungalow", "seaview-flats": "seaview", "the-surfside": "condo", "lot-shore": "lot", "the-boardwalk": "lot", "the-beach": "lot", "the-pier": "lot", "the-break": "lot",
   "the-bunkhouse": "bunkhouse", "alpine-flats": "alpine", "the-lodge": "lodge", "the-chalets": "chalet", "the-slopes": "lot", "lot-summit": "lot",
   // THE PORT and THE OLD TOWN (PHASE 2 step 3)
@@ -476,7 +487,9 @@ export const BUILDINGS = BUILDING_LIST.map(b => {
   const rs = places.map(id => PLACES[id].rect);
   const x0 = Math.min(...rs.map(r => r.x)), y0 = Math.min(...rs.map(r => r.y));
   const x1 = Math.max(...rs.map(r => r.x + r.w)), y1 = Math.max(...rs.map(r => r.y + r.h));
-  return { id: b.id, name: b.name, district: b.district, districtId: b.district, arch: ARCH[b.id] || ARCH_BY_DISTRICT[b.district], places, floors, rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, pos: { x: (x0 + x1) / 2, y: (y0 + y1) / 2 } };
+  // a building laid out by hand is its lot (the same as its places' union, except on the mountain)
+  const R = b.lot && !b.frontage ? b.lot : { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  return { id: b.id, name: b.name, district: b.district, districtId: b.district, arch: ARCH[b.id] || ARCH_BY_DISTRICT[b.district], places, floors, rect: { ...R }, pos: { x: R.x + R.w / 2, y: R.y + R.h / 2 } };
 });
 export const BUILDING = Object.fromEntries(BUILDINGS.map(b => [b.id, b]));
 for (const d of DISTRICTS) d.buildings = [];
@@ -621,6 +634,7 @@ export const JOBS = [
 JOBS.push(...FUNNEL_JOBS.map(a => J(...a)));
 JOBS.push(...VENUE_JOBS.map(a => J(...a)));
 JOBS.push(...STORE_JOBS.map(a => J(...a)));
+JOBS.push(...MOUNTAIN_JOBS.map(a => J(...a)));
 export const JOB = Object.fromEntries(JOBS.map(j => [j.id, j]));
 
 // ---- subject reading --------------------------------------------------------------
@@ -915,6 +929,8 @@ for (const [b, m] of [
 for (const [f, w] of Object.entries({ religion: { cathedral: 3 }, history: { "city-museum": 3, cathedral: 1 }, education: { "city-museum": 1.5 }, visual: { "city-museum": 1.5 }, music: { cathedral: 1, "the-old-bell": 1 }, exploration: { chandlery: 1, "the-anchor": 1 }, labor: { "the-anchor": 1.5 }, business: { "covered-market": 1, "high-street": 1 }, writing: { "the-old-bell": 1.5 }, farming: { "covered-market": 1.5 } })) Object.assign(LEISURE_BY_FIELD[f] ||= {}, w);
 STORE_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
 for (const [f, m] of Object.entries(STORE_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
+MOUNTAIN_LEISURE_BAND.forEach((m, b) => Object.assign(LEISURE_BY_BAND[b], m));
+for (const [f, m] of Object.entries(MOUNTAIN_LEISURE_FIELD)) LEISURE_BY_FIELD[f] = { ...LEISURE_BY_FIELD[f], ...m };
 // the sea and the snow, for the sporting and the idle
 for (const [f, w] of Object.entries({ sport: { surf: 0.8, slopes: 1 }, care: { beach: 1 }, visual: { pier: 1.2, beach: 0.8 }, writing: { pier: 1.5 }, music: { boardwalk: 1 }, finance: { slopes: 1.5 }, business: { slopes: 1 }, screen: { beach: 1.2 } })) Object.assign(LEISURE_BY_FIELD[f] ||= {}, w);
 
@@ -958,7 +974,7 @@ function gamesOn(day, hour) {
   let out = null;
   for (const [id, list] of Object.entries(GAMES)) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
   // the master plan's venues (the Pit's card, the tennis club's fixtures) pull a crowd the same way
-  for (const [id, list] of Object.entries({ ...VENUE_FIXTURES, ...STORE_FIXTURES })) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
+  for (const [id, list] of Object.entries({ ...VENUE_FIXTURES, ...STORE_FIXTURES, ...MOUNTAIN_FIXTURES })) for (const g of list) if (g.days.includes(wd) && hour >= g.from - 0.5 && hour < g.to - 0.5) (out || (out = new Set())).add(id);
   return out;
 }
 const TEAMS = ["THE COMPLIANT", "THE ASSESSED"];
@@ -1336,6 +1352,7 @@ for (const [k, id] of FUNNEL_FAMILY) FAMILY[k].push(id);
 FAMILY[0].push("the-anchor", "the-old-bell"); FAMILY[4].push("covered-market", "high-street", "market-row", "chandlery"); FAMILY[2].push("city-museum"); FAMILY[3].push("cathedral-square", "port-park", "bowling-green", "the-close");
 for (const [k, id] of VENUE_FAMILY) FAMILY[k].push(id);
 for (const [k, id] of STORE_FAMILY) FAMILY[k].push(id);
+for (const [k, id] of MOUNTAIN_FAMILY) FAMILY[k].push(id);
 const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
 // (a storefront unit takes visitors only while a business trades in it: enterprise.js, below)
 const LEISURE_ROOMS = Object.values(PLACES).filter(p => (p.kind === "leisure" || p.kind === "mixed") && !UNIT_SET.has(p.id)).map(p => p.id);
@@ -1757,7 +1774,7 @@ function spotIn(placeId, key, seed) {
 // passable (you leave through your own walls, that is what doors are for), and the open
 // lots (the Green, the Street, the Plaza, the Allotment) are ground anyone may cross.
 // Leg durations follow the path's length, so walking pace never changes.
-export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch", "lot-6f07", "the-assembly", "the-boardwalk", "the-beach", "the-pier", ...VENUE_OPEN_LOTS, "port-park", "cathedral-square", "bowling-green", "the-close"]);
+export const OPEN_LOTS = new Set(["the-green", "the-street", "the-plaza", "the-allotment", "the-diamond", "the-courts", "rec-ground", "the-pitch", "lot-6f07", "the-assembly", "the-boardwalk", "the-beach", "the-pier", ...VENUE_OPEN_LOTS, "port-park", "cathedral-square", "bowling-green", "the-close", ...MOUNTAIN_OPEN_LOTS]);
 const KERB = 0.4, CORNER = 0.3;   // the street view's footprints are the lot less 0.4
 // A lot that is mostly open ground with one solid thing on it: walkers cross the ground and go
 // round the thing. DEPT HQ's plaza, since the Central Line's stations stand in it (PHASE 2): the

@@ -18,7 +18,8 @@ import { BUILDINGS, ARCH, HOUSING_TIERS, OPEN_LOTS } from "./sim.js";
 import { rotRect } from "./iso.js";
 import { insetOf, PARK_LOTS } from "./parkGeo.js";
 import { funnelMass, FUNNEL_STYLES, FUNNEL_OUT_FRONT } from "./funnelGeo.js";
-import { COAST_LOTS, TERRAIN_MAX } from "./coastGeo.js";
+import { COAST_LOTS, MOUNTAIN_LOT_PLACES } from "./coastGeo.js";
+import { maxIn } from "./mountainGeo.js";
 import { venueMass, VENUE_STYLES, VENUE_OUT_FRONT } from "./venueGeo.js";
 import { westMass, WEST_STYLES, WEST_OUT_FRONT } from "./westGeo.js";
 import { storeMass, STORE_STYLES, STORE_OUT_FRONT } from "./storefrontGeo.js";   // THE MALL
@@ -445,6 +446,8 @@ export function towerItems(r) {
   }
   return out;
 }
+// the mountain's bands stand as tall as their highest ground (and the lodge or mast on it), for the tap
+const MTN_TOP = new Map();
 export function isoItems(r) {
   const items = [];
   for (const b of BUILDINGS) {
@@ -457,7 +460,7 @@ export function isoItems(r) {
     else if (m) foot = { x: m.box.x0, y: m.box.y0, w: m.box.x1 - m.box.x0, h: m.box.y1 - m.box.y0 };
     else { const [ix, iy] = insetOf(b); foot = { x: b.rect.x + ix, y: b.rect.y + iy, w: b.rect.w - 2 * ix, h: b.rect.h - 2 * iy }; }
     const R = rotRect(foot, r);
-    const h = coast === "slopes" || coast === "summit-lot" ? TERRAIN_MAX : coast ? 0.4 : open ? 0.05 : PARK_LOTS[b.id] ? 1 : m ? m.rise : 1;
+    const h = MOUNTAIN_LOT_PLACES.has(coast) ? MTN_TOP.get(b.id) ?? MTN_TOP.set(b.id, maxIn(b.rect) + 2).get(b.id) : coast ? 0.4 : open ? 0.05 : PARK_LOTS[b.id] ? 1 : m ? m.rise : 1;
     // the monolith on the line: its body item is the concourse (a deck under the tower, so the tower
     // paints after it), each pylon an item of its own, the tower over the track: towerItems()
     const tower = m?.solid ? m.parts.find(p => p.seg === "tower") : null;

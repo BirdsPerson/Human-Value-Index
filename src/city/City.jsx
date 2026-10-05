@@ -42,6 +42,8 @@ import PitPanel from "./PitPanel.jsx";
 import { pitEvents, boutAt, billLine, resultLine } from "./pit.js";
 import { tennisAt, tennisEvents } from "./tennis.js";
 import { planningLines } from "./planning.js";
+import { raceAt, raceEvents, racerName } from "./race.js";   // THE WEEKEND RACE on THE GAUNTLET
+import { HeightsPage } from "./HeightsPage.jsx";   // #heights: the trail map, the trails' status, the race
 import { paLines as chessPa } from "../chess/park.js";   // PARK CHESS: results, the game on, the ladder
 import { actsNow } from "./acts.js";
 import { ensurePlans, knownSubjects, summaryOf, completeAt, checkDay, wantSectors, findBySlug, pinSubject, unpinSubject } from "./planClient.js";
@@ -68,6 +70,8 @@ export default function City({ route }) {
   const leaguePage = parsed.districtId === "league";
   // #city/prefects (and #prefects): the twelve prefects and their directives (PrefectPanel.jsx)
   const prefectsPage = parsed.districtId === "prefects" || /^#prefects/.test(route || "");
+  // #heights (and #city/heights-map): THE MOUNTAIN's trail map, status and the race (HeightsPage.jsx)
+  const heightsPage = parsed.districtId === "heights-map" || /^#heights/.test(route || "");
   // #city/enterprise (and #enterprise): THE SMALL BUSINESS REGISTER (EnterprisePanel.jsx)
   const enterprisePage = parsed.districtId === "enterprise" || /^#enterprise/.test(route || "");
   const b = districtId && parsed.buildingId && BUILDING[parsed.buildingId]?.districtId === districtId ? BUILDING[parsed.buildingId] : null;
@@ -255,6 +259,12 @@ export default function City({ route }) {
       if (calls.length) venues.push(calls[calls.length - 1].text);
       else if (m) venues.push(`THE TENNIS CLUB, ${m.name}: ${m.status}`);
     }
+    // THE WEEKEND RACE (race.js): the starter, the clock, the result; on the map and in the Heights
+    if (!here || here === "heights") {
+      const calls = raceEvents(mt - 0.5, mt + 1e-6), on = raceAt(mt);
+      if (calls.length) venues.push(calls[calls.length - 1].text);
+      else if (on?.phase === "before") venues.push(`THE GAUNTLET: THE WEEKEND RACE (${on.race.name}) STARTS AT 13:00. FIRST IN THE GATE: ${racerName(on.race.bibs[0])}. SPECTATORS BEHIND THE FENCE.`);
+    }
     // PARK CHESS (src/chess/park.js): a result, the game on at a board, the ladder; with the venues
     { const ch = chessPa(mt, here || null); if (ch.length) venues.push(ch[Math.floor(k / 4) % ch.length]); }
     // the civic record (civic.js): this district's mood and team inside one; swings and the table on the map
@@ -345,6 +355,7 @@ export default function City({ route }) {
   if (leaguePage) crumbs.push({ label: "THE LEAGUES" });
   if (prefectsPage) crumbs.push({ label: "THE PREFECTS" });
   if (enterprisePage) crumbs.push({ label: "THE SMALL BUSINESS REGISTER" });
+  if (heightsPage) crumbs.push({ label: "THE HEIGHTS // TRAIL MAP" });
   if (b) crumbs.push({ label: b.name, go: () => goBuilding(d.id, b.id) });
   if (b && floor != null) { const f = b.floors[floor]; crumbs.push({ label: `${f.code} ${f.name}` }); }
   const three = !d && mode === "stack";
@@ -370,7 +381,7 @@ export default function City({ route }) {
         find={<CityFind index={index} remote={sectors} onPick={onPick} self={selfEntry} caseId={caseId} />} />
       <div className="hvi-city-bar">
         <Breadcrumb crumbs={crumbs} />
-        {!d && !leaguePage && !prefectsPage && !enterprisePage && <ViewToggle mode={mode} onChange={setMode} />}
+        {!d && !leaguePage && !prefectsPage && !enterprisePage && !heightsPage && <ViewToggle mode={mode} onChange={setMode} />}
       </div>
       {findSlug && !findEntry && !findPending && census !== "pending" && (
         <div className="hvi-city-note" role="status">NO SUBJECT ON FILE AS "{findSlug.toUpperCase()}". THE DEPARTMENT HAS CHECKED. TWICE.</div>
@@ -378,6 +389,7 @@ export default function City({ route }) {
       {leaguePage && <LeagueHub tab={parsed.buildingId} />}
       {prefectsPage && <PrefectsPage />}
       {enterprisePage && <EnterprisePage />}
+      {heightsPage && <HeightsPage />}
       <Frame box title={b ? b.name : d ? d.name : iso ? "THE SUBSTRATE" : street ? "THE SUBSTRATE // STREET LEVEL" : three ? "THE SUBSTRATE // IN DEPTH" : "THE SUBSTRATE"}
         meta={b ? "CROSS-SECTION" : d ? "INTERIOR" : iso ? "DRAG // PINCH // TURN // TAP A BUILDING" : street ? "WALK // TURN // ENTER A DOOR" : three ? "DRAG TO TURN // TAP A BUILDING" : "DRAG // PINCH // TAP A DISTRICT"} flush>
         {b

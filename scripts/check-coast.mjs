@@ -66,6 +66,8 @@ ok(["lifeguard", "boardwalk-vendor", "pier-warden", "surf-instructor", "ski-patr
 // ---- the ground: anchors on their own lots, apart, enough of them -------------------------------------
 {
   for (const [lot, pid] of Object.entries(G.COAST_LOTS)) {
+    // THE MOUNTAIN's bands: their skiers ride the lifts and the trails (scripts/check-mountain.mjs)
+    if (G.MOUNTAIN_LOT_PLACES.has(pid) && !SIM.RESORT_PARCELS.has(pid)) continue;
     const as = G.COAST_ANCHORS[pid], R = SIM.PLACES[pid].rect, cap = SIM.PLACES[pid].cap;
     if (SIM.RESORT_PARCELS.has(pid)) { ok(as.length === 0, `${pid}: a vacant parcel has no places to stand`); continue; }
     ok(as.length >= cap, `${pid}: ${as.length} places for a capacity of ${cap}`);
@@ -82,22 +84,7 @@ ok(["lifeguard", "boardwalk-vendor", "pier-warden", "surf-instructor", "ski-patr
     ok(close <= (pid === "slopes" ? 6 : 0), `${pid}: nobody stands on anybody (${close} too close)`);
     ok(as.some(a => a.role === "staff"), `${pid}: a post for its staff`);
   }
-  // the chairs climb one side and come down the other; the pistes and the lift stay on the slopes
-  const ups = Array.from({ length: G.liftChairs() }, (_, k) => G.liftChair(k, 5)).filter(c => c.up).length;
-  ok(ups > 3 && ups < G.liftChairs() - 3, `the lift: chairs up one side, down the other (${ups} of ${G.liftChairs()} going up)`);
-  const S = SIM.PLACES.slopes.rect, inS = ([x, y]) => x > S.x && x < S.x + S.w && y > S.y && y < S.y + S.h;
-  ok(G.PISTES.every(p => p.pts.every(inS)) && inS([G.LIFT.x, G.LIFT.y0]) && inS([G.LIFT.x, G.LIFT.y1]), "the pistes and the lift are on the slopes");
-  ok(G.PISTES.every(p => p.pts.every((q, i) => i === 0 || G.terrainH(...q) < G.terrainH(...p.pts[i - 1]) + 1e-9)), "every piste runs downhill");
-  // the terrain: flat at the village, rising to the ridge, never past its box
-  let maxH = 0, bad = 0;
-  for (let x = G.TERRAIN.x0; x <= G.TERRAIN.x1; x += 0.5) {
-    ok(G.terrainH(x, G.TERRAIN.y1) < 1e-9, `terrain flat at the foot (x ${x})`);
-    for (let y = G.TERRAIN.y1; y >= G.RIDGE_Y; y -= 0.5) { const h = G.terrainH(x, y); maxH = Math.max(maxH, h); if (y < G.TERRAIN.y1 && h < G.terrainH(x, y + 0.5) - 1e-9) bad++; }
-    ok(G.terrainH(x, G.TERRAIN.y0 + 0.01) < G.terrainH(x, G.RIDGE_Y) && G.terrainH(x, G.TERRAIN.y0 + 0.01) > 0, `the far side falls away from the ridge (x ${x})`);
-  }
-  ok(maxH > 5 && maxH <= G.TERRAIN_MAX, `the mountain rises (${maxH.toFixed(1)} storeys, box ${G.TERRAIN_MAX})`);
-  ok(bad === 0, `the mountain climbs all the way to the ridge (${bad} dips)`);
-  ok(G.PINES.length > 80 && G.PINES.every(([x, y]) => G.onTerrain(x, y) && G.offPiste(x, y) >= 1.6), `pines on the mountain, off the pistes (${G.PINES.length})`);
+  // the mountain itself (the terrain, the trails, the lifts, the pines): scripts/check-mountain.mjs
 }
 
 // ---- the crowding: the city built outward relieves the old one -----------------------------------------
