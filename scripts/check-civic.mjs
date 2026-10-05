@@ -1045,7 +1045,12 @@ SIM.setRoster(roster);
   const days = Object.keys(m2().days).map(Number).sort((a, b) => a - b);
   ok(days.length === 3 && days.every(d => sum(d)?.civic?.v === C.CIVIC_V), `every split day's summary carries its civic block (${days})`);
   for (const d of days.slice(1)) for (const id of DIST) ok(sum(d).civic.districts[id].mood.was === sum(d - 1).civic.districts[id].mood.raw, `day ${d} ${id}: chained from yesterday's summary`);
-  ok(days.every(d => JSON.stringify(sum(d).civic).length < 1100 * DIST.length), "the summary's civic block stays small");
+  // the league's ten (their teams included) and the league block within the old bound; every other
+  // district (the Coast, the Heights, PHASE 2's: a mood, a seat, a prefect) a small record of its own
+  const civ = (d) => sum(d).civic, others = (d) => Object.keys(civ(d).districts).filter(id => !DIST.includes(id));
+  const core = (d) => JSON.stringify({ ...civ(d), districts: Object.fromEntries(DIST.map(id => [id, civ(d).districts[id]])) }).length;
+  const rest = (d) => Math.max(0, ...others(d).map(id => JSON.stringify(civ(d).districts[id]).length));
+  ok(days.every(d => core(d) < 1100 * DIST.length && rest(d) < 520), `the summary's civic block stays small (the league's ten ${days.map(d => Math.round(core(d) / DIST.length)).join(", ")} B each < 1100; the largest other district ${days.map(rest).join(", ")} B < 520)`);
   // Yesterday's summary lost, today re-split: recomputed from yesterday's plan, the same block.
   const d = days[2], want = sum(d).civic;
   const s = globalThis.__blobs.get(PL.STORE);

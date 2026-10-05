@@ -27,15 +27,22 @@ const ALL = SIM.DISTRICTS.map(d => d.id);
 
 // ---- 1. twelve, one per district, no two alike ---------------------------------------------------
 const P = PF.PREFECTS;
-// PHASE 2 step 3: the Port and the Old Town have no prefect yet (a TODO: their own look and voice)
-const NO_PREFECT_YET = new Set(["port", "oldtown"]);
-eq(P.map(p => p.id).sort(), ALL.filter(id => !NO_PREFECT_YET.has(id)).sort(), "one prefect per district, the Coast and the Heights included (the Port and the Old Town: not yet)");
-ok(P.length === 12, "twelve prefects");
+// PHASE 2 (phase2Prefects.js): the Port's and the Old Town's are live; the Suburbs', the Airport's,
+// the Farmland's and the Engine's arrive with their districts (dormant until each exists)
+const NO_PREFECT_YET = new Set();
+eq(P.map(p => p.id).sort(), [...ALL].sort(), "one prefect per district: the Coast, the Heights, the Port and the Old Town included");
+const { PHASE2_PREFECTS } = await import("../src/city/phase2Prefects.js");
+for (const q of PHASE2_PREFECTS) ok(SIM.DISTRICT[q.id] ? PF.PREFECT[q.id] === q : !PF.PREFECT[q.id], `${q.code}: ${SIM.DISTRICT[q.id] ? "live, its district exists" : "dormant until its district exists"}`);
+// the dormant ones are held to the same uniqueness now, so each district's prefect is ready the day it arrives
+const PX = [...P, ...PHASE2_PREFECTS.filter(q => !PF.PREFECT[q.id])];
+for (const k of ["code", "name", "signoff", "style", "why"]) ok(new Set(PX.map(p => p[k])).size === PX.length, `no two (dormant included) share a ${k}`);
+for (const k of ["head", "prop"]) ok(new Set(PX.map(p => p.look[k])).size === PX.length, `no two (dormant included) share a ${k}`);
+ok(new Set(PX.map(p => p.look.pal.lens)).size >= PX.length - 1, "no two (dormant included) share a lens, but for the Strip and the Arena's red");
 for (const k of ["code", "name", "signoff", "style", "why"]) ok(new Set(P.map(p => p[k])).size === P.length, `no two share a ${k}`);
 for (const k of ["head", "prop"]) ok(new Set(P.map(p => p.look[k])).size === P.length, `no two share a ${k}`);
-ok(new Set(P.map(p => p.look.pal.body + p.look.pal.lens)).size === P.length && new Set(P.map(p => p.look.pal.lens)).size >= 11, "palettes differ (body and lens)");
+ok(new Set(P.map(p => p.look.pal.body + p.look.pal.lens)).size === P.length && new Set(P.map(p => p.look.pal.lens)).size >= P.length - 1, "palettes differ (body and lens)");
 const allLines = [];
-for (const p of P) {
+for (const p of PX) {
   const L = p.lines, lines = [...PF.DIRECTIVE_IDS.map(d => L[d]), ...L.bark, ...L.clash, L.placated, L.seething];
   ok(lines.every(l => typeof l === "string" && l.length > 4), `${p.code}: every line written`);
   ok(lines.length >= 10 && lines.length <= 20, `${p.code}: ${lines.length} voice lines (10-20)`);
@@ -66,7 +73,7 @@ ok(new Set(allLines).size === allLines.length, "no line is shared between prefec
 
 // ---- 3. the sprites: unique, machine, rigged ------------------------------------------------------
 {
-  const sheets = P.map(p => ({ id: p.id, s: D.prefectSheetRGBA(p.id), f0: D.paintPrefect(p.id, 0), f1: D.paintPrefect(p.id, 1) }));
+  const sheets = PX.map(p => ({ id: p.id, s: PF.PREFECT[p.id] ? D.prefectSheetRGBA(p.id) : { w: 64, h: 48 }, f0: D.paintPrefect(p.id, 0, p), f1: D.paintPrefect(p.id, 1, p) }));
   const mask = (rgba) => { const m = new Uint8Array(D.PW * D.PH); for (let i = 0; i < m.length; i++) m[i] = rgba[i * 4 + 3] > 0 ? 1 : 0; return m; };
   for (const x of sheets) {
     ok(x.s.w === 64 && x.s.h === 48, `${x.id}: a 2-frame 32x48 sheet`);
@@ -79,7 +86,7 @@ ok(new Set(allLines).size === allLines.length, "no line is shared between prefec
     for (let i = 0; i < 32 * 48; i++) if (m[i]) { n++; if (rig.sp.label[i]) cut++; }
     ok(cut === n && !rig.sp.empty, `${x.id}: the rig cuts every pixel (${cut}/${n})`);
     ok(x.f0.some((v, i) => v !== x.f1[i]), `${x.id}: the stride differs from the stand`);
-    eq(D.paintPrefect(x.id, 0), x.f0, `${x.id}: painted deterministically`);
+    eq(D.paintPrefect(x.id, 0, PX.find(q => q.id === x.id)), x.f0, `${x.id}: painted deterministically`);
   }
   let minPix = 1e9, minMask = 1e9;
   for (let i = 0; i < sheets.length; i++) for (let j = i + 1; j < sheets.length; j++) {
@@ -194,7 +201,7 @@ ok(new Set(allLines).size === allLines.length, "no line is shared between prefec
   const ms = performance.now() - t0;
   const per = JSON.stringify(b5).length / ALL.length;
   ok(per < 1000, `5,000 subjects, every seat held: ${Math.round(per)} bytes per district`);
-  ok(ms < 3000, `the fold with twelve leans at 5,000: ${Math.round(ms)} ms`);
+  ok(ms < 3000, `the fold with ${P.length} leans at 5,000: ${Math.round(ms)} ms`);
   globalThis.__fold = [Math.round(per), Math.round(ms)];
   C.setSeats([]); SIM.setRoster(roster);
 }
@@ -226,8 +233,8 @@ ok(new Set(allLines).size === allLines.length, "no line is shared between prefec
   const at = (tue - 1) * 24 + 11.9;
   const row = P.map(p => PF.patrolAt(p.id, at));
   const F = SIM.PLACES.forum.rect;
-  ok(row.every(a => !a.moving && a.stop.why === "council" && Math.abs(a.y - (F.y + F.h - 0.2)) < 1e-9 && a.x > F.x && a.x < F.x + F.w), "while the Council sits, all twelve stand in a row before THE ASSEMBLY");
-  ok(new Set(row.map(a => a.x.toFixed(2))).size === 12, "each in its own place in the row");
+  ok(row.every(a => !a.moving && a.stop.why === "council" && Math.abs(a.y - (F.y + F.h - 0.2)) < 1e-9 && a.x > F.x && a.x < F.x + F.w), `while the Council sits, all ${P.length} stand in a row before THE ASSEMBLY`);
+  ok(new Set(row.map(a => a.x.toFixed(2))).size === P.length, "each in its own place in the row");
   // a busy summary pulls the patrol toward the crowd
   const id = "strip", bld = SIM.PLACES["casino"].building;
   const busy = { day, b: { [bld]: Array(48).fill(400) } };
@@ -237,7 +244,7 @@ ok(new Set(allLines).size === allLines.length, "no line is shared between prefec
   // the voice: the line a prefect says comes from its own lines
   for (const p of P) for (let k = 0; k < 30; k++) ok(PF.lineFor(p.id, { prefect: { directive: "curfew", clash: 5 }, mood: { s: -60 } }, k).endsWith(p.signoff), `${p.code}: speaks in its own voice`);
   const pa = PF.prefectPaLines({ day, districts: Object.fromEntries(P.map(p => [p.id, { prefect: { directive: "decree", clash: 0 } }])) });
-  ok(pa.length === 12 && pa.every((l, i) => l.startsWith(`PREFECT ${P[i].code}: `)), "the PA reads every prefect's decree, by designation");
+  ok(pa.length === P.length && pa.every((l, i) => l.startsWith(`PREFECT ${P[i].code}: `)), "the PA reads every prefect's decree, by designation");
 }
 
 console.log(`check-prefects: ${checks} checks passed. sprites differ pairwise by >= ${globalThis.__minDiff[0]} silhouette px / ${globalThis.__minDiff[1]} px. council leans (430, held): ${globalThis.__leans.join(", ")}. fold at 5k, all held: ${globalThis.__fold[0]} B/district, ${globalThis.__fold[1]} ms.`);

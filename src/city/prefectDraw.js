@@ -173,6 +173,41 @@ const HEAD = {
   monolith(G, p, b) {         // THE AIDE: a narrow black slab, a white line for an eye, an earpiece
     G.rect(GR.head, 12, 2 + b, 19, 12 + b, p.body);
   },
+  // PHASE 2 (phase2Prefects.js)
+  lamp(G, p, b) {             // THE HARBOURMASTER: a white-topped peaked cap over a lighthouse lantern
+    G.rect(GR.head, 11, 2 + b, 20, 4 + b, p.trim);
+    G.rect(GR.head, 9, 5 + b, 22, 5 + b, p.dark);
+    G.rect(GR.head, 12, 6 + b, 19, 12 + b, p.metal);
+  },
+  tricorne(G, p, b) {         // THE BEADLE: a three-cornered hat over a brass bell with one eye
+    G.rect(GR.head, 13, 1 + b, 18, 2 + b, p.dark);
+    G.rect(GR.head, 10, 3 + b, 21, 4 + b, p.dark);
+    G.rect(GR.head, 7, 2 + b, 9, 4 + b, p.dark);
+    G.rect(GR.head, 22, 2 + b, 24, 4 + b, p.dark);
+    G.rect(GR.head, 8, 5 + b, 23, 5 + b, p.dark);
+    G.oval(GR.head, 15.5, 9.5 + b, 4, 3, p.metal);
+    G.rect(GR.head, 11, 12 + b, 20, 12 + b, p.trim);
+  },
+  mailbox(G, p, b) {          // THE COVENANT OFFICER: a curbside mailbox, its red flag up
+    G.oval(GR.head, 15, 5 + b, 5, 2.6, p.metal);
+    G.rect(GR.head, 10, 5 + b, 20, 12 + b, p.metal);
+    G.rect(GR.head, 21, 1 + b, 23, 3 + b, p.accent);
+    G.rect(GR.head, 21, 4 + b, 21, 9 + b, p.accent);
+  },
+  scanner(G, p, b) {          // THE SCREENER: a walk-through scanner arch for a head
+    G.rect(GR.head, 8, 2 + b, 23, 4 + b, p.trim);
+    G.rect(GR.head, 8, 5 + b, 10, 13 + b, p.trim);
+    G.rect(GR.head, 21, 5 + b, 23, 13 + b, p.trim);
+  },
+  boater(G, p, b) {           // THE GRANGE INSPECTOR: a straw boater over a burlap sack face
+    G.rect(GR.head, 11, 2 + b, 20, 4 + b, p.trim);
+    G.rect(GR.head, 6, 5 + b, 25, 5 + b, p.trim);
+    G.rect(GR.head, 11, 6 + b, 20, 12 + b, shade(p.trim, 0.72));
+  },
+  monitor(G, p, b) {          // THE HELPDESK: a beige-grey CRT monitor on its stand
+    G.rect(GR.head, 8, 2 + b, 23, 11 + b, p.metal);
+    G.rect(GR.head, 13, 12 + b, 18, 12 + b, p.dark);
+  },
 };
 const HEAD_DETAIL = {
   visor(G, p, b, f) { G.fill(12, 7 + b, 19, 8 + b, p.lens); G.hl(12 + (f ? 1 : 0), 19, 7 + b, p.accent); for (let x = 12 + (f ? 1 : 0); x <= 19; x += 3) G.px(x, 8 + b, p.dark); G.hl(12, 19, 11 + b, p.trim); },
@@ -187,6 +222,12 @@ const HEAD_DETAIL = {
   siren(G, p, b, f) { G.hl(12, 19, 8 + b, "#f4f4f5"); G.px(f ? 14 : 13, 2 + b, "#fee2e2"); G.hl(11, 20, 5 + b, p.trim); },
   intercom(G, p, b) { for (let y = 8; y <= 11; y += 1) for (let x = 13; x <= 18; x += 2) G.px(x + (y % 2), y + b, p.dark); G.fill(18, 5 + b, 19, 6 + b, p.lens); G.px(13, 5 + b, p.dark); G.hl(12, 16, 6 + b, shade(p.metal, 0.7)); },
   monolith(G, p, b) { G.hl(13, 18, 7 + b, p.lens); G.vl(13, 3 + b, 11 + b, p.metal); G.px(20, 7 + b, p.accent, true); G.px(20, 8 + b, p.accent, true); G.px(20, 9 + b, p.metal, true); },
+  lamp(G, p, b, f) { G.hl(12, 19, 4 + b, shade(p.trim, 0.8)); G.hl(15, 16, 3 + b, "#facc15"); G.fill(13, 8 + b, 18, 10 + b, p.lens); G.vl(f ? 16 : 15, 8 + b, 10 + b, shade(p.lens, 0.6)); G.px(13, 8 + b, "#ecfeff"); G.hl(12, 19, 12 + b, p.dark); G.hl(13, 18, 6 + b, shade(p.metal, 0.75)); },
+  tricorne(G, p, b, f) { G.hl(8, 23, 5 + b, p.trim); G.px(15, 2 + b, p.accent); G.px(16, 2 + b, p.accent); G.hl(13, 18, 9 + b, p.lens); G.px(f ? 16 : 15, 9 + b, "#ffffff"); G.hl(13, 18, 11 + b, shade(p.metal, 0.7)); },
+  mailbox(G, p, b) { G.hl(12, 18, 8 + b, p.lens); G.hl(12, 18, 9 + b, p.dark); G.hl(11, 19, 11 + b, shade(p.metal, 0.7)); G.px(19, 6 + b, p.dark); G.hl(11, 19, 5 + b, shade(p.metal, 1.12)); G.fill(22, 2 + b, 22, 2 + b, "#fecaca"); },
+  scanner(G, p, b, f) { G.hl(11, 20, (f ? 10 : 7) + b, p.lens, true); G.vl(9, 5 + b, 12 + b, shade(p.trim, 0.8)); G.hl(14, 17, 2 + b, p.accent); G.px(9, 7 + b, p.lens); G.px(22, 7 + b, p.lens); G.px(9, 10 + b, p.accent); G.px(22, 10 + b, p.accent); },
+  boater(G, p, b) { G.hl(11, 20, 4 + b, p.accent); G.hl(7, 24, 5 + b, shade(p.trim, 0.85)); G.fill(13, 8 + b, 14, 9 + b, p.lens); G.fill(17, 8 + b, 18, 9 + b, p.lens); for (let x = 12; x <= 19; x += 2) G.px(x, 11 + b, p.dark); G.px(10, 12 + b, p.trim, true); G.px(21, 11 + b, p.trim, true); G.px(21, 12 + b, p.trim, true); },
+  monitor(G, p, b, f) { G.fill(10, 4 + b, 21, 9 + b, "#052e16"); G.hl(11, 16, 5 + b, p.lens); G.hl(11, 14, 7 + b, p.lens); if (!f) G.fill(16, 7 + b, 17, 8 + b, p.lens); G.px(21, 10 + b, p.accent); G.px(22, 10 + b, p.lens); G.hl(9, 22, 11 + b, shade(p.metal, 0.75)); },
 };
 
 // ---- torsos: the uniform ---------------------------------------------------------------------------
@@ -202,6 +243,12 @@ const TORSO = {
   arts(G, p, b) { G.hl(12, 19, 15 + b, shade(p.body, 1.8)); G.hl(12, 19, 16 + b, shade(p.body, 1.8)); G.vl(14, 17 + b, 21 + b, p.trim); G.fill(13, 22 + b, 15, 23 + b, p.trim); G.px(18, 18 + b, p.lens); },
   arena(G, p, b) { for (let x = 11; x <= 20; x++) if (x % 3 === 0) G.vl(x, 16 + b, 29 + b, "#111111"); G.px(16, 17 + b, p.accent); G.px(16, 18 + b, p.accent); G.hl(15, 17, 19 + b, p.accent); G.hl(10, 21, 30 + b, "#111111"); },
   sprawl(G, p, b) { G.hl(9, 22, 21 + b, p.trim); G.hl(9, 22, 22 + b, p.trim); G.fill(11, 17 + b, 13, 19 + b, "#f5f5f4"); G.px(12, 18 + b, p.lens); G.fill(17, 26 + b, 20, 28 + b, shade(p.body, 0.8)); },
+  port(G, p, b) { G.hl(9, 11, 15 + b, p.trim); G.hl(20, 22, 15 + b, p.trim); for (const y of [18, 21, 24, 27]) { G.px(13, y + b, "#facc15"); G.px(18, y + b, "#facc15"); } G.vl(15, 16 + b, 29 + b, shade(p.body, 1.4)); G.hl(13, 18, 16 + b, p.trim); },
+  oldtown(G, p, b) { G.hl(12, 19, 17 + b, p.trim); G.px(12, 16 + b, p.trim); G.px(19, 16 + b, p.trim); G.fill(15, 18 + b, 16, 20 + b, p.trim); G.px(15, 19 + b, p.accent); G.fill(15, 15 + b, 16, 16 + b, "#f8fafc"); G.vl(15, 22 + b, 30 + b, shade(p.body, 1.3)); G.vl(16, 22 + b, 30 + b, shade(p.body, 1.3)); },
+  suburbs(G, p, b) { G.hl(13, 18, 15 + b, p.trim); G.px(15, 16 + b, p.trim); G.px(16, 16 + b, p.trim); G.vl(13, 16 + b, 22 + b, p.lens); G.fill(12, 23 + b, 14, 25 + b, "#fef3c7"); G.px(13, 24 + b, p.accent); G.fill(17, 18 + b, 18, 18 + b, shade(p.body, 1.4)); },
+  airport(G, p, b) { G.hl(9, 11, 15 + b, p.accent); G.hl(20, 22, 15 + b, p.accent); G.fill(12, 18 + b, 13, 19 + b, "#facc15"); G.hl(9, 22, 28 + b, p.dark); G.vl(15, 16 + b, 27 + b, shade(p.body, 1.35)); G.fill(18, 18 + b, 20, 18 + b, p.trim); },
+  farmland(G, p, b) { G.fill(12, 21 + b, 19, 30 + b, p.accent); G.vl(12, 16 + b, 20 + b, p.accent); G.vl(19, 16 + b, 20 + b, p.accent); G.px(12, 21 + b, p.trim); G.px(19, 21 + b, p.trim); G.fill(14, 24 + b, 17, 26 + b, shade(p.accent, 0.75)); for (let x = 10; x <= 21; x += 3) G.vl(x, 16 + b, 19 + b, shade(p.body, 1.3)); },
+  engine(G, p, b) { G.vl(15, 16 + b, 22 + b, p.trim); G.vl(16, 16 + b, 22 + b, p.trim); G.fill(15, 23 + b, 16, 24 + b, "#f8fafc"); G.fill(12, 26 + b, 19, 29 + b, shade(p.body, 0.78)); G.hl(12, 19, 15 + b, shade(p.body, 1.3)); },
   hq(G, p, b) { G.fill(14, 16 + b, 17, 19 + b, "#f8fafc"); G.vl(15, 16 + b, 24 + b, p.trim); G.vl(16, 16 + b, 24 + b, p.trim); G.px(15, 16 + b, "#f8fafc"); G.hl(11, 20, 15 + b, p.metal); },
 };
 
@@ -222,6 +269,12 @@ function paintProp(G, look, f) {
     case "card": G.rect(GR.prop, hr - 1, 1 + b, hr + 2, 5 + b, "#facc15"); break;
     case "keys": G.oval(GR.prop, hr + 1, hy + 3, 2.2, 2.2, "#a8a29e"); break;
     case "tablet": G.rect(GR.prop, hl - 4, hy - 5, hl, hy + 1, "#18181b"); break;
+    case "foghorn": G.rect(GR.prop, hl - 2, hy - 1, hl - 1, hy + 1, pal.metal); G.rect(GR.prop, hl - 5, hy - 3, hl - 3, hy + 3, pal.accent); break;
+    case "mace": G.rect(GR.prop, hr + 1, 12 + b, hr + 2, hy + 3, pal.trim); G.oval(GR.prop, hr + 1.5, 9.5 + b, 2.2, 2.2, pal.trim); break;
+    case "ruler": G.rect(GR.prop, hr + 1, hy - 2, hr + 3, 45, "#facc15"); break;
+    case "wand": G.rect(GR.prop, hr, hy + 1, hr + 1, hy + 3, pal.dark); G.rect(GR.prop, hr - 1, hy + 4, hr + 2, hy + 10, "#111827"); break;
+    case "pitchfork": G.rect(GR.prop, hr + 1, 5 + b, hr + 1, 45, "#92400e"); G.rect(GR.prop, hr - 1, 4 + b, hr + 3, 4 + b, pal.metal); for (const dx of [-1, 1, 3]) G.rect(GR.prop, hr + dx, 2 + b, hr + dx, 3 + b, pal.metal); break;
+    case "ticket": G.rect(GR.prop, hl - 3, hy - 3, hl - 1, 44, "#f8fafc"); break;
     default:
   }
 }
@@ -238,13 +291,20 @@ function propDetail(G, look, f) {
     case "card": G.fill(hr, 2 + b, hr + 1, 4 + b, "#fde047"); break;
     case "keys": G.px(hr + 1, hy + 3, INK); G.px(hr + 2, hy + 5, "#facc15", true); G.px(hr + 2, hy + 6, "#facc15", true); break;
     case "tablet": G.fill(hl - 3, hy - 4, hl - 1, hy, "#fca5a5"); G.hl(hl - 3, hl - 1, hy - 2, "#dc2626"); break;
+    case "foghorn": G.fill(hl - 5, hy - 1, hl - 5, hy + 1, INK); G.px(hl - 4, hy - 2, "#fecaca"); break;
+    case "mace": G.fill(hr + 1, 9 + b, hr + 2, 10 + b, pal.accent); G.px(hr + 1, 8 + b, "#fff7d6"); G.hl(hr + 1, hr + 2, 14 + b, pal.accent); break;
+    case "ruler": for (let y = hy - 1; y <= 44; y += 2) G.hl(hr + 2, y % 4 === 1 ? hr + 3 : hr + 2, y, INK); break;
+    case "wand": G.fill(hr, hy + 5, hr + 1, hy + 9, f ? shade(pal.lens, 0.6) : pal.lens); break;
+    case "pitchfork": G.px(hr + 1, 4 + b, "#d6d3d1"); break;
+    case "ticket": G.hl(hl - 3, hl - 1, hy - 3, pal.lens); for (let y = hy - 1; y <= 42; y += 2) G.px(hl - 2 - (y % 4 === 1 ? 0 : 1), y, "#64748b"); break;
     default:
   }
 }
 
 // One frame of a prefect: -> Uint8ClampedArray (PW x PH RGBA). f: 0 standing, 1 the stride.
-export function paintPrefect(id, f = 0) {
-  const P = PREFECT[id], look = P.look, pal = look.pal, b = f ? -1 : 0;
+// (pf: the prefect itself, for one whose district has not arrived yet: check-prefects paints them all)
+export function paintPrefect(id, f = 0, pf = null) {
+  const P = pf || PREFECT[id], look = P.look, pal = look.pal, b = f ? -1 : 0;
   const G = frameCanvas();
   paintLegs(G, look, f);
   paintBody(G, look, f);

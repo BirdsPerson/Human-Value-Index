@@ -1220,6 +1220,16 @@ look, 14 lines each), `src/city/prefects.js` (lean, directive, clash, legitimacy
 | The Arena | ARN-05 THE REFEREE UNIT | siren dome, stripes, raised yellow card; by the book |
 | The Sprawl | SPR-10 THE HOUSING OFFICER | intercom-panel head, keys; door to door |
 | Dept HQ | HQ-00 THE AIDE | black monolith head, earpiece, tablet; loyal, correct |
+| The Port | PRT-15 THE HARBOURMASTER | peaked cap over a lighthouse lantern, foghorn; strict on the quay (ALL CARGO DECLARED.) |
+| The Old Town | OLD-16 THE BEADLE | tricorne over a one-eyed brass bell, mace, gown; ceremonial, fussy about bylaws (BY ORDER OF THE BYLAWS.) |
+| The Suburbs | SUB-17 THE COVENANT OFFICER | mailbox head with its flag up, a lawn ruler; petty, measures grass (PLEASE REVIEW THE COVENANTS.) - arrives with its district |
+| The Airport | AIR-18 THE SCREENER | walk-through scanner arch for a head, wand; by the book (REMOVE YOUR SHOES.) - arrives with its district |
+| The Farmland | FRM-19 THE GRANGE INSPECTOR | straw boater over a sack face, pitchfork, overalls; slow, seasonal (GRADED AND STAMPED.) - arrives with its district |
+| The Engine | ENG-20 THE HELPDESK | CRT monitor head with a blinking cursor, the ticket printout; closes every ticket (TICKET CLOSED.) - arrives with its district |
+
+PHASE 2's prefects (`src/city/phase2Prefects.js`): prefectData.js takes the ones whose district exists in
+`sim.DISTRICT`, so each of the four later ones goes live the day its district is added (no other change
+needed); check-prefects holds all six to the uniqueness rules now (codes 13-14 are the nightlife quarters').
 
 - **The lean** (one axis, PEOPLE -100 <-> ORDER +100). A subject: ORDER = threat, utility, rigidity
   (100 - adaptability) and an ordering record (military, law, finance, business, royalty,

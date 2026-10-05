@@ -489,7 +489,7 @@ export function civicFold(plan, people, prev = null) {
     if (plan.ent) f.enterprise = enterpriseMood(plan.ent, id) || 0;   // THE MALL (enterprise.js): thriving shops +, closures -
     // THE PREFECT (prefects.js): today's directive from the mood before its own factor and the
     // council's lean; the clash and the directive's weight become the mood's `prefect` factor.
-    // (the Port and the Old Town have no prefect yet: PHASE 2 TODO, one each, their own look and voice)
+    // (a district without a prefect has no block: every district has one once phase2Prefects.js covers it)
     const pf = PREFECT[id] ? prefectFold(id, day, clamp(sum(f), -100, 100), held[id] ? leans[id] ?? 0 : null, prev?.v === CIVIC_V ? prev.districts?.[id]?.prefect : null) : null;
     if (pf) f.prefect = pf.factor;
     const raw = clamp(sum(f), -100, 100);

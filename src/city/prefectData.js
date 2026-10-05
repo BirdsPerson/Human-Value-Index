@@ -1,4 +1,4 @@
-// THE TWELVE DEPARTMENT PREFECTS (docs/CITY_SPEC.md "The Prefects"). Scott 2026-09-30: "in
+// THE DEPARTMENT PREFECTS (docs/CITY_SPEC.md "The Prefects"). Scott 2026-09-30: "in
 // efforts to balance the substrate at a sub level, the Overlord puts in place a representative of
 // its own for each district, tailored to the specific tastes and population of each. Not the same
 // dude over and over. Each police-force-type deal its own unique entity."
@@ -16,6 +16,9 @@
 // look: prefectDraw.js paints it from these (head, build, legs, prop, palette), no two alike.
 // lines: one decree per directive, then barks (patrol), clash (the councillor objects), and the
 //   mood (placated / seething). Every line ends in its own sign-off.
+
+import { DISTRICT } from "./sim.js";
+import { PHASE2_PREFECTS } from "./phase2Prefects.js";
 
 export const DIRECTIVES = {
   permits:     { name: "FESTIVAL PERMITS",          short: "PERMITS",     control: -2, mood: 3,  desc: "SANCTIONED FUN IS ISSUED BY THE HOUR." },
@@ -269,5 +272,8 @@ export const PREFECTS = [
     },
   },
 ];
+// PHASE 2 (phase2Prefects.js): the Port's and the Old Town's, and the four that arrive with their
+// districts (the Suburbs, the Airport, the Farmland, the Engine): only a district that exists has one.
+PREFECTS.push(...PHASE2_PREFECTS.filter(p => DISTRICT[p.id]));
 export const PREFECT = Object.fromEntries(PREFECTS.map(p => [p.id, p]));
 export const prefectTitle = (p) => `PREFECT ${p.code} // ${p.name}`;
