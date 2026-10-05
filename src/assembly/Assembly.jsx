@@ -176,6 +176,7 @@ function ApplicationFrame({ k, votes, state, result }) {
       </div>
       <div className="asm-note">{a.detail}</div>
       <div className="asm-note"><a href={`#city?find=${a.applicantSlug}`}>LOCATE THE APPLICANT IN THE CITY</a></div>
+      {k === "golf" && <div className="asm-note"><a href="#golf">THE DEPARTMENT KEPT THE DRAWINGS: PLAY THE COURSE (EXHIBITION)</a></div>}
     </Frame>
   );
 }

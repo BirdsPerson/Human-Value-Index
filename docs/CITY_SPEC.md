@@ -2076,3 +2076,42 @@ or any score.
 - **Check**: `scripts/check-tennis.mjs` (scoring units, purity, a bot's recorded match replayed twice
   to the same result, a doctored log refused, the roster, a stronger CPU beating a weaker one).
 - **Not yet**: changing ends, lets, doubles, counting results, a server replay check, other viewers.
+
+### Golf: THE DEPARTMENT LINKS (`#golf`, 2026-10-05)
+
+- **The course**: APPLICATION 001's eighteen holes, the course THE ASSEMBLY declined (session 001
+  voted for the farm; the city never builds it). `src/play/golf/course.js` expands civicGeo.js `GOLF`
+  (the six-by-three serpentine routing, its bunkers and pond) into full holes from a fixed seed
+  (`COURSE_SEED = 0x6F07`): par 72 (36 + 36, four 3s, four 5s, ten 4s, no back-to-back 3s), 6,884
+  yards, doglegs bending with the routing's row, fairway, rough, trees along the corridor, greenside
+  and fairway bunkers, water where the city's pond sat near the green (or seeded), a green with a
+  pin and a varying fall (`slopeAt`). Out of bounds past the corridor. Same course for everyone.
+- **The round** (`sim.js`, pure, 60 Hz fixed step, seeded mulberry32 in the state, no DOM, no
+  clock): AIM (left/right, held speeds up), club (B/X or down shorter, up longer; the caddie picks a
+  default each shot), the three-press meter (start, power on the way up, accuracy on the red line on
+  the way down: early hooks, late slices, missed shanks), wind per hole (0-14 mph, 8 directions),
+  trees stop a low ball, water +1 and a dry drop back along the line, OB +1 and replay from the spot,
+  10 strokes is a pick-up. On or near the green the putter rolls the ball over the slope; the cup
+  takes a ball under 2.1 yd/s. Modes: stroke play alone (18, front 9, back 9) or match play against
+  a figure (honour on the tee, farthest away plays, holes won/halved; winner by holes up).
+- **Replay**: a round is `{v, seed, cfg, inputLog, result}`; the log is run-length button bits
+  (`[bits, count, ...]`, ~1,500 numbers for 18 holes). `replay(cfg, log)` reproduces it tick for
+  tick. Kept in localStorage `hvi-golf-rounds` (last 8) and the tab's memory; no endpoint yet.
+- **The figures** (`roster.js`): Tiger Woods 97, Jack Nicklaus 97, Rory McIlroy 91, Phil Mickelson 88,
+  John Daly 79, Michael Jordan 62, Bill Murray 55, John F. Kennedy 52, Babe Ruth 46, Adam Sandler 38
+  (golf ratings set here; census files for the living, bundled files for JFK and Ruth). Rating sets
+  the spread of their power, aim and accuracy errors and how much wind and break they read. Nobody
+  speaks, living or dead; the Department's lines are about the game.
+- **You**: your own file when this browser has a case (`SUBJECT <last four>`, shirt and trousers from
+  your avatar), else SUBJECT. WATCH THE CADDIE PLAY runs the bot on your side (attract mode; not kept).
+- **Screen**: 256x224 canvas, integer scale in device pixels, imageSmoothing off, 5x7 bitmap font,
+  NES palette: golfer and meter left (the swing follows the meter), hole from above right, a close
+  view within 70 yards (slope arrows point downhill, darker is steeper). WebAudio blips, mute kept.
+- **Input**: keys (arrows, Space/Z swing, X club, Enter/Esc pause; a press shorter than a tick still
+  counts), `src/city/gamepad.js` (d-pad/stick, A/cross swing, B/circle and RB shorter club, LB longer,
+  Start pauses), touch pad on phones (aim, CLUB, pause, SWING, 56 px).
+- **Ways in**: `#golf`, `#golf?vs=<slug>` (offers the match); THE ASSEMBLY's APPLICATION 001 frame;
+  THE LEAGUES hub (an exhibitions line).
+- Check: `scripts/check-golf.mjs` (course shape, the scripted round twice and its replay identical,
+  holed ball ends the hole, OB and water penalties, score v par, a 97 beats a 20).
+- **Not yet**: a server that verifies a submitted log; spectators; the course in the city map.

@@ -1,0 +1,44 @@
+/* THE DEPARTMENT LINKS. The terminal's tokens around an NES frame: the canvas is black, pixelated,
+   scaled by whole device pixels (Golf.jsx). Touch buttons only on coarse pointers, 48px and up. */
+.gf-p { margin: 0 0 var(--s3); }
+.gf-p.dim { color: var(--fg-mute); font-size: var(--t-xs); }
+.gf-opts { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0 0 var(--s3); }
+.gf-opt { min-height: var(--hit-min); padding: 0 var(--s3); font: inherit; font-size: var(--t-xs); letter-spacing: 0.04em; color: var(--fg-dim); background: transparent; border: var(--bw) solid var(--line); cursor: pointer; }
+.gf-opt[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.gf-opt:focus-visible { outline: var(--focus); outline-offset: 2px; }
+
+.gf-opps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--s1) var(--s3); }
+.gf-opp { width: 100%; display: flex; align-items: center; gap: var(--s2); min-height: 56px; padding: 2px var(--s1); font: inherit; text-align: left; color: var(--fg); background: transparent; border: var(--bw) solid transparent; cursor: pointer; }
+.gf-opp:hover, .gf-opp:focus-visible { border-color: var(--line-hi); background: var(--panel-hi); outline: none; }
+.gf-opp .nm { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.gf-opp .nm b { font-weight: 700; letter-spacing: 0.04em; }
+.gf-opp .why { font-size: var(--t-xs); color: var(--fg-mute); overflow-wrap: anywhere; }
+.gf-opp .rt { font-variant-numeric: tabular-nums; color: var(--warn); font-weight: 700; }
+.gf-sprite { flex: none; width: 32px; height: 48px; display: inline-flex; align-items: center; justify-content: center; background-repeat: no-repeat; background-size: auto 100%; background-position: 0 0; image-rendering: pixelated; border: var(--bw) solid var(--line); background-color: var(--panel); color: var(--fg-mute); font-size: var(--t-xs); }
+
+.gf-play { margin: 0 0 var(--s4); }
+.gf-stage { display: flex; justify-content: center; background: #000; border: var(--bw) solid var(--line); padding: var(--s2) 0; }
+.gf-stage canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+.gf-status { margin: var(--s2) 0; font-size: var(--t-xs); color: var(--fg-mute); letter-spacing: 0.04em; text-align: center; }
+
+.gf-touch { display: none; }
+@media (pointer: coarse), (max-width: 700px) {
+  .gf-touch { display: grid; grid-template-columns: repeat(4, 1fr) 1.6fr; gap: var(--s2); margin: 0 0 var(--s3); user-select: none; -webkit-user-select: none; }
+  .gf-tb { min-height: 56px; font: inherit; font-weight: 700; letter-spacing: 0.04em; color: var(--fg); background: var(--panel); border: var(--bw) solid var(--line-hi); touch-action: none; -webkit-tap-highlight-color: transparent; }
+  .gf-tb:active { background: var(--accent); color: var(--accent-ink); }
+  .gf-tb.swing { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+}
+
+.gf-keys { display: grid; grid-template-columns: max-content 1fr; gap: var(--s1) var(--s3); margin: 0; font-size: var(--t-xs); }
+.gf-keys dt { color: var(--warn); letter-spacing: 0.04em; }
+.gf-keys dd { margin: 0; color: var(--fg-dim); }
+
+.gf-card-wrap { overflow-x: auto; }
+.gf-card { border-collapse: collapse; font-size: var(--t-xs); font-variant-numeric: tabular-nums; margin: 0 0 var(--s3); min-width: 100%; }
+.gf-card th, .gf-card td { padding: 2px 6px; text-align: center; border: var(--bw) solid var(--line); }
+.gf-card th[scope="row"] { text-align: left; color: var(--fg-dim); font-weight: 400; white-space: nowrap; }
+.gf-card thead th { color: var(--fg-mute); font-weight: 400; }
+.gf-card td.u { color: var(--accent); font-weight: 700; }
+.gf-card td.o { color: var(--harm); }
+.gf-rounds { list-style: none; margin: 0; padding: 0; font-size: var(--t-xs); color: var(--fg-dim); display: grid; gap: 2px; }
+.gf-rounds li::before { content: "> "; color: var(--fg-mute); }

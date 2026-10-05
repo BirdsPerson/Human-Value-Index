@@ -21,6 +21,7 @@ const Docket = lazy(() => import("./assembly/Docket.jsx"));
 const Casino = lazy(() => import("./casino/Casino.jsx"));
 const Chess = lazy(() => import("./chess/Chess.jsx"));
 const Tennis = lazy(() => import("./play/tennis/Tennis.jsx"));   // THE TENNIS CLUB, playable (#tennis)
+const Golf = lazy(() => import("./play/golf/Golf.jsx"));   // #golf: THE DEPARTMENT LINKS (exhibition golf)
 const Economy = lazy(() => import("./economy/Economy.jsx"));
 const LEGAL = ["about", "privacy", "terms", "dispute"];
 const FigurePicker = lazy(() => import("./FigureIndex.jsx").then(m => ({ default: m.FigurePicker })));
@@ -577,6 +578,13 @@ export default function OverlordAssessment() {
   if (routePath === "#tennis") return (
     <Screen nav={nav} wide>
       <Suspense fallback={<Loading what="ROLLING THE COURT" />}><Tennis route={route} /></Suspense>
+    </Screen>
+  );
+
+  // #golf[?vs=<slug>]: THE DEPARTMENT LINKS, exhibition golf on the course the Assembly declined (src/play/golf/)
+  if (routePath === "#golf") return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="RAKING THE BUNKERS" />}><Golf route={route} /></Suspense>
     </Screen>
   );
 
