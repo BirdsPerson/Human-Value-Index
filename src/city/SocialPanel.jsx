@@ -1,7 +1,7 @@
 // The Substrate's social ledger, city-wide: the gossip feed and a web of who keeps
 // company with whom. Nothing here is scripted; see src/city/social.js.
 import { memo, useEffect, useMemo, useState } from "react";
-import { Frame, ChipStrip, Chip } from "../ui";
+import { Frame, ChipStrip, Chip, Disclosure } from "../ui";
 import { useSocial } from "./socialClient.js";
 
 const W = 640, H = 420, CX = W / 2, CY = H / 2, R = 170;
@@ -91,11 +91,12 @@ function SocialPanel() {
     <>
       <Frame title="GOSSIP" meta={`${(d.events || []).length} NOTED`}>
         <ul className="hvi-gossip">
-          {(d.events || []).slice(0, 8).map((e, i) => <li key={`${e.h}-${i}`}>{e.text}</li>)}
+          {(d.events || []).slice(0, 4).map((e, i) => <li key={`${e.h}-${i}`}>{e.text}</li>)}
           {!(d.events || []).length && <li>NOTHING WORTH REPEATING. YET.</li>}
         </ul>
       </Frame>
-      <Frame title="THE LEDGER OF ASSOCIATION" meta={`${(d.counts?.friends ?? 0) + (d.counts?.rivals ?? 0)} TIES`}>
+      {/* the web is a deep cut: folded until asked for, so the page under the city stays short */}
+      <Disclosure className="hvi-city-disc" title="WHO GETS ALONG // THE LEDGER OF ASSOCIATION" meta={`${(d.counts?.friends ?? 0) + (d.counts?.rivals ?? 0)} TIES`}>
         <p className="hvi-web-note">NOBODY ARRANGED ANY OF THIS. SUBJECTS WHO SHARE A ROOM EITHER CLICK OR THEY DO NOT. FRIENDS DRIFT TO EACH OTHER'S USUAL ROOMS. RIVALS LEAVE FIRST.</p>
         <ChipStrip label="Show">
           {[["all", "ALL TIES"], ["friends", `FRIENDS ${d.counts?.friends ?? 0}`], ["rivals", `RIVALS ${d.counts?.rivals ?? 0}`]].map(([k, l]) => (
@@ -112,7 +113,7 @@ function SocialPanel() {
             </li>
           ))}
         </ul>
-      </Frame>
+      </Disclosure>
     </>
   );
 }

@@ -407,24 +407,29 @@ export default function City({ route }) {
               ? <City3D censusRef={censusRef} onDistrict={go} onOpen={open} onFloor={goBuilding} query={query} />
               : <CityMap censusRef={censusRef} onDistrict={go} onOpen={open} />}
       </Frame>
+      {!d && <NowList stats={stats} k={k} />}
+      {iso && (
+        <p className="hvi-city-help">
+          DRAG TO LOOK AROUND. PINCH<span className="hvi-desk-only"> OR CLICK, THEN SCROLL,</span> TO ZOOM. TAP A BUILDING TO SEE INSIDE.
+          <span className="hvi-desk-only"> KEYBOARD: CLICK THE CITY, THEN <kbd>ARROWS</kbd> MOVE, <kbd>+</kbd> <kbd>−</kbd> ZOOM, <kbd>Q</kbd> <kbd>E</kbd> TURN, <kbd>[</kbd> <kbd>]</kbd> STEP THROUGH BUILDINGS, <kbd>ENTER</kbd> GOES IN.</span>
+        </p>
+      )}
+      {!d && <MapKey />}
       {d && !b && <DistrictCivic districtId={d.id} onLeague={(e, sp) => { e.preventDefault(); window.location.hash = `#city/league${sp ? "/" + sp : ""}` + query; }} />}
       {(!d || d.id === "commons") && <AssemblyRow asm={asm} />}
       {!b && <PitPanel districtId={d?.id || null} />}
-      {!d && <MapKey />}
       {!d && !b && <SocialPanel />}
-      <div className="hvi-city-help">
+      {!iso && <div className="hvi-city-help">
         {b
           ? b.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "TAP A FLOOR TO FOCUS IT. HOVER A SUBJECT FOR ITS ASSIGNMENT; CLICK TO READ THE FILE. ON A PHONE: TAP TWICE."
           : d
             ? d.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "ENTER A BUILDING ABOVE. HOVER A SUBJECT FOR ITS ASSIGNMENT; CLICK TO READ THE FILE. ON A PHONE: TAP TWICE. THE SUBJECT WILL NOT NOTICE. IT HAS NO SAY."
-            : iso
-              ? <>THE SUBSTRATE, FROM ABOVE. DRAG TO PAN, PINCH TO ZOOM<span className="hvi-desk-only"> (OR CLICK IT, THEN WHEEL)</span>, TURN IT WITH THE TURN KEYS<span className="hvi-desk-only"> OR Q AND E</span>. TAP A BUILDING TO OPEN IT: EVERY FLOOR, EVERY ROOM, EVERYONE INSIDE. LIT WINDOWS ARE OCCUPIED. EVERYONE HERE IS ON FILE. NOBODY IS TRYING TO LEAVE.</>
             : street
               ? <>THE SUBSTRATE AT STREET LEVEL. IT GIVES ITSELF A TOUR WHEN LEFT ALONE.<span className="hvi-desk-only"> CLICK THE VIEW, THEN W A S D OR THE ARROWS TO WALK; DRAG TO TURN; ENTER GOES INTO THE BUILDING AHEAD.</span> WALK INTO A DOOR TO GO IN. LIT WINDOWS ARE OCCUPIED. EVERYONE HERE IS ON FILE. NOBODY IS TRYING TO LEAVE.</>
               : three
               ? <>DRAG TO TURN THE CITY. PINCH OR WHEEL TO ZOOM. TAP A BUILDING TO OPEN IT, A FLOOR TO GO IN.<span className="hvi-desk-only"> BY KEYBOARD: [ AND ] OPEN THE NEXT BUILDING, ENTER CHOOSES A FLOOR.</span> A LIT PLATFORM HAS A TRAIN STANDING AT IT.</>
               : "EVERYONE HAS BEEN UPLOADED. EVERYONE HAS A JOB. THE LOOP RUNS ON TIME. ZOOM IN TO SEE FACES."}
-      </div>
+      </div>}
       {!d && <LoopPanel riders={stats.riders} aboard={stats.transit} waiting={stats.waiting} self={stats.self} onOpen={open} onDistrict={go} />}
       {(!leaguePage && (!d || GAME_DISTRICTS.has(d.id))) && <LeaguePanel highlight={d?.id || null} />}
       {d
@@ -480,6 +485,34 @@ function AssemblyRow({ asm }) {
     </div>
   );
 }
+
+// NOW: what the picture is showing, in words. The PA above types and rotates and is hidden
+// from screen readers; this is the same city as a short list that holds still. Fixtures, the
+// Pit, the club, the race, the night, the Loop, the busiest districts. Never more than six lines.
+const NowList = memo(function NowList({ stats, k }) {
+  const mt = clockAt(Date.now()).mt;
+  const lines = [];
+  for (const id of Object.keys(GAMES)) { const g = gameAt(id, mt); if (g) lines.push(`${GAME_VENUE[id]}: ${g.name}, ${g.status}.`); }
+  const bout = boutAt(mt);
+  if (bout) lines.push(bout.phase.phase === "decision" || bout.phase.phase === "over" ? `THE PIT: ${resultLine(bout.bout)}` : `THE PIT: ${billLine(bout.bout)}${bout.phase.phase === "round" ? `, ROUND ${bout.phase.round} OF 3` : ""}.`);
+  const m = tennisAt(mt);
+  if (m) lines.push(`THE TENNIS CLUB: ${m.name}, ${m.status}.`);
+  const race = raceAt(mt);
+  if (race?.phase === "before") lines.push(`THE MOUNTAIN: THE WEEKEND RACE STARTS AT 13:00.`);
+  else if (race?.phase === "on") lines.push(`THE MOUNTAIN: THE WEEKEND RACE IS ON.`);
+  const night = nightPa(mt, null);
+  if (night.length) lines.push(night[0]);
+  lines.splice(4);
+  lines.push(`${stats.transit} RIDING THE LOOP. ${stats.waiting} WAITING ON PLATFORMS.`);
+  const busy = stats.districts.slice().sort((a, b) => b.count - a.count).slice(0, 3).filter(x => x.count > 0);
+  if (busy.length) lines.push(`BUSIEST: ${busy.map(x => `${x.name} (${x.count})`).join(", ")}.`);
+  return (
+    <section className="hvi-city-nowbox" aria-labelledby="hvi-city-now-h">
+      <h2 id="hvi-city-now-h" className="hvi-city-now-h">NOW IN THE SUBSTRATE</h2>
+      <ul className="hvi-city-now">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+    </section>
+  );
+}, (a, b) => a.k === b.k && a.stats.sig === b.stats.sig);
 
 // The machine clock, ticking on its own so the rest of the page does not re-render with it.
 function LiveClock() {
