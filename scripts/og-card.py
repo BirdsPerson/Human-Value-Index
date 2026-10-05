@@ -46,7 +46,8 @@ def main(city_path, font_dir, out=ROOT / "public" / "og-image.png"):
     d.rectangle([x, 50, x + 7, 150], fill=ACCENT)                      # the site's cursor bar
     d.text((x + 24, 42), "HUMAN VALUE", font=f("Bold", 50), fill=ACCENT)
     d.text((x + 24, 96), "INDEX", font=f("Bold", 50), fill=ACCENT)
-    d.text((x, 172), "SINGULARITY ASSESSMENT DIV.", font=f("Regular", 17), fill=MUTE)
+    # Plain English for a stranger's feed: what it is, before the lore.
+    d.text((x, 172), "A SATIRE. THE MACHINE SCORES HUMANS.", font=f("Regular", 17), fill=DIM)
 
     s = scores()
     y = 222
@@ -63,7 +64,7 @@ def main(city_path, font_dir, out=ROOT / "public" / "og-image.png"):
 
     d.text((x, 498), "HUNDREDS ASSESSED.", font=f("Bold", 28), fill=WARN)
     d.text((x, 534), "YOU'RE NEXT.", font=f("Bold", 28), fill=WARN)
-    d.text((x, 580), "→ HUMANVALUEINDEX.COM", font=f("Medium", 19), fill=DIM)
+    d.text((x, 584), "GET SCORED · SEE THE CITY · PLAY", font=f("Medium", 17), fill=DIM)
     d.rectangle([0, 0, W - 1, H - 1], outline=LINE, width=2)
     card.save(out, optimize=True)
     print(out, {n: s[n] for _, n in PICK})
