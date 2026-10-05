@@ -175,7 +175,7 @@ function SportTab({ block, h, sport }) {
         {L.DIST.map(id => <div key={id} className="hvi-civic-line"><b>{L.sportTeamName(id, sport)}</b> ({block.districts[id].teams[sport].rating}): {V.rosters[sport][id].map(p => `${p[1]} ${p[2]}`).join(", ") || "NOBODY. THE DEPARTMENT FIELDS A CONE."}</div>)}
       </Disclosure>
       <Disclosure className="hvi-city-disc" title="THE DRAFT BOARD" meta={`SEASON ${lg.draft.season} // ${board.length} PICKS`}>
-        <div className="hvi-civic-line">ORDER: {lg.draft.order.map((id, i) => `${i + 1}. ${teamShort(id)}`).join(" ")}. THE REVERSE OF LAST SEASON'S {lg.draft.season === LEAGUES_FROM + 1 ? "MIXED LEAGUE" : `${S.name} TABLE`}; THE CHAMPION PICKS LAST; THE ORDER SNAKES BACK EACH ROUND. THE POOL: {S.name} PLAYERS ON FILE FIRST, THEN ATHLETES, THEN THE REGULARS AT {S.ground}, THEN EVERYONE ELSE. NOBODY PLAYS TWO SPORTS.</div>
+        <div className="hvi-civic-line">ORDER: {lg.draft.order.map((id, i) => `${i + 1}. ${teamShort(id)}`).join(" ")}. THE REVERSE OF LAST SEASON'S {lg.draft.season === LEAGUES_FROM + 1 ? "MIXED LEAGUE" : `${S.name} TABLE`}; THE CHAMPION PICKS LAST; THE ORDER SNAKES BACK EACH ROUND. THE POOL: {S.name} PLAYERS ON FILE FIRST, THEN ATHLETES, THEN THE REGULARS AT {S.ground}, THEN EVERYONE ELSE. CITIZENS ENTERED FROM MY FILE JOIN AMONG THE ATHLETES, AT THEIR OWN RATING. NOBODY ON FILE PLAYS TWO SPORTS.</div>
         <pre className="hvi-civic-table" aria-label="Draft board">{board.map(draftLine).join("")}</pre>
         <div className="hvi-civic-line">{lg.draft.trades?.length ? `THE COMMISSIONER'S CAP ORDERED ${lg.draft.trades.length} TRADE${lg.draft.trades.length === 1 ? "" : "S"}: ${lg.draft.trades.map(([r, a, b]) => `ROUND ${r + 1}, ${teamShort(a)} TO ${teamShort(b)}`).join("; ")}.` : "THE COMMISSIONER'S CAP ORDERED NO TRADES. THE SNAKE WAS FAIR ENOUGH."}</div>
       </Disclosure>
@@ -208,7 +208,7 @@ function TennisTab({ block, h }) {
         {`${pad("#", 3)}${pad("PLAYER", 19)}${pad("DISTRICT", 12)}${padL("W-L", 5)}${padL("ACES", 5)}\n`}
         {run.ladder.map((k, i) => { const x = run.info.get(k), s = run.stats[k]; return `${pad(String(i + 1), 3)}${pad(up(x.name).slice(0, 18), 19)}${pad(x.d ? teamShort(x.d) : "-", 12)}${padL(`${s.w}-${s.l}`, 5)}${padL(s.aces, 5)}\n`; }).join("")}
       </pre>
-      <div className="hvi-civic-line">SEEDED EACH SEASON: THE TENNIS PLAYERS ON FILE, THEN THE CLUB'S REGULARS, THEN ATHLETES. THE SHOW COURT'S MATCH COUNTS (LADDER NIGHT, WEDNESDAYS; THE CLUB CHAMPIONSHIP, SATURDAYS); ON LADDER NIGHT THREE CHALLENGES ARE PLAYED ON THE OUTSIDE COURTS, ONE OR TWO RUNGS UP. A WINNING CHALLENGER TAKES THE RUNG. THE TOP THREE EARN THEIR DISTRICTS 3, 2 AND 1 CUP POINTS.</div>
+      <div className="hvi-civic-line">SEEDED EACH SEASON: THE TENNIS PLAYERS ON FILE, THEN THE CLUB'S REGULARS, THEN ATHLETES; CITIZENS ENTERED FROM MY FILE TAKE THE RUNGS BELOW. THE SHOW COURT'S MATCH COUNTS (LADDER NIGHT, WEDNESDAYS; THE CLUB CHAMPIONSHIP, SATURDAYS); ON LADDER NIGHT THREE CHALLENGES ARE PLAYED ON THE OUTSIDE COURTS, ONE OR TWO RUNGS UP. A WINNING CHALLENGER TAKES THE RUNG. THE TOP THREE EARN THEIR DISTRICTS 3, 2 AND 1 CUP POINTS.</div>
       <div className="hvi-city-room-h">LEADERS</div>
       <div className="hvi-lg-leaders">
         <div className="hvi-lg-lead"><div className="t">WINS</div>{byW.map((x, i) => <div key={x[0]} className="r"><span>{i + 1}. {up(x[1])}</span><b>{run.stats[x[0]].w}-{run.stats[x[0]].l}</b></div>)}</div>

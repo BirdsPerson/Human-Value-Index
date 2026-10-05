@@ -1353,6 +1353,31 @@ the PA), `simApi.js` (boards and PA). Check: `scripts/check-civic.mjs` section 3
   pts}` (the Coast and the Heights: `cup.pos` null, no teams); no `league`, no `team`. Measured:
   2,507 / 2,620 / 2,670 bytes per district at 430 / 5,000 / 20,000 subjects (the rosters are
   most of it; the mixed league's was ~950-990), fold 127 / 534 ms at 5,000 / 20,000 on draft day.
+- **Players' entries: JOIN THE LEAGUES** (Scott 2026-10-05: "my character is not on any sports teams.
+  I was a multi-sport varsity athlete in high school. I would like to be in the sports competitions.")
+  MY FILE (`src/leagues/MyLeagues.jsx`, `/api/leagues`, `netlify/lib/league-entries.js`) enters the
+  file's citizen in one or two of BASEBALL, BASKETBALL, FOOTBALL, SOCCER and THE TENNIS LADDER, from
+  season 23 (`ENTRIES_FROM` 22, draft day 617). The entry stands every season until withdrawn (Blobs
+  `hvi-leagues` `e/<salted hash of the case>`: the citizen key, the sports, the rating inputs; never the
+  case number; 30 filings an address an hour, 4 new entries an address a day, 10 filings a file before
+  one draft). Entries close at the start of machine day `seasonStart - 3` (72 real minutes before the
+  draft; the builder folds up to three days ahead): an entry or a withdrawal before it counts for that
+  draft, after it for the next. The plan builder (`planIo` `entries`) freezes the season's snapshot
+  (`snap/s<NNN>`, onlyIfNew; the first write after the close freezes it too) and sets every snapshot
+  (`civic.js setEntries`) before it folds, so a season's drafts are always drawn from the same list,
+  chained or from the census alone. **The rating** (`entrantRating`): 0.45 physical + 0.25 competence +
+  0.10 adaptability from the file's latest assessment (an unassessed body is the rubric's neutral 50),
+  + 4 when the subject's own words (or the commendations) record athletics (`athleticsOf`: varsity,
+  lettered, played X, X team...), + 3 more in a sport they named; ceiling 87, below the stars on file. No
+  record in sport: that is the athletes'. **The draft**: an entrant joins the pools of the sports entered
+  among the athletes (g 2) at their own rating, the census's row for that citizen giving way and the
+  pool keeping its size (the lowest of the rest drops), at most 20 entrants a league a season; placed by
+  the same snake and cap. The ladder: below the seeded ten, at most six, challenging up. Shown as
+  SUBJECT and the case's last four (`entrantName`, made from the key) on rosters, box scores, leaders
+  and the draft board. MY FILE shows the next draft (season, close and draft times), the ratings, the
+  drafts the citizen is in, and the season lines (`civic.js entrantLines`: "BATTING .287 FOR THE
+  CURATED NINE (...). THE DEPARTMENT IS UNMOVED."). A harm finding or a purge drops the entry; refused
+  for unassessed files and files under a harm finding.
 - **In the city.** `#city/league` is a hub: BASEBALL / BASKETBALL / FOOTBALL / SOCCER (table with
   Cup points, today, results with box scores, leaders, sortable player stats, team stats, rosters,
   the draft board), TENNIS, PIT, CUP. A district page shows its Cup position and its four teams; the

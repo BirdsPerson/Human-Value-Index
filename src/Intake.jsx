@@ -14,6 +14,7 @@ import { visitCount, causeOf, DEPARTMENT_CAUSES } from "./movement.js";
 import { FileMovement } from "./caseFile.jsx";
 import MySeat from "./elections/MySeat.jsx";
 import MyChess from "./chess/MyChess.jsx";
+import MyLeagues from "./leagues/MyLeagues.jsx";
 
 // The shared file pieces moved to caseFile.jsx; re-exported so older imports keep working.
 export { readCaseId, writeCaseId, readLastResult, syncFile, ScoreCard, Breakdown, AppealPanel, CaseLogon, DIM_ORDER, MAX_APPEAL } from "./caseFile.jsx";
@@ -617,6 +618,8 @@ export default function Intake({ view = "intake" }) {
           <MySeat caseId={caseId} />
           {/* games against the figures at the stone tables (src/chess/MyChess.jsx) */}
           <MyChess caseId={caseId} />
+          {/* JOIN THE LEAGUES: enter the citizen in the drafts, its season lines (src/leagues/MyLeagues.jsx) */}
+          <MyLeagues caseId={caseId} />
           {fileSections(last, { history: last.history })}
           <div className="hvi-note">CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
         </div>

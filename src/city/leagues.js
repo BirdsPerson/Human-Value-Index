@@ -85,6 +85,71 @@ export function playerRating(s) {
   return clamp(Math.round(0.45 * physical + 0.35 * competence + 2 * sport), 0, 99);
 }
 
+// ---- THE ENTRANTS (Scott 2026-10-05: "I was a multi-sport varsity athlete in high school. I would
+// like to be in the sports competitions.") -------------------------------------------------------------
+// A player enters their citizen from MY FILE (netlify/lib/league-entries.js): one or two of the four
+// leagues and the tennis ladder. Entries close ENTRY_CLOSE_DAYS machine days before a season's first
+// day (the plan builder folds the draft day up to three days ahead); the builder freezes a snapshot of
+// the entries per season, so a draft is always drawn from the same list. An entrant joins the sport's
+// pool among the athletes (g 2), at their own rating, and is placed by the normal draft (the snake and
+// the Commissioner's cap); on the ladder, they take the bottom rungs and challenge up. Shown as SUBJECT
+// and the case's last four, never the case number.
+export const ENTRY_SPORTS = [...SPORTS, "tennis"];
+export const ENTRY_MAX_SPORTS = 2;
+export const ENTRANTS_MAX = 20;          // per league per season: the best-rated, then the key
+export const LADDER_ENTRANTS_MAX = 6;    // rungs below the seeded ten
+export const ENTRY_CLOSE_DAYS = 3;
+// Entries for season (0-based) close at the start of this machine day.
+export const entryCloseDay = (season) => seasonStart(season) - ENTRY_CLOSE_DAYS;
+// The season an entry made at machine hour mt is drafted in: the first whose entries are still open.
+export function entrySeasonAt(mt) {
+  let s = Math.max(0, seasonOf(Math.floor(mt / 24) + 1));
+  while ((entryCloseDay(s) - 1) * 24 <= mt) s++;
+  return s;
+}
+// The rating, 0..99, from the file and nothing else: the same body-and-competence scale the figures
+// are drafted on (playerRating: 0.45 physical + 0.35 competence), with adaptability taking a share of
+// competence's weight; an unassessed body counts as the rubric's neutral 50. A bonus only when the
+// file records athletics in the subject's own words (or the Department's commendations): ATH_BONUS,
+// and SPORT_BONUS more for the sport they named. Never a record in sport: that is for the athletes on
+// file. Ceiling 80 + 7 = 87; the named stars are drafted in the 80s and 90s.
+export const ATH_BONUS = 4, SPORT_BONUS = 3;
+const num = (v, d) => (typeof v === "number" && Number.isFinite(v) ? clamp(v, 0, 100) : d);
+export function entrantRating(x, sport) {
+  const base = 0.45 * num(x?.physical, 50) + 0.25 * num(x?.competence, 50) + 0.10 * num(x?.adaptability, 50);
+  const bonus = x?.ath ? ATH_BONUS + (Array.isArray(x.named) && x.named.includes(sport) ? SPORT_BONUS : 0) : 0;
+  return clamp(Math.round(base) + bonus, 0, 99);
+}
+const SPORT_WORDS = "baseball|softball|basketball|football|soccer|tennis|hockey|lacrosse|volleyball|rugby|wrestling|track|cross[- ]country|swimming|golf";
+const ATH_RE = new RegExp(`\\b(varsity|athlet(e|es|ic|ics)|lettered|letterman|team captain|captained|all[- ](state|county|conference|american)|played (\\w+ ){0,3}(${SPORT_WORDS})|(${SPORT_WORDS})( and \\w+)? (team|player|season|scholarship|career|captain))\\b`, "i");
+const NAMED = { baseball: /\b(baseball|softball)\b/i, basketball: /\bbasketball\b/i, football: /\bfootball\b/i, soccer: /\bsoccer\b/i, tennis: /\btennis\b/i };
+// What the file says about athletics: -> {ath, named: [the entry sports it names]} (named only with ath)
+export function athleticsOf(text) {
+  const t = String(text || "");
+  if (!ATH_RE.test(t)) return { ath: false, named: [] };
+  return { ath: true, named: ENTRY_SPORTS.filter(sp => NAMED[sp].test(t)) };
+}
+const CITIZEN_RE = /^citizen-[a-z0-9]{4}$/;
+export const entrantName = (key) => `SUBJECT ${String(key).slice(8).toUpperCase()}`;
+// A season's entries as the draft takes them: well-formed, one per citizen, at most two sports, the
+// name made from the key (nothing else on the entry reaches a roster). -> {sport: [{key, name, r, g}]}
+export function entrantsBySport(entries) {
+  const seen = new Set(), out = Object.fromEntries(ENTRY_SPORTS.map(sp => [sp, []]));
+  const list = (Array.isArray(entries) ? entries : []).filter(e => e && CITIZEN_RE.test(e.key) && Array.isArray(e.sports))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  for (const e of list) {
+    if (seen.has(e.key)) continue;
+    seen.add(e.key);
+    const sports = [...new Set(e.sports)].filter(sp => ENTRY_SPORTS.includes(sp)).slice(0, ENTRY_MAX_SPORTS);
+    for (const sp of sports) {
+      const r = Number.isInteger(e.r?.[sp]) ? clamp(e.r[sp], 0, 99) : null;
+      if (r != null) out[sp].push({ key: e.key, name: entrantName(e.key), r, g: 2 });
+    }
+  }
+  for (const sp of ENTRY_SPORTS) out[sp] = out[sp].sort((a, b) => b.r - a.r || (a.key < b.key ? -1 : 1)).slice(0, sp === "tennis" ? LADDER_ENTRANTS_MAX : ENTRANTS_MAX);
+  return out;
+}
+
 // ---- the pools -----------------------------------------------------------------------------------
 // Which sport a figure plays on the record: the figures on file by name, everyone else by the text.
 // (the census of 2026-09-30: most figures carry no occupation on the record, so they are named here)
@@ -132,8 +197,11 @@ const byPool = (a, b) => b.g - a.g || b.r - a.r || (a.key < b.key ? -1 : a.key >
 // -> {sport: [{key, name, r, g}] in draft order}: g 3 a specialist, 2 an athlete, 1 a regular at the
 // sport's ground (>= 12% of their leisure there), 0 the rest. Exclusive: a player is in one pool.
 // Each pool holds exactly ten teams' worth (fewer only if the census runs out).
-export function sportPools(subjects) {
-  const need = Object.fromEntries(SPORTS.map(s => [s, DIST.length * SPORT[s].n]));
+// entrants: the season's entries (entrantsBySport's input); each entrant takes a place in their
+// sports' pools among the athletes, and leaves the census's rows for everyone else.
+export function sportPools(subjects, entrants = []) {
+  const ent = entrantsBySport(entrants), entKeys = new Set(Object.values(ent).flat().map(x => x.key));
+  const need = Object.fromEntries(SPORTS.map(s => [s, DIST.length * SPORT[s].n - ent[s].length]));
   const pools = Object.fromEntries(SPORTS.map(s => [s, []]));
   const room = (s) => pools[s].length < need[s];
   const fill = (s) => pools[s].length / need[s];
@@ -141,6 +209,7 @@ export function sportPools(subjects) {
   for (const s of subjects) {
     if (individual(s)) continue;
     const key = SIM.keyOf(s), r = sportRating(s), f = SIM.fieldsOf(s);
+    if (entKeys.has(key)) continue;
     const spec = specialtyOf(s);
     const athlete = ATHLETE_HINT.has(key) || SPORT_FIELDS.some(k => k !== "combat" && (f[k] || 0) >= 5);
     let ground = null;
@@ -160,6 +229,7 @@ export function sportPools(subjects) {
   for (const row of rows) if (!taken.has(row.key) && (row.athlete || row.spec)) { const sp = neediest(); if (sp) put(row, sp, 2); }
   for (const row of rows) if (!taken.has(row.key) && row.ground && room(row.ground)) put(row, row.ground, 1);
   for (const row of rows) if (!taken.has(row.key)) { const sp = neediest(); if (!sp) break; put(row, sp, 0); }
+  for (const s of SPORTS) pools[s].push(...ent[s]);
   for (const s of SPORTS) pools[s].sort(byPool);
   return pools;
 }
@@ -393,11 +463,14 @@ export function formOf(played, id) {
 // played on the outside courts: a player challenges one or two rungs up. A challenger who wins takes
 // the rung; everyone between steps down one. -> [[key, name, r, district | null]]
 export const LADDER_N = 10;
-export function ladderSeed(subjects) {
+// entrants: the season's entries; those who entered the ladder take the rungs below the ten.
+export function ladderSeed(subjects, entrants = []) {
   const onFile = new Map(TENNIS_ON_FILE.map(([k, , r]) => [k, r]));
+  const ent = entrantsBySport(entrants), entKeys = new Set(Object.values(ent).flat().map(x => x.key));
   const rows = [];
   for (const s of subjects) {
     const key = SIM.keyOf(s);
+    if (entKeys.has(key)) continue;
     let g = 0;
     if (onFile.has(key)) g = 3;
     else if (isTennis(s)) g = 2;
@@ -412,7 +485,11 @@ export function ladderSeed(subjects) {
     rows.push({ key, name: displayName(s), r: onFile.get(key) ?? sportRating(s), g, d: DIST.includes(d) ? d : null });
   }
   rows.sort((a, b) => (b.g >= 2 ? 2 : b.g >= 1 ? 1 : 0) - (a.g >= 2 ? 2 : a.g >= 1 ? 1 : 0) || b.r - a.r || (a.key < b.key ? -1 : 1));
-  return rows.slice(0, LADDER_N).map(x => [x.key, x.name, x.r, x.d]);
+  const seeded = rows.slice(0, LADDER_N).map(x => [x.key, x.name, x.r, x.d]);
+  if (!ent.tennis.length) return seeded;
+  const by = new Map(subjects.map(s => [SIM.keyOf(s), s]));
+  // the district they work in (the Cup's), when the census has their citizen
+  return [...seeded, ...ent.tennis.map(x => { const s = by.get(x.key), d = s ? SIM.assignJob(s).district : null; return [x.key, x.name, x.r, DIST.includes(d) ? d : null]; })];
 }
 function tennisSets(seed, ra, rb) {
   const edge = (ra - rb) / 100, sets = [], won = [0, 0];

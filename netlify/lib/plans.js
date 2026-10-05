@@ -22,7 +22,7 @@ import { getStore } from "@netlify/blobs";
 import * as SIM from "../../src/city/sim.js";
 import { fullRoster } from "../../src/city/roster.js";
 import { splitDay, SECTORS, FORMAT as FORMAT2 } from "../../src/city/planSplit.js";
-import { civicFold, CIVIC_V, setSeats } from "../../src/city/civic.js";
+import { civicFold, CIVIC_V, setSeats, setEntries } from "../../src/city/civic.js";
 import { stepEnterprise, simDay, publicBlock, satisfactionDay, satRow, ENT_V } from "../../src/city/enterprise.js";
 
 export const STORE = "hvi-plans";
@@ -69,9 +69,11 @@ export function versionOf(json) {
 // civic() -> the Assembly's outcome (netlify/lib/assembly.js civicOf); elections() -> the
 // closed council cycles (netlify/lib/elections.js seatRecord). Both optional; when given, a
 // failed read builds nothing.
-export function planIo(s = store, { census, snapshots, civic, elections }) {
+// entries(days) -> the players' league entries per season (netlify/lib/league-entries.js
+// entriesRecord), freezing the seasons of those days first; optional, strict like the others.
+export function planIo(s = store, { census, snapshots, civic, elections, entries }) {
   return {
-    census, snapshots, ...(civic ? { civic } : {}), ...(elections ? { elections } : {}),
+    census, snapshots, ...(civic ? { civic } : {}), ...(elections ? { elections } : {}), ...(entries ? { entries } : {}),
     async manifest() {
       const r = await s().getWithMetadata(MANIFEST, { type: "json" });
       return r ? { manifest: r.data, etag: r.etag } : { manifest: null, etag: null };
@@ -152,6 +154,8 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
       civic = io.civic ? await io.civic() : null;
       // The council's closed cycles (netlify/lib/elections.js): who holds each seat, and from when.
       setSeats(io.elections ? await io.elections() : []);
+      // The players' league entries (league-entries.js): each season's frozen list, for its drafts.
+      setEntries(io.entries ? await io.entries(want) : {});
       civicRead = true;
       SIM.clearPlans();   // the builder reads the sim, never a plan
       SIM.clearSocialSnapshots();
@@ -203,6 +207,7 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
       if (todo.length && !civicRead) {
         if (io.civic) { civic = await io.civic(); SIM.setCivic(civic); }
         setSeats(io.elections ? await io.elections() : []);
+        setEntries(io.entries ? await io.entries(want) : {});
         civicRead = true;
       }
       const civics = new Map();

@@ -2,11 +2,13 @@
 // the case number. A file secured to an email needs that account's session; an unsecured
 // file needs only the case number (the same credential that reads it, /api/file).
 // Deletes: the case record (transcripts, scores, verdicts, photo, history), its public pen
-// card, its account link, and the account itself when that was its last file.
+// card, its account link, its league entry, and the account itself when that was its last file.
 import { isCaseId } from "../lib/intake.js";
 import { getCase, deleteCase, removePenCard, hitLimit } from "../lib/store.js";
 import { deleteWallet, dropFromBoard } from "../lib/casino-store.js";
 import { deleteChess } from "../lib/chess-store.js";
+import { getStore } from "@netlify/blobs";
+import { dropEntry, STORE as LEAGUES_STORE } from "../lib/league-entries.js";
 import { requireAccount, caseOwner, detachCase, revokeSession, clearCookie } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
@@ -41,6 +43,7 @@ export default async (req, context) => {
     await removePenCard(caseId);
     await Promise.all([deleteWallet(caseId), dropFromBoard(caseId)]).catch(err => console.warn("purge: casino wallet", err?.message));
     await deleteChess(caseId).catch(err => console.warn("purge: chess record", err?.message));
+    await dropEntry(getStore({ name: LEAGUES_STORE, consistency: "strong" }), caseId).catch(err => console.warn("purge: league entry", err?.message));
     if (owner) ({ accountDeleted } = await detachCase(owner, caseId));
     const extra = { "Cache-Control": "no-store" };
     if (accountDeleted) { await revokeSession(req).catch(() => {}); extra["Set-Cookie"] = clearCookie(); }

@@ -9,6 +9,7 @@ import { getStore } from "@netlify/blobs";
 import { civicOf, refreshSubstrate, currentSession, STORE as ASSEMBLY_STORE } from "../lib/assembly.js";
 import { substrateSource } from "../lib/substrate-source.js";
 import { seatRecord, STORE as ELECTIONS_STORE } from "../lib/elections.js";
+import { entriesRecord, STORE as LEAGUES_STORE } from "../lib/league-entries.js";
 
 export const BUDGET_MS = 12 * 60 * 1000;
 const defaultIo = () => planIo(() => getStore({ name: STORE, consistency: "strong" }), {
@@ -16,6 +17,7 @@ const defaultIo = () => planIo(() => getStore({ name: STORE, consistency: "stron
   snapshots: async () => (await getPublic())?.snapshots || {},
   civic: () => civicOf(getStore({ name: ASSEMBLY_STORE, consistency: "strong" })),
   elections: () => seatRecord(getStore({ name: ELECTIONS_STORE, consistency: "strong" })),
+  entries: (days) => entriesRecord(getStore({ name: LEAGUES_STORE, consistency: "strong" }), days),
 });
 
 export default async (req, _context, io = defaultIo()) => {

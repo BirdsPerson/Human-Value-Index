@@ -167,6 +167,12 @@ export default async (req, context) => {
         const { getStore } = await import("@netlify/blobs");
         await dropCandidacy(getStore({ name: STORE, consistency: "strong" }), caseId);
       } catch (e) { console.error("candidacy drop failed", e?.message); }
+      // ... and its league entry (netlify/lib/league-entries.js); a draft already frozen stands.
+      try {
+        const { dropEntry, STORE } = await import("../lib/league-entries.js");
+        const { getStore } = await import("@netlify/blobs");
+        await dropEntry(getStore({ name: STORE, consistency: "strong" }), caseId);
+      } catch (e) { console.error("league entry drop failed", e?.message); }
     }
     const last4 = caseId.slice(-4);
     await putPenCard(caseId, {

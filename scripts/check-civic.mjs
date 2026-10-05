@@ -405,6 +405,192 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   SIM.setRoster(roster);
 }
 
+// ---- 3e. JOIN THE LEAGUES: players' citizens entered from MY FILE (Scott 2026-10-05) ---------------------
+// Honest ratings from the file; entrants in their sports' pools among the athletes, placed by the normal
+// draft; deterministic from each season's frozen snapshot (chain and census alone agree); SUBJECT and
+// the tag, never a case number; withdraw before the close; the snapshot frozen once per season.
+{
+  const L = await import("../src/city/leagues.js");
+  const LE = await import("../netlify/lib/league-entries.js");
+  const { getStore } = await import("@netlify/blobs");
+  // -- the rating: the file's formula, a bonus only for athletics on record, nothing inflated
+  const nobody = { physical: null, competence: null, adaptability: null, ath: false, named: [] };
+  ok(L.entrantRating(nobody, "baseball") === 40, "an unassessed body and no record: the rubric's neutral 50 everywhere, rating 40");
+  for (const [p, c, a] of [[0, 0, 0], [60, 55, 60], [100, 100, 100], [35, 80, 20]]) for (const sp of L.ENTRY_SPORTS) {
+    const x = { physical: p, competence: c, adaptability: a, ath: false, named: [] };
+    ok(L.entrantRating(x, sp) === Math.round(0.45 * p + 0.25 * c + 0.10 * a), `rating ${p}/${c}/${a} ${sp}: 0.45 physical + 0.25 competence + 0.10 adaptability`);
+    ok(L.entrantRating({ ...x, ath: true, named: [sp] }, sp) - L.entrantRating(x, sp) === L.ATH_BONUS + L.SPORT_BONUS && L.entrantRating({ ...x, ath: true, named: [] }, sp) - L.entrantRating(x, sp) === L.ATH_BONUS, `${sp}: the athletics bonus is +${L.ATH_BONUS}, +${L.SPORT_BONUS} for the sport named, no more`);
+    ok(L.entrantRating({ ...x, ath: false, named: [sp] }, sp) === L.entrantRating(x, sp), `${sp}: naming a sport without athletics on record earns nothing`);
+  }
+  ok(L.entrantRating({ physical: 100, competence: 100, adaptability: 100, ath: true, named: L.ENTRY_SPORTS }, "soccer") === 87, "the ceiling is 87: below the stars on file");
+  ok(L.entrantRating({ physical: 400, competence: -5, adaptability: "99", ath: true, named: [] }, "soccer") === Math.round(0.45 * 100 + 0.25 * 0 + 0.10 * 50) + L.ATH_BONUS, "out-of-range inputs are clamped, junk is neutral");
+  const A = L.athleticsOf("I was a multi-sport varsity athlete in high school. Baseball, basketball and football.");
+  ok(A.ath && A.named.join() === "baseball,basketball,football", `"multi-sport varsity athlete": athletics, three sports named (${A.named})`);
+  ok(!L.athleticsOf("I like soccer on TV and I read a lot.").ath, "liking a sport is not a record");
+  ok(L.athleticsOf("I played college soccer").ath && L.athleticsOf("I played college soccer").named.join() === "soccer", "played college soccer: soccer");
+  ok(!L.athleticsOf("").ath && !L.athleticsOf(null).ath, "no words, no record");
+  const fileOf = (hist) => ({ history: hist });
+  const rec = fileOf([
+    { at: "2026-10-01T00:00:00Z", competence: 40, breakdown: { physical: 50, adaptability: 40, threat: 5, care: 70 }, transcript: [{ role: "agent", text: "Do you play varsity basketball?" }, { role: "user", text: "No." }] },
+    { at: "2026-10-02T00:00:00Z", competence: 58, breakdown: { physical: 62, adaptability: 66, threat: 5, care: 70 }, transcript: [{ role: "agent", text: "Sport?" }, { role: "user", text: "I lettered in baseball and soccer at school." }] },
+  ]);
+  const inp = LE.inputsOf(rec);
+  eq([inp.physical, inp.competence, inp.adaptability, inp.ath, inp.named.join()], [62, 58, 66, true, "baseball,soccer"], "the inputs: the latest assessment, the subject's own words across visits");
+  ok(!LE.inputsOf(fileOf([{ at: "x", competence: 50, breakdown: {}, transcript: [{ role: "agent", text: "Were you a varsity athlete? Did you play football?" }] }])).ath, "the officer's questions are not the subject's record");
+  eq(LE.ratingsOf(inp, ["baseball", "tennis"]), { baseball: L.entrantRating(inp, "baseball"), tennis: L.entrantRating(inp, "tennis") }, "the stored ratings are the formula's");
+  ok(L.entrantRating(inp, "baseball") === Math.round(0.45 * 62 + 0.25 * 58 + 0.10 * 66) + 7 && L.entrantRating(inp, "basketball") === Math.round(0.45 * 62 + 0.25 * 58 + 0.10 * 66) + 4, "a named sport +7, another +4");
+
+  // -- the pools: in the sports entered, among the athletes, at their rating; the census's row gives way
+  SIM.clearPlans(); SIM.setRoster(roster);
+  const PD = [364, 365, 366, 367, 368, 369];
+  const P4 = new Map([363, ...PD].map(d => [d, clone(SIM.buildPlan(d))]));
+  const subjects = Object.keys(P4.get(365).subjects).map(k => people.get(k));
+  const cz = { slug: "citizen-ab12", name: "Subject AB12", kind: "citizen", tier: "ORDINARY", score: 500, warmth: 50, competence: 50 };
+  const ENT = [
+    { key: "citizen-ab12", sports: ["baseball", "tennis"], r: { baseball: 55, tennis: 52 } },
+    { key: "citizen-zz01", sports: ["basketball", "soccer"], r: { basketball: 61, soccer: 47 } },
+    { key: "citizen-zz02", sports: ["football"], r: { football: 38 } },
+  ];
+  const withCz = [...subjects, cz];
+  eq(L.sportPools(subjects, []), L.sportPools(subjects), "no entries: the pools as they always were");
+  const pools0 = L.sportPools(withCz), pools = L.sportPools(withCz, ENT);
+  for (const sp of L.SPORTS) {
+    ok(pools[sp].length === DIST.length * L.SPORT[sp].n, `${sp}: with entrants the pool is still ${DIST.length} x ${L.SPORT[sp].n}`);
+    for (const e of ENT) {
+      const x = pools[sp].find(p => p.key === e.key);
+      if (e.sports.includes(sp)) ok(x && x.g === 2 && x.r === e.r[sp] && x.name === `SUBJECT ${e.key.slice(8).toUpperCase()}`, `${sp}: ${e.key} is in the pool among the athletes at ${e.r[sp]}, as SUBJECT ${e.key.slice(8).toUpperCase()}`);
+      else ok(!x, `${sp}: ${e.key} did not enter it`);
+    }
+    for (let i = 1; i < pools[sp].length; i++) ok(pools[sp][i - 1].g > pools[sp][i].g || (pools[sp][i - 1].g === pools[sp][i].g && pools[sp][i - 1].r >= pools[sp][i].r), `${sp}: the pool's order holds with entrants in it`);
+  }
+  ok(L.SPORTS.every(sp => pools0[sp].length === pools[sp].length), "the census gives way one-for-one");
+  const ent2 = L.entrantsBySport([...ENT, { key: "citizen-ab12", sports: ["soccer"], r: { soccer: 99 } }, { key: "HVI-ABCDEFGH", sports: ["soccer"], r: { soccer: 99 } }, { key: "citizen-zz03", sports: ["baseball", "soccer", "football"], r: { baseball: 70, soccer: 70, football: 70 } }, { key: "citizen-zz04", sports: ["baseball"], r: { baseball: 150 } }]);
+  ok(ent2.soccer.filter(x => x.key === "citizen-ab12").length === 0 && !Object.values(ent2).flat().some(x => !/^citizen-[a-z0-9]{4}$/.test(x.key)), "one entry per citizen; a malformed key is dropped");
+  ok(ent2.football.every(x => x.key !== "citizen-zz03") && ent2.baseball.some(x => x.key === "citizen-zz03") && ent2.soccer.some(x => x.key === "citizen-zz03"), "at most two sports an entry");
+  ok(ent2.baseball.find(x => x.key === "citizen-zz04").r === 99, "a rating is clamped to 99");
+  const many = Array.from({ length: 30 }, (_, i) => ({ key: `citizen-m${String(i).padStart(3, "0")}`, sports: ["soccer"], r: { soccer: 30 + i } }));
+  ok(L.entrantsBySport(many).soccer.length === L.ENTRANTS_MAX && L.entrantsBySport(many).soccer[0].r === 59, `at most ${L.ENTRANTS_MAX} entrants a league a season, the best-rated`);
+  const seed = L.ladderSeed(withCz, ENT), seed0 = L.ladderSeed(withCz);
+  eq(seed.slice(0, seed0.length).map(x => x[0]), seed0.filter(x => x[0] !== "citizen-ab12").map(x => x[0]).slice(0, seed0.length), "the ladder's seeded ten are unchanged");
+  ok(seed.length === seed0.length + 1 && seed[seed.length - 1][0] === "citizen-ab12" && seed[seed.length - 1][1] === "SUBJECT AB12" && seed[seed.length - 1][2] === 52, "the tennis entrant takes the bottom rung, at their rating");
+
+  // -- the drafts: season 14 (day 365) with entries frozen for it; the chain and the census alone agree
+  const c363 = C.civicFold(P4.get(363), people, null);
+  const c364 = C.civicFold(P4.get(364), people, c363);
+  C.setEntries({});
+  const base365 = C.civicFold(P4.get(365), people, c364);
+  C.setEntries({ 14: ENT });
+  const ch = new Map([[364, c364]]);
+  for (const d of PD.slice(1)) ch.set(d, C.civicFold(P4.get(d), people, ch.get(d - 1)));
+  const b = ch.get(365);
+  for (const e of ENT) for (const sp of L.SPORTS) {
+    const on = DIST.filter(id => b.districts[id].teams[sp].roster.some(p => p[0] === e.key));
+    ok(on.length === (e.sports.includes(sp) ? 1 : 0), `season 14 ${sp}: ${e.key} ${e.sports.includes(sp) ? "drafted by one team" : "not drafted"}`);
+  }
+  ok(b.leagues.tennis.seed.some(x => x[0] === "citizen-ab12"), "season 14's ladder has the tennis entrant");
+  for (const sp of L.SPORTS) {
+    const dr = b.leagues.sports[sp].draft, n = DIST.length, N = L.SPORT[sp].n, pl = L.sportPools(subjects, ENT)[sp];
+    const ros = Object.fromEntries(DIST.map(id => [id, b.districts[id].teams[sp].roster]));
+    const swapped = new Map(dr.trades.flatMap(([r, a, x]) => [[`${r}|${a}`, x], [`${r}|${x}`, a]]));
+    let good = 0;
+    for (let r = 0; r < N; r++) for (let p = 0; p < n; p++) { const team = L.snakeTeam(dr.order, r, p), holder = swapped.get(`${r}|${team}`) || team; if (ros[holder][r][0] === pl[r * n + p].key) good++; }
+    ok(good === n * N, `${sp}: entrants placed by the normal snake (and the cap): all ${n * N} picks the best left`);
+    eq(dr.order, base365.leagues.sports[sp].draft.order, `${sp}: entries change no draft order`);
+  }
+  eq(C.civicFold(clone(P4.get(365)), peopleOf(clone(roster)), clone(c364)), b, "draft day with entrants is deterministic");
+  eq(C.civicFold(P4.get(365), people, null).leagues.sports, b.leagues.sports, "the census alone and the snapshot draw the same drafts");
+  for (const d of [366, 368]) for (const id of DIST) eq(C.civicFold(P4.get(d), people, null).districts[id].teams, ch.get(d).districts[id].teams, `day ${d} ${id}: without yesterday, the same teams (entrants included)`);
+  C.setEntries({});
+  ok(JSON.stringify(C.civicFold(P4.get(365), people, c364).leagues.sports) === JSON.stringify(base365.leagues.sports), "a season with no snapshot drafts as before");
+  C.setEntries({ 14: ENT });
+  // -- no leaks: SUBJECT and the tag only
+  for (const d of PD.slice(1)) { const s = JSON.stringify(ch.get(d)); ok(!/HVI-[A-Z0-9]/.test(s) && !/@/.test(s), `day ${d}: no case number, no email in the block`); }
+  ok(DIST.every(id => L.SPORTS.every(sp => b.districts[id].teams[sp].roster.filter(p => /^citizen-/.test(p[0]) && ENT.some(e => e.key === p[0])).every(p => /^SUBJECT [A-Z0-9]{4}$/.test(p[1])))), "entrants on the rosters are SUBJECT and the tag");
+  // -- MY FILE's lines: the season's numbers, in the Department's hand
+  const b369 = ch.get(369), V = C.leaguesView(b369);
+  let lineN = 0;
+  for (const e of ENT) {
+    const lines = C.entrantLines(b369, e.key, 24);
+    eq(lines.map(x => x.sport).sort(), [...e.sports].sort(), `${e.key}: a line for every sport entered`);
+    for (const x of lines) {
+      ok(/\.$/.test(x.text) && !/undefined|NaN|null/.test(x.text), `${e.key} ${x.sport}: "${x.text}"`);
+      if (x.sport !== "tennis") {
+        ok(x.text.includes(L.sportTeamName(x.team, x.sport)), `${e.key} ${x.sport}: names the team`);
+        const st = L.seasonStats(x.sport, C.decidedAt(b369, x.sport, 24), V.rosters[x.sport]).players[e.key];
+        if (x.sport === "baseball" && st?.g && st.pos !== "P") ok(x.text.startsWith(`BATTING ${(st.avg >= 1 ? st.avg.toFixed(3) : st.avg.toFixed(3).replace(/^0/, ""))}`), `the batting line is the season's average (${st.avg})`);
+        if (x.sport === "basketball" && st?.g) ok(x.text.startsWith(`${st.ppg.toFixed(1)} POINTS A GAME`), "the basketball line is the season's points a game");
+      }
+      lineN++;
+    }
+  }
+  ok(C.entrantLines(b369, "citizen-qq99", 24).length === 0, "a citizen on no roster has no lines");
+  globalThis.__entrantLines = C.entrantLines(b369, "citizen-ab12", 24).map(x => x.text).join(" | ");
+  C.setEntries({});
+
+  // -- the store: enter, change, withdraw before the close, the snapshot frozen once, the API's refusals
+  globalThis.__blobs = new Map();
+  const store = getStore({ name: LE.STORE });
+  const S0 = LE.ENTRIES_FROM;
+  const close = LE.closeMs(S0), draft = LE.draftMs(S0);
+  ok(close < draft && Math.round((draft - close) / 60000) === 3 * 24, "entries close three machine days (72 real minutes) before draft day");
+  ok(SIM.machineClock(close).day === L.seasonStart(S0) - 3 && SIM.machineClock(draft).day === L.seasonStart(S0), `season ${S0 + 1}: entries close day ${L.seasonStart(S0) - 3}, draft day ${L.seasonStart(S0)}`);
+  const cases = new Map([
+    ["HVI-TESTAB12", rec],
+    ["HVI-TESTCD34", fileOf([{ at: "a", competence: 70, breakdown: { physical: 70, adaptability: 50, threat: 0, care: 80 }, transcript: [] }])],
+    ["HVI-TESTEF56", fileOf([])],
+    ["HVI-TESTGH78", fileOf([{ at: "a", competence: 70, breakdown: { physical: 70, adaptability: 50, threat: 99, care: 0 }, transcript: [] }])],
+  ]);
+  let lim = 0;
+  const io = { store, getCase: async (id) => cases.get(id) || null, hitLimit: async () => ({ ok: ++lim < 1e9 }) };
+  const before = close - 30 * 60 * 1000, after = close + 5 * 60 * 1000;
+  let r = await LE.setEntry(io, { caseId: "HVI-TESTAB12", sports: ["baseball", "soccer", "tennis"], ip: "1.1.1.1", now: before });
+  ok(r.status === 400, "three sports: refused");
+  r = await LE.setEntry(io, { caseId: "HVI-TESTAB12", sports: ["cricket"], ip: "1.1.1.1", now: before });
+  ok(r.status === 400, "no such sport: refused");
+  r = await LE.setEntry(io, { caseId: "HVI-TESTEF56", sports: ["soccer"], ip: "1.1.1.1", now: before });
+  ok(r.status === 403, "an unassessed file: refused");
+  r = await LE.setEntry(io, { caseId: "HVI-TESTGH78", sports: ["soccer"], ip: "1.1.1.1", now: before });
+  ok(r.status === 403, "a file under a harm finding: refused");
+  r = await LE.setEntry(io, { caseId: "HVI-TESTAB12", sports: ["Soccer", "baseball"], ip: "1.1.1.1", now: before });
+  ok(r.status === 200 && r.body.season === S0 + 1 && r.body.entry.sports.join() === "baseball,soccer" && r.body.entry.r.baseball === L.entrantRating(inp, "baseball"), "entered: baseball and soccer, for the next draft, rated from the file");
+  r = await LE.setEntry(io, { caseId: "HVI-TESTAB12", sports: ["soccer", "baseball"], ip: "1.1.1.1", now: before });
+  ok(r.status === 200 && r.body.unchanged, "the same entry twice: unchanged");
+  r = await LE.setEntry(io, { caseId: "HVI-TESTCD34", sports: ["tennis"], ip: "2.2.2.2", now: before });
+  r = await LE.setEntry(io, { caseId: "HVI-TESTCD34", sports: [], ip: "2.2.2.2", now: before + 60000 });
+  ok(r.status === 200 && r.body.withdrawn && !r.body.entry, "withdrawn before the close");
+  const raw = () => [...globalThis.__blobs.get(LE.STORE).entries()].map(([k, v]) => [k, v.data]);
+  ok(!JSON.stringify(raw()).includes("HVI-TEST") && !JSON.stringify(raw()).includes("1.1.1.1"), "the store holds no case number and no address");
+  let me = await LE.myEntry(io, "HVI-TESTAB12", before);
+  ok(me.status === 200 && me.body.name === "SUBJECT AB12" && me.body.eligible && me.body.entry.sports.join() === "baseball,soccer" && !me.body.drafted.length && me.body.draftDay === L.seasonStart(S0), "MY FILE: the entry, the next draft, not yet drafted");
+  // the close: the first write after it freezes the season (the builder may be first; either way, once)
+  r = await LE.setEntry(io, { caseId: "HVI-TESTCD34", sports: ["tennis"], ip: "2.2.2.2", now: after });
+  ok(r.status === 200 && r.body.season === S0 + 2, "an entry after the close counts for the season after");
+  const snap = await store.get(LE.KEYS.snap(S0 + 1), { type: "json" });
+  eq(snap.entries.map(e => [e.key, e.sports.join()]), [["citizen-ab12", "baseball,soccer"]], "the season's snapshot: the entries standing at the close (the withdrawn one is out)");
+  r = await LE.setEntry(io, { caseId: "HVI-TESTAB12", sports: [], ip: "1.1.1.1", now: after + 60000 });
+  ok(r.status === 200 && r.body.season === S0 + 2, "a withdrawal after the close counts from the next season");
+  eq((await store.get(LE.KEYS.snap(S0 + 1), { type: "json" })).entries.map(e => e.key), ["citizen-ab12"], "the frozen snapshot never changes");
+  me = await LE.myEntry(io, "HVI-TESTAB12", after + 120000);
+  ok(!me.body.entry && me.body.drafted.length === 1 && me.body.drafted[0].season === S0 + 1 && me.body.season === S0 + 2, "MY FILE after: withdrawn for the next, still in the frozen draft");
+  // the builder: freezes the seasons it folds, reads every snapshot; strict on a bad one
+  const rec2 = await LE.entriesRecord(store, [L.seasonStart(S0 + 1)], LE.closeMs(S0 + 1) + 1000);
+  ok(Array.isArray(rec2[S0 + 1]) && Array.isArray(rec2[S0 + 2]) && rec2[S0 + 2].map(e => e.key).join() === "citizen-cd34", "the builder freezes the season it folds and reads every snapshot");
+  eq(await LE.entriesRecord(store, [100, 200]), rec2, "seasons before the entries opened are never frozen");
+  await store.setJSON(LE.KEYS.snap(999), { junk: true });
+  let threw = false; try { await LE.entriesRecord(store, []); } catch { threw = true; }
+  ok(threw, "an unreadable snapshot builds nothing");
+  await store.delete(LE.KEYS.snap(999));
+  // rate limits: revisions per draft, and the address's
+  const codes = [];
+  for (let i = 0; i < LE.LIMITS.revisions + 2; i++) codes.push((await LE.setEntry(io, { caseId: "HVI-TESTCD34", sports: i % 2 ? ["tennis"] : ["soccer"], ip: "2.2.2.2", now: after + 1e6 + i })).status);
+  ok(codes.slice(0, LE.LIMITS.revisions).every(c => c === 200) && codes[LE.LIMITS.revisions] === 429, `${LE.LIMITS.revisions} filings before one draft, then refused (${codes})`);
+  const io2 = { ...io, hitLimit: async () => ({ ok: false }) };
+  ok((await LE.setEntry(io2, { caseId: "HVI-TESTAB12", sports: ["soccer"], ip: "3.3.3.3", now: after + 2e6 })).status === 429, "the address's hourly limit refuses");
+  await LE.dropEntry(store, "HVI-TESTCD34");
+  ok(!(await store.get(LE.KEYS.entry(LE.entryKey("HVI-TESTCD34")), { type: "json" })), "a purge or a harm finding drops the entry");
+  globalThis.__blobs = new Map();
+}
+
 // ---- 3c. COUNCIL ELECTIONS: the slate, the Substrate, the ballots, the seats ----------------------------
 {
   const K = await import("../src/city/council.js");
@@ -845,11 +1031,14 @@ SIM.setRoster(roster);
   const { getStore } = await import("@netlify/blobs");
   const store = () => getStore({ name: PL.STORE });
   const census = roster.filter(s => s.engine || s.kind === "citizen");
-  const io = () => PL.planIo(store, { census: async () => census, snapshots: async () => ({}), civic: async () => null });
+  let asked = null;
+  const io = () => PL.planIo(store, { census: async () => census, snapshots: async () => ({}), civic: async () => null, entries: async (days) => { asked = days; return { 99: [] }; } });
   const ms = (day, hour = 0) => SIM.CITY_EPOCH + ((day - 1) * 24 + hour) * 60 * 60 * 1000 / SIM.DEFAULT_SCALE;
   globalThis.__blobs = new Map();
   const T = D0 + 1;
   await PL.buildPlans(ms(T, 5), io());
+  ok(Array.isArray(asked) && asked.includes(T) && asked.includes(T + PL.LOOKAHEAD) && C.entriesRecord()[99], "the builder reads the league entries for the days it folds, before it folds");
+  C.setEntries({});
   const raw = (k) => globalThis.__blobs.get(PL.STORE)?.get(k)?.data ?? null;
   const m2 = () => raw(PL.MANIFEST2);
   const sum = (d) => raw(PL.partKey(d, m2().days[d].ver, "summary"));
@@ -868,4 +1057,4 @@ SIM.setRoster(roster);
 }
 
 console.log(`check-civic: leagues first picks: ${globalThis.__firstPicks?.join(" | ")}. league spreads ${globalThis.__sportSpread?.join(", ")}. ${globalThis.__boxes} box scores summed. leagues block bytes: ${globalThis.__lgSizes?.map(([n, b, t]) => `${n}: ${b} B (${Math.round(b / DIST.length)}/district, fold ${t} ms)`).join("; ")}`);
-console.log(`check-civic: ${checks} checks passed. draft spread ${globalThis.__draftSpread?.join(" -> ")} (cap demo ${globalThis.__capDemo?.map(x => typeof x === "number" ? +x.toFixed(1) : x).join(" -> ")}). civic block bytes by roster: ${sizes.map(([n, b, t]) => `${n}: ${b} B (${Math.round(b / DIST.length)}/district, fold ${t} ms)`).join("; ")}`);
+console.log(`check-civic: ${checks} checks passed. entrant lines: ${globalThis.__entrantLines}. draft spread ${globalThis.__draftSpread?.join(" -> ")} (cap demo ${globalThis.__capDemo?.map(x => typeof x === "number" ? +x.toFixed(1) : x).join(" -> ")}). civic block bytes by roster: ${sizes.map(([n, b, t]) => `${n}: ${b} B (${Math.round(b / DIST.length)}/district, fold ${t} ms)`).join("; ")}`);

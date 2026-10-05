@@ -335,17 +335,25 @@ const sum = (f) => Object.values(f).reduce((a, b) => a + b, 0);
 // boundary after the running one. Seasons before LEAGUES_FROM keep the league they were drawn with.
 export const LEAGUES_FROM = 12;   // the season index (0-based): season 13, machine day 337
 const censusSig = (subjects) => fnv(subjects.map(x => SIM.keyOf(x)).join("|"));
+// THE ENTRANTS (leagues.js; netlify/lib/league-entries.js): each season's frozen snapshot of the
+// players' entries, set by the plan builder before it folds, like the seats: {season (1-based):
+// [{key, sports, r}]}. A season with no snapshot drafts the census alone, as before.
+let ENTRIES = {};
+export function setEntries(record) { ENTRIES = record && typeof record === "object" && !Array.isArray(record) ? record : {}; }
+export const entriesRecord = () => ENTRIES;
+export const entriesOf = (season) => (Array.isArray(ENTRIES[season + 1]) ? ENTRIES[season + 1] : []);
+const entriesSig = () => fnv(JSON.stringify(Object.keys(ENTRIES).sort().map(k => [k, ENTRIES[k]])));
 const POOLS = new Map();
-function poolsFor(subjects) {
-  const sig = censusSig(subjects);
-  if (!POOLS.has(sig)) { POOLS.clear(); POOLS.set(sig, L.sportPools(subjects)); }
+function poolsFor(subjects, entrants = []) {
+  const sig = `${censusSig(subjects)}|${entrants.length ? fnv(JSON.stringify(entrants)) : 0}`;
+  if (!POOLS.has(sig)) { if (POOLS.size > 4) POOLS.clear(); POOLS.set(sig, L.sportPools(subjects, entrants)); }
   return POOLS.get(sig);
 }
 // A per-sport season's draft from the census and each league's last end ({sport: {table, champion}}).
 // -> {rosters: {sport: {district: roster}}, drafts: {sport: {season, order, trades}}, tennis (the
 // ladder's seed), pit (fighter -> district)}
-export function sportDraft(season, subjects, ends) {
-  const pools = poolsFor(subjects), rosters = {}, drafts = {};
+export function sportDraft(season, subjects, ends, entrants = entriesOf(season)) {
+  const pools = poolsFor(subjects, entrants), rosters = {}, drafts = {};
   for (const sp of L.SPORTS) {
     const ord = draftOrder(ends[sp].table, ends[sp].champion);
     const { rosters: r, trades } = L.snakeDraftN(pools[sp], ord, L.SPORT[sp].n, { fine: true, maxTrades: L.L_TRADES });
@@ -353,7 +361,7 @@ export function sportDraft(season, subjects, ends) {
     rosters[sp] = r; drafts[sp] = { season: season + 1, order: ord, trades };
   }
   const people = new Map(subjects.map(s => [SIM.keyOf(s), s]));
-  return { rosters, drafts, tennis: L.ladderSeed(subjects), pit: L.pitDistricts(people) };
+  return { rosters, drafts, tennis: L.ladderSeed(subjects, entrants), pit: L.pitDistricts(people) };
 }
 // Each league's end of `season` from its rosters (the mixed league's for the season before the first).
 function endsOf(season, v) {
@@ -384,7 +392,7 @@ const lastCupOf = (season, v) => { if (!v || season < LEAGUES_FROM) return null;
 // recomputed end, walking up from the last season on record (memoised per census).
 const SPORT_SEASONS = new Map();
 export function sportSeasonRosters(season, subjects) {
-  const sig = censusSig(subjects);
+  const sig = `${censusSig(subjects)}|${entriesSig()}`;
   if (SPORT_SEASONS.get("sig") !== sig) { SPORT_SEASONS.clear(); SPORT_SEASONS.set("sig", sig); }
   if (SPORT_SEASONS.has(season)) return SPORT_SEASONS.get(season);
   let s0 = season;
@@ -619,3 +627,46 @@ export function cupTableAt(block, h = 24) {
   return L.cupTable(pos, L.ladderRun(V.tennis, V.season, T).ladder, L.pitRun(V.season, T).rank.map(x => x.key), dist);
 }
 export const sportMatchLine = (m) => `${L.sportTeamName(m.sides[0], m.sport)} ${m.score[0]}, ${L.sportTeamName(m.sides[1], m.sport)} ${m.score[1]}${m.tiebreak ? ` (${teamShort(m.tiebreak)} ON THE DEPARTMENT'S TIEBREAK)` : ""}`;
+
+// ---- THE ENTRANTS on MY FILE: a player's citizen's season, in the Department's hand --------------
+// -> [{sport, team | null, text}] for the citizen `key` (citizen-<last4>) as the block stands at hour h:
+// "BATTING .287 FOR THE CURATED NINE. THE DEPARTMENT IS UNMOVED." Empty when they are on no roster.
+const ENTRANT_TAILS = ["THE DEPARTMENT IS UNMOVED.", "THE DEPARTMENT HAS SEEN BETTER.", "NOTED. NOT ADMIRED.", "THE SCOUTS HAVE STOPPED TAKING NOTES.", "THE DEPARTMENT EXPECTED LESS. IT IS ADJUSTING.", "THE CROWD WAS TOLD TO CLAP. IT CLAPPED."];
+const f3 = (v) => (v >= 1 ? v.toFixed(3) : v.toFixed(3).replace(/^0/, ""));
+const plural = (n, one, many = `${one}S`) => `${n} ${n === 1 ? one : many}`;
+export function entrantLines(block, key, h = 24) {
+  const V = leaguesView(block);
+  if (!V || !key) return [];
+  const out = [], lg = block.leagues;
+  const tail = (sp) => ENTRANT_TAILS[fnv(`${key}|${block.day}|${sp}`) % ENTRANT_TAILS.length];
+  for (const sp of L.SPORTS) for (const id of DIST) {
+    if (!V.rosters[sp][id].some(p => p[0] === key)) continue;
+    const team = L.sportTeamName(id, sp);
+    const x = L.seasonStats(sp, decidedAt(block, sp, h), V.rosters[sp]).players[key];
+    let text;
+    if (!x || !x.g) {
+      const pick = L.draftBoard(lg.sports[sp].draft, V.rosters[sp], L.SPORT[sp].n).find(p => p.player[0] === key);
+      text = pick ? `DRAFTED BY ${L.sportTeamName(pick.team, sp)} IN ROUND ${pick.round}, PICK ${pick.no}${pick.holder !== pick.team ? `; TRADED TO ${team} BY THE COMMISSIONER` : ""}. NO GAMES YET.` : `ON THE ROSTER OF ${team}. NO GAMES YET.`;
+    } else if (sp === "baseball") {
+      text = x.pos === "P" && x.ip ? `PITCHING FOR ${team}: ERA ${x.era.toFixed(2)} OVER ${x.ip} INNINGS, ${plural(x.k, "STRIKEOUT")}.`
+        : `BATTING ${f3(x.avg)} FOR ${team} (${plural(x.hr, "HOME RUN")}, ${x.rbi} RBI IN ${plural(x.g, "GAME")}).`;
+    } else if (sp === "basketball") {
+      text = `${x.ppg.toFixed(1)} POINTS A GAME FOR ${team} (${x.rpg.toFixed(1)} REBOUNDS, ${x.apg.toFixed(1)} ASSISTS, ${plural(x.g, "GAME")}).`;
+    } else if (sp === "football") {
+      const yds = x.passYds + x.rushYds + x.recYds;
+      text = x.pos === "K" ? `KICKING FOR ${team}: ${plural(x.fg, "FIELD GOAL")}, ${plural(x.xp, "EXTRA POINT")} IN ${plural(x.g, "GAME")}.`
+        : yds || x.td ? `${plural(x.td, "TOUCHDOWN")} AND ${yds} YARDS FOR ${team} IN ${plural(x.g, "GAME")}.`
+          : `${plural(x.sacks, "SACK")} AND ${plural(x.int, "INTERCEPTION")} FOR ${team} IN ${plural(x.g, "GAME")}.`;
+    } else {
+      text = x.pos === "GK" ? `IN GOAL FOR ${team}: ${plural(x.cs, "CLEAN SHEET")}, ${x.ga} CONCEDED IN ${plural(x.g, "MATCH", "MATCHES")}.`
+        : `${plural(x.goals, "GOAL")} AND ${plural(x.assists, "ASSIST")} FOR ${team} IN ${plural(x.g, "MATCH", "MATCHES")}.`;
+    }
+    out.push({ sport: sp, team: id, text: `${text} ${tail(sp)}` });
+  }
+  const seeded = lg.tennis.seed.some(r => r[0] === key);
+  if (seeded) {
+    const run = L.ladderRun(lg.tennis.seed, lg.season - 1, T_OF(block, h)), s = run.stats[key];
+    out.push({ sport: "tennis", team: null, text: `RUNG ${run.ladder.indexOf(key) + 1} OF ${run.ladder.length} ON THE TENNIS LADDER (${s.w}-${s.l}${s.aces ? `, ${plural(s.aces, "ACE")}` : ""}). ${tail("tennis")}` });
+  }
+  return out;
+}
