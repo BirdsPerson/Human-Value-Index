@@ -130,7 +130,7 @@ export async function collect(caseId, rec, { ip = null, deviceHash = null, owner
   if (!r.ok) return { ok: false, error: r.error };
   if (r.dup) return { ok: true, dup: true, collected: 0, days: 0, line: "ALREADY DISBURSED. THE DEPARTMENT DOES NOT PAY TWICE FOR ONE DAY." };
   const net = memoDays.reduce((n, [, u, s]) => n + u - s, 0);
-  return { ok: true, collected: net, days: days.length, gross: days.length * UBI, spend: net - days.length * UBI, lost, line: collectLine({ days: days.length, lost }) };
+  return { ok: true, collected: net, days: days.length, gross: days.length * UBI, spend: days.length * UBI - net, lost, line: collectLine({ days: days.length, lost }) };
 }
 
 // ---- buy / sell: cash <-> the industry position, both the case's own accounts -------------------

@@ -46,7 +46,7 @@
 .ec-ind-row .n small { color: var(--fg-mute); font-size: var(--t-xs); letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ec-mine { color: var(--warn); font-weight: 400; font-size: var(--t-xs); }
 .ec-ind-row .sh { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
-.ec-bar { flex: 1 1 auto; height: 8px; background: var(--fg-ghost); position: relative; min-width: 40px; }
+.ec-bar { flex: 1 1 auto; height: 8px; background: none; border: var(--bw) solid var(--fg-ghost); position: relative; min-width: 40px; }
 .ec-bar > span { position: absolute; left: 0; top: 0; bottom: 0; background: var(--fg-dim); }
 .ec-bar > span.crowd { background: var(--warn); }
 .ec-ind-row .pct { font-size: var(--t-xs); color: var(--fg-dim); white-space: nowrap; }

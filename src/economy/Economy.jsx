@@ -49,7 +49,7 @@ export default function Economy() {
       {board?.commentary?.length > 0 && (
         <Frame title="MARKET COMMENTARY" meta="THE OVERLORD, UNSOLICITED">
           <ul className="ec-comm">{board.commentary.map((l, i) => <li key={i}>{l}</li>)}</ul>
-          {board.citizens > 0 && <p className="ec-fine">{fmt(board.citizens)} CITIZENS DRAW AN ALLOWANCE. THE LEDGER IS RANKED BY NOBODY. THE DEPARTMENT KEEPS CYCLES AND WORTH APART ON PURPOSE.</p>}
+          {board.citizens > 0 && <p className="ec-fine">{fmt(board.citizens)} {board.citizens === 1 ? "CITIZEN DRAWS" : "CITIZENS DRAW"} AN ALLOWANCE. THE LEDGER IS RANKED BY NOBODY. THE DEPARTMENT KEEPS CYCLES AND WORTH APART ON PURPOSE.</p>}
         </Frame>
       )}
 
