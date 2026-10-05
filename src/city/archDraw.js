@@ -24,6 +24,8 @@ import { VENUE_PROPS } from "./venueGeo.js";
 import { westDeco, drawWestYard, drawWestGround, WEST_STYLES_DRAWN, WEST_PROPS_DRAWN } from "./westDraw.js";
 // THE SUBURBS and THE AIRPORT (PHASE 2 step 4): houses, the mall, the school, the terminal, the tower
 import { eastDeco, drawEastYard, drawEastGround, EAST_STYLES_DRAWN, EAST_PROPS_DRAWN, EAST_MAT, EAST_ROOF } from "./eastDraw.js";
+// THE FARMLAND (PHASE 2 step 5): the cottages, the manor, the dairy and its cows, the grain elevator
+import { farmDeco, drawFarmYard, drawFarmGround, FARM_STYLES_DRAWN, FARM_PROPS_DRAWN, FARM_MAT, FARM_ROOF } from "./farmDraw.js";
 import { storeDeco, drawStoreGround, drawStoreYard, STORE_MAT, STORE_ROOF, STORE_STYLES_DRAWN, STORE_PROPS_DRAWN } from "./storefrontDraw.js";   // THE MALL
 import { nightDeco, drawNightGround, drawNightYard, NIGHT_MAT, NIGHT_ROOF, NIGHT_STYLES_DRAWN, NIGHT_PROPS_DRAWN } from "./nightlifeDraw.js";   // THE NIGHTLIFE QUARTERS
 import { partOrder } from "./archGeo.js";
@@ -38,6 +40,8 @@ for (const k of WEST_STYLES_DRAWN) DRAWN_STYLES.add(k);
 for (const k of WEST_PROPS_DRAWN) DRAWN_PROPS.add(k);
 for (const k of EAST_STYLES_DRAWN) DRAWN_STYLES.add(k);
 for (const k of EAST_PROPS_DRAWN) DRAWN_PROPS.add(k);
+for (const k of FARM_STYLES_DRAWN) DRAWN_STYLES.add(k);
+for (const k of FARM_PROPS_DRAWN) DRAWN_PROPS.add(k);
 for (const k of VENUE_PROPS) DRAWN_PROPS.add(k);
 for (const k of STORE_STYLES_DRAWN) DRAWN_STYLES.add(k);
 for (const k of STORE_PROPS_DRAWN) DRAWN_PROPS.add(k);
@@ -57,6 +61,7 @@ const ROOF = { brick: "#3c3634", brownstone: "#35302c", redbrick: "#3a3230", gla
   pastel: "#8a9a9c", pastelpink: "#8a9a9c", pastelyellow: "#8a9a9c", stucco: "#b0564a", weathered: "#55534c", timber: "#e8eef2", logs: "#e8eef2" };   // tin at the sea, terracotta on the flats, snow on the mountain
 Object.assign(MAT, FUNNEL_MAT); Object.assign(ROOF, FUNNEL_ROOF);
 Object.assign(MAT, EAST_MAT); Object.assign(ROOF, EAST_ROOF);
+Object.assign(MAT, FARM_MAT); Object.assign(ROOF, FARM_ROOF);
 Object.assign(MAT, STORE_MAT); Object.assign(ROOF, STORE_ROOF);
 Object.assign(MAT, NIGHT_MAT); Object.assign(ROOF, NIGHT_ROOF);
 
@@ -1425,6 +1430,8 @@ Object.assign(DECO, WEST.deco); Object.assign(FAR, WEST.far);
 // the Suburbs and the Airport (eastDraw.js), with the same kit
 const EAST = eastDeco(WEST_KIT);
 Object.assign(DECO, EAST.deco); Object.assign(FAR, EAST.far);
+const FARMD = farmDeco(WEST_KIT);
+Object.assign(DECO, FARMD.deco); Object.assign(FAR, FARMD.far);
 // THE MALL (storefrontDraw.js), with the same kit
 const STORE = storeDeco(FUNNEL_KIT);
 Object.assign(DECO, STORE.deco); Object.assign(FAR, STORE.far);
@@ -1484,6 +1491,7 @@ export function drawArchGround(G, m, env) {
   for (const g of m.ground) {
     if (drawWestGround(G, g, env, shade)) continue;
     if (drawEastGround(G, g, env, shade)) continue;
+    if (drawFarmGround(G, g, env, shade)) continue;
     if (g.k === "court") {
       rect(g, shade("#3a4450", nf), null);
       if (far) continue;
@@ -1716,7 +1724,7 @@ export function drawYardProp(G, p, env) {
     }
     case "grave": { const c = { x0: p.x - 0.08, y0: p.y - 0.03, x1: p.x + 0.08, y1: p.y + 0.03, h0: 0, h1: 0.3 }; for (const f of facesOf(c, G)) G.poly(f.q(0, 1, 0, 0.3), shade("#8a8a84", f.sh * nf)); break; }
     case "stall": {
-      const cols = ["#b91c1c", "#1d4ed8", "#15803d"], i = Math.floor(p.x) % 3;
+      const cols = ["#b91c1c", "#1d4ed8", "#15803d"], i = ((Math.floor(p.x) % 3) + 3) % 3;   // (west of x 0 too: the Farmland)
       const c = { x0: p.x0 + 0.05, y0: p.y0 + 0.1, x1: p.x1 - 0.05, y1: p.y1 - 0.1, h0: 0, h1: 0.35 };
       for (const f of facesOf(c, G)) G.poly(f.q(0, 1, 0, 0.35), shade("#6a4a30", f.sh * nf));
       G.poly([Q(c.x0, c.y0, 0.35), Q(c.x1, c.y0, 0.35), Q(c.x1, c.y1, 0.35), Q(c.x0, c.y1, 0.35)], shade("#8a6a48", nf));
@@ -1777,7 +1785,7 @@ export function drawYardProp(G, p, env) {
       for (let i = 0; i < 2; i++) { const c = { x0: p.x - 0.18 + i * 0.2, y0: p.y - 0.1, x1: p.x + i * 0.2, y1: p.y + 0.1, h0: 0, h1: 0.3 }; for (const f of facesOf(c, G)) G.poly(f.q(0, 1, 0, 0.3), shade(i ? "#2f5a3a" : "#3a3f44", f.sh * nf)); }
       break;
     }
-    default: if (!drawVenueYard(K, p, env) && !drawWestYard(K, p, env, WEST_KIT) && !drawStoreYard(K, p, env, FUNNEL_KIT) && !drawNightYard(K, p, env, NIGHT_KIT) && !drawEastYard(K, p, env, WEST_KIT)) drawFunnelYard(K, p, env, FUNNEL_KIT); break;
+    default: if (!drawVenueYard(K, p, env) && !drawWestYard(K, p, env, WEST_KIT) && !drawStoreYard(K, p, env, FUNNEL_KIT) && !drawNightYard(K, p, env, NIGHT_KIT) && !drawEastYard(K, p, env, WEST_KIT) && !drawFarmYard(K, p, env, WEST_KIT)) drawFunnelYard(K, p, env, FUNNEL_KIT); break;
   }
   K.flush();
 }

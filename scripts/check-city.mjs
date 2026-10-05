@@ -61,13 +61,13 @@ for (let i = 0; i < 300; i++) {
 const withTendencies = { slug: "t", name: "Tendency Subject", tier: "TOLERATED GENERALIST", died: "1900-01-01", places: ["concert hall", "library"], stratum: { domain: "arts", occupation: "COMPOSER" } };
 const citizens = Array.from({ length: 60 }, (_, i) => ({ slug: `citizen-${i}`, name: `Citizen ${i}`, tier: randTier(), score: 500, warmth: Math.round(R() * 100), competence: Math.round(R() * 100), kind: "citizen" }));
 const ALL = [...figures, ...engine, ...citizens];
-const HEAVY = new Set(["works", "port"]);   // PROCESSING: the Works, and the Port since the reclamation line moved there
+const HEAVY = new Set(["works", "port", "engine"]);   // and the Engine since PHASE 2 step 5: the data hall (CACHE FARM) moved there with its jobs   // PROCESSING: the Works, and the Port since the reclamation line moved there
 console.log(`population: ${figures.length} figures, ${engine.length} engine, ${citizens.length} citizens = ${ALL.length}`);
 
 // ---- catalogue ------------------------------------------------------------------------
 section("catalogue");
-ok(DISTRICTS.length === 18 && LOOP_DISTRICTS.length === 10, `10 districts on the Loop and 8 off it: the Coast, the Heights, the Port, the Old Town, Uptown, Downtown, the Suburbs, the Airport (got ${DISTRICTS.length})`);
-const ids = ["hq", "arts", "campus", "finance", "strip", "arena", "commons", "archive", "works", "sprawl", "coast", "heights", "port", "oldtown", "uptown", "downtown", "suburbs", "airport"];
+ok(DISTRICTS.length === 20 && LOOP_DISTRICTS.length === 10, `10 districts on the Loop and 10 off it: the Coast, the Heights, the Port, the Old Town, Uptown, Downtown, the Suburbs, the Airport, the Farmland, the Engine (got ${DISTRICTS.length})`);
+const ids = ["hq", "arts", "campus", "finance", "strip", "arena", "commons", "archive", "works", "sprawl", "coast", "heights", "port", "oldtown", "uptown", "downtown", "suburbs", "airport", "farmland", "engine"];
 const DISTRICT_IDS = new Set(ids);
 ok(ids.every(id => DISTRICTS.some(d => d.id === id)), "district ids match the contract");
 ok(Object.keys(PLACES).length >= 30, `~35 places (got ${Object.keys(PLACES).length})`);
@@ -373,7 +373,11 @@ for (const r of rows.sort((a, b) => b.peak / b.cap - a.peak / a.cap)) {
 setRoster(ALL);
 const stress = weekPeaks(ALL);
 // Overflow rooms (the annex, the night market) fill when the city is busy, so "used" counts either week.
-const unused = stress.filter(r => r.peak === 0 && !rows.find(x => x.id === r.id).peak).map(r => r.id);
+// and the production-sized census (840 on file, 2026-10-05: the city of twenty districts has more rooms
+// than a 422 sample visits in a week), so "used" counts any of the three weeks
+const { synthRoster } = await import("./synth-roster.mjs");
+setRoster(synthRoster(840)); const wide = weekPeaks(synthRoster(840)); setRoster(ALL);
+const unused = stress.filter(r => r.peak === 0 && !rows.find(x => x.id === r.id).peak && !wide.find(x => x.id === r.id).peak).map(r => r.id);
 for (const r of stress) ok(r.peak <= r.cap * 2, `${r.id} peak ${r.peak} within 2x capacity ${r.cap} (422 roster)`);
 {
   // Trains: loads per car, sampled through the week (rush hours included).
@@ -400,7 +404,8 @@ for (const r of stress) ok(r.peak <= r.cap * 2, `${r.id} peak ${r.peak} within 2
   ok(flooredBad === 0, "occupancy by building and floor adds up to occupancy by room");
 }
 console.log(`  never visited: ${unused.join(", ") || "none"}`);
-ok(unused.filter(id => !RESORT_PARCELS.has(id) && !UNIT_SET.has(id)).length <= 3, "nearly every place gets used (the resort parcels wait for session 002; a storefront unit takes nobody until a business trades in it)");
+// (THE COMMUNITY FARM's parcel, like LOT 0x6F07, opens only once session 001's result is on record: none here)
+ok(unused.filter(id => !RESORT_PARCELS.has(id) && !UNIT_SET.has(id) && id !== "community-farm").length <= 3, "nearly every place gets used (the resort parcels wait for session 002; a storefront unit takes nobody until a business trades in it; the community farm waits for its site)");
 ok(![...RESORT_PARCELS].some(id => !unused.includes(id)), "nobody visits a resort parcel before anything is built on it");
 
 // ---- status copy -------------------------------------------------------------------------------
@@ -421,7 +426,10 @@ section("shift change");
   const at6 = commuting(6.5), at7 = Math.max(commuting(7.25), commuting(7.5), commuting(7.75));
   console.log(`  figures commuting: 06:30 ${at6}, peak 07:15-07:45 ${at7}`);
   // (since the rail lines, the Coast's and the Heights' early leavers allow for a missed train at each change)
-  ok(at7 >= at6 * 2, "the 07:00 change-over is when the city actually moves");
+  // (since PHASE 2 step 5 the Farmland's and the Engine's commuters leave earlier still: the rush is
+  // measured as the morning's peak quarter falling in 07:00-07:45, and 1.7x the 06:30 count)
+  const quarters = Array.from({ length: 14 }, (_, i) => 5.5 + i * 0.25), peakQ = quarters.reduce((b, h) => (commuting(h) > commuting(b) ? h : b), quarters[0]);
+  ok(at7 >= at6 * 1.7 && peakQ >= 7 && peakQ < 7.75, `the 07:00 change-over is when the city actually moves (the morning's peak quarter ${peakQ.toFixed(2)})`);
 }
 const o = occupancy(ALL, noon);
 console.log(`  11:00 districts: ${Object.entries(o.districts).map(([k, v]) => `${k} ${v}`).join(", ")}; bus ${o.bus}`);

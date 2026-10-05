@@ -1962,3 +1962,47 @@ Layout 5, network 7 (docs/planning/MASTER_PLAN.md "PHASE 2" step 4). `src/city/e
   the Loop 16-19, the Shore Line 20-27, the Central Line 14-15, the Alpine Line 10-12, the West Line 9.
   Plan about 1,600 KB, built in about 4 s.
 - The prefects SUB-17 THE COVENANT OFFICER and AIR-18 THE SCREENER take their seats (phase2Prefects.js).
+
+## PHASE 2 step 5: THE FARMLAND, THE ENGINE, THE COMMUNITY FARM (2026-10-05)
+
+Layout 6, network 8 (docs/planning/MASTER_PLAN.md "PHASE 2" step 5). `src/city/farmSim.js` (the data,
+both districts), `farmGeo.js` / `farmDraw.js` (the cottages, the manor, the dairy and its cows, the grain
+elevator, the fields, the orchards), `civicGeo.js` / `civicDraw.js` (THE COMMUNITY FARM and the garden),
+`scripts/check-growth.mjs`.
+
+- **THE FARMLAND** (`farmland`, 0xE500, x -104 to -8, y -76 to -18), north-west behind the Old Town and
+  clear of the Heights: the fields (four crops, a tractor working them by the clock), the orchards, the
+  dairy and its pasture, the grain elevator by the line, the vet; a market town round FARMLAND MARKET:
+  the farmers' market at the station's head, THE PLOUGH, the market green, Grange Row and the manor
+  (the middle band), the farmhands' and dairy cottages (tiers 4-5: `HOME_ONLY_TIERS`, tier 3 keeps the
+  Suburbs' starter homes). 300 homes.
+- **THE ENGINE** (`engine`, 0xE600, x 116-180, y -60 to -8), the second business district: the research
+  park, the university annex, the Engine offices, THE UPTIME, the quad, three towers (glass for the top
+  band, lofts for the middle, the service floors for the lowest: 540 homes), and the data hall: CACHE FARM
+  moved out of the Works with its ids (`MOVED_FROM`; THE TOOL LIBRARY keeps the Works' cell and its
+  addresses). The core's styles keep their own footprints, so each lot is sized to its style.
+- **THE WEST LINE, version 2** (`west2`, line 7, nets [8]): version 1's stations and route on past OLD
+  TOWN MARKET, west out of the Old Town and north up x -56 to FARMLAND MARKET; trains W7-W14. Version 1
+  (`west`, nets 4-7, `retired: 8`) keeps running for every day published on it.
+- **THE ENGINE SHUTTLE** (`engine`, line 8, nets [8]): STRIP (ENGINE SHUTTLE) in the street east of the
+  Strip (an interchange within `XFER_R` of the Loop's Strip gate), north past the Heights' foot (terrain
+  0 there), east along y -6, north up x 134 to ENGINE CAMPUS and east along y -40 to ENGINE TOWERS
+  between the towers. Eight two-car trains, one every 3.3 machine minutes.
+- **THE COMMUNITY FARM.** THE ASSEMBLY's session 001 approved the farm (APPLICATION 002); Scott: the
+  winner gets a full-size site in the growth districts. Its parcel (`community-farm`, 30 x 24 cells,
+  five times LOT 0x6F07) is a civic lot like 0x6F07 (`sim.farmParcelPhase`): approved, then a site for
+  LOT_BUILD machine days from `FARM_PARCEL.breakDay` (hoarding, the crane, a bigger crew, furrows growing
+  with the work), then the farm (as many crop beds as fit, the barn and silo at scale, the orchard row,
+  the stand, the scarecrow, the tractor), visited like the lot (closed until the site opens). From the day
+  it opens LOT 0x6F07 is its smaller companion: THE COMMUNITY GARDEN (`lotPhase(...).garden`: raised
+  beds between paths, the tool shed, the water butt, the compost bays, a bench). Had the course won, the
+  parcel would stay reserved and the Commons would keep the course.
+- **Measured** (5,000, synthetic census, days 300-301): homes 4,132 -> 4,972; crowding core -77 -> -65
+  to -62 (all -125 -> -117 to -113); busiest car of the day: the Loop 18-20, the Shore Line 24-25, the
+  East Line 13-15, the West Line (v2) 12-14, the Engine Shuttle 12-13, the Central Line 13-14, the Alpine
+  Line 8-10. Plan about 1,720 KB, built in about 2.5 s.
+- **Checks.** check-growth (43): the land, the bands, the moved data hall, the lines' versions, the
+  interchange, the farm's timing and faces, the prefects FRM-19 and ENG-20 live. check-plans holds a
+  network-7 day (`fixtures/net7-plan-day300.json`, built by 018ffd3). check-city measures "nearly every
+  place gets used" over the production-sized census too (840), and the morning rush as the peak quarter
+  in 07:00-07:45 at 1.7x the 06:30 count (the far districts' commuters leave earlier).

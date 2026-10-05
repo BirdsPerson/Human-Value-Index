@@ -20,8 +20,12 @@ import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { drawPose, phaseOf } from "./poses.js";
 import { assemblyCrowd } from "./rigReact.js";
 import { assignAnchors } from "./props.js";
-import { lotPhase } from "./sim.js";
-import { CIVIC_LOTS, CIVIC_ANCHORS, FORUM, SIGN, VACANT, SITE, GOLF, FARM, faceOf } from "./civicGeo.js";
+import { lotPhase, farmParcelPhase } from "./sim.js";
+import { CIVIC_LOTS, CIVIC_ANCHORS, FORUM, GOLF, GARDEN, BIG, faceOf } from "./civicGeo.js";
+import * as CG from "./civicGeo.js";
+// The faces' geometry: LOT 0x6F07's, or THE COMMUNITY FARM's full-size parcel (set per lot drawn).
+let SIGN = CG.SIGN, VACANT = CG.VACANT, SITE = CG.SITE, FARM = CG.FARM;
+const useGeo = (big) => { ({ SIGN, VACANT, SITE, FARM } = big ? BIG : CG); };
 import { assemblyNow } from "../assembly/client.js";
 import { ADVOCATES, APPLICATIONS } from "../assembly/content.js";
 import { SPEAKERS2, MOTIONS as MOTIONS2, APPLICATIONS2 } from "../assembly/content002.js";
@@ -44,8 +48,9 @@ const tally2 = (v, m) => m.choices.map(c => v?.tally?.votes?.[c] ?? 0).join("-")
 // -> {at, face}
 export function drawCivicLot(G, lotId, lod, mt, people, prev) {
   const pid = CIVIC_LOTS[lotId], hour = ((mt % 24) + 24) % 24;
-  const phase = pid === "dev-lot" ? lotPhase(mt) : null;
-  const face = pid === "forum" ? "forum" : faceOf(phase);
+  const phase = pid === "dev-lot" ? lotPhase(mt) : pid === "community-farm" ? farmParcelPhase(mt) : null;
+  const face = pid === "forum" ? "forum" : faceOf(phase, pid);
+  useGeo(pid === "community-farm");
   const items = [], carried = new Map();
   const put = (x, y, draw, bias = 0) => { const [u, v] = rot(x, y, G.r); items.push({ k: u + v + bias, draw }); };
   const ground = (pts, fill, h = 0.01) => G.poly(pts.map(p => G.Q(p[0], p[1], h)), fill);
@@ -59,14 +64,15 @@ export function drawCivicLot(G, lotId, lod, mt, people, prev) {
   for (const p of list) { const i = at.get(p.key); if (i != null) present.set(anchors[i].id, { p, a: anchors[i] }); }
 
   if (face === "forum") forum(K);
-  else if (face === "site") site(K);
+  else if (face === "site" || face === "bigsite") site(K);
   else if (face === "golf") golf(K);
-  else if (face === "farm") farm(K);
+  else if (face === "farm" || face === "bigfarm") farm(K);
+  else if (face === "garden") garden(K);
   else vacant(K);
-  if (pid === "dev-lot") sign(K);
+  if (pid === "dev-lot" || pid === "community-farm") sign(K, pid);
 
   for (const [id, { p, a }] of present) {
-    const fn = personDraw(K, a, p, face === "site");
+    const fn = personDraw(K, a, p, face === "site" || face === "bigsite");
     if (carried.has(id)) carried.get(id).push(fn.draw);
     else put(fn.x, fn.y, fn.draw, 0.02);
   }
@@ -83,7 +89,15 @@ export function civicLabel(lotId, mt) {
     if (v?.session?.state === "open") return `THE ASSEMBLY // ${v.tally.votes.golf}-${v.tally.votes.farm}`;
     return "THE ASSEMBLY";
   }
+  if (CIVIC_LOTS[lotId] === "community-farm") {
+    const q = farmParcelPhase(mt);
+    if (q.phase === "vacant") return "THE COMMUNITY FARM // PARCEL RESERVED";
+    if (q.phase === "approved") return `THE COMMUNITY FARM // GROUNDBREAKING DAY ${q.breakDay}`;
+    if (q.phase === "site") return `THE COMMUNITY FARM // BUILDING: ${Math.round(q.progress * 100)}%`;
+    return "THE COMMUNITY FARM";
+  }
   const p = lotPhase(mt);
+  if (p.phase === "built" && p.garden) return "THE COMMUNITY GARDEN (0x6F07)";
   if (p.phase === "vacant") return "LOT 0x6F07 // PROPOSED DEVELOPMENT";
   const app = APPLICATIONS[p.winner];
   if (p.phase === "approved") return `LOT 0x6F07 // APPROVED: ${app.no}`;
@@ -97,7 +111,15 @@ export function civicLine(lotId, mt, n) {
     const sub = v?.substrate ? ` (SUBSTRATE ${v.substrate.votes.golf}-${v.substrate.votes.farm}, ADVISORY)` : "";
     return v?.session?.state === "open" ? `${n} WATCHING // IN SESSION: GOLF ${v.tally.votes.golf}, FARM ${v.tally.votes.farm}${sub}. VOTE AT #ASSEMBLY.` : `${n} ON THE FLOOR // ADJOURNED. THE BENCHES REMAIN.`;
   }
+  if (CIVIC_LOTS[lotId] === "community-farm") {
+    const q = farmParcelPhase(mt);
+    if (q.phase === "vacant") return "RESERVED // FOR THE WINNER OF SESSION 001";
+    if (q.phase === "approved") return `APPROVED BY THE ASSEMBLY (SESSION 001) // GROUNDBREAKING MACHINE DAY ${q.breakDay}`;
+    if (q.phase === "site") return `${n} ON SITE // ${Math.round(q.progress * 100)}% BUILT // OPENS MACHINE DAY ${q.openDay}`;
+    return `${n} IN THE FIELDS // THE ASSEMBLY'S FARM, FULL SIZE. THE HARVEST IS COUNTED`;
+  }
   const p = lotPhase(mt);
+  if (p.phase === "built" && p.garden) return `${n} IN THE BEDS // THE COMMUNITY GARDEN: THE FARM MOVED TO THE FARMLAND, THE BEDS STAYED`;
   if (p.phase === "vacant") return "VACANT // TWO APPLICATIONS BEFORE THE ASSEMBLY";
   if (p.phase === "approved") return `APPROVED: ${APPLICATIONS[p.winner].proposal} // GROUNDBREAKING MACHINE DAY ${p.breakDay}`;
   if (p.phase === "site") return `${n} ON SITE // ${Math.round(p.progress * 100)}% BUILT // OPENS MACHINE DAY ${p.openDay}`;
@@ -262,9 +284,12 @@ function vacant(K) {
   // a low chain on posts along the front, sagging, ignored
   for (let k = 0; k <= 10; k++) { const x = L.x + 0.3 + k * ((L.w - 0.6) / 10); K.put(x, L.y + L.h - 0.2, () => K.vline(x, L.y + L.h - 0.2, 0, 0.35, "#6b7280", Math.max(1, G.z * 0.05))); }
 }
-function sign(K) {
+function sign(K, pid = "dev-lot") {
   const p = K.phase;
-  const rows = p.phase === "vacant" ? ["PROPOSED DEVELOPMENT", "APPLICATIONS 001 + 002", "THE ASSEMBLY DECIDES"]
+  const rows = pid === "community-farm" ? (p.phase === "site" ? ["THE COMMUNITY FARM", `WORKS IN PROGRESS ${Math.round(p.progress * 100)}%`, `OPENS MACHINE DAY ${p.openDay}`]
+      : p.phase === "built" ? ["THE COMMUNITY FARM", "SESSION 001: APPROVED", "YIELD MONITORED"] : ["RESERVED", "THE COMMUNITY FARM", p.breakDay ? `GROUNDBREAKING DAY ${p.breakDay}` : "SESSION 001"])
+    : p.phase === "built" && p.garden ? ["THE COMMUNITY GARDEN", "BEDS BY ALLOCATION", "THE FARM: SEE THE FARMLAND"]
+    : p.phase === "vacant" ? ["PROPOSED DEVELOPMENT", "APPLICATIONS 001 + 002", "THE ASSEMBLY DECIDES"]
     : p.phase === "approved" ? [`APPROVED: APPLICATION ${APPLICATIONS[p.winner].no}`, APPLICATIONS[p.winner].proposal, `GROUNDBREAKING DAY ${p.breakDay}`]
       : p.phase === "site" ? [`${APPLICATIONS[p.winner].proposal}`, `WORKS IN PROGRESS ${Math.round(p.progress * 100)}%`, `OPENS MACHINE DAY ${p.openDay}`]
         : [APPLICATIONS[p.winner].built, p.winner === "golf" ? "MEMBERS ASSESSED" : "YIELD MONITORED", "BY ORDER OF THE ASSEMBLY"];
@@ -282,7 +307,7 @@ function site(K) {
     GOLF.holes.slice(0, n).forEach(h => ground(circ(h.green[0], h.green[1], 0.32, 10), pr > 0.6 ? GREEN : "#6b7d3a", 0.014));
     if (pr > 0.4) GOLF.bunkers.forEach(([x, y, r]) => ground(circ(x, y, r, 12), SAND, 0.013));
   } else {
-    const n = Math.floor(pr * 4 + 0.5);
+    const n = Math.floor(pr * FARM.beds.length + 0.5);
     FARM.beds.slice(0, n).forEach(b => { for (let y = b.y0 + 0.1; y < b.y1; y += 0.28) ground(rectPts(b.x0, y, b.x1, y + 0.1), pr > 0.6 ? "#3f6a22" : "#6a5234", 0.014); });
   }
   if (lod === "far") return;
@@ -415,4 +440,35 @@ function farm(K) {
     G.ctx.fillStyle = "#15803d"; G.ctx.beginPath(); G.ctx.ellipse(cx, cy, r, r * 0.8, 0, 0, Math.PI * 2); G.ctx.fill();
     G.ctx.fillStyle = "#dc2626"; for (let k = 0; k < 4; k++) G.ctx.fillRect(cx - r * 0.5 + k * r * 0.3, cy - r * 0.2 + (k % 2) * r * 0.3, Math.max(1, G.z * 0.07), Math.max(1, G.z * 0.07));   // apples
   });
+}
+
+// ---- the community garden (LOT 0x6F07 once the farm has its full-size site) ----------------------
+function garden(K) {
+  const { G, lod, ground, put, vline } = K, L = GARDEN.lot;
+  ground(rectPts(L.x + 0.1, L.y + 0.1, L.x + L.w - 0.1, L.y + L.h - 0.1), "#4a6a34");
+  // the paths between the beds
+  ground(rectPts(L.x + 2.6, L.y + 0.6, L.x + L.w - 2.6, L.y + L.h - 0.6), "#8a7a5a", 0.011);
+  for (const b of GARDEN.beds) {
+    const [leaf, fruit] = CROP[b.crop];
+    put((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, () => {
+      G.prism(rectPts(b.x0, b.y0, b.x1, b.y1), 0, 0.22, "#7a5a3a", 1.2);   // the timber edging
+      G.poly(rectPts(b.x0 + 0.08, b.y0 + 0.08, b.x1 - 0.08, b.y1 - 0.08).map(p => G.Q(p[0], p[1], 0.23)), "#4a3420");
+      for (let y = b.y0 + 0.25; y < b.y1 - 0.1; y += 0.35) G.poly(rectPts(b.x0 + 0.15, y, b.x1 - 0.15, y + 0.16).map(p => G.Q(p[0], p[1], 0.24)), b.crop === "wheat" ? fruit : leaf);
+      if (lod === "near" && (b.crop === "tomato" || b.crop === "lettuce")) for (let k = 0; k < 6; k++) { const [x, y] = G.Q(b.x0 + 0.3 + ((k * 0.618) % 1) * (b.x1 - b.x0 - 0.6), b.y0 + 0.3 + ((k * 0.382) % 1) * (b.y1 - b.y0 - 0.6), 0.3); G.ctx.fillStyle = fruit; G.ctx.fillRect(x - 1, y - 1, 2, 2); }
+    });
+  }
+  if (lod === "far") return;
+  const S = GARDEN.shed;
+  put((S.x0 + S.x1) / 2, (S.y0 + S.y1) / 2, () => {
+    G.prism(rectPts(S.x0, S.y0, S.x1, S.y1), 0, S.h, "#5a7a4a", 1.2);
+    G.poly([G.Q(S.x0 - 0.1, S.y1 + 0.1, S.h), G.Q(S.x1 + 0.1, S.y1 + 0.1, S.h), G.Q(S.x1 + 0.1, S.y0 - 0.1, S.h + 0.3), G.Q(S.x0 - 0.1, S.y0 - 0.1, S.h + 0.3)], "#3f3f46");
+    if (lod === "near") { const [sx, sy] = G.Q((S.x0 + S.x1) / 2, S.y1, S.h * 0.6); G.ctx.fillStyle = "#f5f5f4"; G.ctx.font = `${Math.max(6, Math.round(G.z * 0.13))}px "Fira Mono", monospace`; G.ctx.textAlign = "center"; G.ctx.fillText("TOOLS (SIGN OUT)", sx, sy); }
+  });
+  const [bx, by, br] = GARDEN.butt;
+  put(bx, by, () => G.prism(circ(bx, by, br, 10), 0, 0.6, "#1e3a8a", 1.25));
+  const C = GARDEN.compost;
+  put((C.x0 + C.x1) / 2, (C.y0 + C.y1) / 2, () => { G.prism(rectPts(C.x0, C.y0, C.x1, C.y1), 0, 0.35, "#6b4a2a", 1.2); G.poly(rectPts(C.x0 + 0.1, C.y0 + 0.1, C.x1 - 0.1, C.y1 - 0.1).map(p => G.Q(p[0], p[1], 0.36)), "#3a2a1a"); });
+  const [qx, qy] = GARDEN.bench;
+  put(qx, qy, () => G.prism(rectPts(qx - 0.5, qy - 0.12, qx + 0.5, qy + 0.12), 0.18, 0.26, "#8a6a42", 1.2));
+  for (const [x, y] of GARDEN.trees) put(x, y, () => { vline(x, y, 0, 0.7, "#4a3018", Math.max(1, G.z * 0.1)); const [cx, cy] = G.Q(x, y, 1.0); G.ctx.fillStyle = "#15803d"; G.ctx.beginPath(); G.ctx.arc(cx, cy, G.z * 0.45, 0, Math.PI * 2); G.ctx.fill(); });
 }

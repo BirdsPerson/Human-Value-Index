@@ -58,6 +58,11 @@ export const ROOM_TYPE = {
   "willow-bend": "hab", "aspen-row": "hab", "hawthorn-rise": "hab", "primrose-court": "hab",
   "north-park": "park", "central-green": "picnic", "south-park": "park", eastgate: "market", "food-court": "diner", "high-school": "school", "school-field": "ballfield", clinic: "ward",
   departures: "cafe", "security-hall": "office", airfield: "street", "control-tower": "office", hangars: "docks", "airport-hotel": "bar",
+  // PHASE 2 step 5: THE FARMLAND and THE ENGINE, furnished from what exists
+  "farmhands-cottages": "hab", "dairy-cottages": "hab", "grange-row": "lofts", "the-manor": "suite", "farmers-market": "market", "the-plough": "bar", "market-green": "park",
+  "the-fields": "allotment", "the-orchards": "picnic", "the-dairy": "vats", "grain-elevator": "docks", "the-vet": "ward", "community-farm": "allotment", "tool-library": "docks",
+  "research-park": "lab", "annex-hall": "lecture", "engine-offices": "office", "the-uptime": "bar", "the-quad": "park",
+  "engine-tower-a": "suite", "engine-tower-b": "lofts", "engine-tower-c": "hab",
   ...PLANNING_ROOM_TYPE,   // the Dept of Planning's drawing office (planning.js): the advocates at their lecterns
   ...STORE_ROOM_TYPE,   // THE MALL: storefront units (their trade decides: storeRoomType), SAM'S PIZZA, GOODNIGHT IRENE'S
   ...NIGHT_ROOM_TYPE,   // THE NIGHTLIFE QUARTERS: the clubs, the bars, the restaurants, the late food, the liquor stores

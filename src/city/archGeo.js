@@ -22,7 +22,8 @@ import { COAST_LOTS, MOUNTAIN_LOT_PLACES } from "./coastGeo.js";
 import { maxIn } from "./mountainGeo.js";
 import { venueMass, VENUE_STYLES, VENUE_OUT_FRONT } from "./venueGeo.js";
 import { westMass, WEST_STYLES, WEST_OUT_FRONT } from "./westGeo.js";
-import { eastMass, EAST_STYLES, EAST_OUT_FRONT } from "./eastGeo.js";   // THE SUBURBS and THE AIRPORT (PHASE 2 step 4)
+import { eastMass, EAST_STYLES, EAST_OUT_FRONT } from "./eastGeo.js";
+import { farmMass, FARM_STYLES, FARM_OUT_FRONT } from "./farmGeo.js";   // THE FARMLAND (PHASE 2 step 5)   // THE SUBURBS and THE AIRPORT (PHASE 2 step 4)
 import { storeMass, STORE_STYLES, STORE_OUT_FRONT } from "./storefrontGeo.js";   // THE MALL
 import { nightMass, NIGHT_STYLES, NIGHT_OUT_FRONT } from "./nightlifeGeo.js";   // THE NIGHTLIFE QUARTERS
 
@@ -52,6 +53,7 @@ export const STYLES = {
   ...VENUE_STYLES,    // the Dept of Planning (venueGeo.js)
   ...WEST_STYLES,     // the Port and the Old Town (westGeo.js)
   ...EAST_STYLES,     // the Suburbs and the Airport (eastGeo.js)
+  ...FARM_STYLES,     // the Farmland (farmGeo.js)
   ...STORE_STYLES,    // THE MALL: the storefront units, SAM'S PIZZA, GOODNIGHT IRENE'S (storefrontGeo.js)
   ...NIGHT_STYLES,    // THE NIGHTLIFE QUARTERS: uptown's marble and glass, downtown's brick (nightlifeGeo.js)
 };
@@ -376,6 +378,7 @@ Object.assign(MASS, westMass({ box, cyl, pt, bx, run, gr }));
 Object.assign(MASS, storeMass({ box, cyl, pt, bx, run, gr }));
 Object.assign(MASS, nightMass({ box, cyl, pt, bx, run, gr }));
 Object.assign(MASS, eastMass({ box, cyl, pt, bx, run, gr }));
+Object.assign(MASS, farmMass({ box, cyl, pt, bx, run, gr }));
 
 // -> {style, parts, yard, ground, rise, box} in map cells, or null for open ground.
 const CACHE = new Map();
@@ -411,7 +414,7 @@ export function massingOf(b) {
   return m;
 }
 // How far the front (+y) dressing stands out from the body: stoops, canopies, awnings, a portico's steps.
-export const OUT_FRONT = { bungalow: 0.4, lodge: 0.1, brownstone: 0.55, glass: 0.45, casino: 0.45, cafe: 0.45, market: 0.35, theatre: 0.4, neon: 0.3, diner: 0.3, classical: 0.25, projects: 0.3, gallery: 0.1, hospital: 0.25, school: 0.2, gothic: 0.2, clocktower: 0.2, shed: 0.35, lofts: 0.3, office: 0.2, chapel: 0.2, ...FUNNEL_OUT_FRONT, ...VENUE_OUT_FRONT, ...WEST_OUT_FRONT, ...STORE_OUT_FRONT, ...NIGHT_OUT_FRONT, ...EAST_OUT_FRONT };
+export const OUT_FRONT = { bungalow: 0.4, lodge: 0.1, brownstone: 0.55, glass: 0.45, casino: 0.45, cafe: 0.45, market: 0.35, theatre: 0.4, neon: 0.3, diner: 0.3, classical: 0.25, projects: 0.3, gallery: 0.1, hospital: 0.25, school: 0.2, gothic: 0.2, clocktower: 0.2, shed: 0.35, lofts: 0.3, office: 0.2, chapel: 0.2, ...FUNNEL_OUT_FRONT, ...VENUE_OUT_FRONT, ...WEST_OUT_FRONT, ...STORE_OUT_FRONT, ...NIGHT_OUT_FRONT, ...EAST_OUT_FRONT, ...FARM_OUT_FRONT };
 
 export const MASSED = Object.keys(MASS);
 export const massingAll = () => BUILDINGS.map(b => [b, massingOf(b)]);

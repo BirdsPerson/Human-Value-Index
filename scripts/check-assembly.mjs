@@ -380,10 +380,12 @@ ok(ASM.decide({ votes: { golf: 3, farm: 3 } }).tie && ASM.decide({ votes: { golf
 
 // ---- the ground: anchors on their own lot, apart, enough of them -----------------------------------------
 {
-  const lotOf = { forum: SIM.PLACES.forum.rect, site: SIM.PLACES["dev-lot"].rect, golf: SIM.PLACES["dev-lot"].rect, farm: SIM.PLACES["dev-lot"].rect };
+  // (THE COMMUNITY FARM's full-size parcel in the Farmland: its own site and farm, "big")
+  const BIGR = SIM.PLACES["community-farm"].rect;
+  const lotOf = { forum: SIM.PLACES.forum.rect, site: SIM.PLACES["dev-lot"].rect, golf: SIM.PLACES["dev-lot"].rect, farm: SIM.PLACES["dev-lot"].rect, garden: SIM.PLACES["dev-lot"].rect, bigsite: BIGR, bigfarm: BIGR };
   for (const [face, as] of Object.entries(CIVIC_ANCHORS)) {
-    if (face === "vacant") { ok(as.length === 0, "the vacant lot has no places to stand"); continue; }
-    const R = lotOf[face], cap = face === "forum" ? SIM.PLACES.forum.cap : SIM.PLACES["dev-lot"].cap;
+    if (face === "vacant" || face === "bigvacant") { ok(as.length === 0, `the vacant lot has no places to stand (${face})`); continue; }
+    const R = lotOf[face], cap = face === "forum" ? SIM.PLACES.forum.cap : face.startsWith("big") ? SIM.PLACES["community-farm"].cap : SIM.PLACES["dev-lot"].cap;
     ok(as.every(a => a.x > R.x + 0.1 && a.x < R.x + R.w - 0.1 && a.y > R.y + 0.1 && a.y < R.y + R.h - 0.1), `${face}: every anchor on its own ground`);
     let close = 0;
     for (let i = 0; i < as.length; i++) for (let j = i + 1; j < as.length; j++) if (Math.hypot(as[i].x - as[j].x, as[i].y - as[j].y) < 0.3) close++;

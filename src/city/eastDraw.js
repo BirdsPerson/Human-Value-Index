@@ -276,7 +276,8 @@ export function drawEastYard(K, p, env, X) {
 }
 
 // ---- the open lots: the parks and the airfield (CityIso calls this over the lot's fill) -----------
-export const EAST_LOT_FILL = { "north-park": "#1d4d23", "village-green": "#215224", "south-park": "#1d4d23", "the-airfield": "#2b3a2a" };
+// (and the Farmland's market green and the Engine's quad, drawn as parks: PHASE 2 step 5)
+export const EAST_LOT_FILL = { "north-park": "#1d4d23", "village-green": "#215224", "south-park": "#1d4d23", "the-airfield": "#2b3a2a", "market-green": "#2a5a26", "the-quad": "#1f4a28" };
 const ptsOf = (Q, list, h) => list.map(([x, y]) => Q(x, y, h));
 function tree(G, x, y, z, night, r = 0.5) {
   const { ctx, Q } = G, [tx, ty] = Q(x, y, 0), [cx, cy] = Q(x, y, 1.0);

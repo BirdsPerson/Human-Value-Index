@@ -634,7 +634,7 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   }
   // housing follows tier: everyone's home is in a housing style whose band holds their tier
   const pop = [...FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name) })),
-    ...Array.from({ length: 600 }, (_, i) => ({ slug: `h-${i}`, name: `H ${i}`, tier: TIERS[i % TIERS.length].label, died: i % 3 === 0 ? "1900-01-01" : null }))];
+    ...Array.from({ length: 2400 }, (_, i) => ({ slug: `h-${i}`, name: `H ${i}`, tier: TIERS[i % TIERS.length].label, died: i % 3 === 0 ? "1900-01-01" : null }))];
   let bad = "";
   const seen = {};
   for (const s of pop) {

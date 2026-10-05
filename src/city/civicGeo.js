@@ -8,8 +8,8 @@
 
 import { PLACES } from "./sim.js";
 
-export const CIVIC_LOTS = { "the-assembly": "forum", "lot-6f07": "dev-lot" };
-export const CIVIC_PLACES = ["forum", "dev-lot"];
+export const CIVIC_LOTS = { "the-assembly": "forum", "lot-6f07": "dev-lot", "community-farm": "community-farm" };
+export const CIVIC_PLACES = ["forum", "dev-lot", "community-farm"];
 const rect = (id) => PLACES[id].rect;
 const A = (id, x, y, kind, act, extra = {}) => ({ id, x, y, h: 0, kind, act, role: "any", look: null, ring: null, ...extra });
 
@@ -45,25 +45,63 @@ function forumAnchors() {
   return out;
 }
 
-// ---- LOT 0x6F07 ------------------------------------------------------------------------------
+// ---- LOT 0x6F07 (and THE COMMUNITY FARM: the same faces at full size) -------------------------
+// Each face's geometry from its lot (L: a rect in map cells), so the Farmland's parcel is laid out
+// by the same rules as the Commons' lot.
+const signOf = (L) => ({ a: [L.x + 0.6, L.y + L.h - 0.5], b: [L.x + 3.6, L.y + L.h - 0.5], h0: 0.45, h1: 1.5 });
+const vacantOf = (L) => ({
+  lot: L,
+  rubble: Array.from({ length: Math.round(14 * L.w * L.h / 101.5) }, (_, i) => [L.x + 0.6 + ((i * 7.31) % 1) * (L.w - 1.2), L.y + 0.5 + ((i * 3.77) % 1) * (L.h - 1.4)]),
+  tufts: Array.from({ length: Math.round(22 * L.w * L.h / 101.5) }, (_, i) => [L.x + 0.4 + ((i * 0.618 + 0.13) % 1) * (L.w - 0.8), L.y + 0.4 + ((i * 0.382 + 0.41) % 1) * (L.h - 0.8)]),
+});
+const siteOf = (L) => {
+  const lx0 = L.x, ly0 = L.y, lx1 = L.x + L.w, ly1 = L.y + L.h;
+  return {
+    lot: L,
+    pit: { x0: lx0 + 3.2, y0: ly0 + 1.4, x1: lx1 - 3.6, y1: ly1 - 1.6 },
+    crane: { x: lx1 - 1.4, y: ly0 + 1.2, mast: 4.2, jib: 6.5, counter: 1.8 },
+    cabin: { x0: lx0 + 0.5, y0: ly0 + 0.5, x1: lx0 + 2.3, y1: ly0 + 1.4, h: 0.75 },
+    piles: [[lx0 + 1.2, ly0 + 2.6, "pipes"], [lx0 + 1.4, ly0 + 4.1, "pallets"], [lx1 - 2.2, ly1 - 1.0, "pallets"]],
+    digger: { x: lx1 - 3.0, y: ly1 - 2.6 },
+    gate: [lx0 + 4.2, ly1 - 0.12],
+  };
+};
+// The farm: beds of crop rows (four on the Commons' lot, as many as fit on a full-size parcel), the
+// barn and silo, the stand by the gate, a scarecrow, the tractor, fruit trees; bigger buildings on a
+// bigger lot.
+const CROPS = ["lettuce", "wheat", "tomato", "corn"];
+const farmOf = (L) => {
+  const lx0 = L.x, ly0 = L.y, lx1 = L.x + L.w, ly1 = L.y + L.h, k = L.w > 20 ? 1.8 : 1;
+  const bx0 = lx0 + 3.0 * k, bx1 = lx1 - 3.2 * k, n = Math.max(4, Math.floor((L.h - 1.4) / 1.5));
+  const beds = Array.from({ length: n }, (_, i) => ({ crop: CROPS[i % 4], x0: bx0, x1: bx1, y0: ly0 + 0.6 + i * 1.5, y1: ly0 + 0.6 + i * 1.5 + 1.15 }));
+  return {
+    lot: L, beds, k,
+    barn: { x0: lx1 - 2.8 * k, y0: ly0 + 0.5, x1: lx1 - 0.5, y1: ly0 + 0.5 + 1.8 * k, h: 1.0 * k, ridge: 0.55 * k },
+    silo: { x: lx1 - 1.3 * k, y: ly0 + 0.5 + 1.8 * k + 1.1 * k, r: 0.5 * k, h: 2.3 * k },
+    stand: { x0: lx0 + 0.6, y0: ly1 - 1.7, x1: lx0 + 2.4, y1: ly1 - 1.0 },
+    scarecrow: [(bx0 + bx1) / 2, ly0 + 2.65],
+    tractor: [lx1 - 2.2 * k, ly1 - 1.0],
+    trees: k > 1 ? Array.from({ length: Math.floor((L.h - 4) / 1.1) }, (_, i) => [lx0 + 0.6 + (i % 2) * 1.2, ly0 + 0.7 + i * 1.1]) : [[lx0 + 0.6, ly0 + 0.7], [lx0 + 1.6, ly0 + 0.7], [lx0 + 0.6, ly0 + 1.8]],
+  };
+};
+// THE COMMUNITY GARDEN (LOT 0x6F07 once THE COMMUNITY FARM has its full-size site in the Farmland):
+// raised beds between paths, the tool shed, the water butt, the compost bays, a bench.
+const gardenOf = (L) => {
+  const lx0 = L.x, ly0 = L.y, lx1 = L.x + L.w, ly1 = L.y + L.h, beds = [];
+  for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) beds.push({ crop: CROPS[(r * 4 + c) % 4], x0: lx0 + 3.0 + c * 2.3, x1: lx0 + 3.0 + c * 2.3 + 1.7, y0: ly0 + 1.0 + r * 2.6, y1: ly0 + 1.0 + r * 2.6 + 1.6 });
+  return {
+    lot: L, beds,
+    shed: { x0: lx1 - 2.2, y0: ly0 + 0.6, x1: lx1 - 0.6, y1: ly0 + 1.8, h: 0.8 },
+    butt: [lx1 - 1.0, ly0 + 2.5, 0.28], compost: { x0: lx1 - 2.2, y0: ly1 - 1.6, x1: lx1 - 0.6, y1: ly1 - 0.8 },
+    bench: [lx0 + 1.4, ly1 - 1.0], trees: [[lx0 + 0.7, ly0 + 0.8], [lx0 + 0.7, ly0 + 2.4]],
+  };
+};
 const L = rect("dev-lot");
 const lx0 = L.x, ly0 = L.y, lx1 = L.x + L.w, ly1 = L.y + L.h;
 // The sign stands at the front (south-west) corner, where the street sees it.
-export const SIGN = { a: [lx0 + 0.6, ly1 - 0.5], b: [lx0 + 3.6, ly1 - 0.5], h0: 0.45, h1: 1.5 };
-export const VACANT = (() => ({
-  lot: L,
-  rubble: Array.from({ length: 14 }, (_, i) => [lx0 + 0.6 + ((i * 7.31) % 1) * (L.w - 1.2), ly0 + 0.5 + ((i * 3.77) % 1) * (L.h - 1.4)]),
-  tufts: Array.from({ length: 22 }, (_, i) => [lx0 + 0.4 + ((i * 0.618 + 0.13) % 1) * (L.w - 0.8), ly0 + 0.4 + ((i * 0.382 + 0.41) % 1) * (L.h - 0.8)]),
-}))();
-export const SITE = {
-  lot: L,
-  pit: { x0: lx0 + 3.2, y0: ly0 + 1.4, x1: lx1 - 3.6, y1: ly1 - 1.6 },
-  crane: { x: lx1 - 1.4, y: ly0 + 1.2, mast: 4.2, jib: 6.5, counter: 1.8 },
-  cabin: { x0: lx0 + 0.5, y0: ly0 + 0.5, x1: lx0 + 2.3, y1: ly0 + 1.4, h: 0.75 },
-  piles: [[lx0 + 1.2, ly0 + 2.6, "pipes"], [lx0 + 1.4, ly0 + 4.1, "pallets"], [lx1 - 2.2, ly1 - 1.0, "pallets"]],
-  digger: { x: lx1 - 3.0, y: ly1 - 2.6 },
-  gate: [lx0 + 4.2, ly1 - 0.12],
-};
+export const SIGN = signOf(L);
+export const VACANT = vacantOf(L);
+export const SITE = siteOf(L);
 // The golf course: eighteen holes, six by three, each a tee and a green with its flag.
 export const GOLF = (() => {
   const holes = [];
@@ -82,23 +120,15 @@ export const GOLF = (() => {
     carts: [[lx0 + 1.3, ly0 + 2.9], [lx0 + 1.3, ly0 + 3.6]],
   };
 })();
-// The farm: four beds of crop rows, the barn and silo, the stand by the gate, a scarecrow.
-export const FARM = (() => {
-  const bx0 = lx0 + 3.0, bx1 = lx1 - 3.2;
-  const beds = ["lettuce", "wheat", "tomato", "corn"].map((crop, i) => ({ crop, x0: bx0, x1: bx1, y0: ly0 + 0.6 + i * 1.5, y1: ly0 + 0.6 + i * 1.5 + 1.15 }));
-  return {
-    lot: L, beds,
-    barn: { x0: lx1 - 2.8, y0: ly0 + 0.5, x1: lx1 - 0.5, y1: ly0 + 2.3, h: 1.0, ridge: 0.55 },
-    silo: { x: lx1 - 1.3, y: ly0 + 3.4, r: 0.5, h: 2.3 },
-    stand: { x0: lx0 + 0.6, y0: ly1 - 1.7, x1: lx0 + 2.4, y1: ly1 - 1.0 },
-    scarecrow: [(bx0 + bx1) / 2, ly0 + 2.65],
-    tractor: [lx1 - 2.2, ly1 - 1.0],
-    trees: [[lx0 + 0.6, ly0 + 0.7], [lx0 + 1.6, ly0 + 0.7], [lx0 + 0.6, ly0 + 1.8]],
-  };
-})();
+export const FARM = farmOf(L);
+export const GARDEN = gardenOf(L);
+const SITE0 = SITE, FARM0 = FARM;
+// THE COMMUNITY FARM's parcel in the Farmland: the same faces, full size
+const BL = rect("community-farm");
+export const BIG = { SIGN: signOf(BL), VACANT: vacantOf(BL), SITE: siteOf(BL), FARM: farmOf(BL) };
 
-function siteAnchors() {
-  const P = SITE.pit, out = [];
+function siteAnchors(SITE = SITE0) {
+  const P = SITE.pit, out = [], L = SITE.lot, lx0 = L.x, ly0 = L.y, ly1 = L.y + L.h;
   // the foreman first, then the diggers in the pit, the carriers, the hammer gang, the crane
   out.push(A("foreman", P.x0 - 0.5, P.y1 + 0.4, "stand", "inspect", { look: [P.x0 + 2, P.y0 + 1] }));
   for (let k = 0; k < 5; k++) out.push(A(`dig${k}`, P.x0 + 0.6 + k * ((P.x1 - P.x0 - 1.2) / 4), P.y0 + 0.6 + (k % 2) * 1.4, "stand", "dig"));
@@ -108,6 +138,8 @@ function siteAnchors() {
   out.push(A("gate", SITE.gate[0] + 0.6, SITE.gate[1] - 0.45, "stand", "guard"));
   for (let k = 0; k < 4; k++) out.push(A(`dig${k + 5}`, P.x0 + 1.1 + k * ((P.x1 - P.x0 - 2.2) / 3), P.y0 + 1.3 + ((k + 1) % 2) * 1.2, "stand", "dig"));
   for (let k = 0; k < 4; k++) out.push(A(`hauls${k}`, lx0 + 0.8 + (k % 2) * 0.9, ly0 + 1.9 + Math.floor(k / 2) * 0.9, "stand", "haul"));
+  // a full-size site (THE COMMUNITY FARM's parcel): a bigger crew across the pit
+  if (L.w > 20) for (let k = 0; k < 14; k++) out.push(A(`crew${k}`, P.x0 + 1.5 + (k % 7) * ((P.x1 - P.x0 - 3) / 6), P.y0 + 3 + Math.floor(k / 7) * ((P.y1 - P.y0 - 6) / 1), "stand", k % 3 ? "dig" : "hammer"));
   return out;
 }
 function golfAnchors() {
@@ -125,11 +157,11 @@ function golfAnchors() {
   out.push(A("club1", GOLF.clubhouse.x1 + 0.35, GOLF.clubhouse.y1 + 0.35, "stand", "talk", { look: [GOLF.clubhouse.x0, GOLF.clubhouse.y1] }));
   return out;
 }
-function farmAnchors() {
+function farmAnchors(FARM = FARM0) {
   const out = [];
   FARM.beds.forEach((b, i) => {
     const n = 5, act = b.crop === "wheat" ? "dig" : "pick";
-    for (let k = 0; k < n; k++) out.push(A(`${b.crop}${k}`, b.x0 + 0.5 + k * ((b.x1 - b.x0 - 1) / (n - 1)) + (i % 2) * 0.3, (b.y0 + b.y1) / 2, "stand", act));
+    for (let k = 0; k < n; k++) out.push(A(i < 4 ? `${b.crop}${k}` : `${b.crop}${i}-${k}`, b.x0 + 0.5 + k * ((b.x1 - b.x0 - 1) / (n - 1)) + (i % 2) * 0.3, (b.y0 + b.y1) / 2, "stand", act));
   });
   const S = FARM.stand;
   out.splice(3, 0, A("seller", (S.x0 + S.x1) / 2, S.y0 - 0.35, "stand", "sell", { look: [(S.x0 + S.x1) / 2, S.y1 + 1] }));
@@ -140,6 +172,20 @@ function farmAnchors() {
   return out;
 }
 
-export const CIVIC_ANCHORS = { forum: forumAnchors(), site: siteAnchors(), golf: golfAnchors(), farm: farmAnchors(), vacant: [] };
-// Which face the lot shows for a lotPhase(): "vacant" | "site" | "golf" | "farm".
-export const faceOf = (p) => (p.phase === "site" ? "site" : p.phase === "built" ? p.winner : "vacant");
+function gardenAnchors() {
+  const out = [];
+  GARDEN.beds.forEach((b, i) => { for (let k = 0; k < 3; k++) out.push(A(`bed${i}${k}`, b.x0 + 0.3 + k * (b.x1 - b.x0 - 0.6) / 2, b.y1 + 0.3, "stand", i % 3 === 1 ? "dig" : "pick", { look: [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2] })); });
+  out.push(A("shed", GARDEN.shed.x0 + 0.5, GARDEN.shed.y1 + 0.35, "stand", "haul"));
+  out.push(A("water", GARDEN.butt[0] - 0.5, GARDEN.butt[1] + 0.3, "stand", "water"));
+  out.push(A("bench", GARDEN.bench[0], GARDEN.bench[1] - 0.1, "stand", "talk"));
+  return out;
+}
+export const CIVIC_ANCHORS = { forum: forumAnchors(), site: siteAnchors(), golf: golfAnchors(), farm: farmAnchors(), garden: gardenAnchors(), vacant: [], bigsite: siteAnchors(BIG.SITE), bigfarm: farmAnchors(BIG.FARM), bigvacant: [] };
+// Which face the lot shows for a lotPhase(): "vacant" | "site" | "golf" | "farm"; LOT 0x6F07's farm is
+// the community garden once THE COMMUNITY FARM has its full-size parcel (sim.FARM_PARCEL), and that
+// parcel's faces are the big ones.
+export const faceOf = (p, pid = "dev-lot") => {
+  const f = p.phase === "site" ? "site" : p.phase === "built" ? p.winner : "vacant";
+  if (pid === "community-farm") return f === "site" ? "bigsite" : f === "farm" ? "bigfarm" : "bigvacant";
+  return f === "farm" && p.garden ? "garden" : f;
+};

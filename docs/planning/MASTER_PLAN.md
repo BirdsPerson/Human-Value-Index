@@ -198,13 +198,16 @@ marked as reconstruction); the billboard sites at four turns. `check-cityview`, 
 
 ## PHASE 2: growth in every direction, and rail to reach it
 
-**Status (2026-10-05): steps 1-4 built and live**, with one addition: THE CENTRAL LINE across the core
+**Status (2026-10-05): steps 1-5 built and live**, with one addition: THE CENTRAL LINE across the core
 through a portal in the monolith (Scott: "it would make sense for the train to run through the
-central building"). What was built and measured: docs/CITY_SPEC.md "PHASE 2" and "PHASE 2 step 4".
-Since then: THE LOOP'S VERSION 2 (network 6: three times the trains, version 1's five untouched; the
-busiest car at 5,000 from 43-51 to 17-24 a day); the Port's and the Old Town's prefects (and the four
-for the districts to come); (4) THE SUBURBS and THE AIRPORT with the East Line (network 7). Still to
-come: (5) THE FARMLAND (the West Line's next version) and THE ENGINE, (6) THE OUTER RING.
+central building"). What was built and measured: docs/CITY_SPEC.md "PHASE 2", "PHASE 2 step 4" and
+"PHASE 2 step 5". Since 2026-10-01: THE LOOP'S VERSION 2 (network 6: three times the trains, version
+1's five untouched; the busiest car at 5,000 from 43-51 to 17-24 a day); the prefects of the Port and
+the Old Town (and of every district since); (4) THE SUBURBS and THE AIRPORT with the East Line (network
+7); (5) THE FARMLAND (the West Line's version 2) with THE COMMUNITY FARM, session 001's winner at full
+size (LOT 0x6F07 its community garden), and THE ENGINE with the Engine Shuttle (network 8). Still to
+come: (6) THE OUTER RING at the 20k stage; the Shore Line's next version (its busiest car reached 29
+at 5,000 once the Loop was relieved).
 
 Scott, 2026-09-30: "make sure we're extending in lots of different directions, planning where
 things should best be located; the train track needs to extend to different parts of the city;

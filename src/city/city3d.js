@@ -18,7 +18,7 @@ import { rotate, project, CAMERA } from "../cube3d.js";
 import { FLOORS as HQ_FLOORS } from "../building.js";
 
 // ---- world scale -------------------------------------------------------------------
-export const SPAN = 170;           // sim cells per world unit (55 until the Coast and the Heights, 66 until the master plan, 78 until the Port and the Old Town, 100 until THE MOUNTAIN, 112 until the Suburbs and the Airport (the view centres on the core, so the east sets it): the whole city still fits at rest)
+export const SPAN = 190;           // sim cells per world unit (55 until the Coast and the Heights, 66 until the master plan, 78 until the Port and the Old Town, 100 until THE MOUNTAIN, 112 until the Suburbs and the Airport, 170 until the Farmland and the Engine (the view centres on the core, so the far edges set it): the whole city still fits at rest)
 export const FLOOR_H = 2.1 / SPAN; // one storey, in world units (about two cells)
 export const LOOP_H = 2.6 * FLOOR_H;   // the Loop's deck, above the low buildings
 export const EXPLODE_GAP = 3.2;    // extra storeys of air between floors when a building opens
