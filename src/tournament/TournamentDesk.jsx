@@ -24,8 +24,8 @@ export function windowLine(ev, now = Date.now()) {
 }
 export function prizeLine(ev) {
   const t = ev.prizes.trophies.length;
-  const cups = t === 3 ? "TROPHIES FOR THE TOP THREE IN OPEN, ONE FOR THE ASSISTED WINNER: A PIECE FOR YOUR FLAT" : t === 1 ? "A TROPHY FOR EACH DIVISION'S WINNER: A PIECE FOR YOUR FLAT" : "NO TROPHY";
-  return `${cups}, AND A LINE ON THE FILE. NO CYCLES: THE DEPARTMENT DOES NOT PAY FOR LEISURE.`;
+  const cups = t === 3 ? "TROPHIES FOR THE TOP THREE IN OPEN AND THE ASSISTED WINNER (A PIECE FOR YOUR FLAT), AND A LINE ON THE FILE" : t === 1 ? "A TROPHY FOR EACH DIVISION'S WINNER (A PIECE FOR YOUR FLAT), AND A LINE ON THE FILE" : "A LINE ON EACH DIVISION WINNER'S FILE. TROPHIES ARE FOR THE MAJORS";
+  return `${cups}. NO CYCLES: THE DEPARTMENT DOES NOT PAY FOR LEISURE.`;
 }
 
 // File one leg of an official attempt: -> a line for the end menu ("FILED. 3RD OF 12 IN OPEN, PROJECTED.")
@@ -102,7 +102,9 @@ export default function TournamentDesk({ game, id, onStart, refresh = 0, busy = 
     } catch (e) { setMsg(e.message); }
     setWorking(false);
   };
-  const others = events.filter(e => !ev || e.id !== ev.id).filter(e => statusOf(e, now) !== "closed" || now - e.closes < 3 * 86400000).slice(0, 6);
+  const rank = (e) => { const x = statusOf(e, now); return x === "open" ? 0 : x === "upcoming" ? (e.major ? 1 : 2) : 3; };
+  const others = events.filter(e => !ev || e.id !== ev.id).filter(e => statusOf(e, now) !== "closed" || now - e.closes < 3 * 86400000)
+    .sort((a, b) => rank(a) - rank(b) || (rank(a) === 3 ? b.closes - a.closes : a.opens - b.opens)).slice(0, 6);
 
   return (
     <Frame title="TOURNAMENT" meta="OPEN TO EVERY FILE // PLAY WHEN YOU LIKE, INSIDE THE WINDOW" className="tq">

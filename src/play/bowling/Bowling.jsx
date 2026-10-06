@@ -409,6 +409,7 @@ function Lane({ cfg, setup, lane, onAgain, onSettings, tour = null }) {
 
   return (
     <div className={`bw${cosmic ? " cosmic" : ""}`}>
+      {tour && <p className="bw-call" style={{ marginBottom: 6 }}><b>{tour.ev.name}</b> {tour.official ? "OFFICIAL" : "PRACTICE"} // {DIV_NAME[tour.div]} // {tour.ev.cond.oil} // GAME {tour.leg + 1} OF {tour.ev.legs}</p>}
       <Monitor st={st} cosmic={cosmic} />
       <div className="bw-call" aria-live="polite" aria-atomic="true">{call ? <><b>{call.head}</b> {call.sub}{call.tell ? <span className="bw-tell"> {call.tell}</span> : null}</> : status}</div>
       <div className="bw-stage" ref={wrapRef}>
@@ -427,7 +428,7 @@ function Lane({ cfg, setup, lane, onAgain, onSettings, tour = null }) {
         <Button variant="back" onClick={onSettings}>Change bowlers</Button>
       </ButtonRow>
       <Legend pad={pad} />
-      <p className="bw-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{tour ? `${tour.ev.name} // ${tour.official ? "OFFICIAL" : "PRACTICE"} // ${DIV_NAME[tour.div]} // ${tour.ev.cond.oil} // GAME ${tour.leg + 1} OF ${tour.ev.legs}` : NOTICE}</p>
+      <p className="bw-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{tour ? "TOURNAMENT GAMES ARE FILED AS THEY END AND RE-PLAYED BY THE DEPARTMENT." : NOTICE}</p>
       {paused && !done && (
         <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE PINSETTER WAITS. IT IS PAID TO." onBack={() => setPaused(false)}
           options={{ resume: () => setPaused(false), restart: onAgain, controls: <Legend pad={pad} />, sound: { on: !muted, onSelect: toggleMute }, quit: true }} />
