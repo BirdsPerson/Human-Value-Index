@@ -68,7 +68,7 @@ export const CAMPAIGN_OF_PLACE = { "dive-bar": "the-dive", "the-lantern": "the-d
 // Buildings whose rooms hold a cabinet (the toolbar offers PLAY there too).
 export const CABINET_BUILDINGS = { "the-dive": "the-dive", "press-building": "the-diner", casino: "casino", "eb-shop": "union-lounge", "the-boardwalk": "the-boardwalk" };
 // The house cabinets a building's rooms hold (the toolbar offers each), from houseGames.HOUSE_PLACES.
-export const HOUSE_BUILDINGS = { "the-dive": ["house-hunt", "house-golf", "house-hoops"], "the-surfside": ["house-golf", "house-hunt", "house-football"], casino: ["house-golf"], "the-boardwalk": ["house-hoops", "house-fish"], "press-building": ["house-fish"] };
+export const HOUSE_BUILDINGS = { "the-dive": ["house-hunt", "house-golf", "house-hoops", "house-football"], "the-surfside": ["house-golf", "house-hunt", "house-football"], casino: ["house-golf"], "the-boardwalk": ["house-hoops", "house-fish"], "press-building": ["house-fish"] };
 // The foothills outfitter's line (FunnelOverlay "outfitter"; the building's button)
 export const OUTFITTER = { title: "THE OUTFITTER", line: "CAPTURE PERMITS ISSUED. THE ANIMALS WILL BE HOUSED, AT GREAT EXPENSE.", soon: "SAFARI ZONE: OPENING SOON." };
 

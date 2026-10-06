@@ -55,6 +55,8 @@ export function bookOf(teamId) {
   return [RUNS[r1], RUNS[r2], PASSES[p1], PASSES[p2]];
 }
 export const KICK_PUNT = 4, KICK_FG = 5;
+// ROOKIE's handicap on the CPU side: its speed, its mashing, a human carrier's grab need
+export const EASY = { speed: 0.92, mash: 0.5, need: 0.78 };
 
 // ---- the numbers ------------------------------------------------------------------------------------
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -115,15 +117,19 @@ export function newGame(cfg, seed) {
     call: null, play: null, ball: null, grab: null, freeze: 0, kick: null, dead: null, msg: null, td: null, firstKick: 1,
     stat: [0, 1].map(() => ({ rush: 0, pass: 0, breaks: 0, hits: 0, reads: 0, ints: 0, plays: 0 })), over: false,
   };
+  // ROOKIE (the default, cfg.level !== "pro"): a CPU side facing a human plays a step slower, shakes
+  // fewer tackles and guesses blind; PRO plays it straight. CPU v CPU is always straight.
+  st.ez = [0, 1].map(t => cfg.level !== "pro" && cfg.sides[t] === "cpu" && cfg.sides[1 - t] === "human");
   for (let t = 0; t < 2; t++) {
     const rows = cfg.teams[t].rows;
     st.lu.push(lineup(rows));
     st.books.push(bookOf(cfg.teams[t].id));
     rows.forEach((row, i) => {
       const [key, name, r] = row;
-      st.p.push({ t, i, g: t * 11 + i, key: String(key), name: String(name), r: r | 0, ...abilities(r | 0, String(key)), x: 0, y: 0, vx: 0, vy: 0, face: dirOf(t), down: 0, eng: -1, engF: 0, shedCD: 0, dive: 0, boost: 0, role: "", wp: 0, sx: 0, sy: 0, mark: -1, path: null, settle: false });
+      st.p.push({ lv: 1, t, i, g: t * 11 + i, key: String(key), name: String(name), r: r | 0, ...abilities(r | 0, String(key)), x: 0, y: 0, vx: 0, vy: 0, face: dirOf(t), down: 0, eng: -1, engF: 0, shedCD: 0, dive: 0, boost: 0, role: "", wp: 0, sx: 0, sy: 0, mark: -1, path: null, settle: false });
     });
   }
+  for (const p of st.p) if (st.ez[p.t]) p.lv = EASY.speed;
   setupKickoff(st, 1, false);   // the visitors kick off; the home side receives first
   return st;
 }
@@ -211,7 +217,7 @@ function cpuOffence(st) {
   return (pass ? 2 : 0) + (rnd(st) < 0.5 ? 0 : 1);
 }
 function cpuDefence(st) {
-  const pass = rnd(st) < 0.5 + (passLean(st) - 0.5) * 0.6;
+  const pass = rnd(st) < 0.5 + (passLean(st) - 0.5) * (st.ez[1 - st.poss] ? 0 : 0.6);
   return (pass ? 2 : 0) + (rnd(st) < 0.5 ? 0 : 1);
 }
 
@@ -418,7 +424,7 @@ function dpad(mask) {
 }
 // steer a man toward a velocity: dx, dy a unit direction (or zero to stop), mult his top speed
 function drive(p, dx, dy, mult) {
-  const sp = p.spd * mult * (p.boost > 0 ? 1.12 : 1);
+  const sp = p.spd * p.lv * mult * (p.boost > 0 ? 1.12 : 1);
   const tx = dx * sp, ty = dy * sp, k = 0.16;
   p.vx += (tx - p.vx) * k; p.vy += (ty - p.vy) * k;
 }
@@ -766,7 +772,7 @@ function tackles(st, c) {
       c.down = 60; q.down = 20; q.dive = 0;
       return downed(st, c);
     }
-    st.grab = { g: c.g, f: 0, mash: 0, need: GRAB_NEED + 8 * q.tak + (q.dive > 0 ? 1.5 : 0), tk: [q.g] };
+    st.grab = { g: c.g, f: 0, mash: 0, need: (GRAB_NEED + 8 * q.tak + (q.dive > 0 ? 1.5 : 0)) * (st.ez[q.t] ? EASY.need : 1), tk: [q.g] };
     q.vx = c.vx * 0.5; q.vy = c.vy * 0.5;
     ev(st, "grab");
   }
@@ -774,7 +780,7 @@ function tackles(st, c) {
   if (!g) return;
   if (g.g !== c.g) { st.grab = null; return; }
   g.f++;
-  if (st.cfg.sides[c.t] !== "human" && rnd(st) < 0.05 + 0.08 * c.str) mash(st, c);
+  if (st.cfg.sides[c.t] !== "human" && rnd(st) < (0.05 + 0.08 * c.str) * (st.ez[c.t] ? EASY.mash : 1)) mash(st, c);
   if (g.mash >= g.need) {
     for (const k of g.tk) { const q = st.p[k]; q.down = 45; q.dive = 0; }
     st.grab = null; c.boost = 24; st.stat[c.t].breaks++; ev(st, "break");

@@ -45,3 +45,9 @@
   .tb-play { position: relative; }
   .tb-keys .row { grid-template-columns: 1fr; gap: 0; }
 }
+.tb-play { position: relative; }
+.tb-tip { min-height: 2.4em; margin: var(--s2) 0 0; padding: var(--s1) var(--s3); color: var(--warn); border: var(--bw) solid transparent; font-size: var(--t-xs); letter-spacing: 0.04em; text-align: center; }
+.tb-tip.on { border-color: var(--warn); }
+.tb-guide { margin: 0 0 var(--s4); }
+.tb-guide kbd { font: inherit; color: var(--fg); font-weight: 700; margin-right: var(--s1); }
+.tb-go { margin-top: var(--s2); min-height: var(--hit); }

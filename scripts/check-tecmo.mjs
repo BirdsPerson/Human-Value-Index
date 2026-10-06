@@ -290,4 +290,27 @@ function play(cfg, seed, botSeed, maxF = 60 * 60 * 20) {
   ok(/^\d+-\d+$/.test(hs.score) && hs.initials.length === 3, `the marquee's score is a football score: ${hs.initials} ${hs.score}`);
 }
 
+// ---- 7. a casual human (scripts/tecmoBot.mjs) against the CPU, equal teams (each club against itself) ------
+// ROOKIE, the default, is beatable most of the time; PRO is not.
+{
+  const { casualHuman } = await import("./tecmoBot.mjs");
+  const rate = (level, games, qlen) => {
+    let w = 0, pf = 0, pa = 0;
+    for (let i = 0; i < games; i++) {
+      const id = R.TEAM_IDS[i % 10], side = i % 2;
+      const st = S.newGame({ qlen, level, sides: side ? ["cpu", "human"] : ["human", "cpu"], teams: [team(id), team(id)] }, 1000 + i);
+      const bot = casualHuman(side, i + 7);
+      for (let f = 0; f < 60 * 60 * 15 && !st.over; f++) S.step(st, bot(st) << (8 * side));
+      ok(st.over, "the casual human's game ends");
+      const me = st.score[side], cpu = st.score[1 - side];
+      pf += me; pa += cpu; w += me > cpu ? 1 : me === cpu ? 0.5 : 0;
+    }
+    return { win: w / games, pf: pf / games, pa: pa / games };
+  };
+  const rookie = rate(undefined, 40, 1), pro = rate("pro", 20, 1);
+  ok(rookie.win >= 0.58 && rookie.win <= 0.82, `ROOKIE (the default): a casual human wins ${(100 * rookie.win).toFixed(0)}% against an equal team (${rookie.pf.toFixed(1)}-${rookie.pa.toFixed(1)} a game); aim 65-75%`);
+  ok(pro.win < rookie.win - 0.25, `PRO is the real thing: ${(100 * pro.win).toFixed(0)}%`);
+  console.log(`  casual human v CPU, equal teams: ROOKIE ${(100 * rookie.win).toFixed(0)}%, PRO ${(100 * pro.win).toFixed(0)}%`);
+}
+
 console.log(`check-tecmo: ${n} checks passed`);

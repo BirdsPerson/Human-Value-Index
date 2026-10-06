@@ -3,14 +3,14 @@ import { Button, ButtonRow, ScreenHead } from "../../ui/index.js";
 import { readCaseId } from "../../caseFile.jsx";
 import { loadSprite } from "../../sprites.js";
 import { headFrom } from "../heads.js";
-import { GLYPHS } from "../../city/gamepad.js";
 import GameMenu from "../GameMenu.jsx";
 import { highScore } from "../../city/funnels.js";
-import { TEAM_IDS, TEAMS, teamName, kitsFor, FALLBACK, loadLeague, sortEleven, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, machineDay, CROPS } from "../football/roster.js";
+import { TEAM_IDS, teamShort, teamName, kitsFor, FALLBACK, loadLeague, sortEleven, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, machineDay, CROPS } from "../football/roster.js";
 import { newGame, step, rleEncode, replay, resultOf, lineup, VERSION, HZ, QLENS, BTN, O, D, PLAYS, bookOf, abilities } from "./sim.js";
 import { draw, drawAttract, camInit, camFollow, W, H, lastName } from "./render.js";
 import { createInput, padAt } from "./input.js";
 import * as SFX from "./audio.js";
+import ControlsGuide, { guideSeen, markGuideSeen, namesFor, tipFor, tipsSeen, markTip } from "./Guide.jsx";
 import "./tecmo.css";
 import "../pages.css";
 
@@ -27,7 +27,7 @@ const parseRoute = (route) => {
   return { home: id("home"), vs: id("vs"), qlen: QLENS.includes(ql) ? ql : 2, two: q.get("p") === "2", cab: q.get("cab") === "1" };
 };
 const REDUCED = () => { try { return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches); } catch { return false; } };
-const SCORES = "hvi-tecmo-scores", LAST = "hvi-tecmo-last", QKEY = "hvi-tecmo-qlen";
+const SCORES = "hvi-tecmo-scores", LAST = "hvi-tecmo-last", QKEY = "hvi-tecmo-qlen", LKEY = "hvi-tecmo-level";
 export function loadScores() { try { const j = JSON.parse(localStorage.getItem(SCORES) || "[]"); return Array.isArray(j) ? j : []; } catch { return []; } }
 // the board: wins over the CPU, the widest margin first
 export function addScore(list, rec) {
@@ -71,11 +71,15 @@ export default function Tecmo({ route }) {
   const [game, setGame] = useState(null);
   const [scores, setScores] = useState(loadScores);
   const [muted, setMuted] = useState(SFX.isMuted());
+  const [level, setLevel] = useState(() => { try { return localStorage.getItem(LKEY) === "pro" ? "pro" : "rookie"; } catch { return "rookie"; } });
+  const [guide, setGuide] = useState(null);   // a start held back for the controls guide, the first time
+  const pickLevel = (v) => { setLevel(v); try { localStorage.setItem(LKEY, v); } catch { /* fine */ } };
   const pickQ = (q) => { setQlen(q); try { localStorage.setItem(QKEY, String(q)); } catch { /* fine */ } };
   const start = (home, away, twoP = two, tape = null) => {
     SFX.unlock();
+    if (!tape && !guideSeen()) { setGuide([home, away, twoP]); return; }
     const kits = kitsFor(home, away);
-    const cfg = { qlen, sides: ["human", twoP ? "human" : "cpu"], teams: [home, away].map(id => ({ id, short: TEAMS[id][1], rows: elevenOf(league, id, caseId) })) };
+    const cfg = { qlen, level, sides: ["human", twoP ? "human" : "cpu"], teams: [home, away].map(id => ({ id, short: teamShort(id), rows: elevenOf(league, id, caseId) })) };
     setGame({ n: Date.now(), cfg: tape ? tape.cfg : cfg, seed: tape ? tape.seed : seedNow(), kits, ids: [home, away], two: twoP, tape });
     setScreen("game");
   };
@@ -88,7 +92,8 @@ export default function Tecmo({ route }) {
   useEffect(() => () => SFX.close(), []);
 
   let body;
-  if (screen === "game" && game) {
+  if (guide) body = <ControlsGuide family={padAt(0).connected ? padAt(0).family : null} two={guide[2]} onDone={() => { markGuideSeen(); const g = guide; setGuide(null); start(g[0], g[1], g[2]); }} />;
+  else if (screen === "game" && game) {
     body = <Match key={game.n} game={game} muted={muted} onMute={toggleMute} cab={opts.cab}
       onEnd={(rec, res) => {
         if (!game.tape && !game.two && rec) {
@@ -103,7 +108,7 @@ export default function Tecmo({ route }) {
   } else if (screen === "teams") {
     body = <Teams league={league} mine={mine} two={two} onStart={(h, a) => start(h, a, two)} onBack={() => setScreen("title")} />;
   } else {
-    body = <Title quickPair={opts} league={league} mine={mine} cab={opts.cab} qlen={qlen} pickQ={pickQ} scores={scores} muted={muted} onMute={toggleMute}
+    body = <Title quickPair={opts} league={league} mine={mine} cab={opts.cab} qlen={qlen} pickQ={pickQ} level={level} pickLevel={pickLevel} scores={scores} muted={muted} onMute={toggleMute}
       onQuick={quick} onOne={() => { setTwo(false); setScreen("teams"); }} onTwo={() => { setTwo(true); setScreen("teams"); }} />;
   }
   return (
@@ -115,7 +120,7 @@ export default function Tecmo({ route }) {
 }
 
 // ---- the title: the attract mode behind the menu ------------------------------------------------------------
-function Title({ quickPair, league, mine, cab, qlen, pickQ, scores, muted, onMute, onQuick, onOne, onTwo }) {
+function Title({ quickPair, league, mine, cab, qlen, pickQ, level, pickLevel, scores, muted, onMute, onQuick, onOne, onTwo }) {
   const canvas = useRef(null), first = useRef(null);
   const [h0, a0] = playNowPair(league, mine);
   const h = quickPair.home || h0, a = quickPair.vs && quickPair.vs !== h ? quickPair.vs : h === h0 ? a0 : playNowPair(league, h)[1];
@@ -126,8 +131,8 @@ function Title({ quickPair, league, mine, cab, qlen, pickQ, scores, muted, onMut
     const cv = canvas.current; if (!cv) return undefined;
     const ctx = cv.getContext("2d"), reduced = REDUCED();
     const ids = [TEAM_IDS[Math.floor(Math.random() * 10)], null]; ids[1] = TEAM_IDS.filter(x => x !== ids[0])[Math.floor(Math.random() * 9)];
-    const kits = kitsFor(ids[0], ids[1]), names = ids.map(i => TEAMS[i][1]);
-    const mk = () => newGame({ qlen: 1, sides: ["cpu", "cpu"], teams: ids.map(id => ({ id, short: TEAMS[id][1], rows: sortEleven(league.teams[id]).map(([k, n, r]) => [k, shownName(n), r]) })) }, seedNow());
+    const kits = kitsFor(ids[0], ids[1]), names = ids.map(i => teamShort(i));
+    const mk = () => newGame({ qlen: 1, sides: ["cpu", "cpu"], teams: ids.map(id => ({ id, short: teamShort(id), rows: sortEleven(league.teams[id]).map(([k, n, r]) => [k, shownName(n), r]) })) }, seedNow());
     let st = mk(), cam = camInit(st), raf = 0, last = performance.now(), acc = 0;
     const loop = (now) => {
       acc = Math.min(acc + (now - last) / 1000, 4 / HZ); last = now;
@@ -154,16 +159,19 @@ function Title({ quickPair, league, mine, cab, qlen, pickQ, scores, muted, onMut
       <p className="tb-sub">QUICK PLAY: {teamName(h)}{h === mine ? " (YOUR TEAM)" : ""} V {teamName(a)}. FOUR {qlen}-MINUTE QUARTERS.</p>
       <div className="tb-chips" role="radiogroup" aria-label="Quarter length">
         {QLENS.map(q => <button key={q} type="button" role="radio" aria-checked={qlen === q} className={`tb-chip${qlen === q ? " on" : ""}`} onClick={() => pickQ(q)}>{q}-MINUTE QUARTERS</button>)}
+      </div>
+      <div className="tb-chips" role="radiogroup" aria-label="CPU level">
+        {[["rookie", "ROOKIE: THE CPU GOES EASY"], ["pro", "PRO: THE CPU PLAYS IT STRAIGHT"]].map(([v, l]) => <button key={v} type="button" role="radio" aria-checked={level === v} className={`tb-chip${level === v ? " on" : ""}`} onClick={() => pickLevel(v)}>{l}</button>)}
         <button type="button" className="tb-chip" aria-pressed={!muted} onClick={onMute}>{muted ? "SOUND: OFF" : "SOUND: ON"}</button>
       </div>
       <div className="tb-board">
         <p><b>THE MARQUEE TODAY</b> {hs ? `${hs.initials} ${hs.score}` : "-"}</p>
-        <p><b>YOUR BEST WINS</b> {scores.length ? scores.map(s => `${s.line} (${TEAMS[s.team]?.[1] || s.team} V ${TEAMS[s.vs]?.[1] || s.vs})`).join(" // ") : "NONE YET. BEAT THE CPU."}</p>
+        <p><b>YOUR BEST WINS</b> {scores.length ? scores.map(s => `${s.line} (${teamShort(s.team)} V ${teamShort(s.vs)})`).join(" // ") : "NONE YET. BEAT THE CPU."}</p>
       </div>
       {cab && <ButtonRow><Button variant="back" onClick={leaveCabinet}>BACK TO THE BAR</Button></ButtonRow>}
       <details className="pg-more">
         <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><Legend /></div>
+        <div className="pg-more-body"><ControlsGuide /></div>
       </details>
     </>
   );
@@ -239,6 +247,7 @@ function Match({ game, muted, onMute, cab, onEnd, onAgain, onTape, onTeams, onTi
   const [live, setLive] = useState("");
   const [label, setLabel] = useState("FOURTH AND LONG");
   const [pads, setPads] = useState([null, null]);
+  const [tip, setTip] = useState(null);
   const pausedRef = useRef(false); pausedRef.current = paused;
   const inputRef = useRef(null);
   const mutedRef = useRef(muted); mutedRef.current = muted;
@@ -260,6 +269,8 @@ function Match({ game, muted, onMute, cab, onEnd, onAgain, onTape, onTeams, onTi
     const input = createInput({ two: game.two }); inputRef.current = input;
     const st = newGame(game.cfg, game.seed), cam = camInit(st);
     const log = [], masks = tape ? rleDecodeLocal(tape.rle) : null;
+    const seenTips = tipsSeen();
+    let tipNow = null, tipAt = 0;
     let raf = 0, last = performance.now(), acc = 0, said = [], lastLabel = 0, lastCur = "", done = false, padsWas = "";
     const finish = () => {
       if (done) return; done = true;
@@ -294,6 +305,12 @@ function Match({ game, muted, onMute, cab, onEnd, onAgain, onTape, onTeams, onTi
         if (s >= 0) { const i = st.call.cur[s]; const id = i < 4 ? st.books[st.poss][i] : null; const k = `${s}:${i}`; if (k !== lastCur) { lastCur = k; said.push(`${s === 0 ? "P1" : "P2"}: ${i < 4 ? `${i + 1}, ${PLAYS[id].name}, A ${PLAYS[id].kind}` : i === 4 ? "PUNT" : "FIELD GOAL"}.`); } }
       } else lastCur = "";
       if (said.length) { setLive(said.slice(-3).join(" ")); said = []; }
+      // first-run tips: player 1's, once each, held three seconds
+      if (!tape && !done) {
+        const tp = tipFor(st, 0, namesFor(padsWas.split(",")[0] || null, game.two));
+        if (tp && !seenTips.has(tp[0]) && (!tipNow || tipNow[0] !== tp[0])) { if (!tipNow || now - tipAt > 3000) { tipNow = tp; tipAt = now; setTip(tp[1]); } }
+        if (tipNow && now - tipAt > 3000 && (!tp || tp[0] !== tipNow[0])) { markTip(seenTips, tipNow[0]); tipNow = null; setTip(null); }
+      }
       if (now - lastLabel > 1000) { lastLabel = now; setLabel(`FOURTH AND LONG. ${names[0]} ${st.score[0]}, ${names[1]} ${st.score[1]}. QUARTER ${Math.min(4, st.q)}.`); }
       camFollow(cam, st, reduced);
       draw(ctx, st, cam, { names, kits, sides, heads: heads.current, reduced, t: now / 1000 });
@@ -311,6 +328,7 @@ function Match({ game, muted, onMute, cab, onEnd, onAgain, onTape, onTeams, onTi
       <div className="tb-stage">
         <canvas ref={canvas} width={W} height={H} role="img" aria-label={label} tabIndex={-1} />
       </div>
+      <p className={`tb-tip${tip ? " on" : ""}`} aria-live="polite">{tip || ""}</p>
       <p className="sr-only" aria-live="polite">{live}</p>
       <TouchPad input={inputRef} />
       <p className="tb-status" aria-hidden="true">{statusLine(game.two, pads)}</p>
@@ -321,7 +339,7 @@ function Match({ game, muted, onMute, cab, onEnd, onAgain, onTape, onTeams, onTi
         </ButtonRow>
       )}
       {paused && !over && <GameMenu key="pause" kind="pause" title="PAUSED." onBack={resume}
-        options={{ resume, restart: onAgain, controls: <Legend two={game.two} pads={pads} />, sound: { on: !muted, onSelect: onMute }, quit: { label: "QUIT TO THE TITLE", onSelect: onTitle }, ...(cab ? { bar: { label: "BACK TO THE BAR", onSelect: leaveCabinet } } : {}) }} />}
+        options={{ resume, restart: onAgain, controls: <ControlsGuide family={pads[0]} two={game.two} compact />, sound: { on: !muted, onSelect: onMute }, quit: { label: "QUIT TO THE TITLE", onSelect: onTitle }, ...(cab ? { bar: { label: "BACK TO THE BAR", onSelect: leaveCabinet } } : {}) }} />}
       {over && <GameMenu key="end" kind="end" title={tape ? "END OF THE TAPE." : "FINAL."} summary={`${names[0]} ${res.score[0]}, ${names[1]} ${res.score[1]}. ${verdict}${over.verified === false ? " THE REPLAY CHECK FAILED." : over.verified ? " REPLAY CHECKED." : ""}`}
         options={{ again: onAgain, rematch: { label: "CHOOSE TEAMS", onSelect: onTeams }, replay: !tape && over.rec ? () => onTape(over.rec) : false, title: { label: "THE TITLE SCREEN", onSelect: onTitle }, ...(cab ? { bar: { label: "BACK TO THE BAR", onSelect: leaveCabinet } } : { play: true }) }} />}
     </div>
@@ -358,30 +376,5 @@ function TouchPad({ input }) {
       </div>
       <button type="button" tabIndex={-1} className="tb-pause" onPointerDown={(e) => { e.preventDefault(); input.current?.pressStart(); }}>PAUSE</button>
     </div>
-  );
-}
-
-// ---- the legend ------------------------------------------------------------------------------------------------
-export function legendRows(pad) {
-  const g = GLYPHS[pad] || null, A = g ? g.act : "A", B = g ? g.back : "B";
-  return [
-    ["CALL A PLAY", `D-PAD, THEN ${A}`, "FOUR PLAYS: TWO RUNS (TOP), TWO PASSES (BOTTOM). ON 4TH DOWN, DOWN FOR PUNT AND FIELD GOAL."],
-    ["DEFENCE: GUESS", `D-PAD, THEN ${A}`, "PICK THE PLAY YOU THINK THEY CALLED. RIGHT, AND YOUR MEN ARE THROUGH THE LINE AT THE SNAP."],
-    ["SNAP", A, ""],
-    ["RUN", "D-PAD", `TAP ${A} FAST WHEN YOU ARE GRABBED: ENOUGH TAPS AND YOU BREAK THE TACKLE.`],
-    ["PASS", `${B} PICKS A RECEIVER, ${A} THROWS`, "THE GOLD MARK IS YOUR MAN. THROW BEFORE THE RUSH ARRIVES."],
-    ["DEFEND", `D-PAD; ${A} DIVES`, `RUN INTO THE CARRIER TO TACKLE. BEFORE THE SNAP, ${B} CHANGES YOUR MAN; AFTER IT, ${B} TAKES THE MAN NEAREST THE BALL.`],
-    ["KICK", `${A} AT THE TOP OF THE METER`, ""],
-    ["PAUSE", g ? g.start : "ESC / ENTER / P", ""],
-  ];
-}
-function Legend({ two = false, pads = [null, null] }) {
-  return (
-    <>
-      <dl className="tb-keys">
-        {legendRows(pads[0]).map(([k, v, n]) => <div key={k} className="row"><dt>{k}</dt><dd><b>{v}</b>{n ? ` ${n}` : ""}</dd></div>)}
-      </dl>
-      <p className="tb-sub">{two ? "TWO ON ONE KEYBOARD: P1 WASD, F = A, G = B (SPACE IS A TOO); P2 ARROWS, / = A, . = B (OR L AND K). TWO PADS: THE FIRST IS P1." : "KEYBOARD: ARROWS OR WASD; A = SPACE, J, X OR F; B = K, Z OR G. A PAD WORKS; PHONES GET BUTTONS."}</p>
-    </>
   );
 }
