@@ -1,7 +1,8 @@
 """Google Gemini image backend for the sprite pipeline (Nano Banana Pro, called directly).
 
   HVI_SPRITE_BACKEND=gemini|higgsfield   default: gemini when the Keychain item exists, else higgsfield
-  HVI_GEMINI_DAILY_IMAGES=60             hard cap, counted in ~/.cache/hvi-sprites/gemini-usage.json
+  HVI_GEMINI_DAILY_IMAGES=10             hard cap (a grid is 16 figures), counted in ~/.cache/hvi-sprites/gemini-usage.json
+  HVI_GEMINI_MONTHLY_USD=10              hard monthly spend cap, summed from the same ledger
   HVI_GEMINI_MODEL=gemini-3-pro-image    override the model id
 
 Key: macOS Keychain item `hvi-gemini` (account $USER), else env GEMINI_API_KEY. The key travels
@@ -11,8 +12,9 @@ Failures raise RuntimeError with the same wording the higgsfield path uses, so c
 them unchanged: a safety block says "job not completed" (this figure's fault), a cap or auth
 problem says "quota"/"401"/"403" (plumbing, no attempt charged).
 
-ponytail: Batch API (50% off) for grids is the next step; it is async (submit, poll) and the
-grid caller is synchronous, so it is not a small change.
+ponytail: Batch API (50% off, ~$0.067/grid) is not wired in: it is async (submit, persist a job id,
+poll next run, then slice) and the grid caller is synchronous, so it is a state machine, not a tweak.
+It would save ~$2 on the 461 backlog at 2K; revisit if volume grows.
 """
 import base64
 import datetime
@@ -27,7 +29,8 @@ from pathlib import Path
 
 MODEL = os.environ.get("HVI_GEMINI_MODEL", "gemini-3-pro-image")
 URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
-DAILY_CAP = int(os.environ.get("HVI_GEMINI_DAILY_IMAGES", "60"))
+DAILY_CAP = int(os.environ.get("HVI_GEMINI_DAILY_IMAGES", "10"))     # a grid is 16 figures: 10/day = up to 160
+MONTHLY_USD = float(os.environ.get("HVI_GEMINI_MONTHLY_USD", "10"))   # hard stop, summed from the ledger
 PRICE = {"1K": 0.134, "2K": 0.134, "4K": 0.24}   # USD per output image, standard (not batch)
 CACHE = Path(os.environ.get("HVI_SPRITE_CACHE", Path.home() / ".cache" / "hvi-sprites"))
 USAGE = CACHE / "gemini-usage.json"
@@ -122,6 +125,11 @@ def generate(prompt, dest, aspect="2:3", size="1K", label="image"):
     if used >= DAILY_CAP:
         raise RuntimeError(f"gemini daily quota reached: {used}/{DAILY_CAP} images today "
                            f"(raise HVI_GEMINI_DAILY_IMAGES to allow more)")
+    month = datetime.date.today().isoformat()[:7]
+    spent = sum(v.get("usd", 0) for k, v in _usage().items() if k.startswith(month))
+    if spent + PRICE.get(size, 0.134) > MONTHLY_USD:
+        raise RuntimeError(f"gemini monthly quota reached: ${spent:.2f} of ${MONTHLY_USD:.2f} spent in {month} "
+                           f"(raise HVI_GEMINI_MONTHLY_USD to allow more)")
     body = {"contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"responseModalities": ["IMAGE"],
                                  "imageConfig": {"aspectRatio": aspect, "imageSize": size}}}

@@ -12,6 +12,7 @@ paid raw: that job then processes and uploads it for free. A cell that fails val
 is deleted from the cache so the same job regenerates that one figure on its own.
 """
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -42,8 +43,8 @@ def grid_prompt(looks):
 
 
 def generate_grid(looks, dest):
-    # 4k on both backends: the gutter finder and cell padding are tuned to a 4k sheet (gemini 4K ~$0.24).
-    return S.draw_raw(grid_prompt(looks), dest, "4k", "grid", timeout=1500)
+    # HVI_GRID_SIZE: 2k by default (gemini $0.134 a sheet); 4k is $0.24.
+    return S.draw_raw(grid_prompt(looks), dest, os.environ.get("HVI_GRID_SIZE", "2k"), "grid", timeout=1500)
 
 
 def figure_mask(rgb):

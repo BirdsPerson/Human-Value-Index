@@ -35,7 +35,11 @@ ROOT = Path(__file__).resolve().parent.parent
 LOG = Path.home() / "Library" / "Logs" / "hvi-referral-sprites.log"
 LOOKS_CACHE = Path.home() / ".cache" / "hvi-sprites" / "referral-looks.json"
 MAX_ATTEMPTS = 3
-PER_RUN = 6          # ponytail: bounds one run's spend (~12 credits); the rest wait 10 minutes
+GRIDS_PER_RUN = 2    # each grid = 16 figures from one image (scripts/roster/grid.py); the daily cap in gemini_image bounds the rest
+SINGLES_PER_RUN = 1  # one-image-per-figure fallback, only for cells a grid could not deliver
+SINGLES_PER_DAY = 3
+MAX_GRID_TRIES = 2   # a figure whose cell failed QA twice is left to the singles fallback
+SINGLES_LEDGER = Path.home() / ".cache" / "hvi-sprites" / "referral-singles.json"
 
 _spec = importlib.util.spec_from_file_location("sprites", ROOT / "scripts" / "sprites.py")
 S = importlib.util.module_from_spec(_spec)
@@ -275,6 +279,64 @@ def check_plans():
         log(f"plan health skipped: {e}")
 
 
+def singles_today():
+    try:
+        return json.loads(SINGLES_LEDGER.read_text()).get(datetime.now().strftime("%Y-%m-%d"), 0)
+    except (OSError, ValueError):
+        return 0
+
+
+def count_single():
+    day = datetime.now().strftime("%Y-%m-%d")
+    SINGLES_LEDGER.write_text(json.dumps({day: singles_today() + 1}))
+
+
+def grid_pass(pending):
+    """Draw uncached pending figures 16 to an image. Cells that pass the grid's QA land in the
+    sprite cache, so the per-card loop below finishes them for free; the rest stay pending."""
+    sys.path.insert(0, str(ROOT / "scripts" / "roster"))
+    import grid as G
+    todo = []
+    for entry in pending:
+        if len(todo) >= GRIDS_PER_RUN * 16:
+            break
+        if (S.CACHE / f"{entry['slug']}.png").exists():
+            continue
+        card = get_json("hvi-figures", entry["slug"])
+        if not card or card.get("removed") or card.get("spriteStatus") != "pending":
+            continue
+        if int(card.get("gridTries") or 0) >= MAX_GRID_TRIES:
+            continue
+        todo.append(card)
+    for i in range(0, len(todo), 16):
+        chunk = todo[i:i + 16]
+        cohort = [{"slug": c["slug"], "name": c.get("name"), "wikiTitle": c.get("wikiTitle"),
+                   "look": c.get("look") or NEUTRAL_LOOK} for c in chunk]
+        tag = f"ref-{int(time.time())}-{i // 16}"
+        with tempfile.TemporaryDirectory() as d:
+            cp, op = Path(d) / "cohort.json", Path(d) / f"{tag}.json"
+            cp.write_text(json.dumps(cohort))
+            try:
+                G.main(str(cp), str(op))
+            except (RuntimeError, SystemExit, OSError, subprocess.TimeoutExpired) as e:
+                msg = str(e)
+                log(f"grid {tag} did not run: {msg[:200]}")
+                if "job not completed" in msg:          # the sheet itself was refused: count it against these figures
+                    for c in chunk:
+                        c["gridTries"] = int(c.get("gridTries") or 0) + 1
+                        set_json("hvi-figures", c["slug"], c)
+                return                                   # cap/auth/network: stop gridding this run
+            res = {r["slug"]: r for r in json.loads(op.read_text())["cells"]}
+        ok = 0
+        for c in chunk:
+            if res[c["slug"]]["ok"]:
+                ok += 1
+            else:
+                c["gridTries"] = int(c.get("gridTries") or 0) + 1
+                set_json("hvi-figures", c["slug"], c)
+        log(f"grid {tag}: {ok}/{len(chunk)} cells usable")
+
+
 def main():
     if "--takedown" in sys.argv:
         takedown(arg_after("--takedown"), excluded="--excluded" in sys.argv)
@@ -303,19 +365,24 @@ def main():
         for c in withheld:
             log(f"  withheld {c['slug']}")
         return 0
-    # PER_RUN bounds generations (spend); a raw already in the cache (a roster-engine grid
+    # SINGLES_PER_* bound the expensive fallback; a raw already in the cache (a roster-engine grid
     # cell, or a paid raw from a failed upload) is processed and uploaded for free.
+    try:
+        grid_pass(pending)
+    except Exception as e:  # noqa: BLE001  the grid is an optimisation: singles and cached raws still run
+        log(f"grid pass failed: {str(e)[:200]}")
     generated = 0
     for entry in pending:
         slug = entry["slug"]
         cached = (S.CACHE / f"{slug}.png").exists()
-        if not cached and generated >= PER_RUN:
+        if not cached and (generated >= SINGLES_PER_RUN or singles_today() >= SINGLES_PER_DAY):
             continue
         card = get_json("hvi-figures", slug)
         if not card or card.get("removed") or card.get("spriteStatus") != "pending":
             continue
         if not cached:
             generated += 1
+            count_single()
         attempt = int(card.get("spriteAttempts") or 0) + 1
         try:
             draw(card, attempt)
