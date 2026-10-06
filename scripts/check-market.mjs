@@ -353,6 +353,7 @@ const inv = () => {
   const res = await fn(new Request("https://x/api/market?ticker=1"));
   const tk = await res.json();
   ok(res.status === 200 && tk.ticker.length > 3 && /max-age/.test(res.headers.get("cache-control")), "the ticker is served small and cached");
+  ok(Array.isArray(tk.movers?.up) && Array.isArray(tk.movers?.down) && tk.movers.up.every(r => r.chg > 0 && r.why !== undefined) && tk.movers.down.every(r => r.chg < 0), "the ticker carries the risers and the fallers, each with its because");
   const res2 = await fn(new Request(`https://x/api/market?slug=${slug}`));
   ok(res2.status === 200 && (await res2.json()).detail.today.length > 0, "one human's detail carries today's ticks");
   const bad = await fn(new Request("https://x/api/market", { method: "POST", body: JSON.stringify({ caseId: "HVI-TEST0001", action: "transfer", to: "x" }) }));
@@ -368,7 +369,8 @@ const inv = () => {
 // ==== the page ships light ========================================================================
 {
   const app = readFileSync("src/App.jsx", "utf8");
-  ok(/lazy\(\(\) => import\("\.\/market\/Market\.jsx"\)\)/.test(app) && /\/api\/market\?ticker=1/.test(app), "the market page is lazy; the landing fetches the ticker, never bundles it");
+  const desk = readFileSync("src/front/FrontDesk.jsx", "utf8");   // the landing's side windows (a lazy chunk)
+  ok(/lazy\(\(\) => import\("\.\/market\/Market\.jsx"\)\)/.test(app) && /lazy\(\(\) => import\("\.\/front\/FrontDesk\.jsx"\)\)/.test(app) && /\/api\/market\?ticker=1/.test(desk), "the market page is lazy; the landing fetches the ticker, never bundles it");
   const page = readFileSync("src/market/Market.jsx", "utf8");
   ok(page.includes("LEDE") && /<table/.test(page) && /<caption/.test(page) && /aria-expanded/.test(page), "one plain line, a real table with a caption, expandable rows");
   ok(R.LEDE === "PUT YOUR DAILY CYCLES TO WORK. PRICES MOVE WITH WHAT HAPPENS IN THE CITY.", "the market's one line is Scott's");

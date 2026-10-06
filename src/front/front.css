@@ -1,0 +1,44 @@
+/* THE FRONT PAGE's small windows (src/front/FrontDesk.jsx). DEPARTMENT OS: windows, teletext
+   sub-bands, plain readable lines. Nothing scrolls sideways; nothing moves under reduced motion. */
+.hvi-desk-side > * + * { margin-top: var(--s5); }
+
+/* MARKET.TKR: risers and fallers */
+.fr-tkr .fr-h { margin: 0 0 2px; padding: 1px var(--s2); font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.06em; }
+.fr-tkr .fr-h.up { background: var(--accent); color: var(--accent-ink); }
+.fr-tkr .fr-h.dn { background: var(--harm); color: #2a0508; margin-top: var(--s3); }
+.fr-tkr ul.fr-movers li { display: block; padding: 0; }
+.fr-movers a { display: block; padding: 4px 0; color: inherit; text-decoration: none; min-height: var(--hit-min); }
+.fr-movers .l1 { display: flex; gap: 1ch; align-items: baseline; }
+.fr-movers .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.fr-movers .p { color: var(--fg-dim); }
+.fr-movers .c { min-width: 8ch; text-align: right; font-weight: 700; }
+.fr-movers .why { display: block; color: var(--fg-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-tkr a.go { text-decoration: none; }
+@media (hover: hover) { .fr-movers a:hover .n, .fr-tkr a.go:hover { text-decoration: underline; text-underline-offset: 3px; } }
+.fr-movers a:focus-visible, .fr-tkr a.go:focus-visible { outline: var(--focus); outline-offset: 2px; }
+
+/* WIRE.TKR: one line at a time */
+.fr-tabs { margin-bottom: var(--s2); }
+.fr-line { display: block; min-height: calc(2 * 1.4em + 8px); padding: 4px 0; color: var(--fg); text-decoration: none; font-size: var(--t-s); line-height: 1.4; }
+.fr-line .tag { display: inline-block; margin-right: 1ch; padding: 0 0.5ch; background: var(--eb-amber); color: #2e1c03; font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.04em; }
+.fr-line .at { margin-right: 1ch; color: var(--fg-mute); font-size: var(--t-xs); }
+.fr-line .tx { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.fr-line.dim { color: var(--fg-mute); margin: 0; }
+@media (hover: hover) { a.fr-line:hover .tx { text-decoration: underline; text-underline-offset: 3px; } }
+a.fr-line:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.fr-steps { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
+.fr-steps button { min-width: var(--hit-min); min-height: var(--hit-min); padding: 0 var(--s2); background: var(--panel-hi); color: var(--fg);
+  border: var(--bw) solid var(--line-hi); box-shadow: 2px 2px 0 var(--shadow); font: inherit; font-size: var(--t-xs); cursor: pointer; }
+.fr-steps button[aria-pressed="true"] { background: var(--eb-amber); color: #2e1c03; border-color: var(--eb-amber); }
+.fr-steps button:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--shadow); }
+.fr-steps button:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.fr-steps .all { margin-left: auto; display: inline-flex; align-items: center; min-height: var(--hit-min); color: var(--eb-amber); font-size: var(--t-xs); text-decoration: none; }
+@media (hover: hover) { .fr-steps .all:hover { text-decoration: underline; text-underline-offset: 3px; } }
+
+/* SUBSTRATE.CAM: the city, small */
+.fr-cam-link { display: block; color: inherit; text-decoration: none; }
+.fr-cam-link img, .fr-cam-wait { display: block; width: 100%; height: auto; aspect-ratio: 396 / 408; max-height: min(320px, 42vh); object-fit: contain; background: #03060b;
+  border: var(--bw) solid var(--line); image-rendering: auto; }
+.fr-cam .go { display: flex; align-items: center; min-height: var(--hit-min); color: var(--eb-cyan); font-size: var(--t-xs); }
+@media (hover: hover) { .fr-cam-link:hover .go { text-decoration: underline; text-underline-offset: 4px; } }
+.fr-cam-link:focus-visible { outline: var(--focus); outline-offset: 4px; }

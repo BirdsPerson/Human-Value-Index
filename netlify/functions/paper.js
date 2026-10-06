@@ -27,12 +27,12 @@ async function wake(base) {
   await fetch(`${base}/.netlify/functions/paper-build-background`, { method: "POST", headers: { [TICK_HEADER]: secret }, signal: AbortSignal.timeout(8_000) }).catch(() => {});
 }
 // the open tournaments' leaders (src/tournament/): a board read per open event, at most three
-async function tourneyLines(now) {
+export async function tourneyLines(now) {
   const evs = openAt(now).sort((a, b) => b.major - a.major).slice(0, 3);
   const boards = await Promise.all(evs.map(ev => readTourney(ev.id).then(b => ({ ev, board: publicStandings(standings(b, ev, now), 2) })).catch(() => null)));
   return tourneyWire(boards.filter(Boolean));
 }
-async function wire() {
+export async function wire() {
   const now = Date.now();
   const [board, social, tourney] = await Promise.all([readBoard().catch(() => null), publicCached().catch(() => null), tourneyLines(now).catch(() => [])]);
   return wireOf({ mt: machineClock(now).mt, board, social, tourney });

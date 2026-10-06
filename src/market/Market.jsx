@@ -31,8 +31,11 @@ export default function Market({ route = "#market" }) {
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("move");
-  const [more, setMore] = useState(false);
   const [sel, setSel] = useState(() => decodeURIComponent(route.split("/")[1] || "") || null);
+  const [more, setMore] = useState(() => Boolean(sel));   // a #market/<slug> link: the row is shown wherever it sorts
+  // a mover picked (MOVERS below, or a #market/<slug> link while the floor is open): its row, opened
+  const pick = useCallback((slug) => { setQ(""); setSort("move"); setMore(true); setSel(slug); }, []);
+  useEffect(() => { const s = decodeURIComponent(route.split("/")[1] || ""); if (s) pick(s); }, [route, pick]);
   const [last, setLast] = useState(null);
   const [busy, setBusy] = useState(false);
   const [logon, setLogon] = useState(false);
@@ -89,6 +92,8 @@ export default function Market({ route = "#market" }) {
       </div>
       {last && <PaLine tag="FLOOR>" text={last.line} tone={last.ok ? undefined : "harm"} />}
       {err && <div className="mk-err" role="status">{err}</div>}
+
+      {board?.movers && (board.movers.up.length > 0 || board.movers.down.length > 0) && <Movers movers={board.movers} onPick={pick} />}
 
       <Frame title="THE HUMANS" meta={board ? `${fmt(board.count)} LISTED // TICK ${board.day}` : "LOADING"}>
         <div className="mk-tools">
@@ -176,6 +181,31 @@ function knobText(k, v) {
 }
 
 // One human: the row (name, price, today, BUY) and, opened, the order and MORE.
+// MOVERS: who is trending UP and who is trending DOWN today (Scott, 2026-10-06), five each, with
+// the price, the change and the because. Two tabs, one window; a pick opens the human's row.
+function Movers({ movers, onPick }) {
+  const [side, setSide] = useState("up");
+  const rows = (side === "up" ? movers.up : movers.down).slice(0, 5);
+  return (
+    <Frame title="MOVERS" meta="TODAY, SINCE THE OPEN" className="mk-movers">
+      <div className="mk-sorts" role="group" aria-label="Rising or falling">
+        {[["up", "▲ UP"], ["down", "▼ DOWN"]].map(([id, label]) => <button key={id} type="button" className={`mk-sort${side === id ? " on" : ""}`} aria-pressed={side === id} onClick={() => setSide(id)}>{label}</button>)}
+      </div>
+      <ol className="mk-mv">
+        {rows.map(r => (
+          <li key={r.slug}>
+            <button type="button" onClick={() => onPick(r.slug)}>
+              <span className="l1"><span className="nm">{r.name.toUpperCase()}</span><Sparkline s={r} /><span>{fmtPrice(r.price)}</span><span className={tone(r.chg)}>{arrow(r.chg)} {fmtPct(r.chg)}</span></span>
+              {r.why && <span className="mk-dim why">{r.why}</span>}
+            </button>
+          </li>
+        ))}
+        {!rows.length && <li className="mk-dim">NOBODY IS {side === "up" ? "RISING" : "FALLING"} TODAY. THE FLOOR IS SUSPICIOUSLY CALM.</li>}
+      </ol>
+    </Frame>
+  );
+}
+
 function Row({ r, mine, open, onToggle, wallet, busy, order, knobs, canTrade }) {
   const [amt, setAmt] = useState("");
   const [detail, setDetail] = useState(null);

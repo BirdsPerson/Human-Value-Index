@@ -84,3 +84,16 @@
   .mk-board-wrap { white-space: normal; }
 }
 .mk-cit td { color: var(--warn); }
+
+/* MOVERS: up and down today, five each, the because under the name */
+.mk-movers { margin-bottom: var(--s5); }
+.mk-movers .mk-sorts { margin-bottom: var(--s2); }
+.mk-mv { list-style: none; margin: 0; padding: 0; font-variant-numeric: tabular-nums; }
+.mk-mv li { border-bottom: var(--bw) solid var(--line); }
+.mk-mv button { display: block; width: 100%; min-height: var(--hit-min); padding: var(--s1) 0; background: none; border: 0; color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
+.mk-mv .l1 { display: flex; gap: 1.5ch; align-items: baseline; }
+.mk-mv .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-mv .l1 > span:last-child { min-width: 9ch; text-align: right; font-weight: 700; }
+.mk-mv .why { display: block; font-size: var(--t-xs); overflow-wrap: anywhere; }
+.mk-mv button:focus-visible { outline: var(--focus); outline-offset: 2px; }
+@media (hover: hover) { .mk-mv button:hover .nm { text-decoration: underline; text-underline-offset: 3px; } }

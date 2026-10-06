@@ -1,7 +1,8 @@
 // /api/market: THE MARKET (docs/design/ECONOMY_PROPERTY.md, "The Living Market"; terms §11).
 //   GET                    the board: THE HUMAN VALUE INDEX, every listed human (price, change,
 //                          fair value, the "because"), movers, the floor, the leaders, events
-//   GET ?ticker=1          the landing's ticker lines only (small, cached)
+//   GET ?ticker=1          the landing's ticker lines and the day's top risers and fallers, each
+//                          with its "because" (netlify/lib/front.js moversOf; small, cached)
 //   GET ?slug=<slug>       one human: today's ticks, closes, the NPC holders, events
 //   GET ?caseId=           + the file's shares and open orders (the wallet's market half)
 //   POST {caseId, action: "order", side: buy|sell, slug, amount (buy, CYCLES) | units (sell), nonce}
@@ -14,6 +15,7 @@ import { NO_SUCH_FILE } from "./case.js";
 import { ledger, LedgerDown } from "../lib/economy-db.js";
 import { readBoard, detail, placeOrder } from "../lib/market.js";
 import { walletView } from "../lib/economy.js";
+import { moversOf } from "../lib/front.js";
 import { LEDE, LEGAL, CURRENCY_NOTE } from "../../src/market/rules.js";
 
 export const ACTIONS = ["order"];
@@ -32,7 +34,7 @@ export default async (req, context) => {
     if (req.method === "GET") {
       const board = await readBoard();
       if (url.searchParams.get("ticker") === "1") {
-        return json(200, { ticker: board?.ticker || [], hvi: board?.hvi || null, at: board?.at || null }, { "Cache-Control": "public, max-age=60" });
+        return json(200, { ticker: board?.ticker || [], movers: moversOf(board), hvi: board?.hvi || null, at: board?.at || null }, { "Cache-Control": "public, max-age=60" });
       }
       const slug = url.searchParams.get("slug");
       if (slug) {

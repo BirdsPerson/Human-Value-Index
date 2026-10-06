@@ -41,7 +41,10 @@ const Shops = lazy(() => import("./shops/Shops.jsx"));   // #shop[/<store>]: THE
 const FirstDay = lazy(() => import("./FirstDay.jsx"));
 const firstDayOpen = (id) => { try { return Boolean(id) && readLastResult()?.caseId === id && localStorage.getItem(`hvi-fd:${id}:done`) !== "1"; } catch { return false; } };
 const Market = lazy(() => import("./market/Market.jsx"));   // #market: THE MARKET (src/market/)
-const Paper = lazy(() => import("./paper/Paper.jsx"));   // #paper: THE DAILY COMPLIANCE, the city's newspaper (docs/PAPER.md)
+const Paper = lazy(() => import("./paper/Paper.jsx"));
+// The desk's small windows beside the logon: MARKET.TKR (risers and fallers), WIRE.TKR (news and
+// trending), SUBSTRATE.CAM (the city, small). A lazy chunk: the entry script has a budget.
+const FrontDesk = lazy(() => import("./front/FrontDesk.jsx"));   // #paper: THE DAILY COMPLIANCE, the city's newspaper (docs/PAPER.md)
 // The logon's one line for a returning file: today's front-page headline, which opens the paper.
 function PaperLine() {
   const [h, setH] = useState(null);
@@ -251,31 +254,6 @@ function injectStyles() {
   if (!el) { el = document.createElement('style'); el.id = 'hvi-styles'; document.head.appendChild(el); }
   const css = globalStyles + FILE_PHOTO_CSS;
   if (el.textContent !== css) el.textContent = css;
-}
-
-// The ticker: THE MARKET's movers when the floor answers (fetched, never bundled: /api/market
-// ?ticker=1, cached a minute at the edge), the scores on file until then or if it does not.
-function Carousel() {
-  const [items] = useState(() => FAMOUS_FIGURES.slice().sort(() => Math.random() - 0.5).slice(0, 6));
-  const [market, setMarket] = useState(null);
-  useEffect(() => {
-    let off = false;
-    fetch("/api/market?ticker=1").then(r => (r.ok ? r.json() : null)).then(d => { if (!off && d?.ticker?.length) setMarket(d.ticker); }).catch(() => {});
-    return () => { off = true; };
-  }, []);
-  // MARKET.TKR: a small window that holds still (no scrolling marquee). "NAME 46.22 ▲+4.2%"
-  // lines from the floor; while it is dark, six subjects on file with their scores.
-  const rows = market
-    ? market.slice(0, 6).map(l => { const m = l.match(/^(.*) ([\d.,]+) ([■▲▼])(.*)$/); return m ? [m[1], m[2], m[3] + m[4], m[3] === "▲" ? "up" : m[3] === "▼" ? "dn" : ""] : [l, "", "", ""]; })
-    : items.map(f => [displayName(f), String(f.score), getTier(f.score).label.split(" ")[0], ""]);
-  return (
-    <Frame title={market ? "MARKET.TKR" : "ON FILE.TKR"} tone="var(--eb-cyan)" className="hvi-tkr">
-      <a className="hvi-tkr-link" href={market ? "#market" : "#scores"} aria-label={market ? "The market: live prices. Open the market." : "The scores. Open the scores."}>
-        <ul aria-hidden="true">{rows.map(([n, p, c, k], i) => <li key={i}><span className="n">{n}</span><span>{p}</span><span className={k}>{c}</span></li>)}</ul>
-        <span className="go" aria-hidden="true">{market ? "OPEN THE MARKET ›" : "SEE THE SCORES ›"}</span>
-      </a>
-    </Frame>
-  );
 }
 
 // NOTICE: a System 7 alert with an OK button. OK dismisses it on this device.
@@ -816,7 +794,7 @@ export default function OverlordAssessment() {
             <Logon key={logonKey} onPick={pickMenu} />
           </TermBox>
           <div className="hvi-desk-side">
-            <Carousel />
+            <Suspense fallback={null}><FrontDesk /></Suspense>
             <Notice />
           </div>
         </div>
