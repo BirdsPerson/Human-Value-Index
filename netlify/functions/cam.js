@@ -1,6 +1,6 @@
 // GET /api/cam: SUBSTRATE.CAM, the front page's tiny live view of the city (netlify/lib/front.js
 // camSvg). The overview at the machine hour: districts, the Loop, every line and train, night or
-// day. A small SVG (~10 KB), the same for every viewer in a minute: the landing asks for
+// day (?at=<district>: cropped tight on that district, for SURVEILLANCE). A small SVG (~10 KB), the same for every viewer in a minute: the landing asks for
 // /api/cam?m=<real minute> and the edge keeps each minute's picture.
 import { camSvg } from "../lib/front.js";
 import { DISTRICTS, LOOP_LINE, STATIONS, STATION_ORDER, machineClock, linesOn, lineTrainsAt } from "../../src/city/sim.js";
@@ -8,7 +8,7 @@ import { layoutDistricts } from "../../src/city/cityKit.js";
 
 const LOOP_CAR = "#67e8f9";
 let layout = null;
-export function camNow(realMs = Date.now()) {
+export function camNow(realMs = Date.now(), focus = null) {
   layout ||= layoutDistricts(DISTRICTS);
   const clock = machineClock(realMs);
   const ls = linesOn(), byId = Object.fromEntries(ls.map(l => [l.id, l]));
@@ -20,14 +20,16 @@ export function camNow(realMs = Date.now()) {
     clock, layout, ring: LOOP_LINE.loop, carLen: LOOP_LINE.carLen,
     stations: STATION_ORDER.map(id => STATIONS[id]),
     lines: ls.filter(l => l.id !== "loop").map(l => ({ color: l.color, pts: l.centre?.pts || [] })),
-    trains,
+    trains, focus,
   });
 }
 
 export default async (req) => {
   if (req.method !== "GET") return new Response("The camera is watched, not written to.", { status: 405 });
   try {
-    return new Response(camNow(), { status: 200, headers: {
+    const at = new URL(req.url).searchParams.get("at");
+    const focus = at && /^[a-z0-9-]{1,40}$/.test(at) ? at : null;
+    return new Response(camNow(Date.now(), focus), { status: 200, headers: {
       "Content-Type": "image/svg+xml; charset=utf-8",
       "Cache-Control": "public, max-age=60",
       "Netlify-CDN-Cache-Control": "public, max-age=60, stale-while-revalidate=60",

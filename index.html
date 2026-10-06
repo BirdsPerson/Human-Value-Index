@@ -38,6 +38,8 @@
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { background: #0a0f0a; }
     </style>
+    <!-- DISPLAY (src/ui/themes.css): the saved theme, else the device's contrast or light preference, before the first paint -->
+    <script>try{var t=null;try{t=localStorage.getItem("hvi-theme")}catch(e){}if(!/^(green|amber|win31|platinum|contrast)$/.test(t||"")){t=matchMedia("(prefers-contrast: more)").matches?"contrast":matchMedia("(prefers-color-scheme: light)").matches?"platinum":"green"}if(t!=="green")document.documentElement.setAttribute("data-theme",t);var c={amber:"#0c0904",win31:"#5fb3b3",platinum:"#a8a8a8",contrast:"#000000"}[t];if(c){document.documentElement.style.background=c;document.querySelector('meta[name="theme-color"]').setAttribute("content",c)}}catch(e){}</script>
   </head>
   <body>
     <div id="root"></div>

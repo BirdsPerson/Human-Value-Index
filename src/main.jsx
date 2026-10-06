@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './ui/tokens.css'
 import './ui/ui.css'
+import './ui/themes.css'
 import App from './App.jsx'
 
 // ?rig=1: the animation rig's lab (src/city/RigLab.jsx), its own chunk; never linked

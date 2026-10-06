@@ -173,7 +173,7 @@ function anchorX(furniture, act, i, w) {
 
 // One room: the back wall and its paper, the floor, the window and curtains, the furniture, the
 // people, then the light. d: {night, sprite, t, reduced, people: [{s, act}], look, sheet}
-function drawRoom(c, room, x, y, w, h, d) {
+export function drawRoom(c, room, x, y, w, h, d) {   // also YOUR FLAT on the desk (src/front/YourFlat.jsx), small
   const s = Math.min(h / 45, w / 22), fy = y + h;
   const look = d.look, dr = look?.rooms[room.id];
   const furniture = dr ? dr.furniture : room.furniture;

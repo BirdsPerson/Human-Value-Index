@@ -311,3 +311,10 @@ plays each time, as before, still skippable.
 3. Drop the per-screen `< MAIN MENU / > HOLDING PEN` footers where the command bar covers them (keep them on desktop only if they add something the header doesn't).
 4. Keep `box` frames for the few panels that carry the file; everything else the line frame.
 5. Check at 390×844: nothing under 44px, no input under 16px, `scrollWidth === innerWidth`.
+
+## Themes (DISPLAY) and the desk's widgets (2026-10-06)
+
+- **Themes** are token sets on `:root[data-theme]` in `src/ui/themes.css`: DEPARTMENT GREEN (tokens.css, no attribute), AMBER MONITOR, WIN 3.1, PLATINUM, HIGH CONTRAST. Nothing but tokens changes, plus a few role tokens a theme may set: `--bar`, `--bar-ink`, `--bar-cur`, `--bar-cur-bg`, `--bar-cur-hot` (menu bar, F-key strip), `--ttl-bg`, `--ttl-fg`, `--ttl-mute` (window titles), `--door-n` (the logon doors' numbers), `--desk` / `--desk-img` (the desktop). New components use tokens only, so they theme for free.
+- The pick lives in localStorage `hvi-theme`; `index.html`'s boot line applies it before the first paint, else HIGH CONTRAST under `prefers-contrast: more`, else PLATINUM under `prefers-color-scheme: light`, else green. The panel is MENU > MORE ROOMS > DISPLAY (src/front/DeskPrefs.jsx).
+- `scripts/check-themes.mjs` holds every theme to WCAG AA on each token pair the components put text on. A new pairing (text token on a surface token) goes into its `PAIRS`.
+- **Widgets**: the windows beside the logon are the visitor's choice (MORE ROOMS > WIDGETS, or ARRANGE THE DESK), kept in localStorage `hvi-widgets`; the list is `src/front/prefs.js`. Each new widget is its own lazy chunk. `scripts/check-desk.mjs` keeps every listed widget rendered and SURVEILLANCE / THE SET to public figures with no harm finding, facts only.

@@ -133,14 +133,14 @@
 .hvi-doors > li > .ui-cmd { flex: 1; }
 .hvi-doors .ui-cmd { grid-template-columns: 2ch minmax(0, 1fr) 32px; column-gap: var(--s3); padding: var(--s2) var(--s3);
   background: var(--accent); color: var(--accent-ink); box-shadow: 8px 6px 0 var(--shadow); }
-.hvi-doors .ui-cmd .n { color: var(--hot); font-weight: 700; grid-row: 1 / span 2; }
+.hvi-doors .ui-cmd .n { color: var(--door-n, var(--hot)); font-weight: 700; grid-row: 1 / span 2; }
 .hvi-doors .ui-cmd .l { font-weight: 700; }
 .hvi-doors .ui-cmd .s { color: var(--accent-ink); }
 .hvi-doors .ui-cmd::after { content: ""; grid-column: 3; grid-row: 1 / span 2; width: 32px; height: 32px; background: currentColor;
   -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; }
 .hvi-doors .ui-cmd[aria-current="true"] { background: var(--accent); color: var(--accent-ink); outline: 2px solid var(--fg); outline-offset: 3px; }
 .hvi-doors .ui-cmd[aria-current="true"] :is(.s) { color: var(--accent-ink); }
-.hvi-doors .ui-cmd[aria-current="true"] .n { color: var(--hot); }
+.hvi-doors .ui-cmd[aria-current="true"] .n { color: var(--door-n, var(--hot)); }
 .hvi-doors .ui-cmd:active { transform: translate(8px, 6px); box-shadow: none; }
 @media (hover: hover) { .hvi-doors .ui-cmd:hover .l { text-decoration: underline; text-underline-offset: 4px; } }
 .hvi-doors .ui-cmd:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
@@ -308,3 +308,9 @@
   .hvi-filedesk { position: relative; left: 50%; width: min(1008px, calc(100vw - 64px)); margin-left: calc(min(1008px, calc(100vw - 64px)) / -2);
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 0 var(--s6); }
 }
+
+/* the publisher credit on the title screen (App.jsx Logotype): small, after the edition line */
+.hvi-logo .cr { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; margin-top: 6px; min-height: 24px;
+  font-size: var(--t-xs); letter-spacing: 0.08em; color: var(--fg-dim); text-decoration: none; }
+.hvi-logo .cr img { flex: none; width: 14px; height: 14px; }
+@media (hover: hover) { .hvi-logo .cr:hover { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; } }

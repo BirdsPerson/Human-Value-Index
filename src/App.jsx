@@ -43,8 +43,9 @@ const FirstDay = lazy(() => import("./FirstDay.jsx"));
 const firstDayOpen = (id) => { try { return Boolean(id) && readLastResult()?.caseId === id && localStorage.getItem(`hvi-fd:${id}:done`) !== "1"; } catch { return false; } };
 const Market = lazy(() => import("./market/Market.jsx"));   // #market: THE MARKET (src/market/)
 const Paper = lazy(() => import("./paper/Paper.jsx"));
-// The desk's small windows beside the logon: MARKET.TKR (risers and fallers), WIRE.TKR (news and
-// trending), SUBSTRATE.CAM (the city, small). A lazy chunk: the entry script has a budget.
+// The desk's small windows beside the logon (the visitor picks which, src/front/prefs.js WIDGETS;
+// MARKET.TKR, WIRE.TKR, SUBSTRATE.CAM and the NOTICE by default) and its DISPLAY / WIDGETS dialogs.
+// A lazy chunk, each new widget its own: the entry script has a budget.
 const FrontDesk = lazy(() => import("./front/FrontDesk.jsx"));   // #paper: THE DAILY COMPLIANCE, the city's newspaper (docs/PAPER.md)
 const Mail = lazy(() => import("./mail/Mail.jsx"));   // #mail[?at=home|terminal]: DEPARTMENT MAIL (src/mail/, docs/design/COMMS.md)
 // The logon's one line for a returning file: today's front-page headline, which opens the paper.
@@ -258,20 +259,6 @@ function injectStyles() {
   if (el.textContent !== css) el.textContent = css;
 }
 
-// NOTICE: a System 7 alert with an OK button. OK dismisses it on this device.
-function Notice() {
-  const [ok, setOk] = useState(() => { try { return localStorage.getItem("hvi-notice-ok") === "1"; } catch { return false; } });
-  if (ok) return null;
-  return (
-    <Frame title="NOTICE" tone="var(--eb-amber)" className="hvi-notice ui-dialog">
-      <p><span className="ic" aria-hidden="true">!</span>THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.</p>
-      <ButtonRow className="ui-dialog-btns">
-        <Button variant="push" tone="sec" className="ok" onClick={() => { try { localStorage.setItem("hvi-notice-ok", "1"); } catch { /* it returns next visit */ } setOk(true); }}>OK</Button>
-      </ButtonRow>
-    </Frame>
-  );
-}
-
 // The logotype (2026-10-05, replaces the block-letter banner): a Windows 3.x title-screen
 // lockup. The Department seal (a 16x16 pixel eye in a bevelled tile), the name in a bold
 // italic system serif, the SNTX / EB four-colour rule, the edition line. Crisp at any size:
@@ -279,14 +266,15 @@ function Notice() {
 const EYE = "M5 3h6v1H5zM3 4h2v1H3zM11 4h2v1h-2zM2 5h1v1H2zM6 5h4v1H6zM13 5h1v1h-1zM1 6h1v1H1zM5 6h6v1H5zM14 6h1v1h-1zM0 7h1v2H0zM5 7h2v2H5zM9 7h2v2H9zM15 7h1v2h-1zM1 9h1v1H1zM5 9h6v1H5zM14 9h1v1h-1zM2 10h1v1H2zM6 10h4v1H6zM13 10h1v1h-1zM3 11h2v1H3zM11 11h2v1h-2zM5 12h6v1H5z";
 function Logotype() {
   return (
-    <h1 className="hvi-logo">
+    <div className="hvi-logo">
       <span className="seal" aria-hidden="true"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path d={EYE} /></svg></span>
       <span className="w">
-        <span className="t">Human Value <b>Index</b></span>
+        <h1 className="t">Human Value <b>Index</b></h1>
         <span className="rule" aria-hidden="true" />
         <span className="s">DEPARTMENT EDITION // VERSION 3.1</span>
+        <a className="cr" href="https://iridescent-studio.netlify.app" target="_blank" rel="noopener"><img src="/brand/iridescent-mark.svg" width="14" height="14" alt="" />AN IRIDESCENT GAME</a>
       </span>
-    </h1>
+    </div>
   );
 }
 
@@ -316,6 +304,8 @@ const MORE = [
   { label: "THE TREASURY", note: "YOUR ALLOWANCE, IN CYCLES", go: "#economy" },
   { label: "THE MARKET", note: "SHARES IN HUMANS. PRICES MOVE WITH THE CITY", go: "#market" },
   { label: "THE PAPER", note: "THE DAILY COMPLIANCE: NEWS, JOBS, SCORES, COMICS", go: "#paper" },
+  { label: "DISPLAY", note: "THEMES: GREEN, AMBER, WIN 3.1, PLATINUM, HIGH CONTRAST", go: "display" },
+  { label: "WIDGETS", note: "WHICH WINDOWS SIT ON THIS DESK, AND IN WHAT ORDER", go: "widgets" },
 ];
 
 // The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
@@ -398,7 +388,7 @@ function Logon({ onPick: pick }) {
                 onClick={(e) => { if (!m.go.startsWith("#")) { e.preventDefault(); onPick(m); } }} />
             ))}
           </CommandList>
-          <Disclosure className="hvi-menu-more" title="MORE ROOMS" meta="SURVEY · CASE NO.">
+          <Disclosure className="hvi-menu-more" title="MORE ROOMS" meta="SURVEY · DISPLAY">
             <CommandList label="More rooms">
               {MORE.map(m => (
                 <Command key={m.label} label={m.label} sub={m.note} href={m.go.startsWith("#") ? m.go : undefined}
@@ -490,7 +480,8 @@ export default function OverlordAssessment() {
   const [submitError, setSubmitError] = useState(null);
   const [route, setRoute] = useState(() => window.location.hash);
   const [logonKey, setLogonKey] = useState(0);
-  const [cubeSeen, setCubeSeen] = useState(false);   // the result's canvas cube mounts on first open
+  const [cubeSeen, setCubeSeen] = useState(false);
+  const [deskDlg, setDeskDlg] = useState(null);   // "display" | "widgets": MORE ROOMS opens them over the desk   // the result's canvas cube mounts on first open
 
   // The server file is the truth: refresh the cached result on load and whenever the
   // case number changes (restore, account sync, new intake).
@@ -557,6 +548,7 @@ export default function OverlordAssessment() {
 
   function pickMenu(m) {
     if (m.go.startsWith("#")) { window.location.hash = m.go; return; }
+    if (m.go === "display" || m.go === "widgets") { setDeskDlg(m.go); return; }   // the desk's dialogs (src/front/DeskPrefs.jsx)
     setPhase(m.go);
     if (m.go === "survey") setCurrentQ(0);
   }
@@ -811,8 +803,7 @@ export default function OverlordAssessment() {
             <Logon key={logonKey} onPick={pickMenu} />
           </TermBox>
           <div className="hvi-desk-side">
-            <Suspense fallback={null}><FrontDesk /></Suspense>
-            <Notice />
+            <Suspense fallback={null}><FrontDesk dialog={deskDlg} onDialog={setDeskDlg} /></Suspense>
           </div>
         </div>
     </Screen>

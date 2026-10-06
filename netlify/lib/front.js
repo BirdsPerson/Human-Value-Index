@@ -93,7 +93,7 @@ export function trendingOf({ board, edition, arrivals, figures = [] }, n = 12) {
 export const nightAt = (hour) => hour >= 19 || hour < 6.5;
 const pad2 = (v) => String(v).padStart(2, "0");
 const f1 = (v) => Math.round(v * 10) / 10;
-export function camSvg({ clock, layout, ring, stations, lines, trains, carLen }) {
+export function camSvg({ clock, layout, ring, stations, lines, trains, carLen, focus = null }) {
   const night = nightAt(clock.hour + clock.minute / 60);
   const P = night
     ? { bg: "#03060b", blk: "#08111c", edge: "#1e3a5f", rail: "#1e4a5a", txt: "#9fc3e8", lit: "#ffaa2d", sky: "NIGHT" }
@@ -121,6 +121,16 @@ export function camSvg({ clock, layout, ring, stations, lines, trains, carLen })
     parts.push(`<line x1="${X(a.x + layout.ox)}" y1="${Y(a.y + layout.oy)}" x2="${X(b.x + layout.ox)}" y2="${Y(b.y + layout.oy)}" stroke="${t.color}" stroke-width="3.4"/>`);
   }
   const label = `DAY ${clock.day} // ${pad2(clock.hour)}:${pad2(clock.minute)} // ${P.sky}`;
+  // SURVEILLANCE (src/front/Surveillance.jsx): the same picture, cropped tight on one district, a
+  // reticle on its block. No caption: the window prints its own.
+  const b = focus && layout.blocks.find(k => k.id === focus);
+  if (b) {
+    const cx = X(b.x + b.w / 2), cy = Y(b.y + b.h / 2), vw = 72, vh = 54;
+    const vx = f1(Math.max(0, Math.min(X(W) - vw, cx - vw / 2))), vy = f1(Math.max(0, Math.min(Y(H) - vh, cy - vh / 2)));
+    parts.push(`<rect x="${X(b.x)}" y="${Y(b.y)}" width="${X(b.w)}" height="${Y(b.h)}" fill="none" stroke="#ffaa2d" stroke-width="0.8" stroke-dasharray="2 1.4"/>`);
+    parts.push(`<path d="M${cx - 6} ${cy}h4M${cx + 2} ${cy}h4M${cx} ${cy - 6}v4M${cx} ${cy + 2}v4" stroke="#ffaa2d" stroke-width="0.9" fill="none"/>`);
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vx} ${vy} ${vw} ${vh}" role="img" aria-label="${b.name || "A DISTRICT"} AT ${label}">${parts.join("")}</svg>`;
+  }
   const fs = Math.round(W / 22);
   parts.push(`<rect x="0" y="${Y(H) - fs * 1.7}" width="${X(W)}" height="${fs * 1.7}" fill="#000" fill-opacity="0.72"/>`);
   parts.push(`<text x="${fs * 0.6}" y="${Y(H) - fs * 0.5}" font-family="Fira Mono,Menlo,monospace" font-size="${fs}" font-weight="700" fill="${P.txt}">${label}</text>`);

@@ -1,0 +1,60 @@
+/* DISPLAY: the monitor, recoloured (src/front/DeskPrefs.jsx; docs/design-system.md "Themes").
+   Each theme is a token set on :root[data-theme]; nothing else changes. DEPARTMENT GREEN is
+   tokens.css itself (no attribute needed). index.html's boot line sets the attribute before the
+   first paint: the visitor's saved pick, else HIGH CONTRAST under prefers-contrast: more, else
+   PLATINUM under prefers-color-scheme: light, else green. scripts/check-themes.mjs holds every
+   theme to WCAG AA on the pairs the components actually use.
+   Extra role tokens a theme may set (defaults in ui.css): --bar / --bar-ink / --bar-cur /
+   --bar-cur-bg / --bar-cur-hot (the menu bar and F-key strip), --door-n (the logon doors' numbers), --ttl-bg / --ttl-fg / --ttl-mute (window titles),
+   --desk (the desktop under the windows) and --desk-img (its dither). */
+
+:root { --desk: var(--bg); }
+
+/* AMBER MONITOR: the same terminal on a P3 amber tube. */
+:root[data-theme="amber"] {
+  --bg: #0c0904; --panel: #130e05; --panel-hi: #1e1608; --line: #4d3812; --line-hi: #80601e;
+  --fg: #ffdca8; --fg-dim: #f0b060; --fg-mute: #b8873f; --fg-ghost: #4a3713;
+  --accent: #ffb000; --accent-ink: #201300; --accent-dim: #d99400; --warn: #ffe27a; --harm: #ff8a66;
+  --hot: #7a1d00; --desk-dot: #2b1f0a; --eb-cyan: #ffcf70; --eb-amber: #ff9a1f;
+  --desk-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Crect width='1' height='1' fill='%232b1f0a'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%232b1f0a'/%3E%3C/svg%3E");
+}
+
+/* WIN 3.1: teal desktop, white windows, navy title bars, the yellow hotkey. */
+:root[data-theme="win31"] {
+  --bg: #5fb3b3; --desk: #5fb3b3; --panel: #ffffff; --panel-hi: #e4e4e4; --line: #808080; --line-hi: #000000;
+  --fg: #000000; --fg-dim: #000080; --fg-mute: #2e2e2e; --fg-ghost: #9a9a9a;
+  --accent: #000080; --accent-ink: #ffffff; --accent-dim: #0000a8; --warn: #6b4f00; --harm: #a00000;
+  --hot: #ffff55; --shadow: #000000; --desk-dot: #4a9a9a; --eb-cyan: #006a78; --eb-amber: #8a4500;
+  --duke: #b0202e; --ttl-bg: #000080; --ttl-fg: #ffffff; --ttl-mute: #d6d6ff;
+  --desk-img: none; --focus: 2px solid #000000;
+  color-scheme: light;
+}
+
+/* PLATINUM: System 7 / Mac OS 8 grey, a white menu bar, black ink. */
+:root[data-theme="platinum"] {
+  --bg: #a8a8a8; --desk: #a8a8a8; --panel: #eeeeee; --panel-hi: #dddddd; --line: #8a8a8a; --line-hi: #555555;
+  --fg: #000000; --fg-dim: #262626; --fg-mute: #3a3a3a; --fg-ghost: #b4b4b4;
+  --accent: #30308f; --accent-ink: #ffffff; --accent-dim: #4040a8; --warn: #6b4f00; --harm: #9a0000;
+  --hot: #9a0000; --shadow: #000000; --desk-dot: #9c9c9c; --eb-cyan: #005f6b; --eb-amber: #7f4000;
+  --duke: #a01828; --bar: #f4f4f4; --bar-ink: #000000; --bar-cur: #ffffff; --bar-cur-bg: #000000; --bar-cur-hot: #ffe27a; --door-n: #ffe27a;
+  --ttl-bg: #eeeeee; --ttl-fg: #000000; --ttl-mute: #3a3a3a;
+  --desk-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='2' height='2' shape-rendering='crispEdges'%3E%3Crect width='1' height='1' fill='%239c9c9c'/%3E%3C/svg%3E");
+  --focus: 2px solid #000000;
+  color-scheme: light;
+}
+
+/* HIGH CONTRAST: black, white, yellow. No dither, no scanlines, thicker focus. */
+:root[data-theme="contrast"] {
+  --bg: #000000; --panel: #000000; --panel-hi: #1c1c1c; --line: #ffffff; --line-hi: #ffffff;
+  --fg: #ffffff; --fg-dim: #ffffff; --fg-mute: #dcdcdc; --fg-ghost: #6e6e6e;
+  --accent: #ffff00; --accent-ink: #000000; --accent-dim: #ffff00; --warn: #ffd400; --harm: #ff9b9b;
+  --hot: #9a0000; --desk-dot: #000000; --eb-cyan: #00ffff; --eb-amber: #ffb000;
+  --desk-img: none; --focus: 3px solid #ffff00;
+}
+
+/* the desktop and the CRT: a theme with its own dither swaps it; the light themes and HIGH CONTRAST drop the scanlines */
+:root[data-theme] .hvi-app { background-color: var(--desk); background-image: var(--desk-img, none); }
+:root[data-theme="win31"] .hvi-app::after, :root[data-theme="platinum"] .hvi-app::after, :root[data-theme="contrast"] .hvi-app::after { display: none; }
+/* the light themes: tags and bands painted in the darkened legend colours take white ink */
+:root:is([data-theme="win31"], [data-theme="platinum"]) :is(.ui-tt.cy, .ui-tt.am, .ui-tt.du, .fr-line .tag, .ui-bar .ctx, .ui-btn.am, .fr-steps button[aria-pressed="true"], .fr-tkr .fr-h.dn) { color: #ffffff; }
+:root[data-theme="contrast"] .fr-tkr .fr-h.dn { color: #000000; }

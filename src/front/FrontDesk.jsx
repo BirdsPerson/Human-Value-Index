@@ -8,9 +8,14 @@
 //                   hover, focus or PAUSE; under reduced motion it never moves on its own
 //   SUBSTRATE.CAM   the city's overview at the machine hour, a ~6 KB SVG from /api/cam, asked for
 //                   only while the window is on screen, once a machine hour (one real minute)
+//   NOTICE          the standing System 7 alert; OK dismisses it on this device
 // Every list is a real list for a screen reader; arrows and signs carry direction, not colour.
-import { useEffect, useRef, useState } from "react";
-import { Frame, Chip, Chips } from "../ui/index.js";
+// Since 2026-10-06 the visitor picks the windows and their order (WIDGETS, src/front/prefs.js);
+// the four above are the default. Every other widget is its own lazy chunk, fetched only when
+// it is on the desk. MORE ROOMS' DISPLAY and WIDGETS open their dialogs here (DeskPrefs.jsx).
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Frame, Chip, Chips, Button, ButtonRow } from "../ui/index.js";
+import { loadWidgets, saveWidgets } from "./prefs.js";
 import { FAMOUS_FIGURES, getTier, displayName } from "../figures.js";
 import Sparkline from "../ui/Sparkline.jsx";   // the MOVEMENT LOG beside a name (src/ui/spark.js)
 import "./front.css";
@@ -23,13 +28,53 @@ const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion:
 const getJSON = (u) => fetch(u).then(r => (r.ok ? r.json() : null)).catch(() => null);
 const SHOWN = 3;   // per side on the landing; #market's MOVERS window has five
 
-export default function FrontDesk() {
+const named = (load, name) => lazy(() => load().then(m => ({ default: m[name] })));
+const smalls = () => import("./Smalls.jsx");
+const LAZY = {
+  file: lazy(() => import("./YourFile.jsx")),
+  flat: lazy(() => import("./YourFlat.jsx")),
+  watch: lazy(() => import("./Surveillance.jsx")),
+  set: lazy(() => import("./TheSet.jsx")),
+  paper: named(smalls, "PaperWidget"),
+  cups: named(smalls, "CupsWidget"),
+  league: named(smalls, "LeagueWidget"),
+};
+const DeskPrefs = lazy(() => import("./DeskPrefs.jsx"));
+const NOW = { market: MarketTkr, wire: WireTkr, cam: SubstrateCam, notice: Notice };
+
+export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
+  const [ids, setIds] = useState(loadWidgets);
   return (
     <>
-      <MarketTkr />
-      <WireTkr />
-      <SubstrateCam />
+      {ids.map(id => {
+        const W = NOW[id] || LAZY[id];
+        return W ? <Suspense key={id} fallback={null}><W /></Suspense> : null;
+      })}
+      {!ids.length && <p className="fr-clear">THE DESK IS CLEAR. THE DEPARTMENT ADMIRES YOUR RESTRAINT.</p>}
+      <p className="fr-arrange">
+        <button type="button" onClick={() => onDialog("widgets")}>ARRANGE THE DESK</button>
+        <button type="button" onClick={() => onDialog("display")}>DISPLAY</button>
+      </p>
+      {dialog && (
+        <Suspense fallback={null}>
+          <DeskPrefs which={dialog} ids={ids} onIds={(v) => { setIds(v); saveWidgets(v); }} onClose={() => onDialog(null)} />
+        </Suspense>
+      )}
     </>
+  );
+}
+
+// ---- NOTICE: a System 7 alert with an OK button. OK dismisses it on this device. ----------------
+function Notice() {
+  const [ok, setOk] = useState(() => { try { return localStorage.getItem("hvi-notice-ok") === "1"; } catch { return false; } });
+  if (ok) return null;
+  return (
+    <Frame title="NOTICE" tone="var(--eb-amber)" className="hvi-notice ui-dialog">
+      <p><span className="ic" aria-hidden="true">!</span>THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.</p>
+      <ButtonRow className="ui-dialog-btns">
+        <Button variant="push" tone="sec" className="ok" onClick={() => { try { localStorage.setItem("hvi-notice-ok", "1"); } catch { /* it returns next visit */ } setOk(true); }}>OK</Button>
+      </ButtonRow>
+    </Frame>
   );
 }
 

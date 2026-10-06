@@ -21,24 +21,24 @@ a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-of
 
 /* ---------- shell: the menu bar ----------
    Light bar, dark ink, the hotkey letter in --hot. Full-bleed, sticky. */
-.ui-head { position: sticky; top: 0; z-index: 50; background: var(--fg-dim); padding-top: var(--safe-t); margin: 0 0 var(--s5); }
+.ui-head { position: sticky; top: 0; z-index: 50; background: var(--bar, var(--fg-dim)); padding-top: var(--safe-t); margin: 0 0 var(--s5); }
 .ui-head-line { display: flex; align-items: center; gap: var(--s2); height: var(--head-h); max-width: 1040px; margin: 0 auto;
-  padding: 0 max(var(--s2), var(--safe-r)) 0 max(var(--s2), var(--safe-l)); font-size: var(--t-xs); color: var(--accent-ink); white-space: nowrap; }
-.ui-head-mark { color: var(--accent-ink); font-weight: 700; letter-spacing: 0.06em; text-decoration: none; padding: 0 var(--s2);
+  padding: 0 max(var(--s2), var(--safe-r)) 0 max(var(--s2), var(--safe-l)); font-size: var(--t-xs); color: var(--bar-ink, var(--accent-ink)); white-space: nowrap; }
+.ui-head-mark { color: var(--bar-ink, var(--accent-ink)); font-weight: 700; letter-spacing: 0.06em; text-decoration: none; padding: 0 var(--s2);
   min-height: var(--hit-min); display: inline-flex; align-items: center; flex: none; }
 @media (hover: hover) { .ui-head-mark:hover { text-decoration: underline; text-underline-offset: 4px; } }
 .ui-head-nav { display: none; gap: 0; margin-left: var(--s2); align-self: stretch; }
-.ui-head-nav a { color: var(--accent-ink); text-decoration: none; padding: 0 var(--s3); display: inline-flex; align-items: center; }
+.ui-head-nav a { color: var(--bar-ink, var(--accent-ink)); text-decoration: none; padding: 0 var(--s3); display: inline-flex; align-items: center; }
 .ui-head-nav a u { text-decoration: none; color: var(--hot); font-weight: 700; }
 @media (hover: hover) { .ui-head-nav a:hover { background: var(--fg); } }
-.ui-head-nav a[aria-current="page"] { background: var(--accent-ink); color: var(--accent); }
-.ui-head-nav a[aria-current="page"] u { color: var(--warn); }
-.ui-head :focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -4px; }
+.ui-head-nav a[aria-current="page"] { background: var(--bar-cur-bg, var(--accent-ink)); color: var(--bar-cur, var(--accent)); }
+.ui-head-nav a[aria-current="page"] u { color: var(--bar-cur-hot, var(--warn)); }
+.ui-head :focus-visible { outline: 2px solid var(--bar-ink, var(--accent-ink)); outline-offset: -4px; }
 .ui-head-case { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding-right: var(--s2); }
-.ui-head-case b { color: var(--accent-ink); font-weight: 700; }
-.ui-head-ok { color: var(--accent-ink); flex: none; display: none; padding-right: var(--s2); }
+.ui-head-case b { color: var(--bar-ink, var(--accent-ink)); font-weight: 700; }
+.ui-head-ok { color: var(--bar-ink, var(--accent-ink)); flex: none; display: none; padding-right: var(--s2); }
 /* The balance chip: an inverse cell on the light bar, so the amber still reads. */
-.ui-head-econ { flex: none; color: var(--warn); background: var(--accent-ink); text-decoration: none; white-space: nowrap; padding: 2px var(--s2); }
+.ui-head-econ { flex: none; color: var(--warn); background: var(--bar-cur-bg, var(--accent-ink)); text-decoration: none; white-space: nowrap; padding: 2px var(--s2); }
 .ui-head-econ .tray { color: var(--accent); }
 @media (hover: hover) { .ui-head-econ:hover { text-decoration: underline; text-underline-offset: 4px; } }
 /* The block-letter banner: inside the logon window, on the menu only. Scales to the width. */
@@ -53,20 +53,20 @@ a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-of
 /* ---------- shell: the F-key strip (phones and small tablets) ----------
    Norton Commander's bottom line as the 4-cell command bar. The key name sits over the
    label in --hot; the current room is inverse. */
-.ui-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; background: var(--fg-dim);
-  border-top: 2px solid var(--accent-ink); display: grid; grid-template-columns: repeat(4, 1fr);
+.ui-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; background: var(--bar, var(--fg-dim));
+  border-top: 2px solid var(--bar-ink, var(--accent-ink)); display: grid; grid-template-columns: repeat(4, 1fr);
   padding: 0 var(--safe-r) var(--safe-b) var(--safe-l); }
 .ui-bar a, .ui-bar button { height: var(--bar-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  color: var(--accent-ink); text-decoration: none; font: inherit; font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--bar-ink, var(--accent-ink)); text-decoration: none; font: inherit; font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   background: none; border: 0; border-radius: 0; cursor: pointer; min-width: 0; padding: 0 var(--s1); }
 .ui-bar a + a, .ui-bar a + button, .ui-bar button + a { border-left: 1px solid var(--fg-mute); }
 .ui-bar .g { color: var(--hot); font-size: var(--t-xs); line-height: 1; }
-.ui-bar [aria-current="page"] { background: var(--accent-ink); color: var(--accent); }
-.ui-bar [aria-current="page"] .g { color: var(--warn); }
+.ui-bar [aria-current="page"] { background: var(--bar-cur-bg, var(--accent-ink)); color: var(--bar-cur, var(--accent)); }
+.ui-bar [aria-current="page"] .g { color: var(--bar-cur-hot, var(--warn)); }
 .ui-bar .ctx { background: var(--eb-amber); color: #2e1c03; }
 .ui-bar .ctx .g { color: var(--hot); }
 .ui-bar a:active, .ui-bar button:active { background: var(--fg); }
-.ui-bar :focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -4px; }
+.ui-bar :focus-visible { outline: 2px solid var(--bar-ink, var(--accent-ink)); outline-offset: -4px; }
 .ui-bar [aria-current="page"]:focus-visible { outline-color: var(--accent); }
 .ui-bar-pad { height: calc(var(--bar-h) + var(--safe-b) + var(--s4)); }
 @media (min-width: 721px) { .ui-bar, .ui-bar-pad { display: none; } }
@@ -102,10 +102,10 @@ a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-of
 :is(.ui-frame, .tb) :is(.ui-frame, .tb) { box-shadow: none; margin-right: 0; }
 .ui-frame-ttl, .tb-top { position: absolute; top: calc(-0.75em - 2px); left: var(--s2); right: var(--s2); display: flex; align-items: center; gap: var(--s2);
   pointer-events: none; font-size: var(--t-xs); line-height: 1.5; letter-spacing: 0.08em; white-space: nowrap; z-index: 2; }
-.ui-frame-ttl > *, .tb-top > * { background: var(--panel); padding: 0 0.5ch; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ui-frame-ttl .b, .tb-box { flex: none; color: var(--accent); letter-spacing: 0; }
-.ui-frame-ttl .t, .tb-top .tb-title { color: var(--tone, var(--fg)); font-weight: 700; flex: 0 1 auto; margin: 0 auto; }
-.ui-frame-ttl .m, .tb-top .tb-right { color: var(--fg-mute); font-weight: 400; flex: 0 1000 auto; margin: 0; }
+.ui-frame-ttl > *, .tb-top > * { background: var(--ttl-bg, var(--panel)); padding: 0 0.5ch; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ui-frame-ttl .b, .tb-box { flex: none; color: var(--ttl-fg, var(--accent)); letter-spacing: 0; }
+.ui-frame-ttl .t, .tb-top .tb-title { color: var(--ttl-fg, var(--tone, var(--fg))); font-weight: 700; flex: 0 1 auto; margin: 0 auto; }
+.ui-frame-ttl .m, .tb-top .tb-right { color: var(--ttl-mute, var(--fg-mute)); font-weight: 400; flex: 0 1000 auto; margin: 0; }
 .ui-frame-ttl > span:empty { display: none; }
 .ui-frame.flush { padding: var(--s3) 0 0; }
 .tb-body { min-width: 0; }
@@ -113,7 +113,7 @@ a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-of
 @media (max-width: 640px) { .tb-top .tb-right { display: none; } }
 /* Wide screens: the title bar's size box on the right, Windows 3.x / Turbo Vision. */
 @media (min-width: 721px) {
-  .ui-frame-ttl::after, .tb-top::after { content: "[↕]"; flex: none; background: var(--panel); padding: 0 0.5ch; color: var(--accent); letter-spacing: 0; }
+  .ui-frame-ttl::after, .tb-top::after { content: "[↕]"; flex: none; background: var(--ttl-bg, var(--panel)); padding: 0 0.5ch; color: var(--ttl-fg, var(--accent)); letter-spacing: 0; }
 }
 
 /* Dialog (System 7 alert): a single frame with a pinstriped title bar inside the top, the
