@@ -4,6 +4,7 @@
 // tabs, columns on a wide screen and one column on a phone. Every edition is built on the server
 // (netlify/lib/paper.js) and read here as it was printed; the WIRE is live.
 import { useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { Window, Headline, Button } from "../ui/index.js";
 
 const Comic = lazy(() => import("./Comic.jsx"));
 
@@ -17,7 +18,7 @@ const CSS = `
 .pp { font-size: var(--t-m); line-height: 1.5; color: var(--fg); }
 .pp a { color: var(--accent); }
 .pp-mast { text-align: center; border-top: 3px double var(--line-hi); border-bottom: 3px double var(--line-hi); padding: var(--s3) 0 var(--s2); margin: 0 0 var(--s2); }
-.pp-name { font-size: clamp(26px, 6.4vw, 54px); letter-spacing: 0.04em; line-height: 1.05; margin: 0; color: var(--fg); font-weight: 700; }
+.pp-name { font-family: var(--tall); font-size: clamp(44px, 10vw, 96px); letter-spacing: 0.03em; line-height: 0.95; margin: 0; color: var(--fg); font-weight: 400; }
 .pp-motto { color: var(--fg-dim); font-size: var(--t-s); margin: var(--s1) 0 0; }
 .pp-date { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s1) var(--s3); font-size: var(--t-s); color: var(--fg-dim); border-bottom: 1px solid var(--line); padding: 0 0 var(--s2); margin: 0 0 var(--s3); }
 .pp-tabs { display: flex; gap: var(--s1); overflow-x: auto; padding: 0 0 var(--s2); margin: 0 0 var(--s4); border-bottom: 1px solid var(--line); scrollbar-width: thin; }
@@ -28,7 +29,9 @@ const CSS = `
 .pp-tab:focus-visible { outline: var(--focus); outline-offset: 2px; }
 .pp-band { background: var(--accent); color: var(--accent-ink); padding: var(--s3) var(--s3); margin: 0 0 var(--s3); }
 .pp-band .pg { font-size: var(--t-xs); letter-spacing: 0.1em; display: block; margin-bottom: var(--s1); }
-.pp .pp-lead { font-size: clamp(26px, 5.2vw, 44px); line-height: 1.08; margin: 0; letter-spacing: 0.01em; }
+.pp .ui-tt.pp-lead { font-size: clamp(40px, 7vw, 72px); line-height: 0.95; padding: var(--s2) var(--s3) var(--s1); margin: 0 0 var(--s3); }
+.pp .ui-tt.pp-sec { margin: 0 0 var(--s4); }
+.pp .ui-frame { margin-top: var(--s5); }
 .pp-lead a { color: inherit; text-decoration: none; }
 .pp-deck { font-size: var(--t-m); color: var(--fg); margin: 0 0 var(--s4); max-width: 70ch; }
 .pp-cols { column-gap: var(--s5); column-rule: 1px solid var(--line); }
@@ -38,10 +41,8 @@ const CSS = `
 .pp-story h3 { font-size: var(--t-l); line-height: 1.2; margin: 0 0 var(--s1); }
 .pp-story h3 a { color: var(--fg); text-decoration: none; } .pp-story h3 a:hover { text-decoration: underline; }
 .pp-story p { margin: 0; color: var(--fg-dim); }
-.pp-box { border: 1px solid var(--line); padding: var(--s3); margin: 0 0 var(--s4); }
-.pp-box.double { border: 3px double var(--line-hi); }
-.pp h2 { font-size: var(--t-l); margin: 0 0 var(--s3); letter-spacing: 0.04em; border-bottom: 1px solid var(--line); padding-bottom: var(--s1); }
-.pp h2 .pg { color: var(--warn); margin-right: 1ch; font-weight: 400; }
+.pp h2:not(.ui-tt) { font-size: var(--t-l); margin: 0 0 var(--s3); letter-spacing: 0.04em; border-bottom: 1px solid var(--line); padding-bottom: var(--s1); }
+.pp h2:not(.ui-tt) .pg { color: var(--warn); margin-right: 1ch; font-weight: 400; }
 .pp h3.sub { font-size: var(--t-m); color: var(--accent); margin: var(--s3) 0 var(--s1); letter-spacing: 0.04em; }
 .pp ul.pp-list { list-style: none; margin: 0 0 var(--s3); padding: 0; }
 .pp ul.pp-list li { padding: 3px 0; border-bottom: 1px dotted var(--fg-ghost); }
@@ -162,7 +163,7 @@ export default function Paper({ route }) {
       </nav>
       <section id="pp-body" role="tabpanel" aria-labelledby={`pp-tab-${sec}`} tabIndex={-1}>
         {sec === "front" && <Front ed={ed} wire={wire} go={pick} />}
-        {sec !== "front" && <h2><span className="pg">{S[2]}</span>{S[1]}</h2>}
+        {sec !== "front" && <Headline page={S[2]} tone={{ sports: "am", markets: "cy", comics: "am", classifieds: "cy" }[sec]} className="pp-sec">{S[1]}</Headline>}
         {sec === "city" && <City c={ed.city} weather={ed.weather} />}
         {sec === "classifieds" && <Classifieds list={ed.classifieds} />}
         {sec === "sports" && <Sports s={ed.sports} />}
@@ -208,43 +209,35 @@ function Front({ ed, wire, go }) {
   const strip = ed.comics?.strip;
   return (
     <>
-      <div className="pp-band">
-        <span className="pg">P100 // TODAY'S LEAD</span>
-        <h2 className="pp-lead" style={{ border: 0, padding: 0, margin: 0, color: "inherit" }}><a href={L.href}>{L.text}</a></h2>
-      </div>
+      <Headline as="h2" page="P100" className="pp-lead"><a href={L.href}>{L.text}</a></Headline>
       {L.deck && <p className="pp-deck">{L.deck}</p>}
       <div className="pp-cols three">
         {ed.front.stories.map((h, i) => <Story key={i} h={h} />)}
-        <div className="pp-box double">
-          <h3 className="sub" style={{ marginTop: 0 }}>THE LEADER</h3>
+        <Window title="THE LEADER" meta={ed.editorial?.by === "engine" ? "ENGINE" : "DESK"} double>
           <p style={{ margin: 0 }}>{ed.editorial?.text}</p>
-        </div>
-        <div className="pp-box">
-          <h3 className="sub" style={{ marginTop: 0 }}>THE WIRE <span className="pp-meta">(LIVE)</span></h3>
+        </Window>
+        <Window title="THE WIRE" meta="LIVE">
           {wire?.length ? (
             <ul className="pp-list pp-wire" aria-live="polite">
               {wire.slice(0, 6).map((w, i) => <li key={i}><span className="t">{w.at}</span><a href={w.href} style={{ color: "var(--fg)" }}>{w.text}</a></li>)}
             </ul>
           ) : <p className="pp-meta">THE WIRE IS QUIET. THE DEPARTMENT IS LISTENING ANYWAY.</p>}
-        </div>
-        <div className="pp-box">
-          <h3 className="sub" style={{ marginTop: 0 }}>WEATHER, ON THE MACHINE CLOCK</h3>
+        </Window>
+        <Window title="WEATHER.SYS" meta="MACHINE CLOCK">
           <p style={{ margin: 0 }}>THE CITY: {ed.weather.city}. THE HEIGHTS: {ed.weather.heights}. THE WATERS: {ed.weather.waters}.</p>
-        </div>
+        </Window>
         {ed.markets && (
-          <div className="pp-box">
-            <h3 className="sub" style={{ marginTop: 0 }}>THE INDEX</h3>
+          <Window title="MARKET.TKR">
             <p style={{ margin: 0 }}><a href="#market">HUMAN VALUE INDEX {ed.markets.level} ({ed.markets.chg})</a></p>
-          </div>
+          </Window>
         )}
-        <div className="pp-box">
-          <h3 className="sub" style={{ marginTop: 0 }}>INSIDE</h3>
+        <Window title="INSIDE">
           <ul className="pp-list pp-plain">
             <li><button type="button" className="pp-btn" onClick={() => go("classifieds")}>P300 HOW TO GET INVOLVED: {ed.classifieds.length} LISTINGS</button></li>
             <li><button type="button" className="pp-btn" onClick={() => go("sports")}>P400 SCORES, TABLES, THE CUP</button></li>
             {strip && <li><button type="button" className="pp-btn" onClick={() => go("comics")}>P800 THE FUNNIES: {strip.title}</button></li>}
           </ul>
-        </div>
+        </Window>
       </div>
     </>
   );
@@ -298,7 +291,7 @@ function Classifieds({ list }) {
             <span className="cat">{c.cat}</span>
             <h3>{c.title}</h3>
             <p>{c.text}</p>
-            <a className="pp-act" href={c.href}>{c.act}</a>
+            <Button variant="push" href={c.href}>{c.act}</Button>
           </div>
         )))}
       </div>
@@ -462,12 +455,11 @@ function Comics({ c }) {
         </section>
       )}
       {c.puzzle && (
-        <div className="pp-box">
-          <h3 className="sub" style={{ marginTop: 0 }}>THE DAILY SCRAMBLE</h3>
+        <Window title="THE DAILY SCRAMBLE">
           <p>{c.puzzle.clue}</p>
           <p className="pp-scr" aria-label={`Scrambled letters: ${c.puzzle.letters.split("").join(" ")}`}>{c.puzzle.letters}</p>
-          {shown ? <p>ANSWER: {c.puzzle.answer}. THE DEPARTMENT KNEW.</p> : <button type="button" className="pp-btn" onClick={() => setShown(true)}>REVEAL THE ANSWER</button>}
-        </div>
+          {shown ? <p>ANSWER: {c.puzzle.answer}. THE DEPARTMENT KNEW.</p> : <Button variant="push" onClick={() => setShown(true)}>REVEAL THE ANSWER</Button>}
+        </Window>
       )}
     </>
   );
