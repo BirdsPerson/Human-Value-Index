@@ -1,0 +1,41 @@
+/* TAGGED OUT (#hunt): the golf page's frame (a pixel canvas, black, scaled by whole device pixels)
+   with the terminal's tokens around it. The canvas hides the pointer: the reticle is the cursor. */
+.hu { font-size: var(--t-s); }
+.hu-p { margin: 0 0 var(--s3); }
+.hu-p.dim { color: var(--fg-mute); font-size: var(--t-xs); }
+.hu-p.harm { color: var(--harm); }
+.hu-p.good { color: var(--accent); }
+.hu-cabhead { margin: 0 0 var(--s3); color: var(--warn); letter-spacing: 0.05em; font-size: var(--t-xs); }
+.hu-cab { padding: var(--s3); }
+.hu-trips { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--s2); margin: 0 0 var(--s4); }
+.hu-trip { font: inherit; text-align: left; display: flex; flex-direction: column; gap: 4px; padding: var(--s2) var(--s3); min-height: var(--hit); background: var(--panel); color: var(--fg-dim); border: var(--bw) solid var(--line); cursor: pointer; font-size: var(--t-xs); letter-spacing: 0.03em; }
+.hu-trip b { color: var(--fg); font-size: var(--t-s); }
+.hu-trip .ok { color: var(--accent); } .hu-trip .off { color: var(--warn); } .hu-trip .dim { color: var(--fg-mute); }
+.hu-trip[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.hu-trip:hover { border-color: var(--line-hi); }
+.hu-trip:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.hu-tag { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin: 0 0 var(--s4); font-size: var(--t-xs); color: var(--fg-dim); letter-spacing: 0.04em; }
+.hu-tag input { width: 5ch; min-height: var(--hit-min); font: inherit; font-size: var(--t-m); letter-spacing: 0.2em; text-align: center; text-transform: uppercase; color: var(--warn); background: var(--bg); border: var(--bw) solid var(--line-hi); }
+.hu-tag input:focus-visible { outline: var(--focus); outline-offset: 2px; }
+
+.hu-play { margin: 0 0 var(--s4); }
+.hu-stage { display: flex; justify-content: center; background: #000; border: var(--bw) solid var(--line); padding: var(--s4) 0; cursor: crosshair; touch-action: none; }
+.hu-stage canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; }
+.hu-stage canvas.nocursor { cursor: none; }
+.hu-status { margin: var(--s2) 0; font-size: var(--t-xs); color: var(--fg-mute); letter-spacing: 0.04em; text-align: center; }
+.hu-touch { display: none; }
+@media (pointer: coarse), (max-width: 700px) {
+  .hu-touch { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: var(--s2); margin: 0 0 var(--s3); user-select: none; -webkit-user-select: none; }
+  .hu-tb { min-height: 56px; font: inherit; font-weight: 700; letter-spacing: 0.04em; color: var(--fg); background: var(--panel); border: var(--bw) solid var(--line-hi); touch-action: none; -webkit-tap-highlight-color: transparent; }
+  .hu-tb:active { background: var(--accent); color: var(--accent-ink); }
+}
+.hu-keys { display: grid; grid-template-columns: max-content 1fr; gap: var(--s1) var(--s3); margin: 0 0 var(--s3); font-size: var(--t-xs); }
+.hu-keys dt { color: var(--warn); letter-spacing: 0.04em; }
+.hu-keys dd { margin: 0; color: var(--fg-dim); }
+.hu-keys dd b { color: var(--fg); font-weight: 700; }
+.hu-board { width: 100%; border-collapse: collapse; font-size: var(--t-xs); font-variant-numeric: tabular-nums; margin: 0 0 var(--s3); }
+.hu-board th, .hu-board td { padding: 3px 6px; text-align: left; border-bottom: var(--bw) solid var(--line); }
+.hu-board thead th { color: var(--fg-mute); font-weight: 400; }
+.hu-board th[scope="row"] { color: var(--warn); letter-spacing: 0.1em; }
+.hu-list { list-style: none; margin: 0; padding: 0; font-size: var(--t-xs); color: var(--fg-dim); display: grid; gap: 2px; }
+.hu-list li::before { content: "> "; color: var(--fg-mute); }

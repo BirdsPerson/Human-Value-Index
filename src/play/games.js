@@ -11,6 +11,7 @@ export const GAMES = [
   { href: "#football", title: "FOOTBALL", name: "football", icon: "football", note: "THE GRIDIRON. THE LEAGUE'S OWN TEAMS" },
   { href: "#soccer", title: "SOCCER", name: "soccer", icon: "soccer", note: "THE PITCH. THE LEAGUE'S OWN TEAMS" },
   { href: "#fish", title: "FISHING", name: "fishing", icon: "fish", note: "FISH THE PIER AND THE RIVER" },
+  { href: "#hunt", title: "TAGGED OUT", name: "the light-gun hunting cabinet", icon: "hunt", note: "THE BAR CABINET. BUCKS ONLY. A VIDEO GAME" },
   { href: "#aquarium", title: "AQUARIUM", name: "the aquarium", icon: "tank", note: "THE TANKS. EVERY DONATION CHECKED BY REPLAY" },
   { href: "#chess", title: "CHESS", name: "chess", icon: "rook", note: "A STONE TABLE OPPOSITE A FIGURE ON FILE" },
   { href: "#casino", title: "CASINO", name: "the casino", icon: "card", note: "PLAY CHIPS ONLY. THE HOUSE IS THE MACHINE" },
