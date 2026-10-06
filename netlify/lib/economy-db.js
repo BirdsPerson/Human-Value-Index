@@ -11,6 +11,7 @@
 import { createHash } from "node:crypto";
 import { marketMemory } from "./market-db.js";
 import { shopsMemory } from "./shops-db.js";
+import { ebvirtualMemory } from "./ebvirtual-db.js";
 
 const salt = () => process.env.HVI_IP_SALT || "hvi-limits-v1";
 const sha = (s) => createHash("sha256").update(s).digest("hex");
@@ -158,6 +159,9 @@ export function memoryLedger() {
   const S = shopsMemory(db, { nowMs, clone });
   const { wrapPurge: shopPurge, ...sfns } = S;
   Object.assign(fns, sfns, { econ_purge: shopPurge(fns.econ_purge) });
+  // THE EB SHOP's real-purchase claims (ebvirtual-db.js)
+  const V = ebvirtualMemory(db, { nowMs });
+  Object.assign(fns, { econ_irl_claim: V.econ_irl_claim, econ_shop_view: V.wrapView(fns.econ_shop_view), econ_purge: V.wrapPurge(fns.econ_purge) });
   return {
     kind: "memory",
     db,

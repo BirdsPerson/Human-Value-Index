@@ -4,7 +4,7 @@
 import { avatarLayers, avatarPalette, DEFAULT_SPEC, sanitizeSpec, AX } from "../avatar.js";
 import { WEAR_KEYS, wearOf } from "../wear.js";
 import { paintAvatar } from "../sprites.js";
-import { CATALOG } from "../city/furniture.js";
+import { pieceOf } from "../city/furniture.js";
 
 const SLOT_INK = {
   top: [AX.TOP, AX.TOPS, AX.TRIM], bottom: [AX.BOT, AX.BTRIM], shoes: [AX.SHOE, AX.SOLE],
@@ -46,7 +46,7 @@ const PIECES = new Map();
 export function pieceSprite(id, s = 2) {
   const k = `${id}|${s}`;
   if (PIECES.has(k)) return PIECES.get(k);
-  const it = CATALOG[id];
+  const it = pieceOf(id);
   if (!it) return null;
   const w = Math.ceil((it.footprint.w + 4) * s), h = Math.ceil((Math.max(it.footprint.h, 6) + 3) * s);
   const cv = document.createElement("canvas"); cv.width = w; cv.height = h;

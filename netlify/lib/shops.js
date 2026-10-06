@@ -10,6 +10,8 @@ import { apartmentOf } from "./economy.js";
 import { updateCase, setPenAvatar } from "./store.js";
 import { sanitizeAvatar, DEFAULT_SPEC } from "../../src/avatar.js";
 import { WEAR_KEYS } from "../../src/wear.js";
+import { entryBySku, keptCatalog } from "./ebvirtual.js";
+import { EBV_LINES } from "../../src/economy/ebvirtual.js";
 import {
   itemOf, onSale, collectionOf, outfitKeys, placeable, spotsFor, roomRule, upgradeOf, MAX_FURN_EACH, OUTFIT_SLOTS, SHOP_LINES,
 } from "../../src/economy/shops.js";
@@ -32,6 +34,12 @@ export async function shopsView(caseId, rec, nowMs = Date.now()) {
   const items = (v.items || []).map(i => { const c = itemOf(i.sku) || { name: i.sku, kind: i.kind }; return { ...c, ref: c.id, id: Number(i.id), sku: i.sku, price: Number(i.price), at: i.bought_at }; });
   const placed = new Map((v.placements || []).map(p => [Number(p.item_id), { room: p.room, spot: p.spot, flat: p.flat }]));
   for (const it of items) if (placed.has(it.id)) it.placed = placed.get(it.id);
+  // the EB SHOP's virtual copies: named from the catalog (src/economy/ebvirtual.js)
+  for (const it of items) it.irl = Boolean((v.items || []).find(i => Number(i.id) === it.id)?.irl);
+  if (items.some(it => it.virtual)) {
+    const byH = new Map(Object.values((await keptCatalog()).items).map(e => [e.h, e]));
+    for (const it of items) { const e = it.virtual && byH.get(it.sku.slice(4, 12)); if (e) Object.assign(it, { name: e.title.toUpperCase(), handle: e.handle, image: e.image, live: e.live }); }
+  }
   const outfits = {};
   for (let k = 1; k <= OUTFIT_SLOTS; k++) outfits[k] = v.outfits?.[String(k)] || null;
   const av = sanitizeAvatar(rec?.avatar);
@@ -48,15 +56,19 @@ export async function buy(caseId, { sku, nonce }, nowMs = Date.now()) {
   if (!it) return { ok: false, status: 400, error: "THE DEPARTMENT DOES NOT STOCK THAT." };
   if (it.upgradeOnly) return { ok: false, status: 409, error: `THE ${it.name} IS NOT SOLD OUTRIGHT. BUY THE TIER BELOW AND UPGRADE IT.`, code: "upgrade-only" };
   if (!onSale(sku, machineDayNow(nowMs))) return { ok: false, status: 409, error: SHOP_LINES.offSeason };
+  // an EB SHOP virtual copy is sold only as the catalog has it (a made-up SKU is not stocked)
+  const ve = it.virtual ? await entryBySku(sku) : null;
+  if (it.virtual && !ve) return { ok: false, status: 400, error: EBV_LINES.unknown };
   const h = caseHash(caseId);
-  const r = await ledger().rpc("econ_shop_buy", { idem: `shop:${h}:${nonceOf(nonce)}`, case_hash: h, sku, name: it.way ? `${it.name} (${it.way.toUpperCase()})` : it.name, kind: it.kind, price: it.price, max_each: MAX_FURN_EACH });
+  const name = ve ? `EB SHOP COPY: ${ve.title}`.slice(0, 160) : it.way ? `${it.name} (${it.way.toUpperCase()})` : it.name;
+  const r = await ledger().rpc("econ_shop_buy", { idem: `shop:${h}:${nonceOf(nonce)}`, case_hash: h, sku, name, kind: it.kind, price: it.price, max_each: it.virtual ? 1 : MAX_FURN_EACH });
   if (r.dup) return { ok: true, dup: true, line: SHOP_LINES.dup };
   if (!r.ok) {
-    const map = { "no-wallet": [403, SHOP_LINES.noWallet], owned: [409, SHOP_LINES.owned], "too-many": [409, SHOP_LINES.tooMany], insufficient: [402, SHOP_LINES.poor] };
+    const map = { "no-wallet": [403, SHOP_LINES.noWallet], owned: [409, it.virtual ? EBV_LINES.owned : SHOP_LINES.owned], "too-many": [409, it.virtual ? EBV_LINES.owned : SHOP_LINES.tooMany], insufficient: [402, SHOP_LINES.poor] };
     const [status, error] = map[r.error] || [409, "THE TILL REFUSED."];
     return { ok: false, status, error, code: r.error };
   }
-  return { ok: true, item: Number(r.item), line: it.kind === "furn" ? SHOP_LINES.boughtFurn : SHOP_LINES.bought };
+  return { ok: true, item: Number(r.item), line: it.virtual ? EBV_LINES.bought : it.kind === "furn" ? SHOP_LINES.boughtFurn : SHOP_LINES.bought };
 }
 
 // ---- WEAR / SAVE: the ledger checks every piece is the case's own --------------------------------------

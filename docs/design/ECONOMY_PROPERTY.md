@@ -682,6 +682,44 @@ The ladder, checked: every thrift piece under every boutique piece; no garment a
 flat; a thrift tee a morning's saving; the grand piano (20,000) and nothing else sold outright past
 two OUTER flats; the simulator, the top of a chain, under four.
 
+## The EB SHOP's virtual copies (as built, 2026-10-06)
+
+Scott: EB Shop items (the real Shopify store, shop.electricbasement.tv) show up in the game both ways.
+
+- **Every listing has a virtual copy**, bought for CYCLES in the EB SHOP: a wall item's card has
+  GET THE VIRTUAL ONE beside BUY THE REAL ONE AT THE EB SHOP (utm as every link out), and THE COPY
+  ROOM lists every listing the shop has ever had (WEARABLES, THE SHELF, THE WALL, THE DESK), the sold
+  ones marked THE REAL ONE HAS SOLD and still for sale as copies. MY FILE (WARDROBE AND HOME) opens it.
+- **What a copy is** (`src/economy/ebvirtual.js categorize`): apparel, hats, jewellery -> a garment
+  layer (shape from the title: jersey, tee, hoodie, cap...); films, games, records, books, card and
+  board games -> a media shelf with the cover face out; autographs, framed photos, posters, helmets ->
+  a framed piece for the wall; anything else -> an object on a stand. Colours: the product photo,
+  read once server side (32 px PNG from Shopify's CDN, decoded with node:zlib), its two strongest
+  colours off the background. A jersey also wears its number (title "#33", a `number:33` Shopify
+  tag, a named player, or `OVERRIDES` in `netlify/lib/ebvirtual.js`: the Pistons jersey is Grant
+  Hill's 33). The SKU carries the look (`w:v-<h8>.jersey-1d428a-c8102e-33`, `f:v-<h8>.shelf-..`), frozen
+  when first read, so the file photo and the flat draw it anywhere with no lookup.
+- **Prices are by category, never by dollars** (`WEAR_TIER`, `FORM_TIER`): a DVD 300, a desk object
+  450, a framed piece 1,200, a cap 450, a tee 600, a jersey 1,500, a jacket 1,800, whatever the real
+  one costs. A price that tracked dollars would imply an exchange rate; CYCLES have none (section 11).
+- **Buying** is `/api/shops` `buy` with the copy's SKU (the same ledger function: idempotent per
+  nonce, burned, one copy a file); the server sells only a SKU its catalog holds. Catalog:
+  `/api/eb-virtual` (public; Blobs store `ebvirtual`, the storefront read at most every 15 minutes).
+- **CLAIM A REAL PURCHASE** (`/api/eb-claim`, `netlify/lib/ebclaim.js`): the order number and the
+  checkout email; the server asks Shopify's Admin API (GraphQL `orders(query: "name:..")`), checks it
+  is paid (or partly refunded: only lines still bought), not cancelled, not a test, the email matches
+  (normalised, compared as salted hashes in constant time), then grants each line's copy free, marked
+  OWNED IN REAL LIFE (`econ_items.irl`; a copy already bought is marked, not doubled). A line is claimed
+  once ever (`econ_irl_claims` primary key on salted hashes of the order and the line; no email, no
+  order number stored, nothing logged). Same-origin only, 12 an hour an address, 6 a file, 10 misses a
+  day. Closed (CLAIMS ARE NOT OPEN YET) until `SHOPIFY_STORE_DOMAIN` and either `SHOPIFY_ADMIN_TOKEN`
+  or `SHOPIFY_CLIENT_ID` + `SHOPIFY_CLIENT_SECRET` (a Dev Dashboard app, client-credentials grant) are
+  set. Migration `20261007000000_eb_virtual.sql`. Check: `scripts/check-ebvirtual.mjs`.
+- **Terms (section 11, added text):** "Virtual copies of EB Shop items are priced in CYCLES by kind,
+  not by what the real item costs. Buying a copy buys nothing real, and buying the real item is a
+  separate purchase from the EB Shop. A verified real purchase may unlock its copy at no charge;
+  nothing in the city can be exchanged for money or for the real item."
+
 ## Selling fish to the restaurants (design only, 2026-10-05; not built)
 
 THE WATERS (`#fish`) lands fish with a species, a weight and a length; THE AQUARIUM takes donations for

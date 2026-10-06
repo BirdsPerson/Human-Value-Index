@@ -111,7 +111,8 @@ export function Closet({ caseId, S }) {
                 <button key={it.id} type="button" className="sh-cell" aria-pressed={cur[it.slot] === it.wear} onClick={() => toggle(it)}
                   aria-label={`${it.name}, ${it.way}. ${cur[it.slot] === it.wear ? "On. Tap to take off." : "Tap to try on."}`}>
                   <GarmentPx sku={it.wear} box={44} />
-                  <span className="n">{it.name}</span>
+                  <span className="n">{it.virtual && it.name.length > 34 ? `${it.name.slice(0, 32)}…` : it.name}</span>
+                  {it.irl && <span className="sh-irl">OWNED IN REAL LIFE</span>}
                 </button>
               ))}
             </div>
@@ -180,7 +181,7 @@ export function Furnish({ S, onPlaced }) {
           <div key={it.id} className="sh-furn">
             <PiecePx id={it.ref} s={2} box={64} />
             <div>
-              <div><b>{it.name}</b> <span className="sh-dim">// {where}</span></div>
+              <div><b>{it.name}</b>{it.irl && <span className="sh-irl">OWNED IN REAL LIFE</span>} <span className="sh-dim">// {where}</span></div>
               {!rooms.length ? <div className="sh-dim">NO ROOM IN YOUR FLAT TAKES IT. A BIGGER FLAT WOULD.</div> : (
                 <>
                   <label className="sh-dim" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>ROOM

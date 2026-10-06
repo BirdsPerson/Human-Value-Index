@@ -12,7 +12,8 @@
 // room) wait for a future machine-day boundary: see FURNITURE_EFFECTS.
 
 import { WEAR, WEAR_SLOTS, wearOf } from "../wear.js";
-import { CATALOG } from "../city/furniture.js";
+import { CATALOG, pieceOf } from "../city/furniture.js";
+import { parseVirtual, tierPrice, FORM_ROOMS } from "./ebvirtual.js";
 import { seasonOf } from "../city/seasons.js";
 
 export const SHOP_V = 1;
@@ -166,6 +167,7 @@ export const collectionOf = (machineDay) => COLLECTIONS[((seasonOf(machineDay) %
 // A SKU: "w:<wear id>.<colourway>" (clothes) or "f:<furniture id>" (furniture).
 export function itemOf(sku) {
   if (typeof sku !== "string") return null;
+  if (sku.startsWith("w:v-") || sku.startsWith("f:v-")) return virtualItemOf(sku);
   if (sku.startsWith("w:")) {
     const w = wearOf(sku.slice(2)), c = w && CLOTHES[w.id];
     if (!c) return null;
@@ -178,6 +180,20 @@ export function itemOf(sku) {
       upgrade: upgradeOf(id), upgradeOnly: UPGRADE_ONLY.has(id), play: PLAY_AT_HOME[id] || null, top: TOP_TIER.has(id) };
   }
   return null;
+}
+// An EB SHOP virtual copy (src/economy/ebvirtual.js): everything but its name is in its SKU; the
+// server adds the listing's title, handle and photo (netlify/lib/ebvirtual.js). Priced by category.
+function virtualItemOf(sku) {
+  const v = parseVirtual(sku);
+  if (!v) return null;
+  const price = tierPrice(v);
+  if (v.cat === "wear") {
+    const w = wearOf(sku.slice(2));
+    if (!w) return null;
+    return { sku, kind: "wear", id: w.id, way: v.shape, wear: sku.slice(2), slot: w.slot, shape: w.shape, name: "EB SHOP COPY", store: "eb-shop", price, seasons: null, rail: "EB SHOP", colour: w.main, detail: w.detail, number: w.number, virtual: true };
+  }
+  const p = pieceOf(v.id);
+  return { sku, kind: "furn", id: v.id, name: "EB SHOP COPY", store: "eb-shop", price, rooms: FORM_ROOMS[v.form], wall: p.wall, floor: false, whole: false, effect: null, upgrade: null, upgradeOnly: false, play: null, top: false, form: v.form, virtual: true };
 }
 export const inSeason = (item, collection) => !item.seasons || item.seasons.includes(collection);
 // A store's stock today: [{rail, items: [item...]}], the rails in order. machineDay: the city's.
@@ -202,6 +218,7 @@ export function stockOf(storeId, machineDay) {
 export function onSale(sku, machineDay) {
   const it = itemOf(sku);
   if (!it) return false;
+  if (it.virtual) return true;   // a copy is stocked all year, sold or not
   if (it.kind === "furn") return !it.upgradeOnly;
   return inSeason(it, collectionOf(machineDay));
 }
@@ -233,7 +250,7 @@ export const spotsFor = (item) => (item?.wall ? WALL_SPOTS.map((x, i) => ({ id: 
 export function roomRule(item, roomId, others) {
   const floor = others.filter(o => o.room === roomId && o.spot[0] === "f");
   if (item.whole && floor.length) return "needs-room";
-  if (!item.wall && floor.some(o => CATALOG[o.item]?.whole)) return "room-given";
+  if (!item.wall && floor.some(o => pieceOf(o.item)?.whole)) return "room-given";
   return null;
 }
 export const spotX = (spot) => { const m = /^([fw])(\d)$/.exec(String(spot || "")); if (!m) return null; const L = m[1] === "w" ? WALL_SPOTS : FLOOR_SPOTS; return L[+m[2]] ?? null; };
@@ -251,11 +268,11 @@ export function furnishLook(look, placements) {
   const rooms = {};
   for (const [rid, r] of Object.entries(look.rooms)) rooms[rid] = { ...r, furniture: r.furniture.slice() };
   for (const p of placements) {
-    const r = rooms[p.room], it = CATALOG[p.item], x = spotX(p.spot);
+    const r = rooms[p.room], it = pieceOf(p.item), x = spotX(p.spot);
     if (!r || !it || x == null) continue;
-    if (it.whole) r.furniture = r.furniture.filter(f => CATALOG[f.item]?.wall || f.placed);
-    else if (!it.wall) r.furniture = r.furniture.filter(f => CATALOG[f.item]?.wall || CATALOG[f.item]?.floor || Math.abs(f.x - x) > 0.13);
-    else r.furniture = r.furniture.filter(f => !CATALOG[f.item]?.wall || Math.abs(f.x - x) > 0.13);
+    if (it.whole) r.furniture = r.furniture.filter(f => pieceOf(f.item)?.wall || f.placed);
+    else if (!it.wall) r.furniture = r.furniture.filter(f => pieceOf(f.item)?.wall || pieceOf(f.item)?.floor || Math.abs(f.x - x) > 0.13);
+    else r.furniture = r.furniture.filter(f => !pieceOf(f.item)?.wall || Math.abs(f.x - x) > 0.13);
     r.furniture.push({ item: p.item, x, role: it.role, tint: it.tints ? it.tints[0] : null, flip: false, placed: true });
   }
   return { ...look, rooms };

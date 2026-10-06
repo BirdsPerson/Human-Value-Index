@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { GAME, GAMES, HOUSE, OUTFITTER, ITCH_LINE, EB_SHOP, EBTV_SITE, EBTV_STREAM, EBTV_NOW, utm, highScore, marqueeScore, clickBody, setEbtvNow, ebtvNow, campaignFor, cabColors } from "./funnels.js";
 import { houseSrc, loadVerified } from "./houseGames.js";
 import { machineClock } from "./sim.js";
 import { loadShop, shopState, onShop, setShopFocus, wallOpen } from "./shopStock.js";
 import { tapHost, shiftAt, HOSTS as CAST } from "./hostsLive.js";
+import { EBV_LINES } from "../economy/ebvirtual.js";
+// THE EB SHOP's virtual copies (src/shops/EbVirtual.jsx): loaded when the shop's card or copy room opens
+const LazyCopy = lazy(() => import("../shops/EbVirtual.jsx").then(m => ({ default: m.VirtualCopy })));
+const LazyRoom = lazy(() => import("../shops/EbVirtual.jsx"));
 
 // The funnels' overlays (funnels.js has the data): a CRT that plays an Iridescent game, the
 // Arcade's cabinet floor, the EB SHOP's live stock with its turntable videos, and EBTV's
@@ -140,7 +144,7 @@ function Overlay({ spec, setSpec, close, now }) {
   if (spec.kind === "game") ({ title, meta, body } = gameView(spec, setSpec));
   else if (spec.kind === "outfitter") ({ title, meta, body } = { title: OUTFITTER.title, meta: "THE FOOTHILLS", body: <Outfitter /> });
   else if (spec.kind === "arcade") ({ title, meta, body } = { title: "THE ARCADE // CABINET FLOOR", meta: `${GAMES.length} CABINETS`, body: <ArcadeFloor setSpec={setSpec} /> });
-  else if (spec.kind === "shop") ({ title, meta, body } = { title: "EB SHOP // LIVE STOCK", meta: "SHOP.ELECTRICBASEMENT.TV", body: <Shop key={`${spec.item || "all"}|${spec.pitch?.line || ""}`} campaign={spec.campaign || "eb-shop"} item={spec.item || null} pitch={spec.pitch || null} /> });
+  else if (spec.kind === "shop") ({ title, meta, body } = { title: "EB SHOP // LIVE STOCK", meta: "SHOP.ELECTRICBASEMENT.TV", body: <Shop key={`${spec.item || "all"}|${spec.pitch?.line || ""}|${spec.room ? 1 : 0}`} campaign={spec.campaign || "eb-shop"} item={spec.item || null} pitch={spec.pitch || null} room={Boolean(spec.room)} /> });
   else ({ title, meta, body } = { title: "ELECTRIC BASEMENT TV", meta: "LIVE", body: <Ebtv campaign={spec.campaign || "ebtv-station"} now={now} /> });
   return (
     <div className="hvi-fn-veil" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
@@ -319,16 +323,19 @@ export function useShop() {
   useEffect(() => { const off = onShop(setSt); loadShop(); setSt(shopState()); return off; }, []);
   return st;
 }
-function Shop({ campaign, item, pitch }) {
+function Shop({ campaign, item, pitch, room: room0 = false }) {
   const raw = useShop();
+  const [room, setRoom] = useState(room0);
   const st = raw.state === "idle" ? { state: "loading" } : raw;
   const [pickH, setPick] = useState(item);
   const pick = st.state === "open" && pickH ? st.items.find(i => i.handle === pickH) || null : null;
+  if (room) return <Suspense fallback={<p className="hvi-fn-note">THE COPY ROOM IS UNLOCKING.</p>}><LazyRoom campaign={campaign} back={() => setRoom(false)} /></Suspense>;
   if (st.state === "loading") return <p className="hvi-fn-note">THE CLERK IS COUNTING THE STOCK. THE CLERK IS CARDBOARD. THIS MAY TAKE A MOMENT.</p>;
   if (st.state === "closed") return (
     <>
       <p className="hvi-fn-note">THE SHOP IS CLOSED FOR INVENTORY. THE STOCK HAS NOT LEFT. IT IS BEING LOOKED AT.</p>
-      <div className="hvi-fn-foot"><Out href={EB_SHOP} campaign={campaign} className="hvi-fn-cta">VISIT THE EB SHOP</Out></div>
+      <div className="hvi-fn-foot"><Out href={EB_SHOP} campaign={campaign} className="hvi-fn-cta">VISIT THE EB SHOP</Out>
+        <button type="button" className="hvi-fn-btn" onClick={() => setRoom(true)}>THE COPY ROOM: VIRTUAL ONES, FOR CYCLES</button></div>
     </>
   );
   if (pick) {
@@ -344,11 +351,12 @@ function Shop({ campaign, item, pitch }) {
             <b style={{ fontSize: 16 }}>{pick.title}</b>
             <span style={{ color: "var(--warn)", fontSize: 20 }}>${pick.price}</span>
             {pick.video && <span className="hvi-fn-tag tt" style={{ alignSelf: "flex-start" }}>ON THE TURNTABLE</span>}
-            <Out href={url} campaign={campaign} content={pick.handle} className="hvi-fn-cta">BUY AT THE EB SHOP</Out>
+            <Out href={url} campaign={campaign} content={pick.handle} className="hvi-fn-cta">{EBV_LINES.real}</Out>
             <button type="button" className="hvi-fn-btn" onClick={() => setPick(null)}>◀ ALL THE STOCK</button>
             <p className="hvi-fn-note">THE ITEM IS REAL. THE SHOP IS REAL. THE MONEY IS, REGRETTABLY, ALSO REAL.</p>
           </div>
         </div>
+        <Suspense fallback={null}><LazyCopy handle={pick.handle} campaign={campaign} /></Suspense>
       </>
     );
   }
@@ -364,7 +372,10 @@ function Shop({ campaign, item, pitch }) {
           </button>
         ))}
       </div>
-      <div className="hvi-fn-foot"><Out href={EB_SHOP} campaign={campaign} className="hvi-fn-cta">THE WHOLE SHOP</Out></div>
+      <div className="hvi-fn-foot">
+        <Out href={EB_SHOP} campaign={campaign} className="hvi-fn-cta">THE WHOLE SHOP</Out>
+        <button type="button" className="hvi-fn-btn" onClick={() => setRoom(true)}>THE COPY ROOM: VIRTUAL ONES, FOR CYCLES</button>
+      </div>
     </>
   );
 }

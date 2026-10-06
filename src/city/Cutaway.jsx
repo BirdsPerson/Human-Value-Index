@@ -13,7 +13,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { towerPlan, placeAll, nameplate, PURPOSE_NAME, isDark } from "./tower.js";
 import { keyOf, jobOf } from "./sim.js";
-import { CATALOG, dressUnit, floorStyle } from "./furniture.js";
+import { pieceOf, dressUnit, floorStyle } from "./furniture.js";
 import { roomIn, activityLine, clockAt } from "./simApi.js";
 import { sheetFor } from "./spriteBank.js";
 import { familyOf, FAMILY_COLOR } from "./cityKit.js";
@@ -218,7 +218,7 @@ function drawRoom(c, room, x, y, w, h, d) {
   }
   const watching = d.people.some(q => q.act === "watch"), working = d.people.some(q => q.act === "work" || q.act === "read");
   for (const p of furniture) {
-    const it = CATALOG[p.item];
+    const it = pieceOf(p.item);
     if (!it) continue;
     const role = it.role;
     // an EBTV set in the open flat is always on: the Department never turns the channel off

@@ -14,6 +14,8 @@
 // the curtains, and one personal touch from who lives there. Render-only: tower.js plans and IDs
 // are untouched.
 
+import { ebPiece } from "./ebPieces.js";
+
 const h01 = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 const pick = (list, str) => list[Math.min(list.length - 1, Math.floor(h01(str) * list.length))];
 
@@ -242,7 +244,9 @@ export const CATALOG = Object.freeze(Object.fromEntries(ITEMS.map(it => [it.id, 
   tints: it.tints || null,
   draw(c, cx, fy, s, o = {}) { paint(c, it.rects, cx, fy, s, o); it.after?.(c, cx, fy, s, o); },
 })])));
-export const drawItem = (c, id, cx, fy, s, o) => CATALOG[id]?.draw(c, cx, fy, s, o);
+// A piece by id: the catalog's, or an EB SHOP virtual copy's (ebPieces.js, "v-..." ids).
+export const pieceOf = (id) => CATALOG[id] || ebPiece(id);
+export const drawItem = (c, id, cx, fy, s, o) => pieceOf(id)?.draw(c, cx, fy, s, o);
 
 // ---- layouts ------------------------------------------------------------------------------------
 // [x, choices]: choices are catalog ids, filtered by the band; the first allowed is the fallback.

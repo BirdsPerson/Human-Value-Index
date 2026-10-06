@@ -11,7 +11,7 @@ export const WEAR_KEYS = WEAR_SLOTS.map(s => `wear_${s}`);
 
 // The shapes each slot knows (avatar.js draws them).
 export const SHAPES = {
-  top: ["tee", "longsleeve", "tank", "shirt", "polo", "hoodie", "sweater"],
+  top: ["tee", "longsleeve", "tank", "shirt", "polo", "hoodie", "sweater", "jersey"],
   bottom: ["trousers", "jeans", "shorts", "skirt", "joggers"],
   shoes: ["sneakers", "hightops", "boots", "loafers"],
   outer: ["jacket", "bomber", "blazer", "coat", "vest"],
@@ -87,9 +87,19 @@ export const WEAR = {
   "b-shades": ["acc", "shades", W(["tortoise", "#3a2414", "#8a5a2a"])],
 };
 
+// An EB SHOP virtual copy (src/economy/ebvirtual.js) carries its own look in the SKU:
+// "v-<h8>.<shape>-<main>-<detail>[-<number>]", so it draws anywhere with no lookup.
+const VIRTUAL = /^v-[0-9a-f]{8}\.([a-z]+)-([0-9a-f]{6})-([0-9a-f]{6})(?:-(\d{1,2}))?$/;
+const SLOT_OF = Object.fromEntries(Object.entries(SHAPES).flatMap(([slot, l]) => l.map(sh => [sh, slot])));
+
 // "<id>.<way>" -> {id, way, slot, shape, main, detail, mark} | null
 export function wearOf(sku) {
   if (typeof sku !== "string") return null;
+  if (sku.startsWith("v-")) {
+    const m = VIRTUAL.exec(sku), slot = m && SLOT_OF[m[1]];
+    if (!slot || (m[4] && m[1] !== "jersey")) return null;
+    return { id: sku.slice(0, 10), way: sku.slice(11), slot, shape: m[1], main: `#${m[2]}`, detail: `#${m[3]}`, mark: null, number: m[4] || null, virtual: true };
+  }
   const dot = sku.lastIndexOf(".");
   if (dot < 1) return null;
   const id = sku.slice(0, dot), way = sku.slice(dot + 1), w = WEAR[id];

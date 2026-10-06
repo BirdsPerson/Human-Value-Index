@@ -132,6 +132,8 @@ function geometry(s, frame) {
   return { frame, cx, headW, headH, headTop, hx, torsoW, torsoTop, torsoBot, tx, swing, armLen, lx, ly, rx, ry, H: SPRITE_H, hand: { x: lx, y: ly + armLen } };
 }
 const worn = (s, slot) => wearOf(s[`wear_${slot}`]);
+// 3x5 digits for a jersey's number (each row 3 bits, the left pixel the high bit)
+const DIGITS = { 0: [7, 5, 5, 5, 7], 1: [2, 6, 2, 2, 7], 2: [7, 1, 7, 4, 7], 3: [7, 1, 7, 1, 7], 4: [5, 5, 7, 1, 1], 5: [7, 4, 7, 1, 7], 6: [7, 4, 7, 5, 7], 7: [7, 1, 2, 2, 2], 8: [7, 5, 7, 5, 7], 9: [7, 5, 7, 1, 7] };
 
 function bodyLayer({ set, rect }, s, g) {
   const { cx, headW, headH, headTop, hx } = g;
@@ -173,10 +175,20 @@ function clothesLayer(p, s, g) {
   const top = worn(s, "top"), shape = top ? top.shape : "longsleeve";
   rect(tx, torsoTop, torsoW, torsoBot - torsoTop, AX.TOP);
   rect(tx + torsoW - 2, torsoTop, 2, torsoBot - torsoTop, AX.TOPS);
-  const sleeve = shape === "tank" ? 0 : shape === "tee" || shape === "polo" ? 4 : armLen;
+  const sleeve = shape === "tank" || shape === "jersey" ? 0 : shape === "tee" || shape === "polo" ? 4 : armLen;
   rect(lx, ly, 3, sleeve, AX.TOP); rect(lx, ly + sleeve, 3, armLen - sleeve, AX.SKIN); rect(lx, ly + armLen, 3, 2, AX.SKIN);
   rect(rx, ry, 3, sleeve, AX.TOPS); rect(rx, ry + sleeve, 3, armLen - sleeve, AX.SKINS); rect(rx, ry + armLen, 3, 2, AX.SKIN);
-  if (shape === "tank") { rect(tx, torsoTop, 2, 2, AX.SKIN); rect(tx + torsoW - 2, torsoTop, 2, 2, AX.SKINS); }
+  if (shape === "tank" || shape === "jersey") { rect(tx, torsoTop, 2, 2, AX.SKIN); rect(tx + torsoW - 2, torsoTop, 2, 2, AX.SKINS); }
+  if (shape === "jersey") {
+    // the trim round the neck and the arm holes, the number on the chest (an EB SHOP copy's own)
+    set(cx - 2, torsoTop, AX.TRIM); set(cx + 1, torsoTop, AX.TRIM); set(cx - 1, torsoTop + 1, AX.TRIM); set(cx, torsoTop + 1, AX.TRIM);
+    rect(tx, torsoTop + 2, 1, 4, AX.TRIM); rect(tx + torsoW - 1, torsoTop + 2, 1, 4, AX.TRIM); rect(tx, torsoBot - 1, torsoW, 1, AX.TRIM);
+    const n = String(top.number || ""), w = n.length * 4 - 1;
+    for (let k = 0; k < n.length; k++) {
+      const rows = DIGITS[n[k]] || [];
+      for (let yy = 0; yy < 5; yy++) for (let xx = 0; xx < 3; xx++) if ((rows[yy] >> (2 - xx)) & 1) set(cx - Math.ceil(w / 2) + k * 4 + xx, torsoTop + 4 + yy, AX.TRIM);
+    }
+  }
   if (shape === "shirt" || shape === "polo") { set(cx - 2, torsoTop, AX.TRIM); set(cx + 1, torsoTop, AX.TRIM); set(cx - 1, torsoTop + 1, AX.TRIM); set(cx, torsoTop + 1, AX.TRIM); }
   if (shape === "shirt") for (let y = torsoTop + 3; y < torsoBot; y += 3) set(cx, y, AX.TRIM);
   if (shape === "polo") { set(cx, torsoTop + 2, AX.TRIM); set(cx, torsoTop + 4, AX.TRIM); }
