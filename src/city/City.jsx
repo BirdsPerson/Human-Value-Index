@@ -87,7 +87,7 @@ export default function City({ route }) {
   // The query minus the floor: what survives moving between views (?at=, ?stress=).
   const query = useMemo(() => {
     const q = new URLSearchParams(parsed.query.replace(/^\?/, ""));
-    q.delete("floor"); q.delete("find"); q.delete("control"); q.delete("storey"); q.delete("welcome");
+    q.delete("floor"); q.delete("find"); q.delete("control"); q.delete("storey"); q.delete("welcome"); q.delete("flat"); q.delete("zoom"); q.delete("room");
     const s = q.toString();
     return s ? "?" + s : "";
   }, [parsed.query]);

@@ -48,7 +48,7 @@ export function apartmentOf(caseId, rec) {
     return {
       place, placeName: placeName(place).toUpperCase(), building: b?.id || null, buildingName: (b?.name || placeName(place)).toUpperCase(),
       district: p?.district || null, districtName: districtName(p?.district).toUpperCase(), floor: fi, floorName: f ? String(f.name || "").replace(`${b?.name} // `, "").toUpperCase() : null, floorCode, unit, flat,
-      tier: s.tier || null, href: b ? `#city/${p.district}/${b.id}${fi != null ? `?floor=${fi}${storeyLevel != null ? `&storey=${storeyLevel}` : ""}` : ""}` : `#city/${p?.district || ""}`,
+      tier: s.tier || null, href: b ? `#city/${p.district}/${b.id}${fi != null ? `?floor=${fi}${storeyLevel != null ? `&storey=${storeyLevel}` : ""}${flat ? `&flat=${flat.id}&zoom=flat` : ""}` : flat ? `?flat=${flat.id}&zoom=flat` : ""}` : `#city/${p?.district || ""}`,
       rent: 0, tenure: "PERMANENT",
     };
   } catch { return null; }

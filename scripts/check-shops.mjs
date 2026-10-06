@@ -279,6 +279,12 @@ ok(t0 > 9000, `T has two weeks' allowance (${t0})`);
   const s = { slug: `citizen-${T.slice(-4).toLowerCase()}`, name: `Subject ${T.slice(-4)}`, score: hist[0].score, tier: hist[0].tier, kind: "citizen" };
   const b = SIM.BUILDING[r.body.apartment.building];
   eq(residentFlat(towerPlan(b), s).id, r.body.apartment.flat.id, "MY APARTMENT names the door the tower draws");
+  { // DEEP ZOOM: MY APARTMENT deep-links to the FLAT level of your flat
+    const { parseLink } = await import("../src/city/zoomCam.js");
+    const A = r.body.apartment, z = parseLink(towerPlan(b), A.href.split("?")[1] || "");
+    ok(A.href.includes(`flat=${A.flat.id}`) && A.href.includes("zoom=flat"), `the apartment href deep-links to the flat (${A.href})`);
+    ok(z && z.level === "flat" && towerPlan(b).storeys[z.f.i].units[z.f.k].id === A.flat.id, "the deep link resolves to your flat at FLAT zoom");
+  }
   eq((await shop("GET", null, { q: `?caseId=${U}` })).status, 403, "an unassessed file does not shop");
   eq((await shop("GET", null, { q: "?caseId=HVI-NOPENOPE" })).status, 404, "no such file");
 }

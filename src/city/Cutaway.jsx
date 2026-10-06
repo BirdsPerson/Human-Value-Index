@@ -9,9 +9,10 @@
 // The canvas is aria-hidden: keyboard and screen readers get the wrapper (arrows, Enter,
 // Escape), the plain line at the top (a live status) and the floor list under it.
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { towerPlan, placeAll, nameplate, PURPOSE_NAME, isDark } from "./tower.js";
+import { roomScale, parseLink } from "./zoomCam.js";
 import { keyOf, jobOf } from "./sim.js";
 import { pieceOf, dressUnit, floorStyle } from "./furniture.js";
 import { roomIn, activityLine, clockAt } from "./simApi.js";
@@ -27,6 +28,7 @@ import { loadRooms, loadShops, lastView, onView } from "../shops/client.js";
 import { useShops, Closet, Furnish, playAtHome, injectShopStyles } from "../shops/parts.jsx";
 import { furnishLook, PLAY_AT_HOME, TOP_TIER, withIssuedPc } from "../economy/shops.js";
 
+const DeepZoom = lazy(() => import("./DeepZoom.jsx"));   // DEEP ZOOM: its own chunk, fetched on the first zoom
 const ROOF_H = 40, STREET_H = 16, FOUND_H = 12;
 const H0 = 52, H1 = 124, PH_H = 68;   // a storey; the focused storey; the penthouse, double height
 const SHAFT = 30, EXPRESS = 18;   // lift shafts, CSS px
@@ -59,7 +61,7 @@ const WALLS = [
   ["#1f2620", "#24261c", "#1c2421", "#22231e"],              // the bottom: whatever was cheapest
 ];
 const OFFICE_WALL = ["#1b2328", "#1e2626", "#202a24"];
-function wallOf(plan, st) {
+export function wallOf(plan, st) {
   if (st.level < 0) return "#141a16";
   const flats = st.units.some(u => u.kind === "flat" || u.kind === "suite");
   const pal = flats ? WALLS[plan.band] : OFFICE_WALL;
@@ -68,12 +70,12 @@ function wallOf(plan, st) {
 const PURPOSE_TINT = { kitchen: "rgba(200,220,200,0.05)", bath: "rgba(160,220,230,0.07)", bedroom: "rgba(40,30,60,0.10)", study: "rgba(120,90,40,0.06)", lobby: "rgba(200,200,160,0.06)", vault: "rgba(0,0,0,0.25)" };
 
 // ---- the dressing (furniture.js): each flat its own, from its id and who lives there -------------
-const LOOKS = new Map();
+export const LOOKS = new Map();
 // THE SHOPS: what residents have placed in this building ({unitId: [{room, spot, item}]}), laid over
 // the dressing (shops.js furnishLook). Module state: the cutaway on screen is the only reader.
 let PLACED = { building: null, byUnit: new Map() };
 const placedIn = (u) => PLACED.byUnit.get(u.id) || null;
-function lookOf(plan, st, u, tags = "") {
+export function lookOf(plan, st, u, tags = "") {
   if (u.kind !== "flat" && u.kind !== "suite") return null;
   const pl = PLACED.building === plan.id ? placedIn(u) : null;
   const k = `${u.id}|${tags}|${pl ? pl.map(x => `${x.room}${x.spot}${x.item}`).join(",") : ""}`;
@@ -95,7 +97,7 @@ const JOB_TAGS = [
   ["cook", /cook|chef|itamae|brewer|pizza/],
 ];
 const TAGS = new WeakMap();
-function tagsOf(list) {
+export function tagsOf(list) {
   if (!list || !list.length) return "";
   const out = new Set();
   for (const s of list) {
@@ -149,7 +151,7 @@ function ebtvScreen(c, x, y, w, h) {
 // A light on with nobody up: a flat whose residents are out leaves a lamp on some evenings, and
 // the Department runs the vacant ones on timers (occupancy is simulated, for the look of the
 // street). One room a flat, a stretch of the evening, hashed by flat and day. Nobody home only.
-function lampRoom(u, mt, occupied) {
+export function lampRoom(u, mt, occupied) {
   const T = ((mt % (24 * 9999)) + 24 * 9999) % (24 * 9999), day = Math.floor(T / 24), h = T - day * 24;
   const hh = h < 6.75 ? h + 24 : h;
   if (hh < 18.5) return null;
@@ -171,10 +173,22 @@ function anchorX(furniture, act, i, w) {
   return Math.max(0.08, Math.min(0.92, base + spread)) * w;
 }
 
+const ACT_WORD = { sleep: "ASLEEP", wash: "WASHING", cook: "COOKING", eat: "EATING", watch: "WATCHING", read: "READING", work: "AT WORK", visit: "VISITING", walk: "PASSING THROUGH" };
+// a name tag over a head (ROOM zoom): the name, and what they are doing
+function tag(c, x, y, name, act, s) {
+  const fs = Math.max(9, Math.min(15, Math.round(3.2 * s)));
+  c.font = `700 ${fs}px ${FONT}`; c.textBaseline = "alphabetic";
+  const w = Math.max(c.measureText(name).width, c.measureText(act).width) + 8, h = act ? fs * 2 + 6 : fs + 5;
+  c.fillStyle = "rgba(6,12,8,0.82)"; c.fillRect(Math.round(x - w / 2), Math.round(y - h), Math.round(w), Math.round(h));
+  c.textAlign = "center"; c.fillStyle = "#c8f5d8"; c.fillText(name, Math.round(x), Math.round(y - h + fs + 1));
+  if (act) { c.fillStyle = "#4ade80"; c.font = `${fs}px ${FONT}`; c.fillText(act, Math.round(x), Math.round(y - 4)); }
+  c.textAlign = "left";
+}
+
 // One room: the back wall and its paper, the floor, the window and curtains, the furniture, the
 // people, then the light. d: {night, sprite, t, reduced, people: [{s, act}], look, sheet}
 export function drawRoom(c, room, x, y, w, h, d) {   // also YOUR FLAT on the desk (src/front/YourFlat.jsx), small
-  const s = Math.min(h / 45, w / 22), fy = y + h;
+  const s = d.snap ? roomScale(w, h, true) : Math.min(h / 45, w / 22), fy = y + h;
   const look = d.look, dr = look?.rooms[room.id];
   const furniture = dr ? dr.furniture : room.furniture;
   const awake = d.people.some(p => p.act !== "sleep");
@@ -263,11 +277,23 @@ export function drawRoom(c, room, x, y, w, h, d) {   // also YOUR FLAT on the de
         c.restore();
         c.fillStyle = bed?.tint?.[0] || "#3d6b8f";
         c.fillRect(Math.round(bx - 2 * s), Math.round(ffy - 10 * s), Math.round(11 * s), Math.round(3 * s));
+        d.hits?.push([bx - 10 * s, ffy - 12 * s, bx + 9 * s, ffy - 6 * s, p.s]);
+        if (d.detail) tag(c, bx, ffy - 15 * s, displayName(p.s), ACT_WORD.sleep, s);
         if (!d.reduced && Math.floor(d.t * 1.2 + i) % 3 !== 0) { c.fillStyle = "#9fd8b8"; c.font = `${Math.max(8, Math.round(6 * s))}px ${FONT}`; c.fillText("z", Math.round(bx - 10 * s), Math.round(ffy - 14 * s - (d.t * 4 % 4))); }
       } else {
         const bob = d.reduced ? 0 : Math.round(Math.abs(Math.sin(d.t * 1.6 + i * 1.7)) * 1);
         const fi = d.reduced || !(sh.frames > 1) ? 0 : (Math.floor(d.t * 1.5 + i) % 6 === 0 ? 1 : 0);
-        c.drawImage(sh.img, fi * FW, 0, FW, FH, Math.round(px - pw / 2), Math.round(ffy - ph - bob), Math.round(pw), Math.round(ph));
+        if (d.detail) {
+          // ROOM zoom: faces the thing they are using, leans into it a little, wears a tag
+          const want = [].concat(ACT_AT[p.act] || []);
+          const tgt = furniture.find(f => want.includes(f.role || f.item));
+          const dir = tgt && x + tgt.x * w < px - 1 ? -1 : 1, lean = ({ watch: 0.035, read: 0.07, cook: 0.05, wash: 0.04, eat: 0.02 }[p.act] || 0) * dir;
+          c.save(); c.translate(Math.round(px), Math.round(ffy - bob)); c.scale(dir, 1); c.rotate(lean);
+          c.drawImage(sh.img, fi * FW, 0, FW, FH, Math.round(-pw / 2), Math.round(-ph), Math.round(pw), Math.round(ph));
+          c.restore();
+        } else c.drawImage(sh.img, fi * FW, 0, FW, FH, Math.round(px - pw / 2), Math.round(ffy - ph - bob), Math.round(pw), Math.round(ph));
+        d.hits?.push([px - pw / 2, ffy - ph, px + pw / 2, ffy, p.s]);
+        if (d.detail) tag(c, px, ffy - ph - 3, displayName(p.s), ACT_WORD[p.act] || "", s);
       }
     } catch { /* not decoded yet */ }
   });
@@ -344,10 +370,17 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
   const [sel, setSel] = useState(() => (floor != null ? (firstOf(floor) >= 0 ? firstOf(floor) : null) : null));
   const [cur, setCur] = useState(0);            // the unit under the keyboard on the focused floor
   const [open, setOpen] = useState(null);       // unit id in the sheet
+  // DEEP ZOOM (DeepZoom.jsx): null, or {level, f}, from the buttons or the route (?flat=&zoom=)
+  const [zoom, setZoom] = useState(() => parseLink(plan, window.location.hash.split("?")[1] || ""));
+  useEffect(() => {
+    const on = () => { const z = parseLink(plan, window.location.hash.split("?")[1] || ""); if (z) setZoom(z); };
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, [plan]);
   const [snap, setSnap] = useState(null);       // the placement, when it changes
   const wrapRef = useRef(null), canRef = useRef(null);
   const V = useRef({ W: 360, lw: 0, dpr: 1, lay: null, place: null, seenV: -1, sig: "", reduced: false, sel, cur }).current;
-  V.sel = sel; V.cur = cur;
+  V.sel = sel; V.cur = cur; V.paused = !!zoom;
   // THE SHOPS: the pieces residents placed here, and which flat is yours (the server's MY APARTMENT)
   const [mine, setMine] = useState(null);
   const [, setPv] = useState(0);
@@ -436,7 +469,7 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
       // what is on screen, in canvas px
       const rect = cv.getBoundingClientRect();
       const v0 = Math.max(0, -rect.top), v1 = Math.min(L.total, window.innerHeight - rect.top);
-      if (v1 <= v0) return;   // scrolled away: draw nothing
+      if (v1 <= v0 || V.paused) return;   // scrolled away, or the deep zoom is over us: draw nothing
       const c = cv.getContext("2d");
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       c.imageSmoothingEnabled = false;
@@ -637,6 +670,9 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
   const st = sel != null ? plan.storeys[sel] : null;
   const curUnit = st ? st.units[Math.min(cur, st.units.length - 1)] : null;
   const unitWord = (u) => (u.kind === "flat" ? `${u.id === mine ? "YOUR FLAT, " : "FLAT "}${u.label}` : u.kind === "suite" ? u.label : u.kind === "lobby" ? "THE LOBBY" : nameplate(u, res));
+  const flatOf = (id) => { for (const s of plan.storeys) { const k = s.units.findIndex(u => u.id === id); if (k >= 0) return { i: plan.storeys.indexOf(s), k, j: 0 }; } return null; };
+  const zoomIn = () => setZoom({ level: sel != null ? "floor" : "building", f: { i: sel ?? Math.max(0, plan.storeys.findIndex(s2 => s2.level === 0)), k: sel != null ? Math.min(cur, plan.storeys[sel].units.length - 1) : 0, j: 0 } });
+  const myFlat = mine ? flatOf(mine) : null;
   const line = st
     ? <><b>{st.code}</b> // {st.name}.{st.owner.label ? ` ${st.owner.label}.` : ""} {st.units.filter(u => u.kind === "flat").length ? "TAP A FLAT." : "TAP A ROOM."}{V.kbd && curUnit ? ` ${unitWord(curUnit)}: ${whoIn(curUnit).length} PRESENT.` : ""}</>
     : <>A CROSS-SECTION OF {b.name}. TAP A FLOOR.</>;
@@ -647,6 +683,11 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
     <div>
       <style>{CSS}</style>
       <p className="hvi-tw-line" role="status" aria-live="polite">{line}</p>
+      <div className="hvi-tw-index" role="toolbar" aria-label="Deep zoom">
+        <button type="button" style={{ padding: "0 10px" }} onClick={zoomIn} aria-label="Zoom in: a floor, a flat, a room">ZOOM IN ›</button>
+        {myFlat && <button type="button" style={{ padding: "0 10px", color: "#fbbf24", borderColor: "#fbbf24" }} onClick={() => setZoom({ level: "flat", f: myFlat })} aria-label="Go to your flat">YOUR FLAT ›</button>}
+      </div>
+      {zoom && createPortal(<Suspense fallback={null}><DeepZoom plan={plan} name={b.name} censusRef={censusRef} mine={mine} start={zoom} onOpen={onOpen} onClose={() => setZoom(null)} /></Suspense>, document.body)}
       {N > 8 && (
         <div className="hvi-tw-index" role="toolbar" aria-label="Floor index">
           {storeysTD.map(s => { const i = plan.storeys.indexOf(s); return <button key={s.id} type="button" aria-current={i === sel ? "true" : undefined} aria-label={`Floor ${s.code}, ${s.name}`} onClick={() => { V.kbd = false; choose(i, true); }}>{s.code}</button>; })}
@@ -670,12 +711,12 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
         ))}
       </ul>
       {/* on the body: over the command bar, outside the frame's stacking context */}
-      {openU && createPortal(<UnitSheet u={openU} plan={plan} P={P} res={res} onClose={closeSheet} onOpen={onOpen} censusRef={censusRef} unitWord={unitWord} mine={openU.id === mine} />, document.body)}
+      {openU && createPortal(<UnitSheet u={openU} plan={plan} P={P} res={res} onClose={closeSheet} onOpen={onOpen} censusRef={censusRef} unitWord={unitWord} mine={openU.id === mine} onEnter={() => { const f = flatOf(openU.id); setOpen(null); if (f) setZoom({ level: "flat", f }); }} />, document.body)}
     </div>
   );
 }
 
-function fitText(c, text, x, y, w) {
+export function fitText(c, text, x, y, w) {
   let s = text;
   if (c.measureText(s).width > w) {
     while (s.length > 1 && c.measureText(s + "…").width > w) s = s.slice(0, -1);
@@ -686,7 +727,7 @@ function fitText(c, text, x, y, w) {
 
 // ---- one unit, large: its rooms side by side (two rows when there are more than three), who is
 // home in each, and who lives here but is out.
-function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord, mine = false }) {
+function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord, mine = false, onEnter }) {
   const ref = useRef(null), closeRef = useRef(null);
   const playRef = useRef([]);
   // the guests round a top-tier piece at night: three figures on the census, the same all evening
@@ -758,7 +799,10 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord, mine
       <div className="hvi-tw-sheet-in">
         <div className="hvi-tw-sheet-h">
           <div><b>{title}</b> // {plan.name}<br />{u.kind === "flat" && !mine ? `${nameplate(u, res)} // ` : ""}{u.owner.label || `HELD BY ${u.owner.name}`}{mine ? " // ASSIGNED TO YOU" : ""}</div>
-          <button ref={closeRef} type="button" onClick={onClose} aria-label="Close and return to the floors">[ X ]</button>
+          <span style={{ display: "flex", gap: 4 }}>
+            {u.kind !== "lobby" && <button type="button" onClick={onEnter} aria-label={`Zoom into ${unitWord(u)}`}>ENTER ›</button>}
+            <button ref={closeRef} type="button" onClick={onClose} aria-label="Close and return to the floors">[ X ]</button>
+          </span>
         </div>
         <canvas ref={ref} aria-hidden="true" onClick={onTap} style={{ height: rowsN * (RH + LBL) }} />
         {mine && <YourFlat u={u} plan={plan} />}
