@@ -12,7 +12,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { towerPlan, placeAll, nameplate, PURPOSE_NAME, isDark } from "./tower.js";
-import { keyOf } from "./sim.js";
+import { keyOf, jobOf } from "./sim.js";
+import { CATALOG, dressUnit, floorStyle } from "./furniture.js";
 import { roomIn, activityLine, clockAt } from "./simApi.js";
 import { sheetFor } from "./spriteBank.js";
 import { familyOf, FAMILY_COLOR } from "./cityKit.js";
@@ -21,7 +22,7 @@ import { SPRITE_W as FW, SPRITE_H as FH } from "../sprites.js";
 import { displayName } from "../figures.js";
 
 const ROOF_H = 40, STREET_H = 16, FOUND_H = 12;
-const H0 = 52, H1 = 124;          // a storey; the focused storey
+const H0 = 52, H1 = 124, PH_H = 68;   // a storey; the focused storey; the penthouse, double height
 const SHAFT = 30, EXPRESS = 18;   // lift shafts, CSS px
 const SLAB_T = 3, SLAB_B = 4;     // ceiling and floor slabs inside a storey's height
 
@@ -58,86 +59,159 @@ function wallOf(plan, st) {
   const pal = flats ? WALLS[plan.band] : OFFICE_WALL;
   return pal[Math.floor(h01(st.id) * pal.length)];
 }
-const CARPET = ["#5a2f2f", "#2f4a5a", "#4a5a2f", "#5a4a2f", "#3a2f5a", "#2f5a45", "#6a5a4a"];
 const PURPOSE_TINT = { kitchen: "rgba(200,220,200,0.05)", bath: "rgba(160,220,230,0.07)", bedroom: "rgba(40,30,60,0.10)", study: "rgba(120,90,40,0.06)", lobby: "rgba(200,200,160,0.06)", vault: "rgba(0,0,0,0.25)" };
 
-// ---- furniture: rects in room units (a room 45 units tall), [dx, up from the floor, w, h, colour]
+// ---- the dressing (furniture.js): each flat its own, from its id and who lives there -------------
+const LOOKS = new Map();
+function lookOf(plan, st, u, tags = "") {
+  if (u.kind !== "flat" && u.kind !== "suite") return null;
+  const k = `${u.id}|${tags}`;
+  let L = LOOKS.get(k);
+  if (!L) {
+    if (LOOKS.size > 4000) LOOKS.clear();
+    L = dressUnit(u, { band: u.kind === "suite" ? 1 : plan.band, penthouse: st.code === "PH", tags: tags ? tags.split(",") : [] });
+    LOOKS.set(k, L);
+  }
+  return L;
+}
+// What the residents' files put in the flat: their job, and the charm corner's taste for games.
+const JOB_TAGS = [
+  ["art", /pixel-renderer|culture-curator|museum-guide|fabricator/], ["music", /musician|singer|karaoke|cypher/],
+  ["scholar", /lecturer|philosopher|research|tutor|stacks-librarian|archivist|teacher|chronometrist|obituary|translator|guidance/],
+  ["athlete", /athlete|combat|footballer|coach|surf|ski-instructor|conditioning|lifeguard|patrol/],
+  ["broadcast", /broadcast|stage-performer|announcer|copywriter|night-editor/], ["tech", /engineer|latency|data-hall|product-manager|cache-custodian|mechanic/],
+  ["cook", /cook|chef|itamae|brewer|pizza/],
+];
+const TAGS = new WeakMap();
+function tagsOf(list) {
+  if (!list || !list.length) return "";
+  const out = new Set();
+  for (const s of list) {
+    let t = TAGS.get(s);
+    if (t == null) {
+      t = [];
+      try { const j = jobOf(s).jobId; for (const [tag, re] of JOB_TAGS) if (re.test(j)) { t.push(tag); break; } } catch { /* no job on file */ }
+      if (familyOf(s).family === "charm") t.push("hedonist");
+      TAGS.set(s, t);
+    }
+    t.forEach(x => out.add(x));
+  }
+  return [...out].sort().join(",");
+}
+
+// Paper, as a repeating pattern per (paper, ink, scale): one fill per room.
+const PATTERNS = new Map();
+function paperPattern(c, kind, ink, s) {
+  if (kind === "plain" || kind === "stain" || kind === "panel" || typeof document === "undefined") return null;
+  const q = Math.max(1, Math.round(s));
+  const k = `${kind}|${ink}|${q}`;
+  if (PATTERNS.has(k)) return PATTERNS.get(k);
+  const T = { stripes: [6, 6], pinstripe: [4, 4], dots: [6, 6], diamonds: [8, 8], damask: [8, 8], brick: [8, 4] }[kind] || [6, 6];
+  const cv = document.createElement("canvas");
+  cv.width = T[0] * q; cv.height = T[1] * q;
+  const g = cv.getContext("2d");
+  g.fillStyle = ink;
+  if (kind === "stripes") g.fillRect(0, 0, 2 * q, cv.height);
+  else if (kind === "pinstripe") g.fillRect(0, 0, Math.max(1, q >> 1), cv.height);
+  else if (kind === "dots") g.fillRect(2 * q, 2 * q, q, q);
+  else if (kind === "diamonds") { g.fillRect(0, 0, q, q); g.fillRect(4 * q, 4 * q, q, q); }
+  else if (kind === "damask") { g.fillRect(3 * q, q, 2 * q, q); g.fillRect(2 * q, 2 * q, 4 * q, q); g.fillRect(3 * q, 3 * q, 2 * q, q); }
+  else if (kind === "brick") { g.fillRect(0, 0, cv.width, Math.max(1, q >> 1)); g.fillRect(0, 0, Math.max(1, q >> 1), 2 * q); g.fillRect(4 * q, 2 * q, Math.max(1, q >> 1), 2 * q); g.fillRect(0, 2 * q, cv.width, Math.max(1, q >> 1)); }
+  const p = c.createPattern(cv, "repeat");
+  PATTERNS.set(k, p);
+  return p;
+}
+
 const LIT = "#f5d27a";
-const F = {
-  bed: [[-11, 0, 2, 11, "#5a4632"], [-10, 0, 20, 5, "#5a4632"], [-10, 5, 20, 3, "#cfcab8"], [-4, 5, 14, 4, "#3d6b8f"], [-9, 8, 5, 2, "#e8e4d4"]],
-  wardrobe: [[-5, 0, 10, 24, "#4a3a2a"], [-0.3, 2, 0.6, 20, "#2a2018"], [-2, 11, 1, 2, "#b8a070"], [1, 11, 1, 2, "#b8a070"]],
-  lamp: [[-0.5, 0, 1, 16, "#6a6a5a"], [-3, 16, 6, 4, "#8a7a50"]],
-  fridge: [[-4, 0, 8, 22, "#c9d2cd"], [-4, 13, 8, 0.7, "#7d8984"], [2, 15, 1, 4, "#7d8984"]],
-  stove: [[-4, 0, 8, 10, "#3a3a3a"], [-4, 10, 8, 1, "#1e1e1e"], [-2, 11, 4, 3, "#8a8a8a"], [-3, 3, 6, 4, "#151515"]],
-  counter: [[-7, 0, 14, 10, "#6b5a44"], [-7, 10, 14, 1.2, "#bfb8a2"], [-7, 22, 14, 6, "#5a4a38"]],
-  table: [[-6, 8, 12, 1.5, "#7a5a3a"], [-5, 0, 1, 8, "#5a4028"], [4, 0, 1, 8, "#5a4028"]],
-  tv: [[-3, 0, 6, 5, "#2e2e2e"], [-5, 7, 10, 7, "#1a2a33"], [-0.5, 5, 1, 2, "#2e2e2e"]],
-  rug: [[-10, 0, 20, 0.8, "#6a2f3a"]],
-  sofa: [[-8, 0, 16, 5, "#7a3b3b"], [-8, 5, 16, 4, "#6a3030"], [-9, 0, 2, 7, "#5e2a2a"], [7, 0, 2, 7, "#5e2a2a"]],
-  plant: [[-2, 0, 4, 4, "#7a4a2a"], [-3, 4, 6, 6, "#3f7a3a"], [-1.5, 10, 3, 3, "#4f9a4a"]],
-  tub: [[-8, 0, 16, 6, "#dfe6e3"], [-8, 6, 16, 1, "#f4f7f5"], [6, 7, 1, 4, "#9a9a9a"]],
-  sink: [[-1, 0, 2, 8, "#d5d5d0"], [-3, 8, 6, 2, "#ececea"], [-3, 15, 6, 7, "#6f9797"]],
-  shelf: [[-5, 0, 10, 26, "#5a4632"], [-4, 3, 8, 4, "#7a3b3b"], [-4, 10, 8, 4, "#3d6b8f"], [-4, 17, 8, 4, "#a08a3a"]],
-  desk: [[-7, 9, 14, 1.5, "#6b5038"], [-6, 0, 1, 9, "#4b3828"], [5, 0, 1, 9, "#4b3828"], [-3, 10.5, 6, 5, "#1f3a2f"], [-2, 0, 4, 6, "#333"]],
-  mailboxes: [[-6, 8, 12, 12, "#7d8270"], [-5, 10, 4, 3, "#4a4f40"], [1, 10, 4, 3, "#4a4f40"], [-5, 15, 4, 3, "#4a4f40"], [1, 15, 4, 3, "#4a4f40"]],
-  reception: [[-7, 0, 14, 10, "#4b5a52"], [-7, 10, 14, 1.5, "#9fb3a8"]],
-  cooler: [[-2, 0, 4, 12, "#cfe3dd"], [-1.5, 12, 3, 4, "#6fb3ff"]],
-  rack: [[-5, 0, 10, 18, "#4a4a4a"], [-4, 2, 8, 3, "#a33"], [-4, 7, 8, 3, "#3a7"], [-4, 12, 8, 3, "#c93"]],
-  till: [[-6, 0, 12, 9, "#4a5a4a"], [-2, 9, 4, 3, "#1e1e1e"]],
-  bar: [[-9, 0, 18, 10, "#5a3020"], [-9, 10, 18, 1.5, "#b07a4a"], [-8, 18, 16, 1, "#3a2a1a"], [-7, 19, 2, 4, "#5a8a5a"], [-3, 19, 2, 5, "#8a5a3a"], [2, 19, 2, 4, "#5a5a8a"]],
-  stool: [[-0.5, 0, 1, 6, "#555"], [-2, 6, 4, 1.2, "#a33"]],
-  safe: [[-5, 0, 10, 12, "#5a5f66"], [-1, 5, 2, 2, "#cfcfcf"]],
-};
-// where people go for each act (the piece they use) and how they hold
+// A light on with nobody up: a flat whose residents are out leaves a lamp on some evenings, and
+// the Department runs the vacant ones on timers (occupancy is simulated, for the look of the
+// street). One room a flat, a stretch of the evening, hashed by flat and day. Nobody home only.
+function lampRoom(u, mt, occupied) {
+  const T = ((mt % (24 * 9999)) + 24 * 9999) % (24 * 9999), day = Math.floor(T / 24), h = T - day * 24;
+  const hh = h < 6.75 ? h + 24 : h;
+  if (hh < 18.5) return null;
+  const k = `${u.id}|lamp|${day - (h < 6.75 ? 1 : 0)}`;
+  if (h01(k) >= (occupied ? 0.6 : 0.4)) return null;
+  const start = 18.5 + h01(k + "|on") * 2.5, end = start + 1.5 + h01(k + "|off") * 4.5;
+  if (hh < start || hh >= end) return null;
+  const rooms = u.rooms.filter(r => r.purpose === "living" || r.purpose === "kitchen" || r.purpose === "bedroom");
+  return (rooms.length ? rooms : u.rooms)[Math.floor(h01(k + "|room") * (rooms.length || u.rooms.length))]?.id || null;
+}
+// where people go for each act: the role of the piece they use
 const ACT_AT = { sleep: "bed", cook: "stove", eat: "table", watch: "sofa", read: ["desk", "sofa", "shelf"], wash: ["tub", "sink"], work: "desk", visit: ["bar", "rack", "table", "reception", "desk"], walk: ["reception", "mailboxes"] };
-function anchorX(room, act, i, w) {
+function anchorX(furniture, act, i, w) {
   const want = [].concat(ACT_AT[act] || []);
   let f = null;
-  for (const k of want) { f = room.furniture.filter(p => p.item === k); if (f.length) break; }
+  for (const k of want) { f = furniture.filter(p => (p.role || p.item) === k); if (f.length) break; }
   const base = f && f.length ? f[i % f.length].x : 0.5;
   const spread = (Math.floor(i / Math.max(1, f?.length || 1)) * (i % 2 ? 1 : -1)) * 0.12;
   return Math.max(0.08, Math.min(0.92, base + spread)) * w;
 }
 
-function drawPiece(c, item, cx, fy, s, on) {
-  const rs = F[item];
-  if (!rs) return;
-  for (const [dx, up, w, h, col] of rs) {
-    let colr = col;
-    if (on && ((item === "lamp" && col === "#8a7a50") || (item === "tv" && col === "#1a2a33"))) colr = item === "lamp" ? LIT : "#7fe0b0";
-    if (on && item === "desk" && col === "#1f3a2f") colr = "#4ade80";
-    c.fillStyle = colr;
-    c.fillRect(Math.round(cx + dx * s), Math.round(fy - (up + h) * s), Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
-  }
-}
-
-// One room: the back wall, its window, the furniture, then the people. d: {night, dark, sprite,
-// t, reduced, people: [{s, act}]}
+// One room: the back wall and its paper, the floor, the window and curtains, the furniture, the
+// people, then the light. d: {night, sprite, t, reduced, people: [{s, act}], look, sheet}
 function drawRoom(c, room, x, y, w, h, d) {
-  const s = Math.min(h / 45, w / 22), fy = y + h;   // furniture fits the room's width as well as its height
-  if (PURPOSE_TINT[room.purpose]) { c.fillStyle = PURPOSE_TINT[room.purpose]; c.fillRect(x, y, w, h); }
+  const s = Math.min(h / 45, w / 22), fy = y + h;
+  const look = d.look, dr = look?.rooms[room.id];
+  const furniture = dr ? dr.furniture : room.furniture;
   const awake = d.people.some(p => p.act !== "sleep");
-  const lit = d.dark && awake;
-  // the window, high on the back wall
+  const lit = d.night && (awake || d.lamp);
+  const ft = dr ? Math.max(1, Math.round(2.4 * s)) : 0, ffy = fy - ft;
+  if (look) {
+    c.fillStyle = look.wall; c.fillRect(x, y, w, h);
+    const tiled = room.purpose === "bath" || room.purpose === "kitchen";
+    const pat = paperPattern(c, look.paper, look.paperInk, s);
+    if (pat) { c.fillStyle = pat; c.globalAlpha = 0.5; c.fillRect(x, y, w, h - ft); c.globalAlpha = 1; }
+    if (look.paper === "panel") { c.fillStyle = "rgba(0,0,0,0.22)"; c.fillRect(x, ffy - 13 * s, w, 13 * s); c.fillStyle = look.paperInk; c.fillRect(x, ffy - 13 * s, w, Math.max(1, s * 0.7)); }
+    if (look.paper === "stain") { c.fillStyle = "rgba(0,0,0,0.18)"; const sx = h01(room.id + "|st"); c.fillRect(x + w * (0.1 + sx * 0.6), y + h * 0.15, w * 0.18, h * 0.22); }
+    if (tiled) {   // tiles to waist height
+      c.fillStyle = room.purpose === "bath" ? "rgba(190,220,225,0.16)" : "rgba(230,225,205,0.12)";
+      c.fillRect(x, ffy - 14 * s, w, 14 * s);
+      c.fillStyle = "rgba(0,0,0,0.18)";
+      for (let k = 1; k < 4; k++) c.fillRect(x, Math.round(ffy - k * 3.5 * s), w, 1);
+    }
+    // the floor
+    const fl = dr.floor;
+    c.fillStyle = fl.kind === "tile" ? (room.purpose === "bath" ? "#9aa8a8" : "#7a7468") : fl.colour;
+    c.fillRect(x, ffy, w, ft);
+    if (fl.kind === "wood" || fl.kind === "boards") { c.fillStyle = "rgba(0,0,0,0.3)"; for (let k = x + ((h01(room.id) * 6 * s) | 0); k < x + w; k += 6 * s) c.fillRect(Math.round(k), ffy, 1, ft); }
+    else if (fl.kind === "tile" || fl.kind === "lino") { c.fillStyle = "rgba(0,0,0,0.22)"; for (let k = x; k < x + w; k += 6 * s) c.fillRect(Math.round(k), ffy, Math.round(3 * s), ft); }
+    else if (fl.kind === "marble") { c.fillStyle = "rgba(120,110,90,0.35)"; for (let k = x + 2 * s; k < x + w; k += 9 * s) c.fillRect(Math.round(k), ffy + 1, Math.round(4 * s), 1); }
+  } else if (PURPOSE_TINT[room.purpose]) { c.fillStyle = PURPOSE_TINT[room.purpose]; c.fillRect(x, y, w, h); }
+  // the window, high on the back wall (taller in the penthouse), its curtains drawn at night when dark
   if (room.purpose !== "vault" && w > 10) {
-    const ww = Math.min(w * 0.36, 16 * s), wh = 11 * s, wx = x + w * 0.5 - ww / 2, wy = y + 5 * s;
-    c.fillStyle = d.night ? (lit ? "#d9a441" : "#0b1411") : "#2f5a52";
+    const big = look?.penthouse;
+    const ww = Math.min(w * (big ? 0.5 : 0.36), (big ? 22 : 16) * s), wh = (big ? 17 : 11) * s, wx = x + w * 0.5 - ww / 2, wy = y + (big ? 3 : 5) * s;
+    c.fillStyle = d.night ? (lit ? "#ffd27a" : "#0c1630") : "#5f9fae";
     c.fillRect(Math.round(wx), Math.round(wy), Math.round(ww), Math.round(wh));
+    if (!d.night) { c.fillStyle = "rgba(255,255,255,0.35)"; c.fillRect(Math.round(wx + 1), Math.round(wy + 1), Math.max(1, Math.round(ww * 0.2)), 1); }
     c.fillStyle = "rgba(0,0,0,0.35)";
     c.fillRect(Math.round(wx + ww / 2), Math.round(wy), 1, Math.round(wh));
+    if (look) {
+      const cw = d.night && !lit ? ww * 0.38 : Math.max(1, 2.2 * s);
+      c.fillStyle = look.curtain;
+      c.fillRect(Math.round(wx - 1.2 * s), Math.round(wy - 1 * s), Math.round(cw), Math.round(wh + 3 * s));
+      c.fillRect(Math.round(wx + ww + 1.2 * s - cw), Math.round(wy - 1 * s), Math.round(cw), Math.round(wh + 3 * s));
+      c.fillStyle = "rgba(0,0,0,0.4)"; c.fillRect(Math.round(wx - 2 * s), Math.round(wy - 1.5 * s), Math.round(ww + 4 * s), Math.max(1, Math.round(0.6 * s)));
+    }
   }
-  for (const p of room.furniture) {
-    const on = lit && (p.item === "lamp" || (p.item === "tv" && d.people.some(q => q.act === "watch"))) || (p.item === "desk" && d.people.some(q => q.act === "work" || q.act === "read"));
-    drawPiece(c, p.item, x + p.x * w, fy, s, on);
+  const watching = d.people.some(q => q.act === "watch"), working = d.people.some(q => q.act === "work" || q.act === "read");
+  for (const p of furniture) {
+    const it = CATALOG[p.item];
+    if (!it) continue;
+    const role = it.role;
+    const on = it.glow || (lit && (role === "lamp" || p.item === "chandelier" || p.item === "beer-tap")) || (role === "tv" && watching) || ((role === "desk") && working);
+    it.draw(c, x + p.x * w, ffy, s, { on, tint: p.tint, flip: p.flip });
   }
   // people
+  const bed = furniture.find(f => (f.role || f.item) === "bed");
   d.people.forEach((p, i) => {
-    const px = x + anchorX(room, p.act, i, w);
+    const px = x + anchorX(furniture, p.act, i, w);
     if (!d.sprite) {
       const fam = familyOf(p.s).family, col = FAMILY_COLOR[fam] || "#6b9a7c", r = Math.max(2, 2.2 * s);
       c.fillStyle = col;
-      if (p.act === "sleep") c.fillRect(Math.round(px - r * 1.6), Math.round(fy - 9 * s - r), Math.round(r * 3.2), Math.round(r * 1.4));
-      else { c.beginPath(); c.arc(px, fy - 8 * s - (d.reduced ? 0 : Math.abs(Math.sin(d.t * 2 + i)) * 0.6), r, 0, Math.PI * 2); c.fill(); c.fillRect(Math.round(px - r * 0.5), Math.round(fy - 8 * s), Math.round(r), Math.round(7 * s)); }
+      if (p.act === "sleep") c.fillRect(Math.round(px - r * 1.6), Math.round(ffy - 9 * s - r), Math.round(r * 3.2), Math.round(r * 1.4));
+      else { c.beginPath(); c.arc(px, ffy - 8 * s - (d.reduced ? 0 : Math.abs(Math.sin(d.t * 2 + i)) * 0.6), r, 0, Math.PI * 2); c.fill(); c.fillRect(Math.round(px - r * 0.5), Math.round(ffy - 8 * s), Math.round(r), Math.round(7 * s)); }
       return;
     }
     const sh = sheetFor(p.s);
@@ -146,35 +220,35 @@ function drawRoom(c, room, x, y, w, h, d) {
     try {
       if (p.act === "sleep") {
         // on the bed, head on the pillow, the blanket over the legs
-        const bed = room.furniture.find(f => f.item === "bed");
         const bx = x + (bed ? bed.x : 0.4) * w;
         c.save();
-        c.translate(Math.round(bx - 9 * s), Math.round(fy - 8 * s));
+        c.translate(Math.round(bx - 9 * s), Math.round(ffy - 8 * s));
         c.rotate(-Math.PI / 2);
         const L = 18 * s;
         c.drawImage(sh.img, 0, 0, FW, FH, -pw * (L / ph) / 2 + 0, 0, pw * (L / ph), L);
         c.restore();
-        c.fillStyle = "#3d6b8f";
-        c.fillRect(Math.round(bx - 2 * s), Math.round(fy - 10 * s), Math.round(11 * s), Math.round(3 * s));
-        if (!d.reduced && Math.floor(d.t * 1.2 + i) % 3 !== 0) { c.fillStyle = "#9fd8b8"; c.font = `${Math.max(8, Math.round(6 * s))}px ${FONT}`; c.fillText("z", Math.round(bx - 10 * s), Math.round(fy - 14 * s - (d.t * 4 % 4))); }
+        c.fillStyle = bed?.tint?.[0] || "#3d6b8f";
+        c.fillRect(Math.round(bx - 2 * s), Math.round(ffy - 10 * s), Math.round(11 * s), Math.round(3 * s));
+        if (!d.reduced && Math.floor(d.t * 1.2 + i) % 3 !== 0) { c.fillStyle = "#9fd8b8"; c.font = `${Math.max(8, Math.round(6 * s))}px ${FONT}`; c.fillText("z", Math.round(bx - 10 * s), Math.round(ffy - 14 * s - (d.t * 4 % 4))); }
       } else {
         const bob = d.reduced ? 0 : Math.round(Math.abs(Math.sin(d.t * 1.6 + i * 1.7)) * 1);
         const fi = d.reduced || !(sh.frames > 1) ? 0 : (Math.floor(d.t * 1.5 + i) % 6 === 0 ? 1 : 0);
-        c.drawImage(sh.img, fi * FW, 0, FW, FH, Math.round(px - pw / 2), Math.round(fy - ph - bob), Math.round(pw), Math.round(ph));
+        c.drawImage(sh.img, fi * FW, 0, FW, FH, Math.round(px - pw / 2), Math.round(ffy - ph - bob), Math.round(pw), Math.round(ph));
       }
     } catch { /* not decoded yet */ }
   });
-  if (d.night && !lit) { c.fillStyle = "rgba(0,0,0,0.3)"; c.fillRect(x, y, w, h); }
-  else if (lit) { c.fillStyle = "rgba(245,210,122,0.06)"; c.fillRect(x, y, w, h); }
+  // the light: warm where someone is up after dark, dim blue where nobody is (or all asleep)
+  if (d.night && !lit) { c.fillStyle = d.sheet ? "rgba(8,14,40,0.42)" : "rgba(8,14,40,0.62)"; c.fillRect(x, y, w, h); }
+  else if (lit) { c.fillStyle = "rgba(255,196,110,0.10)"; c.fillRect(x, y, w, h); }
+  return lit;
 }
-
 // ---- geometry ----------------------------------------------------------------------------------
 // rows top-down: {kind: roof | storey | street | found, y, h, st?, i?}
 // The focused storey is as tall as its narrowest room's furniture needs, plus the plaque and nameplates.
 function focusH(plan, st, W) {
   const [x0, x1] = interior(plan, W);
   const rw = Math.min(...unitRects(st, x0, x1).map(r => r.w / r.u.rooms.length));
-  return Math.round(Math.max(H0 + 24, Math.min(H1, 36 + SLAB_T + SLAB_B + 45 * Math.min(2, rw / 22))));
+  return Math.round(Math.max(H0 + 24, Math.min(H1, 36 + SLAB_T + SLAB_B + 45 * Math.min(2, rw / 22)), st.code === "PH" ? H0 + 40 : 0));
 }
 function layoutOf(plan, sel, W) {
   const rows = [];
@@ -182,7 +256,7 @@ function layoutOf(plan, sel, W) {
   rows.push({ kind: "roof", y, h: ROOF_H }); y += ROOF_H;
   const td = plan.storeys.slice().reverse();
   for (const st of td) {
-    const i = plan.storeys.indexOf(st), h = i === sel ? focusH(plan, st, W) : H0;
+    const i = plan.storeys.indexOf(st), h = i === sel ? focusH(plan, st, W) : st.code === "PH" ? PH_H : H0;
     rows.push({ kind: "storey", y, h, st, i }); y += h;
     if (st.level === 0) { rows.push({ kind: "street", y, h: STREET_H }); y += STREET_H; }
   }
@@ -311,7 +385,7 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
       const [x0, x1] = interior(plan, W);
       for (const row of L.rows) {
         if (row.y + row.h < v0 || row.y > v1) continue;   // only the storeys on screen
-        drawRow(c, row, { W, x0, x1, night, t, hour });
+        drawRow(c, row, { W, x0, x1, night, t, hour, mt });
       }
       drawShafts(c, L, { W, t, v0, v1 });
     }
@@ -343,29 +417,43 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
       const iy = y + SLAB_T, ih = h - SLAB_T - SLAB_B;
       const P = V.place;
       const rects = unitRects(st, x0, x1);
+      const fs = floorStyle(st.id, st.code === "PH");
+      let edgeLit = false;
       rects.forEach(({ u, x, w }, k) => {
         const rw = w / u.rooms.length;
-        // each unit its own paper and its own carpet, so no two flats read the same
-        const hu = h01(u.id);
-        c.fillStyle = hu < 0.5 ? `rgba(255,240,200,${0.02 + hu * 0.08})` : `rgba(120,200,220,${0.02 + (hu - 0.5) * 0.08})`;
-        c.fillRect(Math.round(x), iy, Math.round(w), ih);
-        c.fillStyle = CARPET[Math.floor(h01(u.id + "|c") * CARPET.length)];
-        c.fillRect(Math.round(x), iy + ih - 2, Math.round(w), 2);
+        const look = lookOf(plan, st, u, tagsOf(P?.residents.get(u.id)));
+        if (!look) {
+          // offices, shops, the lobby: their own paper still
+          const hu = h01(u.id);
+          c.fillStyle = hu < 0.5 ? `rgba(255,240,200,${0.02 + hu * 0.08})` : `rgba(120,200,220,${0.02 + (hu - 0.5) * 0.08})`;
+          c.fillRect(Math.round(x), iy, Math.round(w), ih);
+        }
+        const lamp = look && night && !(P?.units.get(u.id)) ? lampRoom(u, o.mt, (P?.residents.get(u.id) || []).length > 0) : null;
         u.rooms.forEach((rm, j) => {
           const people = (P?.rooms.get(rm.id) || []);
-          drawRoom(c, rm, x + j * rw, iy, rw, ih, { night, dark: night, sprite: focused, t: o.t, reduced: V.reduced, people });
+          const lit = drawRoom(c, rm, x + j * rw, iy, rw, ih, { night, sprite: focused, t: o.t, reduced: V.reduced, people, look, lamp: lamp === rm.id });
+          if (k === rects.length - 1 && j === u.rooms.length - 1) edgeLit = lit;
           if (j > 0) { c.fillStyle = "rgba(0,0,0,0.5)"; c.fillRect(Math.round(x + j * rw), iy + (focused ? 16 : 0), 1, ih - (focused ? 16 : 0) - 10 * (ih / 45)); }
         });
         if (k < rects.length - 1) { c.fillStyle = "#0a0f0a"; c.fillRect(Math.round(x + w), y, 3, h); }
         if (focused && k === V.cur && V.kbd) { c.strokeStyle = "#4ade80"; c.setLineDash([3, 2]); c.strokeRect(Math.round(x) + 0.5, iy + 0.5, Math.round(w) - 1, ih - 1); c.setLineDash([]); }
       });
-      // the slabs
+      // the slabs: the corridor carpet shows in the floor slab, gold trim on the penthouse
       c.fillStyle = "#33433a"; c.fillRect(SHAFT - 4, y, W - SHAFT + 4, SLAB_T);
-      c.fillStyle = "#26332c"; c.fillRect(SHAFT - 4, y + h - SLAB_B, W - SHAFT + 4, SLAB_B);
+      c.fillStyle = fs.corridor; c.fillRect(SHAFT - 4, y + h - SLAB_B, W - SHAFT + 4, SLAB_B);
+      c.fillStyle = "rgba(0,0,0,0.35)"; c.fillRect(SHAFT - 4, y + h - 1, W - SHAFT + 4, 1);
+      if (night && st.level >= 0) { c.fillStyle = "rgba(255,214,140,0.22)"; c.fillRect(x0, y + h - SLAB_B, x1 - x0, 1); }   // the corridor lights
+      if (fs.trim) { c.fillStyle = fs.trim; c.fillRect(x0, y + SLAB_T - 1, x1 - x0, 1); c.fillRect(x0, y + h - SLAB_B, x1 - x0, 1); }
+      // the facade: the outer wall glows where the end room is lit
+      if (night && edgeLit) {
+        c.fillStyle = "rgba(255,200,110,0.55)"; c.fillRect(x1, iy + 4, 2, ih - 10);
+        c.fillStyle = "rgba(255,200,110,0.18)"; c.fillRect(x1 + 2, iy + 2, plan.shafts === 2 ? 1 : W - x1 - 2, ih - 6);
+      }
       if (focused) {
         // the plaque and the nameplates: labels on the focused floor only
         c.fillStyle = "rgba(10,15,10,0.86)";
         c.fillRect(x0, iy, x1 - x0, 15);
+        c.fillStyle = fs.plaque; c.fillRect(x0, iy, 2, 15);
         c.font = `700 10px ${FONT}`; c.fillStyle = "#4ade80"; c.textBaseline = "top";
         fitText(c, `${st.code} // ${st.name} // HELD BY ${st.owner.name}`, x0 + 3, iy + 3, x1 - x0 - 6);
         c.font = `9px ${FONT}`;
@@ -562,8 +650,9 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord }) {
       u.rooms.forEach((rm, j) => {
         const cx = (j % cols) * (rw + 3), cy = Math.floor(j / cols) * (RH + LBL);
         c.fillStyle = wallOf(plan, st); c.fillRect(cx, cy, rw, RH);
-        c.fillStyle = "#26332c"; c.fillRect(cx, cy + RH - 4, rw, 4);
-        drawRoom(c, rm, cx, cy, rw, RH - 4, { night, dark: night, sprite: true, t: reduced ? 0 : now / 1000, reduced, people: Pref.current?.rooms.get(rm.id) || [] });
+        c.fillStyle = floorStyle(st.id, st.code === "PH").corridor; c.fillRect(cx, cy + RH - 4, rw, 4);
+        const lamp = night && !Pref.current?.units?.get(u.id) ? lampRoom(u, mt, (Pref.current?.residents.get(u.id) || []).length > 0) : null;
+        drawRoom(c, rm, cx, cy, rw, RH - 4, { night, lamp: lamp === rm.id, sprite: true, sheet: true, t: reduced ? 0 : now / 1000, reduced, people: Pref.current?.rooms.get(rm.id) || [], look: lookOf(plan, st, u, tagsOf(Pref.current?.residents.get(u.id))) });
         c.font = `9px ${FONT}`; c.fillStyle = "#4d8a62"; c.textBaseline = "top";
         fitText(c, `${PURPOSE_NAME[rm.purpose]}`, cx + 2, cy + RH + 3, rw - 4);
         c.textBaseline = "alphabetic";
@@ -591,7 +680,7 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord }) {
           <div className="hvi-tw-sub">RESIDENT, ELSEWHERE // {out.length}</div>
           {out.map(s => <Occupant key={s.name} s={s} onOpen={onOpen} note={activityLine(s, mt).replace(/\.$/, "")} />)}
         </>}
-        {u.kind === "flat" && !(res.get(u.id) || []).length && <div className="hvi-tw-sub">VACANT. ASSIGNED TO NOBODY. THE DEPARTMENT KEEPS THE KEY.</div>}
+        {u.kind === "flat" && !(res.get(u.id) || []).length && <div className="hvi-tw-sub">VACANT. ASSIGNED TO NOBODY. THE DEPARTMENT KEEPS THE KEY. THE LIGHTS ARE ON A TIMER.</div>}
       </div>
     </div>
   );

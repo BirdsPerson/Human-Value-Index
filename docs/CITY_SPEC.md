@@ -2225,7 +2225,7 @@ opens as a SimTower cross-section.
   the bathroom on waking, the kitchen at 07-08:30 / 12-13 / 18-19:30, otherwise the living room or
   study); workers and visitors take a hashed storey, unit and room of their place; people walking in
   or out stand in the lobby. Crowd stand-ins are not drawn (as RoomStage). Owls stay up past 00:54.
-- **The view** (`Cutaway.jsx`, a lazy chunk of ~10 KB gzip): one plain line on top ("A CROSS-SECTION
+- **The view** (`Cutaway.jsx` + `furniture.js`, a lazy chunk of ~18 KB gzip): one plain line on top ("A CROSS-SECTION
   OF <BUILDING>. TAP A FLOOR.", then the focused floor; it is the live status); a floor index (44px
   chips) above eight storeys; the roof (tank, antenna or chimneys), the storeys, the street, the
   basements; the local shaft on the left with a car moving on deterministic legs (and an express
@@ -2246,4 +2246,24 @@ opens as a SimTower cross-section.
   inside the viewport (nothing when scrolled away); placement recomputed only on a new census.
 - Check: `scripts/check-cutaway.mjs` (storeys = massing, every sim floor drawn, stable and unique
   ids, golden ids, placement order-independent and deterministic, nobody in two rooms or two towers,
-  everyone home in the flat on their nameplate, residents in bed at 03:00, workers at work).
+  everyone home in the flat on their nameplate, residents in bed at 03:00, workers at work). Also the dressing: every catalog entry complete, every room has the piece its people use,
+  every piece in its room type and tier, JETSAM cabinets occasional, Irene's taps top tier only,
+  the Meridian's flats all distinct (neighbours and the flat below differ), determinism.
+- **Dressing** (2026-10-05, `furniture.js`; Scott: "each floor its own thing", the player must not
+  feel the machinery). Render-only: plans and ids unchanged. `CATALOG` is every piece (id, name,
+  room types, footprint, tiers, role, draw), one module, so a later shop can sell exactly these for
+  CYCLES (no prices yet). `dressUnit(unit, {band, penthouse, tags})` hashes the unit and room ids:
+  four layouts per room type (mirrored half the time), each slot's piece from the variants its
+  band allows (bunk beds and beanbags low, four-posters, clawfoot tubs, range cookers and
+  sectionals high), the wall colour from the band's hues, paper (stripes, dots, damask, panel,
+  brick, stains), floor (wood, carpet, lino, marble), curtains. The residents' files add one piece
+  each: their job's prop (easel, piano, books, weights and trophies, EBTV for broadcasters, a
+  computer, pots) and a JETSAM cabinet for the charm corner (about one flat in fifteen otherwise);
+  a Goodnight Irene's tap in a fifth of the top tier's kitchens. The penthouse: double height,
+  marble, chandelier, grand piano, gold trim. Each floor its own corridor carpet (the floor slab)
+  and plaque colour. **Light**: by day, sky in the panes; after dark a room is warm where someone is
+  up, dim blue with the curtains drawn where nobody is or all are asleep; a flat whose residents
+  are out leaves a lamp on some evenings, and the vacant ones run on the Department's timers (one
+  room, a stretch of the evening, hashed by flat and day; the sheet says so), so the tower reads
+  as a pattern of lit and dark rooms; the facade edge glows beside a lit end room; corridor lights
+  on every floor. No new labels: names and words on pieces appear only at sheet scale.

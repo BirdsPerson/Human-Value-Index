@@ -7,6 +7,7 @@ import { BUILDINGS, PLACES, whereAt, homeOf, floorOf, keyOf, isOwl } from "../sr
 import { FAMOUS_FIGURES, slugify, TIERS } from "../src/figures.js";
 import { massingOf } from "../src/city/archGeo.js";
 import { roomIn } from "../src/city/simApi.js";
+import { CATALOG, dressUnit, lookSig, TAG_PROPS } from "../src/city/furniture.js";
 import { TOWERS, isTower, towerPlan, storeysAbove, placeAll, residentFlat, homeRoom, flatOf, FURNISH, DEPT, TOWER_STYLES } from "../src/city/tower.js";
 
 let fails = 0;
@@ -109,6 +110,69 @@ ok(atWork === inOffice, `workers in a tower are at work in its offices, shops an
   ok(flatOf(towerPlan(BUILDINGS.find(b => b.id === "the-meridian")), "penthouses", 99, "x") === null, "no flat on a floor that is not there");
 }
 ok(!isTower(null) && !isTower(BUILDINGS.find(b => b.id === "hq")), "HQ keeps the Holding Pen");
+// 4. Dressing (furniture.js): each flat its own, deterministically, within its tier.
+{
+  for (const it of Object.values(CATALOG)) ok(it.id && it.name && it.rooms.length && it.tiers.length && it.footprint.w > 0 && it.footprint.h > 0 && typeof it.draw === "function", `catalog ${it.id}: id, name, rooms, tiers, footprint, draw`);
+  for (const id of ["arcade", "ebtv", "beer-tap"]) ok(CATALOG[id], `catalog has ${id}`);
+  const ROLE_FOR = { bedroom: "bed", kitchen: "stove", living: "sofa", bath: "tub", study: "desk" };
+  const dress = (p, st, u, tags = []) => dressUnit(u, { band: u.kind === "suite" ? 1 : p.band, penthouse: st.code === "PH", tags });
+  let flats = 0, arcades = 0, taps = 0, tapsOutside = 0, wrongTier = 0, wrongRoom = 0, noAnchor = 0;
+  for (const b of towers) {
+    const p = towerPlan(b);
+    for (const st of p.storeys) for (const u of st.units) {
+      if (u.kind !== "flat" && u.kind !== "suite") continue;
+      flats++;
+      const L = dress(p, st, u), band = st.code === "PH" ? 0 : u.kind === "suite" ? 1 : p.band;
+      ok(lookSig(L) === lookSig(dress(p, st, u)), `${u.id}: the same dressing twice`);
+      for (const r of u.rooms) {
+        const fur = L.rooms[r.id].furniture;
+        if (ROLE_FOR[r.purpose] && !fur.some(f => f.role === ROLE_FOR[r.purpose])) { noAnchor++; console.log(`  ${r.id}: no ${ROLE_FOR[r.purpose]}`); }
+        for (const f of fur) {
+          const it = CATALOG[f.item];
+          if (!it.rooms.includes(r.purpose)) wrongRoom++;
+          if (!it.tiers.includes(band)) wrongTier++;
+          if (f.item === "arcade") arcades++;
+          if (f.item === "beer-tap") { taps++; if (band !== 0) tapsOutside++; }
+        }
+      }
+    }
+  }
+  ok(noAnchor === 0, `every room has the piece its people use (${noAnchor} missing)`);
+  ok(wrongRoom === 0, `every piece in a room it belongs in (${wrongRoom} not)`);
+  ok(wrongTier === 0, `every piece within its tier: no bunk beds in the glass towers, no grand pianos in the projects (${wrongTier} not)`);
+  ok(arcades > 0 && arcades < flats / 6, `JETSAM cabinets are occasional (${arcades} in ${flats} flats)`);
+  ok(taps > 0 && tapsOutside === 0, `Goodnight Irene's taps only in the top tier (${taps}, ${tapsOutside} outside)`);
+  // the Meridian: no machinery showing
+  const mer = towerPlan(BUILDINGS.find(b => b.id === "the-meridian"));
+  const sigs = new Map(), parts = { furn: new Set(), wall: new Set() };
+  for (const st of mer.storeys) {
+    const us = st.units.filter(u => u.kind === "flat");
+    us.forEach((u, k) => {
+      const L = dress(mer, st, u), sg = lookSig(L);
+      sigs.set(u.id, sg);
+      parts.wall.add(L.wall + L.paper);
+      for (const r of u.rooms) parts.furn.add(L.rooms[r.id].furniture.map(f => f.item + (f.flip ? "<" : "")).join(","));
+      if (k > 0) ok(sg !== sigs.get(us[k - 1].id), `${u.id}: not the same as its neighbour`);
+      const below = mer.storeys.find(s => s.level === st.level - 1)?.units[st.units.indexOf(u)];
+      if (below && sigs.has(below.id)) ok(sg !== sigs.get(below.id), `${u.id}: not the same as the flat below`);
+    });
+  }
+  const n = sigs.size, distinct = new Set(sigs.values()).size;
+  ok(n >= 20 && distinct === n, `the Meridian's ${n} flats all dressed differently (${distinct} distinct)`);
+  ok(parts.wall.size >= Math.min(n, 12), `the Meridian: at least 12 wall and paper combinations (${parts.wall.size})`);
+  ok(parts.furn.size >= 30, `the Meridian: at least 30 distinct room arrangements (${parts.furn.size})`);
+  // residents bring their things
+  const u0 = mer.storeys[5].units.find(u => u.kind === "flat");
+  for (const [tag, props] of Object.entries(TAG_PROPS)) {
+    const L = dress(mer, mer.storeys[5], u0, [tag]);
+    const has = Object.values(L.rooms).some(r => r.furniture.some(f => props.includes(f.item) || (tag === "music" && f.item === "grand-piano")));
+    ok(has, `a ${tag} resident's flat has ${props.join(" or ")}`);
+  }
+  // a fresh module dresses the same
+  const fresh2 = await import(`../src/city/furniture.js?again=${Date.now()}`);
+  ok([...sigs].every(([id]) => { const st = mer.storeys.find(s => id.startsWith(s.id + ":")); const u = st.units.find(x => x.id === id); return fresh2.lookSig(fresh2.dressUnit(u, { band: mer.band, penthouse: st.code === "PH", tags: [] })) === sigs.get(id); }), "the Meridian dresses the same on a fresh build");
+}
+
 void floorOf;
 
 console.log(fails ? `check-cutaway: ${fails} FAILED` : `check-cutaway: OK (${towers.length} towers, ${ids.size} ids, ${placed} placements)`);

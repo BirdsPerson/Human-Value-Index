@@ -1,7 +1,7 @@
 // TAP TO OPERATE. On touch screens a canvas that takes drags (the cube, the city map)
 // would swallow the thumb that meant to scroll the page. The gate lays a veil over it:
 // a vertical swipe on the veil scrolls the page as usual, a tap lifts the veil and hands
-// the canvas every gesture, and [DONE] (or scrolling it mostly off screen) puts the veil
+// the canvas every gesture, and [DONE · SCROLL PAGE] (or scrolling it mostly off screen) puts the veil
 // back. Mouse and keyboard users never see it.
 
 import { useEffect, useRef, useState } from "react";
@@ -43,7 +43,7 @@ export default function TouchGate({ children, off = false, label = "TAP TO OPERA
     <div ref={ref} className={`ui-gate${gated && live ? " live" : ""} ${className}`} style={style}>
       {children}
       {!gated ? null : live
-        ? <button type="button" className="ui-gate-done" onClick={() => setLive(false)}>[DONE]</button>
+        ? <button type="button" className="ui-gate-done" onClick={() => setLive(false)} aria-label="Done: hand the swipe back to the page, so it scrolls again">[DONE · SCROLL PAGE]</button>
         : (
           <button type="button" className="ui-gate-veil" onClick={() => setLive(true)} aria-label={`${label}. Then ${hint.toLowerCase()}.`}>
             <span className="lbl">▶ {label} <small>{hint}</small></span>
