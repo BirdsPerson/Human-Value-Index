@@ -7,6 +7,7 @@ import { readPad, GLYPHS } from "../../city/gamepad.js";
 import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, FORMATS, dirOf } from "./sim.js";
 import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortFive, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS } from "./roster.js";
 import { draw, camFollow, headOf, skinOf, shade, W, H } from "./render.js";
+import { sheetHints } from "../heads.js";
 import { callFor, crowdFor } from "./calls.js";
 import { createInput } from "./input.js";
 import * as SFX from "./audio.js";
@@ -200,8 +201,12 @@ function looksFor(cfg, home, away, me) {
     sheetP.then(sheet => {
       const spec = isMe && me.spec ? me.spec : { ...DEFAULT_SPEC, ...(HINTS[key] || {}) };
       const s = sheet || paintAvatar(spec, 1);
+      // the head only (heads.js); when a prop is part of it, a head drawn from the photo's skin and hair
       const hd = headOf(s, sheet ? CROPS[key] || null : null);
-      if (hd) { look.head = hd; look.skin = skinOf(hd) || look.skin; }
+      if (hd) { look.head = hd; look.skin = skinOf(hd) || look.skin; return; }
+      const cue = sheetHints(s);
+      if (cue.skin) look.skin = cue.skin;
+      if (cue.hair) look.hair = cue.hair;
     });
     return look;
   });

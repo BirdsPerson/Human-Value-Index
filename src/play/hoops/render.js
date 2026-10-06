@@ -12,6 +12,7 @@
 // camera pans along the court with the ball (render-only; the sim never sees it). The heads are
 // drawn a little large (0.5 m), the 16-bit habit, so a face reads at this size.
 import { COURT as C, TOP, dirOf } from "./sim.js";
+import { shrinkHead } from "../heads.js";
 
 export const W = 256, H = 240;
 export const CAM = { F: 220, D: 11, H: 12, HY: -14 };
@@ -248,7 +249,7 @@ function drawPlayer(ctx, P, look, st, cam, frame, ctl) {
   // the head: the file photo's face, scaled to 0.5 m
   const hh = Math.max(3, Math.round(0.5 * k)), top = Math.round(by - 1.55 * k) - hh + 1;
   if (look.head) {
-    const hd = look.head, hw = Math.max(2, Math.round((hd.width * hh) / hd.height));
+    const hd = hh < look.head.height ? shrinkHead(look.head, hh) : look.head, hw = Math.max(2, Math.round((hd.width * hh) / hd.height));
     ctx.drawImage(hd, Math.round(gx - hw / 2), top, hw, hh);
   } else { R(-0.13, 1.55, 0.26, 0.4, sk); R(-0.14, 1.85, 0.28, 0.12, look.hair || "#2a1a10"); }
   if (ctl) {
@@ -323,45 +324,9 @@ export function draw(ctx, st, looks, cam, frame, fx = {}, reduced = false) {
 }
 
 // ---- faces -------------------------------------------------------------------------------------------
-// The head off a 32 x 48 file photo (frame 0), with any everyday prop taken away: only the opaque
-// pixels of the top rows connected to the face (a flood from the face's middle, kept above the
-// neck), so a pizza peel, a guitar neck or a hat brim held beside the head is not part of it.
-// crop: [x, y, w, h] when a prop crosses the head itself (roster.js CROPS).
-export function headOf(sheet, crop = null) {
-  if (!sheet) return null;
-  try {
-    const c = document.createElement("canvas"); c.width = 32; c.height = 48;
-    const g = c.getContext("2d"); g.drawImage(sheet, 0, 0, 32, 48, 0, 0, 32, 48);
-    if (crop) { const o = document.createElement("canvas"); o.width = crop[2]; o.height = crop[3]; o.getContext("2d").drawImage(c, crop[0], crop[1], crop[2], crop[3], 0, 0, crop[2], crop[3]); return o; }
-    const HR = 14, img = g.getImageData(0, 0, 32, HR), d = img.data, solid = (x, y) => d[(y * 32 + x) * 4 + 3] > 0;
-    // the face's middle: the opaque pixel nearest (16, 7)
-    let sx = -1, sy = -1, bd = 1e9;
-    for (let y = 0; y < HR; y++) for (let x = 0; x < 32; x++) if (solid(x, y)) { const k = (x - 16) * (x - 16) * 1.5 + (y - 7) * (y - 7); if (k < bd) { bd = k; sx = x; sy = y; } }
-    if (sx < 0) return null;
-    // flood within the top rows, no wider than 14 either side of the middle
-    const keep = new Uint8Array(32 * HR), q = [[sx, sy]];
-    keep[sy * 32 + sx] = 1;
-    while (q.length) {
-      const [x, y] = q.pop();
-      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-        if (nx < 0 || ny < 0 || nx >= 32 || ny >= HR || Math.abs(nx - sx) > 7 || keep[ny * 32 + nx] || !solid(nx, ny)) continue;
-        keep[ny * 32 + nx] = 1; q.push([nx, ny]);
-      }
-    }
-    let x0 = 32, x1 = -1, y0 = HR, y1 = -1;
-    for (let y = 0; y < HR; y++) for (let x = 0; x < 32; x++) {
-      if (keep[y * 32 + x]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } else d[(y * 32 + x) * 4 + 3] = 0;
-    }
-    g.putImageData(img, 0, 0);
-    // stop at the neck: the first row under the face narrower than half its widest
-    let widest = 0, cut = y1;
-    for (let y = y0; y <= y1; y++) { let n = 0; for (let x = 0; x < 32; x++) if (keep[y * 32 + x]) n++; if (n > widest) widest = n; else if (y > y0 + 6 && n < widest / 2) { cut = y - 1; break; } }
-    const w = x1 - x0 + 1, h = Math.min(12, cut - y0 + 1);
-    const o = document.createElement("canvas"); o.width = w; o.height = h;
-    o.getContext("2d").drawImage(c, x0, y0, w, h, 0, 0, w, h);
-    return o;
-  } catch { return null; }
-}
+// The head comes off the file photo through the sports pages' shared cut (../heads.js): the head
+// only, whatever the figure carries in daily life stays home.
+export { headFrom as headOf } from "../heads.js";
 // The face's own colour: the commonest opaque pixel in the head's lower middle.
 export function skinOf(h) {
   try {

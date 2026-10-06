@@ -2263,10 +2263,11 @@ or any score.
   are drawn at 0.5 m (the 16-bit habit) so faces read. A 26-row far stand in shadow to the top of the
   frame, every seat a person who cheers, stands or hangs their head; Department boards on the apron;
   stanchions, glass boards seen at their true angle, shot clocks on top of the boards, rims and nets.
-- **Faces**: cut from each file photo's frame 0 (`/api/sprite/<slug>`), keeping only the pixels
-  connected to the face above the neck (`render.js headOf`), so an everyday prop held beside the head
-  (a pizza peel, a guitar) is dropped; `roster.js CROPS` overrides a sprite whose prop crosses the
-  face. Pending likenesses (the API answers 204) get a head painted from `roster.js HINTS`.
+- **Faces**: cut from each file photo's frame 0 (`/api/sprite/<slug>`) by the sports pages' shared
+  cut (`src/play/heads.js headFrom`: the head only, so an everyday prop such as a pizza peel stays
+  home; when the prop is part of the head, a head drawn from the photo's skin and hair), shrunk for
+  depth by `shrinkHead`; `roster.js CROPS` overrides by hand. Pending likenesses (the API answers 204)
+  get a head painted from `roster.js HINTS`.
 - **Presentation**: an arena scoreboard (teams in their colours, the ball's side, quarter, clock,
   shot clock), the Overlord's calls under it (`calls.js`, the Department's voice about the play; nobody
   on the floor speaks or is quoted), a live region with the score, crowd moods (cheer on dunks,
