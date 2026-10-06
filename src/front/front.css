@@ -1,6 +1,7 @@
 /* THE FRONT PAGE's small windows (src/front/FrontDesk.jsx). DEPARTMENT OS: windows, teletext
    sub-bands, plain readable lines. Nothing scrolls sideways; nothing moves under reduced motion. */
 .hvi-desk-side > * + * { margin-top: var(--s5); }
+.hvi-desk-side > .fr-grid + * { margin-top: var(--s4); }
 
 /* MARKET.TKR: risers and fallers */
 .fr-tkr .fr-h { margin: 0 0 2px; padding: 1px var(--s2); font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.06em; }
@@ -43,7 +44,7 @@ a.fr-line:focus-visible { outline: var(--focus); outline-offset: 2px; }
 @media (hover: hover) { .fr-cam-link:hover .go { text-decoration: underline; text-underline-offset: 4px; } }
 .fr-cam-link:focus-visible { outline: var(--focus); outline-offset: 4px; }
 
-/* the desk's own line: ARRANGE THE DESK · DISPLAY (opens DeskPrefs) */
+/* the desk's own line: ARRANGE · WIDGETS · DISPLAY (the last two open DeskPrefs) */
 .fr-arrange { display: flex; gap: var(--s2); flex-wrap: wrap; margin: var(--s4) 0 0; }
 .fr-arrange button, .fr-clear { font: inherit; font-size: var(--t-xs); letter-spacing: 0.06em; }
 .fr-arrange button { min-height: var(--hit-min); padding: 0 var(--s3); background: var(--panel); color: var(--fg-dim); border: var(--bw) solid var(--line-hi); cursor: pointer; text-transform: uppercase; }
@@ -91,7 +92,7 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
 /* SURVEILLANCE: the tight cam (always a dark picture, whatever the theme) and the printout */
 .fr-sv-link { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); color: inherit; text-decoration: none; }
 .fr-sv { container-type: inline-size; }
-@container (min-width: 440px) { .fr-sv-link { grid-template-columns: minmax(0, 46%) minmax(0, 1fr); } }
+@container (min-width: 440px) { .fr-sv.v-E .fr-sv-link { grid-template-columns: minmax(0, 46%) minmax(0, 1fr); } }
 .fr-sv-link:focus-visible { outline: var(--focus); outline-offset: 4px; }
 .fr-sv .cam { position: relative; display: block; aspect-ratio: 4 / 3; background: #03060b; border: var(--bw) solid var(--line); overflow: hidden; }
 .fr-sv .cam img { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -201,3 +202,122 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
 .fr-set .scr .fr-sv .ln { grid-template-columns: 7ch minmax(0, 1fr); }
 .fr-set .scr .fr-sv .ln .k { color: #8fb39c; } .fr-set .scr .fr-sv .ln .v { color: #e8efe9; }
 .fr-set .scr .fr-sv .ts { font-size: 9px; }
+
+/* ---- THE GRID: the windows on a home-screen grid (src/front/layout.js, FrontDesk.jsx) -------------
+   4 columns on a wide desk, 3 mid, 2 on a phone (the grid's own width decides, FrontDesk sets --cols);
+   rows are one --row tall, packing is dense. A window spans 1x1 (S), 2x1 (M), 1x2 (T), 2x2 (L) or
+   4x1 (W, wide only). Each size has its own prepared layout; the window keeps its title bar. */
+.fr-grid { --row: 196px; display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); grid-auto-rows: var(--row); grid-auto-flow: row dense; gap: var(--s5) var(--s3); padding-top: var(--s4); }
+.fr-cell { position: relative; min-width: 0; min-height: 0; padding: 0 8px 8px 0; }
+.fr-cell:not(.edit):has(> .fr-cell-in:empty) { display: none; }
+.fr-cell-in { height: 100%; min-height: 0; }
+.fr-cell .ui-frame { margin: 0; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
+.fr-cell .ui-frame > :last-child { flex: 1; min-height: 0; overflow: hidden auto; }
+.fr-cell .ui-frame.ui-dialog { padding-top: 40px; }
+.fr-cell .hvi-notice .ic { margin-right: 1ch; }
+.fr-nt-s { display: flex; flex-direction: column; gap: var(--s2); font-size: var(--t-xs); }
+.fr-nt-s p { margin: 0; line-height: 1.3; }
+.fr-cell.s-S .hvi-notice .ic { display: none; }
+.fr-cell.s-S .ui-frame.ui-dialog { padding-left: var(--s2); padding-right: var(--s2); }
+.fr-nt-s .ok { align-self: flex-start; }
+
+/* the S layout: a glance. One big thing, one line under it. */
+.fr-glance { display: flex; flex-direction: column; justify-content: center; gap: 3px; height: 100%; min-width: 0; color: inherit; text-decoration: none; }
+.fr-glance .big { font-family: var(--tall); font-size: 28px; line-height: 1; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fr-glance .big .of { font-family: inherit; font-size: var(--t-xs); color: var(--fg-mute); margin-left: 2px; }
+.fr-glance .ln1 { display: flex; align-items: center; gap: 1ch; min-width: 0; font-size: var(--t-xs); color: var(--fg); }
+.fr-glance .ln1 .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-glance .sq { flex: none; width: 10px; height: 10px; border: 1px solid var(--fg); }
+.fr-glance .c { font-size: var(--t-xs); font-weight: 700; }
+.fr-glance:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.fr-glance .up, .fr-mrow .up { color: var(--accent); } .fr-glance .dn, .fr-mrow .dn { color: var(--harm); }
+@media (hover: hover) { .fr-glance:hover .big { text-decoration: underline; text-underline-offset: 4px; } }
+
+/* MARKET: compact lines (M, T), the side-by-side lists (W) */
+.fr-movers .fr-mrow { display: flex; gap: 1ch; align-items: baseline; min-height: 32px; padding: 4px 0; }
+.fr-mlines { margin: 0; }
+.fr-mw { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
+.fr-mw .fr-h { margin-bottom: 0; }
+.fr-tkr.v-M .go, .fr-tkr.v-T .go { display: flex; align-items: center; min-height: 32px; }
+
+/* WIRE: S line only, L a list, W a wide line with its controls beside */
+.fr-wire.v-S .fr-line .tx { -webkit-line-clamp: 4; }
+.fr-wl-list { list-style: none; margin: 0; padding: 0; }
+.fr-wl-list li { border-bottom: 1px dotted var(--line); }
+.fr-wl-list a { display: flex; gap: 1ch; align-items: baseline; padding: 4px 0; min-height: 32px; color: var(--fg); font-size: var(--t-xs); text-decoration: none; line-height: 1.35; }
+.fr-wl-list .tag { flex: none; padding: 0 0.5ch; background: var(--eb-amber); color: #2e1c03; font-weight: 700; letter-spacing: 0.04em; }
+.fr-wl-list .tx { min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+@media (hover: hover) { .fr-wl-list a:hover .tx { text-decoration: underline; text-underline-offset: 3px; } }
+.fr-ww { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s4); align-items: center; }
+.fr-ww .fr-line { font-size: var(--t-m, 1rem); }
+.fr-ww-ctl { display: flex; flex-direction: column; gap: var(--s2); align-items: flex-start; }
+.fr-ww-ctl .fr-tabs { margin: 0; }
+.fr-ww .fr-steps .all { display: none; }
+
+/* CAM: S and T crop, M and L fit; L carries a caption */
+.fr-cam.v-S .fr-cam-link, .fr-cam.v-T .fr-cam-link, .fr-cam.v-M .fr-cam-link, .fr-cam.v-L .fr-cam-link { display: flex; flex-direction: column; height: 100%; }
+.fr-cam .fr-cam-link img, .fr-cam .fr-cam-wait { flex: 1 1 0; min-height: 0; width: 100%; height: 100%; max-height: none; aspect-ratio: auto; }
+.fr-cam.v-S img, .fr-cam.v-T img, .fr-cam.v-S .fr-cam-wait, .fr-cam.v-T .fr-cam-wait { object-fit: cover; }
+.fr-cam .note { flex: none; margin-top: var(--s1); font-size: var(--t-xs); color: var(--fg-dim); line-height: 1.3; }
+.fr-cam.v-M .go, .fr-cam.v-L .go { flex: none; min-height: 28px; }
+
+/* FILE and FLAT and the small windows */
+.fr-file.v-M .ph { width: 56px; height: 84px; }
+.fr-flat.v-M .cut { max-height: 96px; }
+.fr-flat.v-S canvas { display: none; }
+.fr-paper-lead.s .h { font-size: 19px; line-height: 1.1; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.fr-paper.v-M .fr-paper-lead .h { font-size: 22px; }
+
+/* SURVEILLANCE: S no picture, M picture + lines, L big picture + the file, W picture beside the file */
+.fr-sv.v-S .fr-sv-link { display: block; }
+.fr-sv .rec.s { position: static; display: inline-flex; margin-bottom: 4px; }
+.fr-sv.v-M .fr-sv-link { grid-template-columns: minmax(0, 46%) minmax(0, 1fr); align-items: start; }
+.fr-sv.v-W, .fr-sv.v-W .fr-sv-link { height: 100%; }
+.fr-sv.v-W .fr-sv-link { grid-template-columns: minmax(0, 220px) minmax(0, 1fr); }
+.fr-sv.v-W .cam { aspect-ratio: auto; height: 100%; }
+.fr-sv.v-L, .fr-sv.v-L .fr-sv-link { height: 100%; }
+.fr-sv.v-L .fr-sv-link { grid-template-rows: minmax(0, 1fr) auto; }
+.fr-sv.v-L .cam { aspect-ratio: auto; height: 100%; min-height: 0; }
+.fr-sv.v-L .pr { gap: 1px; }
+
+/* THE SET: S the remote, M a small set beside its buttons, L the big screen. The picture is laid out at 288x216 and scaled. */
+.fr-set .scr-in { position: absolute; left: 0; top: 0; width: 288px; height: 216px; transform-origin: 0 0; }
+.fr-set-w { height: 100%; }
+.fr-set-s { display: flex; flex-direction: column; justify-content: center; gap: 3px; height: 100%; }
+.fr-set-s .big, .fr-set-m .big { font-family: var(--tall); font-size: 28px; line-height: 1; color: var(--fg); }
+.fr-set-s .ln1, .fr-set-m .ln1 { font-size: var(--t-xs); color: var(--fg); }
+.fr-set-s .tv-ctl, .fr-set-m .tv-ctl { margin-top: var(--s1); }
+.fr-set-s .tv-ctl button, .fr-set-m .tv-ctl button { min-height: 30px; min-width: 0; }
+.fr-set-m { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s3); height: 100%; align-items: center; }
+.fr-set-m .tv { height: 100%; aspect-ratio: 4 / 3; border-width: 6px; }
+.fr-set-m .side { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fr-set.v-L .fr-set-w { display: flex; flex-direction: column; align-items: center; }
+.fr-set.v-L .tv { flex: 1 1 0; min-height: 0; max-width: 100%; aspect-ratio: 4 / 3; }
+.fr-set.v-L .tv-ctl { flex: none; align-self: stretch; }
+.fr-set.v-M .osd { font-size: 16px; top: 2px; right: 4px; }
+
+/* ARRANGE: the edit mode. Dashed outlines, a handle, size buttons, an x. */
+.fr-bar { margin-top: var(--s4); padding: var(--s2) var(--s3); background: var(--panel); border: 2px dashed var(--accent); }
+.fr-bar p { margin: 0 0 var(--s2); font-size: var(--t-xs); color: var(--fg-dim); line-height: 1.4; }
+.fr-bar-btns { flex-wrap: wrap; gap: var(--s2); }
+.fr-cell.edit { cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.fr-cell.edit:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.fr-cell.edit .fr-cell-in { opacity: 0.5; }
+.fr-cell.held { opacity: 0.4; }
+.fr-ed { position: absolute; left: 0; top: 0; right: 8px; bottom: 8px; pointer-events: none; outline: 2px dashed var(--accent); outline-offset: 3px; }
+.fr-ed-top { position: absolute; left: 4px; right: 4px; top: 20px; display: flex; justify-content: space-between; align-items: center; }
+.fr-ed-sz { position: absolute; left: 4px; right: 4px; bottom: 4px; display: flex; flex-wrap: wrap; gap: 3px; }
+.fr-grip, .fr-ed button { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; font: inherit; font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.04em; color: var(--fg); background: var(--panel-hi); border: 2px solid; border-color: var(--fg-dim) var(--shadow) var(--shadow) var(--fg-dim); cursor: pointer; }
+.fr-grip { padding: 0 8px; cursor: grab; touch-action: none; }
+.fr-ed button { min-width: 30px; padding: 0 4px; }
+.fr-ed button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.fr-ed button:disabled { color: var(--fg-ghost); cursor: default; }
+.fr-ed button:focus-visible { outline: var(--focus); outline-offset: 1px; }
+.fr-x { min-width: 32px; }
+.fr-chip { position: fixed; z-index: 60; transform: translate(-50%, -130%); padding: 4px 10px; background: var(--accent); color: var(--accent-ink); font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.06em; box-shadow: 3px 3px 0 var(--shadow); pointer-events: none; white-space: nowrap; }
+html.fr-dragging, html.fr-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+@media (prefers-reduced-motion: no-preference) and (pointer: coarse) { .fr-cell.edit:not(.held) .fr-cell-in { animation: fr-jig 0.3s ease-in-out infinite alternate; } .fr-cell.edit:nth-child(even):not(.held) .fr-cell-in { animation-direction: alternate-reverse; } @keyframes fr-jig { from { transform: rotate(-0.5deg); } to { transform: rotate(0.5deg); } } }
+.fr-cell.s-S .ui-frame-ttl .m { display: none; }   /* a 1x1 window has room for its name only */
+.fr-tkr.v-L .fr-movers a { padding: 1px 0; min-height: 0; }
+.fr-tkr.v-L .fr-h.dn { margin-top: var(--s2); }
+.fr-wire.v-M .fr-line { min-height: 0; }

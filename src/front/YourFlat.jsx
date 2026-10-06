@@ -10,7 +10,7 @@ import { readCaseId, readLastResult } from "../caseFile.jsx";
 const ROOM_W = 96, ROOM_H = 84;
 const PLACE = { sleep: "ASLEEP IN THE BEDROOM", wash: "IN THE BATHROOM", cook: "COOKING", eat: "EATING", watch: "WATCHING THE SET", read: "READING" };
 
-export default function YourFlat() {
+export default function YourFlat({ size = "L" }) {
   const id = readCaseId(), last = readLastResult();
   const [apt, setApt] = useState(undefined);   // undefined: asking; null: none on record
   const [home, setHome] = useState(null);       // the line under the picture
@@ -61,20 +61,23 @@ export default function YourFlat() {
   }, [apt]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!id || apt === null) return (
-    <Frame title="YOUR FLAT" meta="NONE ON RECORD" tone="var(--eb-cyan)" className="fr-flat">
+    <Frame title="YOUR FLAT" meta={size === "S" ? "" : "NONE ON RECORD"} tone="var(--eb-cyan)" className={`fr-flat v-${size}`}>
       <p className="fr-dim">{id ? "THE HOUSING OFFICE HAS NO FLAT FOR THIS FILE YET. IT IS BEING PROCESSED. SLOWLY." : "NO FILE, NO FLAT. THE DEPARTMENT HOUSES THE ASSESSED."}</p>
       <a className="fr-go" href={id ? "#file" : "#intake"}>{id ? "OPEN YOUR FILE ›" : "GET EVALUATED ›"}</a>
     </Frame>
   );
   const where = apt ? [apt.unit && `FLAT ${apt.unit}`, apt.buildingName, apt.districtName].filter(Boolean).join(", ") : "";
+  const label = `Your flat: ${where || "loading"}. ${home || ""} Open it in the city.`;
+  // S: who is home, in words; M: the cutaway small; L: the cutaway, the address, who is home
+  const pic = apt?.flat ? <canvas ref={cv} className="cut" width={ROOM_W * 3} height={ROOM_H} aria-hidden="true" /> : <span className="cut wait" aria-hidden="true" />;
+  const VIEWS_flat = {
+    S: <a className="fr-glance" href={apt?.href || "#file"} aria-label={label}><span className="big">{apt?.unit ? `FLAT ${apt.unit}` : "YOUR FLAT"}</span><span className="ln1"><span className="n">{home ? home.replace(/^HOME: /, "") : "ASKING…"}</span></span>{apt?.flat && <canvas ref={cv} className="cut" width={ROOM_W * 3} height={ROOM_H} hidden />}</a>,
+    M: <a className="fr-flat-link" href={apt?.href || "#file"} aria-label={label}>{pic}{home && <span className="ln home" aria-hidden="true">{home}</span>}</a>,
+    L: <a className="fr-flat-link" href={apt?.href || "#file"} aria-label={label}>{pic}<span className="ln" aria-hidden="true">{where || "ASKING THE HOUSING OFFICE…"}</span>{home && <span className="ln home" aria-hidden="true">{home}</span>}<span className="fr-go" aria-hidden="true">GO HOME ›</span></a>,
+  };
   return (
-    <Frame title="YOUR FLAT" meta={apt?.unit ? `FLAT ${apt.unit}` : ""} tone="var(--eb-cyan)" className="fr-flat">
-      <a className="fr-flat-link" href={apt?.href || "#file"} aria-label={`Your flat: ${where || "loading"}. ${home || ""} Open it in the city.`}>
-        {apt?.flat ? <canvas ref={cv} className="cut" width={ROOM_W * 3} height={ROOM_H} aria-hidden="true" /> : <span className="cut wait" aria-hidden="true" />}
-        <span className="ln" aria-hidden="true">{where || "ASKING THE HOUSING OFFICE…"}</span>
-        {home && <span className="ln home" aria-hidden="true">{home}</span>}
-        <span className="fr-go" aria-hidden="true">GO HOME ›</span>
-      </a>
+    <Frame title="YOUR FLAT" meta={apt?.unit && size !== "S" ? `FLAT ${apt.unit}` : ""} tone="var(--eb-cyan)" className={`fr-flat v-${size}`}>
+      {VIEWS_flat[size] || VIEWS_flat.L}
     </Frame>
   );
 }

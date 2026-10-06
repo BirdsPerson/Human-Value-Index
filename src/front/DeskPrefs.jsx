@@ -3,13 +3,14 @@
 // (a native <dialog>: focus stays inside, Escape closes), a list, OK and CANCEL.
 //   DISPLAY   the five colour schemes (src/ui/themes.css). Picking one previews it at once;
 //             CANCEL puts the old one back; FOLLOW MY DEVICE forgets the pick.
-//   WIDGETS   a checkbox per window and ▲ ▼ to order them; RESET is today's four.
+//   WIDGETS   a checkbox per window and ▲ ▼ to order them; RESET is today's four; ARRANGE keeps the
+//             ticks and opens the desk's drag-and-resize mode (FrontDesk.jsx, layout.js).
 // Phones: the dialog is the screen's width, its list scrolls inside it, every control 44px.
 import { useEffect, useRef, useState } from "react";
 import { Frame, Button, ButtonRow } from "../ui/index.js";
 import { THEMES, WIDGETS, DEFAULT_WIDGETS, currentTheme, savedTheme, applyTheme, saveTheme } from "./prefs.js";
 
-export default function DeskPrefs({ which, ids, onIds, onClose }) {
+export default function DeskPrefs({ which, ids, onIds, onArrange = () => {}, onClose }) {
   const ref = useRef(null);
   useEffect(() => {
     const d = ref.current;
@@ -18,7 +19,7 @@ export default function DeskPrefs({ which, ids, onIds, onClose }) {
   }, []);
   return (
     <dialog ref={ref} className="fr-dlg" aria-labelledby="fr-dlg-t" onCancel={(e) => { e.preventDefault(); ref.current?.dispatchEvent(new Event("hvi-cancel")); }}>
-      {which === "display" ? <Display dlg={ref} onClose={onClose} /> : <Widgets dlg={ref} ids={ids} onIds={onIds} onClose={onClose} />}
+      {which === "display" ? <Display dlg={ref} onClose={onClose} /> : <Widgets dlg={ref} ids={ids} onIds={onIds} onArrange={onArrange} onClose={onClose} />}
     </dialog>
   );
 }
@@ -64,7 +65,7 @@ function Display({ dlg, onClose }) {
   );
 }
 
-function Widgets({ dlg, ids, onIds, onClose }) {
+function Widgets({ dlg, ids, onIds, onArrange, onClose }) {
   const order = (on) => [...on, ...WIDGETS.map(w => w.id).filter(id => !on.includes(id))];
   const [rows, setRows] = useState(() => order(ids).map(id => ({ id, on: ids.includes(id) })));
   const [said, setSaid] = useState("");
@@ -80,7 +81,7 @@ function Widgets({ dlg, ids, onIds, onClose }) {
   return (
     <Frame title="WIDGETS" meta="CONTROL PANEL" className="ui-dialog fr-dlg-w">
       <h2 id="fr-dlg-t" className="fr-dlg-h">WINDOWS ON THE DESK</h2>
-      <p className="fr-dlg-p">TICK WHAT SITS BESIDE THE LOGON. ▲ ▼ SET THE ORDER. KEPT ON THIS DEVICE.</p>
+      <p className="fr-dlg-p">TICK WHAT SITS BESIDE THE LOGON. ▲ ▼ SET THE ORDER. ARRANGE LETS YOU DRAG THEM AND PICK SIZES. KEPT ON THIS DEVICE.</p>
       <ol className="fr-wl">
         {rows.map((r, i) => {
           const w = WIDGETS.find(x => x.id === r.id);
@@ -101,6 +102,7 @@ function Widgets({ dlg, ids, onIds, onClose }) {
       </ol>
       <p className="sr-only" role="status">{said}</p>
       <ButtonRow className="ui-dialog-btns fr-dlg-btns">
+        <Button variant="secondary" onClick={() => { onIds(rows.filter(r => r.on).map(r => r.id)); onArrange(); onClose(); }}>Arrange</Button>
         <Button variant="secondary" onClick={() => setRows(order(DEFAULT_WIDGETS).map(id => ({ id, on: DEFAULT_WIDGETS.includes(id) })))}>Reset</Button>
         <Button variant="push" tone="sec" onClick={onClose}>CANCEL</Button>
         <Button variant="push" className="ok" onClick={() => { onIds(rows.filter(r => r.on).map(r => r.id)); onClose(); }}>OK</Button>

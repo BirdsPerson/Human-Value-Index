@@ -144,7 +144,48 @@ function Ebtv() {
   );
 }
 
-export default function TheSet() {
+// The screen's picture is laid out at 288x216 and scaled to whatever the window gives it, so the
+// small television shows the same programme as the large one (a bigger screen, not another show).
+function useFit(ref) {
+  const [k, setK] = useState(1);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const fit = () => setK(Math.max(0.3, Math.min(el.clientWidth / 288, el.clientHeight / 216)));
+    fit();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  return k;
+}
+function Screen({ ch, body, snow }) {
+  const ref = useRef(null);
+  const k = useFit(ref);
+  return (
+    <div className={`tv${snow ? " snow" : ""}`} aria-live="off">
+      <div className="scr" ref={ref}>{snow ? null : <div className="scr-in" style={{ transform: `scale(${k})` }}>{body}</div>}</div>
+      <span className="osd" aria-hidden="true">{String(ch.n).padStart(2, "0")}</span>
+    </div>
+  );
+}
+
+// one prepared layout per size: S the remote (what is on, and the buttons), M a small set beside
+// its buttons, L the big screen with the buttons under it
+const Ctl = ({ t }) => (
+  <div className="fr-steps tv-ctl">
+    <button type="button" onClick={() => t.tune(-1)} aria-label="Channel down">CH ▼</button>
+    <button type="button" onClick={() => t.tune(1)} aria-label="Channel up">CH ▲</button>
+    <button type="button" onClick={() => t.setAuto(a => !a)} aria-pressed={t.auto}>AUTO</button>
+  </div>
+);
+const VIEWS_set = {
+  S: (t) => <div className="fr-set-s"><span className="big">CH {String(t.ch.n).padStart(2, "0")}</span><span className="ln1"><span className="n">{t.ch.name}</span></span><Ctl t={t} /></div>,
+  M: (t) => <div className="fr-set-m"><Screen ch={t.ch} body={t.body} snow={t.snow} /><div className="side"><span className="big">CH {String(t.ch.n).padStart(2, "0")}</span><span className="ln1"><span className="n">{t.ch.name}</span></span><Ctl t={t} /></div></div>,
+  L: (t) => <><Screen ch={t.ch} body={t.body} snow={t.snow} /><Ctl t={t} /></>,
+};
+export default function TheSet({ size = "M" }) {
   const [rm] = useState(reduced);
   const [ci, setCi] = useState(0);
   const [auto, setAuto] = useState(() => !reduced());
@@ -154,27 +195,21 @@ export default function TheSet() {
   const ch = CHANNELS[ci];
   const tune = (k) => {
     setCi(v => (v + k + CHANNELS.length) % CHANNELS.length);
-    if (!rm) { setSnow(true); setTimeout(() => setSnow(false), STATIC_MS); }
+    if (!rm && size !== "S") { setSnow(true); setTimeout(() => setSnow(false), STATIC_MS); }
   };
   useEffect(() => {
     if (!auto || hold) return undefined;
     const t = setTimeout(() => { if (!document.hidden) tune(1); }, SURF_MS);
     return () => clearTimeout(t);
   });   // eslint-disable-line react-hooks/exhaustive-deps
-  const body = { snn: <Snn day={day} />, sports: <Sports />, markets: <Markets />, weather: <Weather />, ebtv: <Ebtv />, watch: <Surveillance embedded /> }[ch.id];
+  // the small remote never loads a channel: nothing is fetched for a picture nobody sees
+  const body = size === "S" ? null : { snn: <Snn day={day} />, sports: <Sports />, markets: <Markets />, weather: <Weather />, ebtv: <Ebtv />, watch: <Surveillance embedded /> }[ch.id];
+  const V = VIEWS_set[size] || VIEWS_set.M;
   return (
-    <Frame title="THE SET" meta={`CH ${ch.n} // ${ch.name}`} tone="var(--eb-amber)" className="fr-set">
-      <div onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)} onFocus={() => setHold(true)} onBlur={() => setHold(false)}>
-        <div className={`tv${snow ? " snow" : ""}`} aria-live="off">
-          <div className="scr">{snow ? null : body}</div>
-          <span className="osd" aria-hidden="true">{String(ch.n).padStart(2, "0")}</span>
-        </div>
+    <Frame title="THE SET" meta={`CH ${ch.n} // ${ch.name}`} tone="var(--eb-amber)" className={`fr-set v-${size}`}>
+      <div className="fr-set-w" onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)} onFocus={() => setHold(true)} onBlur={() => setHold(false)}>
+        <V ch={ch} body={body} snow={snow} tune={tune} auto={auto} setAuto={setAuto} />
         <p className="sr-only" aria-live="polite">CHANNEL {ch.n}, {ch.name}.</p>
-        <div className="fr-steps tv-ctl">
-          <button type="button" onClick={() => tune(-1)} aria-label="Channel down">CH ▼</button>
-          <button type="button" onClick={() => tune(1)} aria-label="Channel up">CH ▲</button>
-          <button type="button" onClick={() => setAuto(a => !a)} aria-pressed={auto}>AUTO</button>
-        </div>
       </div>
     </Frame>
   );

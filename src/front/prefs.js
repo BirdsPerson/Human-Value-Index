@@ -1,7 +1,8 @@
 // The desk's two settings, kept on this device (localStorage, every access in try/catch: a private
 // window or blocked storage just gets the defaults):
 //   hvi-theme     DISPLAY: which token set (src/ui/themes.css); index.html applies it before paint
-//   hvi-widgets   WIDGETS: which windows sit beside the logon, in order
+//   hvi-widgets   WIDGETS: which windows sit beside the logon, in order (the old list; src/front/layout.js
+//   migrates it into hvi-layout, the grid: [{ id, size, order }])
 // scripts/check-themes.mjs reads THEMES; scripts/check-desk.mjs reads WIDGETS and DEFAULT_WIDGETS.
 
 export const THEMES = [
@@ -13,8 +14,8 @@ export const THEMES = [
 ];
 const THEME_BG = { green: "#0a0f0a", amber: "#0c0904", win31: "#5fb3b3", platinum: "#a8a8a8", contrast: "#000000" };
 
-const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
-const put = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* this visit only */ } };
+export const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+export const put = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* this visit only */ } };
 
 // what the boot line chose (or the attribute's absence: green)
 export const currentTheme = () => document.documentElement.getAttribute("data-theme") || "green";

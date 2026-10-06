@@ -37,7 +37,7 @@ function useOnScreen(ref) {
   return on;
 }
 
-export default function Surveillance({ embedded = false }) {
+export default function Surveillance({ embedded = false, size = "M" }) {
   const ref = useRef(null);
   const seen = useOnScreen(ref);
   const [d, setD] = useState(null);
@@ -79,29 +79,45 @@ export default function Surveillance({ embedded = false }) {
   }, [seen, hold, list.length, i, rm]);
 
   let left = n;
+  // the keyed printout: a line's characters appear as `left` allows
+  const pr = (from, to, move = true) => (
+    <span className="pr" aria-hidden="true">
+      {lines.map(([k, v], x) => {
+        const str = String(v), shown = str.slice(0, Math.max(0, left));
+        left -= str.length;
+        return x >= from && x < to ? <span key={k} className="ln"><span className="k">{k}</span><span className="v">{shown}{shown.length < str.length && shown.length > 0 ? <span className="cur">█</span> : null}</span></span> : null;
+      })}
+      {move && <span className="ln"><span className="k">MOVEMENT</span><span className="v">{left >= 0 ? <Sparkline s={{ slug: s.slug, name: s.name, score: s.score }} /> : null}</span></span>}
+    </span>
+  );
+  const cam = () => (
+    <span className="cam" aria-hidden="true">
+      <img src={`/api/cam?m=${d.m}&at=${encodeURIComponent(s.district || "")}`} alt="" width="288" height="216" decoding="async" />
+      <span className="ph"><Suspense fallback={null}><FilePhoto subject={{ name: s.name, slug: s.slug, score: s.score }} scale={1} compact /></Suspense></span>
+      <span className="rec"><span className="dot" />REC</span>
+      <span className="ts">CAM {String(((i % list.length) + 1) * 7).padStart(3, "0")} // DAY {d.clock.day} {pad2(d.clock.hour)}:{pad2(d.clock.minute)}</span>
+    </span>
+  );
+  // one prepared layout per size: S who and doing what (no picture), M the picture and three lines,
+  // L the big picture and the whole file, W the picture beside the whole file; E is THE SET's channel
+  const VIEWS_watch = {
+    S: () => <><span className="rec s" aria-hidden="true"><span className="dot" />REC</span>{pr(0, 4, false)}</>,
+    M: () => <>{cam()}{pr(1, 4, false)}</>,
+    L: () => <>{cam()}{pr(0, 6)}</>,
+    W: () => <>{cam()}{pr(0, 6)}</>,
+    E: () => <>{cam()}{pr(0, 6)}</>,
+  };
+  const V = VIEWS_watch[embedded ? "E" : size] || VIEWS_watch.M;
   const body = (
-    <div ref={ref} className={`fr-sv${cut ? " cut" : ""}${rm ? " still" : ""}`} onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)} onFocus={() => setHold(true)} onBlur={() => setHold(false)}>
+    <div ref={ref} className={`fr-sv v-${embedded ? "E" : size}${cut ? " cut" : ""}${rm ? " still" : ""}`} onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)} onFocus={() => setHold(true)} onBlur={() => setHold(false)}>
       {s ? (
         <a className="fr-sv-link" href={s.href} aria-label={`${s.name}, ${s.activity}. Open them in the city.`}>
-          <span className="cam" aria-hidden="true">
-            <img src={`/api/cam?m=${d.m}&at=${encodeURIComponent(s.district || "")}`} alt="" width="288" height="216" decoding="async" />
-            <span className="ph"><Suspense fallback={null}><FilePhoto subject={{ name: s.name, slug: s.slug, score: s.score }} scale={1} compact /></Suspense></span>
-            <span className="rec"><span className="dot" />REC</span>
-            <span className="ts">CAM {String(((i % list.length) + 1) * 7).padStart(3, "0")} // DAY {d.clock.day} {pad2(d.clock.hour)}:{pad2(d.clock.minute)}</span>
-          </span>
-          <span className="pr" aria-hidden="true">
-            {lines.map(([k, v]) => {
-              const str = String(v), shown = str.slice(0, Math.max(0, left));
-              left -= str.length;
-              return <span key={k} className="ln"><span className="k">{k}</span><span className="v">{shown}{shown.length < str.length && shown.length > 0 ? <span className="cur">█</span> : null}</span></span>;
-            })}
-            <span className="ln"><span className="k">MOVEMENT</span><span className="v">{left >= 0 ? <Sparkline s={{ slug: s.slug, name: s.name, score: s.score }} /> : null}</span></span>
-          </span>
+          <V />
         </a>
       ) : <p className="fr-dim">THE CAMERAS ARE WARMING UP. EVERYONE IS STILL BEING WATCHED.</p>}
       {s && <p className="sr-only" aria-live="off">{lines.map(([k, v]) => `${k}: ${v}.`).join(" ")}</p>}
     </div>
   );
   if (embedded) return body;
-  return <Frame title="SURVEILLANCE" meta="LIVE" tone="var(--duke)" className="fr-watch">{body}</Frame>;
+  return <Frame title="SURVEILLANCE" meta={size === "S" ? "" : "LIVE"} tone="var(--duke)" className={`fr-watch v-${size}`}>{body}</Frame>;
 }

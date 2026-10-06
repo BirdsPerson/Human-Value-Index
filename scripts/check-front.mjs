@@ -68,7 +68,7 @@ ok(/prefers-reduced-motion: reduce/.test(desk) && /useState\(\(\) => reduced\(\)
   // SURVEILLANCE REC dot, THE SET's channel-change snow), and each must stand down for reduced motion.
   const css = read("src/front/front.css");
   const moving = css.split("\n").filter(l => /@keyframes|animation:\s*(?!none)/.test(l) && !/animation:\s*none/.test(l));
-  const allowed = (l) => /\.fr-sv \.rec \.dot|tv-snow/.test(l);
+  const allowed = (l) => /\.fr-sv \.rec \.dot|tv-snow|fr-jig/.test(l);   // fr-jig: the ARRANGE wobble, touch screens only, none under reduced motion (check-desk)
   ok(moving.every(allowed), "no crawl: nothing animates (bar the REC dot and the channel-change snow)");
   ok(/\.fr-sv\.still \.rec \.dot \{ animation: none/.test(css) && /prefers-reduced-motion: reduce\) \{ \.fr-set \.tv\.snow \.scr \{ animation: none/.test(css), "both cues stand still under reduced motion");
 }
