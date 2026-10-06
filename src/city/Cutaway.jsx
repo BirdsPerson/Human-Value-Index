@@ -10,6 +10,7 @@
 // Escape), the plain line at the top (a live status) and the floor list under it.
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { towerPlan, placeAll, nameplate, PURPOSE_NAME, isDark } from "./tower.js";
 import { keyOf } from "./sim.js";
 import { roomIn, activityLine, clockAt } from "./simApi.js";
@@ -515,7 +516,8 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
           </li>
         ))}
       </ul>
-      {openU && <UnitSheet u={openU} plan={plan} P={P} res={res} onClose={closeSheet} onOpen={onOpen} censusRef={censusRef} unitWord={unitWord} />}
+      {/* on the body: over the command bar, outside the frame's stacking context */}
+      {openU && createPortal(<UnitSheet u={openU} plan={plan} P={P} res={res} onClose={closeSheet} onOpen={onOpen} censusRef={censusRef} unitWord={unitWord} />, document.body)}
     </div>
   );
 }

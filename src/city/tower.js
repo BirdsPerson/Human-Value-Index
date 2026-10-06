@@ -102,7 +102,7 @@ export function towerPlan(b) {
     const id = `${b.id}:L${level}`;
     const code = level < 0 ? `B${-level}` : level === 0 ? "G" : top && /^(PH|RF)$/.test(f.code) ? f.code : `${level}F`;
     // a sim floor spread over several storeys numbers them as storeys ("RESIDENCE LEVEL 2" over 3F-4F reads 3F, 4F)
-    const spread = level > 0 && !top && k !== N;
+    const spread = level > 0 && !(top && /^(PH|RF)$/.test(f.code)) && k !== N;
     const name = spread && /\d+$/.test(f.name) ? f.name.replace(/\d+$/, String(level)) : f.name;
     return { id, level, code, simFloor: f.index, simCode: f.code, name, places: f.places.slice(), owner: DEPT, units: [] };
   };
