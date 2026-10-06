@@ -2,7 +2,7 @@
 // 256 x 240 logical pixels (the NES's frame), fillRect and a few polygon fills, scaled by whole
 // device pixels with smoothing off.
 //
-// The view is a true one-point perspective from a seat high in the near stand: the camera looks
+// The view (CAMS below; CLASSIC is the original): a true perspective camera. CLASSIC: the camera looks
 // straight across the court (along +y), level, so every vertical stays vertical and every line
 // across the court stays horizontal, while lines along the depth run to one vanishing point on the
 // horizon. A point (x, y, z) in metres lands at x' = 128 + (x - cam) * s, y' = HY + (CAM_H - z) * s
@@ -11,21 +11,47 @@
 // is 20 px, at the far one 8.4: a 2 m player is 40 px near and 17 px far, the rim 3.05 m up. The
 // camera pans along the court with the ball (render-only; the sim never sees it). The heads are
 // drawn a little large (0.5 m), the 16-bit habit, so a face reads at this size.
-import { COURT as C, TOP, dirOf } from "./sim.js";
+import { COURT as C, TOP, FT_TOP, dirOf, greenOf, kindAt } from "./sim.js";
 import { shrinkHead } from "../heads.js";
 
 export const W = 256, H = 240;
+// The camera: a pinhole at (px, py, pz) turned by yaw (about the vertical, 0 = straight across the
+// court) and tipped down by pitch, focal length F, the optical centre at (cx, cy) on the frame. One
+// projection for every preset, so width, height and depth always agree and everything shrinks with
+// distance. CLASSIC is the old seat (level, high in the near stand: the one-point view); the 2K
+// presets sit lower or higher on the side, tipped down, panning and zooming with the ball.
+export const CAMS = {
+  broadcast: { name: "2K BROADCAST", py: -13, pz: 9, pitch: 0.42, F: 390, cy: 136, follow: 0.4, yawK: 0.85, zoom: 20, limit: 7.5 },
+  steady: { name: "2K STEADY", py: -12, pz: 13, pitch: 0.62, F: 330, cy: 124, follow: 0.3, yawK: 0.3, zoom: 8, limit: 6 },
+  drive: { name: "DRIVE", py: -8, pz: 4.2, pitch: 0.3, F: 330, cy: 126, follow: 0.92, yawK: 0.5, zoom: 0, limit: 9.5, handler: true },
+  classic: { name: "CLASSIC", py: -11, pz: 12, pitch: 0, F: 220, cy: -14, follow: 0.85, yawK: 0, zoom: 0, limit: 8.2 },
+};
+export const CAM_ORDER = ["broadcast", "steady", "drive", "classic"];
 export const CAM = { F: 220, D: 11, H: 12, HY: -14 };
-export function proj(x, y, z, cam) {
-  const s = CAM.F / (y + CAM.D);
-  return [128 + (x - cam) * s, CAM.HY + (CAM.H - z) * s, s];
+// The eased state the page keeps between frames: {id, x, yaw, F} -> the projection's numbers.
+export function camOf(c) {
+  const P = CAMS[c.id] || CAMS.broadcast, cp = Math.cos(P.pitch), sp = Math.sin(P.pitch), cyw = Math.cos(c.yaw), syw = Math.sin(c.yaw);
+  return { px: c.x, py: P.py, pz: P.pz, F: c.F, cx: 128, cy: P.cy, f: [syw * cp, cyw * cp, -sp], r: [cyw, -syw, 0], u: [syw * sp, cyw * sp, cp] };
 }
-// The camera: follows the ball along the court, eased; never past the point where the far
-// baseline leaves the picture.
+export function proj(x, y, z, k) {
+  const vx = x - k.px, vy = y - k.py, vz = z - k.pz;
+  const d = Math.max(0.3, vx * k.f[0] + vy * k.f[1] + vz * k.f[2]), X = vx * k.r[0] + vy * k.r[1], Y = vx * k.u[0] + vy * k.u[1] + vz * k.u[2];
+  const s = k.F / d;
+  return [k.cx + X * s, k.cy - Y * s, s];
+}
+// The camera follows the ball (DRIVE: the man with it), eased; the 2K cams turn toward it from
+// their seat and push in a little when the ball is in a half court.
 export const CAM_LIMIT = 8.2;
-export function camFollow(cam, st) {
-  const b = st.ball, want = Math.max(-CAM_LIMIT, Math.min(CAM_LIMIT, b.x * 0.85));
-  return cam + (want - cam) * 0.08;
+export function camStart(id) { const P = CAMS[id] || CAMS.broadcast; return { id: CAMS[id] ? id : "broadcast", x: 0, yaw: 0, F: P.F }; }
+export function camFollow(c, st) {
+  const P = CAMS[c.id] || CAMS.broadcast, b = st.ball;
+  let bx = b.x;
+  if (P.handler && b.st === "held" && b.own >= 0) { const Hh = st.p[b.own]; bx = Hh.x + dirOf(Hh.t) * 2.5; }
+  const wantX = Math.max(-P.limit, Math.min(P.limit, bx * P.follow));
+  const ax = bx - wantX, ay = (P.handler ? (b.y || C.cy) : C.cy) - P.py;
+  const wantYaw = Math.atan2(ax, ay) * P.yawK;
+  const wantF = P.F + P.zoom * Math.min(1, Math.max(0, (Math.abs(bx) - 4) / 7));
+  return { id: c.id, x: c.x + (wantX - c.x) * 0.07, yaw: c.yaw + (wantYaw - c.yaw) * 0.07, F: c.F + (wantF - c.F) * 0.05 };
 }
 
 const PAL = {
@@ -116,19 +142,20 @@ const BOARDS = ["HVI", "THE COURTS", "PICKUP PERMITTED", "APPLAUSE IS MONITORED"
 function drawStands(ctx, cam, fx, reduced) {
   const rows = seats(), mood = fx?.mood || "idle", t = fx?.t || 0;
   for (let i = rows.length - 1; i >= 0; i--) {
-    const R = rows[i], [, sy, s] = proj(0, R.y, R.z, cam), [, ny] = proj(0, R.y - ROW_DY, R.z - ROW_DZ, cam);
-    if (sy < -6) continue;
-    const L = proj(-STAND_X - 2, R.y, R.z, cam)[0], Rr = proj(STAND_X + 2, R.y, R.z, cam)[0];
-    box(ctx, L, sy, Rr, ny + 1, R.r % 2 ? PAL.riser : PAL.riserHi);
+    const R = rows[i], [, sy, s] = proj(cam.px, R.y, R.z, cam);
+    if (sy < -10) continue;
+    const X0 = cam.px - 30, X1 = cam.px + 30;
+    poly(ctx, [proj(X0, R.y, R.z, cam), proj(X1, R.y, R.z, cam), proj(X1, R.y - ROW_DY, R.z - ROW_DZ, cam), proj(X0, R.y - ROW_DY, R.z - ROW_DZ, cam)], R.r % 2 ? PAL.riser : PAL.riserHi);
     const bw = Math.max(1, Math.round(0.42 * s)), bh = Math.max(1, Math.round(0.36 * s)), hw = Math.max(1, Math.round(0.26 * s));
     for (const p of R.seats) {
-      const px = 128 + (p.x - cam) * s;
+      if (p.x < X0 || p.x > X1) continue;
+      const [px, py] = proj(p.x, R.y, R.z, cam);
       if (px < -4 || px > W + 4) continue;
       let up = 0;
       const beat = reduced ? 0 : ((t + p.ph * 3) >> 3) & 1;
       if (mood === "cheer" && p.keen > 0) up = 1 + beat;
       else if (mood === "stand" && p.keen > 1) up = 1;
-      const x0 = Math.round(px - bw / 2), y0 = Math.round(sy - bh - up);
+      const x0 = Math.round(px - bw / 2), y0 = Math.round(py - bh - up);
       ctx.fillStyle = p.shirt; ctx.fillRect(x0, y0, bw, bh);
       ctx.fillStyle = p.skin; ctx.fillRect(Math.round(px - hw / 2), y0 - hw, hw, hw);
       if (mood === "groan" && p.keen > 1) { ctx.fillStyle = "#0a0f0a"; ctx.fillRect(Math.round(px - hw / 2), y0 - hw, hw, 1); }   // heads down
@@ -136,21 +163,20 @@ function drawStands(ctx, cam, fx, reduced) {
     }
   }
   // the front of the stand: the boards along the far apron
-  const by = C.w + 1.9, [, top] = proj(0, by, 0.85, cam), [, bot] = proj(0, by, 0, cam);
+  const by = C.w + 1.9;
   let x = -27;
   BOARDS.forEach((msg, i) => {
-    const wM = Math.max(3.2, msg.length * 0.55 + 1.2), a = proj(x, by, 0, cam)[0], b = proj(x + wM, by, 0, cam)[0];
+    const wM = Math.max(3.2, msg.length * 0.55 + 1.2), a = proj(x, by, 0, cam), b = proj(x + wM, by, 0, cam), at = proj(x, by, 0.85, cam), bt = proj(x + wM, by, 0.85, cam);
     const alt = i % 2 === 0;
-    box(ctx, a, top, b - 1, bot, alt ? PAL.board : PAL.boardAlt);
-    text(ctx, msg, (a + b) / 2 - textW(msg) / 2, (top + bot) / 2 - 2, alt ? PAL.eye : PAL.boardInk);
+    poly(ctx, [at, bt, b, a], alt ? PAL.board : PAL.boardAlt);
+    text(ctx, msg, (a[0] + b[0]) / 2 - textW(msg) / 2, (at[1] + a[1] + bt[1] + b[1]) / 4 - 2, alt ? PAL.eye : PAL.boardInk);
     x += wM + 0.3;
   });
 }
 
 // ---- the floor -----------------------------------------------------------------------------------
 function drawFloor(ctx, cam, paint) {
-  const [, horizonCut] = proj(0, C.w + 1.9, 0, cam);
-  box(ctx, 0, horizonCut, W, H, PAL.floorDk);
+  floorQuad(ctx, cam.px - 26, -6, cam.px + 26, C.w + 1.9, cam, PAL.floorDk);
   floorQuad(ctx, -C.hx - 2.2, -3, C.hx + 2.2, C.w + 1.9, cam, PAL.apron);
   // the boards of the court: planks across the depth, a little grain
   for (let y = 0, k = 0; y < C.w; y += 0.6, k++) floorQuad(ctx, -C.hx, y, C.hx, Math.min(C.w, y + 0.6), cam, k % 2 ? PAL.wood : PAL.woodB);
@@ -219,13 +245,19 @@ function drawRim(ctx, d, cam, half, bend) {
 // ---- the players --------------------------------------------------------------------------------------
 // look: {jersey, trim, skin, hair, head (canvas | null), num}
 function drawPlayer(ctx, P, look, st, cam, frame, ctl) {
-  const [gx, gy, s] = proj(P.x, P.y, 0, cam), hk = P.h / 2, k = s * hk;
+  const [gx, gy, s] = proj(P.x, P.y, 0, cam), sv = gy - proj(P.x, P.y, 1, cam)[1], hk = P.h / 2, k = s * hk, kv = sv * hk;
   if (gx < -30 || gx > W + 30) return;
-  const by = gy - P.z * s;
+  const by = gy - P.z * sv;
   // the shadow stays on the floor
   rect(ctx, gx - 0.32 * s, gy - Math.max(1, 0.06 * s), 0.64 * s, Math.max(1, 0.12 * s), PAL.shadow);
   if (ctl) { const w = Math.round(0.9 * s); line(ctx, gx - w / 2, gy + 1, gx + w / 2, gy + 1, PAL.mark); }
-  const R = (xm, zm, wm, hm, c) => box(ctx, gx + xm * k, by - (zm + hm) * k, gx + (xm + wm) * k, by - zm * k, c);
+  // a man down (his ankles gone): flat on the floor for a moment
+  if (P.stumble > 45) {
+    box(ctx, gx - 0.9 * k, gy - 0.28 * kv, gx + 0.9 * k, gy, look.jersey); box(ctx, gx + 0.6 * k * P.face, gy - 0.3 * kv, gx + 0.95 * k * P.face, gy - 0.02 * kv, look.skin);
+    return;
+  }
+  const lean = P.stumble > 0 ? ((frame >> 2) & 1 ? 0.12 : -0.12) : 0;
+  const R = (xm, zm, wm, hm, c) => box(ctx, gx + (xm + lean * zm) * k, by - (zm + hm) * kv, gx + (xm + wm + lean * zm) * k, by - zm * kv, c);
   const step = P.mv && P.z === 0 ? ((frame >> 3) & 1) : 0, sk = look.skin;
   // shoes, legs, shorts
   R(-0.22, 0, 0.19, 0.1, PAL.shoe); R(0.03, 0, 0.19, 0.1, PAL.shoe);
@@ -233,10 +265,10 @@ function drawPlayer(ctx, P, look, st, cam, frame, ctl) {
   R(-0.24, 0.66, 0.48, 0.42, look.jersey); R(-0.24, 0.66, 0.05, 0.42, look.trim); R(0.19, 0.66, 0.05, 0.42, look.trim);
   // the vest
   R(-0.22, 1.06, 0.44, 0.5, look.jersey); R(-0.22, 1.5, 0.44, 0.05, look.trim);
-  if (k >= 14) { const n = String(look.num); text(ctx, n, gx - textW(n) / 2, by - 1.42 * k, look.trim); }
+  if (k >= 14) { const n = String(look.num); text(ctx, n, gx - textW(n) / 2, by - 1.42 * kv, look.trim); }
   // arms: up for a shot, a block or a dunk; one down to the ball on the dribble
   const a = P.act?.kind, b = st.ball, has = b.st === "held" && b.own === P.g;
-  const up = a === "jump" || a === "hop" || (a === "follow" && P.act.f < 16) || a === "dunk";
+  const up = a === "jump" || a === "hop" || (a === "follow" && P.act.f < 16) || a === "dunk" || a === "ftshot" || (P.hands > 0 && !has && st.poss !== P.t);
   if (up) {
     const f = P.face;
     R(-0.3, 1.3, 0.1, 0.62, sk); R(0.2, 1.3, 0.1, 0.62, sk);
@@ -247,7 +279,7 @@ function drawPlayer(ctx, P, look, st, cam, frame, ctl) {
     R(f > 0 ? 0.2 : -0.3, 1.08, 0.12, 0.38, sk); R(f > 0 ? 0.26 : -0.38, 0.98, 0.12, 0.14, sk);
   } else { R(-0.3, 0.9, 0.09, 0.58, sk); R(0.21, 0.9, 0.09, 0.58, sk); }
   // the head: the file photo's face, scaled to 0.5 m
-  const hh = Math.max(3, Math.round(0.5 * k)), top = Math.round(by - 1.55 * k) - hh + 1;
+  const hh = Math.max(3, Math.round(0.5 * kv)), top = Math.round(by - 1.55 * kv) - hh + 1;
   if (look.head) {
     const hd = hh < look.head.height ? shrinkHead(look.head, hh) : look.head, hw = Math.max(2, Math.round((hd.width * hh) / hd.height));
     ctx.drawImage(hd, Math.round(gx - hw / 2), top, hw, hh);
@@ -273,30 +305,35 @@ function drawBall(ctx, st, cam, frame) {
   if (bs >= 4) { ctx.clearRect(x0, y0, 1, 1); rect(ctx, x0, y0, 1, 1, PAL.ballDk); rect(ctx, x0 + bs - 1, y0 + bs - 1, 1, 1, PAL.ballDk); rect(ctx, x0 + (bs >> 1), y0, 1, bs, PAL.ballDk); }
 }
 
-// The shot meter: beside the human's shooter, from the gather to the landing, the band at the top
-// of the jump lit. After the release, a word for the timing.
-function drawMeter(ctx, st, cam, assist) {
+// The shot meter (and the free-throw meter): beside the human's shooter, filling from the gather,
+// the green band at the top lit at its width for this shooter and shot. After the release: the
+// grade (GREEN, SLIGHTLY EARLY, LATE ...) and how open it was.
+function drawMeter(ctx, st, cam) {
   const P = st.p[st.ctl];
   if (!P || st.cfg.auto) return;
-  const [gx, gy, s] = proj(P.x, P.y, 0, cam), x = Math.round(gx + 0.55 * s + 3), hgt = 24, y0 = Math.round(gy - 2.4 * s);
-  if (P.act?.kind === "jump") {
-    const LAND = 2 * TOP, win = assist ? 5 : 3, yy = (f) => y0 + hgt - Math.round((Math.min(LAND, f) / LAND) * hgt);
+  const [gx, gy, s] = proj(P.x, P.y, 0, cam), x = Math.round(gx + 0.55 * s + 3), hgt = 26, y0 = Math.round(gy - 2.4 * s);
+  const a = P.act, ft = a?.kind === "ftshot";
+  if (a?.kind === "jump" || ft) {
+    const top = ft ? FT_TOP : TOP, full = 2 * top, r = Math.hypot(dirOf(P.t) * C.rimX - P.x, C.cy - P.y);
+    const win = greenOf(P, ft ? "ft" : kindAt(r, a.post), st.cfg.assist), yy = (f) => y0 + hgt - Math.round((Math.min(full, Math.max(0, f)) / full) * hgt);
     rect(ctx, x - 1, y0 - 1, 6, hgt + 2, PAL.outline);
     rect(ctx, x, y0, 4, hgt, "#22382a");
-    rect(ctx, x, yy(TOP + win), 4, yy(TOP - win) - yy(TOP + win) + 1, PAL.eye);
-    rect(ctx, x, yy(P.act.f), 4, y0 + hgt - yy(P.act.f), P.act.f > TOP + win ? "#e05050" : "#e0c040");
-    rect(ctx, x - 2, yy(P.act.f), 8, 1, "#ffffff");
+    rect(ctx, x, yy(top + win), 4, yy(top - win) - yy(top + win) + 1, PAL.eye);
+    rect(ctx, x, yy(a.f), 4, y0 + hgt - yy(a.f), a.f > top + win ? "#e05050" : "#e0c040");
+    rect(ctx, x - 2, yy(a.f), 8, 1, "#ffffff");
   }
   const L = st.lastRel;
-  if (L && L.g === P.g && st.frame - L.frame < 50) {
-    const w = L.q >= 0.999 ? "PERFECT" : L.f < TOP ? "EARLY" : "LATE";
-    textOutlined(ctx, w, Math.max(1, Math.min(W - textW(w) - 1, gx - textW(w) / 2)), Math.max(2, gy - 2.6 * s - 10), L.q >= 0.999 ? PAL.eye : "#ffd040");
+  if (L && L.g === P.g && st.frame - L.frame < 70) {
+    const green = L.grade === "GREEN", y = Math.max(2, gy - 2.6 * s - 16);
+    textOutlined(ctx, L.grade, Math.max(1, Math.min(W - textW(L.grade) - 1, gx - textW(L.grade) / 2)), y, green ? PAL.eye : /VERY/.test(L.grade) ? "#ff6050" : "#ffd040");
+    if (L.word) textOutlined(ctx, L.word, Math.max(1, Math.min(W - textW(L.word) - 1, gx - textW(L.word) / 2)), y + 7, L.c < 0.28 ? "#ffffff" : L.c < 0.66 ? "#ffd040" : "#ff6050");
   }
 }
 
 // The frame. looks: [10] per player. fx: {mood, t, dunk: {side, age} | null, shake}. reduced: no
 // shake, no sparks, a still crowd.
-export function draw(ctx, st, looks, cam, frame, fx = {}, reduced = false) {
+export function draw(ctx, st, looks, camState, frame, fx = {}, reduced = false) {
+  const cam = camOf(camState);
   ctx.imageSmoothingEnabled = false;
   ctx.save();
   if (!reduced && fx.shake > 0) ctx.translate(((fx.shake >> 1) & 1) ? 1 : -1, 0);
@@ -304,22 +341,24 @@ export function draw(ctx, st, looks, cam, frame, fx = {}, reduced = false) {
   drawStands(ctx, cam, fx, reduced);
   drawFloor(ctx, cam, fx.paint || "#1f4a2c");
   const items = [];
+  // painter's order: farthest from the camera first (s, the scale, grows as things come nearer)
+  const depth = (x, y) => proj(x, y, 0, cam)[2];
   for (const d of [-1, 1]) {
     const bend = fx.dunk && fx.dunk.side === d && fx.dunk.age < 18 ? (fx.dunk.age < 9 ? 0.12 : 0.06) : 0;
-    items.push({ y: C.cy + 1.2, f: () => drawStanchion(ctx, d, cam, st) });
-    items.push({ y: C.cy + 0.2, f: () => drawRim(ctx, d, cam, "back", bend) });
-    items.push({ y: C.cy - 0.25, f: () => drawRim(ctx, d, cam, "front", bend) });
+    items.push({ s: depth(d * POLE_X, C.cy + 1.2), f: () => drawStanchion(ctx, d, cam, st) });
+    items.push({ s: depth(d * C.rimX, C.cy + 0.2), f: () => drawRim(ctx, d, cam, "back", bend) });
+    items.push({ s: depth(d * C.rimX, C.cy - 0.25), f: () => drawRim(ctx, d, cam, "front", bend) });
   }
-  for (const P of st.p) items.push({ y: P.y, f: () => drawPlayer(ctx, P, looks[P.g], st, cam, frame, !st.cfg.auto && P.t === 0 && P.i === st.ctl && st.phase !== "over") });
+  for (const P of st.p) items.push({ s: depth(P.x, P.y), f: () => drawPlayer(ctx, P, looks[P.g], st, cam, frame, !st.cfg.auto && P.t === 0 && P.i === st.ctl && st.phase !== "over") });
   const b = st.ball;
-  items.push({ y: b.st === "held" ? st.p[b.own].y - 0.05 : b.y, f: () => drawBall(ctx, st, cam, frame) });
-  items.sort((a, c) => c.y - a.y);
+  items.push({ s: b.st === "held" ? depth(st.p[b.own].x, st.p[b.own].y - 0.05) : depth(b.x, b.y), f: () => drawBall(ctx, st, cam, frame) });
+  items.sort((a, c) => a.s - c.s);
   for (const it of items) it.f();
   if (fx.dunk && !reduced && fx.dunk.age < 24) {
     const r = proj(fx.dunk.side * C.rimX, C.cy, C.rimZ, cam), n = fx.dunk.age;
     for (let i = 0; i < 8; i++) { const dx = [1, 0.7, 0, -0.7, -1, -0.7, 0, 0.7][i], dy = [0, 0.7, 1, 0.7, 0, -0.7, -1, -0.7][i], rr = 4 + n * 0.9; rect(ctx, r[0] + dx * rr, r[1] + dy * rr, 1, 1, n % 4 < 2 ? PAL.mark : "#ffffff"); }
   }
-  drawMeter(ctx, st, cam, st.cfg.assist);
+  drawMeter(ctx, st, cam);
   ctx.restore();
 }
 

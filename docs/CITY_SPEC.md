@@ -2458,25 +2458,64 @@ or any score.
   Options behind "+": your team, the opponent (starts at once), length, shot clock.
 - **Why five a side**: the league drafts fives, so every rostered player appears; 10 sprites at 256 x
   240 cost nothing on a phone, and Tecmo-style control means you only ever steer one of them.
-- **The game** (`sim.js`, pure: 60 Hz fixed step, seeded mulberry32, only + - * / sqrt): NBA lines in
+- **The game** (`sim.js`, pure: 60 Hz fixed step, seeded mulberry32, only + - * / sqrt; **SIM VERSION 2**,
+  2026-10-05, the 2K-style game; v1 frozen in `v1/sim.js`, `replay.js` routes a record by version, and
+  `scripts/fixtures/hoops-v1-records.json` holds three v1 games that must keep replaying): NBA lines in
   metres, rims 3.05 m. FOUR 2-MINUTE QUARTERS (the clock runs only while the ball is live; level after
-  four means one-minute overtimes; the tip to the side that lost it opens Q2 and Q3) or FIRST TO 21; a
-  24- or 14-second shot clock (reset on a change of possession or the rim). Two inside the arc, three
-  outside it or past 6.71 m in a corner; a shot clock violation or stepping over a line with the ball
-  turns it over; a loose ball out goes to the side that did not touch it last. No fouls or free
-  throws yet. You attack right all game (ends do not change).
-- **Control** (Tecmo): you steer the ball carrier on offence, on defence the defender nearest the
-  ball when it changed hands; C switches to the teammate nearest the ball. A held = the jump shot:
-  let go at the top of the jump (a meter beside the shooter lights the window; PERFECT / EARLY / LATE
-  after); near the rim a layup, a dunk for anyone rated 75+ (a leap to the rim, the rim bends, sparks,
-  a two-pixel shake). B passes toward the d-pad (the nearest teammate with none). On defence A jumps
-  (blocks, rebounds) and B reaches (about one in eight, more with a good defender; a missed reach
-  leaves you off balance). Makes are decided at the release from distance, the shooter's rating, the
-  timing and the nearest defender. CPU players (both sides) play from their league rating: speed,
-  touch, defence, hands, leap; man-to-man marking, a defender squared up slows a drive, the carrier
-  drives, pulls up, kicks out to the open man or beats the shot clock. **EASY MODE** (on for a first
-  visit, remembered in `hvi-hoops-easy`): a wider shot window, a little help on makes and steals,
-  softer CPU hands, and your man guards when you let go of the pad.
+  four means one-minute overtimes) or FIRST TO 21; a 24- or 14-second shot clock. Two inside the arc,
+  three outside it or past 6.71 m in a corner; shot clock, out of bounds and charges turn it over.
+- **Ratings**: the league's one rating is spread over skills (three, mid, close, dunk, handle,
+  perimeter and interior D, block, steal, FT, pass) by archetype (guard, wing, slasher, big: cfg row
+  [3] when known, else the key's hash) plus a fixed jitter; speed, height and leap follow. A dunker has
+  a dunk rating of 75+.
+- **Shooting (2K-style)**: decided at the release from the rating for that shot (layup, floater, hook,
+  mid, three), distance, the contest (nearest defenders' distance, whether they are between shooter and
+  rim, height, hands up or in the air, their D), the release grade (frames from the top of the jump:
+  GREEN inside a band 2-4 frames either side, wider for better shooters and +2 in easy mode; then
+  SLIGHTLY EARLY/LATE, EARLY/LATE, VERY EARLY/LATE), fatigue, catch-and-shoot / off a move / stepback /
+  fade / on the move, a hot hand (three straight makes). The grade and WIDE OPEN / OPEN / LIGHTLY
+  CONTESTED / CONTESTED / HEAVILY CONTESTED / SMOTHERED show over the shooter. Calibrated CPU v CPU over
+  120 games of NBA-like fives (check-hoops): FG 47.5%, 3P 37.7%, rim 64.7%, FT 76%, 3PA 42% of shots;
+  an open GREEN three by a 90 ~91%, a heavily contested LATE mid-range ~14%. Dunks need a dunk rating
+  and a lane (or RT, going up strong): the rim protector blocks, strips or fouls (contested ~70%, open
+  ~99%).
+- **Fouls and free throws**: shooting fouls (and-ones: one shot; else two or three; a missed fouled shot
+  is no attempt), reach-ins on steal attempts (from behind more), blocking v charging (a defender set
+  12+ frames, or in a B charge stance, outside the restricted arc draws the charge; one still sliding
+  is a block), loose-ball fouls. Team fouls per period, the bonus after two (FIRST TO 21: four), a
+  side-out with at least 14 on the shot clock otherwise; personal fouls, out at three (six over 48
+  minutes, scaled, three at least) and A STAND-IN (rated 40) takes the place. Charges are personal,
+  not team fouls. At the line: the lane lined up, the crowd hushed, the free-throw meter (hold X, let
+  go at the top); ten seconds without a shot is a violation; a make on the last gives the ball away, a
+  miss is live.
+- **Off the ball**: five-out spacing, or four-out-one-in with a big on the block; backdoor cuts when a
+  man is left (more in easy mode); give and go; the pick and roll (LB, or the CPU now and then): the
+  screener sets on the side of the drive, a defender running into it is hung up unless the defence
+  switches it (by both men's perimeter D), then the roll (or pop for a shooter). Man-to-man by a
+  marking table; help from the man whose own man matters least when the ball beats its defender
+  inside 6 m, closeouts on the catch with a hand up, box-outs while a shot is up (an attacker sealed
+  behind barely gets through), transition sprints. The CPU handler drives or settles at the arc per
+  possession, catches and shoots when open, kicks out when helped, lobs to cutting dunkers, uses moves
+  and calls picks.
+- **Dribble moves**: a quick reversal of the left stick (held 3+ frames, reversed within 5) is a
+  crossover (sideways; behind the back at speed, between the legs sometimes) or a hesitation (along);
+  the pro stick (right stick, a gesture from push to release or 8 frames held): sideways crossover,
+  back-side between the legs, front-side behind the back, back a stepback (X in it: a stepback jumper),
+  toward the rim a drive burst, round a spin. The nearest defender may lose his ankles (handle v
+  perimeter D, the move, his lean; intense D resists; a fall shows him on the floor) and a handler who
+  overdoes it, or has no handle, loses the ball. RT sprints and drains stamina; standing restores it.
+- **Control** (2K conventions): see the legend; EASY MODE (on for a first visit, `hvi-hoops-easy`): a
+  wider green band, smarter teammates (more cuts), a little help on makes and steals, softer CPU hands,
+  your man guards when you let go.
+- **Cameras** (`render.js` CAMS, one true perspective camera for all, remembered in `hvi-hoops-cam`,
+  chosen under "+", V / View in a game, or the pause menu): **2K BROADCAST** (default: the side, 9 m up,
+  13 m off the sideline, tipped down, turning and pushing in with the ball), **2K STEADY** (higher,
+  turns less), **DRIVE** (low and close, tracking the man with the ball), **CLASSIC** (the original
+  level one-point seat). Players, ball and rims scale with depth; the painter's order is by depth.
+- **Menus**: pause and the end of a game use the shared `src/play/GameMenu.jsx` (PLAY AGAIN, NEW
+  OPPONENT, CHANGE SETTINGS, WATCH THE TAPE, BACK TO PLAY, BACK TO THE CITY; pause: RESUME, RESTART,
+  CAMERA, CONTROLS, SOUND, LEAVE THE COURT); the sim and the input log freeze while paused. The board
+  shows team fouls and BONUS; the box line FG, 3PT, FT, fouls, turnovers.
 - **The picture** (`render.js`): a true one-point perspective from high in the near stand (camera
   level along +y, horizon just above the frame): verticals stay vertical, lines across the court stay
   horizontal, depth lines run to one vanishing point; width, height and jumps share one scale per
@@ -2496,23 +2535,34 @@ or any score.
   threes and blocks; groan on airballs, shot-clock violations, rim-outs). Sound (`audio.js`): blips and
   a noise-band crowd; it uses the shared `src/play/crowdAudio.js` when that is in the build
   (`import.meta.glob`, so its absence costs nothing). Mute in `hvi-hoops-muted`.
-- **Input** (`input.js`): keys (arrows / WASD, Z J or Space = A, X or K = B, C or L = C, Enter / Esc
-  pause), a pad via `city/gamepad.js` (A, B, a bumper or the left face button = C, Start), touch on
-  coarse pointers (an eight-way pad; SWITCH, PASS/STEAL, SHOOT/JUMP labelled for the side you are on;
-  START). The legend under the court names the buttons in the hands in use (`hvi-hoops-legend`).
-  Reduced motion: no shake, no sparks, a still crowd.
+- **Input** (`input.js`): a virtual pad (BTN: UP 1, DOWN 2, LEFT 4, RIGHT 8, X 16, A 32, Y 64, B 128,
+  RT 256, LT 512, LB 1024, RS up/down/left/right 2048/4096/8192/16384, SPIN 32768). Pad by position
+  (west X shoot / steal, south A pass / switch, north Y lob / block, east B bounce / charge, RT sprint, LT
+  post up / intense D, LB pick, right stick moves, View camera, Start pause). Keys: arrows / WASD, Z J
+  Space = X, X K = A, C I = Y, F U = B, Shift = RT, E O = LT, R P = LB, Q + a direction = a move, Q
+  alone = spin, V camera, Enter / Esc pause. Touch: the round pad, five buttons labelled for the side
+  you are on (SHOOT/STEAL, PASS/SWITCH, LOB/BLOCK, SPRINT, PICK/CHARGE), START, and swipes on the court
+  (a direction = a move, a circle = a spin). Crowd: boos (made in `audio.js`; the shared crowd has
+  none) when a foul goes against the home side, a roar for an and-one or broken ankles, the hush at the
+  line (`crowdAudio.js` "quiet").
 - **The record**: `{version, seed, cfg (format, shot clock, easy, both fives), home, away, inputLog,
-  result}`, the human's input one bitmask a frame (UP 1, DOWN 2, LEFT 4, RIGHT 8, A 16, B 32, C 64),
-  run-length encoded. At the buzzer the browser replays it and says whether it reproduced; the last
+  result}`, the human's input one bitmask a frame (v2: the virtual pad above; v1: UP 1, DOWN 2, LEFT 4,
+  RIGHT 8, A 16, B 32, C 64), run-length encoded. At the buzzer the browser replays it and says whether it reproduced; the last
   five are kept in `localStorage["hvi-hoops-exhibitions"]`. WATCH THE TAPE plays the game back from
   the log at 2x (or straight to the end).
-- **Check**: `scripts/check-hoops.mjs` (purity; the arc and the corners; forced makes for 2 and 3;
-  a miss; shot clock and out-of-bounds turnovers; FIRST TO 21 and four quarters end properly; a bot's
-  game replayed twice to the same result, another seed differs, a doctored log fails, a wrong version
-  is refused; a strong five beats a weak one 11+ of 12; dunks only by 75+; team names and the copied
-  clock equal the league's and the city's; the calls quote nobody).
-- **Not yet**: fouls and free throws, backcourt and three-second rules, changing ends, a server
-  replay check, counting results anywhere.
+- **Check**: `scripts/check-hoops.mjs` (purity; the arc and corners; forced makes; shot clock, out of
+  bounds; FIRST TO 21 and quarters; a bot's v2 game replayed twice, another seed differs, a doctored log
+  fails; every v1 fixture game replays on v1; calibration bands over 120 CPU games (FG 44-49.5%, 3P
+  33-39.5%, rim 58-72%, FT 70-84%, threes over a quarter of shots, sane foul rate); open GREEN three
+  75-95%, contested LATE 20% or less, an EARLY release well under green; contested dunks not automatic
+  (blocks and fouls happen), open ones 90%+, no lane or no dunk rating = a layup; shooting fouls to the
+  line with and-ones; reach-ins (side-out with 14, or two in the bonus); charges on a set man; foul-out
+  and the stand-in; free throws (green 85%+, the ten-second violation, make/miss on the last); every
+  dribble move trigger, ankles some of the time, a poor handler overdoing it loses the ball; sprint
+  tires; a strong five beats a weak one 11+ of 12; dunks only by dunkers; rosters and calls).
+- **Not yet**: timeouts, substitutions and benches (a five plays the whole game), icon passing, mouse
+  play, backcourt and three-second rules, goaltending, changing ends, dunk replays, a server replay
+  check, counting results anywhere.
 
 ### Fishing: THE WATERS (`#fish`, 2026-10-05)
 

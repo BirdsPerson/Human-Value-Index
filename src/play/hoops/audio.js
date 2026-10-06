@@ -30,9 +30,25 @@ function blip(freq, dur, type = "square", vol = 0.05, slide = 0, at = 0) {
 }
 // The crowd's answer. mood: calls.js crowdFor ("cheer" | "stand" | "groan"); k: the event; buzzer:
 // the ball was in the air at the buzzer.
-const KIND = { dunk: "roar", three: "cheer", block: "cheer", two: "polite", steal: "thin", intercept: "thin", rimout: "ooh", airball: "groan", shotclock: "groan" };
+const KIND = { dunk: "roar", three: "cheer", block: "cheer", two: "polite", steal: "thin", intercept: "thin", rimout: "ooh", airball: "groan", shotclock: "groan", ankles: "roar", alleyoop: "roar", ftmade: "polite", ftmiss: "aww" };
+// A boo: low voices on an "oo", sliding down (the shared crowd has none; made here, cheaply).
+function boo() {
+  const a = ctx();
+  if (!a || a.state !== "running") return;
+  const t = a.currentTime, f = a.createBiquadFilter(), g = a.createGain();
+  f.type = "lowpass"; f.frequency.value = 420;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05, t + 0.25); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+  f.connect(g).connect(a.destination);
+  for (let i = 0; i < 9; i++) {
+    const o = a.createOscillator(), f0 = 105 + i * 13;
+    o.type = "sawtooth"; o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * 0.82, t + 1.4);
+    o.connect(f); o.start(t + i * 0.02); o.stop(t + 1.55);
+  }
+}
 export function crowd(mood, muted, k = null, buzzer = false) {
   if (muted || !mood) return;
+  if (mood === "boo") { CROWD.play("quiet"); boo(); return; }
+  if (mood === "hush") { CROWD.play("quiet"); return; }
   const kind = buzzer && (k === "two" || k === "three" || k === "dunk") ? "roar" : KIND[k] || { cheer: "cheer", stand: "polite", groan: "groan" }[mood];
   if (kind) CROWD.play(kind);
 }
@@ -50,7 +66,10 @@ export function play(ev, muted) {
     else if (e === "block" || e === "steal" || e === "intercept") blip(880, 0.06, "square", 0.05, -400);
     else if (e === "buzzer") blip(110, 0.6, "sawtooth", 0.06);
     else if (e === "shotclock") blip(130, 0.45, "sawtooth", 0.05);
-    else if (e === "toss" || e === "inbound") blip(1800, 0.05, "square", 0.025);   // the whistle
+    else if (e === "toss" || e === "inbound" || e === "shootfoul" || e === "reachfoul" || e === "blockfoul" || e === "charge" || e === "loosefoul") blip(1800, 0.05, "square", 0.025);   // the whistle
+    else if (e === "andone") CROWD.play("roar");
+    else if (e === "ftset") CROWD.play("quiet");   // the hush at the line
+    else if (e === "ftmade") blip(1200, 0.07, "triangle", 0.03, -400);
     else if (e === "two" || e === "three" || e === "dunk") { blip(660, 0.07, "square", 0.04); blip(990, 0.1, "square", 0.04, 0, 0.08); }
     else if (e === "over") [523, 659, 784, 1047].forEach((f, i) => blip(f, 0.12, "square", 0.05, 0, 0.12 * i + 0.2));
   }

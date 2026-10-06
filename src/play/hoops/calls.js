@@ -20,6 +20,17 @@ const L = {
   period: ["END OF THE QUARTER. THE CLOCK RESTS. THE DEPARTMENT DOES NOT."],
   overtime: ["LEVEL AT THE BUZZER. OVERTIME HAS BEEN SCHEDULED."],
   final: ["THE BUZZER. THE RESULT IS FINAL AND COUNTS FOR NOTHING."],
+  shootfoul: ["FOUL ON {N}. THE SHOOTER WAS TOUCHED. TOUCHING IS REGULATED.", "SHOOTING FOUL, {N}. THE LINE HAS BEEN BOOKED."],
+  reachfoul: ["REACH-IN BY {N}. THE HAND WENT WHERE IT WAS NOT INVITED.", "FOUL, {N}. REACHING IS A FORM OF WANTING."],
+  blockfoul: ["BLOCKING FOUL ON {N}. THE FEET WERE STILL MOVING. THE FEET ARE ON FILE."],
+  charge: ["CHARGE. {N} RAN THROUGH A SET MAN. THE MAN WAS SET BY THE DEPARTMENT.", "OFFENSIVE FOUL, {N}. POSSESSION IS REVOKED."],
+  loosefoul: ["LOOSE-BALL FOUL ON {N}. THE FLOOR WAS CONTESTED IMPROPERLY."],
+  standin: ["{N} IS ON THE FLOOR. A STAND-IN HAS BEEN ISSUED FOR THE FOULED-OUT."],
+  ftviolation: ["TEN SECONDS AT THE LINE. NO SHOT. HESITATION HAS BEEN LOGGED."],
+  ankles: ["{N} IS ON THE FLOOR. THE ANKLES HAVE BEEN REASSIGNED.", "{N} WENT THE WRONG WAY. THE CROWD NOTICED. SO DID WE."],
+  lostball: ["{N} LOSES THE HANDLE. THE BALL HAS LEFT THE ARRANGEMENT."],
+  strip: ["STRIPPED BY {N} AT THE RIM. THE DUNK IS DENIED A HEARING."],
+  alleyoop: ["ALLEY-OOP TO {N}. THE AIR SPACE WAS CLEARED IN ADVANCE."],
 };
 const KEYS = new Set(Object.keys(L));
 export const CALLED = KEYS;
@@ -32,9 +43,13 @@ export function callFor(note, names, teams, pick = 0) {
   const T = note.k === "oob" || note.k === "shotclock" ? teams[1 - (note.team >= 0 ? note.team : 0)] || "THE OTHER SIDE" : teams[note.team >= 0 ? note.team : 0] || "";
   return line.replaceAll("{N}", N).replaceAll("{T}", T);
 }
-// The crowd's answer to an event: cheer, groan, or nothing.
-export function crowdFor(k) {
-  if (k === "dunk" || k === "three" || k === "block") return "cheer";
+const FOULS = new Set(["shootfoul", "reachfoul", "blockfoul", "charge", "loosefoul"]);
+// The crowd's answer to an event: cheer, groan, boo (a call against the home side: team is the
+// fouler's), hush (a free throw), or nothing.
+export function crowdFor(k, team = -1) {
+  if (FOULS.has(k)) return team === 0 ? "boo" : "stand";
+  if (k === "ftset") return "hush";
+  if (k === "dunk" || k === "three" || k === "block" || k === "ankles" || k === "alleyoop") return "cheer";
   if (k === "two" || k === "steal" || k === "intercept") return "stand";
   if (k === "airball" || k === "shotclock" || k === "rimout") return "groan";
   return null;
