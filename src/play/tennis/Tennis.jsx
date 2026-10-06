@@ -4,17 +4,18 @@ import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC, AVATAR_ENUMS, CLOTH } from "../../avatar.js";
 import { readPad, GLYPHS } from "../../city/gamepad.js";
-import { newMatch, step, rleEncode, resultOf, replay, serverOfMatch, VERSION, BTN } from "./sim.js";
+import { newMatch, step, rleEncode, resultOf, replay, serverOfMatch, VERSION, BTN, SURFACES } from "./sim.js";
 import { FORMATS } from "./score.js";
 import { OPPONENTS, OPP_BY_KEY, EASIEST, profileOf, spriteOf, pendingSpec, talkFor } from "./roster.js";
-import { draw, drawCutaway, headFrom, faceBox, speakerAt, W, H } from "./render.js";
+import { draw, drawCutaway, headFrom, faceBox, speakerAt, SURFACE_NAMES, W, H } from "./render.js";
+import { sheetHints } from "../heads.js";
 import { createShow } from "./show.js";
 import { createInput } from "./input.js";
 import * as SFX from "./audio.js";
 import CSS from "./tennis.css?inline";
 import "../pages.css";
 
-// #tennis[?vs=<key>][&fmt=short]: THE TENNIS CLUB, playable (docs/CITY_SPEC.md "PLAYABLE SPORTS",
+// #tennis[?vs=<key>][&fmt=short][&court=clay|grass]: THE TENNIS CLUB, playable (docs/CITY_SPEC.md "PLAYABLE SPORTS",
 // Tennis). Phase 1: exhibitions only. Nothing here reaches the ladder, the Cup, a league or a file:
 // the match is kept in this browser (its seed and its input log, enough to play it again) and
 // re-run once at the whistle to show it reproduces.
@@ -24,7 +25,13 @@ function injectStyles() {
   if (!el) { el = document.createElement("style"); el.id = "tn-styles"; document.head.appendChild(el); }
   if (el.textContent !== CSS) el.textContent = CSS;
 }
-const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); return { vs: q.get("vs"), fmt: q.get("fmt") === "short" ? "short" : "set" }; };
+const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); const c = q.get("court"); return { vs: q.get("vs"), fmt: q.get("fmt") === "short" ? "short" : "set", court: SURFACES[c] ? c : "hard" }; };
+// The three courts, in the picker's order: what each is called and how it plays.
+const COURTS = [
+  ["hard", "HARD", "MEDIUM PACE. THE BALL DOES WHAT YOU EXPECT."],
+  ["clay", "CLAY", "SLOW AND HIGH. SPIN BITES. EVERYONE SLIDES."],
+  ["grass", "GRASS", "FAST AND LOW. THE BALL SKIDS THROUGH."],
+];
 const KEEP = "hvi-tennis-exhibitions", KEEP_N = 5;
 export function loadRecords() { try { const j = JSON.parse(localStorage.getItem(KEEP) || "[]"); return Array.isArray(j) ? j : []; } catch { return []; } }
 function saveRecord(rec) { try { localStorage.setItem(KEEP, JSON.stringify([rec, ...loadRecords()].slice(0, KEEP_N))); } catch { /* a full or private store: the match stays in the tab */ } }
@@ -54,21 +61,22 @@ function Face({ spec, url, size = 1, pending = null }) {
 
 export default function Tennis({ route }) {
   useEffect(() => { injectStyles(); }, []);
-  const { vs, fmt: fmt0 } = useMemo(() => parseRoute(route), [route]);
+  const { vs, fmt: fmt0, court: court0 } = useMemo(() => parseRoute(route), [route]);
   const me = useMe();
   const [fmt, setFmt] = useState(fmt0);
+  const [court, setCourt] = useState(court0);
   const [opp, setOpp] = useState(() => (vs && OPP_BY_KEY.get(vs)) || null);
   const [match, setMatch] = useState(null);   // {seed, key: n}
   const [done, setDone] = useState(null);
   const start = (o, f) => { SFX.unlock(); if (f) setFmt(f); setOpp(o); setDone(null); setMatch({ seed: seedNow(), n: Date.now() }); };
   return (
     <div className="tn">
-      <ScreenHead title="THE TENNIS CLUB" meta="THE SHOW COURT // EXHIBITION // NOTHING IS AT STAKE. EVERYTHING IS RECORDED." />
+      <ScreenHead title="THE TENNIS CLUB" meta={`${SURFACE_NAMES[court]} // EXHIBITION // NOTHING IS AT STAKE. EVERYTHING IS RECORDED.`} />
       {match && opp && !done
-        ? <Match key={match.n} seed={match.seed} fmt={fmt} opp={opp} me={me} onDone={setDone} onQuit={() => setMatch(null)} />
+        ? <Match key={match.n} seed={match.seed} fmt={fmt} court={court} opp={opp} me={me} onDone={setDone} onQuit={() => setMatch(null)} />
         : done
           ? <Done done={done} me={me} onAgain={() => start(opp)} onPick={() => { setDone(null); setMatch(null); }} />
-          : <Picker fmt={fmt} setFmt={setFmt} pre={vs ? opp?.key || null : null} onPick={start} />}
+          : <Picker fmt={fmt} setFmt={setFmt} court={court} setCourt={setCourt} pre={vs ? opp?.key || null : null} onPick={start} />}
     </div>
   );
 }
@@ -78,7 +86,7 @@ function seedNow() {
 
 // ---- choosing ------------------------------------------------------------------------------------
 // One line, one button: PLAY NOW is a short match against the easiest member. The rest is folded.
-function Picker({ fmt, setFmt, pre, onPick }) {
+function Picker({ fmt, setFmt, court, setCourt, pre, onPick }) {
   const [sel, setSel] = useState(() => Math.max(0, OPPONENTS.findIndex(o => o.key === pre)));
   const [more, setMore] = useState(Boolean(pre));
   const refs = useRef([]), playRef = useRef(null);
@@ -105,11 +113,19 @@ function Picker({ fmt, setFmt, pre, onPick }) {
       <p className="pg-lede">TENNIS AGAINST THE COMPUTER. ARROW KEYS MOVE, Z SWINGS, Z TWICE SERVES. A CONTROLLER WORKS, AND PHONES GET A PAD ON SCREEN. SOUND IS OPTIONAL.</p>
       <div className="pg-start">
         <Button variant="primary" ref={playRef} onClick={quick}>PLAY NOW</Button>
-        <span className="pg-sub">FIRST TO 4 GAMES, AGAINST THE EASIEST MEMBER OF THE CLUB.</span>
+        <span className="pg-sub">FIRST TO 4 GAMES, AGAINST THE EASIEST MEMBER OF THE CLUB, ON {SURFACE_NAMES[court]}.</span>
       </div>
       <details className="pg-more" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
-        <summary>CHOOSE AN OPPONENT AND MATCH LENGTH ({OPPONENTS.length} ON COURT)</summary>
+        <summary>CHOOSE AN OPPONENT, THE COURT AND MATCH LENGTH ({OPPONENTS.length} ON COURT)</summary>
         <div className="pg-more-body">
+          <div className="tn-fmt" role="radiogroup" aria-label="Court surface">
+            {COURTS.map(([id, label, how]) => (
+              <button key={id} type="button" role="radio" aria-checked={court === id} className={`tn-chip${court === id ? " on" : ""}`} onClick={() => setCourt(id)} title={how}>
+                {label}: {SURFACE_NAMES[id]}
+              </button>
+            ))}
+          </div>
+          <p className="tn-small">{COURTS.find(c => c[0] === court)[2]}</p>
           <div className="tn-fmt" role="radiogroup" aria-label="Match length">
             {Object.values(FORMATS).map(f => (
               <button key={f.id} type="button" role="radio" aria-checked={fmt === f.id} className={`tn-chip${fmt === f.id ? " on" : ""}`} onClick={() => setFmt(f.id)}>
@@ -230,7 +246,7 @@ function pointsShown(sc, i) {
   return PT[Math.min(a, 3)];
 }
 
-function Match({ seed, fmt, opp, me, onDone, onQuit }) {
+function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
   const canvasRef = useRef(null), wrapRef = useRef(null), inputRef = useRef(null), showRef = useRef(null);
   const [hud, setHud] = useState(null);
   const [paused, setPaused] = useState(false);
@@ -266,7 +282,7 @@ function Match({ seed, fmt, opp, me, onDone, onQuit }) {
 
   useEffect(() => {
     const cpu = profileOf(opp.key);
-    const st = newMatch({ seed, fmt, cpu });
+    const st = newMatch({ seed, fmt, cpu, surface: court });
     const log = [];
     const input = createInput(); inputRef.current = input;
     // the broadcast: its own generator, reads the match, never writes it (show.js)
@@ -275,8 +291,18 @@ function Match({ seed, fmt, opp, me, onDone, onQuit }) {
     const looks = [lookOf({ spec: me.spec, kit: me.spec ? [CLOTH[me.spec.top_color], CLOTH[me.spec.bottom_color]] : ["#e6e6e6", "#3d3d3d"] }), lookOf({ spec: opp.spec, kit: opp.kit })];
     // heads: the file photos' faces, when they load
     const sheet = (spec, url) => (url ? loadSprite(url, { sector: null }) : Promise.resolve(paintAvatar(spec || DEFAULT_SPEC, 1)));
-    sheet(me.spec, me.url).then(s => { const h = headFrom(s); if (h) { looks[0].head = h; looks[0].skin = me.spec ? looks[0].skin : skinOf(h) || looks[0].skin; } });
-    sheet(opp.spec, spriteOf(opp)).catch(() => null).then(s => s || (pendingSpec(opp, DEFAULT_SPEC) ? paintAvatar(pendingSpec(opp, DEFAULT_SPEC), 1) : null)).then(s => { const h = headFrom(s); if (h) { looks[1].head = h; if (!opp.spec) looks[1].skin = skinOf(h) || looks[1].skin; } });
+    // the head only (heads.js): a figure's everyday prop never comes on court; if it is part of the
+    // head, the page draws one from the photo's skin and hair
+    const wear = (look, s, keepSkin) => {
+      if (!s) return;
+      const h = headFrom(s);
+      if (h) { look.head = h; if (!keepSkin) look.skin = skinOf(h) || look.skin; return; }
+      const cue = sheetHints(s);
+      if (!keepSkin && cue.skin) look.skin = cue.skin;
+      if (cue.hair) look.hair = cue.hair;
+    };
+    sheet(me.spec, me.url).catch(() => null).then(s => wear(looks[0], s, Boolean(me.spec)));
+    sheet(opp.spec, spriteOf(opp)).catch(() => null).then(s => s || (pendingSpec(opp, DEFAULT_SPEC) ? paintAvatar(pendingSpec(opp, DEFAULT_SPEC), 1) : null)).then(s => wear(looks[1], s, Boolean(opp.spec)));
     // the stand's faces, fetched one ahead of the camera
     const art = new Map();
     const fetchArt = (s) => {
@@ -291,7 +317,7 @@ function Match({ seed, fmt, opp, me, onDone, onQuit }) {
     document.addEventListener("visibilitychange", onVis);
     const finish = () => {
       ended = true;
-      const rec = { version: VERSION, seed, fmt, opp: opp.key, inputLog: rleEncode(log), result: resultOf(st), at: Date.now() };
+      const rec = { version: VERSION, seed, fmt, surface: st.surface, opp: opp.key, inputLog: rleEncode(log), result: resultOf(st), at: Date.now() };
       let verified = false;
       try { verified = JSON.stringify(replay(rec, cpu)) === JSON.stringify(rec.result); } catch { verified = false; }
       saveRecord(rec);

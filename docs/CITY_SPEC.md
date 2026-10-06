@@ -2057,7 +2057,7 @@ or any score.
 
 ### Tennis
 
-- **Where**: `#tennis[?vs=<key>][&fmt=short]` (`src/play/tennis/Tennis.jsx`). Entries: the Pit
+- **Where**: `#tennis[?vs=<key>][&fmt=short][&court=clay|grass]` (`src/play/tennis/Tennis.jsx`). Entries: the Pit
   panel's TENNIS CLUB line (PLAY AN EXHIBITION), and DRIVE YOURSELF: E inside the club's fence
   (`venueGeo.js TENNIS.fence`) offers PLAY TENNIS: AN EXHIBITION (`controlIso.js`, kind `tennis`).
 - **The game**: singles, one end each (you are always the near end; ends do not change), a 256 x 240
@@ -2119,6 +2119,22 @@ or any score.
   and aim hints; collapsible, kept in `localStorage["hvi-tennis-legend"]`; repeated on the pause
   screen. When you serve, a toss meter beside you shows the ball against the green band where the
   hit is best.
+- **Surfaces and the camera** (2026-10-05, Scott: clay and grass; "a little disproportionate, not
+  considering linear perspective"; his pizza peel on court): three courts, chosen under the folded
+  options (PLAY NOW keeps the picked one, HARD by default; `&court=clay|grass` in the route): HARD
+  (THE SHOW COURT), CLAY (THE RED CLAY COURT: brushed red, white tape, the ball's marks where it
+  lands, the players slide), GRASS (THE LAWN: mown stripes, worn to earth at the baselines). Sim
+  version 2 (`sim.js SURFACES`): clay bounces higher and keeps less pace, spin departs further from a
+  flat bounce, and the legs carry momentum (slow to stop or turn); grass bounces low and keeps more
+  pace; hard is version 1's physics exactly. The surface is in the record; a version-1 record (no
+  surface) replays under version 1 (`scripts/fixtures/tennis-v1-record.json`, recorded before the
+  change, is held to its result). The picture is one pinhole camera (`render.js proj`, solved from
+  where the baselines sit and how wide), so lines, net height, the taller back wall (two rows of
+  boards) and side walls, the stands' tiers and seats, the officials, ball kids, players (1.8 m: about
+  half a service box's depth at the near baseline) and the ball all follow one projection; the sim
+  never sees it. Heads come off the file photo with `src/play/heads.js` (shared with golf): the blob on
+  the body's axis, trimmed to the face's width, so a held prop stays home; a prop baked into the head
+  gives no cut and the page draws a head from the photo's skin and hair.
 - **Not yet**: changing ends, lets, doubles, counting results, a server replay check, other viewers,
   figures referred after the bundle in the stand.
 

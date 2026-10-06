@@ -14,6 +14,12 @@
 //                the same state and replays to the same result as the match with them off; the
 //                stand holds no one barred (chess/roster.js barred()), not today's opponent, and
 //                no caption quotes anyone; the living get only the neutral lines
+//   surfaces     (version 2) the same shot bounces higher and slower on clay than on grass, skids
+//                lower and quicker on grass than on hard; hard is version 1's physics exactly; a
+//                version-1 record (scripts/fixtures/tennis-v1-record.json, recorded before the
+//                surfaces existed) replays to its result; clay and grass matches replay too
+//   heads        the sports head cut (src/play/heads.js) takes Scott's head and leaves his pizza
+//                peel; every bundled file photo cuts to a head-sized box or to nothing
 // Run: node scripts/check-tennis.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -236,6 +242,67 @@ function playBot(seed, fmt, key, cap = 60 * 60 * 40) {
     }
   }
   ok("broadcast");
+}
+
+// ---- surfaces ------------------------------------------------------------------------------------
+{
+  const hard = S.bounceOf("hard"), clay = S.bounceOf("clay"), grass = S.bounceOf("grass");
+  assert.ok(clay.peak > grass.peak && clay.peak > hard.peak, `clay bounces higher (${clay.peak.toFixed(2)} m) than hard (${hard.peak.toFixed(2)}) and grass (${grass.peak.toFixed(2)})`);
+  assert.ok(clay.pace < hard.pace && hard.pace < grass.pace, `off the bounce: clay slowest (${clay.pace.toFixed(1)} m/s), hard (${hard.pace.toFixed(1)}), grass fastest (${grass.pace.toFixed(1)})`);
+  assert.ok(grass.peak < hard.peak, "grass skids lower than hard");
+  assert.ok(clay.base > hard.base && hard.base >= grass.base, `the receiver's time: clay ${clay.base}, hard ${hard.base}, grass ${grass.base} frames`);
+  const hs = S.bounceOf("hard", "slice"), cs = S.bounceOf("clay", "slice"), cd = S.bounceOf("clay", "drive");
+  assert.ok(cd.peak - cs.peak > hard.peak - hs.peak, "spin does more on clay: topspin kicks further above slice");
+  assert.deepEqual(S.bounceOf("clay", "drive", 1), hard, "a version-1 match is a hard court whatever it asks for");
+  // the record of version 1, made before the surfaces existed, plays to its own result
+  const v1 = JSON.parse(readFileSync(new URL("./fixtures/tennis-v1-record.json", import.meta.url), "utf8"));
+  assert.equal(v1.version, 1);
+  assert.deepEqual(S.replay(v1, R.profileOf(v1.opp)), v1.result, "the version-1 record replays to its result");
+  assert.deepEqual(S.replay(JSON.parse(JSON.stringify(v1)), R.profileOf(v1.opp)), v1.result, "twice");
+  assert.deepEqual(S.replay({ ...v1, version: 2, surface: "hard" }, R.profileOf(v1.opp)), v1.result, "version 2's hard court is version 1's");
+  assert.notDeepEqual(S.replay({ ...v1, version: 2, surface: "clay" }, R.profileOf(v1.opp)), v1.result, "the same hands on clay play another match");
+  // clay and grass matches replay; the surface is part of the record
+  for (const surface of ["clay", "grass"]) {
+    const st = S.newMatch({ seed: 99, fmt: "short", cpu: R.profileOf("club-pro"), surface }), masks = [];
+    assert.equal(st.surface, surface);
+    while (st.phase !== "over" && st.frame < 60 * 60 * 40) { const m = bot(st); masks.push(m); S.step(st, m); }
+    assert.ok(st.phase === "over", `the ${surface} match finishes`);
+    const rec = { version: S.VERSION, seed: 99, fmt: "short", surface, opp: "club-pro", inputLog: S.rleEncode(masks), result: S.resultOf(st) };
+    assert.deepEqual(S.replay(rec, R.profileOf("club-pro")), rec.result, `a ${surface} match replays`);
+    assert.deepEqual(S.replay(JSON.parse(JSON.stringify(rec)), R.profileOf("club-pro")), rec.result, `a ${surface} match replays through JSON`);
+    if (surface === "clay") assert.ok(st.p.some(P => "slide" in P), "clay players carry a slide");
+  }
+  // CPU v CPU finishes on every court
+  for (const surface of ["clay", "grass"]) {
+    const st = S.newMatch({ seed: 7, fmt: "short", cpu: S.cpuProfile(60), auto: S.cpuProfile(60), surface });
+    while (st.phase !== "over" && st.frame < 60 * 60 * 60) S.step(st, 0);
+    assert.equal(st.phase, "over", `CPU v CPU finishes on ${surface}`);
+  }
+  ok(`surfaces (peak clay ${clay.peak.toFixed(2)} / hard ${hard.peak.toFixed(2)} / grass ${grass.peak.toFixed(2)} m; pace ${clay.pace.toFixed(1)} / ${hard.pace.toFixed(1)} / ${grass.pace.toFixed(1)} m/s)`);
+}
+
+// ---- heads ---------------------------------------------------------------------------------------
+{
+  const { decodePng } = await import("./sprite-atlas.mjs");
+  const { cutHead } = await import("../src/play/heads.js");
+  const { readdirSync } = await import("node:fs");
+  const dir = new URL("../public/sprites/", import.meta.url);
+  const sheet = (f) => { const p = decodePng(readFileSync(new URL(f, dir))); return p && p.w >= 32 && p.h >= 48 ? p : null; };
+  // Scott carries a pizza peel to his left (columns 2-12 of the photo); his head is columns 13-24
+  const sc = sheet("scott.png"), cut = cutHead(sc.rgba, sc.w * 4);
+  assert.ok(cut, "Scott has a head");
+  assert.ok(cut.x0 >= 12 && cut.x0 + cut.w <= 26, `Scott's head is cut from his head, not his peel (x ${cut.x0}-${cut.x0 + cut.w - 1})`);
+  let peel = 0;
+  for (let y = 0; y < cut.h; y++) for (let x = 0; x < cut.w; x++) if (cut.keep[y * cut.w + x] && cut.x0 + x <= 12) peel++;
+  assert.equal(peel, 0, "no peel in Scott's head");
+  let n2 = 0;
+  for (const f of readdirSync(dir).filter(f => f.endsWith(".png"))) {
+    const p = sheet(f); if (!p) continue;
+    const c = cutHead(p.rgba, p.w * 4); n2++;
+    if (c) assert.ok(c.w <= 17 && c.h <= 12 && c.h >= 6, `${f}: a head-sized cut (${c.w} x ${c.h})`);
+  }
+  assert.ok(n2 > 20, "the bundled photos were cut");
+  ok(`heads (${n2} photos; Scott's peel left behind)`);
 }
 
 console.log(`check-tennis: ${n} groups OK`);

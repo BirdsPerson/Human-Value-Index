@@ -5,33 +5,16 @@
 // standardized golf outfit (polo, trousers, cap, one white glove), recoloured from the figure's kit.
 import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC, AVATAR_ENUMS, CLOTH } from "../../avatar.js";
+import { headFrom, sheetHints } from "../heads.js";
 
 const hex = (r, g, b) => `#${[r, g, b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("")}`;
 const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 export const shade = (h, k) => { const [r, g, b] = rgb(h); return hex(r * k, g * k, b * k); };
 const near = (a, b, tol = 60) => { const p = rgb(a), q = rgb(b); return Math.abs(p[0] - q[0]) + Math.abs(p[1] - q[1]) + Math.abs(p[2] - q[2]) < tol; };
 
-// The head off a 32x48 sprite sheet: the opaque box in the top rows, centred on the crown.
-// crop: [x, y, w, h], for a sprite whose prop crosses the head (roster.js CROPS).
-export function headFrom(sheet, crop = null) {
-  if (!sheet) return null;
-  try {
-    const c = document.createElement("canvas"); c.width = 32; c.height = 48;
-    const x = c.getContext("2d"); x.drawImage(sheet, 0, 0, 32, 48, 0, 0, 32, 48);
-    if (crop) { const o = document.createElement("canvas"); o.width = crop[2]; o.height = crop[3]; o.getContext("2d").drawImage(c, crop[0], crop[1], crop[2], crop[3], 0, 0, crop[2], crop[3]); return o; }
-    const d = x.getImageData(0, 0, 32, 14).data;
-    let x0 = 32, x1 = -1, y0 = 14;
-    for (let y = 0; y < 13; y++) for (let i = 0; i < 32; i++) if (d[(y * 32 + i) * 4 + 3] > 0) { x0 = Math.min(x0, i); x1 = Math.max(x1, i); y0 = Math.min(y0, y); }
-    if (x1 < 0) return null;
-    let tx0 = 32, tx1 = -1;
-    for (let y = y0; y < y0 + 5; y++) for (let i = 0; i < 32; i++) if (d[(y * 32 + i) * 4 + 3] > 0) { tx0 = Math.min(tx0, i); tx1 = Math.max(tx1, i); }
-    const cx = Math.round((tx0 + tx1) / 2), w = Math.min(14, x1 - x0 + 1), hx0 = Math.max(0, Math.min(32 - w, cx - (w >> 1)));
-    const h = Math.min(12, 13 - y0);
-    const o = document.createElement("canvas"); o.width = w; o.height = h;
-    o.getContext("2d").drawImage(c, hx0, y0, w, h, 0, 0, w, h);
-    return o;
-  } catch { return null; }
-}
+// The head off a 32x48 sprite sheet: the shared sports cut (../heads.js), which leaves a held prop
+// behind. crop: [x, y, w, h], a hand-set box that wins (roster.js CROPS).
+export { headFrom };
 // The commonest opaque colour in a region of the head -> "#rrggbb" | null
 function commonest(head, y0, y1, skip) {
   try {
@@ -58,9 +41,11 @@ export async function lookFor({ url = null, spec = null, hint = null, shirt, pan
   const sp = spec || { ...DEFAULT_SPEC, ...(hint || {}) };
   if (!sheet) sheet = paintAvatar(sp, 1);
   const head = headFrom(sheet, generic ? null : crop);
-  let skin = generic || spec ? AVATAR_ENUMS.skin[sp.skin] : head && skinOf(head);
+  // a prop baked into the head (headFrom said no): the photo's own skin and hair for a drawn head
+  const cues = !head && !generic && !spec ? sheetHints(sheet) : null;
+  let skin = generic || spec ? AVATAR_ENUMS.skin[sp.skin] : head ? skinOf(head) : cues.skin;
   skin = skin || AVATAR_ENUMS.skin.tan;
-  let hair = generic || spec ? (sp.hair_style === "bald" ? skin : AVATAR_ENUMS.hair_color[sp.hair_color]) : head && hairOf(head, skin);
+  let hair = generic || spec ? (sp.hair_style === "bald" ? skin : AVATAR_ENUMS.hair_color[sp.hair_color]) : head ? hairOf(head, skin) : cues.hair;
   hair = hair || skin;
   shirt = shirt || (spec && CLOTH[spec.top_color]) || "#3cbcfc";
   pants = pants || (spec && CLOTH[spec.bottom_color]) || "#7c7c7c";

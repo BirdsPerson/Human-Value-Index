@@ -13,10 +13,25 @@
 // B with DOWN held a slice; the d-pad at contact aims: LEFT / RIGHT for the lines, UP deep,
 // DOWN short. Serving: A tosses, A again hits (best just under the top of the toss);
 // LEFT / RIGHT at the hit aims at the T or wide; before the toss LEFT / RIGHT walk the baseline.
+//
+// Versions. 1: the hard court only. 2 (2026-10-05): the surface is part of the match (and the
+// record): HARD plays exactly as version 1 did; CLAY bounces higher and slower, spin bites harder
+// and the players slide; GRASS skids through low and fast. A record replays under the physics of
+// its own version, so a version-1 record still plays to the same result.
 
 import { FORMATS, newScore, addPoint, serverOf, serveSide, callOf } from "./score.js";
 
-export const VERSION = 1;
+export const VERSION = 2;
+export const VERSIONS = [1, 2];
+// The surface at the bounce: bz scales the ball's rebound, keep how much pace it keeps, spin how far
+// a shot's own bounce departs from a flat one (topspin kicks up, slice stays down); slide: the
+// players slide into the ball and out of a turn; zlo: the lowest the CPU will plan to meet it.
+// HARD is the identity: version 1's numbers, untouched.
+export const SURFACES = {
+  hard: { id: "hard", bz: 1, keep: 1, spin: 1, slide: 0, zlo: 0.25 },
+  clay: { id: "clay", bz: 1.16, keep: 0.84, spin: 1.45, slide: 1, zlo: 0.3 },
+  grass: { id: "grass", bz: 0.7, keep: 1.12, spin: 0.8, slide: 0, zlo: 0.1 },
+};
 export const HZ = 60;
 const DT = 1 / HZ, G = 9.8;
 export const COURT = { hw: 4.115, dhw: 5.485, hl: 11.885, sv: 6.4, net: 0.914 };
@@ -43,14 +58,16 @@ export function cpuProfile(rating) {
 
 function mkPlayer(i, cpu) {
   const s = cpu || HUMAN;
-  return { i, side: i === 0 ? 1 : -1, x: 0, y: 0, face: 1, swing: -1, kind: "A", done: false, mv: 0, cpu: cpu || null, speed: s.speed, power: s.power, reach: s.reach, plan: null, wait: 0, serveZ: 3, serveAim: 0 };
+  return { i, side: i === 0 ? 1 : -1, x: 0, y: 0, vx: 0, vy: 0, slide: 0, face: 1, swing: -1, kind: "A", done: false, mv: 0, cpu: cpu || null, speed: s.speed, power: s.power, reach: s.reach, plan: null, wait: 0, serveZ: 3, serveAim: 0 };
 }
 
 // opts: {seed, fmt: "set" | "short", cpu: cpuProfile(...), auto: a profile for player 0 (the
-// demo and the checks: the CPU plays itself)}
-export function newMatch({ seed = 1, fmt = "set", cpu, auto = null }) {
+// demo and the checks: the CPU plays itself), surface: "hard" | "clay" | "grass", version (a
+// record's own, for a replay; version 1 is hard only)}
+export function newMatch({ seed = 1, fmt = "set", cpu, auto = null, surface = "hard", version = VERSION }) {
+  if (!VERSIONS.includes(version)) throw new Error(`tennis sim has no version ${version}`);
   const st = {
-    v: VERSION, seed: seed >>> 0, rng: seed | 0, frame: 0, fmt: FORMATS[fmt] ? fmt : "set",
+    v: version, surface: version === 1 || !SURFACES[surface] ? "hard" : surface, seed: seed >>> 0, rng: seed | 0, frame: 0, fmt: FORMATS[fmt] ? fmt : "set",
     p: [mkPlayer(0, auto), mkPlayer(1, cpu || cpuProfile(60))],
     ball: null, phase: "serve", sub: "ready", serveNo: 1, box: null, t: 0, deadFor: 0, after: null,
     call: "", next: "", prev: 0, mask: 0, ev: [], rally: 0, hitAt: 0, won: [0, 0],
@@ -65,7 +82,7 @@ export function newMatch({ seed = 1, fmt = "set", cpu, auto = null }) {
 function setupPoint(st) {
   const sc = st.sc, s = serverOf(sc), S = st.p[s], R = st.p[1 - s];
   const right = serveSide(sc) === "deuce" ? 1 : -1;   // the server's right is +x at the near end
-  for (const P of st.p) { P.swing = -1; P.plan = null; P.done = false; P.mv = 0; }
+  for (const P of st.p) { P.swing = -1; P.plan = null; P.done = false; P.mv = 0; P.vx = 0; P.vy = 0; P.slide = 0; }
   S.x = S.side * right * 1.0; S.y = S.side * (COURT.hl + 0.25);
   st.box = { sx: -Math.sign(S.x), sy: R.side };
   R.x = st.box.sx * 2.2; R.y = R.side * (COURT.hl + 0.6);
@@ -112,7 +129,8 @@ function launch(st, P, tx, ty, speed, spin, margin, lobT = 0) {
     }
     break;
   }
-  Object.assign(b, { vx: dx / t, vy: dy / t, vz, grav: spin.grav, bounce: spin.bounce, keep: spin.keep, bounces: 0, last: P.i, live: true, netted: false, roll: false });
+  const sp = onSurface(st, spin);
+  Object.assign(b, { vx: dx / t, vy: dy / t, vz, grav: spin.grav, bounce: sp.bounce, keep: sp.keep, bounces: 0, last: P.i, live: true, netted: false, roll: false });
   st.hitAt = st.frame;
 }
 
@@ -123,6 +141,18 @@ const SPIN = {
   lob: { grav: 1, bounce: 0.72, keep: 0.62 },
   smash: { grav: 1, bounce: 0.75, keep: 0.74 },
 };
+
+// A shot's bounce on this match's surface. Version 1 and the hard court: the shot's own numbers.
+const surf = (st) => SURFACES[st.surface] || SURFACES.hard;
+function onSurface(st, spin) {
+  const f = surf(st);
+  if (st.v === 1 || f.id === "hard") return spin;
+  const flat = SPIN.serve;
+  return {
+    bounce: Math.min(0.92, (spin.bounce + (spin.bounce - flat.bounce) * (f.spin - 1)) * f.bz),
+    keep: Math.min(0.95, (spin.keep + (spin.keep - flat.keep) * (f.spin - 1)) * f.keep),
+  };
+}
 
 function serveHit(st, S, q, aimX) {
   const second = st.serveNo === 2, b = st.ball;
@@ -207,14 +237,14 @@ function fault(st, call) {
 // Read the ball the moment it is struck: play the flight forward on a copy, find where it will
 // be at a comfortable height after its bounce, decide whether it is going out, choose the reply.
 function planFor(st, P) {
-  const c = { ...st.ball }, lim = COURT.hl + 5.5;
+  const c = { ...st.ball }, lim = COURT.hl + 5.5, zlo = st.v === 1 ? 0.25 : surf(st).zlo;
   let f = st.frame, best = null, prev = null, firstIn = null, netted = false, slack = -1e9;
   for (let k = 0; k < 300; k++) {
     const r = ballStep(c); f++;
     if (r === "net") { netted = true; break; }
     if (r === "bounce" && c.bounces === 1) firstIn = bounceIn(st, c);
     if (c.bounces >= 2) break;
-    if (c.bounces === 1 && c.z < 1.5 && c.z > 0.25 && c.y * P.side > 0.7 && c.y * P.side < lim) {
+    if (c.bounces === 1 && c.z < 1.5 && c.z > zlo && c.y * P.side > 0.7 && c.y * P.side < lim) {
       // the earliest point after the bounce it can get to in time (the racket, not the body)
       const dx = c.x - P.x, dy = c.y - P.y, need = Math.max(0, Math.sqrt(dx * dx + dy * dy) - RACKET * 0.5) / P.speed, have = (f - st.frame - P.cpu.react) / HZ;
       if (have - need >= 0) { best = { f, x: c.x, y: c.y }; break; }
@@ -235,11 +265,20 @@ function planFor(st, P) {
   P.plan = { f: best.f, x: rx - face * RACKET, y: best.y, face, go: st.frame + P.cpu.react, leave, kind: kind === "S" ? "B" : kind, aimX, aimD };
 }
 
-function moveTo(P, tx, ty, frac = 1) {
+// A step of the legs: (ux, uy) is where they want to go this frame. Off clay, there. On clay the
+// feet carry what they had: quick to get going, slow to stop or turn (a slide, drawn as one).
+function legs(st, P, ux, uy) {
+  if (!surf(st).slide || st.v === 1) { P.x += ux; P.y += uy; return; }
+  const want = ux * ux + uy * uy, had = P.vx * P.vx + P.vy * P.vy, a = want >= had ? 0.32 : 0.09;
+  P.vx += (ux - P.vx) * a; P.vy += (uy - P.vy) * a;
+  P.x += P.vx; P.y += P.vy;
+  P.slide = had > 0.0016 && want < had * 0.5 ? P.slide + 1 : 0;
+}
+function moveTo(st, P, tx, ty, frac = 1) {
   const dx = tx - P.x, dy = ty - P.y, d = Math.sqrt(dx * dx + dy * dy), step = P.speed * DT * frac * (P.swing >= 0 ? 0.45 : 1);
-  if (d < 0.02) { P.mv = 0; return; }
+  if (d < 0.02) { P.mv = 0; legs(st, P, 0, 0); return; }
   const k = Math.min(1, step / d);
-  P.x += dx * k; P.y += dy * k; P.mv++;
+  legs(st, P, dx * k, dy * k); P.mv++;
 }
 
 function cpuThink(st, P) {
@@ -256,14 +295,14 @@ function cpuThink(st, P) {
   }
   if (st.phase === "rally" && P.plan && b?.live) {
     const pl = P.plan;
-    if (st.frame >= pl.go) moveTo(P, pl.x, pl.y);
+    if (st.frame >= pl.go) moveTo(st, P, pl.x, pl.y);
     if (!pl.leave && P.swing < 0 && st.frame >= pl.f - 7) { P.swing = 0; P.kind = pl.kind; P.face = pl.face; P.done = false; }
     return;
   }
   // between shots: back to the middle of the baseline, a step inside it after a short ball
   if (st.frame - st.hitAt < (P.cpu.react >> 1)) return;
   const hx = b ? clamp(b.x * 0.3, -1.5, 1.5) : 0;
-  moveTo(P, hx, P.side * (COURT.hl + 0.8), st.phase === "dead" ? 0.5 : 0.8);
+  moveTo(st, P, hx, P.side * (COURT.hl + 0.8), st.phase === "dead" ? 0.5 : 0.8);
 }
 
 function humanThink(st, P, m, press) {
@@ -283,8 +322,8 @@ function humanThink(st, P, m, press) {
   const dx = (m & BTN.RIGHT ? 1 : 0) - (m & BTN.LEFT ? 1 : 0), dy = (m & BTN.DOWN ? 1 : 0) - (m & BTN.UP ? 1 : 0);
   if (dx || dy) {
     const n = dx && dy ? 0.70710678 : 1, sp = P.speed * DT * n * (P.swing >= 0 ? 0.45 : 1);
-    P.x += dx * sp; P.y += dy * sp; P.mv++;
-  } else P.mv = 0;
+    legs(st, P, dx * sp, dy * sp); P.mv++;
+  } else { P.mv = 0; legs(st, P, 0, 0); }
   if ((press & (BTN.A | BTN.B)) && P.swing < 0) {
     P.swing = 0; P.kind = press & BTN.A ? "A" : "B"; P.done = false;
     if (st.ball) P.face = st.ball.x >= P.x ? 1 : -1;
@@ -341,6 +380,24 @@ export function step(st, mask = 0) {
   return st;
 }
 
+// ---- the surfaces, measured --------------------------------------------------------------------
+// One shot struck the same way on a surface: from the near baseline at 1 m to 9.3 m deep on the far
+// side at 21 m/s (a drive) -> after its first bounce, how high it rises, its pace across the court,
+// and the frames from the hit until it passes the far baseline (the receiver's time). The check compares
+// the surfaces with it; it is the court's own physics, not a copy.
+export function bounceOf(surface, shot = "drive", version = VERSION) {
+  const st = newMatch({ seed: 1, fmt: "short", cpu: cpuProfile(60), surface, version });
+  const P = st.p[0];
+  st.ball = { x: 0, y: COURT.hl, z: 1, vx: 0, vy: 0, vz: 0, grav: 1, bounce: 0.7, keep: 0.7, bounces: 0, last: 0, live: true, serve: false, netted: false, roll: false };
+  launch(st, P, 0, -9.3, shot === "slice" ? 15 : 21, SPIN[shot], 0.25);
+  const b = st.ball;
+  let peak = 0, pace = 0, base = 0, k = 0;
+  for (; k < 600 && b.bounces < 1; k++) ballStep(b);
+  pace = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+  for (; k < 900 && b.bounces < 2; k++) { ballStep(b); if (b.z > peak) peak = b.z; if (!base && b.y < -COURT.hl) base = k + 1; }
+  return { peak, pace, base, bounce: b.bounce, keep: b.keep };
+}
+
 // ---- the record -----------------------------------------------------------------------------
 // A frame's mask, run-length encoded: [mask, count, mask, count, ...].
 export function rleEncode(masks) {
@@ -361,8 +418,8 @@ export function resultOf(st) {
 // Play a record again from its seed and log: -> its result. A server check later compares this
 // with the result the browser claims. cpu: the opponent's profile (cpuProfile(rating)).
 export function replay(rec, cpu) {
-  if (rec.version !== VERSION) throw new Error(`tennis record version ${rec.version}, sim ${VERSION}`);
-  const st = newMatch({ seed: rec.seed, fmt: rec.fmt, cpu });
+  if (!VERSIONS.includes(rec.version)) throw new Error(`tennis record version ${rec.version}, sim ${VERSION}`);
+  const st = newMatch({ seed: rec.seed, fmt: rec.fmt, cpu, version: rec.version, surface: rec.surface || "hard" });
   let i = 0;
   const log = rec.inputLog;
   for (let k = 0; k < log.length; k += 2) for (let n = 0; n < log[k + 1]; n++, i++) step(st, log[k]);
