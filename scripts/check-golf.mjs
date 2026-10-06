@@ -32,7 +32,7 @@ import { OSM } from "../src/play/golf/holes/osm.js";
 import { replayRecord, versionOf } from "../src/play/golf/replay.js";
 import * as V1 from "../src/play/golf/v1/sim.js";
 import * as V2 from "../src/play/golf/v2/sim.js";
-import { readSwing, liveSwing, PULL_FULL, PULL_PUTT } from "../src/play/golf/gesture.js";
+import { readSwing, liveSwing, stickSwing, PULL_FULL, PULL_PUTT } from "../src/play/golf/gesture.js";
 import { FAMOUS } from "../src/play/golf/holes/famous.js";
 import { newRound, step, autoplay, replay, cardOf, toParText, BTN, CLUBS, RISE_PUTT, holeOf, MAX_STROKES, VERSION, predict, makeFlight, flightAt, solveShot, puttMark, puttPace, lineFor, act, logPush, logEvent, aimEvent, swingEvent, puttEvent, clubFor, planShot, dirOf, reachOf } from "../src/play/golf/sim.js";
 import { fnv } from "../src/play/golf/course.js";
@@ -352,6 +352,26 @@ const trail = (pull, drift = 0, ms = 150, through = true) => {
   const lv = liveSwing(trail(32, 0, 150, false));
   ok(lv.stage === 1 && Math.abs(lv.m - 0.5) < 1e-9 && !lv.through, "half the pull shows half power on the meter");
 }
+{ // the right stick: the same gesture model as the mouse
+  // pull down to `pull` over 200 ms (8 frames), hold, then push up to -1 in `ms`, drifting `drift`
+  const stick = (pull, drift = 0, ms = 100, through = true, hold = 6) => {
+    const S = []; let t = 0;
+    for (let i = 1; i <= 8; i++) S.push({ x: 0, y: (pull * i) / 8, t: (t += 25) });
+    for (let i = 0; i < hold; i++) S.push({ x: 0, y: pull, t: (t += 16) });
+    if (through) for (let i = 1; i <= 6; i++) S.push({ x: (drift * i) / 6, y: pull - ((pull + 1) * i) / 6, t: (t += ms / 6) });
+    else for (let i = 0; i < 20; i++) S.push({ x: 0, y: 0, t: (t += 16) });
+    return S;
+  };
+  const s0 = stickSwing(stick(1)), sr = stickSwing(stick(1, 0.3)), sl = stickSwing(stick(1, -0.3));
+  ok(s0.kind === "swing" && s0.a === 0 && s0.power === 1 && s0.contact === 0, `stick: a straight push is straight, full at the bottom, pure (${JSON.stringify(s0)})`);
+  ok(sr.a > 0.1 && sl.a < -0.1, `stick: drift right is a slice for a right-hander, left a hook (${sr.a.toFixed(2)}, ${sl.a.toFixed(2)})`);
+  ok(stickSwing(stick(0.5)).power < 0.6 && stickSwing(stick(0.5)).power > 0.45, "stick: half a pull, half the power");
+  ok(stickSwing(stick(1, 0, 600)).contact < 0 && stickSwing(stick(1, 0, 12)).contact > 0, "stick: slow push fat, a snap thin");
+  ok(stickSwing(stick(1, 0, 100, false)).kind === "cancel", "stick: back to the centre and left there: called off");
+  ok(stickSwing(stick(0.6, 0, 100, true), { putt: true }).kind === "putt", "stick: a putt is pull back, push forward");
+  const rS = (g) => { const st = at(0, 0, "fairway"); st.wind = { mph: 0, dir: 0, x: 0, y: 0 }; st.aim = 0; st.club = 4; for (let i = 0; i < 8; i++) step(st, 0); act(st, swingEvent(g)); return st.fl.curve; };
+  ok(Math.abs(rS(s0)) < 1e-9 && rS(sr) > 2 && rS(sl) < -2, "stick: through the sim, straight is straight, right drift curves right");
+}
 // the strokes in the sim: same lie, calm, straight up a flat fairway
 const strokeAt = (ev, club = 4, lie = "fairway") => {
   const st = at(0, 0, lie);
@@ -433,6 +453,45 @@ const strokeAt = (ev, club = 4, lie = "fairway") => {
   ok(JSON.stringify(rp.result) === JSON.stringify(st.result) && rp.tick === st.tick, "a mouse-played round replays from its log tick for tick");
   ok(JSON.stringify(rr.result) === JSON.stringify(st.result) && rr.tick === st.tick, "... and through replay.js, after a trip through JSON (localStorage)");
   ok(log.length < 4000, `the mouse round's log is compact (${log.length} entries)`);
+}
+
+// ---- difficulty: a casual first-timer (Scott, 2026-10-05: "I'm pretty awful at it")
+// The keys, played like a person: reads a fifth of the wind, aims within a few degrees, presses about
+// 100 ms either side of the mark (sd), putts within a quarter of the pace. On today's EASY SWING
+// (assist 2) that is about bogey golf over the Open's front nine; without it, much worse.
+function casual(cfg, seed) {
+  let s = seed >>> 0; const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const g = () => (rnd() + rnd() + rnd() + rnd() - 2) * 1.732;
+  const st = newRound(cfg); let plan = null, key = "";
+  while (st.phase !== "done" && st.tick < 3e6) {
+    const P = st.players[st.cur]; let b = 0;
+    if (st.prev & BTN.A) b = 0;
+    else if (st.phase === "intro" || st.phase === "holeEnd") b = st.t > 20 ? BTN.A : 0;
+    else if (P.kind === "human" && st.phase === "aim" && st.t >= 8) {
+      const kk = `${st.hi}|${P.strokes}|${P.x}|${P.y}`;
+      if (kk !== key) {
+        key = kk; const h = holeOf(st), pl = planShot(h, P, st.wind), putt = CLUBS[pl.club].putt;
+        const sol = solveShot(h, P, st.club, pl.tx, pl.ty, st.wind, putt ? 1 : 0.2);
+        plan = { aim: sol.aim + g() * 0.05, p: Math.max(0.01, Math.min(1, sol.power * (1 + g() * (putt ? 0.25 : 0.05)))), o1: Math.round(g() * 6), o2: Math.round(g() * 6) };
+      }
+      const fine = CLUBS[st.club].putt ? 0.0035 : 0.006, d = plan.aim - st.aim;
+      if (Math.abs(d) > fine * 0.55) { const bit = d > 0 ? BTN.R : BTN.L; b = Math.abs(d) > fine * 12 ? bit : (st.prev & (BTN.L | BTN.R) ? 0 : bit); } else b = BTN.A;
+    } else if (P.kind === "human" && st.phase === "meter") {
+      const m = st.meter, putt = CLUBS[st.club].putt, p = putt ? puttMark(plan.p) : plan.p;
+      if (m.stage === 1) b = m.dir > 0 && m.k + 1 >= Math.min(m.rise, Math.max(1, Math.round(p * m.rise) + (putt ? Math.round(plan.o1 * 0.8) : plan.o1))) ? BTN.A : 0;
+      else b = m.k + 1 >= 2 * Math.round(m.power * m.rise) + plan.o2 ? BTN.A : 0;
+    }
+    step(st, b); st.ev.length = 0;
+  }
+  return st;
+}
+{
+  const nine = (extra) => { const l = []; for (let seed = 1; seed <= 6; seed++) l.push(casual({ seed: seed * 7919, course: "open", mode: "stroke", count: 9, start: 0, player: { name: "FIRST" }, ...extra }, seed).result.toPar[0]); return { mean: l.reduce((x, y) => x + y) / l.length, l }; };
+  const ez = nine({ easy: true, assist: 2 }), hard = nine({});
+  ok(ez.mean >= 4 && ez.mean <= 13, `a first-timer on EASY SWING shoots about bogey golf over nine: +${ez.mean.toFixed(1)} (${ez.l.join(", ")})`);
+  ok(hard.mean > ez.mean + 8, `without EASY SWING the same player is much worse: +${hard.mean.toFixed(1)}`);
+  const st = newRound({ seed: 1, mode: "stroke", count: 9, player: { name: "T" }, easy: true, assist: 2 });
+  ok(st.cfg.assist === 2 && newRound({ seed: 1, mode: "stroke", count: 9, player: { name: "T" }, assist: 2 }).cfg.assist === undefined, "assist 2 is kept in the cfg of easy rounds only (older easy rounds replay as they were)");
 }
 
 // ---- the gallery and the end scene: read-only, deterministic

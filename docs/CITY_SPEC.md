@@ -2375,7 +2375,35 @@ or any score.
     scaled; a longer pull is more power, capped; fat short, thin low; called off = no stroke; a click
     is the meter; events out of turn are ignored; the map click aims and picks the club; a nine-hole
     match played entirely by mouse events finishes and replays from its log (and through JSON).
-- **Not yet**: a server that verifies a submitted log; the course in the city map.
+- **The right stick** (a pad, like the PGA Tour games' analog swing): the same gesture model as the
+  mouse (`gesture.js stickSwing`): pull the right stick down to take it back (how far = power, held
+  at the bottom = full), push up past -0.45 to swing through (struck as it crosses); drift off
+  vertical is the line, the push's time the contact (its own band, 30-190 ms); settle back to the
+  centre for 140 ms first and the swing is called off. Putts: pull back for pace, push forward. Dead
+  zone 0.18 and light smoothing; logged as the same swing / putt events. A still runs the meter.
+- **The simple golfer** (Scott: "keep it simple"): `golfer.js` is a classic sprite now, 60x80 at
+  the scene's scale (the 3D-posed 2.5x figure is gone): six key poses for a full swing (address,
+  half back, top, impact, through, finish), three for the putter, a few joints each drawn as flat
+  two-tone limbs with one dark outline, a light dark-outlined shaft that reads on the grass. The
+  meter (or the drag, or the stick) picks the backswing frame; the downswing runs on the shot's
+  clock. The player's own head (heads.js) and kit colours. Render-only.
+- **The adaptive corner map**: it frames the shot, not the hole: the ball 12 px off the bottom, the
+  aim straight up, the far edge a little past the target (the spot clicked, else the club's carry)
+  and the pin when the pin is near enough to matter; approaches show the green complex, on or near
+  the green the green itself with its fall arrows. Yardage rings every 50 / 25 / 10 / 5 yards by
+  scale (numbered up the line, the spacing printed bottom left), the club's carry marked in red, the
+  wind arrow turned to the shot. Zoom, turn and centre ease between shots (snap under reduced
+  motion); a drag on the map holds it still so a click lands where it looks (`pipToWorld` reads the
+  framing as drawn).
+- **Difficulty, measured** (Scott's first round: "pretty awful"): EASY SWING is on for a new player
+  and remembered (`hvi-golf-easy`). New easy rounds carry `cfg.assist = 2` (`easeOf`): the meter at
+  ~half speed (x1.9), a quarter of a missed line and no shank, fat/thin at 35%, a kinder cup on the
+  player's putts. Easy rounds without `assist` keep the first easy exactly (x1.5, two fifths), so
+  they replay. check-golf plays a casual first-timer (keys, a fifth of the wind read, ~100 ms timing
+  sd, putts within 25% pace) over the Open's front nine: about +8 on easy (bogey golf), about +29
+  without.
+- **Not yet**: a server that verifies a submitted log; the course in the city map; the shared end /
+  pause menu (`src/play/GameMenu.jsx`) once it lands.
 
 ### Basketball: THE COURTS (`#hoops`, 2026-10-05)
 

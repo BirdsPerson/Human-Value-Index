@@ -156,10 +156,11 @@ export function groundStep(h, b) {
   const t = L2 ? Math.max(0, Math.min(1, ((h.pin.x - x0) * ux + (h.pin.y - y0) * uy) / L2)) : 0;
   const off = Math.hypot(x0 + ux * t - h.pin.x, y0 + uy * t - h.pin.y);
   b.vx = vx; b.vy = vy; b.x = nx; b.y = ny;
-  if (off < CUP_R && !b.lipped) {
+  const cupR = CUP_R * (b.cup || 1);   // b.cup: EASY SWING's kinder cup (assist 2), else the cup
+  if (off < cupR && !b.lipped) {
     // dead centre drops at up to CAPTURE_V; an edge only at a crawl
-    const edge = off / CUP_R;
-    if (sp < CAPTURE_V * (1 - 0.65 * edge * edge)) { b.x = h.pin.x; b.y = h.pin.y; return "cup"; }
+    const edge = off / cupR;
+    if (sp < CAPTURE_V * (b.cup ? 1.3 : 1) * (1 - 0.65 * edge * edge)) { b.x = h.pin.x; b.y = h.pin.y; return "cup"; }
     // caught the lip: turned off line and slowed, round the back of the cup
     const side = (ux * (h.pin.y - y0) - uy * (h.pin.x - x0)) >= 0 ? -1 : 1, turn = side * (0.5 + 0.9 * edge);
     const cs = Math.cos(turn), sn = Math.sin(turn);
@@ -350,7 +351,7 @@ export function newRound(cfg) {
   const mode = cfg.mode === "match" && cfg.cpu ? "match" : "stroke";
   if (mode === "match") players.push(mk(cfg.cpu, "cpu"));
   const st = {
-    v: VERSION, cfg: { v: VERSION, seed, course, mode, start, count, player: cfg.player || null, cpu: mode === "match" ? cfg.cpu : null, ...(cfg.easy ? { easy: true } : {}) },
+    v: VERSION, cfg: { v: VERSION, seed, course, mode, start, count, player: cfg.player || null, cpu: mode === "match" ? cfg.cpu : null, ...(cfg.easy ? { easy: true } : {}), ...(cfg.easy && cfg.assist === 2 ? { assist: 2 } : {}) },
     rng: fnv(`golf|${seed}`), mode, course, holes: Array.from({ length: count }, (_, i) => start + i), hi: 0,
     players, cur: 0, honor: players.map((_, i) => i), phase: "intro", t: 0, tick: 0, prev: 0, hold: 0,
     aim: 0, aimTo: null, target: null, club: 0, meter: null, fl: null, ball: null, wind: null, msg: "", tone: "", ev: [], plan: null, result: null, shot: null,
@@ -411,7 +412,7 @@ function botPlan(st) {
   let sol = solveShot(h, P, st.club, tx, ty, st.wind, 1);
   if (CLUBS[st.club].putt && tx === h.pin.x && ty === h.pin.y) {
     // the meter only stops on ticks: take the tick's pace, then read the line for that pace
-    const rise = Math.round(RISE_PUTT * (st.cfg.easy && P.kind === "human" ? 1.5 : 1));
+    const rise = Math.round(RISE_PUTT * easeOf(st, P).rise);
     const k = Math.max(1, Math.round(puttMark(sol.power) * rise)), power = puttPace(k / rise);
     sol = { aim: lineFor(h, P, power, sol.aim), power };
   }
@@ -520,11 +521,19 @@ export function step(st, bits = 0) {
   return st;
 }
 
+// EASY SWING, for the player's side only. cfg.easy alone is the first easy (kept so its rounds replay):
+// the meter a third slower, two fifths of a miss. cfg.assist 2 (new easy rounds, 2026-10-05, after
+// Scott's first round: a first-timer should shoot about bogey golf, not +20): the meter nearly half
+// speed, a quarter of a miss and never a shank, a gentler fat/thin, and a kinder cup.
+export function easeOf(st, P) {
+  if (!st.cfg.easy || P.kind !== "human") return { rise: 1, miss: 1, cap: 1.25, contact: 1, cup: 0 };
+  if (st.cfg.assist === 2) return { rise: 1.9, miss: 0.25, cap: 0.9, contact: 0.35, cup: 1.7 };
+  return { rise: 1.5, miss: 0.4, cap: 1.25, contact: 0.5, cup: 0 };
+}
 function beginMeter(st) {
   st.phase = "meter"; st.t = 0;
-  // EASY SWING (cfg.easy, the player's side only): the marker climbs a third slower
-  const easy = st.cfg.easy && st.players[st.cur].kind === "human";
-  st.meter = { stage: 1, dir: 1, m: 0, k: 0, rise: Math.round((CLUBS[st.club].putt ? RISE_PUTT : RISE) * (easy ? 1.5 : 1)), power: null, acc: null };
+  // EASY SWING (cfg.easy, the player's side only): the marker climbs slower (easeOf)
+  st.meter = { stage: 1, dir: 1, m: 0, k: 0, rise: Math.round((CLUBS[st.club].putt ? RISE_PUTT : RISE) * easeOf(st, st.players[st.cur]).rise), power: null, acc: null };
   st.ev.push("swing");
 }
 
@@ -532,9 +541,9 @@ function beginMeter(st) {
 function strike(st, fx = null) {
   const P = st.players[st.cur], h = holeOf(st), c = CLUBS[st.club], m = st.meter;
   // early (marker above the line): a < 0, a hook. EASY SWING keeps two fifths of the miss.
-  const ek = st.cfg.easy && P.kind === "human" ? 0.4 : 1;
-  const a = c.putt ? 0 : Math.max(-1.25, Math.min(1.25, (fx ? fx.a : -m.acc / ACC_ZONE) * ek));
-  if (fx) fx = { contact: fx.contact * (ek < 1 ? 0.5 : 1), sx: fx.sx, sy: fx.sy };
+  const E = easeOf(st, P);
+  const a = c.putt ? 0 : Math.max(-E.cap, Math.min(E.cap, (fx ? fx.a : -m.acc / ACC_ZONE) * E.miss));
+  if (fx) fx = { contact: fx.contact * E.contact, sx: fx.sx, sy: fx.sy };
   P.prev = { x: P.x, y: P.y, lie: P.lie };
   P.strokes++;
   if (c.putt) P.putts++;
@@ -545,7 +554,7 @@ function strike(st, fx = null) {
   st.shot = { from: Math.hypot(h.pin.x - P.x, h.pin.y - P.y), putt: Boolean(c.putt), shank: Math.abs(a) > 1, lie: P.lie, lip: false, splash: false };
   if (c.putt) {
     const v0 = puttSpeed(m.pace ?? puttPace(m.power)), [dx, dy] = dirOf(st.aim);
-    st.fl = { ox: P.x, oy: P.y, putt: true, aim: st.aim, b: { x: P.x, y: P.y, z: 0, vx: dx * v0, vy: dy * v0, vz: 0, s: 0, hops: 0, putt: true } };
+    st.fl = { ox: P.x, oy: P.y, putt: true, aim: st.aim, b: { x: P.x, y: P.y, z: 0, vx: dx * v0, vy: dy * v0, vz: 0, s: 0, hops: 0, putt: true, ...(E.cup ? { cup: E.cup } : {}) } };
     P.plug = false;
     st.phase = "roll";
     return;
@@ -720,7 +729,7 @@ export function act(st, e) {
     strike(st, { a: cl(e[2] / 1000, -1.2, 1.2), contact: cl(e[3] / 1000, -1, 1), sx: cl(e[4] / 1000, -1, 1), sy: cl(e[5] / 1000, -1, 1) });
   } else if (e[0] === "p" && c.putt) {
     if (st.aimTo != null) { st.aim = st.aimTo; st.aimTo = null; }
-    st.aim += cl(e[2] / 100000, -0.03, 0.03) * (st.cfg.easy ? 0.4 : 1);
+    st.aim += cl(e[2] / 100000, -0.03, 0.03) * Math.min(1, easeOf(st, P).miss);
     beginMeter(st);
     const m = st.meter;
     m.power = m.m = cl(e[1] / 1000, 0.005, 1); m.pace = puttPace(m.power); m.acc = 0; m.drag = true;

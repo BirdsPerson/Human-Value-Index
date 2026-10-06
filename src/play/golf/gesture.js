@@ -33,7 +33,7 @@ export function liveSwing(S, putt = false) {
   if (!S.length) return { pull: 0, m: 0, stage: 1, through: false, drift: 0 };
   const y0 = S[0].y;
   let ib = 0;
-  for (let i = 1; i < S.length; i++) if (S[i].y > S[ib].y) ib = i;
+  for (let i = 1; i < S.length; i++) if (S[i].y >= S[ib].y) ib = i;
   const pull = Math.max(0, S[ib].y - y0), full = putt ? PULL_PUTT : PULL_FULL, power = Math.min(1, pull / full);
   const last = S[S.length - 1], back = last.y >= S[ib].y - 1 || ib === S.length - 1;
   const through = !putt && pull >= PULL_MIN && S.slice(ib).some(p => p.y <= y0);
@@ -51,7 +51,7 @@ export function readSwing(S, { putt = false, easy = false, done = true } = {}) {
   const moved = Math.max(...S.map(p => Math.hypot(p.x - x0, p.y - y0)));
   if (done && moved < CLICK_MOVE) return { kind: "click" };
   let ib = 0;
-  for (let i = 1; i < S.length; i++) if (S[i].y > S[ib].y) ib = i;
+  for (let i = 1; i < S.length; i++) if (S[i].y >= S[ib].y) ib = i;
   const pull = S[ib].y - y0;
   if (pull < PULL_MIN) return done ? { kind: "cancel" } : { kind: "pending" };
   if (putt) {
@@ -77,3 +77,49 @@ export function readSwing(S, { putt = false, easy = false, done = true } = {}) {
 // The words for a stroke (the screen reader, the HUD)
 export const contactWord = (c) => (c <= -0.15 ? "FAT" : c >= 0.15 ? "THIN" : "PURE");
 export const lineWord = (a) => (a > 0.6 ? "SLICE" : a > 0.12 ? "FADE" : a < -0.6 ? "HOOK" : a < -0.12 ? "DRAW" : "STRAIGHT");
+
+// THE RIGHT STICK (a pad; Scott: like the PGA Tour games' analog swing): the same swing, the stick
+// as the hand. Samples [{x, y, t}] are the stick after its dead zone (x right, y DOWN, -1..1) from
+// the moment it is pulled. Pull DOWN to take it back (how far = power; held at the bottom = full),
+// push UP past STICK_THROUGH to swing through (struck as it crosses); drifting left/right of
+// vertical on the way up is the line, the push's time the contact (a thumb is quicker than a
+// mouse: its own sweet band). Let the stick sit back at the centre before pushing: called off.
+// A putt: pull back for pace, push forward through STICK_PUTT to stroke.
+export const STICK_PULL = 0.95, STICK_THROUGH = -0.45, STICK_PUTT = -0.25, STICK_IDLE = 140;
+const STICK_SWEET = { lo: 30, hi: 190 }, STICK_SWEET_EASY = { lo: 20, hi: 300 };
+export function stickSwing(S, { putt = false, easy = false } = {}) {
+  if (!S.length) return { kind: "pending" };
+  let ib = 0;
+  for (let i = 1; i < S.length; i++) if (S[i].y >= S[ib].y) ib = i;
+  const b = S[ib], pull = b.y;
+  if (pull < 0.12) return { kind: "pending" };
+  const line = putt ? STICK_PUTT : STICK_THROUGH;
+  let it = -1, idle = -1;
+  for (let i = ib + 1; i < S.length; i++) {
+    if (S[i].y <= line) { it = i; break; }
+    if (Math.hypot(S[i].x, S[i].y) < 0.05) { if (idle < 0) idle = S[i].t; if (S[i].t - idle >= STICK_IDLE) return { kind: "cancel" }; } else idle = -1;
+  }
+  if (it < 0) return { kind: "pending" };
+  const p = S[it - 1], q = S[it], f = p.y === q.y ? 1 : (p.y - line) / (p.y - q.y);
+  const xs = p.x + (q.x - p.x) * f, ts = p.t + (q.t - p.t) * f;
+  const power = Math.min(1, pull / STICK_PULL), slope = (xs - b.x) / Math.max(0.2, pull - line);
+  if (putt) {
+    const dz = easy ? 0.16 : 0.08, off = Math.sign(slope) * clamp((Math.abs(slope) - dz) / 0.6, 0, 1) * PUTT_DRIFT;
+    return { kind: "putt", m: power, off };
+  }
+  const dz = easy ? DEAD_EASY : DEAD;
+  const a = Math.sign(slope) * clamp((Math.abs(slope) - dz) / RAMP, 0, 1.2);
+  const T = ts - b.t, band = easy ? STICK_SWEET_EASY : STICK_SWEET;
+  const contact = T < band.lo ? clamp((band.lo - T) / band.lo, 0, 1) : T > band.hi ? -clamp((T - band.hi) / (band.hi * 1.5), 0, 1) : 0;
+  return { kind: "swing", power, a, contact, slope, ms: T };
+}
+// the stick's swing so far, for the picture (the meter, the golfer's backswing)
+export function liveStick(S, putt = false) {
+  if (!S.length) return null;
+  let ib = 0;
+  for (let i = 1; i < S.length; i++) if (S[i].y >= S[ib].y) ib = i;
+  const last = S[S.length - 1], power = Math.min(1, S[ib].y / STICK_PULL);
+  if (power < 0.05) return null;
+  const back = putt || last.y >= S[ib].y - 0.02;
+  return { m: back ? power : clamp(last.y / STICK_PULL, 0, 1), power, stage: back ? 1 : 2, pull: power };
+}

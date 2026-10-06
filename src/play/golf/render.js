@@ -19,7 +19,7 @@
 import { surfaceAt, slopeAt, fnv, rngOf, inPoly } from "./course.js";
 import { CLUBS, LIE, ACC_ZONE, ACC_END, PUTT_MAX, holeOf, dirOf, cardOf, toParText, windRel, puttMark } from "./sim.js";
 import { drawText, textWidth, wrap } from "./font.js";
-import { golferCanvas, poseOf, GW, GH, ballPx } from "./golfer.js";
+import { golferCanvas, poseOf, GW, GH, ballPx, FEET } from "./golfer.js";
 import { reactionFor } from "./gallery.js";
 import { drawEnd } from "./scenes.js";
 
@@ -126,13 +126,6 @@ export function holeView(h, w, hh) {
   const xs = h.pts.map(p => p[0]).concat(h.green.poly.pts.map(p => p[0]));
   const s = Math.max(0.6, (h.top - h.bottom) / hh, (Math.max(...xs) - Math.min(...xs) + 70) / w);
   return { s, cx: (Math.min(...xs) + Math.max(...xs)) / 2, cy: (h.top + h.bottom) / 2, kind: "hole", w, h: hh };
-}
-export function greenView(h, ball, w, hh) {
-  const d = Math.hypot(ball.x - h.pin.x, ball.y - h.pin.y);
-  const b = h.green.poly.bb, gw = b[2] - b[0] + 12, gh = b[3] - b[1] + 12;
-  const s = Math.max(gw / w, gh / hh, (d + 8) / (hh * 0.85));
-  const far = d > h.green.r + 4;
-  return { s, cx: far ? (ball.x + h.pin.x) / 2 : (b[0] + b[2]) / 2, cy: far ? (ball.y + h.pin.y) / 2 : (b[1] + b[3]) / 2, kind: "green", w, h: hh };
 }
 const toPx = (v, x, y, ox, oy) => [Math.round(ox + v.w / 2 + (x - v.cx) / v.s), Math.round(oy + v.h / 2 - (y - v.cy) / v.s)];
 
@@ -617,7 +610,7 @@ function behindView(ctx, st, frame, looks, still, ui) {
         const sp = golferCanvas(pose, look), w = Math.round(GW * k), hh = Math.round(GH * k);
         const x0 = Math.round(p[0] - bx * k), y0 = Math.round(p[1] + 1 - by * k);
         // his shadow: on the turf down and to the right of his feet (the sun is behind his left shoulder)
-        shadow(ctx, x0 + 78 * k, y0 + 147 * k, 30 * k, 5 * k, 0.3);
+        shadow(ctx, x0 + (FEET[0] + 6) * k, y0 + FEET[1] * k, 13 * k, 2.5 * k, 0.3);
         ctx.drawImage(sp, x0, y0, w, hh);
       } });
     }
@@ -788,29 +781,118 @@ function spinBall(ctx, spin) {
   px(ctx, x, y, 1, 1, PAL.dgrey);
   px(ctx, x + Math.round((spin?.x || 0) * (r - 2)) - 1, y - Math.round((spin?.y || 0) * (r - 2)) - 1, 3, 3, PAL.red);
 }
-// a pixel of the picture -> a spot on the hole (yards), or null
+// a pixel of the corner map -> a spot on the hole (yards), or null: through the map's own framing
+// as last drawn (zoom, turn), so a click lands where it looks
 export function pipToWorld(st, gx, gy) {
   if (gx < PIP.x + 1 || gy < PIP.y + 1 || gx >= PIP.x + PIP.w - 1 || gy >= PIP.y + PIP.h - 1) return null;
-  const v = pipView(st);
-  return { x: v.cx + (gx - (PIP.x + 1) - v.w / 2) * v.s, y: v.cy - (gy - (PIP.y + 1) - v.h / 2) * v.s };
+  const f = memOf(st).pip || pipFrame(st);
+  const across = (gx - f.bx) * f.s, along = (f.by - gy) * f.s, [ux, uy] = dirOf(f.a);
+  return { x: f.ox + ux * along + uy * across, y: f.oy + uy * along - ux * across };
 }
-export function screenToWorld(st, gx, gy) {
-  const h = holeOf(st), cam = cameraOf(st, h);
+// cam: a camera snapshot (viewCam) to read a drag through, so the view turning under the pointer
+// does not chase it
+export const viewCam = (st) => ({ ...cameraOf(st, holeOf(st)) });
+export function screenToWorld(st, gx, gy, cam = viewCam(st)) {
   const yy = Math.max(cam.H0 + 1.5, Math.min(PANEL_Y - 1, gy));      // the sky: toward the horizon
   const d = cam.K / (yy - cam.H0) ** 2, l = ((gx - CX) * d) / cam.F;
   return { x: cam.x + cam.dx * d + cam.rx * l, y: cam.y + cam.dy * d + cam.ry * l, sky: gy <= cam.H0 + 1 };
 }
-export function pipView(st) {
-  const h = holeOf(st), P = st.players[st.cur], iw = PIP.w - 2, ih = PIP.h - 2;
-  const near = P.lie === "green" || CLUBS[st.club]?.putt || st.fl?.putt;
-  return near && st.phase !== "intro" && st.phase !== "holeEnd" ? greenView(h, P, iw, ih) : holeView(h, iw, ih);
+// THE CORNER MAP, ADAPTIVE: it frames the shot, not the hole. The ball near the bottom, the aim
+// running straight up, and the scale set so the far edge sits a little past the target (the spot
+// clicked, else where the club carries) and the pin when the pin is near enough to matter; as the
+// ball gets closer it zooms in (the green complex on an approach, the green itself with its fall
+// arrows on or near it). Rings every 50 / 25 / 10 / 5 yards by the scale, the club's carry marked.
+// Zoom and turn ease between shots (snap with reduced motion). The turf is the world-aligned
+// terrain() round the ball at a stepped scale, drawn turned and scaled: one build per shot.
+const PIP_IN = { w: PIP.w - 2, h: PIP.h - 2 }, PIP_BALL = 12;   // the ball sits 12 px off the bottom
+function pipFrame(st) {
+  const h = holeOf(st), P = st.players[st.cur], c = CLUBS[st.club];
+  const moving = st.phase === "flight" || st.phase === "roll" || st.phase === "rest";
+  const ox = moving && st.fl ? st.fl.ox : P.x, oy = moving && st.fl ? st.fl.oy : P.y;
+  const a = moving && st.fl?.aim != null ? st.fl.aim : st.aim;
+  const pin = Math.hypot(h.pin.x - ox, h.pin.y - oy);
+  const putt = moving ? Boolean(st.fl?.putt) : Boolean(c?.putt);
+  const carry = putt ? 0 : (c?.carry || 0) * (LIE[P.lie] ?? 1);
+  const T = !moving && st.target ? Math.hypot(st.target.x - ox, st.target.y - oy) : putt ? pin : carry;
+  let far = Math.max(T, pin <= T * 1.35 + 25 ? pin : 0);
+  far = putt ? Math.max(far + 3, 9) : far + Math.max(8, far * 0.12);
+  const near = putt || P.lie === "green" || pin < 45;
+  return { ox, oy, a, s: far / (PIP_IN.h - PIP_BALL - 4), bx: PIP.x + 1 + PIP_IN.w / 2, by: PIP.y + 1 + PIP_IN.h - PIP_BALL, near, carry, putt, pin };
 }
-function pip(ctx, st, frame) {
-  const v = pipView(st);
+const STEP = 1.25, stepOf = (s) => Math.pow(STEP, Math.round(Math.log(s) / Math.log(STEP)));
+function pip(ctx, st, frame, still, ui) {
+  const h = holeOf(st), mem = memOf(st), want = pipFrame(st);
+  let f = mem.pip;
+  if (ui?.pipHold && f) { /* a drag on the map: the map holds still under the pointer */ }
+  else if (!f || still || f.hi !== st.hi) f = { ...want, hi: st.hi };
+  else {
+    const k = 0.18, da = Math.atan2(Math.sin(want.a - f.a), Math.cos(want.a - f.a));
+    const ls = Math.log(f.s) + (Math.log(want.s) - Math.log(f.s)) * k;
+    f = { ...want, hi: st.hi, ox: f.ox + (want.ox - f.ox) * k, oy: f.oy + (want.oy - f.oy) * k, a: Math.abs(da) < 0.002 ? want.a : f.a + da * k, s: Math.abs(Math.log(want.s) - ls) < 0.004 ? want.s : Math.exp(ls) };
+    if (Math.hypot(f.ox - want.ox, f.oy - want.oy) < 0.05) { f.ox = want.ox; f.oy = want.oy; }
+  }
+  mem.pip = f;
+  const [ux, uy] = dirOf(f.a);
+  const to = (x, y) => { const dx = x - f.ox, dy = y - f.oy; return [f.bx + (dx * uy - dy * ux) / f.s, f.by - (dx * ux + dy * uy) / f.s]; };
   px(ctx, PIP.x - 1, PIP.y - 1, PIP.w + 2, PIP.h + 2, PAL.black);
   px(ctx, PIP.x, PIP.y, PIP.w, PIP.h, PAL.white);
-  mapIn(ctx, st, v, PIP.x + 1, PIP.y + 1, frame, true);
-  windIcon(ctx, PIP.x + PIP.w - 15, PIP.y + PIP.h - 15, st.wind);
+  const x0 = PIP.x + 1, y0 = PIP.y + 1;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x0, y0, PIP_IN.w, PIP_IN.h); ctx.clip();
+  px(ctx, x0, y0, PIP_IN.w, PIP_IN.h, RAMP.rough[1]);
+  // the turf: built round the ball the map is settling on, at the scale it is settling to
+  const sb = stepOf(want.s), R = Math.ceil((Math.hypot(PIP_IN.w / 2, PIP_IN.h) * want.s * 1.15) / sb);
+  const cx = Math.round(want.ox * 4) / 4, cy = Math.round(want.oy * 4) / 4;
+  const T = terrain(h, { s: sb, cx, cy, kind: want.near ? "green" : "hole", w: 2 * R, h: 2 * R });
+  const [tx, ty] = to(cx, cy);
+  ctx.translate(tx, ty); ctx.rotate(-f.a); ctx.scale(sb / f.s, sb / f.s);
+  ctx.drawImage(T, -R, -R);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x0, y0, PIP_IN.w, PIP_IN.h); ctx.clip();
+  // the yardage rings round the ball, numbered up the aim line
+  const span = (PIP_IN.h - PIP_BALL) * f.s, ring = span > 160 ? 50 : span > 70 ? 25 : span > 22 ? 10 : 5;
+  for (let r = ring; r < span * 1.6; r += ring) {
+    const rp = r / f.s, n = Math.max(24, Math.round(rp * 0.9));
+    for (let i = 0; i < n; i++) {
+      if (i % 2) continue;
+      const t = (i / n) * Math.PI * 2, qx = f.bx + Math.sin(t) * rp, qy = f.by - Math.cos(t) * rp;
+      if (qy < f.by + 1) px(ctx, qx, qy, 1, 1, "#d8f0c0");
+    }
+    const ly = Math.round(f.by - rp), lab = String(r);
+    if (ly > y0 + 3 && ly < f.by - 8) { px(ctx, f.bx + 3, ly - 3, textWidth(lab) + 2, 9, PAL.black); drawText(ctx, lab, f.bx + 4, ly - 2, PAL.grey); }
+  }
+  // the aim line, the club's carry, the spot clicked
+  const P = st.players[st.cur], aiming = st.phase === "aim" || st.phase === "meter";
+  if (aiming) {
+    const L = f.putt ? Math.min(PUTT_MAX, f.pin + 2) : f.carry;
+    for (let k = 3; k < L / f.s; k += 2) if (((k >> 1) + (frame >> 3)) % 2) px(ctx, f.bx, f.by - k, 1, 1, PAL.white);
+    if (!f.putt) { const ey = Math.round(f.by - f.carry / f.s); px(ctx, f.bx - 3, ey, 7, 1, PAL.red); px(ctx, f.bx, ey - 2, 1, 5, PAL.red); }
+    if (st.target) { const [gx, gy] = to(st.target.x, st.target.y); px(ctx, gx - 3, gy, 2, 1, PAL.gold); px(ctx, gx + 2, gy, 2, 1, PAL.gold); px(ctx, gx, gy - 3, 1, 2, PAL.gold); px(ctx, gx, gy + 2, 1, 2, PAL.gold); }
+  }
+  // the pin, the other balls, the ball
+  const [fx, fy] = to(h.pin.x, h.pin.y);
+  if (f.near) px(ctx, fx - 1, fy - 1, 3, 3, PAL.black);
+  px(ctx, fx, fy - 6, 1, 7, PAL.white); px(ctx, fx + 1, fy - 6, 3, 2, PAL.red);
+  st.players.forEach((Q, i) => {
+    if (Q.holed || (i === st.cur && st.ball)) return;
+    const [qx, qy] = to(Q.x, Q.y);
+    px(ctx, qx - 1, qy - 1, 3, 3, Q.color?.shirt || PAL.gold); px(ctx, qx, qy, 1, 1, PAL.white);
+  });
+  const b = st.ball;
+  if (b && !(st.phase === "rest" && P.holed && Math.hypot(b.x - h.pin.x, b.y - h.pin.y) < 0.2)) {
+    const [bx, by] = to(b.x, b.y), lift = Math.min(14, Math.round(((b.z || 0) / f.s) * 0.8));
+    if (lift > 0) px(ctx, bx - 1, by, 3, 1, PAL.black);
+    px(ctx, bx - 1, by - lift - 1, 2, 2, PAL.white);
+  }
+  ctx.restore();
+  // the scale, bottom left: the ring spacing in words
+  const sc = `${ring}Y`;
+  px(ctx, x0, PIP.y + PIP.h - 10, textWidth(sc) + 3, 9, PAL.black);
+  drawText(ctx, sc, x0 + 1, PIP.y + PIP.h - 9, PAL.grey);
+  // the wind as it meets this shot (the map is turned to the aim)
+  windIcon(ctx, PIP.x + PIP.w - 15, PIP.y + PIP.h - 15, st.wind, f.a);
 }
 
 // ---- overlays -------------------------------------------------------------------------------------------
@@ -905,7 +987,7 @@ export function draw(ctx, st, frame, paused, looks, opts = {}) {
   else {
     behindView(ctx, st, frame, looks, Boolean(opts.still), opts.ui);
     hud(ctx, st, frame, looks, opts.ui);
-    pip(ctx, st, frame);
+    pip(ctx, st, frame, Boolean(opts.still), opts.ui);
     if (showSpin(st, opts.ui)) spinBall(ctx, opts.ui.spin);
   }
   if (st.phase === "holeEnd") scorecard(ctx, st, `AFTER HOLE ${holeOf(st).n}`);
