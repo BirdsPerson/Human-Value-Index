@@ -19,9 +19,9 @@ const KEYS = {
 const META = { Enter: "pause", Escape: "pause", KeyM: "map", Tab: "map", KeyR: "retry", KeyV: "replay" };
 const btn = (pad, i) => { const b = pad.buttons?.[i]; return Boolean(b && (typeof b === "object" ? b.pressed || b.value > 0.4 : b > 0.4)); };
 
-export function createInput() {
+export function createInput(initial = "keys") {
   const held = new Set(), tapped = new Set();
-  let meta = [], touch = { lx: 0, ly: 0, a: false, tuck: false, brake: false, gl: false }, padPrev = {}, family = null, last = "keys";
+  let meta = [], touch = { lx: 0, ly: 0, a: false, tuck: false, brake: false, gl: false }, padPrev = {}, family = null, last = initial;
   const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); };
   const down = (e) => {
     if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;

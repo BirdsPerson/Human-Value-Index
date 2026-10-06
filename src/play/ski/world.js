@@ -336,13 +336,16 @@ export const liftPeriod = (L) => Math.round((L.spacing / L.speed) * 60);
 export const liftRideTicks = (L) => Math.round((L.len / L.speed) * 60);
 export const liftWait = (L, t) => { const P = liftPeriod(L), ph = t % P; return ph === 0 ? 0 : P - ph; };
 
-const boxW = (B, extra = {}) => ({ x0: q(B.x0 * CELL), y0: q(B.y0 * CELL), x1: q(B.x1 * CELL), y1: q(B.y1 * CELL), base: qh(B.base * STOREY), h: B.h * STOREY * 0.45, ...extra });
+// (the city draws its buildings big on the map; on the slope they are their own size: the footprint
+// shrunk about its middle to BUILD_K, the height to a storey-and-a-bit a city storey)
+export const BUILD_K = 0.28;
+const boxW = (B, extra = {}) => { const cx = ((B.x0 + B.x1) / 2) * CELL, cy = ((B.y0 + B.y1) / 2) * CELL, hw = ((B.x1 - B.x0) / 2) * CELL * BUILD_K, hd = ((B.y1 - B.y0) / 2) * CELL * BUILD_K; return { x0: q(cx - hw), y0: q(cy - hd), x1: q(cx + hw), y1: q(cy + hd), base: qh(B.base * STOREY), h: q(B.h * STOREY * 0.3), ...extra }; };
 export const LODGES_W = Object.values(LODGES).map(B => boxW(B, { id: B.id, name: B.name, roof: B.roof, wall: B.wall }));
 export const STATIONS_W = STATIONS.map(B => boxW(B, { id: `${B.lift}-${B.end}`, lift: B.lift, end: B.end, kind: B.kind, roof: B.kind === "gondola" ? "#334155" : "#475569", wall: "#64748b" }));
 // at the foot: THE BASE LODGE's deck and the ski shop (Shaun White's, LICENCE 0001: nothing on sale yet)
 export const BASE_LINE = q(-22.4 * CELL);
-export const SHOP = { id: "shop", name: "SHAUN WHITE // BOARDS AND SKIS", note: "NOTHING ON SALE YET. THE SHELVES ARE BEING APPROVED.", x0: q(29 * CELL), y0: q(-22.6 * CELL), x1: q(31.2 * CELL), y1: q(-21.6 * CELL), base: 0, h: 5, roof: "#0f172a", wall: "#b45309" };
-export const BASE_LODGE = { id: "base", name: "THE BASE LODGE", x0: q(42.6 * CELL), y0: q(-22.2 * CELL), x1: q(50 * CELL), y1: q(-21.2 * CELL), base: 0, h: 9, roof: "#7c2d12", wall: "#8a5a36" };
+export const SHOP = { id: "shop", name: "SHAUN WHITE // BOARDS AND SKIS", note: "NOTHING ON SALE YET. THE SHELVES ARE BEING APPROVED.", x0: q(30 * CELL - 16), y0: q(-22.1 * CELL - 7), x1: q(30 * CELL + 16), y1: q(-22.1 * CELL + 7), base: 0, h: 6, roof: "#0f172a", wall: "#b45309" };
+export const BASE_LODGE = { id: "base", name: "THE BASE LODGE", x0: q(46 * CELL - 45), y0: q(-21.7 * CELL - 14), x1: q(46 * CELL + 45), y1: q(-21.7 * CELL + 14), base: 0, h: 11, roof: "#7c2d12", wall: "#8a5a36" };
 export const BLOCKS = [...LODGES_W, ...STATIONS_W, SHOP, BASE_LODGE];
 // lift towers: obstacles (r m) under the rope
 export const TOWERS = LIFTS_W.flatMap(L => L.towers.map(k => ({ x: q(L.ax + (L.bx - L.ax) * k), y: q(L.ay + (L.by - L.ay) * k), r: 1.4, lift: L.id })));

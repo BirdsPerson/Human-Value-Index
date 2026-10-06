@@ -84,7 +84,7 @@ export const PHYS = {
   grip: 1.25, gripPowder: 0.9, gripBoard: 1.1, skid: 0.55, brake: 0.45,
   turnLow: 1.3, turnOver: 1.6, pivot: 3.2, skate: 3.5, skateMax: 6, walk: 1.4,
   pop: 2.4, popMore: 4.6, crouchMax: 36, airEps: 0.12, impactMax: 16.5,
-  crashTicks: 96, skimMin: 7.5, pumpV: 13.5, pump: 3.2, spinRate: 10, flipRate: 8,
+  crashTicks: 96, skimMin: 7.5, pumpV: 13.5, pump: 3.2, parkV: 13, spinRate: 10, flipRate: 8,
 };
 const SPIN_PTS = [0, 100, 250, 400, 600, 800, 1100, 1400, 1800, 2200];
 const GRAB = { ski: ["", "MUTE", "SAFETY", "JAPAN"], board: ["", "INDY", "MELON", "STALEFISH"] };
@@ -218,6 +218,8 @@ function groundTick(st, inp) {
   if (water) dec += 0.004 * sp3 * sp3;
   // THE PIPELINE's pitch is the slope's (a gentle one): in the pipe the rider pumps the transitions
   // (an arcade's assist, said so on the card): below PUMP_V, a push along the line of travel
+  // THE SANDBOX's in-runs are kept fast (the same assist): a rider in the park holds about 13 m/s
+  if (R?.kind === "park" && sp3 > 2 && sp3 < PHYS.parkV && !inp.brake) dec -= PHYS.pump * 0.8;
   if (inPipe(st.x, st.y)) { if (sp3 > 2 && sp3 < PHYS.pumpV) dec -= PHYS.pump; else if (sp3 > PHYS.pumpV + 2) dec += 1.6; }
   if (sp3 > 1e-6) { const k = Math.max(0, sp3 - dec * DT) / sp3; vx *= k; vy *= k; vz *= k; }
   st.edge = mag * (turned > 0 ? 1 : turned < 0 ? -1 : 0);

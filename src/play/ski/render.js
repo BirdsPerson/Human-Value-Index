@@ -38,7 +38,7 @@ export function lightOf(hour, weather) {
   const amb = 0.3 + 0.32 * day, dir = (0.36 * day + 0.08) * (1 - grey * 0.7);
   const fog = mix(hor, [230, 233, 238], grey * 0.8);
   const fogNear = weather === "WHITEOUT" ? 60 : weather === "FRESH SNOW" ? 500 : 900, fogFar = weather === "WHITEOUT" ? 420 : weather === "FRESH SNOW" ? 2600 : 4200;
-  return { day, night: day < 0.35, sun: [sun[0] / n, sun[1] / n, sun[2] / n], amb, dir, top, hor, fog, fogNear, fogFar, tint: mix([120, 140, 200], [255, 255, 255], day), grey };
+  return { day, night: day < 0.35, sun: [sun[0] / n, sun[1] / n, sun[2] / n], amb, dir, top, hor, fog, fogNear, fogFar, tint: mix([105, 115, 150], [255, 255, 255], day), grey };
 }
 
 // ---- the view: render-only state (the camera's ease, the tracks, the spray) ----------------------------
@@ -107,7 +107,7 @@ export function ropeZ(L, k) {
 
 // ---- the camera ------------------------------------------------------------------------------------------
 function cameraOf(V, W, H) {
-  const p = V.px, Dx = p.cx, Dy = p.cy, pitch = 0.92, d = V.dist;
+  const p = V.px, Dx = p.cx, Dy = p.cy, pitch = 0.92, d = V.dist * (W < 300 ? 0.74 : 1);
   const lx = p.x + Dx * d * 0.16, ly = p.y + Dy * d * 0.16, lz = p.z + 1;
   const C = [p.x + Dx * d * Math.cos(pitch), p.y + Dy * d * Math.cos(pitch), p.z + d * Math.sin(pitch) + 2];
   let F = [lx - C[0], ly - C[1], lz - C[2]]; const fn = Math.hypot(...F); F = F.map(v => v / fn);
@@ -264,7 +264,7 @@ function terrain(K, items, Lgt, env) {
       const xs = [P[a * 3], P[b * 3], P[d * 3], P[c * 3]], ys = [P[a * 3 + 1], P[b * 3 + 1], P[d * 3 + 1], P[c * 3 + 1]];
       if (Math.max(...xs) < 0 || Math.min(...xs) > K.W || Math.max(...ys) < 0 || Math.min(...ys) > K.H) continue;
       // in the pipe's footprint the pipe draws itself
-      if (step === 1) { const wx = GRID.x0 + (gx + 0.5) * GS, wy = GRID.y0 + (gy + 0.5) * GS, [s, t] = pipeLocal(wx, wy); if (s > -6 && s < PIPE.len + 6 && Math.abs(t) < PIPE.F + PIPE.R + PIPE.deck - 2) continue; }
+      if (step === 1) { const wx = GRID.x0 + (gx + 0.5) * GS, wy = GRID.y0 + (gy + 0.5) * GS, [s, t] = pipeLocal(wx, wy); if (s > -12 && s < PIPE.len + 12 && Math.abs(t) < PIPE.F + PIPE.R + PIPE.deck + 10.6) continue; }
       const s = step * GS, hx = ((Z[b] - Z[a]) + (Z[d] - Z[c])) / (2 * s), hy = ((Z[c] - Z[a]) + (Z[d] - Z[b])) / (2 * s);
       const nn = Math.sqrt(1 + hx * hx + hy * hy), lam = Math.max(0, (-hx * Lgt.sun[0] - hy * Lgt.sun[1] + Lgt.sun[2]) / nn);
       const hh = hash(gx, gy);
@@ -279,7 +279,7 @@ function terrain(K, items, Lgt, env) {
         if (edge < 7) col = mix(col, RATING_RGB[RUNS[tr].rating], 0.2);
       } else { col = zmid < TREELINE_M ? SNOW_F : SNOW_P; if (step === 1 && (hh & 3) === 1) col = mix(col, [196, 208, 228], 0.35); }
       // snow in shade goes blue, not grey
-      let cc = col === ROCK || col === ROCK2 || col === WATER_C ? [col[0] * shade, col[1] * shade, col[2] * shade] : mix([col[0] * 0.5, col[1] * 0.6, col[2] * 0.9], col, clamp((shade - 0.25) / 0.75, 0, 1));
+      let cc = col === ROCK || col === ROCK2 || col === WATER_C ? [col[0] * shade, col[1] * shade, col[2] * shade] : mix([col[0] * 0.55, col[1] * 0.62, col[2] * 0.8], col, clamp((shade - 0.25) / 0.75, 0, 1));
       cc = [cc[0] * Lgt.tint[0] / 255, cc[1] * Lgt.tint[1] / 255, cc[2] * Lgt.tint[2] / 255];
       if (Lgt.night && lights && tr >= 0 && T.lit[ti]) cc = mix(cc, [255, 226, 170], 0.45);
       const dep = (P[a * 3 + 2] + P[d * 3 + 2]) / 2, fog = clamp((dep - Lgt.fogNear) / (Lgt.fogFar - Lgt.fogNear), 0, 1);
@@ -329,10 +329,10 @@ function features(K, items, Lgt, env, st) {
   // THE PIPELINE
   if (near(K, PIPE.ax + PIPE.dx * PIPE.len / 2, PIPE.ay + PIPE.dy * PIPE.len / 2, 1400)) {
     const nx = -PIPE.dy, ny = PIPE.dx, hw = PIPE.F + PIPE.R + PIPE.deck;
-    const T = [-hw - 2, -hw + 2, -(PIPE.F + PIPE.R), -(PIPE.F + PIPE.R * 0.92), -(PIPE.F + PIPE.R * 0.75), -(PIPE.F + PIPE.R * 0.5), -(PIPE.F + PIPE.R * 0.25), -PIPE.F, PIPE.F, PIPE.F + PIPE.R * 0.25, PIPE.F + PIPE.R * 0.5, PIPE.F + PIPE.R * 0.75, PIPE.F + PIPE.R * 0.92, PIPE.F + PIPE.R, hw - 2, hw + 2];
+    const T = [-hw - 12, -hw - 6, -hw + 2, -(PIPE.F + PIPE.R), -(PIPE.F + PIPE.R * 0.92), -(PIPE.F + PIPE.R * 0.75), -(PIPE.F + PIPE.R * 0.5), -(PIPE.F + PIPE.R * 0.25), -PIPE.F, PIPE.F, PIPE.F + PIPE.R * 0.25, PIPE.F + PIPE.R * 0.5, PIPE.F + PIPE.R * 0.75, PIPE.F + PIPE.R * 0.92, PIPE.F + PIPE.R, hw - 2, hw + 6, hw + 12];
     const step = near(K, PIPE.ax, PIPE.ay, 900) ? 10 : 30;
-    for (let s = -6; s < PIPE.len + 6; s += step) {
-      const s2 = Math.min(PIPE.len + 6, s + step);
+    for (let s = -12; s < PIPE.len + 12; s += step) {
+      const s2 = Math.min(PIPE.len + 12, s + step);
       for (let i = 0; i < T.length - 1; i++) {
         const pt = (ss, tt) => { const x = PIPE.ax + PIPE.dx * ss + nx * tt, y = PIPE.ay + PIPE.dy * ss + ny * tt; return [x, y, heightAt(x, y)]; };
         const a = pt(s, T[i]), b = pt(s, T[i + 1]), c = pt(s2, T[i + 1]), d = pt(s2, T[i]);
@@ -389,9 +389,12 @@ function features(K, items, Lgt, env, st) {
   const gateSet = C?.gates === "sl" ? SL_GATES : GS_GATES;
   gateSet.forEach((Gt, i) => {
     if (!near(K, Gt.x, Gt.y, 1100)) return;
-    const done = C && C.gates && st.ch && i < st.ch.gi, za = heightAt(Gt.ax, Gt.ay), zb = heightAt(Gt.bx, Gt.by);
-    for (const [x, y, z] of [[Gt.ax, Gt.ay, za], [Gt.bx, Gt.by, zb]]) line3(K, items, [x, y, z], [x, y, z + 2.2], done ? "#94a3b8" : Gt.col, 1);
-    if (C?.gates !== "sl") { const m = (k) => [Gt.ax + (Gt.bx - Gt.ax) * k, Gt.ay + (Gt.by - Gt.ay) * k]; const [x0, y0] = m(0), [x1, y1] = m(0.18), [x2, y2] = m(0.82), [x3, y3] = m(1); poly(K, items, [[x0, y0, za + 2.2], [x1, y1, za + 2.2], [x1, y1, za + 1.2], [x0, y0, za + 1.2]], done ? "#94a3b8" : Gt.col, 0.2); poly(K, items, [[x2, y2, zb + 2.2], [x3, y3, zb + 2.2], [x3, y3, zb + 1.2], [x2, y2, zb + 1.2]], done ? "#94a3b8" : Gt.col, 0.2); }
+    const done = C && C.gates && st.ch && i < st.ch.gi, za = heightAt(Gt.ax, Gt.ay), zb = heightAt(Gt.bx, Gt.by), col = done ? "#94a3b8" : Gt.col;
+    for (const [x, y, z] of [[Gt.ax, Gt.ay, za], [Gt.bx, Gt.by, zb]]) { line3(K, items, [x, y, z], [x, y, z + 3.4], col, 2); poly(K, items, [[x, y, z + 3.4], [x + 1.6, y, z + 3], [x + 1.6, y, z + 2.2], [x, y, z + 2.2]], col, 0.2); }
+    // the gate's line on the snow, faint, between its poles
+    line3(K, items, [Gt.ax, Gt.ay, za + 0.05], [Gt.bx, Gt.by, zb + 0.05], done ? "rgba(148,163,184,0.35)" : Gt.col === "#2563eb" ? "rgba(37,99,235,0.35)" : "rgba(220,38,38,0.35)", 1);
+    // the next gate, pointed out
+    if (C && C.gates && st.ch && i === st.ch.gi) { const t = (env.time || 0) * 4, zz = (za + zb) / 2 + 6 + Math.sin(t) * 0.8; poly(K, items, [[Gt.x - 1.5, Gt.y, zz + 2], [Gt.x + 1.5, Gt.y, zz + 2], [Gt.x, Gt.y, zz]], "#facc15", -0.5); }
   });
   // the challenge lines: checkpoints and the finish, when running one
   if (C && C.run) {
@@ -532,14 +535,14 @@ function buildings(K, items, Lgt) {
 
 // ---- the people: the rider, the city's skiers, the instructor, the field ------------------------------------------
 function people(K, items, st, V, env) {
-  const add = (x, y, z, hx, hy, look, extra = 0) => {
+  const add = (x, y, z, hx, hy, look, extra = 0, grow = 1) => {
     if (!proj(K, x, y, z, TMP, 0)) return;
     const sx = TMP[0], sy = TMP[1], d = TMP[2];
     if (sx < -40 || sx > K.W + 40 || sy < -40 || sy > K.H + 60) return;
     const P2 = new Float64Array(3);
     proj(K, x + hx * 2, y + hy * 2, z, P2, 0);
     const ang = Math.atan2((P2[1] - sy) * 2, P2[0] - sx);
-    const u = clamp((K.f / d) * 0.62, 0.6, 3);
+    const u = clamp((K.f / d) * 0.62 * grow, 0.6, 4);
     items.push({ d: d - 0.8 - extra, draw: (g) => person(g, sx, sy, u, ang, look) });
   };
   // the city's skiers on the mountain
@@ -575,7 +578,8 @@ function people(K, items, st, V, env) {
   // a shadow under a rider in the air
   if (A) { const gz = heightAt(st.x, st.y); if (proj(K, st.x, st.y, gz + 0.05, TMP, 0)) { const sx = TMP[0], sy = TMP[1], d = TMP[2], s = clamp(K.f / d * 1.1, 2, 12); items.push({ d: d - 0.2, draw: (g) => { g.fillStyle = "rgba(60,70,100,0.35)"; g.fillRect(Math.round(sx - s), Math.round(sy - s * 0.25), Math.round(s * 2), Math.max(1, Math.round(s * 0.5))); } }); } }
   if (st.mode === "lift" && st.lift.ph === "ride") { const L = LIFTS_W.find(l => l.id === st.lift.id); hx = L.d[0]; hy = L.d[1]; }
-  add(p.x, p.y, p.z, hx, hy, look, 2);
+  // in the air the rider grows a little (nearer the camera, the old top-down habit), so the air reads
+  add(p.x, p.y, p.z, hx, hy, look, 2, A ? 1 + clamp((p.z - heightAt(st.x, st.y)) / 7, 0, 0.7) : 1);
   // the lift line: a sign at each lift's foot, near
   for (const L of LIFTS_W) if (near(K, L.load[0], L.load[1], 220)) label(K, items, L.load[0], L.load[1], heightAt(L.load[0], L.load[1]) + 5, L.name, "#bae6fd");
   void POIS; void V;

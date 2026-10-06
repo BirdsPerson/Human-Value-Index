@@ -5,7 +5,7 @@ import { GLYPHS, readPad } from "../../city/gamepad.js";
 import { machineClock } from "../../city/sim.js";
 import GameMenu from "../GameMenu.jsx";
 import { newGame, step, warp, challengeNear, rleEncode, rleDecode, replay, resultOf, speedKmh, VERSION } from "./sim.js";
-import { RUNS, POI, SHOP, warmTiles, weatherOn, lightsOn, FILES, LIFT_W, liftRideTicks } from "./world.js";
+import { RUNS, POI, SHOP, warmTiles, weatherOn, lightsOn, FILES, LIFT_W, liftRideTicks, inPipe, waterAt } from "./world.js";
 import { CHALLENGES, CHALLENGE, RUNNABLE, MEDAL_NAME, fieldTimes, PIPE_LIMIT } from "./challenges.js";
 import { makeView, advance, draw } from "./render.js";
 import { drawMap, fitMap, mapBase, toMap } from "./map.js";
@@ -223,8 +223,9 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
   useEffect(() => {
     const fit = () => {
       const el = wrapRef.current; if (!el) return;
-      const w = el.clientWidth, h = Math.max(260, Math.min(window.innerHeight - (COARSE() ? 250 : 190), w * 1.5));
-      const W = 320, H = Math.max(180, Math.min(440, Math.round((W * h) / w)));
+      // (a phone: fewer, bigger pixels, and room left under the picture for the stick and the buttons)
+      const w = el.clientWidth, h = Math.max(220, Math.min(window.innerHeight - (COARSE() ? 470 : 190), w * 1.5));
+      const W = w < 520 ? 240 : 320, H = Math.max(150, Math.min(440, Math.round((W * h) / w)));
       setSize({ W, H, scale: w / W });
     };
     fit();
@@ -244,7 +245,7 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
     let files = prog.files;
     const G = { st: null, words: [], snaps: [], tape: null, tapeI: 0, replay: null, permit: null, paused: false, ended: false, lastTrail: -2, hudKey: "", npcs: [], npcAt: 0, medals: Object.fromEntries(Object.entries(prog.medals).map(([k, v]) => [k, v.medal])) };
     const V = makeView();
-    const input = createInput(); inputRef.current = input;
+    const input = createInput(COARSE() ? "touch" : "keys"); inputRef.current = input;
     const say = (s) => setSr(s);
     const persist = () => { const p = { ...loadProgress(), found: [...found], files, board }; saveProgress(p); setProg(p); };
     const begin = (st) => {
@@ -256,7 +257,7 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
     // the tape: a saved run (a challenge's from its start; a free run from its snapshot)
     if (start.tape) { const r = start.tape; G.tape = rleDecode(r.inputLog); begin(r.snap ? JSON.parse(r.snap) : newGame({ board: r.board, ch: r.ch })); }
     else begin(start.ch ? newGame({ ...cfg, ch: start.ch }) : newGame({ ...cfg, at: start.at }));
-    if (import.meta.env?.DEV && typeof window !== "undefined") window.__hviSki = G;   // for the browser checks
+    if (import.meta.env?.DEV && typeof window !== "undefined") { window.__hviSki = G; import("./world.js").then(m => { G.W = m; }); import("./challenges.js").then(m => { G.C = m; }); import("./sim.js").then(m => { G.S = m; }); }   // for the browser checks (G.bot: a scripted rider)
     const restartCh = () => { const id = G.st.ch?.id || G.lastCh; if (!id) return false; G.lastCh = id; begin(newGame({ ...cfg, ch: id })); setMenu(null); return true; };
     const startNear = () => { const C = challengeNear(G.st); if (!C || G.st.mode === "air") return false; found.add(`ch:${C.id}`); G.lastCh = C.id; begin(newGame({ ...cfg, ch: C.id })); return true; };
     const goTo = (id) => { const s = warp(cfg, id, found); if (!s) return false; if (s.ch) G.lastCh = s.ch.id; begin(s); setMapOpen(false); G.paused = false; setMenu(null); say(`TO ${id.startsWith("ch:") ? CHALLENGE[id.slice(3)].name : POI[id].name}.`); return true; };
@@ -325,7 +326,7 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
           acc -= 1 / 60; n++;
           let w;
           if (G.tape) { if (G.tapeI >= G.tape.length) { G.paused = true; setTimeout(onQuit, 1600); break; } w = G.tape[G.tapeI++]; }
-          else { w = inp.word; G.words.push(w); }
+          else { w = G.bot ? G.bot(S) : inp.word; G.words.push(w); }
           step(S, w);
           if (G.words.length % SNAP_EVERY === 0 && !G.tape) { G.snaps.push({ i: G.words.length, snap: JSON.stringify(S) }); if (G.snaps.length > 8) G.snaps.splice(1, 1); }
           SFX.play(S.ev);
@@ -359,7 +360,7 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
       const shop = Math.abs((SHOP.x0 + SHOP.x1) / 2 - S.x) < 60 && Math.abs((SHOP.y0 + SHOP.y1) / 2 - S.y) < 50;
       const chs = C ? chalLine(S, C) : null;
       const liftL = S.mode === "lift" ? LIFT_W[S.lift.id] : null;
-      const h = { kmh: speedKmh(S), trail: R ? `${RATE_MARK[R.rating]} ${R.name}` : S.mode === "lift" ? "" : "OFF-PISTE", rating: R?.rating || null, ch: chs, count: S.ch?.ph === "count" ? Math.ceil(S.ch.n / 60) : 0, near: near ? near.name : null, shop, lift: liftL ? (S.lift.ph === "wait" ? `IN THE LINE: ${liftL.name} // ${Math.ceil(S.lift.n / 60)} S` : `${liftL.name} // ${Math.max(0, Math.ceil((liftRideTicks(liftL) - S.lift.k) / 60 / (S.ff ? 6 : 1)))} S TO THE TOP${S.ff ? " (FASTER)" : " // HOLD JUMP: FASTER"}`) : null, score: S.score, replay: Boolean(G.replay || G.tape), mode: S.mode };
+      const h = { kmh: speedKmh(S), trail: R ? `${RATE_MARK[R.rating]} ${R.name}` : S.mode === "lift" ? "" : inPipe(S.x, S.y) ? "THE PIPELINE" : waterAt(S.x, S.y) ? "THE RETENTION POOL" : "OFF-PISTE", rating: R?.rating || null, ch: chs, count: S.ch?.ph === "count" ? Math.ceil(S.ch.n / 60) : 0, near: near ? near.name : null, shop, lift: liftL ? (S.lift.ph === "wait" ? `IN THE LINE: ${liftL.name} // ${Math.ceil(S.lift.n / 60)} S` : `${liftL.name} // ${Math.max(0, Math.ceil((liftRideTicks(liftL) - S.lift.k) / 60 / (S.ff ? 6 : 1)))} S TO THE TOP${S.ff ? " (FASTER)" : " // HOLD JUMP: FASTER"}`) : null, score: S.score, replay: Boolean(G.replay || G.tape), mode: S.mode, air: airLine(S) };
       const key = JSON.stringify(h);
       if (key !== G.hudKey) { G.hudKey = key; setHud(h); }
       if (S.run !== G.lastTrail && S.mode === "ski" && R) { G.lastTrail = S.run; say(`${R.name}. ${RATE_WORD[R.rating]}.`); }
@@ -386,7 +387,8 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
             <div className="sk-tl"><b>{hud.kmh}</b> KM/H{hud.trail && <span className={`sk-trail r-${hud.rating || "off"}`}>{hud.trail}</span>}</div>
             {hud.ch && <div className="sk-tr"><span>{hud.ch.name}</span><b>{hud.ch.big}</b>{hud.ch.sub && <small>{hud.ch.sub}</small>}</div>}
             {hud.count > 0 && <div className="sk-count">{hud.count}</div>}
-            {popOn && <div className={`sk-pop ${pop.kind}`} key={pop.t}>{pop.text}</div>}
+            {hud.air && <div className="sk-pop air">{hud.air}</div>}
+            {!hud.air && popOn && <div className={`sk-pop ${pop.kind}`} key={pop.t}>{pop.text}</div>}
             {hud.lift && <div className="sk-bottom">{hud.lift}</div>}
             {!hud.lift && hud.near && <div className="sk-bottom">{mode === "pad" ? "Y" : mode === "touch" ? "RETRY" : "R"}: START {hud.near}</div>}
             {!hud.lift && !hud.near && hud.shop && <div className="sk-bottom">SHAUN WHITE // BOARDS AND SKIS. NOTHING ON SALE YET. THE SHELVES ARE BEING APPROVED.</div>}
@@ -417,6 +419,16 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
       )}
     </div>
   );
+}
+// the trick as it is being done, in the air
+function airLine(S) {
+  const A = S.air;
+  if (!A || A.t < 10) return null;
+  const n = Math.round(Math.abs(A.spin) / 180) * 180, f = Math.round(Math.abs(A.flip) / 360), parts = [];
+  if (f) parts.push(`${f > 1 ? `${f}X ` : ""}${A.flip > 0 ? "FRONT" : "BACK"}FLIP`);
+  if (n) parts.push(String(n));
+  if (A.holding) parts.push("GRAB");
+  return parts.length ? parts.join(" ") : null;
 }
 function chalLine(S, C) {
   const ch = S.ch, secs = ch.tc / 60;
