@@ -1,0 +1,121 @@
+// Who plays at THE BOWL: the city's football league (src/city/leagues.js, docs/CITY_SPEC.md "The
+// leagues and the Departmental Cup"), each Loop district's drafted eleven for the current season, as
+// the plan builder publishes them in the day's summary (civic.districts[id].teams.football.roster:
+// [[key, name, rating] x 11]). Pure apart from loadLeague (fetch). The city's sim stays out of this
+// page's bundle: the team names and the clock's epoch are copied here and scripts/check-football.mjs
+// holds them equal to leagues.js and city/sim.js.
+//
+// Content rule (the chess tables', the tennis club's, the courts'): the living appear and play and
+// never speak; nobody here is quoted. The calls are the Department's, about the play.
+
+export const TEAM_IDS = ["arts", "campus", "finance", "strip", "arena", "hq", "archive", "commons", "works", "sprawl"];
+export const TEAMS = {
+  arts: ["THE CURATED", "CURATED"], campus: ["THE TENURED", "TENURED"], finance: ["THE LEVERAGED", "LEVERAGED"], strip: ["THE HOUSE EDGE", "HOUSE EDGE"],
+  arena: ["THE CONDITIONED", "CONDITIONED"], hq: ["THE DEPARTMENT", "DEPARTMENT"], archive: ["THE INDEXED", "INDEXED"], commons: ["THE TOLERATED", "TOLERATED"],
+  works: ["THE PROCESSED", "PROCESSED"], sprawl: ["THE RETURNED", "RETURNED"],
+};
+export const teamName = (id) => `${TEAMS[id]?.[0] || String(id).toUpperCase()} ELEVEN`;
+export const teamShort = (id) => TEAMS[id]?.[1] || String(id).toUpperCase();
+// The kits: [jersey, trim]. One standard uniform, the district's colours (avatar CLOTH values, as the courts).
+export const KITS = {
+  arts: ["#d977a8", "#262626"], campus: ["#1f2f5a", "#e0c040"], finance: ["#3c8a46", "#e6e6e6"], strip: ["#b83232", "#e0c040"],
+  arena: ["#d97a2b", "#262626"], hq: ["#e6e6e6", "#3c8a46"], archive: ["#6b3fa0", "#e6e6e6"], commons: ["#3a6fd8", "#e6e6e6"],
+  works: ["#8a8a8a", "#d97a2b"], sprawl: ["#45618f", "#e0c040"],
+};
+const lum = (h) => { const n = parseInt(h.slice(1), 16); return 0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255); };
+// The away side changes into its trim when both jerseys are light or dark alike.
+export function kitsFor(home, away) {
+  const a = KITS[home] || KITS.hq, b = KITS[away] || KITS.works;
+  const close = (x, y) => Math.abs(lum(x) - lum(y)) < 45;
+  return [a, close(a[0], b[0]) && !close(a[0], b[1]) ? [b[1], b[0]] : b];
+}
+
+// The rosters as published for machine day 608 (season 22), for a page that cannot reach the plan.
+// Draft order, as the summary carries them; the live rosters replace them when they load.
+export const FALLBACK = {
+  day: 608, season: 22, live: false,
+  teams: {
+    arts: [["jason-kelce", "Jason Kelce", 80], ["ayrton-senna", "Ayrton Senna", 85], ["ray-allen", "Ray Allen", 63], ["frederick-douglass", "Frederick Douglass", 56], ["shigeru-miyamoto", "Shigeru Miyamoto", 54], ["michael-faraday", "Michael Faraday", 53], ["jack-nicholson", "Jack Nicholson", 52], ["socrates", "Socrates (philosopher)", 52], ["geoffrey-chaucer", "Geoffrey Chaucer", 51], ["ryan-reynolds", "Ryan Reynolds", 51], ["j-j-abrams", "J. J. Abrams", 50]],
+    campus: [["joe-namath", "Joe Namath", 77], ["tiger-woods", "Tiger Woods", 87], ["deion-sanders", "Deion Sanders", 61], ["carroll-shelby", "Carroll Shelby", 56], ["william-shatner", "William Shatner", 54], ["kendrick-lamar", "Kendrick Lamar", 53], ["jennifer-lopez", "Jennifer Lopez", 52], ["rza", "RZA", 52], ["hillary-clinton", "Hillary Clinton", 51], ["roger-waters", "Roger Waters", 51], ["jamie-dimon", "Jamie Dimon", 50]],
+    finance: [["travis-kelce", "Travis Kelce", 84], ["bob-burnquist", "Bob Burnquist", 81], ["phil-mickelson", "Phil Mickelson", 72], ["barack-obama", "Barack Obama", 55], ["jensen-huang", "Jensen Huang", 54], ["samuel-l-jackson", "Samuel L. Jackson", 53], ["dustin-hoffman", "Dustin Hoffman", 52], ["betty-white", "Betty White", 51], ["david-stern", "David Stern", 51], ["tony-blair", "Tony Blair", 51], ["dave-matthews", "Dave Matthews", 50]],
+    strip: [["nick-foles", "Nick Foles", 77], ["tenzing-norgay", "Tenzing Norgay", 87], ["katherine-stinson", "Katherine Stinson", 60], ["madonna", "Madonna", 57], ["augustus", "Augustus", 53], ["jimmy-page", "Jimmy Page", 53], ["john-lennon", "John Lennon", 52], ["plato", "Plato", 52], ["jimmy-buffett", "Jimmy Buffett", 51], ["martha-stewart", "Martha Stewart (businesswoman)", 51], ["jfk", "John F. Kennedy", 50]],
+    arena: [["a-j-brown", "A. J. Brown", 82], ["roy-jones-jr", "Roy Jones Jr.", 83], ["peyton-manning", "Peyton Manning", 65], ["robert-plant", "Robert Plant", 56], ["prince", "Prince (musician)", 54], ["rabindranath-tagore", "Rabindranath Tagore", 53], ["henry-ford", "Henry Ford", 52], ["thomas-aquinas", "Thomas Aquinas", 52], ["eminem", "Eminem", 51], ["sonia-sotomayor", "Sonia Sotomayor", 51], ["glenn-danzig", "Glenn Danzig", 50]],
+    hq: [["jalen-hurts", "Jalen Hurts", 83], ["sachin-tendulkar", "Sachin Tendulkar", 82], ["sergio-garcia", "Sergio García (professional golfer)", 60], ["tom-curran", "Tom Curran (cricketer)", 56], ["michelangelo", "Michelangelo", 54], ["rick-rubin", "Rick Rubin", 53], ["emiliano-zapata", "Emiliano Zapata", 52], ["trey-parker", "Trey Parker", 52], ["drew-barrymore", "Drew Barrymore", 51], ["steve-o", "Steve-O", 51], ["ethan-hawke", "Ethan Hawke", 50]],
+    archive: [["tom-brady", "Tom Brady (football player)", 89], ["wayne-gretzky", "Wayne Gretzky", 81], ["charles-barkley", "Charles Barkley", 59], ["jane-fonda", "Jane Fonda", 55], ["pam-grier", "Pam Grier", 55], ["archie-manning", "Archie Manning", 52], ["brad-pitt", "Brad Pitt", 52], ["brad-bird", "Brad Bird", 51], ["carol-burnett", "Carol Burnett", 51], ["big-boi", "Big Boi", 50], ["bill-hader", "Bill Hader", 50]],
+    commons: [["fred-williamson", "Fred Williamson", 76], ["jack-nicklaus", "Jack Nicklaus", 81], ["pedro-garcia-aguado", "Pedro García Aguado", 60], ["david-blaine", "David Blaine", 58], ["charles-dickens", "Charles Dickens", 53], ["grace-hopper", "Grace Hopper", 53], ["logan-paul", "Logan Paul", 52], ["patrick-stewart", "Patrick Stewart", 52], ["john-oates", "John Oates (musician)", 51], ["levar-burton", "LeVar Burton", 51], ["jude-law", "Jude Law", 50]],
+    works: [["walter-payton", "Walter Payton", 88], ["oj-simpson", "O.J. Simpson", 63], ["bubba-watson", "Bubba Watson", 75], ["frank-sinatra", "Frank Sinatra", 55], ["albert-einstein", "Albert Einstein", 54], ["al-pacino", "Al Pacino", 52], ["christopher-nolan", "Christopher Nolan", 52], ["bob-geldof", "Bob Geldof", 51], ["danny-boyle", "Danny Boyle", 51], ["alexey-pajitnov", "Alexey Pajitnov", 50], ["charlize-theron", "Charlize Theron", 50]],
+    sprawl: [["andy-dalton", "Andy Dalton", 71], ["aaron-hernandez", "Aaron Hernandez", 65], ["andre-the-giant", "André the Giant", 78], ["paul-mccartney", "Paul McCartney", 59], ["dolly-parton", "Dolly Parton", 53], ["ellen-church", "Ellen Church", 53], ["matt-stone", "Matt Stone", 52], ["michael-jackson", "Michael Jackson", 52], ["jon-stewart", "Jon Stewart", 51], ["kenneth-branagh", "Kenneth Branagh", 51], ["kate-winslet", "Kate Winslet", 50]],
+  },
+  pos: { arts: 4, campus: 6, finance: 1, strip: 10, arena: 9, hq: 8, archive: 7, commons: 2, works: 5, sprawl: 3 },
+};
+
+// The machine clock (src/city/sim.js machineClock): 1 real minute is 1 machine hour from the epoch.
+export const CITY_EPOCH = Date.UTC(2026, 8, 26, 0, 0, 0);
+export const CLOCK_SCALE = 60;
+export const machineDay = (ms = Date.now()) => Math.floor(((ms - CITY_EPOCH) * CLOCK_SCALE) / 3600000 / 24) + 1;
+
+export const shownName = (name) => String(name || "").replace(/\s*\([^)]*\)\s*/g, " ").trim().toUpperCase();
+export const sortEleven = (rows) => [...(rows || [])].sort((a, b) => b[2] - a[2] || (a[0] < b[0] ? -1 : 1)).slice(0, 11);
+export const teamRating = (rows) => (rows?.length ? Math.round(rows.reduce((n, r) => n + r[2], 0) / rows.length) : 0);
+
+export const citizenKeyOf = (caseId) => `citizen-${String(caseId || "").slice(-4).toLowerCase()}`;
+export function teamOfCase(league, caseId) {
+  if (!caseId || !league) return null;
+  const k = citizenKeyOf(caseId);
+  return TEAM_IDS.find(id => (league.teams[id] || []).some(r => r[0] === k)) || null;
+}
+// PLAY NOW: your own eleven when you are on one, else THE DEPARTMENT ELEVEN; against the team
+// nearest it in rating (an even game), the higher table position breaking a tie.
+export function playNowPair(league, mine = null) {
+  const home = mine && league.teams[mine] ? mine : "hq";
+  const r0 = teamRating(league.teams[home]);
+  const away = TEAM_IDS.filter(id => id !== home && league.teams[id]?.length).sort((a, b) =>
+    Math.abs(teamRating(league.teams[a]) - r0) - Math.abs(teamRating(league.teams[b]) - r0) || (league.pos[a] || 99) - (league.pos[b] || 99) || (a < b ? -1 : 1))[0];
+  return [home, away];
+}
+
+export async function loadLeague(fetchFn = globalThis.fetch, now = Date.now()) {
+  if (typeof fetchFn !== "function") return null;
+  const get = async (u) => { const r = await fetchFn(u); if (!r.ok) return null; return r.json(); };
+  const m = await get("/api/plan");
+  if (!m) return null;
+  const today = machineDay(now);
+  for (const day of [today, today - 1, m.latest]) {
+    const ver = m.sectors?.[day];
+    if (!ver) continue;
+    const lg = leagueFrom(await get(`/api/plan/${day}/${ver}/summary`));
+    if (lg) return lg;
+  }
+  return null;
+}
+export function leagueFrom(sum) {
+  const D = sum?.civic?.districts;
+  if (!D) return null;
+  const teams = {}, pos = {};
+  for (const id of TEAM_IDS) {
+    const t = D[id]?.teams?.football;
+    if (!Array.isArray(t?.roster) || !t.roster.length) return null;
+    teams[id] = t.roster.filter(r => Array.isArray(r) && r.length >= 3).map(([k, n, r]) => [String(k), String(n), Number(r) || 40]);
+    pos[id] = t.pos || 0;
+  }
+  return { day: sum.day, season: sum.civic.leagues?.season || null, live: true, teams, pos };
+}
+
+// Heads for figures whose likeness is not drawn yet (avatar.js fields near enough), as the courts.
+export const HINTS = {
+  "tom-brady": { skin: "fair", hair_style: "short", hair_color: "brown" },
+  "jalen-hurts": { skin: "brown", hair_style: "short", hair_color: "black", facial_hair: "beard" },
+  "joe-namath": { skin: "fair", hair_style: "side_part", hair_color: "dark_brown" },
+  "nick-foles": { skin: "fair", hair_style: "short", hair_color: "brown", facial_hair: "beard" },
+  "andy-dalton": { skin: "fair", hair_style: "short", hair_color: "red" },
+  "peyton-manning": { skin: "fair", hair_style: "short", hair_color: "brown" },
+  "archie-manning": { skin: "fair", hair_style: "side_part", hair_color: "grey" },
+  "walter-payton": { skin: "brown", hair_style: "short", hair_color: "black", facial_hair: "mustache" },
+  "jason-kelce": { skin: "fair", hair_style: "short", hair_color: "brown", facial_hair: "beard" },
+  "travis-kelce": { skin: "fair", hair_style: "short", hair_color: "brown", facial_hair: "beard" },
+  "a-j-brown": { skin: "brown", hair_style: "short", hair_color: "black" },
+  "fred-williamson": { skin: "brown", hair_style: "short", hair_color: "black", facial_hair: "mustache" },
+  "deion-sanders": { skin: "brown", hair_style: "short", hair_color: "black", facial_hair: "beard" },
+  "andre-the-giant": { skin: "fair", hair_style: "curly", hair_color: "black" },
+};
+export const CROPS = {};

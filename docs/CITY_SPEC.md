@@ -2590,6 +2590,120 @@ or any score.
   play, backcourt and three-second rules, goaltending, changing ends, dunk replays, a server replay
   check, counting results anywhere.
 
+### Football: THE BOWL (`#football`, 2026-10-05)
+
+Scott: "just model them off of Madden": the mechanics and conventions of console football (play
+calling, receiver buttons, the kick meter, the hit stick), none of its names, marks or assets; and
+"keep the design simple, but make the gameplay perfect": the courts' plain pixel look, the effort in
+the AI, the rules and the calibration.
+
+- **Where**: `#football[?home=<district>][&vs=<district>][&q=2|3|5][&cam=high]`
+  (`src/play/football/Football.jsx`), a tile on `#play` (`src/play/games.js`). Ways in: THE LEAGUES
+  hub's exhibitions line; DRIVE YOURSELF: E in the middle of THE BOWL's gridiron offers PLAY
+  FOOTBALL: AN EXHIBITION (`controlIso.js`, kind `football`). Phase 1: exhibitions, counted nowhere.
+- **The teams** (`roster.js`): the football league's drafted elevens for the current season from
+  today's plan summary (`civic.districts[id].teams.football.roster`), a bundled snapshot (season 22,
+  day 608) when the plan does not answer; `<TEAM> ELEVEN`, district kits. Iron men: the same eleven
+  plays offence, defence and the kicks. Positions (`sim.js lineup`): the named footballers play their
+  own (Brady, Hurts, Namath, Foles, Dalton QB; Payton, Simpson HB; A. J. Brown WR; Kelce, Hernandez TE;
+  Jason Kelce C), the rest fill by rating, the best to the ball and then the line; defence by rating
+  with the passer last; the kicker is the lowest rated, as the league's box score has it. PLAY NOW: your
+  own eleven when this browser's case is a rostered entrant, else THE DEPARTMENT ELEVEN, against the
+  nearest in rating. Options behind "+": quarter length (2, 3, 5), the camera, your team, the opponent.
+- **Why eleven a side**: measured. The sim step for 22 players is 0.04 ms; a frame's drawing is about
+  1 ms on a desktop (the field and the crowd, not the players: 22 players cost 0.2 ms over none), so a
+  phone at a sixth of the speed stays inside 16 ms. Seven a side would save nothing and drop four of
+  each drafted eleven.
+- **Play calling** (between downs, over the picture): offence picks a formation (SINGLEBACK, SHOTGUN,
+  GOAL LINE, SPECIAL) then a play: HB DIVE, HB STRETCH, PA POST, CURLS, PA BOOT; SLANTS, FOUR
+  VERTICALS, HB DRAW, HB SCREEN; GL POWER, QB SNEAK; PUNT, FIELD GOAL, KNEEL; FLIP mirrors it.
+  Defence: COVER 2, COVER 3, MAN COVER 1, BLITZ (cover 0), GOAL LINE, PREVENT. ASK THE COORDINATOR
+  picks for you (the CPU's own situational logic, shown before you choose). After a touchdown: KICK
+  THE EXTRA POINT or GO FOR TWO. TIMEOUT (three a half) when the clock would run. The CPU calls by
+  down, distance, field position, score and clock, with a per-district coach's lean to the pass;
+  fourth downs by its kicker's real range. The call reaches the sim as a code in bits 16-23 of the
+  frame's mask, so the record holds every call.
+- **Pre-snap**: A snaps; X opens three audibles (SLANTS, HB DIVE, FOUR VERTICALS); Y then a receiver's
+  button sends him deep (a hot route). On defence move your man (over the line is offside) and B
+  cycles who you are. The play art (routes in the buttons' colours) shows before the snap. A 25-second
+  play clock for your offence (delay of game).
+- **Passing**: the quarterback drops back on his own (the stick moves him; over the line he is a
+  runner). Each eligible receiver wears his button (A the back, B right wideout, X left, Y tight end,
+  RB the slot; 1-5 on keys; tap him on a phone): tap for a bullet, hold 10+ frames for a lob, thrown
+  on the release. Throws lead the receiver along his route (a curl stops, a slant runs on); accuracy
+  from the passer's rating, worse under pressure and on the run. At the ball's arrival the catch is
+  contested by ratings and position: clean catches, drops, breakups, interceptions, catches in
+  traffic. Control passes to the target; after the catch you run.
+- **Running**: SPRINT (RT / Shift, stamina drains and recovers), JUKE (right stick left/right, Q/E,
+  or X toward the stick), SPIN (B), TRUCK (right stick up / A: strength against strength), STIFF ARM
+  (Y). Each move opens a window in which tackles miss more often; the CPU carrier uses them too.
+  Blocking: pass protection stands between rusher and passer; run blocking fires into the nearest
+  man in front, the spare blockers climb to the linebackers; blocks are won or shed over time by
+  ratings (a double team holds longer). Broken tackles from tackler versus carrier.
+- **Defence**: B switches to the man nearest the ball. Running into the carrier tries a tackle; A
+  wraps up (surer), X dives (longer reach, on the ground if he misses), right stick up is the hit
+  stick (bigger fumble chance, bigger miss chance), Y swats or jumps a throw (too early is pass
+  interference). Engaged with a blocker, A or X is a pass-rush move. Let go and the AI plays your
+  man. CPU coverage: man (mirroring, re-reading the receiver every few frames, so a sharp cut wins a
+  step; press corners jam the release), zone (drop to the landmark, wall the most dangerous man in it,
+  deep zones stay over the top), break on the ball after a reaction from awareness; run reads,
+  pursuit angles, play-action freezing linebackers, dives at a man they cannot catch.
+- **Kicks**: the power-and-accuracy meter: A starts it (the snap), A sets the power on the rise, A
+  again as the needle falls through the line (EASY widens the window). Arrows aim a punt or kickoff.
+  Field goals fly real arcs: through the posts and over the 10-foot bar or not; range follows the
+  kicker's power (a celebrity kicker manages about 48 yards). Kickoffs from the 35 (touchback at the
+  25; returners kneel deep in the end zone, or stay put to kneel), punts (fair catch with Y; touchback
+  at the 20; muffs), extra points from the 15, two-point tries from the 2, free kick from the 20 after
+  a safety.
+- **Rules** (`sim.js settle`): downs and distance, first downs, goal to go, turnover on downs;
+  touchdown 6, extra point 1, two-point 2, field goal 3, safety 2; interceptions and fumbles (lost or
+  recovered), returns; touchbacks. Flags: holding (offence, 10, replay the down), pass interference
+  (defence, the spot, a first down), offside and false start (5, dead ball), delay of game; the other
+  side accepts or declines whichever is better for it; half the distance to the goal. Clock: four
+  short quarters (2, 3 or 5 minutes) on an accelerated clock: it runs during plays; after a play in
+  bounds 12 game seconds come off (5 for a side in a hurry, who always gets the snap off); it stops on
+  incompletions, scores, changes of possession, penalties, timeouts and, late in a half, out of
+  bounds; a warning stops it once in the 2nd and 4th. Halftime kickoff to the side that kicked first;
+  level after four: one sudden-death overtime period (a tie if it stays level). Teams keep their ends.
+- **The picture** (`render.js`, 320 x 240, whole-pixel scaling): the broadcast angle behind the play,
+  a true pitched perspective (the camera always looks downfield for team 0: behind the quarterback on
+  offence, behind the defence on defence), HIGH AND WIDE under "+". Striped turf, yard lines, hashes,
+  numbers, end zones in the kits' colours, goalposts, crowd stands on both sides and the far end
+  (cheering, standing, heads down). Line of scrimmage (blue) and the line to gain (yellow). Players
+  drawn 1.3x life size (the 16-bit habit), every one by depth: cleats, socks, pants, jersey over the
+  pads with numbers, the file photo's face under a helmet's crown (`heads.js`, head only). Banners for
+  the big moments; a two-pixel shake on a big hit (none with reduced motion).
+- **Presentation**: a score bug (teams, scores, timeouts, possession, quarter, clock, down and
+  distance, the spot, your play clock), the Department's calls under it (`calls.js`, about the play;
+  nobody on the field speaks or is quoted), a live region with the score, the shared crowd
+  (`crowdAudio.js`): a roar for your touchdowns and interceptions, groans for theirs, oohs for big hits
+  and broken tackles. Mute in `hvi-football-muted`. Pause and the end through `src/play/GameMenu.jsx`.
+- **Input** (`input.js`): keys (arrows/WASD, Shift sprint, Space/J A, K B, U X, I Y, O RB, L the right
+  stick up, Q/E jukes, 1-5 the receivers, Enter/Esc pause); a pad (standard mapping, read raw for X, Y,
+  RB, the triggers and the right stick; Switch positions swapped; the legend and the receivers' discs
+  name the pad's own buttons); touch (an eight-way pad and the buttons the moment needs: SNAP /
+  AUDIBLE / HOT, the five receivers, SPRINT / JUKE / SPIN / TRUCK / STIFF, SWITCH / TACKLE / DIVE / HIT
+  / SWAT, KICK; tap a receiver on the picture to throw to him). **EASY MODE** (on for a first visit,
+  `hvi-football-easy`): a bigger catch radius, steadier throws, slower CPU coverage reads, surer
+  tackles for you, a wider kick window, and your runner runs on his own when you let go.
+- **The record**: `{version, seed, cfg (quarter length, easy, both elevens, coaches), home, away,
+  inputLog, result}`, the human's input one mask a frame (UP 1, DOWN 2, LEFT 4, RIGHT 8, A 16, B 32, X
+  64, Y 128, RB 256, SPRINT 512, right stick up/left/right/down 1024-8192, the call code << 16), run-
+  length encoded. At the final whistle the browser replays it and says whether it reproduced; the
+  last three are kept in `localStorage["hvi-football-exhibitions"]`; WATCH THE TAPE plays it back.
+- **Calibration** (CPU v CPU over the league's own elevens, 3-minute quarters, checked by
+  `scripts/check-football.mjs`): about 5.8 yards a play, 64-68% completions, 2.3% of throws
+  intercepted, two sacks a game between the sides, 3 yards a carry, a stronger eleven winning nearly
+  always. Roughly 37 plays a side in a game of 3-minute quarters.
+- **Check**: `scripts/check-football.mjs` (purity; chains, downs, incompletions, turnover on downs,
+  both directions; scoring values; field goals by physics; safety and the free kick; touchbacks;
+  holding, interference, accept/decline; a bot's game with calls replayed twice, another seed
+  differs, a doctored call breaks it, a wrong version refused; strength; the calibration bands; roster
+  names, clock, lineups; the calls quote nobody).
+- **Not yet**: onside kicks, laterals, intentional grounding, the challenge flag, a defensive
+  audible, motion, more than one hot route at a time, changing ends, a server replay check, counting
+  results anywhere.
+
 ### Fishing: THE WATERS (`#fish`, 2026-10-05)
 
 - **Where**: `#fish[?spot=pier|break|estuary|river|lake]` (`src/play/fish/Fish.jsx`, lazy chunk). Ways in:
