@@ -48,3 +48,20 @@
 .sb-tb.y { left: 56px; top: 0; } .sb-tb.x { left: 0; top: 52px; } .sb-tb.b { right: 0; top: 52px; } .sb-tb.a { left: 56px; top: 104px; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .sb-tb.a small { color: var(--accent-ink); }
 .sb-tb.rv { left: 0; top: 0; width: 40px; height: 40px; font-size: 12px; border-radius: 6px; }
+
+/* the controls guide (Guide.jsx) and the first-run prompts */
+.sb-guide { margin: 0 0 var(--s3); }
+.sb-guide-h { font-size: var(--t-m); letter-spacing: 0.08em; margin: 0 0 var(--s2); }
+.sb-pad { display: block; width: 100%; max-width: 420px; height: auto; margin: 0 0 var(--s2); font-family: inherit; }
+.sb-guide-rows { margin: 0 0 var(--s2); display: grid; gap: var(--s2); }
+.sb-guide-rows div { display: grid; grid-template-columns: 9ch 1fr; gap: var(--s3); }
+.sb-guide-rows dt { color: var(--accent); font-weight: 700; font-size: var(--t-xs); }
+.sb-guide-rows dd { margin: 0; color: var(--fg); font-size: var(--t-s); line-height: 1.4; }
+.sb-guide.compact .sb-guide-rows div { grid-template-columns: 1fr; gap: 0; }
+.sb-guide-go { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); margin: 0; }
+.sb-prompt { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); max-width: 92%; padding: 4px 12px; font-size: var(--t-s); font-weight: 700; letter-spacing: 0.06em; text-align: center; color: #fde68a; background: rgba(2, 6, 23, 0.82); border: var(--bw) solid var(--line-hi); pointer-events: none; transition: opacity 0.6s; }
+.sb-prompt.out { opacity: 0; }
+.sb-opts { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); align-items: center; margin: 0 0 var(--s3); font-size: var(--t-xs); color: var(--fg-mute); }
+.sb-opts b { color: var(--fg-dim); letter-spacing: 0.04em; font-weight: 700; }
+.sb-opts .sb-row { margin: 0; }
+.sb-tb.sp { top: 104px; width: 40px; height: 40px; font-size: 16px; border-radius: 6px; } .sb-tb.sp.l { left: 0; } .sb-tb.sp.r { right: 0; }

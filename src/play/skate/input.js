@@ -1,21 +1,25 @@
 // THE PARK, skateable: the hands. Keys, a controller and the touch pad folded into the sim's one input
 // word a tick (sim.js pack), plus the game's own buttons (pause, restart), which never reach the sim.
-//   keys   arrows / WASD: the d-pad (UP pushes, LEFT/RIGHT turn; in the air, spin)
-//          SPACE, J or Z: OLLIE (hold to crouch, let go to pop)   K or X: FLIP   L or C: GRAB
-//          I or V: GRIND (and lip tricks)   SHIFT or U: REVERT   ENTER / ESC / P: pause   R: restart
-//   pad    d-pad or left stick; A ollie, X flip, B grab, Y grind (the handheld layout); any shoulder or
-//          trigger: revert; START pause; SELECT restart (Nintendo pads by position, not by letter)
-//   touch  a d-pad on the left, A B X Y on the right as on a pad, a REVERT button over them
+// The layout is the classic skate game's, by button POSITION (the bottom, right, left and top face buttons are
+// the cross, circle, square and triangle on a PlayStation pad, A B X Y on an Xbox pad's positions, B A Y X on a
+// Switch pad's):
+//   bottom (cross)    OLLIE: hold to crouch, let go to pop       left (square)   FLIP, with a direction
+//   right (circle)    GRAB, with a direction; hold to keep it     top (triangle)  GRIND / slide / lip trick
+//   R2 / L2           REVERT (as you land on a ramp)              L1 / R1         SPIN left / right in the air
+//   d-pad or left stick  push (up), turn, brake; in the air, spin; Up then Down quickly: a manual
+//   keys   arrows / WASD d-pad; Z, SPACE or J ollie; X or K flip; C or L grab; V or I grind; SHIFT or U revert;
+//          Q / E spin; ENTER / ESC / P pause; R restart
+//   touch  a d-pad on the left; cross, square, circle, triangle on the right, a revert button and two spin buttons
 import { familyOf, deadzone } from "../../city/gamepad.js";
 import { pack } from "./sim.js";
 
 const KEYS = {
   ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down", ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right",
-  Space: "a", KeyJ: "a", KeyZ: "a", KeyK: "x", KeyX: "x", KeyL: "b", KeyC: "b", KeyI: "y", KeyV: "y", ShiftLeft: "r", ShiftRight: "r", KeyU: "r",
+  Space: "a", KeyJ: "a", KeyZ: "a", KeyK: "x", KeyX: "x", KeyL: "b", KeyC: "b", KeyI: "y", KeyV: "y", ShiftLeft: "r", ShiftRight: "r", KeyU: "r", KeyQ: "sl", KeyE: "sr",
 };
 const META = { Enter: "pause", Escape: "pause", KeyP: "pause", KeyR: "restart" };
 const btn = (pad, i) => { const b = pad.buttons?.[i]; return Boolean(b && (typeof b === "object" ? b.pressed || b.value > 0.4 : b > 0.4)); };
-const BLANK = { up: false, down: false, left: false, right: false, a: false, b: false, x: false, y: false, r: false };
+const BLANK = { up: false, down: false, left: false, right: false, a: false, b: false, x: false, y: false, r: false, sl: false, sr: false };
 
 export function createInput(initial = "keys") {
   const held = new Set(), tapped = new Set();
@@ -45,12 +49,11 @@ export function createInput(initial = "keys") {
       const pad = pads.find(p => p && p.connected !== false);
       if (pad) {
         family = familyOf(pad.id);
-        const sw = family === "switch";
-        const Ls = deadzone(pad.axes?.[0] || 0, pad.axes?.[1] || 0);
+                const Ls = deadzone(pad.axes?.[0] || 0, pad.axes?.[1] || 0);
         const P = {
           up: btn(pad, 12) || Ls.y < -0.45, down: btn(pad, 13) || Ls.y > 0.45, left: btn(pad, 14) || Ls.x < -0.45, right: btn(pad, 15) || Ls.x > 0.45,
-          a: btn(pad, sw ? 1 : 0), b: btn(pad, sw ? 0 : 1), x: btn(pad, sw ? 3 : 2), y: btn(pad, sw ? 2 : 3),
-          r: btn(pad, 4) || btn(pad, 5) || btn(pad, 6) || btn(pad, 7),
+          a: btn(pad, 0), b: btn(pad, 1), x: btn(pad, 2), y: btn(pad, 3),   // by position, whatever is printed on them
+          sl: btn(pad, 4), sr: btn(pad, 5), r: btn(pad, 6) || btn(pad, 7),
         };
         const start = btn(pad, 9), sel = btn(pad, 8);
         if (Object.values(P).some(Boolean) || start || sel) last = "pad";

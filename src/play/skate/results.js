@@ -14,11 +14,13 @@ export function keepResult(r) {
 }
 export function readProgress() { try { const j = JSON.parse(localStorage.getItem(PROG) || "{}"); return j && typeof j === "object" ? j : {}; } catch { return {}; } }
 // a finished run into the progress -> the new progress (and whether it beat the best)
+// progress is kept per level and per difficulty (PRO is the plain level, as before)
+export const progKey = (level, diff) => (!diff || diff === "pro" ? level : `${level}.${diff}`);
 export function fileProgress(res) {
-  const p = readProgress(), L = p[res.level] || { goals: [], best: 0, combo: 0 };
+  const p = readProgress(), key = progKey(res.level, res.diff), L = p[key] || { goals: [], best: 0, combo: 0 };
   const beat = res.mode === "run" && res.score > (L.best || 0);
   const next = { goals: [...new Set([...(L.goals || []), ...res.goals])], best: res.mode === "run" ? Math.max(L.best || 0, res.score) : L.best || 0, combo: Math.max(L.combo || 0, res.best) };
-  p[res.level] = next;
+  p[key] = next;
   try { localStorage.setItem(PROG, JSON.stringify(p)); } catch { /* the tab remembers */ }
   return { p, beat };
 }

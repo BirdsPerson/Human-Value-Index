@@ -14,21 +14,29 @@
 //                needle it lasts; the grind earns per tick; the meter starts from the seeded wobble
 //   goals        letters, the tape, a grind goal, a lip-trick goal, the score goal; the result shape
 //   the city     the tile, the icon, the route, the house cabinet, the E-prompt, the building's door
+//   version 2    the classic layout and rules: multi-flips, L1 / R1 spin, goofy, three difficulties, the goals sized
+//                to them; version-1 runs (a fixture) replay on the frozen sim1.js
+//   the casual   a casual-human bot (timing noise +-100 ms, a reaction time on the balance needle, rare manuals):
+//   human        on ROOKIE it does the first two goals of a run and lands 70%+ of simple tricks
 // Run: node scripts/check-skate.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const S = await import("../src/play/skate/sim.js");
+const { casual } = await import("./skate-bot.mjs");
 const { LEVELS, LEVEL_IDS, LETTERS } = await import("../src/play/skate/levels.js");
 const B = S.BIT;
+const NG = (c) => S.newGame({ diff: "pro", ...c });   // the rules these groups were written on: PRO (ROOKIE is the default)
 let n = 0;
 const ok = (msg) => { n++; if (process.env.VERBOSE) console.log("ok", msg); };
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 
 // ---- purity ----------------------------------------------------------------------------------------------------
 {
-  const src = read("src/play/skate/sim.js").replace(/\/\/.*$/gm, "");
-  for (const bad of ["Math.random", "Date.now", "performance", "Math.sin", "Math.cos", "Math.tan", "Math.atan", "Math.hypot", "Math.pow", "Math.exp", "Math.log", "**", "document", "window"]) assert.ok(!src.includes(bad), `sim.js uses ${bad}`);
+  for (const f of ["sim.js", "sim1.js"]) {
+  const src = read(`src/play/skate/${f}`).replace(/\/\/.*$/gm, "");
+  for (const bad of ["Math.random", "Date.now", "performance", "Math.sin", "Math.cos", "Math.tan", "Math.atan", "Math.hypot", "Math.pow", "Math.exp", "Math.log", "**", "document", "window"]) assert.ok(!src.includes(bad), `${f} uses ${bad}`);
+  }
   for (let i = 0; i < 64; i++) assert.ok(Math.abs(S.COS[i] - Math.cos((i * Math.PI) / 32)) < 1e-9 && Math.abs(S.SIN[i] - Math.sin((i * Math.PI) / 32)) < 1e-9, "the compass by series");
   ok("purity");
 }
@@ -37,7 +45,7 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const KINDS = new Set(["score", "combo", "letters", "tape", "grind", "trick", "spin"]);
 for (const id of LEVEL_IDS) {
   const D = LEVELS[id], L = S.levelOf(id);
-  const st = S.newGame({ level: id });
+  const st = NG({ level: id });
   assert.ok(st.x > 0 && st.x < D.W && st.y >= 0 && st.y < D.H, `${id}: the start is inside`);
   for (const c of [...LETTERS, "tape"]) {
     const it = D.items[c]; assert.ok(it, `${id}: ${c} placed`);
@@ -62,17 +70,17 @@ const has = (evs, k, v) => evs.some(e => e[0] === k && (v === undefined || e[1] 
 const banks = (evs) => evs.filter(e => e[0] === "bank");
 // the balance hand: hold the key away from where the needle leans
 const counter = (B0, neg, pos) => (B0.b > 0.02 ? neg : B0.b < -0.02 ? pos : 0);
-function at(level, x, y, h, extra = {}) { const st = S.newGame({ level, mode: "free", seed: 11 }); const L = S.levelOf(level), g = S.ground(L, x, y); Object.assign(st, { x, y, h, z: g.h, o: g.o }, extra); return st; }
+function at(level, x, y, h, extra = {}) { const st = NG({ level, mode: "free", seed: 11 }); const L = S.levelOf(level), g = S.ground(L, x, y); Object.assign(st, { x, y, h, z: g.h, o: g.o }, extra); return st; }
 
 // ---- physics -------------------------------------------------------------------------------------------------------
 {
   // push north from the park's start: up the north quarter pipe, straight up, back down
-  const st = S.newGame({ level: "park", mode: "free" });
+  const st = NG({ level: "park", mode: "free" });
   let apex = 0, launchX = null, landed = false;
   play(st, (s) => { if (s.st === "air") { apex = Math.max(apex, s.z); if (launchX === null) launchX = s.x; } if (landed) return null; return B.up; }, 600).evs;
-  const st2 = S.newGame({ level: "park", mode: "free" }), ev2 = play(st2, () => B.up, 400).evs;
+  const st2 = NG({ level: "park", mode: "free" }), ev2 = play(st2, () => B.up, 400).evs;
   assert.ok(has(ev2, "launch") && has(ev2, "land"), "the quarter pipe launches and you land back on it");
-  const st3 = S.newGame({ level: "park", mode: "free" }); let a3 = 0, x3 = new Set();
+  const st3 = NG({ level: "park", mode: "free" }); let a3 = 0, x3 = new Set();
   play(st3, (s) => { if (s.st === "air") { a3 = Math.max(a3, s.z); x3.add(s.y.toFixed(3)); } return B.up; }, 260);
   assert.ok(a3 > 1.6 + 0.4 && a3 < 1.6 + 2.5, `vert air over the park's coping (${a3.toFixed(2)})`);
   assert.ok(x3.size === 1, "straight up: the skater stays over the lip in the air");
@@ -81,10 +89,10 @@ function at(level, x, y, h, extra = {}) { const st = S.newGame({ level, mode: "f
   play(q, () => B.up, 1);
   assert.ok(Math.abs(q.vy) < 0.01, "no push on a ramp");
   // the halfpipe: pumping climbs, air after air
-  const v = S.newGame({ level: "vert", mode: "free" }), launches = [];
+  const v = NG({ level: "vert", mode: "free" }), launches = [];
   play(v, (s) => { for (const e of s.ev) if (e[0] === "launch") launches.push(s.vz); return B.up; }, 900);
   assert.ok(launches.length >= 4 && launches[3] > launches[0] + 0.05 && launches.every(x => x <= S.P.VZ_MAX + 1e-9), `pumping climbs the vert ramp (${launches.map(x => x.toFixed(2)).join(" ")})`);
-  const idle = S.newGame({ level: "vert", mode: "free" }), ei = play(idle, () => 0, 600).evs;
+  const idle = NG({ level: "vert", mode: "free" }), ei = play(idle, () => 0, 600).evs;
   assert.ok(!has(ei, "launch"), "dropping in without a pump does not clear the far coping");
   // an ollie clears a 0.5 box (the funbox): charge and pop, land on top
   const o = at("park", 10.5, 13.5, 48);
@@ -97,7 +105,7 @@ function at(level, x, y, h, extra = {}) { const st = S.newGame({ level, mode: "f
 // ---- combos --------------------------------------------------------------------------------------------------------
 {
   // a kickflip off the park's quarter pipe, landed: 100 x 1
-  const st = S.newGame({ level: "park", mode: "free" });
+  const st = NG({ level: "park", mode: "free" });
   const { evs } = play(st, (s) => (s.st === "air" && s.vz > 0.05 && !s.tr ? B.x | B.left : s.st === "air" ? 0 : B.up), 400);
   const b0 = banks(evs)[0];
   assert.ok(b0 && b0[1] === 100 && b0[3] === 1 && has(evs, "trick", "KICKFLIP"), `a kickflip banks 100 x 1 (${JSON.stringify(b0)})`);
@@ -154,7 +162,7 @@ function at(level, x, y, h, extra = {}) { const st = S.newGame({ level, mode: "f
 
 // ---- a revert on vert links the combo ------------------------------------------------------------------------------
 {
-  const v = S.newGame({ level: "vert", mode: "free" });
+  const v = NG({ level: "vert", mode: "free" });
   let n2 = 0, revd = false, done = false, mult = 0;
   const ev = play(v, (s) => {
     if (done) return null;
@@ -232,13 +240,13 @@ function at(level, x, y, h, extra = {}) { const st = S.newGame({ level, mode: "f
 
 // ---- letters, tape, goals ---------------------------------------------------------------------------------------------
 {
-  const st = S.newGame({ level: "park", mode: "run" });
+  const st = NG({ level: "park", mode: "run" });
   const it = LEVELS.park.items;
   for (const c of [...LETTERS, "tape"]) { Object.assign(st, { x: it[c].x, y: it[c].y, z: it[c].z - 0.3, st: "air", vz: 0.02 }); S.step(st, 0); }
   assert.equal(st.letters, 31); assert.ok(st.tape);
   assert.ok(st.goals.includes("skate") && st.goals.includes("tape"), "S-K-A-T-E and the tape are goals done");
   const r = S.resultOf(st);
-  assert.deepEqual(Object.keys(r).sort(), ["best", "done", "game", "goals", "goalsOf", "letters", "level", "mode", "score", "seed", "tape", "ticks", "v"].sort(), "the results shape");
+  assert.deepEqual(Object.keys(r).sort(), ["best", "diff", "done", "game", "goals", "goalsOf", "letters", "level", "mode", "score", "seed", "tape", "ticks", "v"].sort(), "the results shape");
   assert.equal(r.letters, "SKATE"); assert.equal(r.game, "skate"); assert.equal(r.goalsOf, 6);
   // the HQ rail (THE PLAZA): down the steps from the terrace
   const p = at("street", 15, 1.5, 16);
@@ -252,7 +260,7 @@ function at(level, x, y, h, extra = {}) { const st = S.newGame({ level, mode: "f
 function botWords(level, seed) {
   // a jittery skater: pushes, turns, ollies, tricks, grinds, manuals, from its own seeded generator
   let r = seed >>> 0; const R = () => { r = (Math.imul(r, 1664525) + 1013904223) >>> 0; return r / 4294967296; };
-  const st = S.newGame({ level, mode: "run", seed }), words = [];
+  const st = NG({ level, mode: "run", seed }), words = [];
   let cur = 0, hold = 0;
   while (!st.done && words.length < S.RUN_TICKS + 2000) {
     if (hold-- <= 0) {
@@ -268,7 +276,7 @@ for (const level of ["park", "vert", "street"]) {
   const { st, words } = botWords(level, 4242 + level.length);
   assert.ok(st.done && st.t >= S.RUN_TICKS, `${level}: the run ends at the horn (${st.t})`);
   const res = S.resultOf(st);
-  const rec = { v: S.VERSION, cfg: { level, mode: "run", seed: st.seed }, inputLog: S.rleEncode(words) };
+  const rec = { v: S.VERSION, cfg: { level, mode: "run", seed: st.seed, diff: "pro" }, inputLog: S.rleEncode(words) };
   assert.deepEqual(S.rleDecode(rec.inputLog), words, "RLE round-trips");
   assert.equal(S.logTicks(rec.inputLog), words.length);
   const a = S.replay(rec), b = S.replay(JSON.parse(JSON.stringify(rec)));
@@ -283,6 +291,127 @@ for (const level of ["park", "vert", "street"]) {
   assert.throws(() => S.replay({ ...rec, v: S.VERSION + 1 }), /version/);
   assert.ok(st.stats.tricks > 10, `${level}: the bot did tricks (${st.stats.tricks}, score ${res.score})`);
   ok(`determinism ${level}`);
+}
+
+// ---- version 2: the layout and the rules ------------------------------------------------------------------------------
+{
+  assert.equal(S.VERSION, 2);
+  // the fixture: runs made on version 1 replay to the same result (on the frozen sim1.js, whatever sim.js becomes)
+  const fx = JSON.parse(read("scripts/fixtures/skate-v1-runs.json"));
+  assert.equal(fx.length, 3);
+  for (const { rec, res } of fx) {
+    assert.equal(rec.v, 1);
+    assert.deepEqual(S.replay(rec).res, res, `a version-1 ${rec.cfg.level} run replays as it was`);
+    assert.ok(S.verify(rec, res) && !S.verify(rec, { ...res, score: res.score + 1 }), "and verifies");
+  }
+  assert.throws(() => S.replay({ v: 3, cfg: {}, inputLog: [] }), /version/);
+
+  // multi-flips: the flip held on goes round again. A double is worth more and needs the air; landing mid-turn bails.
+  const flip = (hold, tail = 0) => {   // ollie off the park's flat, kickflip held `hold` ticks (then `tail` of nothing), land
+    const st = NG({ level: "park", mode: "free", seed: 5 });
+    Object.assign(st, { x: 20, y: 20, h: 32, z: 0 });
+    let k = 0;
+    const { evs } = play(st, (s, i) => { if (i < 30) return B.up; if (i === 30) return B.a; if (s.st === "air") { k++; return k <= hold ? B.x | B.left : 0; } return k ? null : 0; }, 300);
+    return { st, evs };
+  };
+  // a high ollie (a quarter pipe's air) gives the time for a double and a triple
+  const vertFlip = (hold) => {   // a big air (the pumped halfpipe's): flip pressed on the 6th tick, held `hold` ticks
+    const st = NG({ level: "park", mode: "free" });
+    Object.assign(st, { x: 20, y: 12, z: 0, st: "air", vz: 0.26, vert: -1 });
+    let air = 0;
+    const { evs } = play(st, (s) => { if (s.st === "air") { air++; return air > 5 && air <= 5 + hold ? B.x | B.left : 0; } return 0; }, 150);
+    return { st, evs };
+  };
+  const one = vertFlip(6), two = vertFlip(24), three = vertFlip(38);
+  const nm = (e) => e.filter(x => x[0] === "trick").map(x => x[1]);
+  assert.deepEqual(nm(one.evs), ["KICKFLIP"]); assert.deepEqual([...new Set(nm(two.evs))].pop(), "DOUBLE KICKFLIP", `held on: a double (${nm(two.evs)})`); assert.equal([...new Set(nm(three.evs))].pop(), "TRIPLE KICKFLIP", `held on: a triple (${nm(three.evs)})`);
+  const pts = (r) => banks(r.evs)[0]?.[2];
+  assert.ok(pts(one) === 100 && pts(two) >= 240 && pts(three) >= 420, `each turn is worth more (${pts(one)}, ${pts(two)}, ${pts(three)})`);
+  assert.ok(pts(two) > pts(one) && pts(three) > pts(two));
+  // a tap, then another tap mid-air: a double
+  const tapTap = NG({ level: "park", mode: "free" });
+  let ta = 0;
+  const et = play(tapTap, (s) => { if (s.st === "air") { ta++; return ta === 7 || ta === 15 ? B.x | B.left : 0; } return ta ? null : B.up; }, 600).evs;
+  assert.ok(nm(et).includes("DOUBLE KICKFLIP"), `tap again mid-air: a double (${nm(et)})`);
+  // a flip that is not through its turn when you land: a bail (PRO), or the rookie's 60% is done
+  const late = (diff) => { const st = NG({ level: "park", mode: "free", diff }); Object.assign(st, { x: 20, y: 20, h: 32 }); let a = 0; return { st, evs: play(st, (s, i) => { if (i < 30) return B.up; if (i === 30) return B.a; if (s.st === "air") { a++; return a === 16 ? B.x | B.left : 0; } return 0; }, 200).evs }; };
+  const lp = late("pro"), lr = late("rookie");
+  assert.ok(has(lp.evs, "bail", "UNDER-ROTATED"), "pro: landing mid-flip is a bail");
+  assert.ok(!has(lr.evs, "bail") && banks(lr.evs)[0], "rookie: a flip past 60% of its turn is landed");
+
+  // L1 / R1 spin in the air (and the d-pad still does), and goofy mirrors the tricks
+  const spin = (bit, extra = {}) => { const st = NG({ level: "park", mode: "free", ...extra }); Object.assign(st, { x: 20, y: 20, h: 32 }); return { st, evs: play(st, (s, i) => (i < 30 ? B.up : i === 30 ? B.a : s.st === "air" && Math.abs(s.face) < 31 ? bit : 0), 120).evs }; };
+  assert.ok(has(spin(B.sr).evs, "trick", "BS 180") && has(spin(B.sl).evs, "trick", "FS 180"), "R1 spins one way, L1 the other");
+  assert.ok(has(spin(B.sr, { goofy: true }).evs, "trick", "FS 180"), "goofy names the spin the other way");
+  const gf = (goofy) => { const st = NG({ level: "park", mode: "free", goofy }); Object.assign(st, { x: 20, y: 20, h: 32 }); return nm(play(st, (s, i) => (i < 30 ? B.up : i === 30 ? B.a : s.st === "air" && !s.tr ? B.x | B.left : 0), 120).evs); };
+  assert.deepEqual(gf(false), ["KICKFLIP"]); assert.deepEqual(gf(true), ["HEELFLIP"], "goofy: the d-pad's left and right swap in every trick");
+
+  // the difficulties: ROOKIE is the default; its meters are wider and its landings kinder; SICK is harder than PRO
+  assert.equal(S.newGame({ level: "park" }).diff, "rookie");
+  const fall = (diff) => { const st = NG({ level: "park", mode: "free", diff }); Object.assign(st, { x: 20, y: 20, h: 32 }); let n2 = 0; play(st, (s, i) => (i < 20 ? B.up : i < 23 ? 0 : i === 23 ? B.up : i === 24 ? B.down : s.st === "manual" ? (n2++, 0) : null), 600); return n2; };
+  assert.ok(fall("rookie") > fall("pro") && fall("pro") >= fall("sick"), `a manual left alone lasts longer on ROOKIE (${fall("rookie")} / ${fall("pro")} / ${fall("sick")} ticks)`);
+  const grabLand = (diff) => { const st = NG({ level: "park", mode: "free", diff }); Object.assign(st, { x: 20, y: 20, h: 32 }); return play(st, (s, i) => (i < 30 ? B.up : i === 30 ? B.a : i === 31 ? 0 : s.st === "air" ? B.b : 0), 200).evs; };
+  assert.ok(has(grabLand("pro"), "bail", "STILL GRABBING") && !has(grabLand("rookie"), "bail") && banks(grabLand("rookie")).length === 1, "rookie lets go of the grab for you");
+  const sideways = (diff) => { const st = NG({ level: "park", mode: "free", diff }); Object.assign(st, { x: 20, y: 20, h: 32 }); return play(st, (s, i) => (i < 30 ? B.up : i === 30 ? B.a : s.st === "air" && Math.abs(s.face) < 21 ? B.right : 0), 200).evs; };   // 9 of 16: a little over a quarter turn off
+  assert.ok(has(sideways("pro"), "bail", "SIDEWAYS") && !has(sideways("rookie"), "bail", "SIDEWAYS"), "rookie forgives a spin that is not quite straight");
+  const gr = S.goalsFor("park", "rookie"), gp = S.goalsFor("park", "pro"), gs = S.goalsFor("park", "sick");
+  assert.deepEqual(gp, LEVELS.park.goals);
+  assert.ok(gr[0].n < gp[0].n && gr[1].n < gp[1].n && gs[0].n > gp[0].n, `goals sized to the level (${gr[0].n} / ${gp[0].n} / ${gs[0].n})`);
+  assert.ok(/1,000/.test(gr[0].name) && /2,500/.test(gr[1].name), `the names follow (${gr[0].name}, ${gr[1].name})`);
+  // the keys and the pad (input.js): by position
+  const inp = read("src/play/skate/input.js");
+  assert.ok(/a: btn\(pad, 0\), b: btn\(pad, 1\), x: btn\(pad, 2\), y: btn\(pad, 3\)/.test(inp), "face buttons by position: bottom ollie, right grab, left flip, top grind");
+  assert.ok(/sl: btn\(pad, 4\), sr: btn\(pad, 5\), r: btn\(pad, 6\) \|\| btn\(pad, 7\)/.test(inp), "L1 / R1 spin, the triggers revert");
+  const G = await import("../src/play/skate/Guide.jsx").catch(() => null);
+  ok("version 2");
+}
+
+// ---- the casual human --------------------------------------------------------------------------------------------------
+const casualRun = (seed, diff, level = "park") => {
+  const st = NG({ level, mode: "run", seed, diff }), bot = casual(seed * 77 + 5, { level }), words = [];
+  while (!st.done && words.length < S.RUN_TICKS + 2000) { const w = bot(st); words.push(w); S.step(st, w); }
+  return { st, words };
+};
+{
+  const stats = {};
+  for (const diff of ["rookie", "pro", "sick"]) {
+    const sc = [], two = [];
+    for (let seed = 1; seed <= 30; seed++) { const { st } = casualRun(seed, diff); sc.push(st.score); two.push(st.goals.includes("score") && st.goals.includes("pro")); }
+    sc.sort((a, b) => a - b);
+    stats[diff] = { median: sc[15], min: sc[0], two: two.filter(Boolean).length };
+  }
+  assert.ok(stats.rookie.two >= 27, `the casual bot does ROOKIE's first two goals in ${stats.rookie.two} of 30 runs`);
+  assert.ok(stats.rookie.median > 2 * stats.pro.median && stats.pro.median >= stats.sick.median, "ROOKIE is easier than PRO is easier than SICK");
+  // and its record replays
+  const { st, words } = casualRun(7, "rookie"); const rec = { v: S.VERSION, cfg: { level: "park", mode: "run", seed: 7, diff: "rookie", goofy: false }, inputLog: S.rleEncode(words) };
+  assert.deepEqual(S.replay(rec).res, S.resultOf(st), "a ROOKIE run replays from its log");
+  if (process.env.VERBOSE || process.env.SKATE_REPORT) console.log("casual bot, 30 two-minute runs on THE PARK:", JSON.stringify(stats));
+
+  // simple tricks: an ollie on the flat with one kickflip (a tap) or one grab (held a while, let go), with +-100 ms noise
+  const simple = (diff, kind, n2 = 300) => {
+    let landed = 0;
+    for (let i = 0; i < n2; i++) {
+      let r = (i * 2654435761 + 12345) >>> 0; const R = () => { r = (Math.imul(r, 1664525) + 1013904223) >>> 0; return r / 4294967296; };
+      const jit = () => Math.round((R() * 2 - 1) * 6);
+      const st = NG({ level: "park", mode: "free", seed: i + 1, diff }); Object.assign(st, { x: 20, y: 20, h: 32 });
+      const crouch = 6 + Math.floor(R() * 8), a = Math.max(0, 9 + jit()), len = kind === "flip" ? 5 + Math.floor(R() * 4) : 10 + Math.floor(R() * 14), dir = [B.left, B.right, B.down, B.up][Math.floor(R() * 4)];
+      let e = -1, did = false;
+      const evs = play(st, (s, t) => {
+        if (t < 30) return B.up;
+        if (t < 30 + crouch) return B.a | B.up;
+        if (s.st === "air") { e++; if (e >= a && e < a + len) { did = true; return (kind === "flip" ? B.x : B.b) | dir; } return 0; }
+        return 0;
+      }, 400).evs;
+      if (did && banks(evs).length && !has(evs, "bail")) landed++;
+    }
+    return landed / n2;
+  };
+  const rates = {};
+  for (const diff of ["rookie", "pro", "sick"]) rates[diff] = { flip: simple(diff, "flip"), grab: simple(diff, "grab") };
+  for (const k of ["flip", "grab"]) assert.ok(rates.rookie[k] >= 0.7, `ROOKIE lands ${Math.round(rates.rookie[k] * 100)}% of simple ${k}s (>= 70%)`);
+  assert.ok(rates.rookie.flip >= rates.pro.flip && rates.pro.flip >= rates.sick.flip - 0.02, "the rates fall with the level");
+  if (process.env.VERBOSE || process.env.SKATE_REPORT) console.log("casual simple tricks landed:", JSON.stringify(rates));
+  ok("the casual human");
 }
 
 // ---- the city ---------------------------------------------------------------------------------------------------------

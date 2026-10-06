@@ -3,14 +3,15 @@ import { Button, ButtonRow, ScreenHead } from "../../ui/index.js";
 import { readLastResult } from "../../caseFile.jsx";
 import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC } from "../../avatar.js";
-import { GLYPHS, readPad } from "../../city/gamepad.js";
+import { readPad } from "../../city/gamepad.js";
 import GameMenu from "../GameMenu.jsx";
 import { headFrom, sheetHints } from "../heads.js";
-import { newGame, step, rleEncode, resultOf, verify, VERSION } from "./sim.js";
+import { newGame, step, rleEncode, resultOf, verify, VERSION, DIFF_IDS, goalsFor } from "./sim.js";
 import { LEVELS, LEVEL_IDS } from "./levels.js";
 import { makeView, advance, draw, pop } from "./render.js";
 import { createInput } from "./input.js";
-import { readResults, keepResult, readProgress, fileProgress } from "./results.js";
+import { readResults, keepResult, readProgress, fileProgress, progKey } from "./results.js";
+import ControlsGuide, { guideSeen, markGuideSeen, namesFor } from "./Guide.jsx";
 import { SKATERS, SKATER } from "./roster.js";
 import * as SFX from "./audio.js";
 import CSS from "./skate.css?inline";
@@ -34,29 +35,66 @@ function parseRoute(route) {
 }
 const comma = (v) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 const seedNow = () => ((Date.now() * 2654435761) >>> 0) || 1;
-const SKATER_KEY = "hvi-skate-skater";
+const SKATER_KEY = "hvi-skate-skater", DIFF_KEY = "hvi-skate-diff", STANCE_KEY = "hvi-skate-stance", SPEED_KEY = "hvi-skate-speed", PROMPT_KEY = "hvi-skate-prompts";
+const DIFF_NOTE = {
+  rookie: "WIDE BALANCE METERS, FORGIVING LANDINGS, A LONGER WINDOW TO LINK A MANUAL OR A REVERT, GOALS SIZED TO MATCH.",
+  pro: "THE CLASSIC RULES: A TIGHT LANDING, A FLIP MUST FINISH, A GRAB MUST BE LET GO.",
+  sick: "NARROWER METERS, A SHORT WINDOW TO LINK, AND BIGGER GOALS.",
+};
+const SPEEDS = [["NORMAL", 1], ["SLOW", 0.75], ["SLOWER", 0.55]];
+const rd = (k, ok, d) => { try { const v = localStorage.getItem(k); return ok(v) ? v : d; } catch { return d; } };
+const wr = (k, v) => { try { localStorage.setItem(k, v); } catch { /* the tab remembers */ } };
+// Left-handed (a profile's `hand`) skates goofy unless they have chosen: the same lookup the tennis club makes.
+function profileHand() {
+  const norm = (h) => (h === "L" || h === "left" || h === -1 || h === "LEFT" ? "L" : h === "R" || h === "right" || h === 1 || h === "RIGHT" ? "R" : null);
+  try { const p = JSON.parse(localStorage.getItem("hvi-profile") || "null"); const h = norm(p?.hand); if (h) return h; } catch { /* no profile */ }
+  const last = readLastResult();
+  return norm(last?.hand) || norm(last?.profile?.hand) || norm(last?.avatar?.hand) || norm(last?.avatar?.spec?.hand) || null;
+}
+const readStance = () => rd(STANCE_KEY, v => v === "goofy" || v === "regular", null) || (profileHand() === "L" ? "goofy" : "regular");
+const usedPrompts = () => { try { const j = JSON.parse(localStorage.getItem(PROMPT_KEY) || "[]"); return Array.isArray(j) ? j : []; } catch { return []; } };
 
 export default function Skate({ route }) {
   useEffect(() => { injectStyles(); }, []);
   const opts = useMemo(() => parseRoute(route), [route]);
-  const [play, setPlay] = useState(() => (opts.lvl || opts.cab ? { n: 1, level: opts.lvl || "park", mode: opts.cab ? "run" : opts.mode, seed: seedNow() } : null));
+  const [diff, setDiffS] = useState(() => rd(DIFF_KEY, v => DIFF_IDS.includes(v), "rookie"));
+  const [stance, setStanceS] = useState(readStance);
+  const [speed, setSpeedS] = useState(() => Number(rd(SPEED_KEY, v => SPEEDS.some(x => String(x[1]) === v), "1")));
+  const setDiff = (v) => { setDiffS(v); wr(DIFF_KEY, v); };
+  const setStance = (v) => { setStanceS(v); wr(STANCE_KEY, v); };
+  const setSpeed = (v) => { setSpeedS(v); wr(SPEED_KEY, String(v)); };
+  const mk = (level, mode) => ({ n: Date.now(), level, mode, seed: seedNow(), diff, goofy: stance === "goofy", speed });
+  const [play, setPlay] = useState(() => (opts.lvl || opts.cab ? { ...mk(opts.lvl || "park", opts.cab ? "run" : opts.mode), n: 1 } : null));
+  const [guided, setGuided] = useState(false);   // the controls guide, once, before the first run
   const [skater, setSkaterS] = useState(() => { try { return SKATER[localStorage.getItem(SKATER_KEY)] ? localStorage.getItem(SKATER_KEY) : "you"; } catch { return "you"; } });
   const setSkater = (k) => { setSkaterS(k); try { localStorage.setItem(SKATER_KEY, k); } catch { /* */ } };
-  useEffect(() => { if (opts.lvl) setPlay({ n: Date.now(), level: opts.lvl, mode: opts.mode, seed: seedNow() }); }, [opts]);   // a link into a level
-  const start = (level, mode) => { SFX.unlock(); setPlay({ n: Date.now(), level, mode, seed: seedNow() }); };
+  useEffect(() => { if (opts.lvl) setPlay(mk(opts.lvl, opts.mode)); }, [opts]);   // eslint-disable-line react-hooks/exhaustive-deps   // a link into a level
+  const start = (level, mode) => { SFX.unlock(); setPlay(mk(level, mode)); };
+  const gate = play && !guided && !guideSeen();
+  const leaveGuide = () => { markGuideSeen(); setGuided(true); };
   return (
     <div className="sb">
       <ScreenHead title="THE PARK" meta="SKATEBOARDING // THE PARK, THE VERT RAMP, THE PLAZA // EVERY RUN IS RECORDED" />
-      {play
-        ? <Play key={play.n} game={play} skater={skater} onRestart={() => setPlay(p => ({ ...p, n: Date.now(), seed: seedNow() }))} onQuit={() => { if (opts.cab) { window.location.hash = "play"; return; } setPlay(null); }} />
-        : <Home skater={skater} setSkater={setSkater} onStart={start} />}
+      {gate
+        ? <GuideGate onDone={leaveGuide} goofy={stance === "goofy"} />
+        : play
+          ? <Play key={play.n} game={play} skater={skater} onRestart={() => setPlay(p => ({ ...p, n: Date.now(), seed: seedNow() }))} onQuit={() => { if (opts.cab) { window.location.hash = "play"; return; } setPlay(null); }} />
+          : <Home skater={skater} setSkater={setSkater} onStart={start} diff={diff} setDiff={setDiff} stance={stance} setStance={setStance} speed={speed} setSpeed={setSpeed} />}
     </div>
   );
 }
+// the guide before the first run: the way you are playing (a pad if one is connected)
+function GuideGate({ onDone, goofy }) {
+  const [pad, setPad] = useState(() => readPad());
+  useEffect(() => { const t = setInterval(() => setPad(readPad()), 500); return () => clearInterval(t); }, []);
+  const mode = pad.connected ? "pad" : COARSE() ? "touch" : "keys";
+  return <ControlsGuide mode={mode} family={pad.family || "generic"} goofy={goofy} onDone={onDone} />;
+}
 
 // ---- the start ---------------------------------------------------------------------------------------------------
-function Home({ skater, setSkater, onStart }) {
+function Home({ skater, setSkater, onStart, diff, setDiff, stance, setStance, speed, setSpeed }) {
   const prog = useMemo(() => readProgress(), []);
+  const P0 = (id) => prog[progKey(id, diff)] || { goals: [], best: 0 };
   const results = useMemo(() => readResults(), []);
   const first = useRef(null);
   useEffect(() => { first.current?.focus({ preventScroll: true }); }, []);
@@ -68,14 +106,20 @@ function Home({ skater, setSkater, onStart }) {
   });
   return (
     <>
-      <p className="pg-lede">Skate the city. A two-minute run: score big combos, grab the letters S-K-A-T-E, find the secret tape, tick off the goals. Or free skate with no clock. Arrows push and turn; Z ollies (hold, let go), X flips, C grabs, V grinds. A controller works; phones get a d-pad.</p>
+      <p className="pg-lede">Skate the city. A two-minute run: string tricks into combos, grab the letters S-K-A-T-E, find the secret tape, tick off the goals. Or free skate with no clock. The controls are the classic skate layout: hold the bottom button to crouch and let go to ollie, the left one flips (hold it longer for a double or a triple), the right one grabs, the top one grinds, R2 reverts. A controller works; phones get a d-pad.</p>
+      <div className="sb-opts">
+        <span className="sb-row" role="radiogroup" aria-label="Level of difficulty"><b>DIFFICULTY</b>{DIFF_IDS.map(d => <button key={d} type="button" role="radio" aria-checked={diff === d} className={`sb-chip${diff === d ? " on" : ""}`} onClick={() => setDiff(d)}>{d.toUpperCase()}</button>)}</span>
+        <span className="sb-row" role="radiogroup" aria-label="Stance"><b>STANCE</b>{["regular", "goofy"].map(d => <button key={d} type="button" role="radio" aria-checked={stance === d} className={`sb-chip${stance === d ? " on" : ""}`} onClick={() => setStance(d)}>{d.toUpperCase()}</button>)}</span>
+        <span className="sb-row" role="radiogroup" aria-label="Game speed"><b>SPEED</b>{SPEEDS.map(([n, v]) => <button key={n} type="button" role="radio" aria-checked={speed === v} className={`sb-chip${speed === v ? " on" : ""}`} onClick={() => setSpeed(v)}>{n}</button>)}</span>
+        <span>{DIFF_NOTE[diff]}</span>
+      </div>
       <div className="pg-start">
         <Button variant="primary" ref={first} onClick={() => onStart("park", "run")}>RUN THE PARK</Button>
-        <span className="pg-sub">TWO MINUTES ON THE RECREATION GROUND. {prog.park?.best ? `YOUR BEST: ${comma(prog.park.best)}.` : "NO RUN YET."}</span>
+        <span className="pg-sub">TWO MINUTES ON THE RECREATION GROUND. {P0("park").best ? `YOUR BEST (${diff.toUpperCase()}): ${comma(P0("park").best)}.` : "NO RUN YET."}</span>
       </div>
       <div className="sb-levels">
         {LEVEL_IDS.map(id => {
-          const D = LEVELS[id], P = prog[id] || { goals: [], best: 0 };
+          const D = LEVELS[id], P = P0(id), goals = goalsFor(id, diff);
           return (
             <section key={id} className="sb-level" aria-label={D.name}>
               <h3>{D.name} <small>{D.place}</small></h3>
@@ -86,7 +130,7 @@ function Home({ skater, setSkater, onStart }) {
                 <span className="sb-best">{P.best ? `BEST ${comma(P.best)}` : ""}</span>
               </div>
               <ul className="sb-goals">
-                {D.goals.map(g => <li key={g.id} className={P.goals?.includes(g.id) ? "done" : ""}><span aria-hidden="true">{P.goals?.includes(g.id) ? "■" : "□"}</span> {g.name}{P.goals?.includes(g.id) ? <span className="sr-only"> (done)</span> : null}</li>)}
+                {goals.map(g => <li key={g.id} className={P.goals?.includes(g.id) ? "done" : ""}><span aria-hidden="true">{P.goals?.includes(g.id) ? "■" : "□"}</span> {g.name}{P.goals?.includes(g.id) ? <span className="sr-only"> (done)</span> : null}</li>)}
               </ul>
             </section>
           );
@@ -103,7 +147,7 @@ function Home({ skater, setSkater, onStart }) {
       </details>
       <details className="pg-more">
         <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><Controls /></div>
+        <div className="pg-more-body"><ControlsGuide mode={COARSE() ? "touch" : "keys"} family="generic" goofy={stance === "goofy"} compact /></div>
       </details>
       <details className="pg-more">
         <summary>YOUR RUNS ({results.length})</summary>
@@ -115,35 +159,6 @@ function Home({ skater, setSkater, onStart }) {
       </details>
     </>
   );
-}
-
-function Controls() {
-  return (
-    <dl className="sb-keys">
-      <dt>PUSH / TURN</dt><dd>UP PUSHES, LEFT AND RIGHT TURN, DOWN SLOWS. ARROWS OR WASD // D-PAD OR LEFT STICK. YOU CAN'T PUSH UP A RAMP: HOLD UP GOING DOWN IT TO PUMP.</dd>
-      <dt>OLLIE</dt><dd>HOLD Z / SPACE / J // A TO CROUCH, LET GO TO POP. LONGER HOLD, HIGHER POP. LET GO AT A KICKER'S LIP FOR MORE.</dd>
-      <dt>FLIP TRICKS</dt><dd>IN THE AIR: X / K // X (LEFT FACE BUTTON), WITH A DIRECTION. ← KICKFLIP, → HEELFLIP, ↓ POP SHOVE-IT, ↑ IMPOSSIBLE, DIAGONALS: HARDFLIP, VARIAL KICKFLIP, VARIAL HEELFLIP, 360 FLIP.</dd>
-      <dt>GRABS</dt><dd>IN THE AIR: C / L // B, WITH A DIRECTION. HOLD IT FOR MORE POINTS, BUT LET GO BEFORE YOU LAND.</dd>
-      <dt>SPINS</dt><dd>HOLD LEFT OR RIGHT IN THE AIR. LAND STRAIGHT (A WHOLE 180, 360...) OR YOU BAIL.</dd>
-      <dt>GRINDS</dt><dd>V / I // Y NEAR A RAIL, A LEDGE OR THE COPING, IN THE AIR. A DIRECTION PICKS THE GRIND. KEEP THE NEEDLE IN THE GREEN WITH LEFT / RIGHT. OLLIE OFF.</dd>
-      <dt>LIP TRICKS</dt><dd>ON VERT: GRIND AT THE TOP OF A SLOW AIR, STRAIGHT UP. ↑ INVERT, ↓ ROCK TO FAKIE... BALANCE, THEN OLLIE TO DROP BACK IN.</dd>
-      <dt>MANUALS</dt><dd>UP THEN DOWN, QUICKLY (DOWN THEN UP: A NOSE MANUAL). ON THE GROUND OR JUST BEFORE YOU LAND. BALANCE WITH UP / DOWN.</dd>
-      <dt>REVERT</dt><dd>SHIFT / U // ANY SHOULDER, AS YOU LAND ON A RAMP. THEN MANUAL TO KEEP GOING.</dd>
-      <dt>COMBOS</dt><dd>EVERY TRICK ADDS POINTS AND +1 TO THE MULTIPLIER. LAND TO BANK POINTS X MULTIPLIER. A MANUAL OR A REVERT ON LANDING KEEPS IT GOING. THE SAME TRICK TWICE IS WORTH LESS. BAIL AND YOU LOSE THE LOT.</dd>
-      <dt>PAUSE</dt><dd>ENTER / ESC / P // START. R // SELECT RESTARTS.</dd>
-    </dl>
-  );
-}
-export function legendRows(mode, family) {
-  if (mode === "pad") {
-    const g = GLYPHS[family] || GLYPHS.generic;
-    return [["PUSH/TURN", "D-PAD / STICK"], ["OLLIE", `HOLD ${g.act}, LET GO`], ["FLIP", "X + DIR"], ["GRAB", `${g.back} + DIR`], ["GRIND", "Y + DIR"], ["MANUAL", "↑ ↓"], ["REVERT", `${g.turnL} / ${g.turnR}`], ["PAUSE", g.start]];
-  }
-  if (mode === "touch") return [["PUSH/TURN", "D-PAD"], ["OLLIE", "HOLD A, LET GO"], ["FLIP", "X + DIR"], ["GRAB", "B + DIR"], ["GRIND", "Y + DIR"], ["MANUAL", "↑ ↓"], ["REVERT", "R"], ["PAUSE", "II"]];
-  return [["PUSH/TURN", "←↑↓→ / WASD"], ["OLLIE", "HOLD Z / SPACE"], ["FLIP", "X + DIR"], ["GRAB", "C + DIR"], ["GRIND", "V + DIR"], ["MANUAL", "↑ ↓"], ["REVERT", "SHIFT"], ["PAUSE", "ENTER / ESC"]];
-}
-function Legend({ mode, family }) {
-  return <dl className="sb-legend">{legendRows(mode, family).map(([k, v]) => <div key={k}><dt>{k}</dt><dd><kbd>{v}</kbd></dd></div>)}</dl>;
 }
 
 // ---- how the skater looks -----------------------------------------------------------------------------------------
@@ -182,6 +197,7 @@ function Play({ game, skater, onRestart, onQuit }) {
   const [sr, setSr] = useState("");
   const touch = mode === "touch";
   const L = LEVELS[game.level];
+  const [prompt, setPrompt] = useState(null);   // {text, out}: the first-run prompt on the stage
 
   useEffect(() => {
     const fit = () => {
@@ -197,15 +213,22 @@ function Play({ game, skater, onRestart, onQuit }) {
   }, []);
 
   useEffect(() => {
-    const cfg = { level: game.level, mode: game.mode, seed: game.seed };
+    const cfg = { level: game.level, mode: game.mode, seed: game.seed, diff: game.diff, goofy: game.goofy };
     const G = { st: newGame(cfg), words: [], paused: false, ended: false, replay: null };
     const V = makeView(game.level);
     const input = createInput(COARSE() ? "touch" : "keys"); inputRef.current = input;
     const say = (s) => setSr(s);
     if (import.meta.env?.DEV) { window.__hviSkate = G; G.V = V; }
+    // the first-run prompts: each shows until you have done the thing, then fades and never returns
+    const used = new Set(usedPrompts());
+    const useIt = (id) => { if (used.has(id)) return; used.add(id); wr(PROMPT_KEY, JSON.stringify([...used])); };
     const events = (evs, VV) => {
       for (const e of evs) {
+        if (e[0] === "ollie") useIt("ollie");
+        else if (e[0] === "trick") { if (/FLIP|SHOVE|HEEL/.test(e[1]) && !/MANUAL/.test(e[1])) useIt("flip"); else if (/^(INDY|NOSEGRAB|TAILGRAB|METHOD|MELON|MADONNA|BENIHANA|STALEFISH|CROSSBONE)$/.test(e[1])) useIt("grab"); else if (/MANUAL/.test(e[1])) useIt("manual"); else if (e[1] === "REVERT") useIt("revert"); }
+        else if (e[0] === "grind" || e[0] === "lip") useIt("grind");
         if (e[0] === "bank" && e[1] > 0) pop(VV, `+${comma(e[1])}`, "bank");
+        else if (e[0] === "multi") pop(VV, e[1] === 2 ? "DOUBLE!" : "TRIPLE!", "goal", 1.4);
         else if (e[0] === "bail") { pop(VV, "BAIL!", "bail"); if (e[2]) say(`BAIL. ${e[2]} POINTS LOST.`); }
         else if (e[0] === "goal") { pop(VV, `GOAL: ${e[2]}`, "goal", 2.6); say(`GOAL: ${e[2]}.`); }
         else if (e[0] === "letter") { pop(VV, `${e[1]}!`, "letter"); say(`LETTER ${e[1]}.`); }
@@ -251,7 +274,7 @@ function Play({ game, skater, onRestart, onQuit }) {
         S = G.replay.st; VV = G.replay.V; acc += dt;
         while (acc >= 1 / 60) { acc -= 1 / 60; if (G.replay.i < G.replay.words.length) { step(S, G.replay.words[G.replay.i++]); events(S.ev, VV); SFX.play(S.ev); } else { apiRef.current.stopWatch(); break; } }
       } else if (!G.paused && !G.ended) {
-        acc += dt; let n = 0;
+        acc += dt * (game.speed || 1); let n = 0;
         while (acc >= 1 / 60 && n < 6) {
           acc -= 1 / 60; n++;
           const w = G.bot ? G.bot(S) : inp.word;
@@ -260,6 +283,19 @@ function Play({ game, skater, onRestart, onQuit }) {
         }
         if (n === 6) acc = 0;
       } else acc = 0;
+      if (!G.replay && !G.paused && !G.ended) {
+        // which prompt, if any: the first thing in the order you have not yet done and could do now
+        const N = namesFor(lastMode || "keys", lastFam || "generic"), air = S.st === "air", ground = S.st === "ground", ramp = air && S.vert >= 0;
+        const want = !used.has("ollie") && ground && S.t > 30 ? ["ollie", `HOLD ${N.ollie}, RELEASE TO OLLIE`]
+          : !used.has("flip") && air ? ["flip", `${N.flip} + DIRECTION: FLIP`]
+          : !used.has("grab") && air && used.has("flip") ? ["grab", `${N.grab}: GRAB (HOLD IT)`]
+          : !used.has("grind") && air && used.has("grab") ? ["grind", `${N.grind} ON A RAIL: GRIND`]
+          : !used.has("manual") && ground && used.has("grab") && used.has("flip") && S.t > 600 ? ["manual", `${N.manual.replace(", ", "-")}: MANUAL`]
+          : !used.has("revert") && ramp && used.has("flip") ? ["revert", `${N.r2} ON LANDING: REVERT`] : null;
+        const cur = G.prompt;
+        if (want && (!cur || cur.id !== want[0])) { G.prompt = { id: want[0], text: want[1] }; setPrompt({ text: want[1], out: false }); }
+        else if (!want && cur) { G.prompt = null; setPrompt(p => (p ? { ...p, out: true } : p)); }
+      }
       advance(VV, S, dt);
       const c = canvasRef.current;
       draw(ctx, c.width, c.height, S, VV, { look: lookRef.current, replay: Boolean(G.replay), banner: !G.replay && G.st.t < 90 ? (game.mode === "run" ? `${L.name}: GO!` : L.name) : G.ended && !G.replay ? "TIME!" : null });
@@ -273,12 +309,13 @@ function Play({ game, skater, onRestart, onQuit }) {
 
   const api = apiRef.current;
   const toggleMute = () => { const m = !muted; setMutedS(m); SFX.setMuted(m); if (!m) SFX.unlock(); };
-  const legend = <Legend mode={mode} family={family} />;
+  const legend = <ControlsGuide mode={mode} family={family} goofy={game.goofy} compact />;
   const end = menu && menu.end ? menu : null;
   return (
     <div className="sb-play">
       <div className="sb-stage" ref={wrapRef}>
         <canvas ref={canvasRef} width={size.W} height={size.H} style={{ width: "100%", height: size.H * size.scale }} role="img" aria-label={`${L.name}: the skate level, seen from above at an angle`} />
+        {prompt && !watching && !menu && <div className={`sb-prompt${prompt.out ? " out" : ""}`} aria-hidden="true">{prompt.text}</div>}
         {watching && <button type="button" className="sb-stoptape" onClick={() => api.stopWatch?.()}>STOP THE REPLAY</button>}
       </div>
       <div className="sr-only" aria-live="polite" aria-atomic="true">{sr}</div>
@@ -290,7 +327,7 @@ function Play({ game, skater, onRestart, onQuit }) {
         <Button onClick={toggleMute}>{muted ? "Sound on" : "Mute"}</Button>
         <Button variant="back" onClick={onQuit}>Leave the park</Button>
       </ButtonRow>
-      {!touch && <details className="pg-more sb-legend-wrap"><summary>CONTROLS // {mode === "pad" ? `CONTROLLER (${String(family || "pad").toUpperCase()})` : "KEYBOARD"}</summary><div className="pg-more-body">{legend}<Controls /></div></details>}
+      {!touch && <details className="pg-more sb-legend-wrap"><summary>CONTROLS // {mode === "pad" ? `CONTROLLER (${String(family || "pad").toUpperCase()})` : "KEYBOARD"} // {game.diff.toUpperCase()}, {game.goofy ? "GOOFY" : "REGULAR"}</summary><div className="pg-more-body">{legend}</div></details>}
       {menu === "pause" && (
         <GameMenu kind="pause" title="PAUSED." summary={`${L.name}. ${game.mode === "run" ? "THE CLOCK IS STOPPED." : "FREE SKATE."}`} onBack={() => api.resume?.()}
           options={{ resume: () => api.resume?.(), restart: onRestart, controls: legend, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "LEAVE THE PARK", onSelect: onQuit } }} />
@@ -329,11 +366,13 @@ function TouchPad({ input }) {
         <span className="u" /><span className="d" /><span className="l" /><span className="r" />
       </div>
       <div className="sb-face">
-        <button type="button" className="sb-tb rv" {...hold("r")} aria-label="Revert">R</button>
-        <button type="button" className="sb-tb y" {...hold("y")} aria-label="Grind">Y<small>GRIND</small></button>
-        <button type="button" className="sb-tb x" {...hold("x")} aria-label="Flip">X<small>FLIP</small></button>
-        <button type="button" className="sb-tb b" {...hold("b")} aria-label="Grab">B<small>GRAB</small></button>
-        <button type="button" className="sb-tb a" {...hold("a")} aria-label="Ollie">A<small>OLLIE</small></button>
+        <button type="button" className="sb-tb rv" {...hold("r")} aria-label="Revert">R2</button>
+        <button type="button" className="sb-tb y" {...hold("y")} aria-label="Grind">△<small>GRIND</small></button>
+        <button type="button" className="sb-tb x" {...hold("x")} aria-label="Flip">□<small>FLIP</small></button>
+        <button type="button" className="sb-tb b" {...hold("b")} aria-label="Grab">○<small>GRAB</small></button>
+        <button type="button" className="sb-tb a" {...hold("a")} aria-label="Ollie">✕<small>OLLIE</small></button>
+        <button type="button" className="sb-tb sp l" {...hold("sl")} aria-label="Spin left">↶</button>
+        <button type="button" className="sb-tb sp r" {...hold("sr")} aria-label="Spin right">↷</button>
       </div>
     </div>
   );

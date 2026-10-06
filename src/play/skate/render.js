@@ -344,7 +344,7 @@ function skater(ctx, x, y, st, V, look) {
   } else if (st.st === "manual") { tilt = st.m.k === 2 ? -1 : 1; lean = st.m.k === 2 ? 2 : -2; armL = [-8, -15]; armR = [8, -14]; crouch = 0.25; }
   else if (st.st === "air") {
     crouch = 0.45; armL = [-6, -18]; armR = [7, -17];
-    if (T && T.k === "flip" && !T.done) { flipK = T.t / T.dur; crouch = 0.55; armL = [-7, -14]; armR = [7, -14]; }
+    if (T && T.k === "flip" && !T.done) { flipK = T.t / FLIPS[T.d][2]; crouch = 0.55;   /* flipK is in turns of the trick: a double goes round twice */ armL = [-7, -14]; armR = [7, -14]; }
     if (T && T.k === "grab" && !T.done) { const k = T.rel ? Math.max(0, 1 - (T.t - T.rel) / 5) : Math.min(1, T.t / 4); crouch = 0.45 + 0.5 * k; liftBoard = 5 * k; armR = [3 + 2 * fr, -6 + 2 * k]; armL = [-8, -17]; }
   } else if (st.st === "grind") { crouch = 0.3; armL = [-9, -14]; armR = [9, -13]; lean = Math.round((st.g?.b || 0) * 3); }
   else if (st.st === "lip") { const name = LIPS[st.lip.k][0]; upside = /INVERT|PLANT/.test(name); crouch = 0.4; lean = Math.round(st.lip.b * 3); }
@@ -427,15 +427,17 @@ function hud(ctx, W, H, st, V, px, py, opts) {
   const ly = W >= 300 ? 22 : 14;
   LETTERS.forEach((c, i) => { const got = st.letters & (1 << i); R(ctx, 4 + i * 9, ly, 8, 9, got ? "#f97316" : "rgba(15,23,42,0.6)"); drawText(ctx, c, 5 + i * 9, ly + 1, got ? "#431407" : "#64748b"); });
   R(ctx, 4 + 5 * 9 + 2, ly, 10, 9, st.tape ? "#e5e7eb" : "rgba(15,23,42,0.6)"); R(ctx, 4 + 5 * 9 + 4, ly + 5, 2, 2, st.tape ? "#111827" : "#475569"); R(ctx, 4 + 5 * 9 + 8, ly + 5, 2, 2, st.tape ? "#111827" : "#475569");
-  // the combo, at the foot of the picture: the tricks, then BASE X MULT
+  // the combo, at the foot of the picture: the trick string, then BASE X MULT big, hotter as the multiplier climbs
   const C = st.combo;
   if (C) {
+    const big = W >= 300 ? 3 : 2, hot = C.mult >= 8 ? "#fb7185" : C.mult >= 5 ? "#fb923c" : C.mult >= 3 ? "#fde047" : "#fef08a";
     const names = C.names.slice(-3).join(" + ");
     const shown = (C.names.length > 3 ? "... " : "") + names;
     const fit = shown.length * 6 > W - 8 ? "..." + shown.slice(-Math.floor((W - 26) / 6)) : shown;
-    OUT(ctx, fit, Math.round(W / 2 - textWidth(fit) / 2), H - 30, "#fde68a");
+    OUT(ctx, fit, Math.round(W / 2 - textWidth(fit) / 2), H - 18 - big * 8 - 12, "#fde68a");
     const line2 = `${comma(C.base)} X ${C.mult}`;
-    OUT(ctx, line2, Math.round(W / 2 - textWidth(line2, 2) / 2), H - 20, "#fef08a", 2);
+    OUT(ctx, line2, Math.round(W / 2 - textWidth(line2, big) / 2), H - 12 - big * 8, hot, big);
+    if (C.base > 0) { const tot = `= ${comma(C.base * C.mult)}`; OUT(ctx, tot, Math.round(W / 2 - textWidth(tot) / 2), H - 10, "#e2e8f0"); }
   }
   // the balance meter: across over the head (grind, lip), up and down beside you (manual)
   const B = st.st === "grind" ? st.g : st.st === "lip" ? st.lip : st.st === "manual" ? st.m : null;

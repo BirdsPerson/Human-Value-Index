@@ -1,3 +1,4 @@
+// VERSION 1, FROZEN. Runs made on it replay here (sim.js dispatches on `v`). Never edit: a changed line changes an old run.
 // THE PARK, skateable: the sim. Pure and deterministic: 60 ticks a second, one input word a tick, a
 // seeded generator (the balance meters' first wobble), no clock, no Math.random, no trig (a 64-way
 // table built by series below), only + - * / and sqrt. The same {v, cfg, inputLog} always gives the
@@ -13,27 +14,21 @@
 //     lip tricks and air off a grind or a manual chain it too
 //   - a BAIL (a bad landing, a meter run out) loses the whole combo
 //
-// THE INPUT WORD (pack/unpack): up 1, down 2, left 4, right 8, A (ollie, the cross) 16, B (grab, the circle)
-// 32, X (flip, the square) 64, Y (grind, the triangle) 128, R (revert, R2) 256, SL (spin left, L1) 512,
-// SR (spin right, R1) 1024.
-//
-// VERSION 2 (this file): the Tony Hawk layout and rules -- multi-flips (hold the square for a double or
-// triple), L1 / R1 spin, three levels of difficulty (ROOKIE, PRO, SICK) and a goofy stance in the run's
-// config. VERSION 1 is frozen in sim1.js; a v1 run replays there (replay / verify dispatch on `v`).
+// THE INPUT WORD (pack/unpack): up 1, down 2, left 4, right 8, A (ollie) 16, B (grab) 32, X (flip) 64,
+// Y (grind) 128, R (revert) 256.
 //
 // THE RESULT (resultOf): {game: "skate", v, level, mode, seed, score, best, letters: "SK_T_", tape,
 // goals: [id...], goalsOf, ticks, done} -- what the tournaments and the results list read.
 import { LEVELS, LETTERS } from "./levels.js";
-import * as V1 from "./sim1.js";
 
-export const VERSION = 2;
+export const VERSION = 1;
 export const HZ = 60;
 export const RUN_TICKS = 120 * HZ;          // a RUN: two minutes
 const OVERTIME = 10 * HZ;                    // a combo in the air at the horn gets this long to land
-const sqrt = Math.sqrt, abs = Math.abs, floor = Math.floor, ceil = Math.ceil, round = Math.round, min = Math.min, max = Math.max;
+const sqrt = Math.sqrt, abs = Math.abs, floor = Math.floor, round = Math.round, min = Math.min, max = Math.max;
 
 // ---- the input ------------------------------------------------------------------------------------------
-export const BIT = { up: 1, down: 2, left: 4, right: 8, a: 16, b: 32, x: 64, y: 128, r: 256, sl: 512, sr: 1024 };
+export const BIT = { up: 1, down: 2, left: 4, right: 8, a: 16, b: 32, x: 64, y: 128, r: 256 };
 export function pack(o = {}) { let w = 0; for (const k in BIT) if (o[k]) w |= BIT[k]; return w; }
 export function unpack(w) { const o = {}; for (const k in BIT) o[k] = (w & BIT[k]) !== 0; return o; }
 // the d-pad as one of nine: 0 none, 1 up, 2 down, 3 left, 4 right, 5 up-left, 6 up-right, 7 down-left, 8 down-right
@@ -43,22 +38,6 @@ export function dirOf(w) {
   if (!dx) return dy < 0 ? 1 : 2;
   if (!dy) return dx < 0 ? 3 : 4;
   return dy < 0 ? (dx < 0 ? 5 : 6) : (dx < 0 ? 7 : 8);
-}
-
-// a goofy skater's tricks are the mirror: the d-pad's left and right swap in every trick's lookup
-const MIRROR = [0, 1, 2, 4, 3, 6, 5, 8, 7];
-const spinName = (st, halves) => `${(st.face < 0) !== st.goofy ? "FS" : "BS"} ${halves * 180}`;
-const tdir = (st, w) => { const d = dirOf(w); return st.goofy ? MIRROR[d] : d; };
-const comma = (v) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-// the level's goals at this difficulty: a score or a combo is sized to it (to the nearest 500), the rest is the same
-export function goalsFor(level, diff = "pro") {
-  const D = DIFFS[diff] || DIFFS.pro;
-  return LEVELS[level].goals.map(G => {
-    const k = G.kind === "score" ? D.score : G.kind === "combo" ? D.combo : 1;
-    if (k === 1) return G;
-    const n = max(500, round((G.n * k) / 500) * 500);
-    return { ...G, n, name: G.name.replace(/[\d,]{4,}/, comma(n)) };
-  });
 }
 
 // ---- the tricks ------------------------------------------------------------------------------------------
@@ -85,16 +64,6 @@ export const P = {
   STEP: 0.12, SPIN: 2.4, TURN: 1.25,
   BAIL_T: 75,
 };
-// the difficulty: the balance meters (drift of the needle, the push you give it, how far it leans), how wide the
-// landing is (the spin's sideways window, how much of a flip counts as done, a grab still held), how long the
-// combo waits for a manual or a revert after a landing, and the goals' size
-export const DIFFS = {
-  rookie: { drift: 0.5, push: 1.4, lean: 0.6, kick: 0.5, tol: 11, ff: 0.6, grabOk: true, pend: 22, pendRamp: 26, seqWin: 22, revPre: 14, score: 0.0625, combo: 0.4 },
-  pro: { drift: 1, push: 1, lean: 1, kick: 1, tol: 8, ff: 1, grabOk: false, pend: 7, pendRamp: 14, seqWin: 14, revPre: 6, score: 1, combo: 1 },
-  sick: { drift: 1.35, push: 0.9, lean: 1.2, kick: 1.3, tol: 7, ff: 1, grabOk: false, pend: 6, pendRamp: 12, seqWin: 12, revPre: 5, score: 1.6, combo: 1.6 },
-};
-export const DIFF_IDS = ["rookie", "pro", "sick"];
-export const MULTI = [1, 2.4, 4.2], MULTI_NAME = ["", "DOUBLE ", "TRIPLE "];
 export const BAL = { kick: 0.2, drift: 0.00045, grow: 0.0000035, lean: 0.003, push: 0.0028, damp: 0.94 };
 
 // the compass: 64 headings, cos and sin by series (exact arithmetic, the same in every engine)
@@ -179,11 +148,10 @@ function rnd(st) {
 }
 
 // ---- a new game ------------------------------------------------------------------------------------------------
-export function newGame({ level = "park", mode = "run", seed = 1, diff = "rookie", goofy = false } = {}) {
-  if (!DIFFS[diff]) diff = "rookie";
+export function newGame({ level = "park", mode = "run", seed = 1 } = {}) {
   const L = levelOf(level), S = L.start;
   const st = {
-    v: VERSION, level, mode, diff, goofy: Boolean(goofy), gl: goalsFor(level, diff), seed: seed >>> 0, rng: (seed >>> 0) || 1, t: 0, end: mode === "run" ? RUN_TICKS : 0, done: false,
+    v: VERSION, level, mode, seed: seed >>> 0, rng: (seed >>> 0) || 1, t: 0, end: mode === "run" ? RUN_TICKS : 0, done: false,
     x: S.x, y: S.y, z: 0, vx: 0, vy: 0, vz: 0, h: S.h, face: 0, fakie: false, st: "ground", o: -1, dz: 0,
     charge: 0, pw: 0, vert: -1, tr: null, g: null, m: null, lip: null, bailT: 0,
     pend: 0, pendRamp: false, mq: 0, lastUp: -99, lastDown: -99, lastR: -99, lastY: -99, lastRail: -1, railCool: 0,
@@ -202,7 +170,6 @@ function addTrick(st, name, pts) {
   if (C.names.length > 40) C.names.shift();
   st.stats.tricks++;
   st.ev.push(["trick", name, v]);
-  return v;
 }
 const tickPts = (st, n) => { if (st.combo) st.combo.base += n; };
 function bank(st, L) {
@@ -212,7 +179,7 @@ function bank(st, L) {
   if (pts > st.best) st.best = pts;
   if (C.mult > st.stats.maxMult) st.stats.maxMult = C.mult;
   st.ev.push(["bank", pts, C.base, C.mult]);
-  for (const G of st.gl) {
+  for (const G of L.goals) {
     if (G.kind === "combo" && pts >= G.n) goal(st, G);
     if (G.kind === "score" && st.score >= G.n) goal(st, G);
     if (G.kind === "trick" && C.counts[G.trick]) goal(st, G);
@@ -220,18 +187,6 @@ function bank(st, L) {
   }
 }
 function goal(st, G) { if (st.goals.includes(G.id)) return; st.goals.push(G.id); st.ev.push(["goal", G.id, G.name]); }
-// a flip held on: the trick already in the combo becomes its double (or triple) and is worth more
-function extendFlip(st, R) {
-  const C = st.combo, F = FLIPS[R.d], old = R.name;
-  R.n++; R.dur += ceil(F[2] * 0.65); R.q = false;   // the extra turns come quicker than the first
-  const name = MULTI_NAME[R.n - 1] + F[0];
-  if (!C) return;
-  C.counts[old] = (C.counts[old] || 1) - 1;
-  const i = C.names.lastIndexOf(old); if (i >= 0) C.names[i] = name;
-  const k = C.counts[name] || 0, v = floor(F[1] * MULTI[R.n - 1] * REPEAT[min(k, REPEAT.length - 1)]);
-  C.counts[name] = k + 1; C.base += v - R.v; R.v = v; R.name = name;
-  st.ev.push(["trick", name, v], ["multi", R.n]);
-}
 function bail(st, why) {
   const lost = st.combo ? st.combo.base * st.combo.mult : 0;
   st.combo = null; st.pend = 0; st.mq = 0; st.tr = null; st.g = null; st.m = null; st.lip = null; st.vert = -1;
@@ -242,13 +197,13 @@ function bail(st, why) {
 // ---- balance (grind, manual, lip) ----------------------------------------------------------------------------------
 // b: -1..1 (the meter's needle; past either end you fall). The key that matches the needle's side pushes
 // it further; the other pulls it back: hold the one AWAY from where it leans.
-function newBal(st) { const r = rnd(st); return { b: (r - 0.5) * BAL.kick * DIFFS[st.diff].kick, bv: 0, t: 0 }; }
-function balance(B, neg, pos, D) {
+function newBal(st) { const r = rnd(st); return { b: (r - 0.5) * BAL.kick, bv: 0, t: 0 }; }
+function balance(B, neg, pos) {
   B.t++;
   const side = B.b > 0 ? 1 : B.b < 0 ? -1 : 0;
-  B.bv += side * (BAL.drift + BAL.grow * B.t) * D.drift + B.b * BAL.lean * D.lean;
-  if (neg) B.bv -= BAL.push * D.push;
-  if (pos) B.bv += BAL.push * D.push;
+  B.bv += side * (BAL.drift + BAL.grow * B.t) + B.b * BAL.lean;
+  if (neg) B.bv -= BAL.push;
+  if (pos) B.bv += BAL.push;
   B.bv *= BAL.damp; B.b += B.bv;
   return abs(B.b) < 1;
 }
@@ -258,21 +213,21 @@ export function step(st, w) {
   st.ev = [];
   if (st.done) return st;
   const L = levelOf(st.level);
-  const D = DIFFS[st.diff], p = st.pw; st.pw = w;
+  const p = st.pw; st.pw = w;
   const on = (k) => (w & k) !== 0, edge = (k) => (w & k) !== 0 && (p & k) === 0, rel = (k) => (w & k) === 0 && (p & k) !== 0;
   st.t++;
   // a manual is UP then DOWN (or DOWN then UP: a nose manual) inside a quarter second, no trick button held
   let seq = 0;
   if (!on(BIT.b) && !on(BIT.x)) {
-    if (edge(BIT.down) && st.t - st.lastUp <= D.seqWin) seq = 1;
-    else if (edge(BIT.up) && st.t - st.lastDown <= D.seqWin) seq = 2;
+    if (edge(BIT.down) && st.t - st.lastUp <= 14) seq = 1;
+    else if (edge(BIT.up) && st.t - st.lastDown <= 14) seq = 2;
   }
   if (edge(BIT.up)) st.lastUp = st.t;
   if (edge(BIT.down)) st.lastDown = st.t;
   if (edge(BIT.r)) st.lastR = st.t;
   if (edge(BIT.y)) st.lastY = st.t;
   if (st.railCool > 0) st.railCool--;
-  const I = { w, on, edge, rel, seq, D };
+  const I = { w, on, edge, rel, seq };
   switch (st.st) {
     case "ground": case "manual": groundTick(st, L, I); break;
     case "air": airTick(st, L, I); break;
@@ -333,8 +288,8 @@ function groundTick(st, L, I) {
   if (manual) {
     const M = st.m;
     tickPts(st, PER_TICK.manual);
-    if (!balance(M, I.on(BIT.up), I.on(BIT.down), I.D)) { bail(st, "MANUAL"); return; }
-    if (along < 0.02) { st.st = "ground"; st.m = null; st.pend = I.D.pend; st.pendRamp = false; }
+    if (!balance(M, I.on(BIT.up), I.on(BIT.down))) { bail(st, "MANUAL"); return; }
+    if (along < 0.02) { st.st = "ground"; st.m = null; st.pend = 7; st.pendRamp = false; }
   } else if (I.seq && along >= 0.02) { startManual(st, I.seq); }
   else if (st.combo && st.pend > 0) {
     if (st.pendRamp && I.edge(BIT.r)) revert(st);
@@ -388,7 +343,7 @@ function moveGround(st, L) {
     const sp = sqrt(st.vx * st.vx + st.vy * st.vy);
     if (sp > 0.01) { const nh = headOf(st.vx, st.vy); if (((nh - st.h + 96) % 64) - 32 > 16 || ((nh - st.h + 96) % 64) - 32 < -16) st.fakie = !st.fakie; st.h = nh; }
     st.ev.push(["bump", sp]);
-    if (st.st === "manual") { st.st = "ground"; st.m = null; st.pend = DIFFS[st.diff].pend; st.pendRamp = false; }
+    if (st.st === "manual") { st.st = "ground"; st.m = null; st.pend = 7; st.pendRamp = false; }
   }
   st.x = nx; st.y = ny;
   if (st.z - g.h > P.STEP && g.o !== st.o) {   // rolled off an edge (or off a kicker's lip)
@@ -406,15 +361,13 @@ function airTick(st, L, I) {
   const Q = st.vert >= 0 ? L.objs[st.vert] : null;
   const busy = I.on(BIT.b) || I.on(BIT.x);
   if (!busy) { if (I.on(BIT.left)) st.face -= P.SPIN; if (I.on(BIT.right)) st.face += P.SPIN; }
-  if (I.on(BIT.sl)) st.face -= P.SPIN; if (I.on(BIT.sr)) st.face += P.SPIN;
   // the tricks
   const T = st.tr, free = !T || T.done;
-  if (free && I.edge(BIT.x)) { const d = tdir(st, I.w), F = FLIPS[d]; st.tr = { k: "flip", d, t: 0, dur: F[2], n: 1, q: false, name: F[0], v: 0, done: false }; st.tr.v = addTrick(st, F[0], F[1]); }
-  else if (free && I.edge(BIT.b)) { const d = tdir(st, I.w), Gr = GRABS[d]; st.tr = { k: "grab", d, t: 0, rel: 0, done: false }; addTrick(st, Gr[0], Gr[1]); }
-  else if (T && !T.done && T.k === "flip" && I.edge(BIT.x)) T.q = true;   // a second tap: one more turn
+  if (free && I.edge(BIT.x)) { const d = dirOf(I.w), F = FLIPS[d]; st.tr = { k: "flip", d, t: 0, dur: F[2], done: false }; addTrick(st, F[0], F[1]); }
+  else if (free && I.edge(BIT.b)) { const d = dirOf(I.w), Gr = GRABS[d]; st.tr = { k: "grab", d, t: 0, rel: 0, done: false }; addTrick(st, Gr[0], Gr[1]); }
   if (st.tr && !st.tr.done) {
     const R = st.tr; R.t++;
-    if (R.k === "flip") { if (R.t >= R.dur) { if (R.n < 3 && (I.on(BIT.x) || R.q) && st.combo) extendFlip(st, R); else R.done = true; } }
+    if (R.k === "flip") { if (R.t >= R.dur) R.done = true; }
     else {
       if (I.on(BIT.b) && !R.rel) { if (R.t > GRAB_SET) tickPts(st, PER_TICK.grab); }
       else if (!R.rel && R.t >= GRAB_SET) R.rel = R.t;
@@ -451,19 +404,16 @@ function airTick(st, L, I) {
   if (st.vz <= 0 && st.z <= g.h) land(st, L, g, Q);
 }
 function land(st, L, g, Q) {
-  const R = st.tr, D = DIFFS[st.diff];
+  const R = st.tr;
   const r = ((st.face % 32) + 32) % 32;
   let why = null;
-  if (R && !R.done) {
-    if (R.k === "grab") { if (!D.grabOk) why = "STILL GRABBING"; }                                   // a rookie's grab lets go for them
-    else { const p = R.t / R.dur, need = R.n > 1 ? (1 + D.ff) / 2 : D.ff; if (p < need) why = "UNDER-ROTATED"; }   // a rookie's flip is done at 60%
-  }
-  if (!why && (r > D.tol && r < 32 - D.tol)) why = "SIDEWAYS";
+  if (R && !R.done) why = R.k === "flip" ? "UNDER-ROTATED" : "STILL GRABBING";
+  else if (r > 8 && r < 24) why = "SIDEWAYS";
   st.z = g.h; st.o = g.o; st.dz = 0;
   if (why) { bail(st, why); st.ev.push(["land", 2]); return; }
   const halves = round(abs(st.face) / 32);
   if (halves > 0) {
-    addTrick(st, spinName(st, halves), SPIN_PTS[min(halves, SPIN_PTS.length - 1)]);
+    addTrick(st, `${st.face < 0 ? "FS" : "BS"} ${halves * 180}`, SPIN_PTS[min(halves, SPIN_PTS.length - 1)]);
     if (st.combo) st.combo.spin = max(st.combo.spin, halves);
     if (halves > st.stats.maxSpin) st.stats.maxSpin = halves;
   }
@@ -479,8 +429,8 @@ function land(st, L, g, Q) {
   st.ev.push(["land", st.combo ? 1 : 0]);
   if (st.combo) {
     if (st.mq && sp >= 0.02) startManual(st, st.mq);
-    else if (ramp && st.t - st.lastR <= D.revPre) revert(st);
-    else { st.pend = ramp ? D.pendRamp : D.pend; st.pendRamp = ramp; }
+    else if (ramp && st.t - st.lastR <= 6) revert(st);
+    else { st.pend = ramp ? 14 : 7; st.pendRamp = ramp; }
   }
   st.mq = 0;
 }
@@ -508,8 +458,8 @@ function tryGrind(st, L, I) {
   if (!dir) { const [hx, hy] = headVec(st.h); dir = hx * r.ux + hy * r.uy >= 0 ? 1 : -1; }
   // a spin into a grind counts, rounded to the half turn
   const halves = round(abs(st.face) / 32);
-  if (halves > 0) { addTrick(st, spinName(st, halves), SPIN_PTS[min(halves, SPIN_PTS.length - 1)]); if (st.combo) st.combo.spin = max(st.combo.spin, halves); }
-  const d = tdir(st, I.w), Gd = GRINDS[d];
+  if (halves > 0) { addTrick(st, `${st.face < 0 ? "FS" : "BS"} ${halves * 180}`, SPIN_PTS[min(halves, SPIN_PTS.length - 1)]); if (st.combo) st.combo.spin = max(st.combo.spin, halves); }
+  const d = dirOf(I.w), Gd = GRINDS[d];
   st.st = "grind"; st.tr = null; st.face = 0; st.mq = 0;
   st.g = { ...newBal(st), r: best.i, u: best.u, dir, sp: max(0.06, abs(best.along)), k: d, gt: 0 };
   st.x = best.px; st.y = best.py; st.z = best.pz; st.vz = 0;
@@ -525,7 +475,7 @@ function grindTick(st, L, I) {
   G.sp = min(P.MAXV, max(0, G.sp * 0.998 - P.GR * rise * 1.5));
   G.u += (G.dir * G.sp) / r.len;
   tickPts(st, PER_TICK.grind);
-  for (const Gl of st.gl) if (Gl.kind === "grind" && Gl.rail === r.id && G.gt >= Gl.ticks) goal(st, Gl);
+  for (const Gl of L.goals) if (Gl.kind === "grind" && Gl.rail === r.id && G.gt >= Gl.ticks) goal(st, Gl);
   const tx = r.ux * G.dir, ty = r.uy * G.dir;
   if (I.on(BIT.a)) st.charge = min(P.CHARGE, st.charge + 1);
   const leave = (vz, side) => {
@@ -535,7 +485,7 @@ function grindTick(st, L, I) {
     if (st.vert >= 0) { const f = L.objs[st.vert].f; if (f.ax === "x") st.vx = 0; else st.vy = 0; }
   };
   if (I.rel(BIT.a)) { const side = (I.on(BIT.right) ? 1 : 0) - (I.on(BIT.left) ? 1 : 0); const c = st.charge; st.charge = 0; leave(P.OLLIE * 0.95 + c * P.CHARGE_K * 0.5, side); st.ev.push(["ollie", 1]); return; }
-  if (!balance(G, I.on(BIT.left), I.on(BIT.right), I.D)) { bail(st, "OFF BALANCE"); return; }
+  if (!balance(G, I.on(BIT.left), I.on(BIT.right))) { bail(st, "OFF BALANCE"); return; }
   if (G.u <= 0 || G.u >= 1) { G.u = max(0, min(1, G.u)); place(st, r, G.u); leave(0.02, 0); st.ev.push(["off"]); return; }
   if (G.sp < 0.02) { leave(0.015, 0); st.ev.push(["off"]); return; }
   place(st, r, G.u);
@@ -547,9 +497,9 @@ function place(st, r, u) { st.x = r.a[0] + r.dx * u; st.y = r.a[1] + r.dy * u; s
 function tryLip(st, L, Q, I) {
   const f = Q.f, par = f.ax === "x" ? st.vy : st.vx;
   if (abs(par) >= 0.05 || st.vz > 0.04 || st.z < Q.H - 0.1 || st.z > Q.H + 0.8) return false;
-  const d = tdir(st, I.w), Lp = LIPS[d];
+  const d = dirOf(I.w), Lp = LIPS[d];
   const halves = round(abs(st.face) / 32);
-  if (halves > 0) { addTrick(st, spinName(st, halves), SPIN_PTS[min(halves, SPIN_PTS.length - 1)]); if (st.combo) st.combo.spin = max(st.combo.spin, halves); }
+  if (halves > 0) { addTrick(st, `${st.face < 0 ? "FS" : "BS"} ${halves * 180}`, SPIN_PTS[min(halves, SPIN_PTS.length - 1)]); if (st.combo) st.combo.spin = max(st.combo.spin, halves); }
   st.st = "lip"; st.tr = null; st.face = 0; st.mq = 0; st.vx = 0; st.vy = 0; st.vz = 0; st.z = Q.H;
   st.lip = { ...newBal(st), q: Q.i, k: d };
   addTrick(st, Lp[0], Lp[1]);
@@ -559,13 +509,13 @@ function tryLip(st, L, Q, I) {
 function lipTick(st, L, I) {
   const Lp = st.lip, Q = L.objs[Lp.q], f = Q.f;
   tickPts(st, PER_TICK.lip);
-  if (!balance(Lp, I.on(BIT.left), I.on(BIT.right), I.D)) { bail(st, "OFF THE LIP"); return; }
+  if (!balance(Lp, I.on(BIT.left), I.on(BIT.right))) { bail(st, "OFF THE LIP"); return; }
   if (I.rel(BIT.a) || Lp.t > 240) {   // drop back in
     const sp = 0.05;
     if (f.ax === "x") { st.vx = -f.sgn * sp; st.x = f.lip - f.sgn * 0.02; } else { st.vy = -f.sgn * sp; st.y = f.lip - f.sgn * 0.02; }
     const g = ground(L, st.x, st.y);
     st.z = g.h; st.o = g.o; st.lip = null; st.st = "ground"; st.h = headOf(st.vx, st.vy); st.dz = 0;
-    st.pend = I.D.pendRamp; st.pendRamp = true; st.charge = 0;
+    st.pend = 14; st.pendRamp = true; st.charge = 0;
     st.ev.push(["land", 1]);
   }
 }
@@ -586,10 +536,10 @@ function collect(st, L) {
     if (st.letters & (1 << i)) return;
     if (near(L.items[c])) {
       st.letters |= 1 << i; st.ev.push(["letter", c]);
-      if (st.letters === 31) for (const G of st.gl) if (G.kind === "letters") goal(st, G);
+      if (st.letters === 31) for (const G of L.goals) if (G.kind === "letters") goal(st, G);
     }
   });
-  if (!st.tape && near(L.items.tape)) { st.tape = true; st.ev.push(["tape"]); for (const G of st.gl) if (G.kind === "tape") goal(st, G); }
+  if (!st.tape && near(L.items.tape)) { st.tape = true; st.ev.push(["tape"]); for (const G of L.goals) if (G.kind === "tape") goal(st, G); }
 }
 
 // ---- the record --------------------------------------------------------------------------------------------------------------------------
@@ -598,13 +548,12 @@ export function rleDecode(rle) { const out = []; for (let i = 0; i < rle.length;
 export function logTicks(rle) { let n = 0; for (let i = 1; i < rle.length; i += 2) n += rle[i]; return n; }
 export const lettersOf = (mask) => LETTERS.map((c, i) => (mask & (1 << i) ? c : "_")).join("");
 export function resultOf(st) {
-  return { game: "skate", v: st.v, level: st.level, mode: st.mode, diff: st.diff, seed: st.seed, score: st.score, best: st.best, letters: lettersOf(st.letters), tape: st.tape, goals: [...st.goals], goalsOf: st.gl.length, ticks: st.t, done: st.done };
+  const L = levelOf(st.level);
+  return { game: "skate", v: st.v, level: st.level, mode: st.mode, seed: st.seed, score: st.score, best: st.best, letters: lettersOf(st.letters), tape: st.tape, goals: [...st.goals], goalsOf: L.goals.length, ticks: st.t, done: st.done };
 }
-// a record: {v, cfg: {level, mode, seed, diff, goofy}, inputLog (RLE)} -> {st, res}. A version-1 record replays in
-// the frozen sim1.js (the run it was); any other version is refused.
+// a record: {v, cfg: {level, mode, seed}, inputLog (RLE)} -> {st, res}. Another version is refused.
 export function replay(rec, maxTicks = Infinity) {
   const v = Number(rec?.v ?? rec?.cfg?.v);
-  if (v === 1) return V1.replay(rec, maxTicks);
   if (v !== VERSION) throw new Error(`skate: version ${v} is not this sim's (${VERSION})`);
   const st = newGame(rec.cfg);
   let n = 0;
