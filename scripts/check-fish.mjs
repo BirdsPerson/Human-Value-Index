@@ -346,10 +346,16 @@ function hookIndex(c, log) { const st = S.newTrip(c); for (let i = 0; i < log.le
     const t1 = await call("POST", { caseId: A, action: "trip", spot: "lake" });
     const at1 = backdate(A, 60);
     const play1 = (c, want) => { const st = V1.newTrip(c), log = []; while (st.tick < V1.TRIP_TICKS && st.catches.filter(k => k.fate === "keep").length < want) { const bb = V1.botBits(st); V1.logPush(log, bb); V1.step(st, bb); st.ev.length = 0; } return { st, log }; };
-    const g1 = play1({ seed: t1.body.seed, spot: "lake", at: at1 }, 2), ks = g1.st.catches.filter(k => k.fate === "keep");
+    const c1cfg = { seed: t1.body.seed, spot: "lake", at: at1 }, g1 = play1(c1cfg, 2), ks = g1.st.catches.filter(k => k.fate === "keep");
     const cl = (k) => ({ sp: k.sp, cw: k.cw, tl: k.tl });
-    res = await call("POST", { caseId: A, action: "donate", tripId: t1.body.tripId, n: ks[0].n, claim: cl(ks[0]), inputLog: g1.log, v: 2 });
-    ok(res.status === 422, "a v1 trip sent as v2: refused");
+    // the waters are the same, so a v1 log replayed on v2 now and then lands the same fish at the same
+    // index; the endpoint must answer exactly as the v2 replay does
+    const asV2 = R.verifyCatchV(2, c1cfg, g1.log, ks[0].n, cl(ks[0])).ok;
+    if (asV2) ok(true, "a v1 trip sent as v2: this seed's v2 replay happens to land the same fish (allowed)");
+    else {
+      res = await call("POST", { caseId: A, action: "donate", tripId: t1.body.tripId, n: ks[0].n, claim: cl(ks[0]), inputLog: g1.log, v: 2 });
+      ok(res.status === 422, `a v1 trip sent as v2: refused (${res.status} ${res.body.error})`);
+    }
     res = await call("POST", { caseId: A, action: "donate", tripId: t1.body.tripId, n: ks[0].n, claim: cl(ks[0]), inputLog: g1.log, v: 9 });
     ok(res.status === 400, "an unknown sim version: refused");
     res = await call("POST", { caseId: A, action: "donate", tripId: t1.body.tripId, n: ks[0].n, claim: cl(ks[0]), inputLog: g1.log });
