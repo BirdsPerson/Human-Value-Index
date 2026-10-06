@@ -6,7 +6,10 @@ import { CELL_W, CELL_H, layoutDistricts, FAMILY_COLOR, familyOf, lodFor, roomLa
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { wantSectors } from "./planClient.js";
 import { FONT, SubjectTip, ZoomBar } from "./cityUi.jsx";
+import { PadHint } from "./ControlLayer.jsx";
 // THE ATTRITION (river.js): the river on the map from its day, its name on hover or a tap
+import { makePadBrowse, drawReticle, pressView } from "./padBrowse.js";   // GAMEPAD BROWSE: the controller on the map
+import { CTL } from "./control.js";
 import { riverShown, COURSES, MAIN, MELT, TARN, ESTUARY, BRIDGES, NAME, nearest } from "./river.js";
 
 // THE SUBSTRATE: the whole city as one canvas. District blocks drawn in box characters,
@@ -36,6 +39,9 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
   const [tip, setTip] = useState(null);
   const [cursor, setCursor] = useState("");
   const onDistrictRef = useRef(onDistrict); onDistrictRef.current = onDistrict;
+  const [padUi, setPadUi] = useState(null), [padSay, setPadSay] = useState(null);   // GAMEPAD BROWSE: the hint strip, what the cursor is on
+  const setPadUiRef = useRef(setPadUi); setPadUiRef.current = setPadUi;
+  const setPadSayRef = useRef(setPadSay); setPadSayRef.current = setPadSay;
   const onOpenRef = useRef(onOpen); onOpenRef.current = onOpen;
   // The tooltip's size, measured once per content change instead of every frame.
   const tipSize = useRef([0, 0]);
@@ -575,6 +581,8 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
         ctx.fillStyle = "rgba(6,10,6,0.86)"; ctx.fillRect(x, y - 15, w, 16);
         ctx.fillStyle = "#67e8f9"; ctx.fillText(text, x + 4, y);
       }
+      // GAMEPAD BROWSE: the reticle
+      if (pad.active()) drawReticle(ctx, pad.P.x, pad.P.y, Boolean(V.hover || hitDistrict(pad.P.x, pad.P.y)));
       // the tooltip follows its subject
       const tipEl = tipRef.current;
       if (tipEl) {
@@ -625,6 +633,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       if (e) refreshTip(e, censusRef.current.mt ?? clockAt(Date.now()).mt); else setTip(null);
     }
     function onDown(ev) {
+      pad.off();
       if (ev.button !== undefined && ev.button !== 0 && ev.pointerType === "mouse") return;
       try { canvas.setPointerCapture(ev.pointerId); } catch { /* fine */ }
       const [x, y] = local(ev);
@@ -652,7 +661,8 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
         V.cam.x = wx - mx / V.cam.z; V.cam.y = wy - my / V.cam.z; clampCam();
         return;
       }
-      if (ev.pointerType === "mouse" && !g) {
+      if (ev.pointerType === "mouse" && pad.active() && Math.abs(ev.movementX || 0) + Math.abs(ev.movementY || 0) > 2) pad.off();   // the mouse took over
+      if (ev.pointerType === "mouse" && !g && !pad.active()) {
         const rn = hitRiver(x, y), was = V.riverAt?.[2] || null;
         V.riverAt = rn ? [x, y, rn] : V.riverTap || null;
         if (rn || was) V.need = true;
@@ -678,7 +688,10 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       setCursor("");
       if (!tap) return;
       const [x, y] = local(ev);
-      const touch = type !== "mouse";
+      tapAt(x, y, type !== "mouse");
+    }
+    // a tap (or the pad's A): a subject (a touch names them first), the river, a district
+    function tapAt(x, y, touch) {
       const e = hitSubject(x, y, touch);
       if (e) {
         if (!touch || V.tip === e.s.name) { showTip(e); onOpenRef.current(e.s); }
@@ -699,6 +712,37 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       const [x, y] = local(ev);
       zoomAt(x, y, Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0015)));
     }
+    // ---- GAMEPAD BROWSE (padBrowse.js): the cursor, the camera, A to tap, Select back to CITY --
+    const blockAt = (b) => { const c = V.cam; return [((b.x + b.w / 2) * CELL_W - c.x) * c.z, ((b.y + b.h / 2) * CELL_H - c.y) * c.z]; };
+    let padIdx = -1;
+    function padStep(dir) {
+      const cx = V.cssW / 2, cy = V.cssH / 2;
+      const on = layout.blocks.map(b => ({ b, p: blockAt(b) })).filter(q => q.p[0] > 0 && q.p[0] < V.cssW && q.p[1] > 0 && q.p[1] < V.cssH)
+        .sort((a, c) => Math.hypot(a.p[0] - cx, a.p[1] - cy) - Math.hypot(c.p[0] - cx, c.p[1] - cy));
+      if (!on.length) return null;
+      padIdx = padIdx < 0 || padIdx >= on.length ? (dir > 0 ? 0 : on.length - 1) : (padIdx + dir + on.length) % on.length;
+      return on[padIdx].p;
+    }
+    const pad = makePadBrowse({
+      size: () => [V.cssW, V.cssH], driving: () => false, reduced: () => V.reduced,
+      hasSelf: () => Boolean(document.querySelector("button.hvi-city-findme:not([disabled])")),
+      poke: () => { V.need = true; }, publish: (ui) => setPadUiRef.current(ui), say: (t) => setPadSayRef.current(t), focus: () => canvas.focus?.({ preventScroll: true }),
+      other: "CITY",
+      targets: () => V.vis.filter(e => !e.s.crowd).map(e => ({ x: e.sx, y: e.sy - 6 })),
+      hover: (x, y) => {
+        const e = hitSubject(x, y, false);
+        if (e !== V.hover) { V.hover = e; if (e) showTip(e); V.need = true; }
+        const rn = hitRiver(x, y);
+        V.riverAt = rn ? [x, y, rn] : V.riverTap || null;
+        return e ? String(e.s.name) : rn ? String(rn) : hitDistrict(x, y)?.name || null;
+      },
+      tap: (x, y) => tapAt(x, y, true),
+      back: () => { if (V.riverTap) { V.riverTap = V.riverAt = null; V.need = true; return true; } if (V.tip) { showTip(null); return true; } return false; },
+      pan: (dx, dy) => { V.cam.x -= dx / V.cam.z; V.cam.y -= dy / V.cam.z; clampCam(); },
+      zoom: (f, x, y) => zoomAt(x, y, f), turn: () => {}, fit: () => fit(), labels: () => {},
+      prev: () => padStep(-1), next: () => padStep(1),
+      drive: () => { CTL.request = Date.now(); pressView("CITY"); },   // Start: to the CITY view, and take control there
+    });
     canvas.addEventListener("pointerdown", onDown);
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerup", onUp);
@@ -709,6 +753,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
     // ---- loop: one rAF, running only while the map is on screen and the tab is visible --
     let raf = 0, last = 0, onScreen = true, dead = false;
     function frame(ts) {
+      pad.poll();   // GAMEPAD BROWSE
       const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
       last = ts;
       update(dt);
@@ -759,6 +804,8 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       </TouchGate>
       <ZoomBar api={apiRef} hint="TAP A DISTRICT TO ENTER" />
       <SubjectTip ref={tipRef} tip={tip} onOpen={(s) => onOpenRef.current(s)} />
+      <PadHint ui={padUi && padUi.mode === "browse" ? { ...padUi, mode: "map" } : padUi} />
+      {padUi && padSay && <p className="sr-only" role="status">{padSay}</p>}
     </div>
   );
 }

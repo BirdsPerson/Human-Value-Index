@@ -4,7 +4,8 @@
 // leaning on it goes in), the inside (the lift reaches every floor with rooms, the exit
 // lets you out), seat snapping, the input mapping (keys, the touch stick, a mocked
 // navigator.getGamepads with Xbox / PlayStation / Switch pads), "up is screen up" at every
-// quarter turn, the Loop's stairs and platform, and the session store.
+// quarter turn, the Loop's stairs and platform, and the session store; GAMEPAD BROWSE
+// (padBrowse.js): the cursor, the camera, the presses, through the same mocked pads.
 import { BUILDINGS, BUILDING, OPEN_LOTS, STATIONS, PLACES } from "../src/city/sim.js";
 import { project, rot, mod4 } from "../src/city/iso.js";
 import { roomPlan, typeOf } from "../src/city/props.js";
@@ -14,7 +15,8 @@ import {
   keysVector, stickVector, stepStreet, stepInside, stateFromTarget, saveControl, loadControl, exitPoint, benches, benchNear,
   trainIn, nearestCar, STORE_KEY, STORE_TTL, LIFT_X, EXIT_X, PLAT_LA, DOOR_REACH,
 } from "../src/city/control.js";
-import { readPad, pressedSince, deadzone, familyOf, GLYPHS } from "../src/city/gamepad.js";
+import { readPad, pressedSince, deadzone, familyOf, GLYPHS, driveToggle } from "../src/city/gamepad.js";
+import { stepCursor, snapTarget, stepPan, zoomFactor, stickStep, nearestInDir, padActions, makePadBrowse, CUR, PAN } from "../src/city/padBrowse.js";
 import { trainsAt } from "../src/city/sim.js";
 
 let fails = 0;
@@ -227,6 +229,149 @@ for (const id of Object.keys(STATIONS)) {
   ok(loadControl("k", store) === null, "a building that no longer exists is not resumed");
 }
 void PLACES;
+
+// 11. GAMEPAD BROWSE (padBrowse.js): the cursor, the camera, what each press means
+{
+  const P = (axes, pressed = [], id = "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e)") => readPad(nav(pad(id, axes, pressed)));
+  // the right stick, the triggers and the face buttons, apart
+  const r = P([0, 0, 0.9, -0.5], [7, 2, 3, 11]);
+  ok(r.rx > 0.5 && r.ry < 0 && r.lmag === 0 && r.held.find && r.held.labels && r.held.rs && r.rt === 1 && r.lt === 0, "right stick, RT, X (find), Y (labels), RS click read apart");
+  const sw = P([0, 0], [3, 2], "Pro Controller (STANDARD GAMEPAD Vendor: 057e)");
+  ok(sw.held.find && sw.held.labels, "switch: X on top finds, Y on the left labels");
+  ok(P([0, 0], [], "pad").lt === 0 && readPad(nav({ ...pad("p", [0, 0]), buttons: Array.from({ length: 17 }, (_, i) => (i === 6 ? { pressed: false, value: 0.05 } : btn(false))) })).lt === 0, "a resting trigger is zero");
+  // stick -> cursor, with its dead zone
+  const still = P([0.15, -0.1]);
+  const c0 = { x: 200, y: 150, t: 0 };
+  const c1 = stepCursor(c0, still.lx, still.ly, 1 / 60, { w: 400, h: 300 });
+  ok(c1.x === 200 && c1.y === 150, "cursor: a stick inside the dead zone does not move it");
+  const push = P([1, 0]);
+  let c = c0; for (let k = 0; k < 6; k++) c = stepCursor(c, push.lx, push.ly, 1 / 60, { w: 400, h: 300 });
+  const early = c.x - 200;
+  ok(early > 0 && c.y === 150, `cursor: pushed right moves right (${early.toFixed(1)} px)`);
+  let c2 = { ...c }; const x0 = c2.x; for (let k = 0; k < 6; k++) c2 = { ...c2, ...stepCursor({ ...c2, t: 1 }, push.lx, push.ly, 1 / 60, { w: 4000, h: 300 }) };
+  ok(c2.x - x0 > early, "cursor: a held push accelerates");
+  const half = P([0.6, 0]);
+  const ch = stepCursor({ x: 200, y: 150, t: 1 }, half.lx, half.ly, 0.1, { w: 4000, h: 300 }), cf = stepCursor({ x: 200, y: 150, t: 1 }, 1, 0, 0.1, { w: 4000, h: 300 });
+  ok(ch.x - 200 < (cf.x - 200) * 0.5, "cursor: a light push is fine (speed grows with the push squared)");
+  const slow = stepCursor({ x: 200, y: 150, t: 1 }, 1, 0, 0.1, { w: 4000, h: 300, over: true });
+  ok(near(slow.x - 200, (cf.x - 200) * CUR.friction, 1e-6), "aim assist: slower over a target");
+  const sn = stepCursor({ x: 200, y: 150, t: 0 }, 0, 0, 0.1, { w: 400, h: 300, snap: [210, 150] });
+  ok(sn.x > 200 && sn.x <= 210, "aim assist: a released cursor settles onto a person near it");
+  ok(stepCursor({ x: 200, y: 150 }, 0, 0, 0.1, { w: 400, h: 300, snap: [210, 150], reduced: true }).x === 210, "aim assist under reduced motion: no glide");
+  ok(snapTarget(200, 150, [{ x: 215, y: 150 }, { x: 500, y: 500 }])?.[0] === 215 && snapTarget(200, 150, [{ x: 300, y: 150 }]) === null, "snap: only within reach");
+  const rim = stepCursor({ x: 395, y: 150, t: 1 }, 1, 0, 0.1, { w: 400, h: 300 });
+  ok(rim.x === 400 - CUR.edge && rim.ex === 1, "the rim stops the cursor and pushes the camera");
+  // right stick -> camera deltas, eased (none under reduced motion)
+  const rs = P([0, 0, 1, 0]);
+  let v = { x: 0, y: 0 }; v = stepPan(v, rs.rx, rs.ry, 1 / 60);
+  ok(v.x > 0 && v.x < PAN && v.y === 0, `pan eases in: ${v.x.toFixed(0)} px/s`);
+  for (let k = 0; k < 60; k++) v = stepPan(v, rs.rx, rs.ry, 1 / 60);
+  ok(near(v.x, PAN, 1), "pan reaches full speed");
+  ok(stepPan({ x: 0, y: 0 }, rs.rx, rs.ry, 1 / 60, true).x === PAN, "reduced motion: no easing");
+  const rdz = P([0, 0, 0.12, 0.1]);
+  ok(stepPan({ x: 0, y: 0 }, rdz.rx, rdz.ry, 1 / 60, true).x === 0, "right stick dead zone: no drift");
+  let vv = { x: PAN, y: 0 }; for (let k = 0; k < 120; k++) vv = stepPan(vv, 0, 0, 1 / 60);
+  ok(vv.x === 0, "pan eases out to a stop");
+  ok(zoomFactor(0, 1, 0.1) > 1 && zoomFactor(1, 0, 0.1) < 1 && zoomFactor(0, 0, 0.1) === 1, "RT zooms in, LT out, neither: still");
+  // the stick as a d-pad in a cutaway: one step, then repeats
+  let st = stickStep({ dir: null, t: 0 }, 0, -1, 1 / 60);
+  ok(st.dir === "up", "stick step: up");
+  let n = 0; for (let k = 0; k < 60; k++) { st = stickStep(st.rep, 0, -1, 1 / 60); if (st.dir) n++; }
+  ok(n >= 3 && n <= 6, `stick step: held a second, it repeats (${n})`);
+  ok(stickStep(st.rep, 0, 0, 1 / 60).dir === null, "stick step: let go, nothing");
+  // rooms in a grid: right goes right, down goes down
+  const grid = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 0, y: 50 }, { x: 100, y: 50 }];
+  ok(nearestInDir(grid[0], grid, "right") === 1 && nearestInDir(grid[0], grid, "down") === 2 && nearestInDir(grid[0], grid, "left") === -1, "nearest in a direction");
+  // the presses, by mode (A, B, the bumpers, Start, Select)
+  const edges = (pressed, id) => pressedSince(null, P([0, 0], pressed, id).held);
+  ok(padActions(edges([0]), "browse").includes("tap"), "browse: A taps");
+  ok(padActions(edges([1]), "browse").includes("back"), "browse: B backs");
+  ok(padActions(edges([4]), "browse").includes("turnL") && padActions(edges([5]), "browse").includes("turnR"), "browse: LB / RB turn");
+  ok(padActions(edges([11]), "browse").includes("fit"), "browse: the right-stick click fits");
+  ok(padActions(edges([2]), "browse").includes("find") && padActions(edges([3]), "browse").includes("labels"), "browse: X finds, Y labels");
+  ok(padActions(edges([8]), "browse").includes("view"), "browse: Select toggles the map");
+  ok(padActions(edges([15]), "browse").includes("next") && padActions(edges([14]), "browse").includes("prev"), "browse: the d-pad steps buildings");
+  ok(padActions(edges([0]), "rooms").includes("drill") && padActions(edges([0]), "items").includes("open"), "cutaway: A goes in, then opens");
+  ok(padActions(edges([1]), "items").includes("out") && padActions(edges([1]), "rooms").includes("close"), "cutaway: B comes out, then closes");
+  ok(padActions(edges([12]), "rooms").includes("move:up"), "cutaway: the d-pad moves between rooms");
+  ok(padActions(edges([1]), "card")[0] === "closeCard" && padActions(edges([0]), "card").length === 0, "a card open: only B, to close it");
+  ok(padActions(edges([13]), "find")[0] === "findDown" && padActions(edges([0]), "find")[0] === "findPick", "FIND: the d-pad chooses, A picks");
+  ok(!padActions(edges([0], "Pro Controller (057e)"), "browse").includes("tap") && padActions(edges([1], "Pro Controller (057e)"), "browse").includes("tap"), "switch: A (right) taps, the bottom button does not");
+  // Start toggles DRIVE YOURSELF (controlIso.js reads gamepad.driveToggle)
+  ok(driveToggle(edges([9]), { hasSelf: true }) === "take", "Start: take control");
+  ok(driveToggle(edges([9]), { hasSelf: false }) === null, "Start without a file: nothing");
+  ok(driveToggle(edges([9]), { driving: true }) === "release" && driveToggle(edges([8]), { driving: true }) === "release", "driving: Start or Select releases");
+  ok(driveToggle(edges([8]), { hasSelf: true }) === null, "browse: Select does not take control");
+  ok(driveToggle(edges([9]), { hasSelf: true, card: true }) === null, "a card open: Start waits");
+
+  // the whole loop through a view's hooks: A then A (name, then open), B back, the camera, the bumpers
+  const log = [];
+  let held = [], axes = [0, 0, 0, 0], driving = false;
+  let pads = () => [pad("Xbox Wireless Controller (045e)", axes, held)];
+  const mockNav = { getGamepads: () => pads() };
+  const peekOrSel = { peek: null, sel: null };
+  const H = {
+    nav: mockNav, size: () => [400, 300], driving: () => driving, hasSelf: () => true, reduced: () => false, poke() {}, publish: (ui) => log.push(["ui", ui && ui.mode]), say() {},
+    targets: () => [], hover: (x, y) => (x > 180 && x < 260 ? "THE DIVE" : null),
+    tap: (x) => { if (x > 180 && x < 260) { if (peekOrSel.peek) { peekOrSel.sel = "the-dive"; peekOrSel.peek = null; } else peekOrSel.peek = "the-dive"; } log.push(["tap"]); },
+    back: () => { log.push(["back"]); if (peekOrSel.peek) { peekOrSel.peek = null; return true; } return false; },
+    pan: (dx, dy) => log.push(["pan", dx, dy]), zoom: (f) => log.push(["zoom", f]), turn: (d) => log.push(["turn", d]), fit: () => log.push(["fit"]), labels: () => log.push(["labels"]),
+    prev: () => null, next: () => [220, 150], other: "MAP",
+  };
+  const B = makePadBrowse(H);
+  let t = 1000;
+  const frame = (pressed = [], ax = [0, 0, 0, 0]) => { held = pressed; axes.splice(0, 4, ...ax); t += 16; B.poll(t); };
+  frame();
+  ok(!B.active(), "a connected pad untouched: no cursor (the mouse keeps the city)");
+  frame([], [0.1, 0.05, 0, 0]);
+  ok(!B.active(), "a resting stick inside the dead zone does not wake it");
+  frame([], [1, 0, 0, 0]);
+  ok(B.active() && B.P.x > 200, `the left stick wakes the cursor and moves it right: ${B.P.x.toFixed(1)}`);
+  for (let k = 0; k < 4; k++) frame([], [1, 0, 0, 0]);
+  frame([0]); frame([]);
+  ok(peekOrSel.peek === "the-dive" && !peekOrSel.sel, "A over a building: named, its chip up");
+  frame([0]); frame([]);
+  ok(peekOrSel.sel === "the-dive", "A again: opened");
+  frame([0]); frame([0]); frame([]);
+  ok(log.filter(e => e[0] === "tap").length === 3, "a held A is one press");
+  peekOrSel.sel = null; peekOrSel.peek = "the-dive";
+  frame([1]); frame([]);
+  ok(peekOrSel.peek === null && log.some(e => e[0] === "back"), "B: back (the chip goes)");
+  log.length = 0;
+  frame([], [0, 0, 1, 0]); frame([], [0, 0, 1, 0]);
+  const pans = log.filter(e => e[0] === "pan");
+  ok(pans.length === 2 && pans.every(e => e[1] < 0 && e[2] === 0) && Math.abs(pans[1][1]) > Math.abs(pans[0][1]), "right stick: the camera pans that way, easing in");
+  log.length = 0;
+  frame([4]); frame([]); frame([5]); frame([]);
+  { // a view mounting under a button still held (Select, through the switch to MAP) does not take it as a press
+    const n0 = log.filter(e => e[0] === "labels").length;
+    const B2 = makePadBrowse({ ...H, nav: { getGamepads: () => [pad("Xbox (045e)", [0, 0, 0, 0], [3])] } });
+    B2.poll(5000); B2.poll(5016);
+    ok(log.filter(e => e[0] === "labels").length === n0, "a button held through a view switch is not a press there"); }
+  ok(JSON.stringify(log.filter(e => e[0] === "turn").map(e => e[1])) === "[-1,1]", "LB / RB: a quarter turn each way");
+  log.length = 0;
+  held = []; axes.splice(0, 4, 0, 0, 0, 0);
+  pads = () => [{ ...pad("Xbox (045e)", axes, held), buttons: Array.from({ length: 17 }, (_, i) => (i === 7 ? { pressed: true, value: 1 } : btn(false))) }];
+  t += 16; B.poll(t);
+  ok(log.some(e => e[0] === "zoom" && e[1] > 1), "RT: zoom in");
+  pads = () => [pad("Xbox Wireless Controller (045e)", axes, held)];
+  log.length = 0;
+  frame([15]); frame([]);
+  ok(B.P.x === 220 && B.P.y === 150, "d-pad: the cursor jumps to the next building");
+  frame([11]); frame([]); frame([3]); frame([]);
+  ok(log.some(e => e[0] === "fit") && log.some(e => e[0] === "labels"), "RS click fits; Y toggles labels");
+  // driving: the browse stands down, and the cursor is gone
+  driving = true; log.length = 0;
+  frame([0], [1, 0, 1, 0]); frame([]);
+  ok(!B.active() && !log.some(e => e[0] === "tap" || e[0] === "pan"), "driving: the browse stands down");
+  driving = false;
+  frame([], [1, 0, 0, 0]);
+  ok(B.active(), "released: the cursor comes back on the next push");
+  // unplugged
+  pads = () => [];
+  t += 16; B.poll(t);
+  ok(!B.active() && log[log.length - 1][0] === "ui" && log[log.length - 1][1] === null, "unplugged: the hint goes");
+}
 
 console.log(fails ? `check-control: ${fails} FAILED` : "check-control: ALL PASS");
 process.exit(fails ? 1 : 0);

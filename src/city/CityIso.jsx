@@ -26,7 +26,8 @@ import { drawBody, drawYardProp, drawArchGround, doorAt } from "./archDraw.js";
 import { findTarget, findLine } from "./find.js";
 // DRIVE YOURSELF (controlIso.js, ControlLayer.jsx): the viewer's own citizen, steered
 import { makeIsoControl } from "./controlIso.js";
-import ControlLayer, { TakeControlButton } from "./ControlLayer.jsx";
+import ControlLayer, { TakeControlButton, PadHint } from "./ControlLayer.jsx";
+import { makePadBrowse, drawReticle, drawFocus } from "./padBrowse.js";   // GAMEPAD BROWSE: the controller, not driving
 import { funnelRoomHits } from "./funnelProps.js";
 import { funnelButtons } from "./funnels.js";
 import { storeLabel, tramAt, drawTram } from "./storefrontDraw.js";   // THE MALL: the storefronts' names, THE TRAM CAR
@@ -146,6 +147,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
   const setFoundRef = useRef(setFound); setFoundRef.current = setFound;
   const onFindEndRef = useRef(onFindEnd); onFindEndRef.current = onFindEnd;
   const selfRef = useRef(self); selfRef.current = self;
+  // GAMEPAD BROWSE (padBrowse.js): the hint strip's state, and what the cursor is on (said aloud)
+  const [padUi, setPadUi] = useState(null);
+  const [padSay, setPadSay] = useState(null);
+  const setPadUiRef = useRef(setPadUi); setPadUiRef.current = setPadUi;
+  const setPadSayRef = useRef(setPadSay); setPadSayRef.current = setPadSay;
+  const toggleLabelsRef = useRef(null); toggleLabelsRef.current = toggleLabels;
 
   useEffect(() => {
     const canvas = canvasRef.current, wrap = wrapRef.current;
@@ -1270,6 +1277,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       });
       for (const box of takeTvBoxes()) if (live) V.hits.push({ kind: "ebtv", panel: true, box });   // a TV on the wall: the real channel
       if (live) ctl.room(b, f, pid, rx, ry, rw, rh, sh, plan, byAnchor, now);   // DRIVE YOURSELF: the avatar in its room
+      if (live) V.padRooms.push({ key: `${f.index}|${pid}`, x: rx + rw / 2, y: ry + rh / 2, box: [rx, ry, rx + rw, ry + rh], name: `${f.code} ${PLACES[pid]?.name || f.name}`, entry: f.level === 0, pid });   // GAMEPAD BROWSE: the rooms, to step between
       const fx = PARK_LOTS[b.id] && gameAt(pid, mt);
       nameTab(fx ? `${fx.name} // IN PLAY` : many ? PLACES[pid].name : f.name, rx, ry, rw);
       if (hq) {
@@ -1327,7 +1335,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = "#060a06"; ctx.fillRect(0, 0, V.cssW, V.cssH);
-      V.hits = []; V.labels = []; takeTvBoxes();
+      V.hits = []; V.labels = []; V.padRooms = []; takeTvBoxes();
       V.river = riverShown(mt);
       drawGround();
       if (V.river) {
@@ -1420,6 +1428,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         V.need = true;
       }
       if (V.find && !V.reduced) V.need = true;   // the ring pulses
+      // GAMEPAD BROWSE: the reticle over the open city, or the focus in the cutaway
+      if (pad.active() && !ctl.active()) {
+        const fb = padFocusBox();
+        if (fb) drawFocus(ctx, fb, pad.P.level === "items");
+        else if (!V.panel) drawReticle(ctx, pad.P.x, pad.P.y, Boolean(V.hover));
+      }
     }
 
     // ---- the find marker: above everything, the same size at every zoom -----------------------
@@ -1498,6 +1512,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     let drag = null, pinch = null;
     const local = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
     function onDown(e) {
+      pad.off();
       try { canvas.setPointerCapture?.(e.pointerId); } catch { /* synthetic or already gone */ }
       if (document.activeElement !== canvas) canvas.focus({ preventScroll: true });
       pts.set(e.pointerId, local(e));
@@ -1526,7 +1541,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       if (id !== V.hover) { V.hover = id; V.need = true; canvas.classList.toggle("point", !!id); }
     }
     function onMove(e) {
-      if (e.pointerType === "mouse" && !pts.size) hoverAt(...local(e));
+      if (e.pointerType === "mouse" && pad.active() && Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0) > 2) pad.off();   // the mouse took over
+      if (e.pointerType === "mouse" && !pts.size && !pad.active()) hoverAt(...local(e));
       if (!pts.has(e.pointerId)) return;
       pts.set(e.pointerId, local(e));
       if (pinch && pts.size >= 2) {
@@ -1638,6 +1654,95 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         V.need = true; e.preventDefault();
       } else return;
     }
+    // ---- GAMEPAD BROWSE (padBrowse.js): everything but driving, from a controller ---------------
+    const hitName = (id) => {
+      if (!id) return null;
+      if (BUILDING[id]) return `${BUILDING[id].name}. ${V.occ[id] || 0} inside.`;
+      if (id.startsWith("p:")) { const h = V.hits.find(q => q.kind === "p" && !q.panel && `p:${who(q.s)}` === id); return h ? String(h.s.name || h.s.slug || "Someone") : null; }
+      if (id.startsWith("pf:")) return "A prefect";
+      if (id.startsWith("rv:") || id.startsWith("sp:")) return "The Attrition";
+      return null;
+    };
+    const boxC = (b) => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
+    const hullC = (hull) => { let x = 0, y = 0; for (const [a, c] of hull) { x += a; y += c; } return [x / hull.length, y / hull.length]; };
+    let padIdx = -1;
+    function padStep(dir) {
+      const ids = keyOrder(), n = ids.length;
+      if (!n) return null;
+      const i = V.peek ? ids.indexOf(V.peek) : padIdx;
+      padIdx = i < 0 ? (dir > 0 ? 0 : n - 1) : (i + dir + n) % n;
+      const id = ids[padIdx];
+      unfollow();
+      setPeekState(id);
+      const h = V.hits.find(q => q.kind === "b" && q.id === id && q.hull);
+      if (h) return hullC(h.hull);
+      const b = BUILDING[id];
+      return Q(b.pos.x, b.pos.y, 1);
+    }
+    // what is in a room of the open cutaway: its people, cabinets, shop items, TVs (not the room itself)
+    function padItems(roomKey) {
+      const r = V.padRooms.find(q => q.key === roomKey);
+      if (!r) return [];
+      const [x0, y0, x1, y1] = r.box, area = (x1 - x0) * (y1 - y0), seen = new Map();
+      const out = [];
+      for (const h of V.hits) {
+        if (!h.panel || h.kind === "close" || !h.box) continue;
+        const [cx, cy] = boxC(h.box);
+        if (cx < x0 || cx > x1 || cy < y0 || cy > y1) continue;
+        if ((h.box[2] - h.box[0]) * (h.box[3] - h.box[1]) >= area * 0.8) continue;   // the room's own tap
+        const sp = h.spec || {};
+        let k = h.kind === "p" ? `p:${who(h.s)}` : h.kind === "funnel" ? `f:${sp.kind}:${sp.slug || sp.item || sp.host || ""}` : `${h.kind}:${h.go || ""}`;
+        const n = seen.get(k) || 0; seen.set(k, n + 1); if (n) k += `#${n}`;
+        const name = h.kind === "p" ? String(h.s.name || h.s.slug || "Someone")
+          : h.kind === "funnel" ? (sp.kind === "game" ? `Play ${String(sp.slug || "the cabinet").replace(/-/g, " ")}` : sp.kind === "shop" ? (sp.item ? "A shop item" : "The shop") : sp.kind === "host" ? `${sp.host || "The host"}, on the floor` : sp.kind === "ebtv" ? "EBTV" : "Open")
+          : h.kind === "ebtv" ? "EBTV, live" : h.kind === "casino" ? "A table" : "Open";
+        out.push({ key: k, x: cx, y: cy, box: h.box, name, hit: h });
+      }
+      return out;
+    }
+    function padFocusBox() {
+      const P = pad.P;
+      if (!V.panel || !P.room) return null;
+      if (P.level === "items") { const it = padItems(P.room).find(q => q.key === P.item); if (it) return it.box; }
+      return V.padRooms.find(q => q.key === P.room)?.box || null;
+    }
+    const pad = makePadBrowse({
+      size: () => [V.cssW, V.cssH], driving: () => ctl.active(), hasSelf: () => Boolean(selfRef.current), reduced: () => V.reduced,
+      poke: () => { V.need = true; }, wake: () => dropHintRef.current?.(), publish: (ui) => setPadUiRef.current(ui), say: (t) => setPadSayRef.current(t), focus: () => canvas.focus({ preventScroll: true }),
+      other: "MAP",
+      targets: () => V.hits.filter(h => !h.panel && h.box && (h.kind === "p" || h.kind === "prefect" || h.kind === "spot")).map(h => { const [x, y] = boxC(h.box); return { x, y }; }),
+      hover: (x, y) => { hoverAt(x, y); return hitName(V.hover); },
+      // A again on the building whose chip is up opens it, whoever walks in front of it meanwhile
+      tap: (x, y) => {
+        const h = V.peek && V.hits.find(q => q.kind === "b" && q.id === V.peek && q.hull);
+        if (h && inPoly(x, y, h.hull)) { unfollow(); select(V.peek); } else tap(x, y, true);
+      },
+      back: () => {
+        if (V.peek) { setPeekState(null); return true; }
+        if (V.riverSel) { V.riverSel = null; V.need = true; return true; }
+        if (V.find) { apiRef.current.endFind(); return true; }
+        return false;
+      },
+      pan: (dx, dy) => { hands(); unfollow(); V.cam.ox += dx; V.cam.oy += dy; V.need = true; },
+      zoom: (f, x, y) => zoomAt(x, y, f), turn: (d) => turn(d), fit: () => apiRef.current.fit(), labels: () => toggleLabelsRef.current?.(),
+      prev: () => padStep(-1), next: () => padStep(1),
+      rooms: () => (V.sel && V.panel && V.padRooms?.length ? V.padRooms : null),
+      items: padItems,
+      open: (it) => {
+        const h = it.hit;
+        if (h.kind === "p") onOpenRef.current?.(h.s);
+        else if (h.kind === "funnel") openFunnel(h.spec);
+        else if (h.kind === "ebtv") openFunnel({ href: watchHref(), campaign: "ebtv-tv" });
+        else if (h.kind === "casino") window.location.hash = h.go;
+        else tap(it.x, it.y);
+      },
+      roomAct: (r) => {
+        const [x0, y0, x1, y1] = r.box, area = (x1 - x0) * (y1 - y0);
+        const whole = V.hits.find(h => h.panel && h.kind === "funnel" && h.box && (h.box[2] - h.box[0]) * (h.box[3] - h.box[1]) >= area * 0.8 && Math.abs(h.box[0] - x0) < 2 && Math.abs(h.box[1] - y0) < 2);
+        if (whole) openFunnel(whole.spec); else apiRef.current.enter();
+      },
+      enter: () => apiRef.current.enter(), close: () => { unfollow(); select(null); },
+    });
     canvas.addEventListener("pointerdown", onDown);
     // a hand on the city has understood the hint
     const seen = () => dropHintRef.current?.();
@@ -1663,6 +1768,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     // ---- loop --------------------------------------------------------------------------------
     let raf = 0, onScreenNow = true, dead = false;
     function frame() {
+      pad.poll();   // GAMEPAD BROWSE: before the frame is drawn
       if (!V.reduced || V.need || censusRef.current?.v !== V.censusV) { V.need = false; draw(); }
       const tl = tvLinkRef.current, lab = ebtvLabel();
       if (tl && tl.getAttribute("aria-label") !== lab) tl.setAttribute("aria-label", lab);
@@ -1691,7 +1797,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     }
     SAVED = null;
     sync();
-    if (import.meta.env?.DEV) window.__hviIso = { V, turn, select, zoomAt, fit, tap, draw, startFind, ctl, selfRef, centreOn };
+    if (import.meta.env?.DEV) window.__hviIso = { V, turn, select, zoomAt, fit, tap, draw, startFind, ctl, selfRef, centreOn, pad };
     return () => {
       SAVED = { cam: { ...(V.camTo ? { ...V.cam, ...V.camTo } : V.cam) }, sel: V.sel, cssW: V.cssW };
       dead = true; sync();
@@ -1747,9 +1853,10 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         </div>
       )}
       <ControlLayer onRelease={() => apiRef.current.release?.()} />
+      <PadHint ui={padUi} />
       <TouchGate label="TAP TO EXPLORE" hint="DRAG · PINCH">
         <canvas ref={canvasRef} tabIndex={0} className="hvi-city-canvas" role="img"
-          aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag or use the arrow keys to move, pinch or plus and minus to zoom, Q and E to turn. Tap a building, or press ] and [ to step through the buildings in view, to open its cutaway: every floor and room, and who is in it; Enter goes inside. The list under the city says what is happening now, and the district directory lists every district." />
+          aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag or use the arrow keys to move, pinch or plus and minus to zoom, Q and E to turn. Tap a building, or press ] and [ to step through the buildings in view, to open its cutaway: every floor and room, and who is in it; Enter goes inside. With a game controller: the left stick moves a cursor that names what it is over, A opens, B backs out, the right stick pans, the triggers zoom, the bumpers turn, X finds, Y names everything. The list under the city says what is happening now, and the district directory lists every district." />
         {b?.id === "eb-shop" && <ShopWallLinks />}
         <a ref={tvLinkRef} className="sr-only hvi-city-tvlink" href={watchHref()} target="_blank" rel="noopener" aria-label={ebtvLabel()}>Electric Basement TV, live</a>
       </TouchGate>
@@ -1776,7 +1883,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
                 <button type="button" className="hvi-city-zb txt" aria-pressed={labels} title="Name everything on the map" onClick={toggleLabels}>LABELS</button>
               </>}
       </div>
-      {b && <p className="sr-only" role="status">{`${b.name} open. ${b.floors.length} floor${b.floors.length === 1 ? "" : "s"}. ${b.floors.map(f => `${f.code} ${f.name}`).join(", ")}.`}</p>}
+      {(b || padSay) && <p className="sr-only" role="status">{padSay && padUi ? padSay : b ? `${b.name} open. ${b.floors.length} floor${b.floors.length === 1 ? "" : "s"}. ${b.floors.map(f => `${f.code} ${f.name}`).join(", ")}.` : ""}</p>}
     </div>
   );
 }

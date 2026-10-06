@@ -23,6 +23,11 @@ const CSS = `
 .hvi-ctl-btn { touch-action: none; user-select: none; -webkit-user-select: none; min-width: 48px; min-height: 48px; border-radius: 50%; border: 2px solid #4ade80; background: rgba(6,10,6,0.72); color: #d1fadf; font: 700 11px 'Fira Mono', ui-monospace, monospace; padding: 0 6px; }
 .hvi-ctl-btn.act { width: 68px; height: 68px; background: rgba(74,222,128,0.25); color: #e5ffe9; font-size: 13px; }
 .hvi-ctl-btn:active, .hvi-ctl-btn.on { background: #4ade80; color: #06210f; }
+/* GAMEPAD BROWSE (padBrowse.js): one small line of glyphs, only while a controller is in use */
+.hvi-pad-hint { position: absolute; left: 8px; bottom: 8px; z-index: 23; max-width: min(46%, 620px); display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 3px 7px; background: rgba(6,10,6,0.86); border: 1px solid rgba(74,222,128,0.45); color: var(--fg-mute, #6b9a7c); font-size: 10px; line-height: 1.5; letter-spacing: 0.04em; pointer-events: none; }
+.hvi-pad-hint span { white-space: nowrap; }
+.hvi-pad-hint b { display: inline-block; min-width: 1.6ch; margin-right: 0.5ch; padding: 0 0.4ch; background: #e5ffe9; color: #06210f; text-align: center; font-weight: 700; }
+@media (max-width: 720px) { .hvi-pad-hint { bottom: calc(var(--hit-min, 44px) + 24px); max-width: calc(100% - 16px); } }
 @media (max-width: 640px) { .hvi-ctl-note { bottom: 60px; } .hvi-ctl-legend { font-size: 11px; padding: 3px 6px; max-width: calc(100% - 16px); } .hvi-ctl-legend .opt { display: none; } }
 /* while driving, the TAP TO OPERATE veil (ui/TouchGate.jsx) stays, small, in a corner: a swipe
    still scrolls the page, a tap still lifts it to pan and pinch, and it hides nothing */
@@ -88,7 +93,7 @@ function Legend({ ui, touch }) {
   const actKey = src === "pad" ? g.act : src === "touch" ? "ACT" : "E";
   const backKey = src === "pad" ? g.back : src === "touch" ? "BACK" : "B";
   const keys = src === "pad"
-    ? `L-STICK WALK // ${g.run} RUN // ${g.turnL} ${g.turnR} TURN // ${g.start} RELEASE`
+    ? `L-STICK WALK // ${g.run} RUN // ${g.turnL} ${g.turnR} TURN // ${g.start} OR ${g.select} RELEASE`
     : src === "touch"
       ? "STICK WALK (PUSH FAR TO RUN) // RELEASE UP TOP"
       : "WASD OR ARROWS WALK // SHIFT RUN // Q R TURN // ESC RELEASE";
@@ -139,3 +144,25 @@ function TouchPad({ ui }) {
     </>
   );
 }
+
+// GAMEPAD BROWSE (padBrowse.js): what the buttons do here, in the glyphs printed on this pad.
+// ui: {family, mode: "browse" | "map" | "rooms" | "items" | "find" | "card", self} | null.
+export const PadHint = memo(function PadHint({ ui }) {
+  useEffect(injectCss, []);
+  if (!ui || ui.mode === "card") return null;
+  const g = GLYPHS[ui.family] || GLYPHS.generic;
+  const rows = ui.mode === "find"
+    ? [["▲▼", "CHOOSE"], [g.act, "FIND"], [g.back, "CANCEL"]]
+    : ui.mode === "rooms"
+      ? [[g.lstick, "ROOMS"], [g.act, "IN"], [g.labels, "ENTER"], [g.back, "CLOSE"]]
+      : ui.mode === "items"
+        ? [[g.lstick, "PICK"], [g.act, "OPEN"], [g.back, "OUT"]]
+        : ui.mode === "map"
+          ? [[g.act, "OPEN"], [g.back, "BACK"], [g.find, "FIND"], [`${g.zoomOut} ${g.zoomIn}`, "ZOOM"], ...(ui.self ? [[g.start, "DRIVE"]] : []), [g.select, "CITY"]]
+        : [[g.act, "OPEN"], [g.back, "BACK"], [g.find, "FIND"], [g.labels, "LABELS"], [`${g.zoomOut} ${g.zoomIn}`, "ZOOM"], [`${g.turnL} ${g.turnR}`, "TURN"], ...(ui.self ? [[g.start, "DRIVE"]] : []), [g.select, "MAP"]];
+  return (
+    <div className="hvi-pad-hint" aria-hidden="true">
+      {rows.map(([k, t]) => <span key={t}><b>{k}</b>{t}</span>)}
+    </div>
+  );
+});

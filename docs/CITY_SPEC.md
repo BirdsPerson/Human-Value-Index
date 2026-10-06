@@ -1085,6 +1085,39 @@ introduce a controller function". v1 is solo: you drive your own citizen, nobody
 - Measured (headless Chromium, dev build): 1440 walking 16.6 ms average frame, p95 17.2; 390
   touch emulation 16.6 / 18.0. Screens: docs/screens/control/.
 
+## GAMEPAD BROWSE: the controller for everything else (2026-10-05)
+
+Scott: "right stick controls camera, left stick controls cursor." Whenever a pad is connected,
+has been touched, and you are not driving, the CITY and MAP views take it (`padBrowse.js`;
+CityIso.jsx / CityMap.jsx hooks marked `GAMEPAD BROWSE`). A connected pad nobody touches changes
+nothing; a mouse move or a tap hands the city back to the pointer until the pad is used again.
+
+- **Left stick**: a pixel reticle. Speed grows with the push squared and ramps over half a
+  second held; it slows to half over something it can name, and, let go, settles onto a person
+  (or prefect, or fishing spot) within 26 px. At the rim it stops and pushes the camera. It
+  hovers exactly as a mouse does: that one label, said aloud through the selection status.
+- **Buttons** (glyphs per family, `gamepad.GLYPHS`; Nintendo swaps A/B and X/Y by print):
+  A taps (a building: first its chip, A again opens the cutaway, even if someone walked in
+  front; a person: their file); B backs out (the chip, the river's name, a find; over a card or
+  an overlay it closes it); X focuses FIND (d-pad up / down choose, A picks, A on an empty box
+  is FIND ME, B or X again leaves); Y is LABELS; d-pad steps through the buildings in view,
+  nearest the centre first, cursor and chip on each (like `[` `]`).
+- **Camera**: right stick pans (eased, none under reduced motion), RT in / LT out about the
+  cursor, LB / RB a quarter turn, right-stick click FIT.
+- **Cutaway**: the stick (with repeat) or d-pad moves between rooms, nearest that way; A goes
+  in among its people, cabinets, shop items, hosts and TVs (a room with none: its own tap, or
+  ENTER); A again opens one (a cabinet plays, a shop item opens its card, a person their file);
+  B comes back out, then closes. Y is ENTER (the building page). Brackets mark the focus.
+- **Start / Select**: Start takes your own citizen when you have a file (`gamepad.driveToggle`);
+  driving, Start or Select release. Select otherwise flips CITY / MAP (on the MAP, Start goes to
+  the CITY view and takes control there). A button held through the switch is not a press there.
+- **Hint strip**: one 10 px line bottom-left, only while the pad is in use, in that pad's glyphs.
+- **Checks**: `check-control.mjs` section 11, mocked getGamepads: dead zone, acceleration, aim
+  assist, rim push, pan easing, triggers, stick repeat, every press per mode, A-then-A, B,
+  bumpers, Start / Select, driving stands the browse down, unplugging.
+- **Not yet**: STREET and STACK views; the building page (BuildingView); typing a name with the
+  pad (no on-screen keyboard: FIND takes the keyboard, or FIND ME).
+
 
 ## The funnels (2026-09-30)
 

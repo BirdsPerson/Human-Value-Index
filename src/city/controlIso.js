@@ -17,7 +17,7 @@ import { drawPose, fitStature } from "./poses.js";
 import { findTarget } from "./find.js";
 import { displayName } from "../figures.js";
 import { rot, STOREY, DECK, LOD_NEAR } from "./iso.js";
-import { readPad, pressedSince } from "./gamepad.js";
+import { readPad, pressedSince, driveToggle } from "./gamepad.js";
 import { tableNear, tableGo } from "../chess/park.js";   // PARK CHESS: E at a stone table
 import { TENNIS } from "./venueGeo.js";   // THE TENNIS CLUB, playable: E on the courts
 import { PIER } from "./coastGeo.js";   // THE WATERS, playable: E at the pier's rail (src/play/fish/)
@@ -145,7 +145,7 @@ export function makeIsoControl(K) {
     setRiverLive(riverShown(mt));   // THE ATTRITION: its water is solid from its day
     const now = performance.now(), dt = Math.min(0.1, last ? (now - last) / 1000 : 0);
     last = now;
-    // the pad: connect/disconnect, and Start takes (or releases) control
+    // the pad: connect/disconnect, and Start takes (or releases) control, Select releases
     const pad = readPad();
     input.pad = pad.connected ? pad : null;
     if (pad.connected !== padWas) { padWas = pad.connected; if (pad.connected) { input.source = "pad"; if (CTL.st) note(`CONTROLLER DETECTED. THE DEPARTMENT ACCEPTS ALL PERIPHERALS.`); } else if (input.source === "pad") { input.source = "keys"; if (CTL.st) note("CONTROLLER LOST. THE KEYBOARD REMAINS. IT ALWAYS DOES."); } }
@@ -155,7 +155,10 @@ export function makeIsoControl(K) {
     if (CTL.request && !CTL.st && K.getSelf()) { if (Date.now() - CTL.request < 15000) start(); else CTL.request = false; }
     // a reload (or Back from a building page) resumes a drive saved this session
     if (!resumed && !CTL.st && K.getSelf()) { resumed = true; const sf = K.getSelf(); if (loadControl(sf.slug || sf.name)) start(sf); }
-    if (pp.start && !cardOpen()) { if (CTL.st) { release(); return; } if (K.getSelf()) start(); }
+    // Start takes control (or lets go); Select lets go too (GAMEPAD BROWSE: padBrowse.js)
+    const tog = pad.connected ? driveToggle(pp, { driving: Boolean(CTL.st), hasSelf: Boolean(K.getSelf()), card: cardOpen() }) : null;
+    if (tog === "release") { release(); return; }
+    if (tog === "take") start();
     const st = CTL.st;
     if (!st) { input.taps.act = input.taps.back = input.taps.release = 0; return; }
     V.need = true;
