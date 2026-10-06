@@ -344,3 +344,12 @@ at the live census and a 5,000 synthetic roster):
 5. **How often the big swing comes.** (a) Every 2-3 real days; (b) about once a week city-wide,
    with smaller district events every day or two; (c) about once a month. **Recommend (b):** often
    enough that a weekly visitor sees one, rare enough that it still reads as news.
+
+## 9. Decisions (Scott, 2026-10-05)
+
+All five recommendations in section 8 approved as written: drives from the sealed interview with the
+player choosing which of their top three leads (shown only if they opt in); living figures appear in
+stabilizers only through in-game acts, and audit / scandal / schism pick only the dead; Overlord
+emergency powers last at most 3 days, anything lasting goes to an emergency ballot; NPC proposals on a
+separate Substrate docket, at most one a day, adopted by player co-signs; about one city-wide swing a
+week with small district events every day or two. Build order: after the living market's slice 1.
