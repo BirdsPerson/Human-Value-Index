@@ -71,5 +71,37 @@ export function drawMap(g, W, H, { found, files, you, medals, focus, scale, ox, 
   void POI; void W0; void polyAt;
   return ms;
 }
+// THE MINI-MAP: the trail map round the rider, turned so it reads like the screen (down the map is
+// down the screen), with the lifts, the objective (and a line to it) and you (an arrow, your heading).
+// -> nothing; draws into g (W x H)
+export function drawMini(g, W, H, { st, goal, time = 0, scale = 1.6 }) {
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = "#94a3b8"; g.fillRect(0, 0, W, H);   // (off the map's edge: the valley)
+  const [mx, my] = toMap(st.x, st.y), ang = Math.PI / 2 - Math.atan2(st.cy, st.cx);
+  g.save();
+  g.translate(W / 2, H / 2); g.rotate(ang); g.scale(scale, scale); g.translate(-mx, -my);
+  g.drawImage(mapBase(), 0, 0);
+  // the lifts, bright
+  g.lineWidth = 1.6 / scale; g.strokeStyle = "#facc15";
+  for (const L of LIFTS_W) { g.beginPath(); g.moveTo(...toMap(L.ax, L.ay)); g.lineTo(...toMap(L.bx, L.by)); g.stroke(); }
+  for (const L of LIFTS_W) { const [x, y] = toMap(L.zone[0], L.zone[1]); g.fillStyle = "#facc15"; g.fillRect(x - 2 / scale * 1.5, y - 2 / scale * 1.5, 4 / scale * 1.5, 4 / scale * 1.5); }
+  g.restore();
+  const S = (x, y) => { const [ax, ay] = toMap(x, y), dx = (ax - mx) * scale, dy = (ay - my) * scale, c = Math.cos(ang), s = Math.sin(ang); return [W / 2 + dx * c - dy * s, H / 2 + dx * s + dy * c]; };
+  if (goal) {
+    let [gx, gy] = S(goal.x, goal.y);
+    const dx = gx - W / 2, dy = gy - H / 2, m = Math.max(Math.abs(dx) / (W / 2 - 5), Math.abs(dy) / (H / 2 - 5), 1);
+    gx = W / 2 + dx / m; gy = H / 2 + dy / m;
+    g.strokeStyle = "rgba(250,204,21,0.8)"; g.setLineDash([2, 2]); g.lineWidth = 1; g.beginPath(); g.moveTo(W / 2, H / 2); g.lineTo(gx, gy); g.stroke(); g.setLineDash([]);
+    const on = Math.floor(time * 3) % 2;
+    g.fillStyle = "#020617"; g.fillRect(Math.round(gx - 4), Math.round(gy - 4), 8, 8);
+    g.fillStyle = on ? goal.col || "#facc15" : "#fef9c3"; g.fillRect(Math.round(gx - 3), Math.round(gy - 3), 6, 6);
+  }
+  // you: an arrow along your heading
+  const [hx, hy] = (() => { const [a, b] = S(st.x + st.hx * 40, st.y + st.hy * 40); const dx = a - W / 2, dy = b - H / 2, n = Math.hypot(dx, dy) || 1; return [dx / n, dy / n]; })();
+  g.fillStyle = "#020617"; g.beginPath(); g.moveTo(W / 2 + hx * 7, H / 2 + hy * 7); g.lineTo(W / 2 - hx * 5 - hy * 5, H / 2 - hy * 5 + hx * 5); g.lineTo(W / 2 - hx * 5 + hy * 5, H / 2 - hy * 5 - hx * 5); g.closePath(); g.fill();
+  g.fillStyle = "#f97316"; g.beginPath(); g.moveTo(W / 2 + hx * 5, H / 2 + hy * 5); g.lineTo(W / 2 - hx * 3 - hy * 3.5, H / 2 - hy * 3 + hx * 3.5); g.lineTo(W / 2 - hx * 3 + hy * 3.5, H / 2 - hy * 3 - hx * 3.5); g.closePath(); g.fill();
+  // downhill is down: said once, small
+  drawText(g, "DOWNHILL", Math.round(W / 2 - textWidth("DOWNHILL") / 2), H - 9, "rgba(248,250,252,0.75)");
+}
 // The fit: the whole mountain in W x H -> {scale, ox, oy}
 export function fitMap(W, H) { const scale = Math.min(W / MAP_W, H / MAP_H); return { scale, ox: (W - MAP_W * scale) / 2, oy: (H - MAP_H * scale) / 2 }; }

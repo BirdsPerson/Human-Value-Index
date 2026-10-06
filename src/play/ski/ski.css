@@ -58,6 +58,26 @@
 .sk-pop.trick, .sk-pop.air { color: #fde68a; }
 .sk-pop.air { animation: none; } .sk-pop.crash { color: #fca5a5; } .sk-pop.find { color: #a5f3fc; }
 @media (prefers-reduced-motion: no-preference) { .sk-pop { animation: sk-up 2.2s steps(8, end) forwards; } @keyframes sk-up { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -12px); } } }
+.sk-goal { margin: 0 0 var(--s2); font-size: var(--t-m); font-weight: 700; letter-spacing: 0.05em; color: var(--warn); }
+.sk-hint { position: absolute; left: 50%; top: 30px; transform: translateX(-50%); max-width: 70%; padding: 1px 8px; text-align: center; color: #0f172a; background: rgba(248, 250, 252, 0.88); text-shadow: none; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 600px) { .sk-hint { top: 26px; max-width: 94%; white-space: normal; font-size: 12px; line-height: 1.25; } .sk-big { font-size: var(--t-s); bottom: 30%; } }
+.sk-hint.p-ch { background: rgba(253, 230, 138, 0.9); }
+.sk-big { position: absolute; left: 50%; bottom: 34%; transform: translateX(-50%); max-width: 92%; padding: 4px 12px; text-align: center; font-size: var(--t-m); font-weight: 700; letter-spacing: 0.05em; color: #0f172a; background: #facc15; text-shadow: none; border: 2px solid #0f172a; }
+.sk-big.p-flag { background: #fb923c; }
+.sk-big.p-lift, .sk-big.p-wait { background: #7dd3fc; }
+.sk-big.p-top { background: #f8fafc; }
+@media (prefers-reduced-motion: no-preference) { .sk-big.p-zone, .sk-big.p-flag { animation: sk-blink 1s steps(2, end) infinite; } @keyframes sk-blink { 50% { border-color: #f8fafc; } } }
+.sk-coach { position: absolute; left: 6px; top: 56px; width: min(40%, 400px); display: grid; gap: 6px; pointer-events: none; }
+@media (max-width: 600px) { .sk-coach { width: 41%; } .sk-coach .sk-intro, .sk-coach .sk-tut b { font-size: var(--t-xs); } }
+.sk-intro { margin: 0; padding: 6px 10px; text-align: left; font-size: var(--t-m); font-weight: 700; letter-spacing: 0.05em; color: #f8fafc; background: rgba(2, 6, 23, 0.82); border: 2px solid #facc15; }
+.sk-tut { display: grid; gap: 4px; justify-items: start; padding: 6px 10px; text-align: left; color: #0f172a; background: rgba(248, 250, 252, 0.94); border: 2px solid #16a34a; }
+.sk-tut .n { font-size: var(--t-xs); color: #15803d; letter-spacing: 0.06em; font-weight: 700; }
+.sk-tut b { font-size: var(--t-s); letter-spacing: 0.04em; }
+.sk-tut .sk-chip { pointer-events: auto; min-height: 32px; color: #334155; border-color: #94a3b8; background: #f8fafc; }
+.sk-mini { position: absolute; right: 6px; bottom: 6px; width: clamp(84px, 22%, 132px); display: grid; gap: 2px; pointer-events: none; }
+.sk-mini canvas { width: 100%; height: auto; aspect-ratio: 1; image-rendering: pixelated; border: 2px solid rgba(248, 250, 252, 0.85); background: #0b1220; }
+.sk-mini span { font-size: 11px; line-height: 1.2; font-weight: 700; text-align: center; color: #f8fafc; background: rgba(2, 6, 23, 0.7); padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-mini .r-green { color: #4ade80; } .sk-mini .r-blue { color: #93c5fd; }
 .sk-bottom { position: absolute; left: 8px; right: 8px; bottom: 6px; text-align: center; color: #fde68a; }
 .sk-tape { position: absolute; left: 8px; bottom: 6px; color: #f87171; font-weight: 700; }
 .sk-stoptape { position: absolute; right: 8px; bottom: 6px; min-height: var(--hit-min); padding: 0 var(--s2); font: inherit; font-size: var(--t-xs); color: var(--fg); background: rgba(2, 6, 23, 0.8); border: var(--bw) solid var(--line-hi); cursor: pointer; }

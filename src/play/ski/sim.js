@@ -38,10 +38,18 @@
 //               runs the ride on at six times; you are put off at the top
 //   the water   THE RETENTION POOL and THE BURNOUT hold a fast rider (a skim) and take a slow one
 // Every run segment, every challenge: the same rules. (The weather and the hour are the picture's.)
+//
+// THE FREE RIDE'S GUIDANCE (st.g2, set by every new game; a snapshot saved before it lacks it and
+// re-plays as it did). Only off a challenge, so no challenge run, and no verified board, changes:
+//   the lift line  a glowing zone LOAD_R2 m round each line: inside it (the stick let go) the rider
+//                  is slowed to a stop; a press of A boards at any speed, two seconds stood there board
+//   the camera     the fall line over a wider span (smoother), turning at most CAM_MAX a tick
+//   ROOKIE (st.rk) a cap on the speed on the greens, a stronger skate on the flats, softer falls
+//                  (shorter, and trees and landings forgive more)
 
 import {
   G, q, W0, heightAt, gradAt, gradBack, fallAt, surfaceAt, RUNS, treesNear, BLOCKS, TOWERS, waterAt, RAILS, baseH, inPipe, pipeLocal, PIPE,
-  LIFTS_W, LIFT_W, LOAD_R, LIFT_FF, liftWait, liftRideTicks, POIS, POI, FIND_R, FILES, FILE_R, KICKERS, BIG_AIR, crosses, POOL, BASE_LINE,
+  LIFTS_W, LIFT_W, LOAD_R, LOAD_R2, LIFT_FF, liftWait, liftRideTicks, POIS, POI, FIND_R, FILES, FILE_R, KICKERS, BIG_AIR, crosses, POOL, BASE_LINE,
 } from "./world.js";
 import { CHALLENGE, RUNNABLE, gatesOf, linesOf, PENALTY, FOLLOW_R, PIPE_LIMIT, MAX_RUN, LEAVE_R, instructorAt, fieldTimes, medalOf, SUMMIT_FINISH } from "./challenges.js";
 
@@ -50,6 +58,11 @@ export const HZ = 60;
 const DT = 1 / HZ, sqrt = Math.sqrt, abs = Math.abs;
 export const BTN = { A: 1 << 20, TUCK: 1 << 21, BRAKE: 1 << 22, GL: 1 << 23, GR: 1 << 24, ONE: 1 << 25 };
 export const CAM_SIDE = 1;   // +1: the camera downhill of the rider (down the screen is down the hill)
+export const LIFT_AUTO = 120;   // ticks stood (under 3 m/s) in a lift's zone before it boards you (g2)
+const CAM_MAX = 0.012;          // the guided camera's most turn a tick (radians, ~41 degrees a second)
+// ROOKIE (free ride only): a green's steady speed (m/s), the skate's push and top speed on the flats,
+// a shorter fall (ticks), the speed a tree takes you down at, and a landing's allowance (x the impact)
+export const ROOKIE = { greenV: 12.5, skate: 6, skateMax: 9, crashTicks: 54, treeV: 9, impact: 1.35 };
 
 // ---- the input word ---------------------------------------------------------------------------------
 const qs = (v) => Math.max(-15, Math.min(15, Math.round((v || 0) * 15)));
@@ -90,7 +103,7 @@ const SPIN_PTS = [0, 100, 250, 400, 600, 800, 1100, 1400, 1800, 2200];
 const GRAB = { ski: ["", "MUTE", "SAFETY", "JAPAN"], board: ["", "INDY", "MELON", "STALEFISH"] };
 
 // ---- the start -----------------------------------------------------------------------------------------
-// cfg: {board, at: poi id} (free ride) | {board, ch: challenge id}
+// cfg: {board, at: poi id, rookie} (free ride) | {board, ch: challenge id}
 export function newGame(cfg = {}) {
   const c = cfg.ch ? CHALLENGE[cfg.ch] : null;
   const p = c?.start || POI[cfg.at] || POI.base;
@@ -99,6 +112,7 @@ export function newGame(cfg = {}) {
     mode: "ski", crouch: 0, air: null, grind: null, crash: 0, lift: null, cx: 0, cy: 1,
     found: [], files: 0, ch: null, score: 0, chain: 0, chainT: 0, last: null, land: [p.x, p.y], skim: 0,
     stats: { top: 0, jump: 0, air: 0 }, ev: [], run: -1, slip: 0, edge: 0, a0: false, ff: false,
+    g2: 1, rk: cfg.rookie ? 1 : 0, lz: 0,
   };
   if (!p.hx && !p.hy) { const [fx, fy, s] = fallAt(st.x, st.y); if (s > 0.01) { const [nx, ny] = norm(fx, fy); st.hx = nx; st.hy = ny; } }
   st.z = heightAt(st.x, st.y);
@@ -142,7 +156,7 @@ export function step(st, word) {
   else groundTick(st, inp);
   st.a0 = inp.a;
   if (st.mode !== "lift") { obstacles(st); bounds(st); }
-  camera(st, 0.016);
+  if (st.g2 && !st.ch) camera2(st); else camera(st, 0.016);
   const sp = sqrt(st.vx * st.vx + st.vy * st.vy + st.vz * st.vz);
   if (sp > st.stats.top) st.stats.top = sp;
   if (st.t % 15 === 0) discover(st);
@@ -157,6 +171,16 @@ function camera(st, k) {
   if (s < 0.03) return;
   const [tx, ty] = norm(fx * CAM_SIDE, fy * CAM_SIDE), [nx, ny] = norm(st.cx + (tx - st.cx) * k, st.cy + (ty - st.cy) * k);
   if (nx || ny) { st.cx = nx; st.cy = ny; }
+}
+// The guided camera (free ride): the fall line over 90 m, eased, its turn capped
+function camera2(st) {
+  if (st.mode === "air") return;
+  const [fx, fy, s] = fallAt(st.x, st.y, 90);
+  if (s < 0.025) return;
+  const [tx, ty] = norm(fx * CAM_SIDE, fy * CAM_SIDE), [ex, ey] = norm(st.cx + (tx - st.cx) * 0.02, st.cy + (ty - st.cy) * 0.02);
+  if (!ex && !ey) return;
+  const r = turnToward(st.cx, st.cy, ex, ey, CAM_MAX);
+  st.cx = r[0]; st.cy = r[1];
 }
 // The stick in world terms: screen-down is (cx, cy), screen-right is (cy, -cx)
 function stickWorld(st, sx, sy) {
@@ -194,10 +218,11 @@ function groundTick(st, inp) {
   // gravity along the surface
   vx += (-G * gx / N2) * DT; vy += (-G * gy / N2) * DT;
   // skating and walking on the flat (or uphill): the stick pushes
-  if (mag > 0.3 && sp < PHYS.skateMax + 0.5) {
+  const rook = st.rk && !st.ch, skMax = rook ? ROOKIE.skateMax : PHYS.skateMax, skA = rook ? ROOKIE.skate : PHYS.skate;
+  if (mag > 0.3 && sp < skMax + 0.5) {
     const up = gx * tx + gy * ty;
     if (up > 0.12) { vx = tx * PHYS.walk; vy = ty * PHYS.walk; st.hx = tx; st.hy = ty; }
-    else { const along = vx * tx + vy * ty; if (along < PHYS.skateMax) { vx += tx * PHYS.skate * DT; vy += ty * PHYS.skate * DT; } }
+    else { const along = vx * tx + vy * ty; if (along < skMax) { vx += tx * skA * DT; vy += ty * skA * DT; } }
   }
   // the edge: sideways speed (relative to the skis) is held off (dissipated), then scrubbed (a skid)
   const lx = -st.hy, ly = st.hx;
@@ -216,6 +241,11 @@ function groundTick(st, inp) {
   const mu = water ? PHYS.muWater : R && R.kind !== "glades" ? PHYS.muGroom : PHYS.muPowder;
   let dec = (mu * G) / N + (tuck ? (st.board ? PHYS.kTuckBoard : PHYS.kTuck) : PHYS.kUp) * sp3 * sp3 + (inp.brake ? PHYS.brake * G : 0);
   if (water) dec += 0.004 * sp3 * sp3;
+  // ROOKIE: the greens hold you to a steady speed (a firm drag above it)
+  if (rook && R?.rating === "green" && sp3 > ROOKIE.greenV) dec += (sp3 - ROOKIE.greenV) * 1.5;
+  // the lift's zone (g2): slowed to a stop in the line
+  const inZone = st.g2 && !st.ch && zoneLift(st) != null;
+  if (inZone && mag < 0.3 && sp3 > 0.5) dec += 4 + sp3 * 0.4;
   // THE PIPELINE's pitch is the slope's (a gentle one): in the pipe the rider pumps the transitions
   // (an arcade's assist, said so on the card): below PUMP_V, a push along the line of travel
   // THE SANDBOX's in-runs are kept fast (the same assist): a rider in the park holds about 13 m/s
@@ -252,11 +282,22 @@ function groundTick(st, inp) {
     if (st.t % 30 === 0 && sp < 25) st.land = [st.x, st.y];
   }
   // a lift line
-  if (sp < 9 && !st.ch) for (const L of LIFTS_W) {
+  if (st.g2) {
+    // (guided) in the zone: a press of A boards, or two seconds there
+    const Lz = st.ch ? null : zoneLift(st);
+    if (Lz) { if (sp < 3) st.lz++; if ((inp.a && !st.a0) || st.lz >= LIFT_AUTO) { boardLift(st, Lz); return; } }
+    else st.lz = 0;
+  } else if (sp < 9 && !st.ch) for (const L of LIFTS_W) {
     const dx = st.x - L.load[0], dy = st.y - L.load[1];
     if (dx * dx + dy * dy < LOAD_R * LOAD_R) { boardLift(st, L); return; }
   }
   railMount(st);
+}
+
+// The lift whose glowing zone the rider stands in (guided), or null
+export function zoneLift(st) {
+  for (const L of LIFTS_W) { const dx = st.x - L.zone[0], dy = st.y - L.zone[1]; if (dx * dx + dy * dy < LOAD_R2 * LOAD_R2) return L; }
+  return null;
 }
 
 function takeoff(st) {
@@ -319,7 +360,7 @@ function land(st) {
   if (flipErr > 55) why = nflip || abs(A.flip) > 90 ? "OVER-ROTATED" : "UNDER-ROTATED";
   else if (spinErr > 42) why = "LANDED SIDEWAYS";
   else if (A.holding && A.t > 20) why = "STILL GRABBING";
-  else if (impact > PHYS.impactMax) why = "LANDED FLAT FROM A HEIGHT";
+  else if (impact > PHYS.impactMax * (st.rk && !st.ch ? ROOKIE.impact : 1)) why = "LANDED FLAT FROM A HEIGHT";
   else if (!A.pipe && hs > 6 && align < 0.62) why = "CAUGHT AN EDGE";
   // the ground takes the speed driven into it; the rest carries on along it
   const nx = -gx / N, ny = -gy / N, nz = 1 / N, vn = st.vx * nx + st.vy * ny + st.vz * nz;
@@ -400,7 +441,7 @@ function grindTick(st, inp) {
 
 // ---- wipeouts -----------------------------------------------------------------------------------------------
 function wipeout(st, why, water = false) {
-  st.mode = "crash"; st.crash = PHYS.crashTicks; st.air = null; st.grind = null; st.crouch = 0; st.chain = 0;
+  st.mode = "crash"; st.crash = st.rk && !st.ch ? ROOKIE.crashTicks : PHYS.crashTicks; st.air = null; st.grind = null; st.crouch = 0; st.chain = 0;
   st.wipe = { why, water };
   if (water) { st.vx = 0; st.vy = 0; st.vz = 0; }
   st.last = { name: why, pts: 0, t: st.t, crash: true };
@@ -435,7 +476,7 @@ function obstacles(st) {
     if (dx * dx + dy * dy < r * r && above < 9 * T.s) {
       const [nx, ny] = norm(dx, dy);
       st.x = T.x + nx * r; st.y = T.y + ny * r;
-      if (sp > 5 && st.mode !== "crash") { st.vx = nx * 1.5; st.vy = ny * 1.5; wipeout(st, "MET A TREE"); }
+      if (sp > (st.rk && !st.ch ? ROOKIE.treeV : 5) && st.mode !== "crash") { st.vx = nx * 1.5; st.vy = ny * 1.5; wipeout(st, "MET A TREE"); }
       else { const vn = st.vx * nx + st.vy * ny; if (vn < 0) { st.vx -= vn * nx; st.vy -= vn * ny; } }
       return;
     }
@@ -463,7 +504,7 @@ function bounds(st) {
 
 // ---- the lifts ----------------------------------------------------------------------------------------------
 function boardLift(st, L) {
-  st.mode = "lift"; st.lift = { id: L.id, ph: "wait", n: liftWait(L, st.t), k: 0 };
+  st.mode = "lift"; st.lift = { id: L.id, ph: "wait", n: liftWait(L, st.t), k: 0 }; st.lz = 0;
   st.x = L.load[0]; st.y = L.load[1]; st.z = heightAt(st.x, st.y); st.vx = st.vy = st.vz = 0; st.crouch = 0;
   st.ev.push(["queue", L.name]);
 }
@@ -579,4 +620,4 @@ export function replay(rec, maxTicks = MAX_RUN + 600) {
   return { res: resultOf(st), ticks: n, st };
 }
 export const speedKmh = (st) => Math.round(sqrt(st.vx * st.vx + st.vy * st.vy + st.vz * st.vz) * 3.6);
-export { CHALLENGE, LIFT_W };
+export { CHALLENGE, LIFT_W, LOAD_R2 };

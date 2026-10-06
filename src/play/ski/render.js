@@ -11,11 +11,12 @@
 // trails glow under their lamps; the weather is the city's day.
 import {
   GRID, gridIndex, baseH, heightAt, RUNS, TREE_BUCKETS, LIFTS_W, TOWERS, BLOCKS, KICKERS, RAILS, PIPE, pipeLocal, POOL, waterAt, GS_GATES, SL_GATES,
-  MOG_L, FILES, FILE_R, TREELINE_M, W0, SHOP, BASE_LODGE, POIS, surfaceAt,
+  MOG_L, FILES, FILE_R, TREELINE_M, W0, SHOP, BASE_LODGE, POIS, surfaceAt, polyAt, trailAt, LOAD_R2,
 } from "./world.js";
 import { CHALLENGES, CHALLENGE, linesOf, instructorAt, fieldTimes } from "./challenges.js";
 import { liftFrac } from "./sim.js";
 import { drawText, textWidth } from "../golf/font.js";
+import { HEADS } from "./guide.js";
 
 const RATING_RGB = { green: [22, 163, 74], blue: [37, 99, 235], black: [17, 24, 39], double: [0, 0, 0] };
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -108,7 +109,8 @@ export function ropeZ(L, k) {
 // ---- the camera ------------------------------------------------------------------------------------------
 function cameraOf(V, W, H) {
   const p = V.px, Dx = p.cx, Dy = p.cy, pitch = 0.92, d = V.dist * (W < 300 ? 0.74 : 1);
-  const lx = p.x + Dx * d * 0.16, ly = p.y + Dy * d * 0.16, lz = p.z + 1;
+  // (the look point well downhill of the rider: the rider sits high on the screen, the way ahead below)
+  const lx = p.x + Dx * d * 0.22, ly = p.y + Dy * d * 0.22, lz = p.z + 1;
   const C = [p.x + Dx * d * Math.cos(pitch), p.y + Dy * d * Math.cos(pitch), p.z + d * Math.sin(pitch) + 2];
   let F = [lx - C[0], ly - C[1], lz - C[2]]; const fn = Math.hypot(...F); F = F.map(v => v / fn);
   const R = [Dy, -Dx, 0];
@@ -166,14 +168,16 @@ function person(g, sx, sy, u, ang, look) {
   if (!look.sit || look.board != null) {
     g.fillStyle = look.skis || "#1e293b";
     const len = look.board ? 4.2 * u : 5.2 * u, off = look.board ? [0] : [-0.7 * u, 0.7 * u];
+    // a board stands across the line a little, its nose to the lead foot (regular: left; goofy: right)
+    const ba = look.board ? (look.goofy ? -0.45 : 0.45) : 0, bc = Math.cos(ba), bs = Math.sin(ba), C2 = cos * bc - sin * bs, S2 = sin * bc + cos * bs;
     for (const o of off) {
       for (let s = -len; s <= len; s += Math.max(1, u * 0.7)) {
-        const x = cos * s - sin * o, y = (sin * s + cos * o) * 0.5;
+        const x = C2 * s - S2 * o, y = (S2 * s + C2 * o) * 0.5;
         g.fillRect(Math.round(x - u * 0.5), Math.round(y - u * 0.5), Math.max(1, Math.round(u * (look.board ? 1.4 : 0.9))), Math.max(1, Math.round(u * 0.8)));
       }
     }
   }
-  const cr = look.crouch ? 1.6 * u : 0, lean = (look.lean || 0) * u * 1.6;
+  const cr = look.crouch ? 1.6 * u : 0, lean = (look.lean || 0) * u * 1.6 + (look.board ? (look.goofy ? 0.5 : -0.5) * u : 0);
   const bx = Math.round(-1.5 * u + lean * 0.4);
   // legs
   g.fillStyle = look.pants || "#1f2937";
@@ -192,7 +196,8 @@ function person(g, sx, sy, u, ang, look) {
   g.fillStyle = "#38bdf8"; g.fillRect(Math.round(bx + lean + 0.4 * u), Math.round(ty - 1.8 * u), Math.round(2.2 * u), Math.max(1, Math.round(0.7 * u)));
   g.restore();
 }
-const JACKETS = ["#dc2626", "#2563eb", "#16a34a", "#9333ea", "#eab308", "#0891b2", "#db2777", "#f8fafc", "#ea580c", "#475569"];
+// (no orange: orange is the player's alone)
+const JACKETS = ["#dc2626", "#2563eb", "#16a34a", "#9333ea", "#eab308", "#0891b2", "#db2777", "#f8fafc", "#65a30d", "#475569"];
 export const PLAYER_LOOK = { jacket: "#f97316", pants: "#111827", helmet: "#e5e7eb" };
 
 // ---- the frame -------------------------------------------------------------------------------------------
@@ -212,11 +217,18 @@ export function draw(g, W, H, st, V, env) {
   trees(K, items, Lgt, env);
   lifts(K, items, st, env);
   buildings(K, items, Lgt);
+  signage(K, items, Lgt, env, st);
   people(K, items, st, V, env);
   items.sort((a, b) => b.d - a.d);
   // the ground first (it is all far behind the people near it); tracks over the ground
   for (const it of items) {
-    if (it.k === 0) { g.fillStyle = it.c; g.beginPath(); g.moveTo(it.p[0], it.p[1]); g.lineTo(it.p[2], it.p[3]); g.lineTo(it.p[4], it.p[5]); g.lineTo(it.p[6], it.p[7]); g.closePath(); g.fill(); continue; }
+    if (it.k === 0) {
+      g.fillStyle = it.c; g.beginPath(); g.moveTo(it.p[0], it.p[1]); g.lineTo(it.p[2], it.p[3]); g.lineTo(it.p[4], it.p[5]); g.lineTo(it.p[6], it.p[7]); g.closePath(); g.fill();
+      // the snow's grain: corduroy on the groomers, wind streaks off them, both down the fall line
+      if (it.cord) { g.strokeStyle = it.cc; g.lineWidth = 1; g.beginPath(); for (let i = 0; i < it.cord.length; i += 4) { g.moveTo(it.cord[i], it.cord[i + 1]); g.lineTo(it.cord[i + 2], it.cord[i + 3]); } g.stroke(); }
+      if (it.zones) paintZone(g, it);
+      continue;
+    }
     if (it.tracks) { drawTracks(g, K, V, Lgt); continue; }
     it.draw(g);
   }
@@ -230,6 +242,7 @@ export function draw(g, W, H, st, V, env) {
     for (let i = 0; i < n; i++) { const h = hash(i, 99), x = ((h % 1000) / 1000 * W + t * (8 + (h % 7)) * (env.weather === "WIND" ? 3 : 1)) % W, y = (((h >>> 10) % 1000) / 1000 * H + t * (18 + (h >>> 20) % 14)) % H; g.fillRect(x | 0, y | 0, h % 3 ? 1 : 2, 1); }
   }
   if (env.weather === "WHITEOUT") { g.fillStyle = "rgba(235,238,242,0.28)"; g.fillRect(0, 0, W, H); }
+  if (env.guide?.goal && !env.noGoal && env.guide.phase !== "lift" && env.guide.phase !== "wait") goalMarker(g, K, env.guide.goal, env.time || 0, st);
   return K;
 }
 
@@ -242,8 +255,31 @@ function waterFlag(T, gx, gy, o) {
   if (a[o] < 0) { const w = waterAt(GRID.x0 + gx * GRID.GS, GRID.y0 + gy * GRID.GS); a[o] = w ? 1 : 0; }
   return a[o] === 1;
 }
-const SNOW_G = [246, 249, 253], SNOW_P = [222, 231, 243], SNOW_F = [206, 216, 228], ROCK = [104, 98, 94], ROCK2 = [132, 124, 116], WATER_C = [52, 112, 140];
+const SNOW_G = [248, 250, 254], SNOW_P = [212, 222, 238], SNOW_F = [196, 207, 225], ROCK = [104, 98, 94], ROCK2 = [132, 124, 116], WATER_C = [52, 112, 140];
+// the lifts' zones on the screen this frame: [{x, y, r, P (screen ring), fill}]
+function zoneRings(K, env) {
+  const out = [], pulse = 0.55 + 0.45 * Math.sin((env.time || 0) * 4), N = 28;
+  for (const L of LIFTS_W) {
+    const [zx, zy] = L.zone;
+    if (!near(K, zx, zy, 900)) continue;
+    const P = new Float64Array(N * 3); let ok = true;
+    for (let i = 0; i < N; i++) { const a = (i / N) * Math.PI * 2, x = zx + Math.cos(a) * LOAD_R2, y = zy + Math.sin(a) * LOAD_R2; if (!proj(K, x, y, baseH(x, y) + 0.08, P, i * 3)) { ok = false; break; } }
+    if (ok) out.push({ x: zx, y: zy, P, N, fill: `rgba(250,204,21,${(0.22 + 0.16 * pulse).toFixed(2)})` });
+  }
+  return out;
+}
+function paintZone(g, it) {
+  g.save();
+  g.beginPath(); g.moveTo(it.p[0], it.p[1]); g.lineTo(it.p[2], it.p[3]); g.lineTo(it.p[4], it.p[5]); g.lineTo(it.p[6], it.p[7]); g.closePath(); g.clip();
+  for (const Z of it.zones) {
+    g.beginPath(); g.moveTo(Z.P[0], Z.P[1]); for (let i = 1; i < Z.N; i++) g.lineTo(Z.P[i * 3], Z.P[i * 3 + 1]); g.closePath();
+    g.fillStyle = Z.fill; g.fill(); g.strokeStyle = "#facc15"; g.lineWidth = 2; g.stroke();
+  }
+  g.restore();
+}
 function terrain(K, items, Lgt, env) {
+  GK = K;
+  const ZR = zoneRings(K, env);
   const GS = GRID.GS, cgx = Math.round((K.C[0] + K.F[0] * 160 - GRID.x0) / GS), cgy = Math.round((K.C[1] + K.F[1] * 160 - GRID.y0) / GS);
   const lights = env.lightsOn, specks = [];
   let inner = null;
@@ -268,9 +304,10 @@ function terrain(K, items, Lgt, env) {
       const s = step * GS, hx = ((Z[b] - Z[a]) + (Z[d] - Z[c])) / (2 * s), hy = ((Z[c] - Z[a]) + (Z[d] - Z[b])) / (2 * s);
       const nn = Math.sqrt(1 + hx * hx + hy * hy), lam = Math.max(0, (-hx * Lgt.sun[0] - hy * Lgt.sun[1] + Lgt.sun[2]) / nn);
       const hh = hash(gx, gy);
-      let shade = Lgt.amb + Lgt.dir * Math.min(1, lam * 1.15);
-      shade = Math.min(1, Math.round(shade * 16) / 16);
       const [T, ti] = gridIndex(gx, gy), tr = T.trail[ti] - 1, edge = T.edge[ti], steep = Math.sqrt(hx * hx + hy * hy), zmid = (Z[a] + Z[d]) / 2;
+      // the light, and the pitch: the steeper the face, the deeper its blue (so a slope reads as one)
+      let shade = Lgt.amb + Lgt.dir * Math.min(1.1, lam * 1.3) - Math.min(0.2, steep * 0.32);
+      shade = Math.min(1, Math.round(shade * 16) / 16);
       let col;
       if (step < 9 && waterFlag(T, gx, gy, ti)) col = WATER_C;
       else if (steep > 1.05 && tr < 0) col = (gx + gy) & 1 ? ROCK : ROCK2;
@@ -288,7 +325,10 @@ function terrain(K, items, Lgt, env) {
       const mx = (xs[0] + xs[1] + xs[2] + xs[3]) / 4, my = (ys[0] + ys[1] + ys[2] + ys[3]) / 4;
       for (let q = 0; q < 4; q++) { const ex = xs[q] - mx, ey = ys[q] - my, el = Math.hypot(ex, ey) || 1; xs[q] += (ex / el) * 0.6; ys[q] += (ey / el) * 0.6; }
       if (step === 1 && (hh & 3) === 0 && tr < 0) specks.push([GRID.x0 + (gx + ((hh >> 4) & 15) / 16) * GS, GRID.y0 + (gy + ((hh >> 8) & 15) / 16) * GS]);
-      items.push({ k: 0, d: Math.max(P[a * 3 + 2], P[b * 3 + 2], P[c * 3 + 2], P[d * 3 + 2]) + step * 0.01, c: rgb(cc), p: [xs[0], ys[0], xs[1], ys[1], xs[2], ys[2], xs[3], ys[3]] });
+      const it = { k: 0, d: Math.max(P[a * 3 + 2], P[b * 3 + 2], P[c * 3 + 2], P[d * 3 + 2]) + step * 0.01, c: rgb(cc), p: [xs[0], ys[0], xs[1], ys[1], xs[2], ys[2], xs[3], ys[3]] };
+      if (step === 1 && tr >= 0 && col !== WATER_C && it.d < 420 && Math.abs(xs[2] - xs[0]) + Math.abs(ys[2] - ys[0]) > 7) grain(it, gx, gy, cc);
+      if (ZR.length && step < 9) { const wx = GRID.x0 + (gx + step / 2) * GS, wy = GRID.y0 + (gy + step / 2) * GS, reach = LOAD_R2 + step * GS * 0.75; const zs = ZR.filter(Z => (Z.x - wx) * (Z.x - wx) + (Z.y - wy) * (Z.y - wy) < reach * reach); if (zs.length) it.zones = zs; }
+      items.push(it);
     }
     inner = [gx0 + step, gx0 + (n - 2) * step, gy0 + step, gy0 + (n - 2) * step];
   }
@@ -301,6 +341,28 @@ function terrain(K, items, Lgt, env) {
   }
   // the tracks, drawn just over the ground nearest them
   items.push({ k: 1, d: 0.5, tracks: true });
+}
+// the grain of a near groomed square: three corduroy lines down the fall line, in screen points on
+// the item (drawn with its square)
+// (the lines lie on a world grid across the fall line, so a square's lines meet its neighbours': stripes)
+let GK = null;
+const CORD = 3.2, FALLS = new Map();
+function grain(it, gx, gy, cc) {
+  const K = GK, GS = GRID.GS, cx = GRID.x0 + (gx + 0.5) * GS, cy = GRID.y0 + (gy + 0.5) * GS;
+  // the fall line, broadly (the same over neighbouring squares), cached by 60 m cell
+  const fk = Math.floor(cx / 60) * 4096 + Math.floor(cy / 60);
+  let F = FALLS.get(fk);
+  if (!F) { const x = (Math.floor(cx / 60) + 0.5) * 60, y = (Math.floor(cy / 60) + 0.5) * 60, gxx = (baseH(x + 60, y) - baseH(x - 60, y)) / 120, gyy = (baseH(x, y + 60) - baseH(x, y - 60)) / 120, n = Math.hypot(gxx, gyy); F = n > 0.01 ? [-gxx / n, -gyy / n] : [0, 1]; FALLS.set(fk, F); }
+  const [fx, fy] = F, ax = -fy, ay = fx, c = cx * ax + cy * ay, first = -((c % CORD) + CORD) % CORD, half = GS * 0.5, out = [];
+  for (let o = first - CORD * 2; o <= half; o += CORD) {
+    if (o < -half) continue;
+    const x0 = cx + ax * o - fx * half, y0 = cy + ay * o - fy * half, x1 = cx + ax * o + fx * half, y1 = cy + ay * o + fy * half;
+    if (!proj(K, x0, y0, baseH(x0, y0) + 0.03, TMP, 0) || !proj(K, x1, y1, baseH(x1, y1) + 0.03, TMP, 3)) continue;
+    out.push(TMP[0], TMP[1], TMP[3], TMP[4]);
+  }
+  if (!out.length) return;
+  it.cord = out;
+  it.cc = rgb([cc[0] * 0.88, cc[1] * 0.9, cc[2] * 0.95]);
 }
 function drawTracks(g, K, V, Lgt) {
   g.strokeStyle = Lgt.night ? "rgba(70,80,110,0.5)" : "rgba(150,165,195,0.55)";
@@ -470,7 +532,8 @@ function trees(K, items, Lgt, env) {
       if (sx < -h || sx > K.W + h || sy < 0 || sy - h > K.H) continue;
       if (h < 2.2) { const fog = clamp((d - Lgt.fogNear) / (Lgt.fogFar - Lgt.fogNear), 0, 1); const c = mix(Lgt.night ? [14, 30, 22] : [30, 72, 46], Lgt.fog, fog); items.push({ d, draw: (g) => { g.fillStyle = rgb(c); g.fillRect(Math.round(sx), Math.round(sy - 2), 1, 2); } }); continue; }
       const spr = treeSprite(h, Lgt.night, snowy), fog = clamp((d - Lgt.fogNear) / (Lgt.fogFar - Lgt.fogNear), 0, 1);
-      items.push({ d, draw: (g) => { g.drawImage(spr, Math.round(sx - spr.width / 2), Math.round(sy - spr.height)); if (fog > 0.15) { g.globalAlpha = fog * 0.85; g.fillStyle = rgb(Lgt.fog); g.fillRect(Math.round(sx - spr.width / 2), Math.round(sy - spr.height), spr.width, spr.height); g.globalAlpha = 1; } } });
+      const sh = h >= 6 ? Math.round(spr.width * 0.7) : 0;
+      items.push({ d, draw: (g) => { if (sh) { g.fillStyle = "rgba(40,55,95,0.25)"; g.fillRect(Math.round(sx - sh * 0.3), Math.round(sy - 1), sh, Math.max(1, Math.round(h * 0.1))); } g.drawImage(spr, Math.round(sx - spr.width / 2), Math.round(sy - spr.height)); if (fog > 0.15) { g.globalAlpha = fog * 0.85; g.fillStyle = rgb(Lgt.fog); g.fillRect(Math.round(sx - spr.width / 2), Math.round(sy - spr.height), spr.width, spr.height); g.globalAlpha = 1; } } });
     }
   }
 }
@@ -527,10 +590,177 @@ function buildings(K, items, Lgt) {
       // windows: lit at night
       if (B.h > 4 && Lgt.night) { const P = new Float64Array(3); if (proj(K, mxx, myy, z0 + B.h * 0.55, P, 0)) { const s = clamp(K.f / P[2] * 1.4, 1, 10); items.push({ d: P[2] - 0.6, draw: (g) => { g.fillStyle = "#fde68a"; g.fillRect(Math.round(P[0] - s * 1.5), Math.round(P[1]), Math.round(s * 3), Math.max(1, Math.round(s * 0.7))); } }); } }
     }
-    poly(K, items, [[B.x0 - 1, B.y0 - 1, z1], [B.x1 + 1, B.y0 - 1, z1], [B.x1 + 1, B.y1 + 1, z1], [B.x0 - 1, B.y1 + 1, z1]], shadeC(roof, Lgt.amb + Lgt.dir * 0.7, Lgt), 0.5);
+    // the roof, under snow (a dark roof seen from above reads as a hole in the ground)
+    poly(K, items, [[B.x0 - 1, B.y0 - 1, z1], [B.x1 + 1, B.y0 - 1, z1], [B.x1 + 1, B.y1 + 1, z1], [B.x0 - 1, B.y1 + 1, z1]], shadeC(mix(roof, [236, 241, 248], 0.55), Lgt.amb + Lgt.dir * 0.7, Lgt), 0.5);
+    poly(K, items, [[B.x0 + 2, B.y0 + 2, z1 + 0.05], [B.x1 - 2, B.y0 + 2, z1 + 0.05], [B.x1 - 2, B.y1 - 2, z1 + 0.05], [B.x0 + 2, B.y1 - 2, z1 + 0.05]], shadeC([244, 247, 252], Lgt.amb + Lgt.dir * 0.75, Lgt), 0.6);
     if (B === SHOP || B === BASE_LODGE || B.name && near(K, cx, cy, 380)) if (B.name) label(K, items, cx, cy, z1 + 4, B === SHOP ? "SHAUN WHITE // BOARDS AND SKIS" : B.name, "#fde68a");
   }
   void W0;
+}
+
+// ---- the signage: piste poles and their ropes, the trail signs, the lifts' zones -------------------------------
+// Poles stand along both edges of every trail, one every POLE_GAP m, in the trail's colour (green,
+// blue, black), a rope between them; none where the edge runs inside another trail (a junction).
+const POLE_GAP = 34, PB = 150, POLE_COL = { green: "#16a34a", blue: "#2563eb", black: "#0f172a", double: "#0f172a" };
+let POLES = null;
+function polesIn() {
+  if (POLES) return POLES;
+  POLES = new Map();
+  for (const R of RUNS) for (const side of [-1, 1]) {
+    let prev = null;
+    for (let s = 12; s < R.len - 8; s += POLE_GAP) {
+      const [x0, y0, dx, dy] = polyAt(R, s), o = (R.hw - 1.5) * side, x = x0 - dy * o, y = y0 + dx * o;
+      const [, e] = trailAt(x, y);
+      if (e > 5) { prev = null; continue; }
+      const P = { x, y, z: baseH(x, y), col: POLE_COL[R.rating], top: R.rating === "black" || R.rating === "double" ? "#facc15" : "#f8fafc", prev, rope: R.kind !== "glades" };
+      prev = P;
+      const k = Math.floor(x / PB) * 4096 + Math.floor(y / PB);
+      if (!POLES.has(k)) POLES.set(k, []);
+      POLES.get(k).push(P);
+    }
+  }
+  // and down the middle, a tall marker every 48 m: the line to follow (the trails are wide)
+  for (const R of RUNS) for (let s = 40; s < R.len - 20; s += 48) {
+    const [x, y] = polyAt(R, s), [ti, e] = trailAt(x, y);
+    if (ti !== R.i || e < R.hw * 0.6) continue;
+    const P = { x, y, z: baseH(x, y), col: POLE_COL[R.rating], top: R.rating === "black" || R.rating === "double" ? "#facc15" : "#f8fafc", mark: R.rating };
+    const k = Math.floor(x / PB) * 4096 + Math.floor(y / PB);
+    if (!POLES.has(k)) POLES.set(k, []);
+    POLES.get(k).push(P);
+  }
+  return POLES;
+}
+// the trail signs: one at every trail's head, its name on its colour and an arrow down it
+let SIGNS = null;
+function signsOf() {
+  if (SIGNS) return SIGNS;
+  SIGNS = RUNS.map(R => {
+    const [x0, y0, dx, dy] = polyAt(R, 26), o = -(R.hw - 5), x = x0 - dy * o, y = y0 + dx * o, [ax, ay] = polyAt(R, 60);
+    return { x, y, z: baseH(x, y), name: R.name, rating: R.rating, cx: x0, cy: y0, ax, ay };
+  });
+  return SIGNS;
+}
+const SIGN_BG = { green: "#15803d", blue: "#1d4ed8", black: "#0f172a", double: "#0f172a" };
+function signage(K, items, Lgt, env, st) {
+  const lx = K.C[0] + K.F[0] * 220, ly = K.C[1] + K.F[1] * 220, PL = polesIn();
+  const b0x = Math.floor((lx - 600) / PB), b1x = Math.floor((lx + 600) / PB), b0y = Math.floor((ly - 600) / PB), b1y = Math.floor((ly + 600) / PB);
+  const P2 = new Float64Array(6);
+  for (let bx = b0x; bx <= b1x; bx++) for (let by = b0y; by <= b1y; by++) {
+    const L = PL.get(bx * 4096 + by);
+    if (!L) continue;
+    for (const P of L) {
+      if (!proj(K, P.x, P.y, P.z, P2, 0) || !proj(K, P.x, P.y, P.z + (P.mark ? 3.6 : 2.6), P2, 3)) continue;
+      const sx = P2[0], sy = P2[1], tx = P2[3], ty = P2[4], d = P2[2];
+      if (sx < -20 || sx > K.W + 20 || sy < -10 || ty > K.H + 10 || d > 900) continue;
+      if (P.mark) {
+        // the middle marker: a pole and the trail's sign on it (a circle, a square, a diamond)
+        const r = clamp(Math.round(K.f / d * 1.1), 2, 8), w = d < 160 ? 2 : 1;
+        items.push({ d: d - 0.4, draw: (g) => { g.strokeStyle = "#334155"; g.lineWidth = w; g.beginPath(); g.moveTo(sx, sy); g.lineTo(tx, ty); g.stroke(); markSign(g, Math.round(tx), Math.round(ty - r), r, P.mark); } });
+        continue;
+      }
+      const w = d < 110 ? 2 : 1, cut = (sy - ty) * 0.25;
+      items.push({ d: d - 0.4, draw: (g) => { g.strokeStyle = P.col; g.lineWidth = w; g.beginPath(); g.moveTo(sx, sy); g.lineTo(tx, ty + cut); g.stroke(); g.strokeStyle = P.top; g.beginPath(); g.moveTo(tx, ty + cut); g.lineTo(tx, ty); g.stroke(); } });
+      // the rope to the pole before, near
+      if (P.rope && P.prev && d < 320) {
+        const Q = P.prev, R2 = new Float64Array(6);
+        if (proj(K, P.x, P.y, P.z + 0.9, R2, 0) && proj(K, Q.x, Q.y, Q.z + 0.9, R2, 3)) {
+          const dd = Math.max(R2[2], R2[5]), mx = (R2[0] + R2[3]) / 2, my = (R2[1] + R2[4]) / 2 + Math.max(1, Math.abs(R2[0] - R2[3]) * 0.05);
+          items.push({ d: dd - 0.3, draw: (g) => { g.strokeStyle = Lgt.night ? "#9a5b2a" : "#f97316"; g.lineWidth = 1; g.beginPath(); g.moveTo(R2[0], R2[1]); g.quadraticCurveTo(mx, my, R2[3], R2[4]); g.stroke(); } });
+        }
+      }
+    }
+  }
+  // the trail signs
+  for (const S of signsOf()) {
+    if (!near(K, S.x, S.y, 700)) continue;
+    const pa = new Float64Array(9);
+    if (!proj(K, S.x, S.y, S.z, pa, 0) || !proj(K, S.x, S.y, S.z + 4.4, pa, 3)) continue;
+    if (pa[2] > 520) continue;
+    const sx = pa[0], sy = pa[1], tx = pa[3], ty = pa[4], d = pa[2];
+    // the arrow: the trail's way down, on the screen
+    const pc = new Float64Array(6); let ang = Math.PI / 2;
+    if (proj(K, S.cx, S.cy, baseH(S.cx, S.cy), pc, 0) && proj(K, S.ax, S.ay, baseH(S.ax, S.ay), pc, 3)) ang = Math.atan2(pc[4] - pc[1], pc[3] - pc[0]);
+    const text = S.name, w = textWidth(text) + 14, big = d < 140;
+    items.push({ d: d - 1.5, draw: (g) => {
+      g.strokeStyle = "#475569"; g.lineWidth = 1; g.beginPath(); g.moveTo(sx, sy); g.lineTo(tx, ty); g.stroke();
+      const bx = Math.round(tx - w / 2), by = Math.round(ty - 11);
+      g.fillStyle = "#f8fafc"; g.fillRect(bx - 1, by - 1, w + 2, 12);
+      g.fillStyle = SIGN_BG[S.rating]; g.fillRect(bx, by, w, 10);
+      drawText(g, text, bx + 2, by + 2, "#f8fafc");
+      arrowHead(g, bx + w - 6, by + 5, ang, big ? 4 : 3, "#facc15");
+    } });
+  }
+  // the lifts: a glowing zone at each line and a big sign
+  for (const L of LIFTS_W) {
+    const [zx, zy] = L.zone;
+    if (!near(K, zx, zy, 900)) continue;
+    // (the glowing circle itself is painted with the ground: terrain() hands it to the squares under it)
+    // the sign stands at the zone's lift side (behind a rider standing in it)
+    const sgx = zx + L.d[0] * (LOAD_R2 + 3), sgy = zy + L.d[1] * (LOAD_R2 + 3), sgz = baseH(sgx, sgy), pa = new Float64Array(6);
+    if (proj(K, sgx, sgy, sgz, pa, 0) && proj(K, sgx, sgy, sgz + 6.5, pa, 3) && pa[2] < 800) {
+      const sx = pa[0], sy = pa[1], tx = pa[3], ty = pa[4], d = pa[2], sc = d < 260 ? 2 : 1;
+      const l1 = "LIFT", l2 = L.name, w = Math.max(textWidth(l1, sc), textWidth(l2)) + 18, h = 10 * sc + 12;
+      items.push({ d: d - 2, draw: (g) => {
+        g.strokeStyle = "#334155"; g.lineWidth = 2; g.beginPath(); g.moveTo(sx, sy); g.lineTo(tx, ty); g.stroke();
+        const bx = Math.round(tx - w / 2), by = Math.round(ty - h);
+        g.fillStyle = "#0f172a"; g.fillRect(bx - 1, by - 1, w + 2, h + 2);
+        g.fillStyle = "#facc15"; g.fillRect(bx, by, w, h);
+        drawText(g, l1, Math.round(tx - textWidth(l1, sc) / 2), by + 2, "#0f172a", sc);
+        drawText(g, l2, Math.round(tx - textWidth(l2) / 2), by + 10 * sc + 3, "#0f172a");
+        arrowHead(g, bx + 6, by + 6, -Math.PI / 2, 3, "#0f172a"); arrowHead(g, bx + w - 6, by + 6, -Math.PI / 2, 3, "#0f172a");
+      } });
+    }
+  }
+  // just off a lift: the trail heads, pointed out
+  const heads = env.guide?.phase === "top" ? env.guide.heads : null;
+  if (heads) for (const Hd of heads) {
+    const z = baseH(Hd.x, Hd.y) + 6 + Math.sin((env.time || 0) * 5) * 0.8, pa = new Float64Array(3);
+    if (!proj(K, Hd.x, Hd.y, z, pa, 0)) continue;
+    const sx = pa[0], sy = pa[1], col = POLE_COL[Hd.rating] === "#0f172a" ? "#f8fafc" : POLE_COL[Hd.rating];
+    items.push({ d: pa[2] - 3, draw: (g) => { arrowHead(g, sx, sy, Math.PI / 2, 6, "#0f172a"); arrowHead(g, sx, sy - 1, Math.PI / 2, 5, col); } });
+  }
+  void st; void HEADS;
+}
+// a trail's rating mark: green circle, blue square, black diamond (two for a double), on a white plate
+function markSign(g, x, y, r, rating) {
+  g.fillStyle = "#f8fafc"; g.fillRect(x - r - 1, y - r - 1, r * 2 + 2, r * 2 + 2);
+  g.fillStyle = POLE_COL[rating];
+  if (rating === "green") { g.beginPath(); g.arc(x, y, r * 0.8, 0, Math.PI * 2); g.fill(); }
+  else if (rating === "blue") g.fillRect(x - r * 0.75, y - r * 0.75, r * 1.5, r * 1.5);
+  else { const k = rating === "double" ? 0.55 : 0.85, o = rating === "double" ? r * 0.5 : 0; for (const dx of rating === "double" ? [-o, o] : [0]) { g.beginPath(); g.moveTo(x + dx, y - r * k); g.lineTo(x + dx + r * k, y); g.lineTo(x + dx, y + r * k); g.lineTo(x + dx - r * k, y); g.closePath(); g.fill(); } }
+}
+// a filled arrowhead at (x, y) pointing at angle a (screen radians), r pixels
+function arrowHead(g, x, y, a, r, col) {
+  const c = Math.cos(a), s = Math.sin(a);
+  g.fillStyle = col; g.beginPath();
+  g.moveTo(x + c * r, y + s * r); g.lineTo(x - c * r * 0.7 - s * r * 0.8, y - s * r * 0.7 + c * r * 0.8); g.lineTo(x - c * r * 0.7 + s * r * 0.8, y - s * r * 0.7 - c * r * 0.8);
+  g.closePath(); g.fill();
+}
+// THE OBJECTIVE: over it, a bouncing arrow and how far; off the screen, an arrow at the edge toward it
+function goalMarker(g, K, G0, t, st) {
+  if (G0.dist < 28) return;   // there: the prompt says what to do
+  const pa = new Float64Array(3), W = K.W, H = K.H, m = 16, bob = Math.round(Math.sin(t * 5) * 2);
+  const label = `${G0.name}${G0.dist > 30 ? ` ${G0.dist} M` : ""}`;
+  const on = proj(K, G0.x, G0.y, G0.z + 7, pa, 0) && pa[0] > m && pa[0] < W - m && pa[1] > m + 10 && pa[1] < H - m;
+  if (on) {
+    const x = Math.round(pa[0]), y = Math.round(pa[1]) + bob;
+    arrowHead(g, x, y, Math.PI / 2, 8, "#0f172a"); arrowHead(g, x, y - 1, Math.PI / 2, 6, G0.col);
+    if (G0.dist > 30) { const w = textWidth(label); g.fillStyle = "rgba(2,6,23,0.7)"; g.fillRect(Math.round(x - w / 2 - 2), y - 21, w + 4, 10); drawText(g, label, Math.round(x - w / 2), y - 20, "#f8fafc"); }
+    return;
+  }
+  // off the screen: from the middle toward it (behind the camera: the guide's screen direction)
+  let dx, dy;
+  if (pa[2] >= NEAR) { dx = pa[0] - W / 2; dy = pa[1] - H / 2; } else { dx = G0.arrow[0]; dy = G0.arrow[1]; }
+  const n = Math.hypot(dx, dy) || 1; dx /= n; dy /= n;
+  const kx = dx ? (W / 2 - m) / Math.abs(dx) : Infinity, ky = dy ? (H / 2 - m - 6) / Math.abs(dy) : Infinity, k = Math.min(kx, ky);
+  let x = Math.round(W / 2 + dx * k), y = Math.round(H / 2 + dy * k);
+  // (clear of the mini-map in the bottom right corner, and of the HUD's top line)
+  if (x > W * 0.7 && y > H - W * 0.26 - 14) { y = Math.round(H - W * 0.26 - 14); x = Math.min(x, W - m); }
+  const a = Math.atan2(dy, dx), pul = 8 + (Math.floor(t * 4) % 2);
+  arrowHead(g, x, y, a, pul + 2, "#0f172a"); arrowHead(g, x, y, a, pul, G0.col);
+  const w = textWidth(label), lx = clamp(Math.round(x - dx * (w / 2 + 16) - w / 2), 2, W - w - 2), ly = clamp(Math.round(y - dy * 18 - 4), 2, H - 10);
+  g.fillStyle = "rgba(2,6,23,0.75)"; g.fillRect(lx - 2, ly - 1, w + 4, 10); drawText(g, label, lx, ly, "#f8fafc");
+  void st;
 }
 
 // ---- the people: the rider, the city's skiers, the instructor, the field ------------------------------------------
@@ -573,15 +803,16 @@ function people(K, items, st, V, env) {
   let hx = st.hx, hy = st.hy;
   if (A) { const a = (A.spin * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a); hx = A.hx * c - A.hy * s; hy = A.hx * s + A.hy * c; }
   if (sw) { hx = -hx; hy = -hy; }
-  const look = { ...PLAYER_LOOK, board: st.board, crouch: st.crouch > 4 || (st.mode === "ski" && Math.hypot(st.vx, st.vy) > 18), lean: st.edge, flip: A ? (A.flip * Math.PI) / 180 : 0, tumble: st.mode === "crash" && !st.wipe?.water ? (st.crash * 0.35) % (Math.PI * 2) : null, sit: st.mode === "lift" };
+  const look = { ...PLAYER_LOOK, board: st.board, goofy: env.goofy, crouch: st.crouch > 4 || (st.mode === "ski" && Math.hypot(st.vx, st.vy) > 18), lean: st.edge, flip: A ? (A.flip * Math.PI) / 180 : 0, tumble: st.mode === "crash" && !st.wipe?.water ? (st.crash * 0.35) % (Math.PI * 2) : null, sit: st.mode === "lift" };
   if (st.mode === "crash" && st.wipe?.water) { look.alpha = clamp(st.crash / 60, 0.2, 1); }
   // a shadow under a rider in the air
-  if (A) { const gz = heightAt(st.x, st.y); if (proj(K, st.x, st.y, gz + 0.05, TMP, 0)) { const sx = TMP[0], sy = TMP[1], d = TMP[2], s = clamp(K.f / d * 1.1, 2, 12); items.push({ d: d - 0.2, draw: (g) => { g.fillStyle = "rgba(60,70,100,0.35)"; g.fillRect(Math.round(sx - s), Math.round(sy - s * 0.25), Math.round(s * 2), Math.max(1, Math.round(s * 0.5))); } }); } }
+  // the rider's shadow (always: it says where on the ground they are, in the air and out of it)
+  if (st.mode !== "lift") { const gz = heightAt(st.x, st.y); if (proj(K, st.x, st.y, gz + 0.05, TMP, 0)) { const sx = TMP[0], sy = TMP[1], d = TMP[2], s = clamp(K.f / d * 1.1, 2, 12); items.push({ d: d - 0.2, draw: (g) => { g.fillStyle = "rgba(40,55,95,0.38)"; g.beginPath(); g.ellipse(sx + s * 0.3, sy, s, Math.max(1, s * 0.32), 0, 0, Math.PI * 2); g.fill(); } }); } }
   if (st.mode === "lift" && st.lift.ph === "ride") { const L = LIFTS_W.find(l => l.id === st.lift.id); hx = L.d[0]; hy = L.d[1]; }
   // in the air the rider grows a little (nearer the camera, the old top-down habit), so the air reads
   add(p.x, p.y, p.z, hx, hy, look, 2, A ? 1 + clamp((p.z - heightAt(st.x, st.y)) / 7, 0, 0.7) : 1);
-  // the lift line: a sign at each lift's foot, near
-  for (const L of LIFTS_W) if (near(K, L.load[0], L.load[1], 220)) label(K, items, L.load[0], L.load[1], heightAt(L.load[0], L.load[1]) + 5, L.name, "#bae6fd");
+  // the first seconds of a run: YOU, over the rider (which of the people on the slope is you)
+  if (env.you && proj(K, p.x, p.y, p.z + 5.5, TMP, 0)) { const sx = Math.round(TMP[0]), sy = Math.round(TMP[1]), d = TMP[2]; items.push({ d: d - 4, draw: (g) => { const w = textWidth("YOU"); g.fillStyle = "#f97316"; g.fillRect(sx - w / 2 - 2, sy - 12, w + 4, 10); drawText(g, "YOU", sx - w / 2, sy - 11, "#0f172a"); arrowHead(g, sx, sy + 1, Math.PI / 2, 3, "#f97316"); } }); }
   void POIS; void V;
 }
 // along THE GAUNTLET through the giant slalom gates (the field's line), k 0..1 -> [x, y, hx, hy]

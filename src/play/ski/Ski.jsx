@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState, forwardRef } from "react";
 import { Button, ButtonRow, ScreenHead } from "../../ui/index.js";
-import { readCaseId } from "../../caseFile.jsx";
+import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { GLYPHS, readPad } from "../../city/gamepad.js";
 import { machineClock } from "../../city/sim.js";
 import GameMenu from "../GameMenu.jsx";
-import { newGame, step, warp, challengeNear, rleEncode, rleDecode, replay, resultOf, speedKmh, VERSION } from "./sim.js";
-import { RUNS, POI, SHOP, warmTiles, weatherOn, lightsOn, FILES, LIFT_W, liftRideTicks, inPipe, waterAt } from "./world.js";
+import { newGame, step, warp, challengeNear, rleEncode, rleDecode, replay, resultOf, speedKmh, unpack, VERSION } from "./sim.js";
+import { RUNS, POI, SHOP, warmTiles, weatherOn, lightsOn, FILES, LIFT_W, inPipe, waterAt } from "./world.js";
 import { CHALLENGES, CHALLENGE, RUNNABLE, MEDAL_NAME, fieldTimes, PIPE_LIMIT } from "./challenges.js";
 import { makeView, advance, draw } from "./render.js";
-import { drawMap, fitMap, mapBase, toMap } from "./map.js";
+import { drawMap, drawMini, fitMap, mapBase, toMap } from "./map.js";
+import { createGuide, guide, noteEvents, fillKeys } from "./guide.js";
 import { createInput } from "./input.js";
 import { npcsAt, PACE } from "./npc.js";
 import { loadProgress, saveProgress, fileResult, loadRuns, saveRun, deleteRun, fmtValue } from "./records.js";
@@ -39,14 +40,36 @@ function parseRoute(route) {
 const RATE_MARK = { green: "●", blue: "■", black: "◆", double: "◆◆" };
 const RATE_WORD = { green: "GREEN CIRCLE", blue: "BLUE SQUARE", black: "BLACK DIAMOND", double: "DOUBLE BLACK" };
 const NOTICE = "EXHIBITION. NOTHING HERE REACHES YOUR FILE, THE LEAGUE OR THE CUP.";
-const TIMES = { city: "THE CITY'S HOUR", day: "MIDDAY", dusk: "DUSK", night: "NIGHT SKIING" };
+const TIMES = { day: "MIDDAY", city: "THE CITY'S HOUR", dusk: "DUSK", night: "NIGHT SKIING" };
+const GOAL_LINE = "SKI DOWN. RIDE THE LIFT UP. TRY THE FLAGS (CHALLENGES).";
+const TIME_KEY = "hvi-ski-time", TUT_KEY = "hvi-ski-tutorial";
+const rd = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const wr = (k, v) => { try { localStorage.setItem(k, v); } catch { /* the tab remembers */ } };
+// Left-handed (a profile's hand) rides goofy unless they have chosen: the skate park's lookup
+function profileHand() {
+  const norm = (h) => (h === "L" || h === "left" || h === -1 || h === "LEFT" ? "L" : h === "R" || h === "right" || h === 1 || h === "RIGHT" ? "R" : null);
+  try { const p = JSON.parse(localStorage.getItem("hvi-profile") || "null"); const h = norm(p?.hand); if (h) return h; } catch { /* no profile */ }
+  const last = readLastResult();
+  return norm(last?.hand) || norm(last?.profile?.hand) || norm(last?.avatar?.hand) || norm(last?.avatar?.spec?.hand) || null;
+}
+// THE FIRST RUN: five steps from the base, each done by doing it (skippable; remembered)
+const TUTORIAL = [
+  { id: "go", text: { keys: "PRESS DOWN (↓ OR S) TO GO DOWN THE HILL", pad: "PUSH THE LEFT STICK DOWN TO GO DOWN THE HILL", touch: "PUSH THE STICK DOWN TO GO DOWN THE HILL" } },
+  { id: "turn", text: { keys: "PRESS LEFT OR RIGHT: TURNING ACROSS THE SLOPE SLOWS YOU", pad: "PUSH THE STICK LEFT OR RIGHT: TURNING ACROSS THE SLOPE SLOWS YOU", touch: "PUSH THE STICK LEFT OR RIGHT: TURNING ACROSS THE SLOPE SLOWS YOU" } },
+  { id: "stop", text: { keys: "HOLD X TO STOP", pad: "HOLD {B} TO STOP", touch: "HOLD BRAKE TO STOP" } },
+  { id: "lift", text: { keys: "NOW RIDE THE LIFT: FOLLOW THE YELLOW ARROW TO THE YELLOW CIRCLE", pad: "NOW RIDE THE LIFT: FOLLOW THE YELLOW ARROW TO THE YELLOW CIRCLE", touch: "NOW RIDE THE LIFT: FOLLOW THE YELLOW ARROW TO THE YELLOW CIRCLE" } },
+  { id: "poles", text: { keys: "AT THE TOP: PICK A TRAIL, THEN FOLLOW ITS POLES DOWN. GREEN IS EASIEST", pad: "AT THE TOP: PICK A TRAIL, THEN FOLLOW ITS POLES DOWN. GREEN IS EASIEST", touch: "AT THE TOP: PICK A TRAIL, THEN FOLLOW ITS POLES DOWN. GREEN IS EASIEST" } },
+];
 
 export default function Ski({ route }) {
   useEffect(() => { injectStyles(); }, []);
   const opts = useMemo(() => parseRoute(route), [route]);
   const [prog, setProg] = useState(() => loadProgress());
   const [board, setBoard] = useState(() => opts.board || prog.board);
-  const [time, setTime] = useState("city");
+  const [time, setTimeS] = useState(() => (TIMES[rd(TIME_KEY, "day")] ? rd(TIME_KEY, "day") : "day"));
+  const setTime = (t) => { setTimeS(t); wr(TIME_KEY, t); };
+  const rookie = prog.rookie !== false, goofy = prog.goofy ?? profileHand() === "L";
+  const setPref = (k, v) => setProg(p => { const q = { ...p, [k]: v }; saveProgress(q); return q; });
   const [play, setPlay] = useState(null);   // {n, at | ch, tape?}
   const caseId = useMemo(() => readCaseId(), []);
   useEffect(() => {
@@ -57,8 +80,8 @@ export default function Ski({ route }) {
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   const toggleBoard = () => setBoard(b => { const v = !b; setProg(p => { const q = { ...p, board: v }; saveProgress(q); return q; }); return v; });
   let body;
-  if (play) body = <Play key={play.n} start={play} board={play.tape ? Boolean(play.tape.board) : board} time={time} caseId={caseId} prog={prog} setProg={setProg} onQuit={() => { setPlay(null); setProg(loadProgress()); }} />;
-  else body = <Home prog={prog} board={board} toggleBoard={toggleBoard} time={time} setTime={setTime} caseId={caseId} onPlay={(s) => { SFX.unlock(); setPlay({ n: Date.now(), ...s }); }} />;
+  if (play) body = <Play key={play.n} start={play} board={play.tape ? Boolean(play.tape.board) : board} rookie={rookie} goofy={goofy} time={time} caseId={caseId} prog={prog} setProg={setProg} onQuit={() => { setPlay(null); setProg(loadProgress()); }} />;
+  else body = <Home prog={prog} board={board} toggleBoard={toggleBoard} rookie={rookie} goofy={goofy} setPref={setPref} time={time} setTime={setTime} caseId={caseId} onPlay={(s) => { SFX.unlock(); setPlay({ n: Date.now(), ...s }); }} />;
   return (
     <div className="sk">
       <ScreenHead title="THE MOUNTAIN" meta="SKIING // EXHIBITION // OPEN SLOPE. THE LIFTS RUN FOR YOU. EVERYTHING IS RECORDED." />
@@ -68,7 +91,7 @@ export default function Ski({ route }) {
 }
 
 // ---- the start ------------------------------------------------------------------------------------------
-function Home({ prog, board, toggleBoard, time, setTime, caseId, onPlay }) {
+function Home({ prog, board, toggleBoard, rookie, goofy, setPref, time, setTime, caseId, onPlay }) {
   const found = new Set(prog.found), playRef = useRef(null);
   const [runs, setRuns] = useState(() => loadRuns());
   const [boards, setBoards] = useState(null);
@@ -83,11 +106,25 @@ function Home({ prog, board, toggleBoard, time, setTime, caseId, onPlay }) {
   const medals = CHALLENGES.filter(c => c.start).reduce((n, c) => n + ((prog.medals[c.id]?.medal || 0) === 3 ? 1 : 0), 0);
   return (
     <>
-      <p className="pg-lede">THE CITY'S MOUNTAIN, ALL OF IT: 21 TRAILS, SEVEN LIFTS, THE PARK, THE PIPE, THE RACE COURSE AND THE RETENTION POOL. SKI ANYWHERE. RIDE THE LIFTS. FIND THE CHALLENGES' FLAGS AND THE FILES THE DEPARTMENT MISLAID. ARROWS STEER, SPACE JUMPS (HOLD, LET GO), SHIFT TUCKS, M IS THE MAP. A CONTROLLER IS BETTER; PHONES GET A STICK.</p>
+      <p className="sk-goal">{GOAL_LINE}</p>
+      <p className="pg-lede">DOWN THE HILL IS ALWAYS DOWN THE SCREEN. A YELLOW ARROW POINTS TO WHERE TO GO NEXT. THE COLOURED POLES MARK THE TRAILS: GREEN IS EASY, BLUE IS HARDER, BLACK IS HARD. THE FIRST RUN TEACHES THE REST IN HALF A MINUTE.</p>
       <div className="pg-start">
         <Button variant="primary" ref={playRef} onClick={() => onPlay({ at: "base" })}>PLAY NOW</Button>
-        <span className="pg-sub">FREE RIDE FROM THE BASE ON {board ? "A SNOWBOARD" : "SKIS"}. {found.size} PLACES FOUND, {files} OF {FILES.length} FILES, {medals} GOLD.</span>
+        <span className="pg-sub">FROM THE BASE ON {board ? `A SNOWBOARD (${goofy ? "GOOFY" : "REGULAR"})` : "SKIS"}, {rookie ? "ROOKIE HELP ON" : "NO HELP (PRO)"}. {found.size} PLACES FOUND, {files} OF {FILES.length} FILES, {medals} GOLD.</span>
       </div>
+      <div className="sk-row" role="group" aria-label="Settings">
+        <button type="button" className="pg-toggle" aria-pressed={rookie} onClick={() => setPref("rookie", !rookie)}>ROOKIE HELP</button>
+        <span className="sk-small">{rookie ? "ON: THE GREEN TRAILS KEEP YOUR SPEED STEADY, FALLS ARE SHORT, TREES AND LANDINGS FORGIVE MORE. (CHALLENGES ARE ALWAYS THE SAME FOR EVERYONE.)" : "OFF: THE MOUNTAIN AS IT IS."}</span>
+      </div>
+      <div className="sk-row" role="group" aria-label="Skis or snowboard">
+        <button type="button" className="pg-toggle" aria-pressed={board} onClick={toggleBoard}>SNOWBOARD</button>
+        {board && <span className="sk-chips" role="radiogroup" aria-label="Stance" style={{ margin: 0 }}>
+          <button type="button" role="radio" aria-checked={!goofy} className={`sk-chip${!goofy ? " on" : ""}`} onClick={() => setPref("goofy", false)}>REGULAR (LEFT FOOT FORWARD)</button>
+          <button type="button" role="radio" aria-checked={goofy} className={`sk-chip${goofy ? " on" : ""}`} onClick={() => setPref("goofy", true)}>GOOFY (RIGHT FOOT FORWARD)</button>
+        </span>}
+        {!board && <span className="sk-small">SKIS. TURN ON SNOWBOARD TO RIDE ONE (AND PICK YOUR STANCE).</span>}
+      </div>
+      {rd(TUT_KEY, "") === "done" && <p className="sk-small"><button type="button" className="sk-chip" onClick={() => { wr(TUT_KEY, ""); onPlay({ at: "base" }); }}>PLAY THE FIRST-RUN LESSON AGAIN</button></p>}
       <details className="pg-more">
         <summary>CHALLENGES ({CHALLENGES.filter(c => c.start && found.has(`ch:${c.id}`)).length} OF {RUNNABLE.length} FOUND)</summary>
         <div className="pg-more-body">
@@ -109,13 +146,13 @@ function Home({ prog, board, toggleBoard, time, setTime, caseId, onPlay }) {
         </div>
       </details>
       <details className="pg-more">
-        <summary>SKIS OR BOARD, TIME OF DAY</summary>
+        <summary>TIME OF DAY, WHERE TO START</summary>
         <div className="pg-more-body">
-          <p className="sk-row"><button type="button" className="pg-toggle" aria-pressed={board} onClick={toggleBoard}>SNOWBOARD</button><span className="sk-small">{board ? "ONE BOARD, SIDEWAYS. GRABS ARE INDY, MELON, STALEFISH; RAILS CAN BE BOARDSLID." : "TWO SKIS. GRABS ARE MUTE, SAFETY, JAPAN."}</span></p>
+          <p className="sk-small">{board ? "ONE BOARD, SIDEWAYS. GRABS ARE INDY, MELON, STALEFISH; RAILS CAN BE BOARDSLID." : "TWO SKIS. GRABS ARE MUTE, SAFETY, JAPAN."}</p>
           <div className="sk-chips" role="radiogroup" aria-label="Time of day">
             {Object.entries(TIMES).map(([k, v]) => <button key={k} type="button" role="radio" aria-checked={time === k} className={`sk-chip${time === k ? " on" : ""}`} onClick={() => setTime(k)}>{v}</button>)}
           </div>
-          <p className="sk-small">THE CITY'S HOUR AND WEATHER BY DEFAULT (THE MOUNTAIN'S DAY RUNS AT A SIXTH OF THE CITY'S CLOCK WHILE YOU SKI). THE LIGHTS ON THE LOWER TRAILS COME ON AT DUSK.</p>
+          <p className="sk-small">MIDDAY BY DEFAULT: THE EASIEST TO SEE. THE CITY'S HOUR BRINGS THE CITY'S WEATHER (THE MOUNTAIN'S DAY RUNS AT A SIXTH OF THE CITY'S CLOCK WHILE YOU SKI). THE LIGHTS ON THE LOWER TRAILS COME ON AT DUSK.</p>
           <p className="sk-small">START FROM A PLACE FOUND:</p>
           <div className="sk-chips">
             {[...found].filter(id => POI[id]).slice(0, 40).map(id => <button key={id} type="button" className="sk-chip" onClick={() => onPlay({ at: id })}>{POI[id].name}</button>)}
@@ -173,7 +210,9 @@ function Controls() {
       <dt>JUMP</dt><dd>HOLD SPACE // HOLD A: CROUCH AND CHARGE; LET GO TO POP. LET GO AT A KICKER'S LIP TO GO FURTHER.</dd>
       <dt>TRICKS</dt><dd>IN THE AIR: THE RIGHT STICK (OR THE ARROWS / THE PHONE'S STICK) SPINS LEFT AND RIGHT, FLIPS FORWARD AND BACK. LET GO NEAR A WHOLE TURN AND IT COMES ROUND. Q / E // LB / RB HOLD A GRAB. LAND WITH THE ROTATION FINISHED, THE GRAB LET GO, POINTING THE WAY YOU ARE GOING.</dd>
       <dt>RAILS</dt><dd>RIDE ONTO ONE FROM ITS RAMP, OR LAND ON IT, LINED UP. JUMP TO LEAVE.</dd>
-      <dt>LIFTS</dt><dd>STOP IN THE LINE AT A LIFT'S FOOT (A SIGN SAYS WHICH). THE NEXT CHAIR TAKES YOU. HOLD JUMP TO RIDE FASTER.</dd>
+      <dt>LIFTS</dt><dd>SKI INTO THE GLOWING YELLOW CIRCLE UNDER A LIFT SIGN. PRESS JUMP (SPACE // A), OR STAND THERE TWO SECONDS: THE NEXT CHAIR TAKES YOU. HOLD JUMP TO RIDE FASTER. AT THE TOP, ARROWS POINT TO THE TRAILS.</dd>
+      <dt>WHERE TO GO</dt><dd>DOWN THE HILL IS DOWN THE SCREEN. THE YELLOW ARROW POINTS TO THE NEXT THING (A LIFT, A FLAG, THE FINISH); THE MINI-MAP SHOWS IT TOO. THE LINE AT THE TOP SAYS WHAT TO DO NOW.</dd>
+      <dt>TRAILS</dt><dd>POLES IN THE TRAIL'S COLOUR LINE BOTH EDGES: GREEN EASY, BLUE HARDER, BLACK HARD. A SIGN AT EACH TRAIL'S TOP NAMES IT. OUTSIDE THE POLES IS DEEP SNOW (SLOWER) AND TREES.</dd>
       <dt>FLATS</dt><dd>PUSH THE STICK TO SKATE; UPHILL YOU WALK.</dd>
       <dt>MAP</dt><dd>M OR TAB // SELECT // MAP. TAP A PLACE YOU HAVE FOUND TO GO THERE; A FLAG STARTS ITS CHALLENGE.</dd>
       <dt>CHALLENGE</dt><dd>R // Y // RETRY: START THE CHALLENGE AT THE FLAG YOU STAND BY; IN ONE, START IT AGAIN.</dd>
@@ -203,8 +242,10 @@ function hourOf(time, h0, secs) {
   if (time === "night") return 19.5;
   return (h0 + secs / 360) % 24;
 }
-function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
-  const canvasRef = useRef(null), wrapRef = useRef(null), mapRef = useRef(null), inputRef = useRef(null), apiRef = useRef({});
+function Play({ start, board, rookie, goofy, time, caseId, prog, setProg, onQuit }) {
+  const canvasRef = useRef(null), wrapRef = useRef(null), mapRef = useRef(null), inputRef = useRef(null), apiRef = useRef({}), miniRef = useRef(null);
+  const [tut, setTut] = useState(null);     // the first-run lesson's step (index) | null
+  const [intro, setIntro] = useState(!start.tape && !start.ch);
   const [ready, setReady] = useState(0);
   const [hud, setHud] = useState(null);
   const [pop, setPop] = useState(null);
@@ -238,12 +279,12 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
   useEffect(() => {
     if (ready < 1) return;
     const reduced = REDUCED();
-    const cfg = { board };
+    const cfg = { board, rookie };
     const t0 = performance.now(), clk = machineClock(Date.now()), h0 = clk.hour + clk.minute / 60, mt0 = clk.mt, day = clk.day;
     const weather = weatherOn(day);
     const found = new Set(prog.found);
     let files = prog.files;
-    const G = { st: null, words: [], snaps: [], tape: null, tapeI: 0, replay: null, permit: null, paused: false, ended: false, lastTrail: -2, hudKey: "", npcs: [], npcAt: 0, medals: Object.fromEntries(Object.entries(prog.medals).map(([k, v]) => [k, v.medal])) };
+    const G = { gm: createGuide(), gd: null, tut: null, miniAt: 0, st: null, words: [], snaps: [], tape: null, tapeI: 0, replay: null, permit: null, paused: false, ended: false, lastTrail: -2, hudKey: "", npcs: [], npcAt: 0, medals: Object.fromEntries(Object.entries(prog.medals).map(([k, v]) => [k, v.medal])) };
     const V = makeView();
     const input = createInput(COARSE() ? "touch" : "keys"); inputRef.current = input;
     const say = (s) => setSr(s);
@@ -257,6 +298,25 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
     // the tape: a saved run (a challenge's from its start; a free run from its snapshot)
     if (start.tape) { const r = start.tape; G.tape = rleDecode(r.inputLog); begin(r.snap ? JSON.parse(r.snap) : newGame({ board: r.board, ch: r.ch })); }
     else begin(start.ch ? newGame({ ...cfg, ch: start.ch }) : newGame({ ...cfg, at: start.at }));
+    // the first-run lesson: from the base, once (until done or skipped)
+    if (!start.tape && !start.ch && start.at === "base" && rd(TUT_KEY, "") !== "done") { G.tut = { i: 0, n: 0, t0: 0 }; setTut(0); }
+    const tutDone = (skip = false) => { G.tut = null; setTut(null); wr(TUT_KEY, "done"); if (!skip) setPop({ t: performance.now(), text: "LESSON DONE. THE MOUNTAIN IS YOURS", kind: "find" }); say(skip ? "LESSON SKIPPED." : "LESSON DONE."); };
+    const tutStep = (S, w) => {
+      const T = G.tut; if (!T) return;
+      const u = unpack(w), sp = Math.hypot(S.vx, S.vy), id = TUTORIAL[T.i].id;
+      // a step already overtaken (on the lift before stopping, say): on to the step that fits
+      if (S.mode === "lift" && T.i < 3) { T.i = 3; T.n = 0; setTut(3); }
+      let ok = false;
+      if (id === "go") ok = sp > 3;
+      else if (id === "turn") { if (Math.abs(u.lx) > 0.4 && sp > 0.8) T.n++; ok = T.n > 24; }
+      else if (id === "stop") { if (u.brake && sp < 1.2) T.n++; ok = T.n > 8; }
+      else if (id === "lift") ok = S.mode === "lift";
+      else if (id === "poles") { if (S.mode === "ski" && !T.t0) T.t0 = S.t; ok = T.t0 && S.t - T.t0 > 60 * 7; }
+      if (!ok) return;
+      T.n = 0;
+      if (T.i + 1 >= TUTORIAL.length) { tutDone(); return; }
+      T.i++; setTut(T.i); say(TUTORIAL[T.i].text.keys);
+    };
     if (import.meta.env?.DEV && typeof window !== "undefined") { window.__hviSki = G; import("./world.js").then(m => { G.W = m; }); import("./challenges.js").then(m => { G.C = m; }); import("./sim.js").then(m => { G.S = m; }); }   // for the browser checks (G.bot: a scripted rider)
     const restartCh = () => { const id = G.st.ch?.id || G.lastCh; if (!id) return false; G.lastCh = id; begin(newGame({ ...cfg, ch: id })); setMenu(null); return true; };
     const startNear = () => { const C = challengeNear(G.st); if (!C || G.st.mode === "air") return false; found.add(`ch:${C.id}`); G.lastCh = C.id; begin(newGame({ ...cfg, ch: C.id })); return true; };
@@ -265,7 +325,7 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
       const now = G.words.length;
       let s0 = G.snaps[0];
       if (!whole) for (const s of G.snaps) if (now - s.i >= REPLAY_BACK * 0.5) s0 = s;
-      G.replay = { st: JSON.parse(s0.snap), words: G.words.slice(s0.i), i: 0, V: makeView() };
+      G.replay = { st: JSON.parse(s0.snap), words: G.words.slice(s0.i), i: 0, V: makeView(), gm: createGuide() };
       G.paused = true; setTapeOn(true); setMenu(null); say("THE REPLAY.");
     };
     const saveThis = () => {
@@ -274,7 +334,7 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
       const rec = G.st.ch && s0 === G.snaps[0] ? { v: VERSION, ch: G.st.ch.id, board, inputLog: rleEncode(G.words), res, at: Date.now(), name: CHALLENGE[G.st.ch.id].name } : { v: VERSION, snap: s0.snap, board, inputLog: rleEncode(G.words.slice(s0.i)), at: Date.now(), name: "A FREE RUN" };
       say(saveRun(rec) ? "RUN SAVED." : "THE BROWSER'S STORE IS FULL.");
     };
-    apiRef.current = { restartCh, goTo, instant, saveThis, resume: () => { G.paused = false; setMenu(null); }, freeOn: () => { G.st.ch = null; G.ended = false; G.words = []; G.snaps = [{ i: 0, snap: JSON.stringify(G.st) }]; setMenu(null); G.paused = false; }, leaveCh: () => { G.st.ch = null; setMenu(null); G.paused = false; G.words = []; G.snaps = [{ i: 0, snap: JSON.stringify(G.st) }]; }, pause: () => { G.paused = true; setMenu("pause"); }, map: () => { G.paused = true; setMapOpen(true); }, closeMap: () => { setMapOpen(false); G.paused = false; }, found, files: () => files, st: () => G.st, medals: () => G.medals,
+    apiRef.current = { skipTut: () => tutDone(true), hideIntro: () => setIntro(false), restartCh, goTo, instant, saveThis, resume: () => { G.paused = false; setMenu(null); }, freeOn: () => { G.st.ch = null; G.ended = false; G.words = []; G.snaps = [{ i: 0, snap: JSON.stringify(G.st) }]; setMenu(null); G.paused = false; }, leaveCh: () => { G.st.ch = null; setMenu(null); G.paused = false; G.words = []; G.snaps = [{ i: 0, snap: JSON.stringify(G.st) }]; }, pause: () => { G.paused = true; setMenu("pause"); }, map: () => { G.paused = true; setMapOpen(true); }, closeMap: () => { setMapOpen(false); G.paused = false; }, found, files: () => files, st: () => G.st, medals: () => G.medals,
       stopReplay: () => { if (G.tape) { onQuit(); return; } G.replay = null; setTapeOn(false); if (!G.ended) G.paused = false; else setMenu({ end: resultOf(G.st) }); },
       file: async () => {
         const res = resultOf(G.st);
@@ -328,6 +388,8 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
           if (G.tape) { if (G.tapeI >= G.tape.length) { G.paused = true; setTimeout(onQuit, 1600); break; } w = G.tape[G.tapeI++]; }
           else { w = G.bot ? G.bot(S) : inp.word; G.words.push(w); }
           step(S, w);
+          noteEvents(G.gm, S);
+          if (G.tut && !G.tape) tutStep(S, w);
           if (G.words.length % SNAP_EVERY === 0 && !G.tape) { G.snaps.push({ i: G.words.length, snap: JSON.stringify(S) }); if (G.snaps.length > 8) G.snaps.splice(1, 1); }
           SFX.play(S.ev);
           for (const e of S.ev) {
@@ -336,7 +398,7 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
             else if (e[0] === "trick") { setPop({ t: now, text: `${e[1]} +${e[2]}`, kind: "trick" }); say(`${e[1]}. ${e[2]} POINTS.`); }
             else if (e[0] === "crash") { setPop({ t: now, text: e[1], kind: "crash" }); say(`${e[1]}.`); }
             else if (e[0] === "board") say(`ON ${e[1]}. HOLD JUMP TO RIDE FASTER.`);
-            else if (e[0] === "unload") say(`AT THE TOP OF ${e[1]}.`);
+            else if (e[0] === "unload") say(`AT THE TOP OF ${e[1]}. PICK A TRAIL: THE ARROWS ARE THE TRAIL HEADS.`);
             else if (e[0] === "queue") say(`IN THE LINE FOR ${e[1]}.`);
             else if (e[0] === "gate") { if (e[1] === e[2] || e[1] % 3 === 0) say(`GATE ${e[1]} OF ${e[2]}.`); }
             else if (e[0] === "miss") { setPop({ t: now, text: `MISSED GATE ${e[1]} +3 S`, kind: "crash" }); say(`MISSED GATE ${e[1]}. THREE SECONDS.`); }
@@ -350,8 +412,9 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
       // the people on the mountain (every tenth frame)
       if (now - G.npcAt > 160) { G.npcAt = now; try { G.npcs = npcsAt(mt0 + (secs * PACE) / 3600); } catch { G.npcs = []; } }
       advance(VV, S, reduced);
+      const gd = guide(G.replay ? G.replay.gm : G.gm, S, { medals: G.medals }); G.gd = gd;
       const hour = hourOf(time, h0, secs);
-      draw(ctx, canvasRef.current.width, canvasRef.current.height, S, VV, { hour, weather: time === "city" ? weather : "CLEAR", reduced, npcs: G.npcs, files, medals: G.medals, time: secs, lightsOn: time === "city" ? lightsOn(mt0 + secs / 360) || hour >= 16.5 || hour < 7 : time !== "day" });
+      draw(ctx, canvasRef.current.width, canvasRef.current.height, S, VV, { guide: gd, goofy, you: !G.replay && !G.tape && secs < 12 && S.mode !== "lift", noGoal: Boolean(G.replay || G.tape), hour, weather: time === "city" ? weather : "CLEAR", reduced, npcs: G.npcs, files, medals: G.medals, time: secs, lightsOn: time === "city" ? lightsOn(mt0 + secs / 360) || hour >= 16.5 || hour < 7 : time !== "day" });
       // the sound bed
       const sp = Math.hypot(S.vx, S.vy, S.vz);
       SFX.bed(G.paused && !G.replay ? 0 : sp, S.slip || 0, S.mode === "ski");
@@ -360,9 +423,15 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
       const shop = Math.abs((SHOP.x0 + SHOP.x1) / 2 - S.x) < 60 && Math.abs((SHOP.y0 + SHOP.y1) / 2 - S.y) < 50;
       const chs = C ? chalLine(S, C) : null;
       const liftL = S.mode === "lift" ? LIFT_W[S.lift.id] : null;
-      const h = { kmh: speedKmh(S), trail: R ? `${RATE_MARK[R.rating]} ${R.name}` : S.mode === "lift" ? "" : inPipe(S.x, S.y) ? "THE PIPELINE" : waterAt(S.x, S.y) ? "THE RETENTION POOL" : "OFF-PISTE", rating: R?.rating || null, ch: chs, count: S.ch?.ph === "count" ? Math.ceil(S.ch.n / 60) : 0, near: near ? near.name : null, shop, lift: liftL ? (S.lift.ph === "wait" ? `IN THE LINE: ${liftL.name} // ${Math.ceil(S.lift.n / 60)} S` : `${liftL.name} // ${Math.max(0, Math.ceil((liftRideTicks(liftL) - S.lift.k) / 60 / (S.ff ? 6 : 1)))} S TO THE TOP${S.ff ? " (FASTER)" : " // HOLD JUMP: FASTER"}`) : null, score: S.score, replay: Boolean(G.replay || G.tape), mode: S.mode, air: airLine(S) };
+      const md = inp.mode, gl = GLYPHS[inp.family] || GLYPHS.generic;
+      const trailName = R ? `${RATE_MARK[R.rating]} ${R.name}` : liftL ? liftL.name : inPipe(S.x, S.y) ? "THE PIPELINE" : waterAt(S.x, S.y) ? "THE RETENTION POOL" : gd.phase === "base" || gd.phase === "zone" ? "THE BASE" : "OFF-PISTE: DEEP SNOW";
+      const h = { kmh: speedKmh(S), trail: trailName, rating: R?.rating || null, ch: chs, count: S.ch?.ph === "count" ? Math.ceil(S.ch.n / 60) : 0, near: near ? near.name : null, shop: shop && gd.phase === "base", score: S.score, replay: Boolean(G.replay || G.tape), mode: S.mode, air: airLine(S),
+        hint: G.replay || G.tape ? "" : fillKeys(gd.hint, md, gl), big: G.replay || G.tape ? "" : fillKeys(gd.big, md, gl), phase: gd.phase, ff: S.ff, tutText: G.tut ? fillKeys(TUTORIAL[G.tut.i].text[md] || TUTORIAL[G.tut.i].text.keys, md, gl) : "" };
       const key = JSON.stringify(h);
       if (key !== G.hudKey) { G.hudKey = key; setHud(h); }
+      // the mini-map (every third frame)
+      if (miniRef.current && ++G.miniAt % 3 === 0) { const mc = miniRef.current; drawMini(mc.getContext("2d"), mc.width, mc.height, { st: S, goal: G.replay || G.tape ? null : gd.goal, time: secs }); }
+      if (!G.introOff && (secs > 8 || S.ch)) { G.introOff = true; setIntro(false); }
       if (S.run !== G.lastTrail && S.mode === "ski" && R) { G.lastTrail = S.run; say(`${R.name}. ${RATE_WORD[R.rating]}.`); }
       if (mapRef.current && G.paused && mapRef.current.isConnected) mapRef.current.dataset.t = String(secs);
     };
@@ -385,16 +454,23 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
         {hud && (
           <div className="sk-hud" aria-hidden="true">
             <div className="sk-tl"><b>{hud.kmh}</b> KM/H{hud.trail && <span className={`sk-trail r-${hud.rating || "off"}`}>{hud.trail}</span>}</div>
+            {hud.hint && <div className={`sk-hint p-${hud.phase}`}>{hud.hint}</div>}
             {hud.ch && <div className="sk-tr"><span>{hud.ch.name}</span><b>{hud.ch.big}</b>{hud.ch.sub && <small>{hud.ch.sub}</small>}</div>}
             {hud.count > 0 && <div className="sk-count">{hud.count}</div>}
             {hud.air && <div className="sk-pop air">{hud.air}</div>}
             {!hud.air && popOn && <div className={`sk-pop ${pop.kind}`} key={pop.t}>{pop.text}</div>}
-            {hud.lift && <div className="sk-bottom">{hud.lift}</div>}
-            {!hud.lift && hud.near && <div className="sk-bottom">{mode === "pad" ? "Y" : mode === "touch" ? "RETRY" : "R"}: START {hud.near}</div>}
-            {!hud.lift && !hud.near && hud.shop && <div className="sk-bottom">SHAUN WHITE // BOARDS AND SKIS. NOTHING ON SALE YET. THE SHELVES ARE BEING APPROVED.</div>}
+            {hud.big && !hud.count && <div className={`sk-big p-${hud.phase}`}>{hud.big}</div>}
+            {!hud.big && hud.shop && <div className="sk-bottom">SHAUN WHITE // BOARDS AND SKIS. NOTHING ON SALE YET.</div>}
             {hud.replay && <div className="sk-tape">REPLAY</div>}
           </div>
         )}
+        {hud && !hud.replay && (intro || tut != null) && (
+          <div className="sk-coach">
+            {intro && <p className="sk-intro">{GOAL_LINE}</p>}
+            {tut != null && hud.tutText && <div className="sk-tut" role="status"><span className="n">FIRST RUN {tut + 1}/{TUTORIAL.length}</span><b>{hud.tutText}</b><button type="button" className="sk-chip" onClick={() => api.skipTut?.()}>SKIP THE LESSON</button></div>}
+          </div>
+        )}
+        {ready >= 1 && !hud?.replay && <div className="sk-mini" aria-hidden="true"><canvas ref={miniRef} width={110} height={110} /><span className={`r-${hud?.rating || "off"}`}>{hud?.trail || ""}</span></div>}
         {tapeOn && <button type="button" className="sk-stoptape" onClick={() => api.stopReplay?.()}>STOP THE REPLAY</button>}
         {mapOpen && <MapOverlay ref={mapRef} api={api} onClose={() => api.closeMap?.()} />}
       </div>
@@ -412,7 +488,7 @@ function Play({ start, board, time, caseId, prog, setProg, onQuit }) {
       <p className="sk-small">{NOTICE}</p>
       {menu === "pause" && (
         <GameMenu kind="pause" title="PAUSED." summary="THE MOUNTAIN WAITS. THE LIFTS DO NOT, BUT THEY WILL FOR YOU." onBack={() => api.resume?.()}
-          options={{ resume: () => api.resume?.(), restart: inCh ? { label: "RETRY CHALLENGE", onSelect: () => api.restartCh?.() } : null, map: { label: "FAST TRAVEL (THE MAP)", onSelect: () => { setMenu(null); api.map?.(); } }, replay: { label: "INSTANT REPLAY", onSelect: () => api.instant?.() }, save: { label: "SAVE THIS RUN", onSelect: () => { api.saveThis?.(); } }, leave: inCh ? { label: "LEAVE THE CHALLENGE", onSelect: () => api.leaveCh?.() } : null, controls: legend, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "LEAVE THE MOUNTAIN", onSelect: onQuit } }} />
+          options={{ resume: () => api.resume?.(), lesson: tut != null ? { label: "SKIP THE FIRST-RUN LESSON", onSelect: () => { api.skipTut?.(); api.resume?.(); } } : null, restart: inCh ? { label: "RETRY CHALLENGE", onSelect: () => api.restartCh?.() } : null, map: { label: "FAST TRAVEL (THE MAP)", onSelect: () => { setMenu(null); api.map?.(); } }, replay: { label: "INSTANT REPLAY", onSelect: () => api.instant?.() }, save: { label: "SAVE THIS RUN", onSelect: () => { api.saveThis?.(); } }, leave: inCh ? { label: "LEAVE THE CHALLENGE", onSelect: () => api.leaveCh?.() } : null, controls: legend, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "LEAVE THE MOUNTAIN", onSelect: onQuit } }} />
       )}
       {menu && menu.end !== undefined && !tapeOn && (
         <EndMenu key={`end${menu.end?.ticks}`} m={menu} api={api} caseId={caseId} filed={filed} onQuit={onQuit} />

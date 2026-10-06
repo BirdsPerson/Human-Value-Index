@@ -12,6 +12,12 @@
 //   lifts        the wait at the foot is at most one car's interval; the ride takes the line's length
 //                at the lift's speed (a held A, a sixth of it); the rider is put off at the top
 //   records      the results shape the newspaper reads; the tile and the route exist
+//   unchanged    the challenges ski exactly as version 1 did (pinned runs): old records and the boards
+//   rookie       ROOKIE holds a green to a steady speed in free ride, and never touches a challenge
+//   first-timer  a bot with no map knowledge, reading only what the screen shows (the objective
+//                arrow, the hint, the big prompt), gets from the base to a lift, up it, and into a
+//                challenge, each step in time; and from every place on the mountain the guidance
+//                leads to a lift or a flag
 // Run: node scripts/check-ski.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -178,9 +184,18 @@ function bigAir(air) {
   for (const L of W.LIFTS_W) {
     const st = S.newGame({ at: "base" });
     st.t = 1234 + L.len | 0;
-    st.x = L.load[0]; st.y = L.load[1]; st.z = W.heightAt(st.x, st.y); st.vx = st.vy = 0;
+    st.x = L.zone[0]; st.y = L.zone[1]; st.z = W.heightAt(st.x, st.y); st.vx = st.vy = 0;
+    // the zone stands clear of every building
+    assert.ok(!W.BLOCKS.some(B => L.zone[0] > B.x0 - 10 && L.zone[0] < B.x1 + 10 && L.zone[1] > B.y0 - 10 && L.zone[1] < B.y1 + 10), `${L.id}: the zone is outside`);
+    // (guided) standing in the glowing zone: two seconds, then the lift takes you
+    for (let i = 0; i < S.LIFT_AUTO - 1; i++) S.step(st, S.IDLE);
+    assert.equal(st.mode, "ski", `${L.id}: not before two seconds`);
     S.step(st, S.IDLE);
-    assert.equal(st.mode, "lift", `${L.id}: stopping in the line boards`);
+    assert.equal(st.mode, "lift", `${L.id}: two seconds stood in the zone boards`);
+    // a press of A boards at once, at any speed (here 14 m/s, across the zone's edge)
+    { const s3 = S.newGame({ at: "base" }); s3.x = L.zone[0] + W.LOAD_R2 - 4; s3.y = L.zone[1]; s3.z = W.heightAt(s3.x, s3.y); s3.vx = -14; s3.vy = 0; S.step(s3, S.pack({ a: true })); assert.equal(s3.mode, "lift", `${L.id}: A boards at speed`); }
+    // a snapshot from before the guidance (no g2) boards as it did: a stop in the line
+    { const s4 = S.newGame({ at: "base" }); delete s4.g2; s4.x = L.load[0]; s4.y = L.load[1]; s4.z = W.heightAt(s4.x, s4.y); S.step(s4, S.IDLE); assert.equal(s4.mode, "lift", `${L.id}: the old line`); }
     assert.ok(st.lift.n <= W.liftPeriod(L), `${L.id}: the wait is at most a car's interval`);
     let waited = 0, rode = 0;
     while (st.mode === "lift" && st.lift.ph === "wait") { S.step(st, S.IDLE); waited++; }
@@ -190,8 +205,8 @@ function bigAir(air) {
     assert.ok(Math.abs(W.liftRideTicks(L) / 60 - L.len / L.speed) < 0.02);
     assert.ok(Math.hypot(st.x - L.off[0], st.y - L.off[1]) < 3, `${L.id}: put off at the top`);
     // a held A runs the ride on
-    const s2 = S.newGame({ at: "base" }); s2.x = L.load[0]; s2.y = L.load[1]; s2.z = W.heightAt(s2.x, s2.y);
-    let ff = 0; S.step(s2, S.IDLE); while (s2.mode === "lift" && s2.lift.ph === "wait") S.step(s2, S.IDLE);
+    const s2 = S.newGame({ at: "base" }); s2.x = L.zone[0]; s2.y = L.zone[1]; s2.z = W.heightAt(s2.x, s2.y);
+    let ff = 0; S.step(s2, S.pack({ a: true })); S.step(s2, S.IDLE); while (s2.mode === "lift" && s2.lift.ph === "wait") S.step(s2, S.IDLE);
     while (s2.mode === "lift") { S.step(s2, S.pack({ a: true })); ff++; }
     assert.ok(ff <= Math.ceil(W.liftRideTicks(L) / W.LIFT_FF) + 1, `${L.id}: a held A, ${W.LIFT_FF}x`);
   }
@@ -230,5 +245,80 @@ function bigAir(air) {
   assert.ok(/href: "#ski"/.test(games) && icons.ICONS.ski?.length === 12 && icons.ICONS.ski.every(r => r.length === 12), "the #play tile and its icon");
   assert.ok(app.includes('routePath === "#ski"'), "App.jsx serves #ski");
   ok("challenges, records");
+}
+// ---- unchanged: the challenges are version 1's, run for run ------------------------------------------------
+{
+  // a scripted rider down four challenges; the result, the length and a hash of every position, pinned
+  // from the version-1 sim (before the free ride's guidance): a change here breaks every filed run
+  const PIN = { gs: [44.88, 2873, -780530578], audit: [96.2, 5952, -1620497391], summit: [null, 18000, 70304452], instructor: [2.3, 14306, -95730174] };
+  assert.equal(S.VERSION, 1, "the sim's version: challenge physics unchanged");
+  for (const id of Object.keys(PIN)) for (const rookie of [false, true]) {
+    const st = S.newGame({ ch: id, rookie }), D = C.CHALLENGE[id], gates = C.gatesOf(D), L = C.linesOf(D);
+    let h = 0;
+    for (let t = 0; t < 60 * 300 && !st.ch.res; t++) {
+      const tgt = gates && st.ch.gi < gates.length ? gates[st.ch.gi] : L.finish || { x: 2160, y: -1300 };
+      S.step(st, S.pack({ ...stickTo(st, tgt.x - st.x, tgt.y - st.y, 0.6), tuck: t % 200 < 120 }));
+      h = (h * 31 + Math.round(st.x * 256) + Math.round(st.y * 256)) | 0;
+    }
+    assert.deepEqual([st.ch.res?.value ?? null, st.t, h], PIN[id], `${id}${rookie ? " (rookie)" : ""}: skis as version 1 did`);
+  }
+  ok("unchanged");
+}
+
+// ---- rookie -------------------------------------------------------------------------------------------------
+{
+  const [x, y, dx, dy] = W.polyAt(W.RUN.compliance, 900);
+  const down = (rookie) => { const st = S.newGame({ at: "base", rookie }); Object.assign(st, { x, y, z: W.heightAt(x, y), hx: dx, hy: dy, vx: dx * 10, vy: dy * 10 }); let top = 0; for (let t = 0; t < 60 * 12; t++) { S.step(st, S.pack({ ...stickTo(st, ...W.polyAt(W.RUN.compliance, 900 + t * 0.4).slice(0, 2).map((v, i) => v - (i ? st.y : st.x)), 0.4), tuck: true })); if (st.run === W.RUN.compliance.i) top = Math.max(top, Math.hypot(st.vx, st.vy)); } return top; };
+  const r = down(true), p = down(false);
+  assert.ok(r <= S.ROOKIE.greenV + 1.5, `ROOKIE holds a green near ${S.ROOKIE.greenV} m/s (${r.toFixed(1)})`);
+  assert.ok(p > r + 1, `without it the green runs faster (${p.toFixed(1)} > ${r.toFixed(1)})`);
+  ok("rookie");
+}
+
+// ---- the first-timer --------------------------------------------------------------------------------------------
+{
+  const Gd = await import("../src/play/ski/guide.js");
+  // the bot reads the screen: the arrow (a direction on the screen), the hint, the big prompt. It knows
+  // no place, no lift, no challenge: it pushes the stick the way the arrow points and does what the
+  // prompt says (the keyboard's words: SPACE rides, R starts).
+  const read = (g) => ({ arrow: g.goal?.arrow || null, hint: Gd.fillKeys(g.hint, "keys"), big: Gd.fillKeys(g.big, "keys"), name: g.near?.id });
+  const M = Gd.createGuide();
+  let st = S.newGame({ at: "base", rookie: true }), t = 0, held = false;
+  const when = {};
+  const mark = (k) => { if (when[k] == null) when[k] = t / 60; };
+  for (; t < 60 * 180; t++) {
+    const scr = read(Gd.guide(M, st));
+    assert.ok(scr.hint, `a hint on the screen at ${t / 60}s`);
+    let w;
+    if (/PRESS SPACE TO RIDE THE LIFT/.test(scr.big)) { mark("zone"); w = S.pack({ a: !held }); held = true; }
+    else if (/HOLD SPACE TO SPEED UP|SPEEDING UP/.test(scr.big)) { mark("ride"); w = S.pack({ a: true }); }
+    else if (/NEXT (CHAIR|CABIN)/.test(scr.big)) { mark("line"); w = S.IDLE; }
+    else if (/^PRESS R TO START: /.test(scr.big)) { mark("flag"); st = S.newGame({ ch: scr.name }); break; }
+    else { if (/PICK A TRAIL/.test(scr.big) || /CHOOSE A TRAIL/.test(scr.hint)) mark("top"); held = false; w = S.pack({ lx: scr.arrow[0] * 0.8, ly: scr.arrow[1] * 0.8 }); }
+    S.step(st, w);
+  }
+  assert.ok(when.zone != null && when.zone < 20, `the base to a lift's zone in under 20 s (${when.zone})`);
+  assert.ok(when.ride != null && when.ride - when.zone < 12, `boarded and riding within a car's wait (${when.ride})`);
+  assert.ok(when.top != null && when.top - when.ride < 50, `at the top within the ride, held (${when.top})`);
+  assert.ok(when.flag != null && when.flag - when.top < 15, `a challenge's start prompt within 15 s of the top (${when.flag})`);
+  assert.ok(st.ch && st.ch.ph === "count", "the challenge starts");
+  // from every place on the mountain the arrow leads somewhere: a lift's line or a flag (the pool's
+  // bowl excepted: out of it is a climb), in four minutes, and on the way the hint never goes blank
+  const stuck = [];
+  for (const P of W.POIS) {
+    if (P.id === "pool") continue;
+    const M2 = Gd.createGuide(), s2 = S.newGame({ at: P.id, rookie: true });
+    let done = false, pr = false;
+    for (let k = 0; k < 60 * 240 && !done; k++) {
+      const g = Gd.guide(M2, s2);
+      if (g.phase === "flag" || g.phase === "wait" || g.phase === "lift") { done = true; break; }
+      const w = g.phase === "zone" ? S.pack({ a: !pr }) : S.pack({ lx: g.goal.arrow[0] * 0.8, ly: g.goal.arrow[1] * 0.8 });
+      pr = g.phase === "zone";
+      S.step(s2, w);
+    }
+    if (!done) stuck.push(P.id);
+  }
+  assert.deepEqual(stuck, [], `the guidance leads somewhere from every place (stuck: ${stuck.join(", ")})`);
+  ok("first-timer");
 }
 console.log(`check-ski: ${n} groups OK`);

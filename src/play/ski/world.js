@@ -330,7 +330,7 @@ export const LIFTS_W = LIFTS.map(L => {
   return { id: L.id, name: L.name, sub: L.sub, kind: L.kind, ax, ay, bx, by, d, n: [q(L.n[0]), q(L.n[1])], len, speed, spacing, seats: L.seats, load, off, towers: L.towers.map(k => q(k)), rope: L.rope * STOREY * 0.55, gap: q(L.gap * CELL * 0.35) };
 });
 export const LIFT_W = Object.fromEntries(LIFTS_W.map(L => [L.id, L]));
-export const LOAD_R = 22;
+export const LOAD_R = 22, LOAD_R2 = 30;   // the line (a stop in it boards); the guided zone (sim.js g2)
 // A car every `spacing` m: the wait at the foot from tick t, and the ride, in ticks (60 Hz)
 export const liftPeriod = (L) => Math.round((L.spacing / L.speed) * 60);
 export const liftRideTicks = (L) => Math.round((L.len / L.speed) * 60);
@@ -347,6 +347,20 @@ export const BASE_LINE = q(-22.4 * CELL);
 export const SHOP = { id: "shop", name: "SHAUN WHITE // BOARDS AND SKIS", note: "NOTHING ON SALE YET. THE SHELVES ARE BEING APPROVED.", x0: q(30 * CELL - 16), y0: q(-22.1 * CELL - 7), x1: q(30 * CELL + 16), y1: q(-22.1 * CELL + 7), base: 0, h: 6, roof: "#0f172a", wall: "#b45309" };
 export const BASE_LODGE = { id: "base", name: "THE BASE LODGE", x0: q(46 * CELL - 45), y0: q(-21.7 * CELL - 14), x1: q(46 * CELL + 45), y1: q(-21.7 * CELL + 14), base: 0, h: 11, roof: "#7c2d12", wall: "#8a5a36" };
 export const BLOCKS = [...LODGES_W, ...STATIONS_W, SHOP, BASE_LODGE];
+// THE GUIDED LINE (sim.js g2): the glowing zone a rider stands in to board. The old line (`load`)
+// can sit inside the foot station's walls (THE ASCENT's does), where nobody can stand; the zone is
+// the line moved straight out (back from the lift, or to either side of it, whichever is shortest)
+// until it is clear of every building by 26 m.
+for (const L of LIFTS_W) {
+  const inside = (px, py, m) => BLOCKS.some(B => px > B.x0 - m && px < B.x1 + m && py > B.y0 - m && py < B.y1 + m);
+  let best = null;
+  for (const [ux, uy] of [[-L.d[0], -L.d[1]], [-L.d[1], L.d[0]], [L.d[1], -L.d[0]]]) {
+    let [x, y] = L.load, k = 0;
+    for (; k < 40 && inside(x, y, 26); k++) { x += ux * 3; y += uy * 3; }
+    if (!best || k < best.k) best = { k, x, y };
+  }
+  L.zone = [q(best.x), q(best.y)];
+}
 // lift towers: obstacles (r m) under the rope
 export const TOWERS = LIFTS_W.flatMap(L => L.towers.map(k => ({ x: q(L.ax + (L.bx - L.ax) * k), y: q(L.ay + (L.by - L.ay) * k), r: 1.4, lift: L.id })));
 
@@ -372,7 +386,8 @@ void RACE_COURSE;
 // ---- places to fast-travel to (found by passing near them) -----------------------------------------------------
 // {id, name, kind, x, y}: the base, every lift's foot and top, the lodges, every trail's head, the peaks, the pool
 export const POIS = (() => {
-  const out = [{ id: "base", name: "THE BASE (THE VILLAGE'S FOOT)", kind: "base", x: q(36 * CELL), y: q(-23.2 * CELL) }];
+  // (the base: by THE ASCENT's line, so the first lift is a short skate away)
+  const out = [{ id: "base", name: "THE BASE (THE VILLAGE'S FOOT)", kind: "base", x: q(41.7 * CELL), y: q(-24 * CELL) }];
   for (const L of LIFTS_W) {
     out.push({ id: `${L.id}@a`, name: `${L.name}: THE FOOT`, kind: "lift", lift: L.id, x: L.load[0], y: L.load[1] });
     out.push({ id: `${L.id}@b`, name: `${L.name}: THE TOP`, kind: "top", lift: L.id, x: L.off[0], y: L.off[1] });
