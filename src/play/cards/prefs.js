@@ -15,3 +15,17 @@ export function useFour() {
 }
 export const reducedMotion = () => { try { return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches); } catch { return false; } };
 export const utcDay = () => new Date().toISOString().slice(0, 10);
+
+// FRIENDLY FIGURES (on by default): the figures at the table play loosely (roster.js FRIENDLY_CAP), so a casual
+// player can win. Off: they play at their file's rating.
+const FKEY = "hvi-cards-friendly";
+const readF = () => { try { return localStorage.getItem(FKEY) !== "0"; } catch { return true; } };
+export function setFriendly(on) {
+  try { localStorage.setItem(FKEY, on ? "1" : "0"); } catch { /* private mode: this page only */ }
+  try { window.dispatchEvent(new CustomEvent("hvi-cards-friendly", { detail: on })); } catch { /* no window */ }
+}
+export function useFriendly() {
+  const [f, set] = useState(readF);
+  useEffect(() => { const on = (e) => set(Boolean(e.detail)); window.addEventListener("hvi-cards-friendly", on); return () => window.removeEventListener("hvi-cards-friendly", on); }, []);
+  return f;
+}

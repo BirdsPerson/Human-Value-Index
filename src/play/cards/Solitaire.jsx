@@ -11,6 +11,7 @@ import PixelCard from "./PixelCard.jsx";
 import { CW, CH, drawCard } from "./art.js";
 import { codeOf, nameOf, suitOf, SUIT_WORD } from "./deck.js";
 import GameMenu from "../GameMenu.jsx";
+import CardGuide, { useCardGuide } from "./Guide.jsx";
 import { Button, Chip, Chips } from "../../ui/index.js";
 import { useFour, reducedMotion } from "./prefs.js";
 import { arrowKeys, usePad } from "./padnav.js";
@@ -185,6 +186,7 @@ export function Klondike({ back = "dept", backHref }) {
   const [err, setErr] = useState("");
   const [hintIds, setHintIds] = useState(null);
   const [paused, setPaused] = useState(false);
+  const [guide, dismissGuide] = useCardGuide("solitaire");   // HOW TO PLAY, once
   const [phase, setPhase] = useState(st.won ? "menu" : "play");   // play | cascade | menu
   const [finishing, setFinishing] = useState(false);
   const root = useRef(null), board = useRef(null);
@@ -222,7 +224,7 @@ export function Klondike({ back = "dept", backHref }) {
     }
     if (sel && sel.from === from && sel.n === n) {
       const to = K.bestTarget(st, from, n);
-      if (!to || !tryMove(from, n, to)) { setErr("NOWHERE FOR IT TO GO. THE DEPARTMENT RECOMMENDS ANOTHER CARD."); setSel(null); }
+      if (!to || !tryMove(from, n, to)) { setErr("THAT CARD HAS NOWHERE TO GO. TRY ANOTHER."); setSel(null); }
       return;
     }
     const cards = K.takeFrom(st, from, n);
@@ -249,7 +251,7 @@ export function Klondike({ back = "dept", backHref }) {
     let a = K.nextHome(st);
     if (!a) for (let i = 0; i < 7 && !a; i++) { const t = st.tab[i]; if (!t.up.length || !t.down.length) continue; const to = K.bestTarget(st, `t${i}`, t.up.length); if (to) a = { from: `t${i}`, to }; }
     if (!a && st.waste.length) { const to = K.bestTarget(st, "w", 1); if (to) a = { from: "w", to }; }
-    if (!a) { setHintIds(["stock"]); setSay(st.stock.length || K.canRecycle(st) ? "TURN THE STOCK." : "NO MOVES LEFT. THE DEPARTMENT SUGGESTS A NEW DEAL."); return; }
+    if (!a) { setHintIds(["stock"]); setSay(st.stock.length || K.canRecycle(st) ? "TURN THE STOCK." : "NO MOVES LEFT. TRY A NEW DEAL."); return; }
     setHintIds([a.from, a.to]); setSay(`TRY ${a.from === "w" ? "THE WASTE" : a.from[0] === "t" ? `PILE ${+a.from[1] + 1}` : "THAT"} TO ${a.to[0] === "f" ? "ITS FOUNDATION" : `PILE ${+a.to[1] + 1}`}.`);
   };
   // the rest plays itself, one card at a time
@@ -261,8 +263,8 @@ export function Klondike({ back = "dept", backHref }) {
     return () => clearTimeout(t);
   }, [finishing, st, act, reduced]);
 
-  usePad(root, { start: () => setPaused(p => !p), back: () => setSel(null), paused: paused || phase !== "play" });
-  useEscPause(paused, setPaused, phase !== "play");
+  usePad(root, { start: () => setPaused(p => !p), back: () => setSel(null), paused: paused || guide || phase !== "play" });
+  useEscPause(paused, setPaused, guide || phase !== "play");
 
   const fd = Math.round(4 * L.scale), fu = Math.round((L.big ? 18 : 13) * L.scale);
   const maxH = Math.max(L.ch * 3, (typeof window !== "undefined" ? window.innerHeight : 800) * 0.62);
@@ -274,6 +276,7 @@ export function Klondike({ back = "dept", backHref }) {
   };
   useEffect(() => { if (phase === "cascade" && board.current) { const r = board.current.getBoundingClientRect(); setBox({ w: r.width, h: Math.max(r.height, Math.round(r.width * 0.6), 360), src: sources() }); } }, [phase]);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  if (guide) return <div className="cr" ref={root}><CardGuide game="solitaire" onDone={dismissGuide} /></div>;
   return (
     <div className="cr" ref={root} onKeyDown={(e) => arrowKeys(e, root.current)}>
       <div className="sol-bar">
@@ -338,7 +341,7 @@ export function Klondike({ back = "dept", backHref }) {
       )}
       {paused && !st.won && (
         <GameMenu kind="pause" title="PAUSED." onBack={() => setPaused(false)}
-          options={{ resume: () => setPaused(false), restart: { label: "NEW DEAL", onSelect: () => deal() }, controls: <SolLegend spider={false} />, quit: { label: "PUT THE CARDS AWAY", href: backHref } }} />
+          options={{ resume: () => setPaused(false), restart: { label: "NEW DEAL", onSelect: () => deal() }, controls: <CardGuide game="solitaire" compact />, quit: { label: "PUT THE CARDS AWAY", href: backHref } }} />
       )}
     </div>
   );
@@ -360,6 +363,7 @@ export function Spider({ back = "dept", backHref }) {
   const [err, setErr] = useState("");
   const [hintIds, setHintIds] = useState(null);
   const [paused, setPaused] = useState(false);
+  const [guide, dismissGuide] = useCardGuide("spider");
   const [phase, setPhase] = useState("play");
   const root = useRef(null), board = useRef(null);
   const width = useWidth(root);
@@ -398,12 +402,12 @@ export function Spider({ back = "dept", backHref }) {
   const deal = (suits = g.cfg.suits) => { const cfg = { seed: newSeed(), suits }; setG({ cfg, log: [], st: SP.newSpider(cfg) }); setSel(null); setPhase("play"); setPaused(false); setSay("A NEW DEAL."); };
   const hint = () => {
     const a = SP.hint(st);
-    if (!a) { setSay("NO MOVES LEFT. THE DEPARTMENT SUGGESTS A NEW DEAL."); return; }
+    if (!a) { setSay("NO MOVES LEFT. TRY A NEW DEAL."); return; }
     if (a.t === "deal") { setHintIds(["stock"]); setSay("DEAL FROM THE STOCK."); return; }
     setHintIds([`t${a.from}`, `t${a.to}`]); setSay(`TRY PILE ${a.from + 1} TO PILE ${a.to + 1}.`);
   };
-  usePad(root, { start: () => setPaused(p => !p), back: () => setSel(null), paused: paused || phase !== "play" });
-  useEscPause(paused, setPaused, phase !== "play");
+  usePad(root, { start: () => setPaused(p => !p), back: () => setSel(null), paused: paused || guide || phase !== "play" });
+  useEscPause(paused, setPaused, guide || phase !== "play");
 
   const fd = Math.round(3 * L.scale), fu = Math.round((L.big ? 18 : 13) * L.scale);
   const maxH = Math.max(L.ch * 3, (typeof window !== "undefined" ? window.innerHeight : 800) * 0.66);
@@ -416,6 +420,7 @@ export function Spider({ back = "dept", backHref }) {
     setBox({ w: r.width, h: Math.max(r.height, 360), src: runs.slice(0, 4).map(cards => ({ cards, x: q ? q.left - r.left : r.width - L.cw, y: q ? q.top - r.top : 0 })) });
   }, [phase]);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  if (guide) return <div className="cr" ref={root}><CardGuide game="spider" onDone={dismissGuide} /></div>;
   return (
     <div className="cr" ref={root} onKeyDown={(e) => arrowKeys(e, root.current)}>
       <div className="sol-bar">
@@ -460,19 +465,8 @@ export function Spider({ back = "dept", backHref }) {
       )}
       {paused && !st.won && (
         <GameMenu kind="pause" title="PAUSED." onBack={() => setPaused(false)}
-          options={{ resume: () => setPaused(false), restart: { label: "NEW DEAL", onSelect: () => deal() }, controls: <SolLegend spider />, quit: { label: "PUT THE CARDS AWAY", href: backHref } }} />
+          options={{ resume: () => setPaused(false), restart: { label: "NEW DEAL", onSelect: () => deal() }, controls: <CardGuide game="spider" compact />, quit: { label: "PUT THE CARDS AWAY", href: backHref } }} />
       )}
-    </div>
-  );
-}
-
-function SolLegend({ spider }) {
-  return (
-    <div className="cr-fine" style={{ color: "var(--fg)" }}>
-      <p>DRAG A CARD (OR A RUN) AND DROP IT. OR TAP IT, THEN TAP WHERE IT GOES. TAP IT TWICE TO SEND IT TO ITS BEST PLACE.</p>
-      <p>KEYS: ARROWS MOVE, ENTER PICKS UP AND PUTS DOWN, ESC PAUSES.</p>
-      <p>PAD: D-PAD MOVES, A PICKS UP AND PUTS DOWN, B PUTS IT BACK, START PAUSES.</p>
-      <p>{spider ? "SPIDER: TAP THE STOCK TO DEAL. EIGHT RUNS, KING TO ACE IN ONE SUIT, WIN." : "SOLITAIRE: BUILD DOWN IN ALTERNATING COLOURS; ACES UP TO KINGS ON THE FOUNDATIONS; ONLY A KING TO AN EMPTY PILE."}</p>
     </div>
   );
 }

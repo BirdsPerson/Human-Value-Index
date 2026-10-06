@@ -58,6 +58,12 @@ export function tablesFor(at, day) {
   return out;
 }
 export const tableLevel = (t) => Math.round(t.seats.reduce((a, s) => a + s.rating, 0) / t.seats.length);
+// FRIENDLY FIGURES: the seats' ratings capped, so they play loosely (a rating-20 figure picks a random card about one choice in
+// five). Measured in scripts/check-cards.mjs: a simple heuristic player wins hearts ~45-50% of games at the easiest table.
+export const FRIENDLY_CAP = 20;
+export const friendlySeats = (seats, on) => (on ? seats.map(s => ({ ...s, rating: Math.min(s.rating, FRIENDLY_CAP) })) : seats);
+// The table with the lowest level among a room's three: where PLAY NOW sits you.
+export const easiestTable = (tables) => tables.reduce((a, b) => (tableLevel(b) < tableLevel(a) ? b : a));
 
 // ---- the silent gestures (past figures only) ------------------------------------------------------
 const OWN = {

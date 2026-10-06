@@ -391,5 +391,68 @@ function playHearts(cfg, maxSteps = 4000) {
   }
 }
 
+// ---- a casual human at the easiest table (Scott, 2026-10-06: the sports games are too hard) -------------------
+// A simple heuristic player (hearts: pass the queen and the highest cards, duck high, dump the queen and hearts when
+// void; spades: bid the estimate, win cheaply or play low) should win a fair share against the room's three weakest
+// figures at FRIENDLY ratings (RO.FRIENDLY_CAP): hearts >= 40% of games on average, and a spread of rooms.
+{
+  const { rankOf, suitOf } = D;
+  function simplePass(h){ const o=h.slice().sort((a,b)=>(b===HT.QS)-(a===HT.QS)||rankOf(b)-rankOf(a)); return o.slice(0,3); }
+  function simplePlay(st){
+    const L=HT.legal(st,0); if(L.length===1)return L[0];
+    const lo=(cs)=>cs.reduce((a,b)=>rankOf(b)<rankOf(a)?b:a), hi=(cs)=>cs.reduce((a,b)=>rankOf(b)>rankOf(a)?b:a);
+    if(!st.trick.length) return lo(L);
+    const led=suitOf(st.trick[0].c);
+    if(suitOf(L[0])===led){ const win=st.trick.filter(t=>suitOf(t.c)===led).reduce((a,b)=>rankOf(b.c)>rankOf(a.c)?b:a).c; const un=L.filter(c=>rankOf(c)<rankOf(win)&&c!==HT.QS); return un.length?hi(un):lo(L.filter(c=>c!==HT.QS).length?L.filter(c=>c!==HT.QS):L); }
+    if(L.includes(HT.QS))return HT.QS; const he=L.filter(c=>suitOf(c)===D.HE); return he.length?hi(he):hi(L);
+  }
+  function heartsGame(seed,seats,target=100){
+    let g=HT.newHearts({seed,seats:[null,...seats],target}); let n=0;
+    while(g.phase!=="over"&&n++<5000){
+      if(g.phase==="pass")g=HT.apply(g,{t:"pass",cards:simplePass(g.hands[0])});
+      else if(g.phase==="play")g=HT.apply(g,{t:"play",c:simplePlay(g)});
+      else if(g.phase==="scored")g=HT.apply(g,{t:"next"});
+      else break;
+    }
+    return g;
+  }
+  
+  function simpleSpadesPlay(st){
+    const L=SPD.legal(st,0); if(L.length===1)return L[0];
+    const lo=(cs)=>cs.reduce((a,b)=>rankOf(b)<rankOf(a)?b:a);
+    if(!st.trick.length) return lo(L);
+    const led=suitOf(st.trick[0].c);
+    const best=st.trick.reduce((a,b)=>{const ka=(suitOf(a.c)===0?100:0)+(suitOf(a.c)===led||suitOf(a.c)===0?rankOf(a.c):-1);const kb=(suitOf(b.c)===0?100:0)+(suitOf(b.c)===led||suitOf(b.c)===0?rankOf(b.c):-1);return kb>ka?b:a;});
+    const key=(c)=>(suitOf(c)===0?100:0)+(suitOf(c)===led||suitOf(c)===0?rankOf(c):-1);
+    const win=L.filter(c=>key(c)>key(best.c));
+    return win.length?lo(win):lo(L);
+  }
+  function spadesGame(seed,seats,target){
+    let g=SPD.newSpades({seed,seats:[null,...seats],target}),n=0;
+    while(g.phase!=="over"&&n++<5000){
+      if(g.phase==="bid"){const ls=SPD.legalBids(g,0);let b=Math.max(1,Math.round(SPD.estimate(g.hands[0])));if(!ls.includes(b))b=ls.find(x=>x>=1)??ls[0];g=SPD.apply(g,{t:"bid",n:b});}
+      else if(g.phase==="play")g=SPD.apply(g,{t:"play",c:simpleSpadesPlay(g)});
+      else if(g.phase==="scored")g=SPD.apply(g,{t:"next"});
+      else break;
+    }
+    return g;
+  }
+  
+  const easiest = (r) => r.pool.map(x => RO.FIGURE_BY.get(x)).sort((a, b) => a.rating - b.rating).slice(0, 3);
+  let hw = 0, hn = 0, sw = 0, sn = 0;
+  const per = [];
+  for (const [k, r] of Object.entries(RO.ROOMS)) {
+    const seats = RO.friendlySeats(easiest(r).map(s => ({ key: s.key, rating: s.rating, temper: s.temper })), true);
+    let w = 0; const N = 60;
+    for (let i = 0; i < N; i++) { const g = heartsGame(1000 + i * 7, seats, 100); if (g.winners.includes(0)) w++; }
+    per.push(`${k} ${(w / N * 100).toFixed(0)}%`); hw += w; hn += N;
+    let w2 = 0; for (let i = 0; i < 40; i++) { const g = spadesGame(3000 + i * 7, seats, 300); if (g.scores[0] > g.scores[1]) w2++; }
+    sw += w2; sn += 40;
+  }
+  ok(hw / hn >= 0.40, `a simple hearts player wins ${(hw / hn * 100).toFixed(0)}% of games at the easiest friendly tables (>= 40%): ${per.join(", ")}`);
+  ok(sw / sn >= 0.35, `a simple spades player's team wins ${(sw / sn * 100).toFixed(0)}% of games at the easiest friendly tables (>= 35%)`);
+  if (process.env.VERBOSE) console.log(`  casual hearts ${(hw / hn * 100).toFixed(0)}% (${per.join(", ")}), spades ${(sw / sn * 100).toFixed(0)}%`);
+}
+
 console.log(failed ? `check-cards: ${failed} of ${n} FAILED` : `check-cards: ${n} checks passed`);
 process.exit(failed ? 1 : 0);

@@ -14,7 +14,9 @@ import { Button } from "../../ui/index.js";
 import { codeOf, nameOf } from "./deck.js";
 import { useFour, reducedMotion } from "./prefs.js";
 import { arrowKeys, usePad } from "./padnav.js";
-import { emoteFor } from "./roster.js";
+import { emoteFor, friendlySeats } from "./roster.js";
+import CardGuide, { useCardGuide, TIPS_KEY } from "./Guide.jsx";
+import { tipsUsed, markTipUsed, Tip } from "../guideKit.jsx";
 
 const POS = ["s", "w", "n", "e"];
 const ENG = { hearts: HT, spades: SPD };
@@ -36,19 +38,19 @@ function useWidth(ref) {
 const save = (key, v) => { try { if (v) localStorage.setItem(key, JSON.stringify(v)); else localStorage.removeItem(key); } catch { /* private mode */ } };
 const load = (key) => { try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; } };
 
-export default function TrickGame({ kind, table, at, target, onLeave, onNewTable, backHref }) {
+export default function TrickGame({ kind, table, at, target, friendly = false, onLeave, onNewTable, backHref }) {
   const E = ENG[kind];
   const four = useFour();
   const reduced = useMemo(reducedMotion, []);
   const names = useMemo(() => ["YOU", ...table.seats.map(s => s.name)], [table]);
   const KEY = `hvi-cards-${kind}`;
   const tableKey = table.seats.map(s => s.key).join(",");
-  const cfgFor = useCallback((round) => ({ seed: ((table.seed + round * 7919) >>> 0) || 1, seats: [null, ...table.seats], target }), [table, target]);
+  const cfgFor = useCallback((round) => ({ seed: ((table.seed + round * 7919) >>> 0) || 1, seats: [null, ...friendlySeats(table.seats, friendly)], target }), [table, target, friendly]);
 
   // the game: {round, log, st}; resumed from this browser when it is the same table
   const [game, setGame] = useState(() => {
     const s = load(KEY);
-    if (s && s.table === tableKey && s.target === target && Array.isArray(s.log)) {
+    if (s && s.table === tableKey && s.target === target && Boolean(s.friendly) === friendly && Array.isArray(s.log)) {
       const st = E.replay(cfgFor(s.round || 0), s.log);
       if (st && st.phase !== "over") return { round: s.round || 0, log: s.log, st: { ...st, events: [] } };
     }
@@ -64,10 +66,13 @@ export default function TrickGame({ kind, table, at, target, onLeave, onNewTable
   const [paused, setPaused] = useState(false);
   const [menuClosed, setMenuClosed] = useState(false);
   const [err, setErr] = useState("");
+  const [guide, dismissGuide] = useCardGuide(kind);   // HOW TO PLAY, once, before the first deal
+  const [tipUsed, setTipUsed] = useState(() => tipsUsed(TIPS_KEY));
+  const lastTip = useRef("");
   const root = useRef(null), handRef = useRef(null), heldFor = useRef(null);
   const width = useWidth(root);
 
-  useEffect(() => { save(KEY, { table: tableKey, target, round: game.round, log: game.log }); }, [KEY, tableKey, target, game.round, game.log]);
+  useEffect(() => { save(KEY, { table: tableKey, target, friendly, round: game.round, log: game.log }); }, [KEY, tableKey, target, friendly, game.round, game.log]);
 
   const emote = useCallback((p, moment, pick = 0) => {
     if (p === 0) return;
@@ -111,7 +116,7 @@ export default function TrickGame({ kind, table, at, target, onLeave, onNewTable
 
   // the figures' turns, one at a time; a finished trick stays up a moment
   useEffect(() => {
-    if (paused) return undefined;
+    if (paused || guide) return undefined;
     if (hold) { const t = setTimeout(() => setHold(null), reduced ? 650 : 1000); return () => clearTimeout(t); }
     if (st.events?.some(e => e.k === "trick") && heldFor.current !== st && st.last) { heldFor.current = st; setHold({ trick: st.last.trick, w: st.last.w }); return undefined; }
     if (!E.waiting(st)) return undefined;
@@ -120,13 +125,14 @@ export default function TrickGame({ kind, table, at, target, onLeave, onNewTable
       if (nx) { tell(nx); setGame(g => ({ ...g, st: nx })); }
     }, reduced ? 260 : 520);
     return () => clearTimeout(t);
-  }, [st, hold, paused, E, tell, reduced]);
+  }, [st, hold, paused, guide, E, tell, reduced]);
 
   const act = (a) => {
-    if (hold || paused) return;
+    if (hold || paused || guide) return;
     const nx = E.apply(st, a, { step: true });
-    if (!nx) { setErr("THAT CARD CANNOT BE PLAYED NOW. THE RULES ARE THE RULES."); return; }
+    if (!nx) { setErr("THAT CARD CANNOT BE PLAYED NOW."); return; }
     setErr(""); setHint(null); setSel([]);
+    { const id = a.t === "next" ? null : a.t; if (id && !tipUsed.has(id)) setTipUsed(markTipUsed(TIPS_KEY, id)); }
     tell(nx);
     setGame(g => ({ ...g, log: [...g.log, a], st: nx }));
   };
@@ -138,7 +144,7 @@ export default function TrickGame({ kind, table, at, target, onLeave, onNewTable
   };
 
   // ---- what is on the table ----------------------------------------------------------------------
-  const myTurn = !hold && !paused && st.turn === 0;
+  const myTurn = !hold && !paused && !guide && st.turn === 0;
   const legal = myTurn && st.phase === "play" ? E.legal(st, 0) : [];
   const passing = kind === "hearts" && st.phase === "pass" && !hold;
   const bidding = kind === "spades" && st.phase === "bid" && myTurn;
@@ -153,7 +159,7 @@ export default function TrickGame({ kind, table, at, target, onLeave, onNewTable
   const tapCard = (c) => {
     if (passing) { setSel(s => (s.includes(c) ? s.filter(x => x !== c) : s.length < 3 ? [...s, c] : s)); return; }
     if (legal.includes(c)) act({ t: "play", c });
-    else if (myTurn && st.phase === "play") setErr(kind === "hearts" && !st.trick.length && !st.broken ? "HEARTS ARE NOT BROKEN YET. LEAD SOMETHING ELSE." : kind === "spades" && !st.trick.length && !st.broken ? "SPADES ARE NOT BROKEN YET. LEAD ANOTHER SUIT." : "FOLLOW SUIT. THE DEPARTMENT IS WATCHING.");
+    else if (myTurn && st.phase === "play") setErr(kind === "hearts" && !st.trick.length && !st.broken ? "HEARTS ARE NOT BROKEN YET. LEAD SOMETHING ELSE." : kind === "spades" && !st.trick.length && !st.broken ? "SPADES ARE NOT BROKEN YET. LEAD ANOTHER SUIT." : "FOLLOW THE SUIT THAT WAS LED.");
   };
   const showHint = () => {
     const h = E.hintFor(st);
@@ -164,7 +170,7 @@ export default function TrickGame({ kind, table, at, target, onLeave, onNewTable
     setHint({ c }); setSay(`SUGGESTED: ${UP(c)}.`);
   };
 
-  usePad(root, { start: () => setPaused(p => !p), back: () => setSel([]), paused });
+  usePad(root, { start: () => setPaused(p => !p), back: () => setSel([]), paused: paused || guide });
   useEffect(() => {
     const k = (e) => { if (e.key === "Escape" && !paused) { e.preventDefault(); setPaused(true); } };
     window.addEventListener("keydown", k);
@@ -206,8 +212,13 @@ export default function TrickGame({ kind, table, at, target, onLeave, onNewTable
     );
   };
 
+  const tipId = guide || hold || paused || over ? null : passing ? "pass" : bidding ? "bid" : myTurn && st.phase === "play" ? "play" : null;
+  const tipText = { pass: "TAP THREE CARDS YOU WANT TO GET RID OF, THEN PRESS PASS", bid: "TAP HOW MANY TRICKS YOU EXPECT TO TAKE", play: "TAP A CARD TO PLAY IT. FOLLOW THE SUIT LED." }[tipId];
+  const tipOn = Boolean(tipId && !tipUsed.has(tipId));
+  if (tipOn) lastTip.current = tipText;
   const midMsg = hold ? `${names[hold.w]} ${hold.w === 0 ? "TAKE" : "TAKES"} IT` : passing ? `CHOOSE THREE TO PASS ${st.dir.toUpperCase()}` : st.phase === "bid" && !myTurn ? "BIDDING…" : null;
 
+  if (guide) return <div className="cr" ref={root}><CardGuide game={kind} onDone={dismissGuide} /></div>;
   return (
     <div className="cr" ref={root} onKeyDown={(e) => arrowKeys(e, root.current)}>
       {kind === "spades" && (
@@ -232,6 +243,7 @@ export default function TrickGame({ kind, table, at, target, onLeave, onNewTable
         {seat(3)}{seat(0)}
       </div>
 
+      <Tip text={lastTip.current} gone={!tipOn} />
       {/* your hand */}
       <div className="ch" ref={handRef} role="group" aria-label={passing ? "Your hand: choose three cards to pass" : "Your hand"} style={{ "--ov": `${ov}px` }}>
         {st.hands[0].map((c, i) => {
@@ -277,7 +289,7 @@ export default function TrickGame({ kind, table, at, target, onLeave, onNewTable
       )}
       {paused && !over && (
         <GameMenu kind="pause" title="PAUSED." onBack={() => setPaused(false)}
-          options={{ resume: () => setPaused(false), restart: { label: "NEW GAME, SAME TABLE", onSelect: () => newGame(game.round + 1) }, controls: <Legend kind={kind} />, quit: { label: "LEAVE THE TABLE", onSelect: onLeave } }} />
+          options={{ resume: () => setPaused(false), restart: { label: "NEW GAME, SAME TABLE", onSelect: () => newGame(game.round + 1) }, controls: <CardGuide game={kind} compact />, quit: { label: "LEAVE THE TABLE", onSelect: onLeave } }} />
       )}
     </div>
   );

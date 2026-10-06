@@ -9,8 +9,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Frame, Button, ButtonRow, Chip, Chips, PaLine, ScreenHead } from "../../ui/index.js";
 import { readCaseId, CaseLogon } from "../../caseFile.jsx";
 import { loadShops, lastView } from "../../shops/client.js";
-import { tablesFor, tableLevel, roomOf, ROOMS, ownsDeck, ownsEbDeck, ownsTable } from "./roster.js";
-import { useFour, setFour, utcDay } from "./prefs.js";
+import { tablesFor, tableLevel, roomOf, ROOMS, ownsDeck, ownsEbDeck, ownsTable, friendlySeats, easiestTable } from "./roster.js";
+import { useFour, setFour, useFriendly, setFriendly, utcDay } from "./prefs.js";
 import PixelCard from "./PixelCard.jsx";
 import Head, { spriteOf } from "./Head.jsx";
 import TrickGame from "./TrickGame.jsx";
@@ -71,6 +71,7 @@ export default function Cards({ route }) {
   const { game, at, t, short } = nav;
   const room = roomOf(at);
   const four = useFour();
+  const friendly = useFriendly();
   const day = useMemo(utcDay, []);
   const tables = useMemo(() => tablesFor(at, day), [at, day]);
   const D = useDeck();
@@ -91,12 +92,13 @@ export default function Cards({ route }) {
           </Frame>
         ) : (
           <Frame title={`${game === "hearts" ? "HEARTS" : "SPADES"} // ${tb.seats.map(s => s.name).join(", ")}`} meta={short ? "SHORT GAME" : "EXHIBITION"}>
-            <TrickGame key={`${game}-${at}-${t}-${short}`} kind={game} table={tb} at={at} target={game === "hearts" ? (short ? 50 : 100) : (short ? 300 : 500)}
+            <TrickGame key={`${game}-${at}-${t}-${short}`} kind={game} table={tb} at={at} friendly={friendly} target={game === "hearts" ? (short ? 50 : 100) : (short ? 300 : 500)}
               onLeave={() => go({ game: null })} onNewTable={() => go({ game: null })} backHref={roomHref} />
           </Frame>
         )}
         <ButtonRow split stackOnMobile>
           <Button variant="back" href={roomHref}>Leave the table</Button>
+          <Button variant="secondary" onClick={() => setFriendly(!friendly)} aria-pressed={friendly}>{friendly ? "FRIENDLY FIGURES: ON" : "FRIENDLY FIGURES: OFF"}</Button>
           <Button variant="secondary" onClick={() => setFour(!four)} aria-pressed={four}>{four ? "FOUR-COLOUR DECK: ON" : "FOUR-COLOUR DECK: OFF"}</Button>
         </ButtonRow>
       </div>
@@ -123,7 +125,7 @@ export default function Cards({ route }) {
   return (
     <div className="cr">
       <ScreenHead title="THE CARD ROOM" meta={`${room.name} // ${room.sub}`} />
-      <p className="pg-lede">HEARTS AND SPADES AGAINST FIGURES ON FILE, SOLITAIRE AND SPIDER AT HOME. EXHIBITIONS: NO CYCLES OR CHIPS ARE WON AT THESE TABLES. THE FIGURES PLAY THE WAY THEIR FILES SAY THEY WOULD, AND SAY NOTHING.</p>
+      <p className="pg-lede">HEARTS AND SPADES AGAINST FIGURES ON FILE, SOLITAIRE AND SPIDER AT HOME. EXHIBITIONS: NO CYCLES OR CHIPS ARE WON AT THESE TABLES. THE FIGURES PLAY LOOSELY, SO A CASUAL PLAYER CAN WIN (SWITCH FRIENDLY FIGURES OFF TO PLAY THEM AT THEIR FILE'S RATING), AND SAY NOTHING.</p>
       <div className="cr-row" role="group" aria-label="Rooms" style={{ marginBottom: "var(--s3)" }}>
         <Chips>
           {Object.entries(ROOMS).map(([k, r]) => <Chip key={k} pressed={at === k} onClick={() => go({ at: k, game: null })}>{k === "home" ? "YOUR FLAT" : r.name}</Chip>)}
@@ -131,7 +133,12 @@ export default function Cards({ route }) {
       </div>
       {at !== "home" && (
         <Frame title={`THE TABLES // ${room.name}`} meta={`TODAY'S SEATING // ${day}`}>
-          <div className="cp-tables">{tables.map(tb => <TablePickFelt key={tb.n} tb={tb} at={at} short={short} />)}</div>
+          <ButtonRow stackOnMobile>
+            <Button variant="primary" href={hrefOf({ game: "hearts", at, t: easiestTable(tables).n, short })} data-pad="first">PLAY HEARTS NOW: THE EASIEST TABLE</Button>
+            <Button variant="secondary" href={hrefOf({ game: "spades", at, t: easiestTable(tables).n, short })}>PLAY SPADES</Button>
+            <Button variant="secondary" onClick={() => setFriendly(!friendly)} aria-pressed={friendly}>{friendly ? "FRIENDLY FIGURES: ON" : "FRIENDLY FIGURES: OFF"}</Button>
+          </ButtonRow>
+          <div className="cp-tables">{tables.map(tb => <TablePickFelt key={tb.n} tb={tb} at={at} short={short} friendly={friendly} easy={tb.n === easiestTable(tables).n} />)}</div>
           <div className="cr-row" style={{ marginTop: "var(--s3)" }}>
             <Chips><Chip pressed={!short} onClick={() => go({ short: false })}>FULL GAME (HEARTS 100, SPADES 500)</Chip><Chip pressed={short} onClick={() => go({ short: true })}>SHORT GAME (50 / 300)</Chip></Chips>
           </div>
@@ -149,7 +156,7 @@ export default function Cards({ route }) {
             {at === "home" && (D.table ? (
               <>
                 <p className="cr-p">HOME GAME NIGHT: THE CARD TABLE SEATS THREE.</p>
-                <div className="cp-tables">{tables.map(tb => <TablePickFelt key={tb.n} tb={tb} at="home" short={short} />)}</div>
+                <div className="cp-tables">{tables.map(tb => <TablePickFelt key={tb.n} tb={tb} at="home" short={short} friendly={friendly} easy={tb.n === easiestTable(tables).n} />)}</div>
                 {D.poker && <ButtonRow><Button variant="secondary" href="#casino/poker">HOLD'EM (HOUSE CHIPS, THE CASINO'S RULES)</Button></ButtonRow>}
               </>
             ) : <p className="cr-fine">UPGRADE THE DECK TO A CARD TABLE (YOUR FURNITURE, AT THE SHOPS) AND THREE FIGURES COME ROUND FOR HEARTS AND SPADES. THEN A POKER TABLE.</p>)}
@@ -165,10 +172,11 @@ export default function Cards({ route }) {
   );
 }
 
-function TablePickFelt({ tb, at, short }) {
+function TablePickFelt({ tb, at, short, friendly = false, easy = false }) {
+  const level = tableLevel({ seats: friendlySeats(tb.seats, friendly) });
   return (
     <div className={`cp-t cr-felt felt-${roomOf(at).felt}`}>
-      <h3>TABLE {tb.n} <span style={{ color: "#c8f5d8", fontSize: 11 }}>// PLAYS AT {tableLevel(tb)}</span></h3>
+      <h3>TABLE {tb.n} <span style={{ color: "#c8f5d8", fontSize: 11 }}>// PLAYS AT {level}{easy ? " // EASIEST" : ""}</span></h3>
       <div className="cp-seats">
         {tb.seats.map(s => <div key={s.key} className="cp-seat"><Head src={spriteOf(s.key)} name={s.name} px={2} /><span>{s.name}</span></div>)}
       </div>
