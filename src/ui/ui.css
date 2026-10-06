@@ -331,3 +331,17 @@ textarea.ui-input { resize: vertical; min-height: calc(var(--t-m) * var(--lh) * 
    (scripts/check-bundle.mjs). Screen readers announce generated content. */
 .ui-foot::before { content: "SATIRE. SCORES AND VERDICTS ARE AI-GENERATED OPINION, NOT FACT."; display: block; margin-bottom: var(--s1); }
 .ui-foot a { margin-right: 2ch; }
+
+/* THE MOVEMENT LOG beside a name (src/ui/Sparkline.jsx): fixed box, never reflows the row,
+   no animation. The line is the dim ink; the last point says which way the file went. */
+.ui-spark { display: inline-block; flex: none; vertical-align: middle; contain: strict; line-height: 0; color: var(--fg-dim); }
+.ui-spark svg { display: block; overflow: visible; }
+.ui-spark .ln { fill: none; stroke: currentColor; stroke-width: 1; }
+.ui-spark .ln-f { fill: var(--fg-mute); }
+.ui-spark .br { fill: var(--fg-ghost); }
+.ui-spark .pt { fill: var(--fg-mute); }
+.ui-spark.up .pt { fill: var(--accent); }
+.ui-spark.dn .pt { fill: var(--harm); }
+.ui-spark .nw { fill: var(--fg-mute); font: 700 9px var(--mono); letter-spacing: 0; }
+.ui-row:is([aria-pressed="true"], [aria-current="true"], .on) .ui-spark { color: var(--accent-ink); }
+@media (max-width: 359px) { .ui-spark { display: none; } }

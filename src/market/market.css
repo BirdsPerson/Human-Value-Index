@@ -34,6 +34,8 @@
 .mk-mine { color: var(--warn); font-size: var(--t-xs); }
 .mk-halt { color: var(--harm); font-size: var(--t-xs); }
 .mk-price { color: var(--warn); }
+.mk-table .mk-fl { width: 1%; padding-left: 0; padding-right: 0; }
+@media (max-width: 359px) { .mk-table .mk-fl { display: none; } }
 .mk-act { width: 1%; }
 .mk-buy { font: inherit; font-weight: 700; color: var(--accent-ink); background: var(--accent); border: 0; min-height: var(--hit-min); min-width: 7ch; padding: 0 var(--s3); cursor: pointer; }
 .mk-buy:disabled { background: var(--panel-hi); color: var(--fg-mute); cursor: default; }

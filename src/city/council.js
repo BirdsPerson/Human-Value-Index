@@ -27,6 +27,7 @@
 import * as SIM from "./sim.js";
 import { compat, TIES } from "./social.js";
 import { displayName } from "../figures.js";
+import { hxOf } from "../ui/spark.js";
 
 export { ELECTION_MS, TERM_SEASONS, TERM_DAYS, MS_PER_DAY, TERM_MS, SEAT_LAG, machineDayAt, seatDayOf, cycleWindow, cycleAt, seatsOn, councilSitting, COUNCIL_SITS } from "./councilCalendar.js";
 export const MAX_CANDIDATES = 3, MIN_CANDIDATES = 2;
@@ -61,6 +62,8 @@ export function candidateOf(s, dist, incumbent = false) {
     works: job.district === dist, incumbent,
     platform: living ? null : PLATFORMS[key] || null,
     filing: filingOf(s, d, job, dist, incumbent),
+    // the file's score and movement, for the ballot's sparkline (src/ui/spark.js)
+    ...(typeof s.score === "number" && s.kind !== "citizen" ? { score: s.score, ...((s.hx || hxOf(s)) ? { hx: s.hx || hxOf(s) } : {}) } : {}),
   };
 }
 const FIELD_WORD = { politics: "POLITICS", activism: "ACTIVISM", business: "BUSINESS" };

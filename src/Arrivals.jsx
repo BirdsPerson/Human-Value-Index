@@ -17,6 +17,7 @@ import FilePhoto from "./FilePhoto.jsx";
 import { readCaseId } from "./caseFile.jsx";
 import { Rule } from "./term.jsx";
 import { Frame, Disclosure, ListRow, PaLine, ScreenHead } from "./ui";
+import Sparkline, { sparkLabelOf } from "./ui/Sparkline.jsx";
 import {
   BAYS, BAY, TOP_PAD, ROW_H, FOUNDATION, layoutFor, bayRect, bayAt, bayCenter, bayPath,
   releaseLine, assignedLine, homeBay, reconcile, minutesUntil,
@@ -906,8 +907,8 @@ export default function Arrivals() {
             return (
               <div role="listitem" key={`${pending ? "p" : "r"}-${keyOf(s)}`}>
                 <ListRow lead={<FilePhoto subject={s} scale={1} compact />} onClick={() => openRow(s)}
-                  label={`${displayName(s)}${s.name && simRef.current?.byKey?.get(keyOf(s))?.you ? " (YOU)" : ""}`} value={s.score} tone={t.color} tag={tag}
-                  aria-label={`${displayName(s)}, ${s.score}, ${t.label}, ${pending ? releaseLine(s.releaseDay, s.releaseAt, now) : "released"}. Open file.`} />
+                  label={`${displayName(s)}${s.name && simRef.current?.byKey?.get(keyOf(s))?.you ? " (YOU)" : ""}`} spark={<Sparkline s={s} />} value={s.score} tone={t.color} tag={tag}
+                  aria-label={`${displayName(s)}, ${s.score}, ${t.label}, ${pending ? releaseLine(s.releaseDay, s.releaseAt, now) : "released"}.${sparkLabelOf(s) ? ` ${sparkLabelOf(s)}.` : ""} Open file.`} />
               </div>
             );
           })}

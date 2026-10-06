@@ -3,6 +3,7 @@ import { clockAt } from "./simApi.js";
 import { searchIndex, findTarget, whereShort } from "./find.js";
 import { searchCensus } from "./planClient.js";
 import { SpriteThumb } from "./cityUi.jsx";
+import Sparkline from "../ui/Sparkline.jsx";
 import { note } from "../firstDay.js";
 import { findFunnel } from "./funnels.js";   // YOUR FIRST DAY: FIND YOURSELF IN THE CITY
 
@@ -61,6 +62,7 @@ export default memo(function CityFind({ index, remote = false, onPick, onPlace, 
                 onPointerDown={(ev) => ev.preventDefault()} onClick={() => pick(r)} onPointerEnter={() => setAct(i)}>
                 <span className="lead">{r.place ? <span aria-hidden="true">▣</span> : <SpriteThumb s={r.e.s} />}</span>
                 <span className="txt"><span className="n">{r.place ? r.place.name : r.e.name}{r.e?.s.you ? " (YOU)" : ""}</span><span className="w">{r.where}</span></span>
+                {r.e && <Sparkline s={r.e.s} />}
               </li>
             ))}
           </ul>

@@ -19,6 +19,7 @@ import {
 import { ScoreCard, Breakdown, readCaseId, writeCaseId, readLastResult, CaseLogon, FileMovement, movementMeta } from "./caseFile.jsx";
 import { Rule, Typed } from "./term.jsx";
 import { Frame, Button, ButtonRow, Chip, ChipStrip, Command, CommandList, Disclosure, TextField, ListRow, PaLine, ScreenHead } from "./ui";
+import Sparkline, { sparkLabelOf } from "./ui/Sparkline.jsx";
 
 const FONT = "'Fira Mono', ui-monospace, Menlo, monospace";
 
@@ -1511,9 +1512,9 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
             return (
               <div role="listitem" key={s.name}>
                 <ListRow lead={<FilePhoto subject={s} scale={1} compact />} onClick={() => openFromList(s)}
-                  label={`${displayName(s)}${s.you ? " (YOU)" : ""}`} value={s.score} tone={t.color}
+                  label={`${displayName(s)}${s.you ? " (YOU)" : ""}`} spark={<Sparkline s={s} />} value={s.score} tone={t.color}
                   tag={where || undefined} tagOptional
-                  aria-label={`${displayName(s)}, ${s.score}, ${t.label}${where ? `, located: ${where}` : ""}. Open file.`} />
+                  aria-label={`${displayName(s)}, ${s.score}, ${t.label}${where ? `, located: ${where}` : ""}.${sparkLabelOf(s) ? ` ${sparkLabelOf(s)}.` : ""} Open file.`} />
               </div>
             );
           })}

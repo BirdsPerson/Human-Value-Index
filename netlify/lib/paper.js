@@ -152,7 +152,9 @@ export function buildEdition(I) {
   let markets = null;
   if (I.market?.hvi) {
     const m = I.market, lvl = m.hvi.level, chg = m.hvi.open ? (m.hvi.level - m.hvi.open) / m.hvi.open : 0;
-    const mover = (x) => ({ name: up(x.name), price: Number(x.price).toFixed(2), chg: pct(x.chg || 0), why: printable(x.why) ? up(x.why) : null, href: `#market/${x.slug}` });
+    // score + hx: the file's movement, for the sparkline beside the name (src/ui/spark.js)
+    const mover = (x) => ({ name: up(x.name), price: Number(x.price).toFixed(2), chg: pct(x.chg || 0), why: printable(x.why) ? up(x.why) : null, href: `#market/${x.slug}`,
+      ...(typeof x.score === "number" ? { score: x.score } : {}), ...(typeof x.hx === "string" && x.hx ? { hx: x.hx } : {}) });
     markets = {
       href: "#market", level: fmtLevel(lvl), chg: pct(chg), listed: m.count,
       up: m.movers.up.map(mover), down: m.movers.down.map(mover),
@@ -238,7 +240,7 @@ export function buildEdition(I) {
   }
   if (civic?.districts) {
     for (const [id, d] of Object.entries(civic.districts)) {
-      if (d.seat?.status === "HELD" && d.seat.name) politics.council.push({ district: districtName(id), name: up(d.seat.name), by: d.seat.by ? up(d.seat.by) : null });
+      if (d.seat?.status === "HELD" && d.seat.name) politics.council.push({ district: districtName(id), name: up(d.seat.name), key: d.seat.holder || null, by: d.seat.by ? up(d.seat.by) : null });
       const pf = d.prefect, P1 = PREFECT[id];
       if (pf?.directive && P1) {
         const dline = P1.lines?.[pf.directive];

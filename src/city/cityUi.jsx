@@ -6,6 +6,7 @@ import { sheetFor } from "./spriteBank.js";
 import { jobLine } from "./simApi.js";
 import { FAMILY_COLOR } from "./cityKit.js";
 import { Frame } from "../ui/components.jsx";
+import Sparkline, { sparkLabelOf } from "../ui/Sparkline.jsx";
 import "./dos.css";   // DEPARTMENT OS: the header window, NOW IN THE SUBSTRATE
 
 export const FONT = "'Fira Mono', ui-monospace, Menlo, monospace";
@@ -46,6 +47,7 @@ const css = `
   .hvi-lg-lead .r span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hvi-lg-lead .r i { font-style: normal; color: var(--fg-mute); }
   .hvi-lg-lead .r b { color: var(--fg); font-weight: 700; flex: none; }
+  .hvi-lg-lead .r .ui-spark { margin-left: auto; align-self: center; }
   .hvi-lg-lead .r.dim { color: var(--fg-mute); }
   .hvi-lg-scroll { overflow-x: auto; max-height: 60vh; overflow-y: auto; }
   .hvi-lg-stats { border-collapse: collapse; font-size: var(--t-xs); color: var(--fg-dim); white-space: nowrap; }
@@ -74,11 +76,11 @@ const css = `
   .hvi-city-find-list li { display: flex; align-items: center; gap: var(--s2); min-height: var(--hit); padding: var(--s1) var(--s2); cursor: pointer; border-bottom: var(--bw) solid var(--line); }
   .hvi-city-find-list li:last-child { border-bottom: 0; }
   .hvi-city-find-list li.act { background: var(--accent); color: var(--accent-ink); }
-  .hvi-city-find-list li.act .w { color: var(--accent-ink); }
+  .hvi-city-find-list li.act .w, .hvi-city-find-list li.act .ui-spark { color: var(--accent-ink); }
   .hvi-city-find-list li.none { cursor: default; color: var(--fg-mute); font-size: var(--t-xs); }
   .hvi-city-find-list .lead { flex: none; }
   .hvi-city-find-list .hvi-city-thumb { display: block; width: 16px; height: 24px; image-rendering: pixelated; }
-  .hvi-city-find-list .txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+  .hvi-city-find-list .txt { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; line-height: 1.3; }
   .hvi-city-find-list .n { text-transform: none; font-size: var(--t-s); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hvi-city-find-list .w { text-transform: uppercase; font-size: var(--t-xs); color: var(--fg-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hvi-city-findme { flex: none; text-decoration: none; white-space: nowrap; }
@@ -330,14 +332,16 @@ export function SpriteThumb({ s }) {
 // Memoized: lists re-render with the census; a row only changes with its subject.
 export const Occupant = memo(function Occupant({ s, onOpen, note }) {
   const job = jobLine(s);
+  const spark = sparkLabelOf(s);
   return (
-    <button type="button" className="ui-row hvi-city-occ" onClick={() => onOpen(s)} aria-label={`${displayName(s)}. ${job}.${note ? " " + note + "." : ""} Open file.`}>
+    <button type="button" className="ui-row hvi-city-occ" onClick={() => onOpen(s)} aria-label={`${displayName(s)}. ${job}.${note ? " " + note + "." : ""}${spark ? " " + spark + "." : ""} Open file.`}>
       <span className="lead"><SpriteThumb s={s} /></span>
       <span className="txt">
         <span className="name">{displayName(s)}{s.you ? " (YOU)" : ""}</span>
         <span className="dots" aria-hidden="true">{" " + ".".repeat(120)}</span>
         <span className="tag">{note ? `${note} // ` : ""}{job}</span>
       </span>
+      <Sparkline s={s} />
     </button>
   );
 });

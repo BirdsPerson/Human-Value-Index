@@ -12,6 +12,12 @@ import * as L from "./leagues.js";
 import { leaguesView, decidedAt, sportTableAt, cupTableAt, LEAGUES_FROM, teamShort, teamName } from "./civic.js";
 import { CITY_EPOCH, DEFAULT_SCALE } from "./sim.js";
 import { resultLine } from "./pit.js";
+import { heldSubject } from "./planClient.js";
+import Sparkline from "../ui/Sparkline.jsx";
+
+// A league line's person, for the movement sparkline: the census record this browser holds,
+// else the figures on file by slug (src/ui/Sparkline.jsx seriesOf); a stranger's citizen shows none.
+const subjectOf = (x) => heldSubject(x.key) || { slug: x.key, name: x.name, kind: String(x.key).startsWith("citizen-") ? "citizen" : undefined };
 
 export const TABS = [["baseball", "BASEBALL"], ["basketball", "BASKETBALL"], ["football", "FOOTBALL"], ["soccer", "SOCCER"], ["tennis", "TENNIS"], ["pit", "PIT"], ["cup", "CUP"]];
 const ord = (n) => `${n}${n % 10 === 1 && n % 100 !== 11 ? "ST" : n % 10 === 2 && n % 100 !== 12 ? "ND" : n % 10 === 3 && n % 100 !== 13 ? "RD" : "TH"}`;
@@ -150,7 +156,7 @@ function SportTab({ block, h, sport }) {
         {leaders.map(c => (
           <div key={c.key} className="hvi-lg-lead">
             <div className="t">{c.label}</div>
-            {c.rows.length ? c.rows.map((x, i) => <div key={x.key} className="r"><span>{i + 1}. {up(x.name)} <i>{teamShort(x.team)}</i></span><b>{fmt(c.key, x[c.key])}</b></div>)
+            {c.rows.length ? c.rows.map((x, i) => <div key={x.key} className="r"><span>{i + 1}. {up(x.name)} <i>{teamShort(x.team)}</i></span><Sparkline s={subjectOf(x)} /><b>{fmt(c.key, x[c.key])}</b></div>)
               : <div className="r dim">NOBODY QUALIFIES. YET.</div>}
           </div>
         ))}
@@ -159,8 +165,8 @@ function SportTab({ block, h, sport }) {
       <Disclosure className="hvi-city-disc" title="PLAYER STATS" meta={`${players.length} PLAYERS // SORTED BY ${cols.find(c => c[0] === key)?.[1] || up(key)}`}>
         <div className="hvi-lg-scroll">
           <table className="hvi-lg-stats">
-            <thead><tr><th className="n">PLAYER</th><th>TEAM</th>{cols.map(([k, l]) => <th key={k}><button type="button" aria-pressed={key === k} onClick={() => setSort(k)}>{l}</button></th>)}</tr></thead>
-            <tbody>{players.map(x => <tr key={x.key}><td className="n">{up(x.name)}</td><td>{teamShort(x.team)}</td>{cols.map(([k]) => <td key={k} className={key === k ? "on" : undefined}>{fmt(k, x[k])}</td>)}</tr>)}</tbody>
+            <thead><tr><th className="n">PLAYER</th><th><span aria-hidden="true">FILE</span><span className="sr-only">Score history</span></th><th>TEAM</th>{cols.map(([k, l]) => <th key={k}><button type="button" aria-pressed={key === k} onClick={() => setSort(k)}>{l}</button></th>)}</tr></thead>
+            <tbody>{players.map(x => <tr key={x.key}><td className="n">{up(x.name)}</td><td><Sparkline s={subjectOf(x)} /></td><td>{teamShort(x.team)}</td>{cols.map(([k]) => <td key={k} className={key === k ? "on" : undefined}>{fmt(k, x[k])}</td>)}</tr>)}</tbody>
           </table>
         </div>
       </Disclosure>

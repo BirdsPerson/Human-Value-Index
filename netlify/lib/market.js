@@ -67,6 +67,8 @@ export async function runTick(nowMs = Date.now(), io = {}) {
       j = w.modified ? { orders: batch } : await S.get(`j/${d}`, { type: "json" });
     }
     const tick = E.step(state, { day: d, part, orders: j.orders || [], noise });
+    // the file's movement (score history, not price) for the board's sparkline; the engine never reads it
+    if (part?.h) for (const [k, v] of Object.entries(part.h)) if (state.inst[k] && Array.isArray(v) && typeof v[0] === "number" && typeof v[1] === "string" && v[1].length <= 24) state.inst[k].fs = v;
     if (L && tick.fills.length) await L.rpc("econ_orders_fill", { tick_day: d, hold_hours: state.knobs.minHoldHours, fills: tick.fills });
     done.push({ day: d, news: tick.news, fills: tick.fills.length, halts: tick.halts.length, roll: tick.roll?.fired || null });
     const rd = tick.rd;
@@ -105,7 +107,7 @@ const TERM_KEYS = ["work", "crowd", "sport", "play", "civic"];
 export function rowOf(state, k) {
   const I = state.inst[k];
   return {
-    slug: k, name: I.n, dead: Boolean(I.dead), price: I.p, open: I.o, chg: E.changeOf(I), close: I.cl.length ? I.cl[I.cl.length - 1] : null,
+    slug: k, name: I.n, ...(I.fs ? { score: I.fs[0], ...(I.fs[1] ? { hx: I.fs[1] } : {}) } : {}), dead: Boolean(I.dead), price: I.p, open: I.o, chg: E.changeOf(I), close: I.cl.length ? I.cl[I.cl.length - 1] : null,
     fair: E.fairValue(I.s), record: Math.round(I.s * 100) / 100, recent: Math.round((I.r ?? I.s) * 100) / 100, halted: Boolean(I.h),
     npc: I.npc / FLOAT, players: I.pl / FLOAT, why: E.whyOf(state, k),
     terms: I.a ? Object.fromEntries(TERM_KEYS.map((t, j) => [t, I.a[j]])) : null,

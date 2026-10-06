@@ -5,6 +5,7 @@
 // (netlify/lib/paper.js) and read here as it was printed; the WIRE is live.
 import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { Window, Headline, Button } from "../ui/index.js";
+import Sparkline from "../ui/Sparkline.jsx";
 
 const Comic = lazy(() => import("./Comic.jsx"));
 
@@ -361,7 +362,7 @@ function Sports({ s }) {
 
 function Markets({ m }) {
   if (!m) return <p>THE FLOOR DID NOT REPORT. THE DEPARTMENT ASSUMES THE WORST, AS USUAL.</p>;
-  const row = (x, i) => <li key={i}><a href={x.href}>{x.name}</a> {x.price} <span className={x.chg.startsWith("+") ? "pp-up" : "pp-down"}>{x.chg}</span>{x.why ? <> BECAUSE: {x.why}</> : null}</li>;
+  const row = (x, i) => <li key={i}><a href={x.href}>{x.name}</a> <Sparkline s={{ ...x, slug: x.slug || String(x.href || "").split("/")[1] }} /> {x.price} <span className={x.chg.startsWith("+") ? "pp-up" : "pp-down"}>{x.chg}</span>{x.why ? <> BECAUSE: {x.why}</> : null}</li>;
   return (
     <div className="pp-cols">
       <div className="pp-story">
@@ -401,7 +402,7 @@ function Politics({ p }) {
       {p.council.length ? (
         <div className="pp-story">
           <h3 className="sub">THE SITTING COUNCIL</h3>
-          <Table rows={p.council.map((c, i) => ({ ...c, n: i + 1 }))} cols={[["n", "#"], ["district", "SEAT"], ["name", "HOLDER"]]} />
+          <Table rows={p.council.map((c, i) => ({ ...c, n: i + 1, name: <>{c.name} {c.key ? <Sparkline s={{ slug: c.key, kind: String(c.key).startsWith("citizen-") ? "citizen" : undefined }} /> : null}</> }))} cols={[["n", "#"], ["district", "SEAT"], ["name", "HOLDER"]]} />
         </div>
       ) : null}
       {p.prefects.length ? (

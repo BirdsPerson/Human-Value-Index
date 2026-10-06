@@ -7,6 +7,7 @@ import { TITLE, BLURB, NOTICE, RULES, FIELD, CHAIR, WRITEIN } from "./content.js
 import WriteIn from "./WriteIn.jsx";
 import { loadElections, castVote } from "./client.js";
 import "../play/pages.css";
+import Sparkline from "../ui/Sparkline.jsx";
 
 // #elections: THE COUNCIL ELECTIONS (docs/CITY_SPEC.md "Council elections"). Every district's
 // race: the candidates (filings for the living, a reconstructed line for the dead), the
@@ -178,7 +179,7 @@ function Race({ id, race, seatDay, adopted, state, caseId, mine, mineWrite, onVi
         <div className="el-cand" key={c.key}>
           <CandidateSprite c={c} />
           <div>
-            <div className="el-who">{c.name.toUpperCase()} {c.incumbent && <Chip tone="accent">INCUMBENT</Chip>} {c.years && <span className="dead">{c.years}</span>}</div>
+            <div className="el-who">{c.name.toUpperCase()} <Sparkline s={c} /> {c.incumbent && <Chip tone="accent">INCUMBENT</Chip>} {c.years && <span className="dead">{c.years}</span>}</div>
             <div className="el-sub">{c.field ? `RECORD: ${FIELD[c.field]}` : "NO POLITICAL RECORD"} // {c.job.toUpperCase()}</div>
             {c.living ? (
               <div className="el-plat">STATEMENT: NONE ON FILE. LIVING CANDIDATES DO NOT SPEAK IN THIS CITY. THEY FILE.
@@ -203,7 +204,7 @@ function Race({ id, race, seatDay, adopted, state, caseId, mine, mineWrite, onVi
         <div className="el-cand" key={`w-${w.key}`}>
           <CandidateSprite c={w} />
           <div>
-            <div className="el-who">{w.name.toUpperCase()} <Chip>{WRITEIN.chip}</Chip>{w.declared && <> <Chip tone="accent">{WRITEIN.declaredChip}</Chip></>}</div>
+            <div className="el-who">{w.name.toUpperCase()} <Sparkline s={w} /> <Chip>{WRITEIN.chip}</Chip>{w.declared && <> <Chip tone="accent">{WRITEIN.declaredChip}</Chip></>}</div>
             {w.living || !w.platform
               ? <div className="el-plat">{w.declared ? WRITEIN.declared : w.living ? WRITEIN.living : WRITEIN.dead}</div>
               : <div className="el-plat">PLATFORM (RECONSTRUCTED BY THE DEPARTMENT, NOT A QUOTATION):<span className="tx">{w.platform}</span></div>}

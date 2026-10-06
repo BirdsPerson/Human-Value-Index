@@ -7,6 +7,7 @@
 import * as SIM from "../city/sim.js";
 import { NIGHT_SET } from "../city/nightlifeSim.js";
 import { isExcludedQid } from "../../netlify/lib/excluded.js";
+import { hxOf } from "../ui/spark.js";
 
 export const ACTIVITY_V = 1;
 const r2 = (x) => Math.round(x * 100) / 100;
@@ -52,11 +53,13 @@ export function marketTerms(plan, people, summary, sat) {
     if (b.owner) shop[b.owner] = Math.max(shop[b.owner] || 0, bonus);
     for (const s of b.staff || []) if (Array.isArray(s)) shop[s[0]] = Math.max(shop[s[0]] || 0, bonus / 2);
   }
-  const n = {}, a = {};
+  const n = {}, a = {}, h = {};
   for (const key of Object.keys(plan.subjects).sort()) {
     const s = people.get(key);
     if (!s || s.kind === "citizen") continue;
     n[key] = [String(s.name || key), s.died ? 1 : 0, untradable(s) ? 1 : 0];
+    // the file's score and movement, for the board's sparkline (src/ui/spark.js)
+    if (typeof s.score === "number") h[key] = [s.score, s.hx || hxOf(s) || ""];
     let work = 0, crowd = 0, play = 0;
     for (const g of SIM.rowSegs(P, plan.subjects[key])) {
       const hrs = Math.max(0, Math.min(24, g.to) - Math.max(0, g.from));
@@ -72,5 +75,5 @@ export function marketTerms(plan, people, summary, sat) {
     const w = work * (x ? Math.max(0, x.s) / 100 : 0.5) + (shop[key] || 0);
     a[key] = [r2(w), r2(crowd), r2(sport[key] || 0), r2(play), r2(civic[key] || 0)];
   }
-  return { v: ACTIVITY_V, day: plan.day, ver: null, n, a };
+  return { v: ACTIVITY_V, day: plan.day, ver: null, n, a, h };
 }

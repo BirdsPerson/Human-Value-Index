@@ -10,6 +10,7 @@ import { Rule, padL } from "./term.jsx";
 import { Button, ButtonRow, Chip, Chips, ChipStrip, ListRow, TextField, ScreenHead } from "./ui/index.js";
 import "./figureIndex.css";
 import PetitionPanel from "./PetitionPanel.jsx";
+import Sparkline, { sparkLabelOf } from "./ui/Sparkline.jsx";
 
 // ANALYTICS loads only when asked for (charts are their own chunk).
 const Analytics = lazy(() => import("./analytics/Analytics.jsx"));
@@ -101,8 +102,8 @@ export default function FigureIndex({ figures, result, onPrimary }) {
             return (
               <ListRow key={fig.name} className="hvi-fi-row"
                 lead={<><span className="rk" aria-hidden="true">{padL(rank.get(fig.name), w)}</span><Thumb fig={fig} /></>}
-                label={displayName(fig)} value={padL(fig.score, 3)} tone={t.color} tag={short(t.label)} tagOptional
-                aria-label={`${rank.get(fig.name)}. ${displayName(fig)}, ${fig.score}, ${t.label}. Read the file.`} subAsTyped>
+                label={displayName(fig)} spark={<Sparkline s={fig} />} value={padL(fig.score, 3)} tone={t.color} tag={short(t.label)} tagOptional
+                aria-label={`${rank.get(fig.name)}. ${displayName(fig)}, ${fig.score}, ${t.label}. ${sparkLabelOf(fig)}. Read the file.`} subAsTyped>
                 <Chips className="hvi-fi-chips">
                   <Chip tone={t.color}>{t.label}</Chip>
                   {fig.quadrant && <Chip tone={fig.quadrant === "ADMIRED" ? "accent" : fig.quadrant === "DISMISSED" || fig.quadrant === "FEARED" ? "harm" : "warn"}>{fig.quadrant}</Chip>}
@@ -122,6 +123,7 @@ export default function FigureIndex({ figures, result, onPrimary }) {
                 <span className="lead"><span className="rk">{padL("▶", w)}</span></span>
                 <span className="name">YOUR FILE</span>
                 <span className="dots" aria-hidden="true">{" " + ".".repeat(200)}</span>
+                <Sparkline s={{ you: true, score: you.score, history: result.history }} />
                 <span className="val">{padL(you.score, 3)}</span>
                 <span className="tag opt">[{short(you.tier.label)}]</span>
               </div>
@@ -171,9 +173,9 @@ export function FigurePicker({ figures, score, filter, onFilter, selected, onSel
           const on = selected?.name === fig.name;
           return (
             <div role="listitem" key={fig.name}>
-              <ListRow className="hvi-fi-row" lead={<Thumb fig={fig} />} label={displayName(fig)} value={padL(fig.score, 3)}
+              <ListRow className="hvi-fi-row" lead={<Thumb fig={fig} />} label={displayName(fig)} spark={<Sparkline s={fig} />} value={padL(fig.score, 3)}
                 tone={t.color} tag={short(t.label)} tagOptional selected={on} onClick={() => onSelect(on ? null : fig)}
-                aria-label={`${displayName(fig)}, ${fig.score}, ${t.label}. ${on ? "Clear the comparison" : "Compare"}.`} />
+                aria-label={`${displayName(fig)}, ${fig.score}, ${t.label}. ${sparkLabelOf(fig)}. ${on ? "Clear the comparison" : "Compare"}.`} />
             </div>
           );
         })}

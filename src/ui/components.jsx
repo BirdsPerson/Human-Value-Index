@@ -222,11 +222,12 @@ export const TextField = forwardRef(function TextField(
 });
 
 // ---------------------------------------------------------------------------
-// ListRow: NAME ............ 742 [TAG], optionally with a thumbnail (`lead`).
+// ListRow: NAME ............ 742 [TAG], optionally with a thumbnail (`lead`) and the file's
+// movement (`spark`: a <Sparkline>, src/ui/Sparkline.jsx) before the value.
 // Interactive when it has onClick or href (44px). With `children` it expands on tap
 // (aria-expanded) and shows them underneath: the index pattern, compact rows that
 // open to the full verdict. `selected` is inverse video.
-export function ListRow({ lead, label, value, tag, tagOptional = false, tone, onClick, href, selected, expanded, defaultExpanded = false,
+export function ListRow({ lead, label, spark, value, tag, tagOptional = false, tone, onClick, href, selected, expanded, defaultExpanded = false,
   onExpand, children, subAsTyped = false, className, ...rest }) {
   const [openLocal, setOpenLocal] = useState(defaultExpanded);
   const expandable = children != null && children !== false;
@@ -237,6 +238,7 @@ export function ListRow({ lead, label, value, tag, tagOptional = false, tone, on
       {lead && <span className="lead">{lead}</span>}
       <span className="name">{label}</span>
       <span className="dots" aria-hidden="true">{" " + ".".repeat(200)}</span>
+      {spark}
       {value != null && <span className="val" style={color ? { color } : undefined}>{value}</span>}
       {tag && <span className={cx("tag", tagOptional && "opt")} style={color ? { color } : undefined}>[{tag}]</span>}
       {expandable && <span className="x" aria-hidden="true">{isOpen ? "▾" : "▸"}</span>}

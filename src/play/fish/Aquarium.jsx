@@ -6,6 +6,7 @@ import { drawFish } from "./art.js";
 import { loadAquarium } from "./api.js";
 import "./fish.css";
 import "../pages.css";
+import Sparkline from "../../ui/Sparkline.jsx";
 
 // #aquarium: THE AQUARIUM, the wing of the MUSEUM OF THE CITY in the Old Town (docs/CITY_SPEC.md
 // "THE AQUARIUM"). One tank per species. A donated fish swims in its tank over a plaque: the city
@@ -53,7 +54,7 @@ function Tank({ s, tank, mineHeld, reduced, registry }) {
         {r ? (
           <>
             <span className="rec">CITY RECORD {(r.cw / 100).toFixed(2)} LB ({lbText(r.cw)}) // {inText(r.tl)}</span>
-            <span>CAUGHT BY {r.holder}{mineHeld ? " (YOU)" : ""} AT {spotName(r.spot)}, DAY {r.day}.</span>
+            <span>CAUGHT BY {r.holder}{mineHeld ? <> (YOU) <Sparkline s={{ you: true }} /></> : ""} AT {spotName(r.spot)}, DAY {r.day}.</span>
             {tank.previous?.length > 0 && (
               <details><summary>PREVIOUS RECORDS ({tank.previous.length})</summary>
                 <ol>{tank.previous.map((p, i) => <li key={i}>{(p.cw / 100).toFixed(2)} LB // {p.holder} // {spotName(p.spot)}, DAY {p.day}</li>)}</ol>

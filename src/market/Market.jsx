@@ -8,6 +8,7 @@ import { Frame, Button, ButtonRow, PaLine, ScreenHead, Disclosure } from "../ui/
 import { readCaseId, CaseLogon } from "../caseFile.jsx";
 import { loadMarket, loadDetail, placeOrder, newNonce } from "./client.js";
 import { LEDE, LEGAL, MIN_ORDER, KNOB_LABELS, fmt, fmtPrice, fmtPct, arrow, askOf } from "./rules.js";
+import Sparkline from "../ui/Sparkline.jsx";
 import CSS from "./market.css?inline";
 import "../play/pages.css";
 
@@ -100,14 +101,14 @@ export default function Market({ route = "#market" }) {
         </div>
         {!board ? <p className="mk-dim">{err ? "THE FLOOR IS DARK. TRY AGAIN SHORTLY." : "READING THE FLOOR…"}</p> : (
           <table className="mk-table">
-            <caption className="sr-only">Prices in CYCLES a share, and the change since today's open. Updated every 24 minutes.</caption>
-            <thead><tr><th scope="col">HUMAN</th><th scope="col" className="n">PRICE</th><th scope="col" className="n">TODAY</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+            <caption className="sr-only">Prices in CYCLES a share, each human's score history on file, and the change since today's open. Updated every 24 minutes.</caption>
+            <thead><tr><th scope="col">HUMAN</th><th scope="col" className="mk-fl"><span aria-hidden="true">FILE</span><span className="sr-only">Score history</span></th><th scope="col" className="n">PRICE</th><th scope="col" className="n">TODAY</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>
               {shown.map(r => (
                 <Row key={r.slug} r={r} mine={mine[r.slug]} open={sel === r.slug} onToggle={() => setSel(sel === r.slug ? null : r.slug)}
                   wallet={wallet} busy={busy} order={order} knobs={board.knobs} canTrade={Boolean(st?.open && st?.assessed) || !caseId} />
               ))}
-              {!shown.length && <tr><td colSpan={4} className="mk-dim">NOBODY BY THAT NAME IS LISTED. NOT EVERYONE ON FILE IS FOR SALE.</td></tr>}
+              {!shown.length && <tr><td colSpan={5} className="mk-dim">NOBODY BY THAT NAME IS LISTED. NOT EVERYONE ON FILE IS FOR SALE.</td></tr>}
             </tbody>
           </table>
         )}
@@ -195,13 +196,14 @@ function Row({ r, mine, open, onToggle, wallet, busy, order, knobs, canTrade }) 
             {r.name.toUpperCase()}{mine ? <span className="mk-mine"> // YOURS {fmt(mine.units)}</span> : null}{r.halted ? <span className="mk-halt"> // HALTED</span> : null}
           </button>
         </th>
+        <td className="mk-fl"><Sparkline s={r} /></td>
         <td className="n mk-price">{fmtPrice(r.price)}</td>
         <td className={`n ${tone(r.chg)}`}><span aria-hidden="true">{arrow(r.chg)}</span>{fmtPct(r.chg)}</td>
         <td className="mk-act"><button type="button" className="mk-buy" onClick={onToggle} disabled={r.halted} aria-label={`Buy ${r.name}`}>BUY</button></td>
       </tr>
       {open && (
         <tr className="mk-open" id={panel}>
-          <td colSpan={4}>
+          <td colSpan={5}>
             <p className="mk-why">{r.why}</p>
             {r.halted ? <p className="mk-p">HALTED FOR THE DAY. THE BAND HELD. THE DEPARTMENT RESUMES AT 00:00 UTC.</p> : !canTrade ? <p className="mk-p">ASSESSED CITIZENS TRADE, ONCE THE TREASURY IS OPEN.</p> : (
               <div className="mk-order">

@@ -1,6 +1,7 @@
 import { cube, validHarmReview } from "./intake.js";
 import { judged } from "../../src/cube.js";
 import { normOrigin } from "../../src/origin.js";
+import { hxOf } from "../../src/ui/spark.js";
 // Referral logic: name validation, the Wikipedia gate, slugs and dedupe against the
 // figures already on file. The Wikipedia calls take an injectable fetch so
 // scripts/check-refer.mjs can run them offline.
@@ -457,8 +458,12 @@ export const publicFigure = c => ({
 // when a file opens. Breakdown stays: the city's jobs and friendships and the analytics
 // category profile read it for everyone (~140 bytes a subject).
 export const FILE_ONLY = ["verdict", "scoreHistory", "harmReview", "sources"];
+// The file's movement rides the census as hx (src/ui/spark.js: the last 8 scores, ~10 bytes),
+// so every list draws a sparkline without opening a file.
 export const censusFigure = c => {
   const f = publicFigure(c);
   for (const k of FILE_ONLY) delete f[k];
+  const hx = hxOf(c);
+  if (hx) f.hx = hx;
   return f;
 };
