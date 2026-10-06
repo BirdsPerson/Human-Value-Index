@@ -190,7 +190,8 @@ ok(opened >= 3, `the rules open businesses (${opened} in 16 days)`);
   const plans = days.map(d => raw(m1.days[d].key));
   ok(plans.every(p => p.ent?.v === E.ENT_V && p.ent.day === p.day), "every plan carries the day's enterprise state");
   ok(plans[0].ent.biz[0]?.owner === "shaun-white", "the first day built: LICENCE 0001");
-  for (let i = 1; i < plans.length; i++) eq(plans[i].ent, E.stepEnterprise(plans[i - 1].ent, plans[i - 1], new Map(roster.map(s => [SIM.keyOf(s), s])), plans[i].day), `day ${plans[i].day}: the chain steps from yesterday's plan`);
+  // the builder pins the ladder to the day it builds (SCALE_FROM, machine day 648); replay the step the same way
+for (let i = 1; i < plans.length; i++) { SIM.setLadderDay(plans[i].day); try { eq(plans[i].ent, E.stepEnterprise(plans[i - 1].ent, plans[i - 1], new Map(roster.map(s => [SIM.keyOf(s), s])), plans[i].day), `day ${plans[i].day}: the chain steps from yesterday's plan`); } finally { SIM.setLadderDay(null); } }
   ok(raw(PL.ENT_LEDGER)?.day === days[days.length - 1], "the ledger holds the latest day");
   const sd = Object.keys(m2.days).map(Number)[0], e2 = m2.days[sd];
   const sum = raw(PL.partKey(sd, e2.ver, "summary"));

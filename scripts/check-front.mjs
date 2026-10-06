@@ -63,7 +63,15 @@ ok(scoreMoves({ rows: [] }, figs).length > 0 || figs.every(f => (f.scoreHistory 
 ok(scoreMoves(board, []).every(m => m.href.startsWith("#city?find=")), "a score move opens the subject in the city");
 ok(/fr-steps/.test(desk) && /aria-label="Previous item"/.test(desk) && /aria-label="Next item"/.test(desk) && /PAUSE/.test(desk), "the ticker steps with buttons and can be paused");
 ok(/prefers-reduced-motion: reduce/.test(desk) && /useState\(\(\) => reduced\(\)\)/.test(desk), "reduced motion: it never advances on its own");
-ok(!/@keyframes|animation:/.test(read("src/front/front.css")), "no crawl: nothing animates");
+{
+  // no crawl: the headlines never animate. The only motion allowed is two small, deliberate cues (the
+  // SURVEILLANCE REC dot, THE SET's channel-change snow), and each must stand down for reduced motion.
+  const css = read("src/front/front.css");
+  const moving = css.split("\n").filter(l => /@keyframes|animation:\s*(?!none)/.test(l) && !/animation:\s*none/.test(l));
+  const allowed = (l) => /\.fr-sv \.rec \.dot|tv-snow/.test(l);
+  ok(moving.every(allowed), "no crawl: nothing animates (bar the REC dot and the channel-change snow)");
+  ok(/\.fr-sv\.still \.rec \.dot \{ animation: none/.test(css) && /prefers-reduced-motion: reduce\) \{ \.fr-set \.tv\.snow \.scr \{ animation: none/.test(css), "both cues stand still under reduced motion");
+}
 ok(/className="sr-only"/.test(desk) && /<ul className="sr-only"/.test(desk), "screen readers get the whole list");
 ok(/TABS = \[\["news", "NEWS"\], \["trending", "TRENDING"\]\]/.test(desk) && (desk.match(/title="WIRE.TKR"/g) || []).length === 1, "one window, two tabs: not three crawls");
 
