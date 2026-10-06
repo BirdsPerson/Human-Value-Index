@@ -23,6 +23,18 @@
   --warn: #fbbf24;        /* middle tiers, CHARMING / INDULGED, caution */
   --harm: #f87171;        /* low tiers, FEARED / DISMISSED, errors */
 
+  /* DEPARTMENT OS (2026-10-05): Turbo Vision windows on a dotted desktop, teletext bands.
+     The EB accents and the SNTX pair are legend colours for window frames and large
+     headline bands only, never for body text on --bg (DUKE and Revin fail as small text). */
+  --shadow: #000;         /* the hard drop shadow under windows and push-buttons. Never blurred. */
+  --hot: #7a1010;         /* the hotkey letter on the light menu bar / F-key strip: 6.9:1 on --fg-dim */
+  --eb-cyan: #2bc6de;     /* EB (ebtv eb.css): the Loop, transit, the market */
+  --eb-amber: #ffaa2d;    /* EB: notices, the Assembly, verdicts */
+  --duke: #FF5C6B;        /* SNTX DUKE red (satire). Bands only. */
+  --revin: #2F6BFF;       /* SNTX Revin cobalt (scoring engine). Bands only, white type. */
+  --desk-dot: #1c4027;    /* the desktop's halftone dot (Turbo Vision's ░, as a 4px dither) */
+  --tall: 'VT323', var(--mono);   /* teletext double-height headlines only; never body copy */
+
   /* type: Fira Mono only. Five steps; nothing else. */
   --mono: 'Fira Mono', ui-monospace, Menlo, Consolas, monospace;
   --t-xs: 13px;           /* meta, labels, the floor (12px all-caps was too small to read) */

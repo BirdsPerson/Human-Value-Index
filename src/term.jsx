@@ -5,37 +5,26 @@ import { useState, useEffect, useRef } from "react";
 // box drawing and block elements, so every glyph has the same advance width.
 
 export const RULE = "─".repeat(400);
-const SIDE = "│\n".repeat(400);
-const SIDE2 = "║\n".repeat(400);
 const RULE2 = "═".repeat(400);
 
 export function prefersReducedMotion() {
   try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
 }
 
-// A frame drawn in box-drawing characters. The horizontal runs are long strings clipped
-// by flex, so the box fills any width and the clip lands mid-rule, where it is invisible.
-// The sides are a column of │ one character wide, stretched to the content's height.
+// A window (DEPARTMENT OS, 2026-10-05): a double frame with a hard drop shadow, the title
+// cut into the top border and a close box on the left, Turbo Vision style. The frame is
+// CSS (ui.css .tb); the close box is decoration, hidden from screen readers, which hear
+// the title once. `double` keeps its old meaning as the emphasis frame (.tb.dbl).
 export function TermBox({ title, right, children, tone, double = false, className = "", bodyClass = "", ...rest }) {
-  const [tl, tr, bl, br, h, side] = double ? ["╔", "╗", "╚", "╝", RULE2, SIDE2] : ["┌", "┐", "└", "┘", RULE, SIDE];
   return (
-    <div className={`tb ${className}`} style={tone ? { "--tb": tone } : undefined} {...rest}>
-      <div className="tb-edge" aria-hidden="true">
-        <span>{tl}{h[0]}</span>
-        {title && <span className="tb-title">{" "}{title}{" "}</span>}
-        <span className="tb-fill">{h}</span>
-        {right && <span className="tb-title tb-right">{" "}{right}{" "}</span>}
-        <span>{h[0]}{tr}</span>
+    <div className={`tb${double ? " dbl" : ""} ${className}`} style={tone ? { "--tb": tone } : undefined} {...rest}>
+      <div className="tb-top" aria-hidden="true">
+        <span className="tb-box">[■]</span>
+        {title && <span className="tb-title">{title}</span>}
+        {right && <span className="tb-title tb-right">{right}</span>}
       </div>
       {title && <span className="sr-only">{title}</span>}
-      <div className="tb-mid">
-        <span className="tb-side" aria-hidden="true">{side}</span>
-        <div className={`tb-body ${bodyClass}`}>{children}</div>
-        <span className="tb-side" aria-hidden="true">{side}</span>
-      </div>
-      <div className="tb-edge" aria-hidden="true">
-        <span>{bl}</span><span className="tb-fill">{h}</span><span>{br}</span>
-      </div>
+      <div className={`tb-body ${bodyClass}`}>{children}</div>
     </div>
   );
 }

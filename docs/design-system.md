@@ -7,6 +7,16 @@ button styles, eight type sizes, 21px tap targets). This is the one version of e
 
 Source of the decisions: `docs/design-audit/AUDIT.md` and its mockups.
 
+**DEPARTMENT OS (2026-10-05, Scott's pick: direction A + B's best parts).** The terminal
+now runs as a Turbo Vision / Norton Commander desktop: content sits in double-framed
+windows with hard black drop shadows on a dotted desktop; a light menu bar with hotkey
+letters on top; on phones an F1–F4 key strip at the bottom; primary actions are green
+push-buttons; section heads are teletext bands (tall VT323 type on a solid colour band,
+page number right, e.g. `P300`). The EB accents (`--eb-cyan`, `--eb-amber`) colour window
+frames and bands; the SNTX pair (`--duke`, `--revin`) appear **only** on large bands.
+Window chrome (the `[■]` close box, the frame) is decoration: aria-hidden; screen readers
+hear the title once. Everything is CSS: `src/ui/ui.css`, values in `tokens.css`.
+
 ## Files
 
 | File | What |
@@ -97,16 +107,28 @@ any CSS colour (tier colours).
 ```jsx
 <ScreenHead title="THE CUBE" meta="MACHINE VS PEOPLE // 431 FILES // 38 PLACED" />
 ```
-The one heading a destination screen opens on: `> TITLE` in accent at `--t-l`, one line of meta in `--fg-mute` under it. Used by the index, the cube and the pen. MY FILE opens on its score card instead (the payoff is the heading).
+The one heading a destination screen opens on: a teletext band (`Headline`, tall type on
+`--accent`), one line of meta on a panel strip under it. `page="P400"` prints the page
+number; `tone` = `cy` | `am` | `du` | `rv` changes the band. Used by the index, the cube and the pen. MY FILE opens on its score card instead (the payoff is the heading).
 
-### Frame
+### Headline
+```jsx
+<Headline page="P300" tone="cy">THE SUBSTRATE</Headline>   // h2 by default; as="h1"
+```
+The teletext band. 32px VT323 on phones, 38px on desktop. DUKE (`du`) and Revin (`rv`)
+are for bands only, never small text.
+
+### Frame (Window)
 ```jsx
 <Frame title="CATEGORY BREAKDOWN" meta="7 OF 9 ASSESSED">…</Frame>          // 1px line frame, inset title
 <Frame box title="YOUR VALUE INDEX" tone={tier.color} double>…</Frame>        // box-drawing (TermBox)
 ```
 Props: `title`, `meta` (right edge, drops first), `tone`, `box` (box-drawn), `double`
 (╔═╗, implies box), `flush` (no padding), `className`, `bodyClass`, plus any div props (`id`).
-Titles ellipsize. **Use `box` deliberately:** the score card, the case file, the live
+Every Frame is a **window** (`Window` is the same component): `4px double` frame in
+`tone` (default `--line-hi`), `--panel` fill, `8px 8px 0 #000` shadow (6px under 420px),
+title centred in the top border, `[■]` on the left, meta right (hidden under 640px for
+`box`). A window inside a window drops its shadow. Titles ellipsize. **Use `box` deliberately:** the score card, the case file, the live
 interview, the logon terminal. Everything else takes the line frame. No frame nested
 more than two deep.
 
@@ -130,7 +152,9 @@ any list of destinations.
   <Button variant="primary" onClick={…}>Submit for evaluation</Button>
 </ButtonRow>
 ```
-An inline terminal command. `variant`: `primary` `[ LABEL ]` (one per screen; the brackets carry their own space, no flex gap),
+An inline terminal command. `variant`: `primary` (a green **push-button**: solid face,
+block shadow, pressed on tap; one per screen), `push` (the same button for a window's own
+actions, `tone="am"` amber or `tone="sec"` dim, e.g. VOTE / READ, ACKNOWLEDGED / DISPUTE),
 `secondary` `>LABEL`, `back` `<LABEL`, `danger`. `block` = full-width 48px row. `href`
 renders `<a>`. 44px tall always. `ButtonRow`: `split` (first left, last right),
 `stackOnMobile` (full-width rows under 720px). Replaces `.hvi-btn-*` and `.hvi-link-btn`.
@@ -212,13 +236,15 @@ city. The pen and district canvases are `touch-action: pan-y` already and need n
 
 ## Shell
 
-**Header** (`AppHeader`): one sticky 44px line on every screen: `▌HUMAN VALUE INDEX`
-(links to the menu), the case number on the right, and on desktop (≥721px) the section
-links MENU · CITY · CUBE · MY FILE with the current one in inverse video. The block-letter
-banner renders above it on the menu only (`banner` prop), scaled to fit any width.
+**Menu bar** (`AppHeader`): one sticky, full-bleed light bar on every screen (44px on
+phones, 36px on desktop): `≡ HUMAN VALUE INDEX` (links to the menu), the case number on
+the right, and on desktop (≥721px) MENU · CITY · PLAY · MY FILE with the hotkey letter in
+`--hot` (real `accesskey`s) and the current one inverse. The block-letter banner lives
+inside the logon window, on the menu only.
 
-**Command bar** (`CommandBar`, under 721px only): fixed to the bottom, 56px + the
-safe-area inset, MENU · CITY · CUBE · MY FILE, current tab inverse. It hides while a text
+**F-key strip** (`CommandBar`, under 721px only): fixed to the bottom, 56px + the
+safe-area inset, F1 MENU · F2 CITY · F3 PLAY · F4 MY FILE (the key names are labels; the
+function keys stay the browser's), current tab inverse, the context action amber. It hides while a text
 field has focus on a touch screen (the keyboard is up). A spacer keeps page content clear
 of it.
 

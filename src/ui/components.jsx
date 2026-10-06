@@ -30,6 +30,7 @@ export function Frame({ title, meta, tone, box = false, double = false, flush = 
       aria-label={typeof title === "string" ? title : undefined} {...rest}>
       {(title || meta) && (
         <div className="ui-frame-ttl" aria-hidden="true">
+          <span className="b">[■]</span>
           {title ? <span className="t">{title}</span> : <span />}
           {meta && <span className="m">{meta}</span>}
         </div>
@@ -39,14 +40,32 @@ export function Frame({ title, meta, tone, box = false, double = false, flush = 
   );
 }
 
+// Window: the DEPARTMENT OS name for a Frame. Every Frame is a window now (double frame,
+// hard shadow, title in the top border); `box` and `double` are the emphasis frames.
+export const Window = Frame;
+
 // ---------------------------------------------------------------------------
-// ScreenHead: the one heading a screen opens on. TITLE in accent, one line of the
-// Overlord's meta under it. Every destination screen uses it (index, cube, pen), so
+// Headline: a teletext band (Ceefax, 1974). Tall type on a solid colour band with the
+// page number on the right: "THE SUBSTRATE ........ P300". tone: accent (default) | cy |
+// am | du | rv. DUKE (du) and Revin (rv) live here and nowhere smaller: bands only.
+export function Headline({ as: Tag = "h2", page, tone, className, children, ...rest }) {
+  return (
+    <Tag className={cx("ui-tt", tone, className)} {...rest}>
+      <span className="t">{children}</span>
+      {page && <span className="p" aria-hidden="true">{page}</span>}
+    </Tag>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ScreenHead: the one heading a screen opens on, as a teletext band (Headline), one line
+// of the Overlord's meta under it. Every destination screen uses it (index, cube, pen), so
 // they read as rooms of the same terminal instead of pages that start mid-sentence.
-export function ScreenHead({ title, meta, children, className }) {
+// `page` is the teletext page number ("P400"); `tone` the band colour.
+export function ScreenHead({ title, meta, page, tone, children, className }) {
   return (
     <header className={cx("ui-screen-head", className)}>
-      <h1>{title}</h1>
+      <Headline as="h1" page={page} tone={tone}>{title}</Headline>
       {meta && <p className="m">{meta}</p>}
       {children}
     </header>
@@ -88,10 +107,13 @@ export function CommandList({ label, children, className }) {
 //   secondary  > HOLDING PEN  an alternative
 //   back       < MAIN MENU    leave
 //   danger     red text, for destructive commands
+//   push       a Turbo Vision push-button: a solid face on a hard block shadow, pressed
+//              when tapped. tone: accent (default) | am (amber) | sec (dim). For the
+//              few actions that are the point of a window (VOTE, ACKNOWLEDGED).
 // `block` makes it a full-width 48px row (use inside ButtonRow stack-m on phones).
 export const Button = forwardRef(function Button(
-  { variant = "secondary", block = false, href, className, children, type = "button", ...rest }, ref) {
-  const cls = cx("ui-btn", variant, block && "block", className);
+  { variant = "secondary", tone, block = false, href, className, children, type = "button", ...rest }, ref) {
+  const cls = cx("ui-btn", variant, tone, block && "block", className);
   if (href) return <a ref={ref} className={cls} href={href} {...rest}>{children}</a>;
   return <button ref={ref} type={type} className={cls} {...rest}>{children}</button>;
 });

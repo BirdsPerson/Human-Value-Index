@@ -1,7 +1,8 @@
-// The app shell: a one-line sticky header on every screen (the block-letter banner on
-// the menu only), and on phones a bottom command bar within thumb reach:
-// MENU · CITY · PLAY · MY FILE. A screen can put one context action (APPEAL) in the
-// PLAY slot with useBarAction(). Desktop hides the bar; the header carries the same links.
+// The app shell (DEPARTMENT OS, 2026-10-05): a sticky menu bar on every screen, Turbo
+// Vision style, its hotkey letters live as accesskeys, and on phones a bottom F-key strip
+// within thumb reach: F1 MENU · F2 CITY · F3 PLAY · F4 MY FILE (the keys are labels; the
+// function keys belong to the browser). A screen can put one context action (APPEAL) in
+// the PLAY slot with useBarAction(). Desktop hides the strip; the menu bar carries the links.
 
 import { useEffect, useState } from "react";
 import { BANNER } from "../term.jsx";
@@ -9,11 +10,18 @@ import { readCaseId } from "../caseFile.jsx";
 import { useCurrentBarAction } from "./barAction.js";
 
 export const NAV = [
-  { key: "menu", label: "MENU", glyph: "▣", href: "#" },
-  { key: "city", label: "CITY", glyph: "▦", href: "#city" },
-  { key: "play", label: "PLAY", glyph: "◈", href: "#play" },
-  { key: "file", label: "MY FILE", glyph: "▤", href: "#file" },
+  { key: "menu", label: "MENU", glyph: "▣", href: "#", fk: "F1", hot: "M" },
+  { key: "city", label: "CITY", glyph: "▦", href: "#city", fk: "F2", hot: "C" },
+  { key: "play", label: "PLAY", glyph: "◈", href: "#play", fk: "F3", hot: "P" },
+  { key: "file", label: "MY FILE", glyph: "▤", href: "#file", fk: "F4", hot: "F" },
 ];
+// LABEL with its hotkey letter marked: MY FILE -> MY <u>F</u>ILE. The letter is decoration;
+// the link's accessible name stays the plain label.
+const hotLabel = (n) => {
+  const i = n.label.indexOf(n.hot);
+  const nb = (t) => t.replace(/ /g, "\u00a0");   // the link is inline-flex: a plain space at an item edge collapses
+  return i < 0 ? n.label : <>{nb(n.label.slice(0, i))}<u aria-hidden="true">{n.hot}</u>{nb(n.label.slice(i + 1))}</>;
+};
 
 // Which tab a location belongs to. INTAKE (#arrivals, once #pen) has no tab of its own.
 export function navKeyFor(route = "") {
@@ -77,10 +85,10 @@ export function AppHeader({ banner = false, active = null, onNav }) {
       {banner && <pre className="ui-banner" role="img" aria-label="Human Value Index">{BANNER}</pre>}
       <header className="ui-head">
         <div className="ui-head-line">
-          <a className="ui-head-mark" href="#" onClick={e => onNav?.("menu", e)} aria-label="Human Value Index, main menu">▌HUMAN VALUE INDEX</a>
+          <a className="ui-head-mark" href="#" onClick={e => onNav?.("menu", e)} aria-label="Human Value Index, main menu"><span aria-hidden="true">≡{"\u00a0"}</span>HUMAN VALUE INDEX</a>
           <nav className="ui-head-nav" aria-label="Sections">
             {NAV.map(n => (
-              <a key={n.key} href={n.href} aria-current={active === n.key ? "page" : undefined} onClick={e => onNav?.(n.key, e)}>{n.label}</a>
+              <a key={n.key} href={n.href} accessKey={n.hot.toLowerCase()} aria-label={n.label} aria-current={active === n.key ? "page" : undefined} onClick={e => onNav?.(n.key, e)}>{hotLabel(n)}</a>
             ))}
           </nav>
           <span className="ui-head-case">CASE <b>{caseId || "UNASSIGNED"}</b></span>
@@ -103,11 +111,11 @@ export function CommandBar({ active = null, onNav }) {
         {items.map(n => n.ctx
           ? (
             <button key="ctx" type="button" className="ctx" onClick={() => n.ctx.onSelect?.()}>
-              <span className="g" aria-hidden="true">{n.ctx.glyph || "›"}</span>{n.ctx.label}
+              <span className="g" aria-hidden="true">{n.fk}</span>{n.ctx.label}
             </button>
           ) : (
             <a key={n.key} href={n.href} aria-current={active === n.key ? "page" : undefined} onClick={e => onNav?.(n.key, e)}>
-              <span className="g" aria-hidden="true">{n.glyph}</span>{n.label}
+              <span className="g" aria-hidden="true">{n.fk}</span>{n.label}
             </a>
           ))}
       </nav>

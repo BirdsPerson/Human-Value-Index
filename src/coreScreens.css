@@ -91,6 +91,55 @@
 .hvi-judge-line { color: var(--fg-mute); font-size: var(--t-xs); }
 .hvi-cube-wait { display: flex; align-items: center; justify-content: center; color: var(--fg-mute); font-size: var(--t-xs); }
 
+/* ---------- the logon desk (DEPARTMENT OS) ----------
+   Phones: the logon window, then the ticker and the notice under it. Desktop: the logon
+   window left, the small windows beside it. */
+.hvi-desk { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.hvi-desk > .tb { margin-top: var(--s4); }
+@media (min-width: 900px) {
+  .hvi-desk { grid-template-columns: minmax(0, 640px) minmax(0, 1fr); gap: 0 var(--s6); }
+  .hvi-desk-side { padding-top: var(--s5); }
+}
+.hvi-tkr-link { display: block; color: inherit; text-decoration: none; }
+.hvi-tkr ul { list-style: none; margin: 0; padding: 0; font-size: var(--t-xs); }
+.hvi-tkr li { display: flex; gap: 1ch; padding: 3px 0; border-bottom: 1px dotted var(--line); color: var(--fg); }
+.hvi-tkr li .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hvi-tkr .up { color: var(--accent); } .hvi-tkr .dn { color: var(--harm); }
+.hvi-tkr li > span:last-child { min-width: 7ch; text-align: right; }
+.hvi-tkr .go { display: flex; align-items: center; min-height: var(--hit-min); color: var(--eb-cyan); font-size: var(--t-xs); }
+@media (hover: hover) { .hvi-tkr-link:hover .go { text-decoration: underline; text-underline-offset: 4px; } }
+.hvi-tkr-link:focus-visible { outline: var(--focus); outline-offset: 4px; }
+.hvi-notice p { display: flex; gap: var(--s3); align-items: flex-start; margin: 0; color: var(--fg); }
+.hvi-notice .ic { flex: none; width: 40px; height: 40px; border: 2px solid var(--eb-amber); color: var(--eb-amber); display: grid; place-items: center; font-weight: 700; font-size: 20px; }
+
+/* ---------- the five doors: push-buttons with a 16x16 icon (HyperCard, Kare-style) ---------- */
+.hvi-logon .hvi-doors { border-top: 0; margin: var(--s4) 0 var(--s3); }
+.hvi-logon .hvi-doors > li { border-bottom: 0; margin: 0 8px var(--s3) 0; display: flex; }
+.hvi-doors > li > .ui-cmd { flex: 1; }
+.hvi-doors .ui-cmd { grid-template-columns: 2ch minmax(0, 1fr) 32px; column-gap: var(--s3); padding: var(--s2) var(--s3);
+  background: var(--accent); color: var(--accent-ink); box-shadow: 8px 6px 0 var(--shadow); }
+.hvi-doors .ui-cmd .n { color: var(--hot); font-weight: 700; grid-row: 1 / span 2; }
+.hvi-doors .ui-cmd .l { font-weight: 700; }
+.hvi-doors .ui-cmd .s { color: var(--accent-ink); }
+.hvi-doors .ui-cmd::after { content: ""; grid-column: 3; grid-row: 1 / span 2; width: 32px; height: 32px; background: currentColor;
+  -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; }
+.hvi-doors .ui-cmd[aria-current="true"] { background: var(--accent); color: var(--accent-ink); outline: 2px solid var(--fg); outline-offset: 3px; }
+.hvi-doors .ui-cmd[aria-current="true"] :is(.s) { color: var(--accent-ink); }
+.hvi-doors .ui-cmd[aria-current="true"] .n { color: var(--hot); }
+.hvi-doors .ui-cmd:active { transform: translate(8px, 6px); box-shadow: none; }
+@media (hover: hover) { .hvi-doors .ui-cmd:hover .l { text-decoration: underline; text-underline-offset: 4px; } }
+.hvi-doors .ui-cmd:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .hvi-doors .ui-cmd:active { transform: none; } }
+@media (min-width: 900px) {
+  .hvi-logon .hvi-doors { display: grid; grid-template-columns: 1fr 1fr; gap: 0 var(--s3); }
+  .hvi-logon .hvi-doors > li:first-child { grid-column: 1 / -1; }
+}
+.hvi-doors .ic-eye::after { --ic: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27 shape-rendering=%27crispEdges%27%3E%3Cpath d=%27M5 3h6v1h-6zM3 4h2v1h-2zM11 4h2v1h-2zM2 5h1v1h-1zM6 5h4v1h-4zM13 5h1v1h-1zM1 6h1v1h-1zM5 6h6v1h-6zM14 6h1v1h-1zM0 7h1v1h-1zM5 7h2v1h-2zM9 7h2v1h-2zM15 7h1v1h-1zM0 8h1v1h-1zM5 8h2v1h-2zM9 8h2v1h-2zM15 8h1v1h-1zM1 9h1v1h-1zM5 9h6v1h-6zM14 9h1v1h-1zM2 10h1v1h-1zM6 10h4v1h-4zM13 10h1v1h-1zM3 11h2v1h-2zM11 11h2v1h-2zM5 12h6v1h-6z%27/%3E%3C/svg%3E"); }
+.hvi-doors .ic-city::after { --ic: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27 shape-rendering=%27crispEdges%27%3E%3Cpath d=%27M10 1h3v1h-3zM10 2h1v1h-1zM12 2h1v1h-1zM3 3h3v1h-3zM10 3h1v1h-1zM12 3h1v1h-1zM3 4h1v1h-1zM5 4h1v1h-1zM8 4h3v1h-3zM12 4h1v1h-1zM3 5h1v1h-1zM5 5h1v1h-1zM8 5h1v1h-1zM10 5h1v1h-1zM12 5h1v1h-1zM1 6h3v1h-3zM5 6h1v1h-1zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h3v1h-3zM1 7h1v1h-1zM3 7h1v1h-1zM5 7h4v1h-4zM10 7h1v1h-1zM12 7h1v1h-1zM14 7h1v1h-1zM1 8h1v1h-1zM3 8h1v1h-1zM5 8h1v1h-1zM8 8h1v1h-1zM10 8h1v1h-1zM12 8h1v1h-1zM14 8h1v1h-1zM1 9h1v1h-1zM3 9h1v1h-1zM5 9h1v1h-1zM8 9h1v1h-1zM10 9h1v1h-1zM12 9h1v1h-1zM14 9h1v1h-1zM1 10h1v1h-1zM3 10h1v1h-1zM5 10h1v1h-1zM8 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM14 10h1v1h-1zM1 11h1v1h-1zM3 11h1v1h-1zM5 11h1v1h-1zM8 11h1v1h-1zM10 11h1v1h-1zM12 11h1v1h-1zM14 11h1v1h-1zM0 12h16v1h-16z%27/%3E%3C/svg%3E"); }
+.hvi-doors .ic-die::after { --ic: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27 shape-rendering=%27crispEdges%27%3E%3Cpath d=%27M1 1h14v1h-14zM1 2h1v1h-1zM14 2h1v1h-1zM1 3h1v1h-1zM3 3h2v1h-2zM11 3h2v1h-2zM14 3h1v1h-1zM1 4h1v1h-1zM3 4h2v1h-2zM11 4h2v1h-2zM14 4h1v1h-1zM1 5h1v1h-1zM14 5h1v1h-1zM1 6h1v1h-1zM14 6h1v1h-1zM1 7h1v1h-1zM7 7h2v1h-2zM14 7h1v1h-1zM1 8h1v1h-1zM7 8h2v1h-2zM14 8h1v1h-1zM1 9h1v1h-1zM14 9h1v1h-1zM1 10h1v1h-1zM14 10h1v1h-1zM1 11h1v1h-1zM3 11h2v1h-2zM11 11h2v1h-2zM14 11h1v1h-1zM1 12h1v1h-1zM3 12h2v1h-2zM11 12h2v1h-2zM14 12h1v1h-1zM1 13h1v1h-1zM14 13h1v1h-1zM1 14h14v1h-14z%27/%3E%3C/svg%3E"); }
+.hvi-doors .ic-ballot::after { --ic: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27 shape-rendering=%27crispEdges%27%3E%3Cpath d=%27M5 0h6v1h-6zM5 1h1v1h-1zM10 1h1v1h-1zM5 2h1v1h-1zM7 2h2v1h-2zM10 2h1v1h-1zM5 3h1v1h-1zM10 3h1v1h-1zM5 4h1v1h-1zM7 4h2v1h-2zM10 4h1v1h-1zM2 5h12v1h-12zM2 6h1v1h-1zM13 6h1v1h-1zM2 7h1v1h-1zM4 7h8v1h-8zM13 7h1v1h-1zM2 8h1v1h-1zM13 8h1v1h-1zM2 9h1v1h-1zM13 9h1v1h-1zM2 10h1v1h-1zM13 10h1v1h-1zM2 11h1v1h-1zM13 11h1v1h-1zM2 12h1v1h-1zM13 12h1v1h-1zM2 13h1v1h-1zM13 13h1v1h-1zM2 14h12v1h-12z%27/%3E%3C/svg%3E"); }
+.hvi-doors .ic-bars::after { --ic: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27 shape-rendering=%27crispEdges%27%3E%3Cpath d=%27M12 1h3v1h-3zM12 2h1v1h-1zM14 2h1v1h-1zM12 3h1v1h-1zM14 3h1v1h-1zM7 4h3v1h-3zM12 4h1v1h-1zM14 4h1v1h-1zM7 5h1v1h-1zM9 5h1v1h-1zM12 5h1v1h-1zM14 5h1v1h-1zM7 6h1v1h-1zM9 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM2 7h3v1h-3zM7 7h1v1h-1zM9 7h1v1h-1zM12 7h1v1h-1zM14 7h1v1h-1zM2 8h1v1h-1zM4 8h1v1h-1zM7 8h1v1h-1zM9 8h1v1h-1zM12 8h1v1h-1zM14 8h1v1h-1zM2 9h1v1h-1zM4 9h1v1h-1zM7 9h1v1h-1zM9 9h1v1h-1zM12 9h1v1h-1zM14 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM7 10h1v1h-1zM9 10h1v1h-1zM12 10h1v1h-1zM14 10h1v1h-1zM2 11h1v1h-1zM4 11h1v1h-1zM7 11h1v1h-1zM9 11h1v1h-1zM12 11h1v1h-1zM14 11h1v1h-1zM2 12h1v1h-1zM4 12h1v1h-1zM7 12h1v1h-1zM9 12h1v1h-1zM12 12h1v1h-1zM14 12h1v1h-1zM0 13h16v1h-16z%27/%3E%3C/svg%3E"); }
+
 /* ---------- logon menu ---------- */
 .hvi-logon .ui-cmd-list { margin: var(--s4) 0 0; }
 /* MORE ROOMS continues the door list: its own top rule would double the last door's. */
@@ -101,7 +150,7 @@
 .hvi-logon .hvi-prompt { margin-top: var(--s2); }
 @media (max-width: 720px) {
   /* Command rows run edge to edge of the frame on a phone: more thumb, same grid. */
-  .hvi-logon .ui-cmd-list { margin-left: -1ch; margin-right: -1ch; }
+  .hvi-logon .ui-cmd-list:not(.hvi-doors) { margin-left: -1ch; margin-right: -1ch; }
 }
 
 /* ---------- survey ---------- */

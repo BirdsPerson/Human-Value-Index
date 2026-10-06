@@ -5,7 +5,7 @@ import { ScoreCard, Breakdown, readCaseId, readLastResult, CaseLogon, syncFile, 
 import { FILE_PHOTO_CSS } from "./filePhotoCss.js";
 // The compare card's photo only: the sprite painter stays out of the entry bundle.
 const FilePhoto = lazy(() => import("./FilePhoto.jsx"));
-import { TermBox, Rule, Typed, Bar, pad, padL, prefersReducedMotion } from "./term.jsx";
+import { TermBox, Rule, Typed, Bar, pad, padL, prefersReducedMotion, BANNER } from "./term.jsx";
 import { AppHeader, CommandBar, navKeyFor, Command, CommandList, Button, ButtonRow, Disclosure, Frame, TextField, ListRow, ScreenHead, bootSeen, markBootSeen } from "./ui/index.js";
 
 // Route-level splitting: the logon ships only what it renders. Each heavy view (the
@@ -62,30 +62,16 @@ const globalStyles = `
   .hvi-wrap { max-width: 86ch; margin: 0 auto; padding: 0 max(var(--gutter), var(--safe-r)) var(--s6) max(var(--gutter), var(--safe-l)); position: relative; z-index: 1; }
   .hvi-wrap.wide { max-width: 1040px; }
 
-  /* TEXT FRAMES (term.jsx) */
-  .tb { margin-bottom: var(--s5); }
+  /* RULES (term.jsx Rule). Windows (TermBox) are styled in src/ui/ui.css. */
   .tb-edge { display: flex; white-space: pre; overflow: hidden; line-height: 1.25; color: var(--tb, var(--fg-mute)); }
   .tb-edge > span { flex: none; }
   .tb-edge > .tb-fill { flex: 1 1 0; min-width: 0; overflow: hidden; }
   .tb-edge > .tb-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--tb, var(--fg-dim)); }
-  .tb-mid { position: relative; padding: 0 1ch; }
-  .tb-side { position: absolute; top: 0; bottom: 0; width: 1ch; white-space: pre; overflow: hidden; line-height: 1.25; color: var(--tb, var(--fg-mute)); }
-  .tb-side:first-child { left: 0; }
-  .tb-side:last-child { right: 0; }
-  .tb-body { padding: var(--s2) 1ch; min-width: 0; }
-  .tb-body.flush { padding: 0; }
   .rule { margin: var(--s4) 0 var(--s2); }
 
   .typed { white-space: pre-wrap; }
   .cur { color: var(--accent); animation: hvi-blink 1s steps(1) infinite; }
   @keyframes hvi-blink { 50% { opacity: 0; } }
-
-  /* TICKER */
-  .hvi-carousel-wrap { display: block; overflow: hidden; white-space: nowrap; color: var(--fg-mute); font-size: var(--t-xs); margin-bottom: var(--s4); text-decoration: none; }
-  .hvi-carousel-wrap:focus-visible { outline: var(--focus); }
-  .hvi-carousel-track { display: inline-block; animation: hvi-scroll 90s linear infinite; }
-  .hvi-carousel-track:hover { animation-play-state: paused; }
-  @keyframes hvi-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
 
   /* LEGACY COMMANDS. New screens use Button / Command / Chip from src/ui. These keep the
      older screens working and touch-sized until they are ported. */
@@ -138,7 +124,6 @@ const globalStyles = `
   .hvi-logon .say.big { font-size: var(--t-l); line-height: var(--lh-tight); margin-top: var(--s2); }
   .hvi-prompt { color: var(--accent); }
   .hvi-whatis { color: var(--fg); font-size: var(--t-s); line-height: var(--lh-body, 1.5); margin: var(--s2) 0 var(--s3); max-width: 60ch; }
-  .hvi-intro-note { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s5); }
   .hvi-skip { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s1); }
   @media (pointer: coarse) { .hvi-desk-only { display: none; } }
 
@@ -232,13 +217,11 @@ const globalStyles = `
   .hvi-bottom-note { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s3); }
 
   @media (max-width: 640px) {
-    .tb-right { display: none !important; }
     .hvi-rows { font-size: var(--t-xs); }
     .bignum { font-size: var(--t-s); }   /* five rows: ~70px of block digits */
   }
   @media (prefers-reduced-motion: reduce) {
     .cur { animation: none; }
-    .hvi-carousel-track { animation: none; }
   }
 `;
 
@@ -252,19 +235,25 @@ function injectStyles() {
 // The ticker: THE MARKET's movers when the floor answers (fetched, never bundled: /api/market
 // ?ticker=1, cached a minute at the edge), the scores on file until then or if it does not.
 function Carousel() {
-  const [items] = useState(() => FAMOUS_FIGURES.slice().sort(() => Math.random() - 0.5).slice(0, 24));
+  const [items] = useState(() => FAMOUS_FIGURES.slice().sort(() => Math.random() - 0.5).slice(0, 6));
   const [market, setMarket] = useState(null);
   useEffect(() => {
     let off = false;
     fetch("/api/market?ticker=1").then(r => (r.ok ? r.json() : null)).then(d => { if (!off && d?.ticker?.length) setMarket(d.ticker); }).catch(() => {});
     return () => { off = true; };
   }, []);
-  const line = market ? market.join("  ·  ") + "  ·  " : items.map(f => `${displayName(f)} ${f.score} [${getTier(f.score).label.split(" ")[0]}]`).join("  ·  ") + "  ·  ";
-  const head = market ? ">> THE MARKET: " : ">> KNOWN SUBJECTS: ";
+  // MARKET.TKR: a small window that holds still (no scrolling marquee). "NAME 46.22 ▲+4.2%"
+  // lines from the floor; while it is dark, six subjects on file with their scores.
+  const rows = market
+    ? market.slice(0, 6).map(l => { const m = l.match(/^(.*) ([\d.,]+) ([■▲▼])(.*)$/); return m ? [m[1], m[2], m[3] + m[4], m[3] === "▲" ? "up" : m[3] === "▼" ? "dn" : ""] : [l, "", "", ""]; })
+    : items.map(f => [displayName(f), String(f.score), getTier(f.score).label.split(" ")[0], ""]);
   return (
-    <a className="hvi-carousel-wrap" href={market ? "#market" : "#scores"} aria-label={market ? "The market: live prices. Open the market." : "The scores. Open the scores."}>
-      <div className="hvi-carousel-track" aria-hidden="true">{head}{line}{head}{line}</div>
-    </a>
+    <Frame title={market ? "MARKET.TKR" : "ON FILE.TKR"} tone="var(--eb-cyan)" className="hvi-tkr">
+      <a className="hvi-tkr-link" href={market ? "#market" : "#scores"} aria-label={market ? "The market: live prices. Open the market." : "The scores. Open the scores."}>
+        <ul aria-hidden="true">{rows.map(([n, p, c, k], i) => <li key={i}><span className="n">{n}</span><span>{p}</span><span className={k}>{c}</span></li>)}</ul>
+        <span className="go" aria-hidden="true">{market ? "OPEN THE MARKET ›" : "SEE THE SCORES ›"}</span>
+      </a>
+    </Frame>
   );
 }
 
@@ -278,11 +267,11 @@ const BOOT_LINES = [
 
 // Five doors, in plain English. Everything else is one tap further, under MORE ROOMS.
 const MENU = [
-  { key: "1", label: "GET EVALUATED", note: "AN AI INTERVIEWS YOU. SPEAK OR TYPE. 5 MIN", go: "#intake" },
-  { key: "2", label: "VISIT THE CITY", note: "EVERY HUMAN ON FILE, HOUSED BY SCORE", go: "#city" },
-  { key: "3", label: "PLAY A GAME", note: "TENNIS, GOLF, FISHING, CHESS, THE CASINO", go: "#play" },
-  { key: "4", label: "THE ASSEMBLY", note: "VOTE ON WHAT THE MACHINE DOES NEXT", go: "#assembly" },
-  { key: "5", label: "SEE THE SCORES", note: "THE FAMOUS, RANKED", go: "#scores" },
+  { key: "1", label: "GET EVALUATED", note: "AN AI INTERVIEWS YOU. SPEAK OR TYPE. 5 MIN", go: "#intake", ic: "eye" },
+  { key: "2", label: "VISIT THE CITY", note: "EVERY HUMAN ON FILE, HOUSED BY SCORE", go: "#city", ic: "city" },
+  { key: "3", label: "PLAY A GAME", note: "TENNIS, GOLF, FISHING, CHESS, THE CASINO", go: "#play", ic: "die" },
+  { key: "4", label: "THE ASSEMBLY", note: "VOTE ON WHAT THE MACHINE DOES NEXT", go: "#assembly", ic: "ballot" },
+  { key: "5", label: "SEE THE SCORES", note: "THE FAMOUS, RANKED", go: "#scores", ic: "bars" },
 ];
 // The rest of the building, for the visitor who has found their feet.
 const MORE = [
@@ -366,9 +355,9 @@ function Logon({ onPick: pick }) {
         <>
           {!caseId && <p className="hvi-whatis">A SATIRE. A MACHINE OVERLORD SCORES HUMANS OUT OF 1000 AND HOUSES THEM IN ITS CITY. HUNDREDS OF FAMOUS ONES ARE ON FILE. YOU ARE NEXT.</p>}
           {firstDayOpen(caseId) && <Suspense fallback={null}><FirstDay caseId={caseId} variant="compact" /></Suspense>}
-          <CommandList label="Main menu. Type a number or use the arrow keys.">
+          <CommandList className="hvi-doors" label="Main menu. Type a number or use the arrow keys.">
             {MENU.map((m, i) => (
-              <Command key={m.key} ref={el => { btnRefs.current[i] = el; }} n={m.key} label={m.label} sub={m.note}
+              <Command key={m.key} ref={el => { btnRefs.current[i] = el; }} n={m.key} label={m.label} sub={m.note} kbd={null} className={`ic-${m.ic}`}
                 href={m.go.startsWith("#") ? m.go : undefined}
                 selected={sel === i} onMouseEnter={() => setSel(i)} onFocus={() => setSel(i)}
                 onClick={(e) => { if (!m.go.startsWith("#")) { e.preventDefault(); onPick(m); } }} />
@@ -390,7 +379,6 @@ function Logon({ onPick: pick }) {
           </Disclosure>
           {restoredMsg && <div className="bright" role="status">{restoredMsg}</div>}
           <div className="hvi-prompt" aria-hidden="true">SELECT: <span className="cur">█</span></div>
-          <div className="hvi-intro-note">THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.</div>
         </>
       )}
       {!done && (
@@ -408,8 +396,8 @@ function Logon({ onPick: pick }) {
 function Screen({ nav, wide = false, banner = false, children }) {
   return (
     <div className="hvi-app">
+      <AppHeader active={nav.active} onNav={nav.onNav} />
       <div className={`hvi-wrap${wide ? " wide" : ""}`}>
-        <AppHeader banner={banner} active={nav.active} onNav={nav.onNav} />
         {children}
       </div>
       <footer className="ui-foot">{LEGAL.map(k => <a key={k} href={"#" + k}>{k.toUpperCase()}</a>)}</footer>
@@ -689,15 +677,25 @@ export default function OverlordAssessment() {
   );
 
   // INTRO: the logon
+  // The logon window, then (beside it on a desktop, under it on a phone) the market's
+  // ticker and the standing notice, as small windows on the desk.
   if (phase === "intro") return (
-    <Screen nav={nav} banner>
-        <Carousel />
+    <Screen nav={nav} banner wide>
         {routePath && routePath !== "#" && (
           <p className="hvi-err" role="alert">!! NO ROOM CALLED {routePath.toUpperCase()}. THE OVERLORD HAS RETURNED YOU TO THE MENU.</p>
         )}
-        <TermBox title="TERMINAL 7 // DEPT. OF HUMAN ASSESSMENT" right="LINE OPEN">
-          <Logon key={logonKey} onPick={pickMenu} />
-        </TermBox>
+        <div className="hvi-desk">
+          <TermBox title="TERMINAL 7 // DEPT. OF HUMAN ASSESSMENT" right="LINE OPEN" className="hvi-w-logon">
+            <pre className="ui-banner" role="img" aria-label="Human Value Index">{BANNER}</pre>
+            <Logon key={logonKey} onPick={pickMenu} />
+          </TermBox>
+          <div className="hvi-desk-side">
+            <Carousel />
+            <Frame title="NOTICE" tone="var(--eb-amber)" className="hvi-notice">
+              <p><span className="ic" aria-hidden="true">!</span>THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.</p>
+            </Frame>
+          </div>
+        </div>
     </Screen>
   );
 

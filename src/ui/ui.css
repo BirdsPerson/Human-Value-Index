@@ -12,67 +12,109 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 400 var(--t-s)/
 a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-offset: 3px; }
 [id] { scroll-margin-top: calc(var(--head-h) + var(--safe-t) + var(--s2)); }
 
-/* ---------- shell: header ---------- */
-.ui-head { position: sticky; top: 0; z-index: 50; background: var(--bg); padding-top: var(--safe-t);
-  margin: 0 calc(var(--gutter) * -1) var(--s4); padding-left: var(--gutter); padding-right: var(--gutter); }
-.ui-head-line { display: flex; align-items: center; gap: var(--s3); height: var(--head-h);
-  border-bottom: var(--bw) solid var(--line); font-size: var(--t-xs); color: var(--fg-mute); white-space: nowrap; }
-.ui-head-mark { color: var(--accent); font-weight: 700; letter-spacing: 0.08em; text-decoration: none;
+/* ---------- the desktop (DEPARTMENT OS, 2026-10-05) ----------
+   Turbo Vision (Borland, 1990) / Norton Commander (1986): windows on a halftone desktop.
+   The dither is two 1px dots in a 4px tile, dim enough that a line of text sitting on it
+   (not every room is in windows yet) still reads. Same value as --desk-dot. */
+.hvi-app { background-color: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Crect width='1' height='1' fill='%231c4027'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%231c4027'/%3E%3C/svg%3E"); }
+
+/* ---------- shell: the menu bar ----------
+   Light bar, dark ink, the hotkey letter in --hot. Full-bleed, sticky. */
+.ui-head { position: sticky; top: 0; z-index: 50; background: var(--fg-dim); padding-top: var(--safe-t); margin: 0 0 var(--s5); }
+.ui-head-line { display: flex; align-items: center; gap: var(--s2); height: var(--head-h); max-width: 1040px; margin: 0 auto;
+  padding: 0 max(var(--s2), var(--safe-r)) 0 max(var(--s2), var(--safe-l)); font-size: var(--t-xs); color: var(--accent-ink); white-space: nowrap; }
+.ui-head-mark { color: var(--accent-ink); font-weight: 700; letter-spacing: 0.06em; text-decoration: none; padding: 0 var(--s2);
   min-height: var(--hit-min); display: inline-flex; align-items: center; flex: none; }
 @media (hover: hover) { .ui-head-mark:hover { text-decoration: underline; text-underline-offset: 4px; } }
-.ui-head-nav { display: none; gap: var(--s1); margin-left: var(--s3); }
-.ui-head-nav a { color: var(--fg-dim); text-decoration: none; padding: 0 var(--s2); min-height: 32px; display: inline-flex; align-items: center; }
-@media (hover: hover) { .ui-head-nav a:hover { color: var(--fg); text-decoration: underline; text-underline-offset: 4px; } }
-.ui-head-nav a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
-.ui-head-case { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ui-head-case b { color: var(--fg-dim); font-weight: 500; }
-.ui-head-ok { color: var(--accent); flex: none; display: none; }
-.ui-head-econ { flex: none; color: var(--warn); text-decoration: none; white-space: nowrap; }
+.ui-head-nav { display: none; gap: 0; margin-left: var(--s2); align-self: stretch; }
+.ui-head-nav a { color: var(--accent-ink); text-decoration: none; padding: 0 var(--s3); display: inline-flex; align-items: center; }
+.ui-head-nav a u { text-decoration: none; color: var(--hot); font-weight: 700; }
+@media (hover: hover) { .ui-head-nav a:hover { background: var(--fg); } }
+.ui-head-nav a[aria-current="page"] { background: var(--accent-ink); color: var(--accent); }
+.ui-head-nav a[aria-current="page"] u { color: var(--warn); }
+.ui-head :focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -4px; }
+.ui-head-case { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding-right: var(--s2); }
+.ui-head-case b { color: var(--accent-ink); font-weight: 700; }
+.ui-head-ok { color: var(--accent-ink); flex: none; display: none; padding-right: var(--s2); }
+/* The balance chip: an inverse cell on the light bar, so the amber still reads. */
+.ui-head-econ { flex: none; color: var(--warn); background: var(--accent-ink); text-decoration: none; white-space: nowrap; padding: 2px var(--s2); }
 .ui-head-econ .tray { color: var(--accent); }
 @media (hover: hover) { .ui-head-econ:hover { text-decoration: underline; text-underline-offset: 4px; } }
-/* The block-letter banner: the menu only. Scales to the width so it never scrolls. */
-.ui-banner { color: var(--accent); white-space: pre; overflow: hidden; line-height: 1.05; margin: var(--s4) 0 var(--s2);
-  font-size: min(14px, calc((100vw - 2 * var(--gutter)) / 42)); }
+/* The block-letter banner: inside the logon window, on the menu only. Scales to the width. */
+.ui-banner { color: var(--accent); white-space: pre; overflow: hidden; line-height: 1.05; margin: var(--s2) 0 var(--s3);
+  font-size: min(14px, calc((100vw - 2 * var(--gutter) - 48px) / 42)); text-shadow: 1px 1px 0 var(--shadow); }
 @media (min-width: 721px) {
   .ui-head-nav { display: flex; }
   .ui-head-ok { display: inline; }
+  :root { --head-h: 36px; }
 }
 
-/* ---------- shell: bottom command bar (phones and small tablets) ---------- */
-.ui-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; background: var(--panel);
-  border-top: var(--bw) solid var(--line-hi); display: grid; grid-template-columns: repeat(4, 1fr);
+/* ---------- shell: the F-key strip (phones and small tablets) ----------
+   Norton Commander's bottom line as the 4-cell command bar. The key name sits over the
+   label in --hot; the current room is inverse. */
+.ui-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; background: var(--fg-dim);
+  border-top: 2px solid var(--accent-ink); display: grid; grid-template-columns: repeat(4, 1fr);
   padding: 0 var(--safe-r) var(--safe-b) var(--safe-l); }
 .ui-bar a, .ui-bar button { height: var(--bar-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  color: var(--fg-dim); text-decoration: none; font: inherit; font-size: var(--t-xs); letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--accent-ink); text-decoration: none; font: inherit; font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   background: none; border: 0; border-radius: 0; cursor: pointer; min-width: 0; padding: 0 var(--s1); }
-.ui-bar .g { color: var(--fg); font-size: var(--t-m); line-height: 1; }
-.ui-bar [aria-current="page"] { background: var(--accent); color: var(--accent-ink); }
-.ui-bar [aria-current="page"] .g { color: var(--accent-ink); }
-.ui-bar .ctx { color: var(--warn); }
-.ui-bar .ctx .g { color: var(--warn); }
-.ui-bar a:active, .ui-bar button:active { background: var(--panel-hi); }
-.ui-bar :focus-visible { outline-offset: -3px; }
+.ui-bar a + a, .ui-bar a + button, .ui-bar button + a { border-left: 1px solid var(--fg-mute); }
+.ui-bar .g { color: var(--hot); font-size: var(--t-xs); line-height: 1; }
+.ui-bar [aria-current="page"] { background: var(--accent-ink); color: var(--accent); }
+.ui-bar [aria-current="page"] .g { color: var(--warn); }
+.ui-bar .ctx { background: var(--eb-amber); color: #2e1c03; }
+.ui-bar .ctx .g { color: var(--hot); }
+.ui-bar a:active, .ui-bar button:active { background: var(--fg); }
+.ui-bar :focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -4px; }
+.ui-bar [aria-current="page"]:focus-visible { outline-color: var(--accent); }
 .ui-bar-pad { height: calc(var(--bar-h) + var(--safe-b) + var(--s4)); }
 @media (min-width: 721px) { .ui-bar, .ui-bar-pad { display: none; } }
 /* The software keyboard is up: the bar would sit on top of the field. */
 .hvi-kb-open .ui-bar, .hvi-kb-open .ui-bar-pad { display: none; }
 
-/* ---------- ScreenHead ---------- */
-.ui-screen-head { margin: var(--s2) 0 var(--s4); }
-.ui-screen-head h1 { margin: 0; font-size: var(--t-l); line-height: var(--lh-tight); font-weight: 700; color: var(--accent); letter-spacing: 0.06em; }
-.ui-screen-head h1::before { content: "> "; color: var(--fg-mute); font-weight: 400; }
-.ui-screen-head .m { margin: var(--s1) 0 0; font-size: var(--t-xs); color: var(--fg-mute); max-width: 72ch; }
+/* ---------- Headline: the teletext band ----------
+   Tall VT323 on a solid band, page number right. SNTX DUKE / Revin only here, large. */
+.ui-tt { display: flex; align-items: baseline; gap: 1ch; margin: 0; padding: 2px var(--s3) 0; background: var(--accent); color: var(--accent-ink);
+  font-family: var(--tall); font-weight: 400; font-size: 32px; line-height: 1.05; letter-spacing: 0.02em; text-transform: uppercase; }
+.ui-tt .t { min-width: 0; overflow-wrap: anywhere; }
+.ui-tt .p { margin-left: auto; flex: none; font-family: var(--mono); font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.04em; }
+.ui-tt.cy { background: var(--eb-cyan); color: #06262c; }
+.ui-tt.am { background: var(--eb-amber); color: #2e1c03; }
+.ui-tt.du { background: var(--duke); color: #2a0508; }
+.ui-tt.rv { background: var(--revin); color: #fff; }
+@media (min-width: 721px) { .ui-tt { font-size: 38px; } }
 
-/* ---------- Frame ---------- */
-.ui-frame { position: relative; border: var(--bw) solid var(--tone, var(--line)); padding: var(--s4) var(--s4) var(--s3);
-  margin: var(--s5) 0 var(--s5); }
-.ui-frame-ttl { position: absolute; top: calc(-0.5em - 1px); left: var(--s3); right: var(--s3); display: flex; gap: var(--s3);
-  justify-content: space-between; pointer-events: none; font-size: var(--t-xs); line-height: 1; letter-spacing: 0.1em; }
-.ui-frame-ttl > * { background: var(--bg); padding: 0 var(--s2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ui-frame-ttl .t { color: var(--tone, var(--fg-dim)); flex: 0 1 auto; }
-.ui-frame-ttl .m { color: var(--fg-mute); flex: 0 1000 auto; }
+/* ---------- ScreenHead ---------- */
+.ui-screen-head { margin: 0 0 var(--s5); }
+.ui-screen-head .m { margin: 0; padding: var(--s2) var(--s3); background: var(--panel); border-bottom: var(--bw) solid var(--line);
+  font-size: var(--t-xs); color: var(--fg-dim); }
+
+/* ---------- Window (Frame, TermBox) ----------
+   A double frame on --panel with a hard black drop shadow; the title is cut into the top
+   border, a [■] close box on the left. Decoration only: the title row is aria-hidden and
+   the section is labelled by its title. Frame's `tone` / TermBox's `tone` colour the frame.
+   Nested windows lose the shadow (one level of depth reads; two is clutter). */
+.ui-frame, .tb { position: relative; background: var(--panel); border: 4px double var(--tone, var(--tb, var(--line-hi)));
+  box-shadow: 8px 8px 0 var(--shadow); margin: var(--s6) 8px var(--s5) 0; padding: var(--s4) var(--s3) var(--s3); }
+.tb { --tone: var(--tb, var(--fg-dim)); }
+.tb.dbl { border-width: 6px; }
+:is(.ui-frame, .tb) :is(.ui-frame, .tb) { box-shadow: none; margin-right: 0; }
+.ui-frame-ttl, .tb-top { position: absolute; top: calc(-0.75em - 2px); left: var(--s2); right: var(--s2); display: flex; align-items: center; gap: var(--s2);
+  pointer-events: none; font-size: var(--t-xs); line-height: 1.5; letter-spacing: 0.08em; white-space: nowrap; }
+.ui-frame-ttl > *, .tb-top > * { background: var(--panel); padding: 0 0.5ch; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ui-frame-ttl .b, .tb-box { flex: none; color: var(--accent); letter-spacing: 0; }
+.ui-frame-ttl .t, .tb-top .tb-title { color: var(--tone, var(--fg)); font-weight: 700; flex: 0 1 auto; margin: 0 auto; }
+.ui-frame-ttl .m, .tb-top .tb-right { color: var(--fg-mute); font-weight: 400; flex: 0 1000 auto; margin: 0; }
+.ui-frame-ttl > span:empty { display: none; }
 .ui-frame.flush { padding: 0; }
-.tb .tb-title { text-overflow: ellipsis; }
+.tb-body { min-width: 0; }
+.tb:has(> .tb-body.flush) { padding: 0; }
+@media (max-width: 640px) { .tb-top .tb-right { display: none; } }
+@media (max-width: 420px) {
+  .ui-frame, .tb { padding-left: var(--s2); padding-right: var(--s2); box-shadow: 6px 6px 0 var(--shadow); margin-right: 6px; }
+  .tb:has(> .tb-body.flush) { padding: 0; }
+}
 
 /* ---------- Command (row) ---------- */
 .ui-cmd-list { list-style: none; margin: var(--s4) 0; padding: 0; border-top: var(--bw) solid var(--line); }
@@ -102,10 +144,16 @@ a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-of
 .ui-btn { display: inline-flex; align-items: center; justify-content: flex-start; gap: 1ch; min-height: var(--hit-min);
   padding: 0 1ch; background: none; border: 0; border-radius: 0; color: var(--accent); font: inherit; text-transform: uppercase;
   text-decoration: none; text-align: left; cursor: pointer; letter-spacing: 0; }
-/* [ LABEL ]: the brackets carry their own space, so no flex gap (it read "[  LABEL  ]"). */
-.ui-btn.primary { font-weight: 700; gap: 0; }
-.ui-btn.primary::before { content: "[ "; white-space: pre; }
-.ui-btn.primary::after { content: " ]"; white-space: pre; }
+/* primary and push: a Turbo Vision push-button. Solid face, block shadow one cell down-right;
+   pressed, the face drops into the shadow. Turbo Vision's buttons really were green. */
+.ui-btn:is(.primary, .push) { font-weight: 700; justify-content: center; min-height: var(--hit); padding: var(--s2) var(--s4);
+  background: var(--accent); color: var(--accent-ink); box-shadow: 6px 6px 0 var(--shadow); margin: 0 6px 6px 0; text-align: center; }
+.ui-btn:is(.primary, .push).am { background: var(--eb-amber); color: #2e1c03; }
+.ui-btn:is(.primary, .push).sec { background: var(--fg-dim); color: var(--accent-ink); }
+.ui-btn:is(.primary, .push):active { transform: translate(6px, 6px); box-shadow: none; }
+.ui-btn:is(.primary, .push):focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; background: var(--accent); color: var(--accent-ink); }
+.ui-btn:is(.primary, .push).am:focus-visible { background: var(--eb-amber); color: #2e1c03; }
+.ui-btn:is(.primary, .push).sec:focus-visible { background: var(--fg-dim); }
 .ui-btn.secondary { color: var(--fg-dim); }
 .ui-btn.secondary::before { content: ">"; color: var(--fg-mute); }
 .ui-btn.back { color: var(--fg-dim); }
@@ -118,9 +166,11 @@ a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-of
 @media (hover: hover) {
   .ui-btn:hover { background: var(--accent); color: var(--accent-ink); outline: none; }
   .ui-btn:hover::before { color: var(--accent-ink); }
+  .ui-btn:is(.primary, .push):hover { background: var(--fg); }
 }
-.ui-btn:active { background: var(--panel-hi); }
+.ui-btn:not(.primary):not(.push):active { background: var(--panel-hi); }
 .ui-btn:disabled, .ui-btn:disabled:hover { background: none; color: var(--fg-mute); cursor: default; }
+.ui-btn:is(.primary, .push):disabled, .ui-btn:is(.primary, .push):disabled:hover { background: var(--fg-ghost); color: var(--fg-dim); box-shadow: 6px 6px 0 var(--shadow); transform: none; }
 .ui-btn.block { display: flex; width: 100%; min-height: var(--hit); }
 .ui-btn-row { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); align-items: center; margin: var(--s4) 0; }
 .ui-btn-row.split { justify-content: space-between; }
@@ -234,10 +284,11 @@ textarea.ui-input { resize: vertical; min-height: calc(var(--t-m) * var(--lh) * 
 
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; }
+  .ui-btn:is(.primary, .push):active { transform: none; }
 }
 
 /* The satire line under every screen (App.jsx Screen). Copy: docs/legal/about.md. */
-.ui-foot { max-width: 86ch; margin: var(--s6) auto 0; padding: var(--s3) var(--gutter) var(--s4); border-top: var(--bw) solid var(--line);
+.ui-foot { max-width: 86ch; margin: var(--s6) auto 0; padding: var(--s3) var(--gutter) var(--s4); border-top: var(--bw) solid var(--line); background: var(--bg);
   font-size: var(--t-xs); line-height: 1.6; color: var(--fg-mute); letter-spacing: 0.02em; }
 .ui-foot a { color: var(--fg-dim); display: inline-block; padding: 4px 0; text-underline-offset: 3px; }
 /* The notice lives here, not in the JS: the logon's entry bundle is at its 90 KB budget
