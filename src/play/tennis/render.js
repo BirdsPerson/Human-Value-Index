@@ -10,8 +10,8 @@
 // everything standing on it shrinks with it. The sim's court is in metres and never sees this.
 // Three surfaces (sim.js SURFACES): the hard court (the show court's blue), clay (brushed red,
 // white tape, the ball's marks where it lands), grass (mown stripes, worn at the baselines).
-import { COURT, serverOfMatch } from "./sim.js";
-import { CHAIR, NET_JUDGE, JUDGES } from "./show.js";
+import { COURT, serverOfMatch, ptrOf, gestureShot, gestureServe } from "./sim.js";
+import { CHAIR, NET_JUDGE, JUDGES, REVIEW, BRAND } from "./show.js";
 import { shrinkHead } from "../heads.js";
 export { headFrom } from "../heads.js";
 
@@ -46,6 +46,12 @@ const CAM_Y = COURT.hl + DIST;                                   // the camera's
 export function proj(x, y, z = 0) {
   const s = FOCAL / (CAM_Y - y);
   return [Math.round(CX + x * s), Math.round(HORIZON + (CAM_H - z) * s), s];
+}
+// logical pixels -> the court floor, metres (the pointer: where a click on the picture lands), or null above the horizon
+export function unproj(px, py) {
+  const s = (py - HORIZON) / CAM_H;
+  if (s <= 0) return null;
+  return { x: (px - CX) / s, y: CAM_Y - FOCAL / s };
 }
 const projF = (x, y, z = 0) => { const s = FOCAL / (CAM_Y - y); return [CX + x * s, HORIZON + (CAM_H - z) * s, s]; };
 // The arena, metres: the side walls, the back wall, how high each is, the stands' tiers behind them.
@@ -87,7 +93,7 @@ const GL = {
   S: "011100010001110", T: "111010010010010", U: "101101101101111", V: "101101101101010", W: "101101111111101", X: "101101010101101",
   Y: "101101010010010", Z: "111001010100111", 0: "111101101101111", 1: "010110010010111", 2: "110001010100111", 3: "110001010001110",
   4: "101101111001001", 5: "111100110001110", 6: "011100111101111", 7: "111001010010010", 8: "111101111101111", 9: "111101111001110",
-  ".": "000000000000010", ",": "000000000010100", "-": "000000111000000", ":": "000010000010000", "!": "010010010000010", "'": "010010000000000", "/": "001001010100100",
+  ".": "000000000000010", ",": "000000000010100", "-": "000000111000000", "\u2014": "000000111000000", "?": "110001010000010", ":": "000010000010000", "!": "010010010000010", "'": "010010000000000", "/": "001001010100100",
 };
 export const textW = (s, k = 1) => (String(s).length * 4 - 1) * k;
 export function text(ctx, s, x, y, c, k = 1) {
@@ -359,7 +365,8 @@ function drawPlayer(ctx, P, look, frame) {
   line(ctx, hx, hy, ex, ey, PAL.grip);
   const rk = pen(ctx, ex, ey, k);
   rk(-1.6, -1.6, 3.2, 3.2, PAL.racket); rk(-0.6, -0.6, 1.2, 1.2, PAL.court);
-  R(-P.face * 4.2 - (P.face > 0 ? 0.6 : 0), -12.8, 1.4, 4.4, look.skin);
+  if (P.appeal > 8) { const a = -P.face; R(a * 3.4 - 0.6, -21.6, 1.4, 8.6, look.skin); R(a * 3.4 - 0.9, -23, 2, 1.8, look.skin); }   // a hand up to the chair
+  else R(-P.face * 4.2 - (P.face > 0 ? 0.6 : 0), -12.8, 1.4, 4.4, look.skin);
   const th = Math.max(4, Math.round(5.8 * k)), hd = look.head ? shrinkHead(look.head, th) : null;
   if (hd) ctx.drawImage(hd, Math.round(sx - hd.width / 2), Math.round(sy - 13.4 * k) - hd.height + 1);
   else {
@@ -412,6 +419,34 @@ export function draw(ctx, st, looks, frame, show = null) {
   items.sort((a, c) => a.y - c.y);
   for (const it of items) it.f();
   if (st.phase === "serve" && serverOfMatch(st) === 0 && !st.p[0].cpu) drawTossMeter(ctx, st);
+  if (st.v >= 3 && !st.p[0].cpu) drawAim(ctx, st);
+}
+
+// The pointer, held: where the player is running (a small cross on the floor) and, from the
+// player, the shot the drag is setting (its direction and colour: topspin green, slice blue, flat
+// white, lob gold). Nothing when the pointer is not down.
+const SPIN_INK = { drive: "#5cff8a", slice: "#6fb0ff", flat: "#e6e6e6", lob: "#e0c040", kick: "#5cff8a", sserve: "#6fb0ff", serve: "#e6e6e6" };
+const SPIN_TAG = { drive: "TOP", slice: "SLICE", flat: "FLAT", lob: "LOB", kick: "KICK", sserve: "SLICE", serve: "FLAT" };
+function drawAim(ctx, st) {
+  const P = st.p[0];
+  if (P.goal) { const [gx, gy] = proj(P.goal.x, P.goal.y); rect(ctx, gx - 2, gy, 5, 1, PAL.ball); rect(ctx, gx, gy - 2, 1, 5, PAL.ball); }
+  const pt = ptrOf(st.mask);
+  if (!pt) return;
+  const serving = st.phase === "serve" && serverOfMatch(st) === 0, kind = serving ? gestureServe(pt.gx, pt.gy).spin : gestureShot(pt.gx, pt.gy).shot;
+  // beside the player (the side the drag leans to), clear of the head
+  const [sx, sy, s] = proj(P.x, P.y), dir = pt.gx < 0 ? -1 : 1, ox = sx + dir * Math.round(s * 0.8), oy = Math.round(sy - s * 0.9), len = Math.hypot(pt.gx, pt.gy);
+  const ink = SPIN_INK[kind] || "#e6e6e6", tag = SPIN_TAG[kind] || "";
+  let tx = ox + dir * 4, ty = oy - 2;
+  if (len < 0.5) { rect(ctx, ox - 2, oy - 2, 5, 5, PAL.outline); rect(ctx, ox - 1, oy - 1, 3, 3, ink); }
+  else {
+    const ux = pt.gx / len, uy = pt.gy / len, L = 6 + 4 * len, ex = ox + ux * L, ey = oy + uy * L;
+    line(ctx, ox + 1, oy + 1, ex + 1, ey + 1, PAL.outline); line(ctx, ox, oy, ex, ey, ink);
+    line(ctx, ex, ey, ex - ux * 3 - uy * 2, ey - uy * 3 + ux * 2, ink); line(ctx, ex, ey, ex - ux * 3 + uy * 2, ey - uy * 3 - ux * 2, ink);
+    tx = ex + dir * 4; ty = ey + (uy > 0.3 ? 2 : uy < -0.3 ? -6 : -2);
+  }
+  if (dir < 0) tx -= textW(tag);
+  rect(ctx, tx - 1, ty - 1, textW(tag) + 2, 7, PAL.outline);
+  text(ctx, tag, tx, ty, ink);
 }
 
 // Where a speaker's head is on the 256 x 240 frame (the page puts the speech box there).
@@ -543,4 +578,137 @@ export function faceBox(sheet) {
     let sn = 0; for (const [k, v] of m) if (v > sn) { sn = v; box.shirt = k; }
   } catch { /* the default box */ }
   return box;
+}
+
+// ---- THE DEPARTMENT'S EYE: a challenge's review ---------------------------------------------------
+// The broadcast's own ball-tracking replay (no one else's): the flight drawn as a trail, slowing to
+// the bounce; the camera coming down onto the mark; the measurement; the verdict; the brand line.
+// d: show.js S.review.d (the sim's challenge, copied: the bounce, the velocity into it, the flight's
+// time, the margin m and the line). Every pixel of floor is ray-cast from a camera of its own, so a
+// 5 cm line and a 3 mm gap are the size they are at any zoom. reduced: still frames, no camera move.
+const RV = { bg: [6, 12, 8], grid: [16, 40, 24], ink: "#c8f5d8", dim: "#3fae5a", eye: "#5cff8a", warn: "#ffe14a", ball: "#e0e040", trail: "#d97a2b" };
+const LW = 0.05;   // a line's width, m
+function eyeCam(T, psi, th, dist) {
+  const hx = Math.sin(psi), hy = Math.cos(psi), c = Math.cos(th), sn = Math.sin(th);
+  const C = [T[0] + dist * hx * c, T[1] + dist * hy * c, T[2] + dist * sn];
+  const f = [-hx * c, -hy * c, -sn], r = [hy, -hx, 0], u = [-hx * sn, -hy * sn, c];
+  return { C, f, r, u, F: 210 };
+}
+function eyeProj(cam, x, y, z) {
+  const dx = x - cam.C[0], dy = y - cam.C[1], dz = z - cam.C[2];
+  const zc = dx * cam.f[0] + dy * cam.f[1] + dz * cam.f[2];
+  if (zc <= 0.01) return null;
+  const xc = dx * cam.r[0] + dy * cam.r[1], yc = dx * cam.u[0] + dy * cam.u[1] + dz * cam.u[2];
+  return [W / 2 + cam.F * xc / zc, H / 2 - cam.F * yc / zc, cam.F / zc];
+}
+// The floor, a ray a pixel: the court, its lines at their width, the run-off, the mark (mark: null or
+// {x, y, ax, ay}: an ellipse's half-axes along x and y).
+let EYE_IMG = null;
+function eyeFloor(ctx, cam, sf, mark) {
+  if (!EYE_IMG) EYE_IMG = ctx.createImageData(W, H);
+  const d = EYE_IMG.data, P = SURF[sf] || SURF.hard, court = rgbOf(P.court), out = rgbOf(P.out), ln = rgbOf(P.line), mk = rgbOf("#e0e040"), mkE = rgbOf("#8a7a10");
+  const { hw, dhw, hl, sv } = COURT;
+  for (let sy = 0; sy < H; sy++) {
+    const b = (sy + 0.5 - H / 2) / cam.F;
+    for (let sx = 0; sx < W; sx++) {
+      const a = (sx + 0.5 - W / 2) / cam.F, o = (sy * W + sx) * 4;
+      const rx = cam.f[0] + cam.r[0] * a - cam.u[0] * b, ry = cam.f[1] + cam.r[1] * a - cam.u[1] * b, rz = cam.f[2] - cam.u[2] * b;
+      let c = RV.bg;
+      if (rz < -1e-6) {
+        const t = -cam.C[2] / rz, X = cam.C[0] + rx * t, Y = cam.C[1] + ry * t, ax = Math.abs(X), ay = Math.abs(Y);
+        if (ax < dhw + 4 && ay < hl + 6) {
+          const inC = ax <= dhw && ay <= hl;
+          c = inC ? court : out;
+          const onLine = (ay <= hl && ay >= hl - LW && ax <= dhw) || (ay <= hl && ((ax <= hw && ax >= hw - LW) || (ax <= dhw && ax >= dhw - LW))) ||
+            (ax <= hw && ay <= sv && ay >= sv - LW) || (ay <= sv && ax <= LW / 2) || (ax <= LW / 2 && ay >= hl - 0.1 && ay <= hl);
+          if (onLine) c = ln;
+          if (mark) {
+            const ex = (X - mark.x) / mark.ax, ey = (Y - mark.y) / mark.ay, e = ex * ex + ey * ey;
+            if (e <= 1) c = e > 0.72 ? mkE : mk;
+          }
+        } else if ((Math.round(X) + Math.round(Y)) % 4 === 0) c = RV.grid;
+      } else if (sy % 12 === 0 || sx % 16 === 0) c = RV.grid;
+      d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(EYE_IMG, 0, 0);
+}
+// The flight, from the bounce back to the racket: s 0 (the hit) .. 1 (the bounce) -> [x, y, z].
+function flightAt(d, s) {
+  const tau = (1 - s) * d.t, g = 9.8 * (d.grav || 1);
+  return [d.x - d.vx * tau, d.y - d.vy * tau, Math.max(0, -d.vz * tau - 0.5 * g * tau * tau)];
+}
+const ease = (k) => (k < 0 ? 0 : k > 1 ? 1 : k < 0.5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k));
+function centred(ctx, s, y, c, k = 1) { text(ctx, s, Math.round((W - textW(s, k)) / 2), y, c, k); }
+
+export function drawReview(ctx, d, age, reduced = false) {
+  ctx.imageSmoothingEnabled = false;
+  const R2 = REVIEW, alongX = d.line === "BASELINE" || d.line === "SERVICE LINE";
+  const start = flightAt(d, 0), sgn = start[1] >= d.y ? 1 : -1;
+  const psi0 = Math.atan2(0.55 * (d.x >= 0 ? 1 : -1), 0.85 * sgn);
+  let psi1 = alongX ? (sgn > 0 ? 0 : Math.PI) : (d.x >= 0 ? Math.PI / 2 : -Math.PI / 2);
+  while (psi1 - psi0 > Math.PI) psi1 -= 2 * Math.PI;
+  while (psi0 - psi1 > Math.PI) psi1 += 2 * Math.PI;
+  const span = Math.hypot(start[0] - d.x, start[1] - d.y), mid = [(start[0] + d.x) / 2, (start[1] + d.y) / 2, 0.6];
+  const dist0 = span * 0.75 + 7, dist1 = 0.42, th0 = 0.38, th1 = 1.5707;
+  // where the review is: the flight's progress u, the zoom's k
+  let u, k;
+  if (reduced) { u = 1; k = age < R2.ZOOM ? 0 : 1; }
+  else { const f = Math.min(1, Math.max(0, (age - R2.FLIGHT) / (R2.ZOOM - R2.FLIGHT))); u = 1 - (1 - f) * (1 - f) * (1 - f); k = ease((age - R2.ZOOM) / (R2.MARK - R2.ZOOM - 20)); }
+  // the camera finds the bounce first, then comes down onto it
+  const kt = ease(Math.min(1, k * 2.2)), kd = k * k;
+  const T = [mid[0] + (d.x - mid[0]) * kt, mid[1] + (d.y - mid[1]) * kt, mid[2] * (1 - kt)];
+  const cam = eyeCam(T, psi0 + (psi1 - psi0) * k, th0 + (th1 - th0) * k, Math.exp(Math.log(dist0) + (Math.log(dist1) - Math.log(dist0)) * kd));
+  const landed = u >= 0.999;
+  // the mark: its half-width across the line is the ball's 3 cm exactly (the call's own rule), so
+  // the gap or the overlap on screen is the margin measured
+  const mark = landed ? (alongX ? { x: d.x, y: d.y, ax: 0.05, ay: 0.03 } : { x: d.x, y: d.y, ax: 0.03, ay: 0.05 }) : null;
+  eyeFloor(ctx, cam, d.surface, mark);
+  // the trail, then the ball (drawn four times its size, as the television does)
+  if (k < 0.95) {
+    const n = 48;
+    for (let i = 0; i <= n; i++) {
+      const s = (i / n) * u, p = flightAt(d, s), q = eyeProj(cam, p[0], p[1], p[2]);
+      if (!q) continue;
+      const sz = Math.max(1, Math.min(3, Math.round(q[2] * 0.03)));
+      rect(ctx, q[0] - (sz >> 1), q[1] - (sz >> 1), sz, sz, i / n > u - 0.12 ? RV.ball : RV.trail);
+      const g = eyeProj(cam, p[0], p[1], 0);
+      if (g && i % 4 === 0) rect(ctx, g[0], g[1], 1, 1, "#0a0f0a");
+    }
+    if (!landed) {
+      const p = flightAt(d, u), q = eyeProj(cam, p[0], p[1], p[2]);
+      if (q) { const r = Math.max(2, Math.min(9, Math.round(q[2] * 0.033 * 4))); rect(ctx, q[0] - r, q[1] - r, 2 * r, 2 * r, RV.ball); rect(ctx, q[0] - r, q[1] - r, Math.max(1, r >> 1), Math.max(1, r >> 1), "#ffffff"); }
+    }
+  }
+  // the measurement
+  if ((age >= R2.MARK || (reduced && age >= R2.ZOOM)) && age < R2.VERDICT) {
+    const on = reduced || age - R2.MARK > 24 || ((age >> 3) & 1);
+    rect(ctx, 0, 176, W, 22, "rgba(5,10,7,0.85)");
+    if (on) centred(ctx, d.words.short, 180, d.m < 0 ? RV.warn : RV.eye, 2);
+  }
+  // the furniture: the name, the line, the call under review
+  rect(ctx, 0, 0, W, 24, "#050a07"); rect(ctx, 0, 24, W, 1, RV.dim);
+  text(ctx, "THE DEPARTMENT'S EYE", 6, 4, RV.eye, 2);
+  text(ctx, "// PROBABLY ACCURATE", 6, 16, RV.dim);
+  const eyeX = W - 22; rect(ctx, eyeX, 6, 16, 10, "#0a0f0a"); rect(ctx, eyeX + 1, 9, 14, 4, RV.ink); rect(ctx, eyeX + 6, 8, 4, 6, RV.eye); rect(ctx, eyeX + 7, 10, 2, 2, "#050a07");
+  rect(ctx, 0, H - 16, W, 16, "#050a07");
+  text(ctx, `${d.line} // CALLED ${d.called ? "IN" : "OUT"} // ${d.serve ? "SERVE" : "RALLY"}`, 6, H - 11, RV.ink);
+  if (!reduced && age < 300 && (age >> 4) & 1) rect(ctx, W - 12, H - 12, 5, 5, "#e04040");
+  ctx.globalAlpha = 0.12; ctx.fillStyle = "#000";
+  for (let y = 0; y < H; y += 2) ctx.fillRect(0, y, W, 1);
+  ctx.globalAlpha = 1;
+  // the verdict, then the brand line
+  if (age >= R2.VERDICT) {
+    ctx.globalAlpha = 0.72; rect(ctx, 0, 25, W, H - 41, "#050a07"); ctx.globalAlpha = 1;
+    const v = d.overturned ? "CALL OVERTURNED" : "CALL STANDS", c = d.overturned ? RV.eye : RV.warn;
+    const pop = reduced ? 3 : age - R2.VERDICT < 6 ? 4 : 3;
+    centred(ctx, v, 80, c, pop);
+    centred(ctx, d.words.short, 108, RV.ink, 1);
+    if (age >= R2.BRAND) {
+      const [a, b] = [BRAND.slice(0, BRAND.indexOf(".") + 1), BRAND.slice(BRAND.indexOf(".") + 2)];
+      centred(ctx, a, 140, RV.dim); centred(ctx, b, 150, RV.dim);
+      const ex = W / 2 - 8; rect(ctx, ex, 164, 16, 10, "#0a0f0a"); rect(ctx, ex + 1, 167, 14, 4, RV.ink); rect(ctx, ex + 6, 166, 4, 6, RV.eye); rect(ctx, ex + 7, 168, 2, 2, "#050a07");
+    }
+  }
+  if (!reduced && age < R2.FLIGHT) { const n = Math.round(H * (1 - age / R2.FLIGHT)); for (let y = 0; y < n; y += 4) rect(ctx, 0, y, W, 2, "#c8f5d8"); }
 }

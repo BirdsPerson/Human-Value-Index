@@ -4,13 +4,13 @@ import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC, AVATAR_ENUMS, CLOTH } from "../../avatar.js";
 import { readPad, GLYPHS } from "../../city/gamepad.js";
-import { newMatch, step, rleEncode, resultOf, replay, serverOfMatch, VERSION, BTN, SURFACES } from "./sim.js";
+import { newMatch, step, rleEncode, resultOf, replay, serverOfMatch, canChallenge, VERSION, BTN, SURFACES } from "./sim.js";
 import { FORMATS } from "./score.js";
-import { OPPONENTS, OPP_BY_KEY, EASIEST, profileOf, spriteOf, pendingSpec, talkFor } from "./roster.js";
-import { draw, drawCutaway, headFrom, faceBox, speakerAt, SURFACE_NAMES, W, H } from "./render.js";
+import { OPPONENTS, OPP_BY_KEY, EASIEST, profileOf, spriteOf, pendingSpec, talkFor, formalName } from "./roster.js";
+import { draw, drawCutaway, drawReview, unproj, headFrom, faceBox, speakerAt, SURFACE_NAMES, W, H } from "./render.js";
 import { sheetHints } from "../heads.js";
-import { createShow } from "./show.js";
-import { createInput } from "./input.js";
+import { createShow, REVIEW } from "./show.js";
+import { createInput, SELECT_GLYPH } from "./input.js";
 import * as SFX from "./audio.js";
 import CSS from "./tennis.css?inline";
 import "../pages.css";
@@ -166,12 +166,15 @@ function Controls() {
       <dt>SERVE</dt><dd>A TOSSES. A AGAIN AS THE BALL DROPS INTO THE GREEN BAND BESIDE YOU. LEFT / RIGHT AIMS.</dd>
       <dt>PAUSE</dt><dd>ENTER / ESC // START</dd>
       <dt>CAMERA</dt><dd>BETWEEN POINTS THE BROADCAST MAY FIND SOMEONE IN THE STAND. A OR B (OR A TAP) RETURNS TO THE MATCH. TURN IT OFF UNDER THE COURT.</dd>
+      <dt>CHALLENGE</dt><dd>C // PAD SELECT (VIEW, CREATE, MINUS) // TAP THE PROMPT. RIGHT AFTER A CLOSE CALL AGAINST YOU. THREE WRONG CHALLENGES A SET, ONE MORE IN A TIEBREAK; A RIGHT ONE COSTS NOTHING. DO NOT HOLD IT AT THE UMPIRE.</dd>
+      <dt>MOUSE / TOUCH</dt><dd>CLICK OR TAP WHERE TO RUN. HOLD, DRAG FOR SPIN, RELEASE TO SWING: DRAG UP TOPSPIN, DOWN SLICE, STILL FLAT, A BIG FLICK UP A LOB; LEFT / RIGHT AIMS. SERVING: PRESS TO TOSS, RELEASE TO HIT; DRAG UP KICKS, DOWN SLICES.</dd>
     </dl>
   );
 }
 
 // ---- the legend under the court: what each button does, in the hands you are using ---------------
-const LEGEND_KEY = "hvi-tennis-legend", CUTS_KEY = "hvi-tennis-cutaways";
+const LEGEND_KEY = "hvi-tennis-legend", CUTS_KEY = "hvi-tennis-cutaways", CLASSIC_KEY = "hvi-tennis-classic-touch";
+export const POINTER_SR = "CLICK WHERE TO RUN, HOLD, DRAG FOR SPIN, RELEASE TO SWING.";
 // a reduced-motion setting starts the crowd cameras off (the viewer can still turn them on)
 const REDUCED = () => { try { return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches); } catch { return false; } };
 const readFlag = (k, dflt) => { try { const v = localStorage.getItem(k); return v === null ? dflt : v === "1"; } catch { return dflt; } };
@@ -188,6 +191,18 @@ export function legendRows(mode, family) {
       ["SERVE", `${g.act} TOSS, ${g.act} HIT`, "HIT AS THE BALL DROPS INTO THE GREEN BAND. LEFT / RIGHT AIMS."],
       ["PAUSE", g.start, ""],
       ["CAMERA", `${g.act} / ${g.back}`, "BACK TO THE MATCH."],
+      ["CHALLENGE", SELECT_GLYPH[family] || SELECT_GLYPH.generic, "RIGHT AFTER A CLOSE CALL AGAINST YOU."],
+    ];
+  }
+  if (mode === "pointer") {
+    return [
+      ["MOVE", "CLICK / TAP THE COURT", "YOUR PLAYER RUNS THERE."],
+      ["SWING", "HOLD, RELEASE", "LET GO AS THE BALL ARRIVES."],
+      ["SPIN", "DRAG WHILE HELD", "UP TOPSPIN, DOWN SLICE, STILL FLAT, A BIG FLICK UP A LOB. LEFT / RIGHT AIMS."],
+      ["SERVE", "PRESS TOSS, RELEASE HIT", "RELEASE AS THE BALL DROPS INTO THE GREEN BAND. DRAG UP KICKS, DOWN SLICES."],
+      ["PAUSE", "ENTER / ESC / START", ""],
+      ["CAMERA", "CLICK / TAP", "BACK TO THE MATCH."],
+      ["CHALLENGE", "C / TAP THE PROMPT", "RIGHT AFTER A CLOSE CALL AGAINST YOU."],
     ];
   }
   if (mode === "touch") {
@@ -200,6 +215,7 @@ export function legendRows(mode, family) {
       ["SERVE", "A TOSS, A HIT", "HIT AS THE BALL DROPS INTO THE GREEN BAND. LEFT / RIGHT AIMS."],
       ["PAUSE", "START", ""],
       ["CAMERA", "A / B / TAP", "BACK TO THE MATCH."],
+      ["CHALLENGE", "TAP THE PROMPT", "RIGHT AFTER A CLOSE CALL AGAINST YOU."],
     ];
   }
   return [
@@ -211,9 +227,10 @@ export function legendRows(mode, family) {
     ["SERVE", "Z TOSS, Z HIT", "HIT AS THE BALL DROPS INTO THE GREEN BAND. \u2190 \u2192 AIMS."],
     ["PAUSE", "ENTER / ESC", ""],
     ["CAMERA", "Z / X / CLICK", "BACK TO THE MATCH."],
+    ["CHALLENGE", "C", "RIGHT AFTER A CLOSE CALL AGAINST YOU."],
   ];
 }
-const MODE_NAME = { keys: "KEYBOARD", touch: "TOUCH" };
+const MODE_NAME = { keys: "KEYBOARD", touch: "TOUCH", pointer: "MOUSE / TOUCH" };
 function Legend({ mode, family, open, onToggle, compact = false }) {
   const rows = legendRows(mode, family), label = mode === "pad" ? `CONTROLLER (${String(family || "pad").toUpperCase()})` : MODE_NAME[mode];
   if (compact) {
@@ -233,6 +250,7 @@ function Legend({ mode, family, open, onToggle, compact = false }) {
           {rows.map(([k, keys, hint]) => <div key={k}><dt>{k}</dt><dd><kbd>{keys}</kbd>{hint && <span>{hint}</span>}</dd></div>)}
         </dl>
       )}
+      {mode === "pointer" && <p className="sr-only">{POINTER_SR}</p>}
     </section>
   );
 }
@@ -255,6 +273,10 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
   const [scale, setScale] = useState(1);
   const [pad, setPad] = useState(null);
   const [touch, setTouch] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer: coarse)").matches));
+  const [classic, setClassic] = useState(() => readFlag(CLASSIC_KEY, false));   // the phone's on-screen pad, instead of tap-to-move
+  const [lastKind, setLastKind] = useState("keys");
+  const [prompt, setPrompt] = useState(null);   // {left, frac}: the challenge window, open
+  const [revSay, setRevSay] = useState("");     // challenges and verdicts, for the screen reader
   const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, !touch));
   const [cutsOn, setCutsOn] = useState(() => readFlag(CUTS_KEY, !REDUCED()));
   const [over, setOver] = useState(null);   // {bubble, cut}: the broadcast's words on the picture
@@ -263,7 +285,7 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
   mutedRef.current = muted;
   const togglePause = (v) => { pausedRef.current = v ?? !pausedRef.current; setPaused(pausedRef.current); };
   const names = [me.name, opp.name];
-  const mode = pad ? "pad" : touch ? "touch" : "keys";
+  const mode = lastKind === "pointer" ? "pointer" : lastKind === "pad" && pad ? "pad" : touch ? (classic ? "touch" : "pointer") : pad ? "pad" : "keys";
 
   useEffect(() => { const f = () => setTouch(true); window.addEventListener("touchstart", f, { once: true, passive: true }); return () => window.removeEventListener("touchstart", f); }, []);
 
@@ -283,11 +305,13 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
 
   useEffect(() => {
     const cpu = profileOf(opp.key);
-    const st = newMatch({ seed, fmt, cpu, surface: court });
+    // the challenge window: 2 s, 3 s on a touch screen (part of the record: the sim keeps it)
+    const win = window.matchMedia?.("(pointer: coarse)").matches ? 180 : 120;
+    const st = newMatch({ seed, fmt, cpu, surface: court, win });
     const log = [];
     const input = createInput(); inputRef.current = input;
     // the broadcast: its own generator, reads the match, never writes it (show.js)
-    const show = createShow({ seed, names, opp: opp.key, cutaways: readFlag(CUTS_KEY, !REDUCED()), st });
+    const show = createShow({ seed, names, formal: [formalName(null, me.name), formalName(opp)], opp: opp.key, cutaways: readFlag(CUTS_KEY, !REDUCED()), st });
     showRef.current = show;
     const looks = [lookOf({ spec: me.spec, kit: me.spec ? [CLOTH[me.spec.top_color], CLOTH[me.spec.bottom_color]] : ["#e6e6e6", "#3d3d3d"] }), lookOf({ spec: opp.spec, kit: opp.kit })];
     // heads: the file photos' faces, when they load
@@ -313,12 +337,14 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
     };
     fetchArt(show.state.upcoming);
     const ctx = canvasRef.current.getContext("2d");
-    let raf, last = performance.now(), acc = 0, hudKey = "", overKey = "", ended = false;
+    let raf, last = performance.now(), acc = 0, hudKey = "", overKey = "", ended = false, promptKey = "", srN = 0;
+    const cue = { n: 0, clap: false, verdict: false };   // the review's sounds, once each per review
+    const reduced = REDUCED();
     const onVis = () => { if (document.hidden) togglePause(true); };
     document.addEventListener("visibilitychange", onVis);
     const finish = () => {
       ended = true;
-      const rec = { version: VERSION, seed, fmt, surface: st.surface, opp: opp.key, inputLog: rleEncode(log), result: resultOf(st), at: Date.now() };
+      const rec = { version: VERSION, seed, fmt, surface: st.surface, win: st.win, opp: opp.key, inputLog: rleEncode(log), result: resultOf(st), at: Date.now() };
       let verified = false;
       try { verified = JSON.stringify(replay(rec, cpu)) === JSON.stringify(rec.result); } catch { verified = false; }
       saveRecord(rec);
@@ -330,6 +356,7 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
       if (dt > 0.25) dt = 0.25;
       const inp = input.sample();
       if (inp.pad !== undefined) setPad(p => (p === inp.pad ? p : inp.pad));
+      setLastKind(k => (k === inp.last ? k : inp.last));
       if (inp.start && !ended) togglePause();
       if (!pausedRef.current) {
         acc += dt;
@@ -349,14 +376,25 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
       } else acc = 0;
       const S = show.state;
       if (S.upcoming) fetchArt(S.upcoming);
-      if (S.cut) drawCutaway(ctx, S.cut, S.t, S.cut.s.slug ? art.get(S.cut.s.slug) : null);
+      if (S.review) {
+        const age = S.t - S.review.from, d = S.review.d;
+        drawReview(ctx, d, age, reduced);
+        if (cue.n !== S.reviews) { cue.n = S.reviews; cue.clap = false; cue.verdict = false; SFX.crowd("quiet", mutedRef.current); }
+        if (!cue.clap && age >= REVIEW.ZOOM - 50) { cue.clap = true; SFX.crowd("slowclap", mutedRef.current); }
+        if (!cue.verdict && age >= REVIEW.VERDICT) { cue.verdict = true; SFX.crowd("quiet", mutedRef.current); SFX.crowd(d.overturned ? "cheer" : "groan", mutedRef.current); }
+      } else if (S.cut) drawCutaway(ctx, S.cut, S.t, S.cut.s.slug ? art.get(S.cut.s.slug) : null);
       else draw(ctx, st, looks, st.frame, show);
+      if (S.sr && S.sr.n !== srN) { srN = S.sr.n; setRevSay(S.sr.text); }
+      const open = !S.review && !S.cut && canChallenge(st, 0);
+      const pk = open ? `${st.chLeft[0]}|${Math.ceil(((st.chal.until - st.frame) / st.win) * 12)}` : "";
+      if (pk !== promptKey) { promptKey = pk; setPrompt(open ? { left: st.chLeft[0], frac: Math.max(0, (st.chal.until - st.frame) / st.win) } : null); }
       const sc = st.sc, server = sc.tb || st.phase !== "over" ? serverOfMatch(st) : -1;
       const call = st.phase === "dead" ? (st.t < 45 ? st.call : st.next) : st.phase === "serve" && st.sub === "ready" ? st.next : st.phase === "over" ? "GAME, SET AND MATCH" : "";
-      const key = `${sc.pts}|${sc.games}|${sc.sets.length}|${call}|${server}|${sc.tb}`;
-      if (key !== hudKey) {
+      // the board holds still while the review plays: the verdict is the review's to tell
+      const key = `${sc.pts}|${sc.games}|${sc.sets.length}|${call}|${server}|${sc.tb}|${st.chLeft}|${st.viol}`;
+      if (key !== hudKey && !S.review) {
         hudKey = key;
-        setHud({ rows: [0, 1].map(i => ({ sets: sc.sets.map(s => s[i]), games: sc.games[i], pts: pointsShown(sc, i), serve: server === i })), call, tb: sc.tb, done: sc.done });
+        setHud({ rows: [0, 1].map(i => ({ sets: sc.sets.map(s => s[i]), games: sc.games[i], pts: pointsShown(sc, i), serve: server === i, ch: st.chLeft[i], viol: st.viol[i] })), call, tb: sc.tb, done: sc.done });
       }
       const b = S.cut ? null : S.bubble, ok = `${S.cut ? S.cut.n : 0}|${b ? `${b.who}${b.j}${b.text}` : ""}`;
       if (ok !== overKey) { overKey = ok; setOver({ bubble: b ? { ...b } : null, cut: S.cut ? { n: S.cut.n, ...S.cut.caption } : null }); }
@@ -366,8 +404,23 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleLegend = () => setLegendOpen(v => { writeFlag(LEGEND_KEY, !v); return !v; });
+  const toggleClassic = () => setClassic(v => { writeFlag(CLASSIC_KEY, !v); return !v; });
+  // the pointer on the picture: logical pixels, and the court floor under them
+  const at = (e) => { const r = canvasRef.current.getBoundingClientRect(); return [((e.clientX - r.left) * W) / r.width, ((e.clientY - r.top) * H) / r.height]; };
+  const ptrDown = (e) => {
+    const show = showRef.current;
+    if (show?.busy()) { show.skip(); return; }
+    if (paused) return;
+    SFX.unlock();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const [lx, ly] = at(e);
+    inputRef.current?.pointerDown(unproj(lx, ly), lx, ly);
+  };
+  const ptrMove = (e) => { const [lx, ly] = at(e); inputRef.current?.pointerMove(lx, ly); };
+  const ptrUp = () => inputRef.current?.pointerUp();
   const toggleCuts = () => setCutsOn(v => { writeFlag(CUTS_KEY, !v); if (showRef.current) showRef.current.state.cutaways = !v; return !v; });
-  const bub = over?.bubble, at = bub ? speakerAt(bub.who, bub.j) : null;
+  const bub = over?.bubble, spk = bub ? speakerAt(bub.who, bub.j) : null;
+  const chalKey = mode === "pad" ? SELECT_GLYPH[pad] || SELECT_GLYPH.generic : mode === "keys" ? "C" : "TAP";
   const skipHint = mode === "pad" ? `${(GLYPHS[pad] || GLYPHS.generic).act}: BACK TO THE MATCH` : mode === "touch" ? "TAP: BACK TO THE MATCH" : "Z / CLICK: BACK TO THE MATCH";
   return (
     <div className="tn-match">
@@ -379,17 +432,28 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
               {(r.sets || []).map((g, k) => <td key={k} className="set">{g}</td>)}
               <td className="gm">{r.games ?? 0}</td>
               <td className="pt">{hud?.done ? "" : r.pts ?? "0"}</td>
+              <td className="ch" aria-label={`${r.ch ?? 3} challenges left${r.viol ? `, ${r.viol} code ${r.viol === 1 ? "violation" : "violations"}` : ""}`} title="CHALLENGES LEFT THIS SET">
+                {"\u25AE".repeat(r.ch ?? 3)}{r.viol ? <b>{r.viol >= 3 ? " P" : ` W${r.viol > 1 ? r.viol : ""}`}</b> : null}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
       <p className="sr-only" aria-live="polite">{crowdSay}</p>
+      <p className="sr-only" aria-live="assertive">{revSay}</p>
       <div className="tn-call" aria-live="polite" aria-atomic="true">{hud?.call ? `${hud.call}${hud.tb && hud.call !== "TIEBREAK" ? " // TIEBREAK" : ""}` : " "}{hud?.call && <span className="sr-only">. Games: {names[0]} {hud.rows[0].games}, {names[1]} {hud.rows[1].games}.</span>}</div>
       <div className="tn-stage" ref={wrapRef}>
         <div className="tn-screen" style={{ width: W * scale, height: H * scale }}>
-          <canvas ref={canvasRef} width={W} height={H} style={{ width: W * scale, height: H * scale }} aria-label={`Tennis: ${names[0]} versus ${names[1]}`} role="img" onClick={() => showRef.current?.skip()} />
-          {bub && at && !paused && (
-            <div className={`tn-bubble ${bub.who}${at[0] > W / 2 ? " west" : ""}`} style={{ left: `${(at[0] / W) * 100}%`, top: `${(at[1] / H) * 100}%` }} aria-live="polite">
+          <canvas ref={canvasRef} width={W} height={H} style={{ width: W * scale, height: H * scale, touchAction: mode === "pointer" ? "none" : undefined }} aria-label={`Tennis: ${names[0]} versus ${names[1]}. ${POINTER_SR}`} role="img"
+            onPointerDown={ptrDown} onPointerMove={ptrMove} onPointerUp={ptrUp} onPointerCancel={ptrUp} onContextMenu={(e) => e.preventDefault()} />
+          {prompt && !paused && (
+            <button type="button" className="tn-chal" onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); inputRef.current?.tapC(); }}>
+              CHALLENGE? <kbd>{chalKey}</kbd> <small>{prompt.left} LEFT</small>
+              <i style={{ width: `${Math.round(prompt.frac * 100)}%` }} aria-hidden="true" />
+            </button>
+          )}
+          {bub && spk && !paused && (
+            <div className={`tn-bubble ${bub.who}${spk[0] > W / 2 ? " west" : ""}`} style={{ left: `${(spk[0] / W) * 100}%`, top: `${(spk[1] / H) * 100}%` }} aria-live="polite">
               {bub.who === "chair" && <i>THE CHAIR</i>}{bub.text}
             </div>
           )}
@@ -410,13 +474,14 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
           )}
         </div>
       </div>
-      {touch && <TouchPad input={inputRef} onStart={() => togglePause()} />}
+      {touch && classic && <TouchPad input={inputRef} onStart={() => togglePause()} />}
       <Legend mode={mode} family={pad} open={legendOpen} onToggle={toggleLegend} />
       {tell && <p className={`tn-tell ${tell.kind}`}>{tell.kind === "say" ? `${opp.name}: "${tell.text}"` : tell.text}</p>}
       <ButtonRow>
         <Button onClick={() => togglePause()}>{paused ? "Resume" : "Pause"}</Button>
         <Button onClick={() => { const m = !muted; setMutedS(m); SFX.setMuted(m); if (!m) SFX.unlock(); }}>{muted ? "Sound on" : "Mute"}</Button>
         <Button onClick={toggleCuts}>{cutsOn ? "Crowd cameras: on" : "Crowd cameras: off"}</Button>
+        {touch && <Button onClick={toggleClassic}>{classic ? "\u2212 Touch buttons" : "+ Touch buttons"}</Button>}
         <Button variant="back" onClick={onQuit}>Leave the court</Button>
       </ButtonRow>
       <p className="tn-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{NOTICE}</p>

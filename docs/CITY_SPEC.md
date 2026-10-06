@@ -2105,9 +2105,10 @@ or any score.
 - **Faces**: the head cut from the file photo (`/api/sprite/<slug>`; the regulars and you from the
   procedural photo; your own file's photo and kit when this browser holds a case, else SUBJECT in
   grey); bodies drawn procedurally.
-- **Input** (`input.js`): keys (arrows / WASD, Z or J = A, X or K = B, Enter or Esc = pause), a pad
-  through `city/gamepad.js` (A, B or the left face button, Start; also chooses on the picker and
-  rematches), touch (an eight-way pad, A, B, START) on coarse pointers.
+- **Input** (`input.js`): keys (arrows / WASD, Z or J = A, X or K = B, C = challenge, Enter or Esc =
+  pause), a pad through `city/gamepad.js` (A, B or the left face button, SELECT to challenge, Start;
+  also chooses on the picker and rematches), the pointer (see Mouse and touch below), touch (an
+  eight-way pad, A, B, START) on coarse pointers when asked for.
 - **Determinism and the record** (`sim.js`): a fixed 60 Hz step, a seeded mulberry32, only + - * /
   and sqrt. A match is `{version, seed, fmt, opp, inputLog, result}` with the human's input one
   bitmask a frame (UP 1, DOWN 2, LEFT 4, RIGHT 8, A 16, B 32), run-length encoded. Pause never reaches
@@ -2162,6 +2163,63 @@ or any score.
   never sees it. Heads come off the file photo with `src/play/heads.js` (shared with golf): the blob on
   the body's axis, trimmed to the face's width, so a held prop stays home; a prop baked into the head
   gives no cut and the page draws a head from the photo's skin and hair.
+- **Line-call challenges** (2026-10-05, Scott: "Can you approach the ref and challenge calls? ...
+  recreate that little ... spot-checker thing"). Sim version 3 (`sim.js CALLS`, `judge`,
+  `resolve`): the line judges are human. Each first bounce is measured against its nearest line
+  (`lineMargin`: metres the ball's mark overlaps the line's outer edge, below zero the gap; the call
+  rule is unchanged, touching the line is in); within `BAND` (8 cm) the seeded generator sometimes
+  calls it wrong, up to `MISS` (60%) on the line itself and less the further off, at 0.4x on clay (the
+  ball leaves a mark) and 1.2x on grass. Any call within `CH_CLOSE` (20 cm) that ended a point or a
+  first serve opens a CHALLENGE window for the player it went against: 2 s (3 s on a touch screen;
+  `win`, part of the record). C, the pad's SELECT (Xbox VIEW, PlayStation CREATE, Switch minus), or
+  a tap on the prompt; the prompt (CHALLENGE? and the key, the count left, a bar for the time) is
+  the only new chrome, and the board carries a discreet count (one bar a challenge left; W1 / W2 for
+  warnings). Pressing it: the player walks toward the chair with a hand up, THE CHAIR leans to the
+  microphone: "MR./MS. SUBJECT .... IS CHALLENGING THE CALL." (figures by their honorific,
+  `roster.js formalName`; the chair speaking about a living figure is not the figure speaking).
+  CPUs challenge too: a wrong call against them by their rating, a right one by their temper
+  (`roster.js temper`, hand-set: McEnroe 0.97, Ashe 0.08, the line judge on a day off 0.03). The
+  verdict is decided in the sim at once; the review only shows it. Rules: a right challenge
+  overturns the call and costs nothing (a ball called out that was in: the point to its hitter; a
+  winner or ace called good that was out: the point to the receiver, or for a first serve a fault and
+  the second serve; a serve called a fault that was good: the point replayed); a wrong one stands
+  and costs one; three a set, one more in a tiebreak, three again with each set; none after the
+  window. Holding C at the umpire for 1.5 s (the opponent will not serve meanwhile), or challenging
+  with none left, is a code violation: "THE UMPIRE HAS NOTED YOUR TONE. CODE VIOLATION, WARNING,
+  ...", the third a point penalty.
+- **THE DEPARTMENT'S EYE // PROBABLY ACCURATE** (`render.js drawReview`, `show.js REVIEW`; our own
+  parody of a television line review: no other system's names or marks): 8 s, skippable with A / B /
+  C / a click after the first second. The flight replays as a trail from a camera of its own,
+  slowing to the bounce; the camera finds the bounce and comes down to a top-down view a few
+  centimetres across; the mark (an ellipse exactly the ball's 3 cm either side of its centre across
+  the line, so the gap on screen is the margin measured) against the line at its 5 cm width, every
+  floor pixel ray-cast; the measurement ("OUT BY 3 MM", "IN — TOUCHING THE LINE"); CALL OVERTURNED
+  or CALL STANDS; then "THE DEPARTMENT'S EYE IS SPONSORED BY NOBODY. IT DOES NOT BLINK." The crowd
+  (`crowdAudio.js slowclap`) claps slowly and then faster under the reveal; a cheer for an overturn,
+  a groan for a call that stands. Reduced motion: four still frames, no camera move. The match is
+  held during the review exactly as for a crowd camera (no step, nothing logged) and the board
+  holds still until it ends; the screen reader hears the challenge and the verdict ("THE BALL WAS
+  OUT BY 3 MILLIMETRES. CALL STANDS.").
+- **Mouse and touch** (2026-10-05, Scott: "the character only moves when you've pointed and
+  clicked, and the release of your click is the timing of the swing"). Press on the court: your
+  player runs there. Hold while the ball comes; RELEASE is the swing (the same contact windows as
+  A). The drag while held sets the shot (`sim.js gestureShot`): up (toward the net) topspin, further
+  up deeper topspin, a big flick up a lob, down a slice, still a flat drive (new in version 3: less
+  net clearance, more pace); left / right aim for the lines; the longer the hold, a little more pace.
+  A small arrow beside the player shows the shot (green topspin, blue slice, white flat, gold lob)
+  and a cross marks where you are running. Serving: press to toss, release on the way down to hit
+  (a quick click's release on the way up is ignored); drag left / right places it, up kicks, down
+  slices (`gestureServe`). The pointer goes into the same mask as the buttons (`ptrBits`: PTR 128,
+  the pressed spot to 10 cm in bits 8-23, the drag as -3..3 each way in bits 24-29), so mouse, keys
+  and pad mix in one match and the record replays. The legend switches to MOUSE / TOUCH when the
+  pointer is used; on a phone tap-to-move replaces the on-screen pad, and "+ Touch buttons" (kept in
+  `localStorage["hvi-tennis-classic-touch"]`) brings the classic pad back.
+- **Records**: `{version: 3, seed, fmt, surface, win, opp, inputLog, result}`; the result adds
+  `chLeft`, `viol` and `mis` (miscalls). The check holds the version-1 record
+  (`scripts/fixtures/tennis-v1-record.json`) and a version-2 clay record made just before
+  (`tennis-v2-record.json`) to their results, plays version-3 matches with challenges both ways and a
+  mouse-driven match (with key points mixed in) and replays them, and plays a challenged match with
+  the broadcast on and off to the same masks.
 - **Not yet**: changing ends, lets, doubles, counting results, a server replay check, other viewers,
   figures referred after the bundle in the stand.
 

@@ -10,22 +10,27 @@ import { cpuProfile } from "./sim.js";
 // kit: [shirt, shorts] (avatar CLOTH colours). spec: a regular's procedural file photo. hint: avatar
 // fields for a figure whose likeness is not drawn yet (pendingSpec).
 export const OPPONENTS = [
-  { key: "serena-williams", name: "SERENA WILLIAMS", rating: 98, died: null, kit: ["#d977a8", "#262626"], hint: { skin: "brown", hair_style: "bun", hair_color: "black", top_color: "pink", bottom_color: "black" } },
-  { key: "venus-williams", name: "VENUS WILLIAMS", rating: 93, died: null, kit: ["#e0c040", "#e6e6e6"], hint: { skin: "brown", hair_style: "ponytail", hair_color: "black", top_color: "yellow", bottom_color: "white" } },
-  { key: "john-mcenroe", name: "JOHN MCENROE", rating: 92, died: null, kit: ["#e6e6e6", "#1f2f5a"] },
-  { key: "arthur-ashe", name: "ARTHUR ASHE", rating: 91, died: "1993-02-06", kit: ["#e6e6e6", "#e6e6e6"] },
-  { key: "club-pro", name: "THE CLUB PRO", rating: 62, died: null, regular: true, note: "HITTING PARTNER GRADE. PAID BY THE HOUR. THE HOUR IS LOGGED.", kit: ["#3c8a46", "#e6e6e6"],
+  { key: "serena-williams", hon: "MS.", temper: 0.6, name: "SERENA WILLIAMS", rating: 98, died: null, kit: ["#d977a8", "#262626"], hint: { skin: "brown", hair_style: "bun", hair_color: "black", top_color: "pink", bottom_color: "black" } },
+  { key: "venus-williams", hon: "MS.", temper: 0.3, name: "VENUS WILLIAMS", rating: 93, died: null, kit: ["#e0c040", "#e6e6e6"], hint: { skin: "brown", hair_style: "ponytail", hair_color: "black", top_color: "yellow", bottom_color: "white" } },
+  { key: "john-mcenroe", hon: "MR.", temper: 0.97, name: "JOHN MCENROE", rating: 92, died: null, kit: ["#e6e6e6", "#1f2f5a"] },
+  { key: "arthur-ashe", hon: "MR.", temper: 0.08, name: "ARTHUR ASHE", rating: 91, died: "1993-02-06", kit: ["#e6e6e6", "#e6e6e6"] },
+  { key: "club-pro", hon: "", temper: 0.3, name: "THE CLUB PRO", rating: 62, died: null, regular: true, note: "HITTING PARTNER GRADE. PAID BY THE HOUR. THE HOUR IS LOGGED.", kit: ["#3c8a46", "#e6e6e6"],
     spec: { skin: "light_tan", hair_style: "short", hair_color: "blonde", build: "average", top_color: "green", bottom_color: "white", facial_hair: "none", accessory: "cap" } },
-  { key: "line-judge", name: "A LINE JUDGE ON A DAY OFF", rating: 40, died: null, regular: true, note: "HAS CALLED TWELVE THOUSAND BALLS. HAS HIT ELEVEN.", kit: ["#1f2f5a", "#8a8a8a"],
+  { key: "line-judge", hon: "", temper: 0.03, name: "A LINE JUDGE ON A DAY OFF", rating: 40, died: null, regular: true, note: "HAS CALLED TWELVE THOUSAND BALLS. HAS HIT ELEVEN.", kit: ["#1f2f5a", "#8a8a8a"],
     spec: { skin: "porcelain", hair_style: "side_part", hair_color: "white", build: "average", top_color: "navy", bottom_color: "grey", facial_hair: "none", accessory: "none" } },
   // the first-timer's opponent: slower than the scale goes (cpuProfile floors at rating 30), late to
   // the ball, loose with it. A point is there to be won.
-  { key: "new-member", name: "A NEW MEMBER", rating: 20, died: null, regular: true, easy: true, note: "JOINED THIS MORNING. HAS READ THE RULES ONCE.", kit: ["#e6e6e6", "#3c8a46"],
+  { key: "new-member", hon: "", temper: 0.2, name: "A NEW MEMBER", rating: 20, died: null, regular: true, easy: true, note: "JOINED THIS MORNING. HAS READ THE RULES ONCE.", kit: ["#e6e6e6", "#3c8a46"],
     profile: { rating: 20, sk: 0, speed: 3.4, react: 34, acc: 0.3, power: 0.3, judge: 0.3, reach: 0.9 },
     spec: { skin: "tan", hair_style: "curly", hair_color: "dark_brown", build: "average", top_color: "white", bottom_color: "green", facial_hair: "none", accessory: "none" } },
 ];
 export const OPP_BY_KEY = new Map(OPPONENTS.map(o => [o.key, o]));
-export const profileOf = (key) => { const o = OPP_BY_KEY.get(key); return o ? (o.profile ? { ...o.profile } : cpuProfile(o.rating)) : null; };
+// temper (0..1): how readily they challenge a call they cannot be sure of (version 3). Hand-set from
+// the public record: one of them is famous for it; the line judge on a day off trusts colleagues.
+export const profileOf = (key) => { const o = OPP_BY_KEY.get(key); return o ? { ...(o.profile ? o.profile : cpuProfile(o.rating)), temper: o.temper ?? 0.3 } : null; };
+// What the chair calls them: "MS. SERENA WILLIAMS", "THE CLUB PRO". A SUBJECT's form of address is
+// not on file, so the chair reads both.
+export const formalName = (o, name) => (o ? (o.hon ? `${o.hon} ${o.name}` : o.name) : `MR./MS. ${name}`);
 export const EASIEST = "new-member";
 export const spriteOf = (o) => (o.spec ? null : `/api/sprite/${o.key}`);
 // The file photo to paint while a figure's likeness is pending (/api/sprite answers 404): their

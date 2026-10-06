@@ -6,12 +6,13 @@
 //   ooh / aww  the same voices on an "oo" rising and falling, or an "aw" sinking: a gasp, a groan
 //   crickets   two crickets chirping in the quiet; maybe one cough
 //   bell       a bar bell (golf's nineteenth hole)
+//   slowclap   the stand clapping in time, slow then quickening (tennis: a line review's reveal)
 // Audio only: it reads nothing from a sim and writes nothing back. Each game passes its own
 // AudioContext getter and mute test, so its remembered mute toggle governs the crowd too, and no
 // sound plays before the page's first gesture (the game's unlock() opens the context).
 //
 //   const crowd = makeCrowd({ ctx: () => audioContext, muted: () => bool });
-//   crowd.play("polite" | "warm" | "cheer" | "roar" | "ooh" | "groan" | "aww" | "thin" | "crickets" | "cough" | "bell" | "quiet")
+//   crowd.play("polite" | "warm" | "cheer" | "roar" | "ooh" | "groan" | "aww" | "thin" | "crickets" | "cough" | "bell" | "slowclap" | "quiet")
 // "quiet" stops whatever the crowd is doing (an umpire's QUIET PLEASE).
 
 const BUFS = new Map();   // rendered sounds, per kind and sample rate (a handful of variants each)
@@ -82,6 +83,17 @@ function bell(d, sr, at = 0, vol = 0.22) {
   }
 }
 
+// The slow clap before a line review's verdict: the whole stand on one beat, slow, then quicker and
+// quicker, a few hands always a little early or late.
+function slowClap(d, sr) {
+  const people = 46, beats = [];
+  for (let t = 0.05, gap = 0.62; t < 4.1; t += gap, gap = Math.max(0.13, gap * 0.86)) beats.push(t);
+  for (let p = 0; p < people; p++) {
+    const v = 0.22 * (0.5 + rnd() * 0.5), lag = (rnd() - 0.5) * 0.04;
+    beats.forEach((t, i) => clap(d, sr, Math.max(0, t + lag + (rnd() - 0.5) * 0.02), v * (0.75 + 0.25 * Math.min(1, i / 8))));
+  }
+}
+
 // Each kind: how long, what goes in it, and the vowel its voices go through (formants, Hz).
 const KINDS = {
   thin: { dur: 2.2, make: (d, sr) => applause(d, sr, { people: 3, dur: 1.4, rate: 3, vol: 0.5 }) },
@@ -94,6 +106,7 @@ const KINDS = {
   crickets: { dur: 3.2, make: (d, sr) => { chirps(d, sr, { dur: 3, f: 4400, every: 0.8, at: 0.2, vol: 0.035 }); chirps(d, sr, { dur: 3, f: 3900, every: 1.1, at: 0.55, vol: 0.025 }); if (rnd() < 0.5) cough(d, sr, 1.6 + rnd() * 0.8, 0.3); } },
   cough: { dur: 0.6, make: (d, sr) => cough(d, sr, 0.02, 0.4) },
   bell: { dur: 1.8, make: (d, sr) => { bell(d, sr, 0); bell(d, sr, 0.28, 0.16); } },
+  slowclap: { dur: 4.4, make: (d, sr) => slowClap(d, sr) },
 };
 KINDS.aww = KINDS.groan;
 

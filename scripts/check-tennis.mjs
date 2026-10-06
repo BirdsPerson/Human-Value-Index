@@ -18,6 +18,17 @@
 //                lower and quicker on grass than on hard; hard is version 1's physics exactly; a
 //                version-1 record (scripts/fixtures/tennis-v1-record.json, recorded before the
 //                surfaces existed) replays to its result; clay and grass matches replay too
+//   challenges   (version 3) the judges miss only balls within CALLS.BAND of a line, and only now
+//                and then; every call's truth is the margin's sign; a challenge of a wrong call
+//                overturns it (the point to whoever the true call favoured, a serve replayed) and
+//                costs nothing, a challenge of a right call stands and costs one; three a set, one
+//                more in a tiebreak; holding C at the umpire is a warning, the third a point
+//                penalty; challenging with none left is a violation; a version-2 record
+//                (scripts/fixtures/tennis-v2-record.json, clay, made before challenges) replays to
+//                its result; a version-3 match with challenges both ways replays to its own
+//   pointer      (version 3) the drag -> the shot (up topspin, down slice, still flat, a big flick
+//                up a lob; left / right aims); the packed pointer round-trips; a match played with
+//                the mouse (and now and then the keys) replays to its result
 //   heads        the sports head cut (src/play/heads.js) takes Scott's head and leaves his pizza
 //                peel; every bundled file photo cuts to a head-sized box or to nothing
 // Run: node scripts/check-tennis.mjs
@@ -279,6 +290,185 @@ function playBot(seed, fmt, key, cap = 60 * 60 * 40) {
     assert.equal(st.phase, "over", `CPU v CPU finishes on ${surface}`);
   }
   ok(`surfaces (peak clay ${clay.peak.toFixed(2)} / hard ${hard.peak.toFixed(2)} / grass ${grass.peak.toFixed(2)} m; pace ${clay.pace.toFixed(1)} / ${hard.pace.toFixed(1)} / ${grass.pace.toFixed(1)} m/s)`);
+}
+
+// ---- challenges (version 3) -----------------------------------------------------------------------
+{
+  const { BAND, CH_CLOSE, PER_SET, HOLD } = S.CALLS;
+  // the version-2 record, made before the judges could be wrong, still plays to its result
+  const v2 = JSON.parse(readFileSync(new URL("./fixtures/tennis-v2-record.json", import.meta.url), "utf8"));
+  assert.equal(v2.version, 2); assert.equal(v2.surface, "clay");
+  assert.deepEqual(S.replay(v2, R.profileOf(v2.opp)), v2.result, "the version-2 record replays to its result");
+  assert.deepEqual(S.replay(JSON.parse(JSON.stringify(v2)), R.profileOf(v2.opp)), v2.result, "twice");
+  assert.notDeepEqual(S.replay({ ...v2, version: 3 }, R.profileOf(v2.opp)), v2.result, "the same hands under version 3's judges play another match");
+  // the judges: wrong only within the band; each call's truth is the margin's sign
+  let mis = 0, calls = 0, ch = 0, over = 0, stood = 0;
+  for (const [seed, surface] of [[1, "hard"], [2, "grass"], [3, "clay"], [4, "hard"]]) {
+    const st = S.newMatch({ seed, fmt: "set", cpu: S.cpuProfile(70), auto: R.profileOf("john-mcenroe"), surface });
+    while (st.phase !== "over" && st.frame < 60 * 60 * 90) {
+      const before = st.chLeft.slice();
+      S.step(st, 0);
+      if ((st.ev.includes("point") || st.ev.includes("fault")) && st.chal) {
+        const c = st.chal; calls++;
+        assert.equal(c.truth, c.m >= 0, `the truth is the margin's sign (${c.m})`);
+        assert.ok(Math.abs(c.m) < CH_CLOSE, "only close calls open a challenge");
+        if (c.called !== c.truth) assert.ok(Math.abs(c.m) < BAND, `a miscall ${c.m} m off the line`);
+      }
+      if (st.ev.includes("challenge")) ch++;
+      if (st.ev.includes("review")) {
+        const c = st.chal;
+        assert.equal(c.overturned, c.called !== c.truth, "a review overturns exactly the wrong calls");
+        if (c.overturned) {
+          over++;
+          if (c.outcome === "point") assert.equal(st.lastWinner, c.truth ? c.hitter : 1 - c.hitter, "the point goes where the true call sends it");
+          if (c.serve) assert.ok(c.called ? ["fault", "point"].includes(c.outcome) : c.outcome === "replay", `a serve's overturn: ${c.called ? "good, was out: a fault" : "a fault, was good: replayed"} (${c.outcome})`);
+          if (c.outcome === "fault") { assert.equal(st.serveNo, 2); assert.equal(st.after, "serve2"); }
+        }
+        else { stood++; assert.equal(st.chLeft[c.by], before[c.by] - 1, "a call that stands costs a challenge"); }
+        if (c.overturned && !st.ev.includes("game")) assert.equal(st.chLeft[c.by], before[c.by], "a right challenge costs nothing");
+      }
+    }
+    assert.equal(st.phase, "over", "a match with challenges finishes");
+    for (const mm of st.mis) assert.ok(Math.abs(mm) < BAND * 1000, `miscall at ${mm} mm`);
+    mis += st.mis.length;
+  }
+  assert.ok(mis >= 3, `the judges miss some (${mis})`);
+  assert.ok(ch >= 4 && over >= 1 && stood >= 1, `challenges made ${ch}, overturned ${over}, stood ${stood}`);
+  // the human's challenges: the bot challenges every close call against it, then is replayed
+  const chalBot = (st) => (S.canChallenge(st, 0) && st.frame === st.chal.frame + 30 ? S.BTN.C : bot(st));
+  let hum = { over: 0, stood: 0, none: 0 };
+  for (let seed = 11; seed < 60; seed++) {
+    const st = S.newMatch({ seed, fmt: "set", cpu: R.profileOf("club-pro"), surface: "grass" }), masks = [];
+    while (st.phase !== "over" && st.frame < 60 * 60 * 90) {
+      const m = chalBot(st); masks.push(m); S.step(st, m);
+      if (st.ev.includes("review") && st.chal.by === 0) st.chal.overturned ? hum.over++ : hum.stood++;
+      if (st.ev.includes("violation")) hum.none++;
+    }
+    const rec = { version: S.VERSION, seed, fmt: "set", surface: "grass", win: st.win, opp: "club-pro", inputLog: S.rleEncode(masks), result: S.resultOf(st) };
+    assert.deepEqual(S.replay(rec, R.profileOf("club-pro")), rec.result, "a version-3 match with challenges replays");
+    assert.deepEqual(S.replay(JSON.parse(JSON.stringify(rec)), R.profileOf("club-pro")), rec.result, "through JSON");
+    if (hum.over && hum.stood && seed >= 13) { hum.seeds = seed - 10; break; }
+  }
+  assert.ok(hum.over >= 1 && hum.stood >= 1, `the human's challenges: ${JSON.stringify(hum)}`);
+  // the review is the broadcast's: it holds the match (nothing logged) and changes nothing
+  {
+    const SH = await import("../src/play/tennis/show.js");
+    const bare = (() => { const st = S.newMatch({ seed: 12, fmt: "set", cpu: R.profileOf("club-pro"), surface: "grass" }), m = []; while (st.phase !== "over" && st.frame < 60 * 60 * 90) { const k = chalBot(st); m.push(k); S.step(st, k); } return { st, m }; })();
+    const st = S.newMatch({ seed: 12, fmt: "set", cpu: R.profileOf("club-pro"), surface: "grass" });
+    const show = SH.createShow({ seed: 12, names: ["SUBJECT", "THE CLUB PRO"], formal: ["MR./MS. SUBJECT", "THE CLUB PRO"], opp: "club-pro", cutaways: false, st });
+    const masks = []; let slots = 0, said = 0;
+    while (st.phase !== "over" && slots < 60 * 60 * 120) {
+      slots++;
+      const m = show.busy() ? 0 : chalBot(st);
+      if (show.slot(st, m)) { masks.push(m); S.step(st, m); show.observe(st); if (show.state.bubble?.text.includes("IS CHALLENGING THE CALL.")) said++; }
+    }
+    assert.ok(show.state.reviews >= 2, `reviews shown (${show.state.reviews})`);
+    assert.ok(said > 0, "the chair announces the challenge");
+    assert.ok(slots >= masks.length + show.state.reviews * SH.REVIEW.LEN, "the match was held through each review");
+    assert.deepEqual(masks, bare.m, "the same masks reach the sim, reviews or not");
+    assert.deepEqual(S.resultOf(st), S.resultOf(bare.st), "the same result");
+    assert.equal(SH.measured(-0.003).short, "OUT BY 3 MM");
+    assert.equal(SH.measured(-0.003).long, "THE BALL WAS OUT BY 3 MILLIMETRES");
+    assert.equal(SH.measured(-0.0004).short, "OUT BY 1 MM", "never out by nothing");
+    assert.equal(SH.measured(0.02).short, "IN \u2014 TOUCHING THE LINE");
+    assert.equal(SH.measured(0.13).short, "IN BY 20 MM");
+  }
+  // after the window closes, C does nothing
+  {
+    const st = S.newMatch({ seed: 11, fmt: "set", cpu: R.profileOf("club-pro"), surface: "grass" });
+    let seen = false;
+    while (st.phase !== "over" && st.frame < 60 * 60 * 30 && !seen) {
+      S.step(st, bot(st));
+      if (S.canChallenge(st, 0)) {
+        while (st.frame <= st.chal.until) S.step(st, 0);
+        assert.ok(!S.canChallenge(st, 0), "the window closes");
+        const left = st.chLeft[0]; S.step(st, S.BTN.C);
+        assert.ok(!st.ev.includes("challenge") && st.chLeft[0] === left && st.viol[0] === 0, "a late C is nothing");
+        seen = true;
+      }
+    }
+    assert.ok(seen, "a window opened for the human");
+  }
+  // the tone: C held at the umpire, twice a warning, the third time a point
+  {
+    const st = S.newMatch({ seed: 5, fmt: "short", cpu: R.profileOf("club-pro") });
+    const hold = () => { for (let k = 0; k < HOLD; k++) S.step(st, S.BTN.C); S.step(st, 0); };
+    hold(); assert.deepEqual(st.viol, [1, 0], "a warning");
+    hold(); assert.deepEqual(st.viol, [2, 0], "a second warning");
+    const w1 = st.won[1]; hold();
+    assert.equal(st.viol[0], 3);
+    for (let k = 0; k < 60 && !st.ev.includes("penalty"); k++) S.step(st, 0);
+    assert.equal(st.won[1], w1 + 1, "the third: a point penalty");
+    assert.equal(st.call, "POINT PENALTY");
+  }
+  // the allowance: three a set, one more in a tiebreak, three again with the next set
+  {
+    const st = S.newMatch({ seed: 1, fmt: "set", cpu: R.profileOf("club-pro") });
+    assert.deepEqual(st.chLeft, [PER_SET, PER_SET]);
+    st.sc.games = [6, 5]; st.chLeft = [0, 2];
+    for (let k = 0; k < 4; k++) S.award(st, 1);
+    assert.ok(st.sc.tb, "six-all"); assert.deepEqual(st.chLeft, [1, 3], "one more each in the tiebreak");
+    st.sc.fmt = { ...st.sc.fmt, setsToWin: 2 };
+    for (let k = 0; k < 7; k++) S.award(st, 0);
+    assert.equal(st.sc.sets.length, 1); assert.deepEqual(st.chLeft, [PER_SET, PER_SET], "three again with the set");
+  }
+  ok(`challenges (${mis} miscalls in 4 sets; CPU challenges ${ch}: ${over} overturned, ${stood} stood; the bot's ${JSON.stringify(hum)})`);
+}
+
+// ---- pointer (version 3) ---------------------------------------------------------------------------
+{
+  assert.deepEqual(S.gestureShot(0, -1), { kind: "A", shot: "drive", aimX: 0, aimD: 0 }, "drag up: topspin");
+  assert.equal(S.gestureShot(0, -2).shot, "drive"); assert.equal(S.gestureShot(0, -2).aimD, 1, "further up: deeper topspin");
+  assert.deepEqual(S.gestureShot(0, 2), { kind: "B", shot: "slice", aimX: 0, aimD: -1 }, "drag down: slice");
+  assert.equal(S.gestureShot(0, 0).shot, "flat", "still: flat");
+  assert.equal(S.gestureShot(0, -3).shot, "lob", "a big flick up: lob");
+  assert.equal(S.gestureShot(2, -1).aimX, 1); assert.equal(S.gestureShot(-1, 1).aimX, -1, "left / right aims");
+  assert.equal(S.gestureServe(0, -2).spin, "kick"); assert.equal(S.gestureServe(0, 2).spin, "sserve"); assert.equal(S.gestureServe(1, 0).aimX, 1);
+  const pb = S.ptrBits(-3.27, 11.94, 2, -3);
+  assert.ok(pb > 0 && pb < 2 ** 30 && pb & S.BTN.PTR, "a positive 30-bit mask");
+  assert.deepEqual(S.ptrOf(pb), { x: -3.3, y: 11.9, gx: 2, gy: -3 }, "the pointer round-trips to 10 cm");
+  assert.equal(S.ptrOf(S.BTN.A), null);
+  // the spins differ where they bounce: a topspin drive kicks up, a slice stays low (the court's own physics)
+  const dr = S.bounceOf("hard", "drive"), fl = S.bounceOf("hard", "flat"), sl = S.bounceOf("hard", "slice");
+  assert.ok(dr.peak > sl.peak && fl.pace > sl.pace, "topspin kicks higher than slice; flat keeps more pace than slice");
+  // a mouse match: press on the court where the ball is going, hold, release as it arrives; the
+  // drag cycles through the shots; every third point is played with the keys instead
+  const G = [[0, -1], [0, 1], [0, 0], [1, -2], [-1, 0], [0, -3], [-1, 1]];
+  const shots = new Set();
+  function mouseBot(st) {
+    const P = st.p[0], b = st.ball, B = S.BTN, g = G[(st.frame >> 7) % G.length];
+    if (st.phase === "serve" && S.serverOfMatch(st) === 0) {
+      if (st.sub === "ready") return st.frame % 50 < 4 ? S.ptrBits(P.x, P.y, g[0], g[1]) : 0;
+      return b && b.vz < 0 && b.z < 3.05 ? 0 : S.ptrBits(P.x, P.y, g[0], g[1]);
+    }
+    if (b && b.live && b.last === 1) {
+      if ((st.won[0] + st.won[1]) % 3 === 2) return bot(st);
+      const d = Math.sqrt((b.x - P.x) ** 2 + (b.y - P.y) ** 2);
+      if (d < 1.5 && b.y > 0 && (b.bounces > 0 || P.y < 6) && P.swing < 0) return 0;   // release: swing
+      // where to run: where the ball will be after its bounce, at a hitting height (read from the flight, as a player would)
+      const c = { ...b };
+      for (let k = 0; k < 240 && !(c.bounces >= 1 && c.z < 1.2 && c.vz < 0) && c.y < S.COURT.hl + 3; k++) S.ballStep(c);
+      return S.ptrBits(c.x - 0.45 * (c.x >= P.x ? 1 : -1), Math.max(1, Math.min(c.y, S.COURT.hl + 2)), g[0], g[1]);
+    }
+    return 0;
+  }
+  const play = (seed) => {
+    const st = S.newMatch({ seed, fmt: "short", cpu: R.profileOf("line-judge") }), masks = [];
+    while (st.phase !== "over" && st.frame < 60 * 60 * 40) {
+      const m = mouseBot(st); masks.push(m); S.step(st, m);
+      if (st.p[0].gest && st.p[0].swing === 1) shots.add(st.p[0].gest.shot);
+    }
+    return { st, rec: { version: S.VERSION, seed, fmt: "short", win: st.win, opp: "line-judge", inputLog: S.rleEncode(masks), result: S.resultOf(st) }, masks };
+  };
+  const a = play(31);
+  assert.ok(a.rec.result.done, "the mouse match finishes");
+  assert.ok(a.rec.result.pts[0] > 0, "the mouse wins points");
+  assert.ok(a.masks.some(m => m & S.BTN.PTR) && a.masks.some(m => m & S.BTN.A), "the pointer and the keys in one match");
+  assert.ok(["drive", "slice", "flat", "lob"].every(k => shots.has(k)), `every shot from the drag (${[...shots]})`);
+  assert.deepEqual(S.rleDecode(a.rec.inputLog), a.masks, "the pointer's masks round-trip the RLE");
+  assert.deepEqual(S.replay(a.rec, R.profileOf("line-judge")), a.rec.result, "a mouse match replays");
+  assert.deepEqual(S.replay(JSON.parse(JSON.stringify(a.rec)), R.profileOf("line-judge")), a.rec.result, "through JSON");
+  ok(`pointer (mouse match ${a.rec.result.sets[0].join("-")}, ${a.rec.inputLog.length / 2} runs)`);
 }
 
 // ---- heads ---------------------------------------------------------------------------------------

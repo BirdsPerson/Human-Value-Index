@@ -7,6 +7,8 @@
 // The one thing it decides for the loop: whether the sim steps this 60 Hz slot (slot()). During a
 // cutaway the match is held (like pause: no step, nothing logged), and after one the match waits
 // until A and B are let go, so the press that skipped it never reaches the sim as a toss or swing.
+// A challenge's review (THE DEPARTMENT'S EYE) holds the match the same way: the sim has already
+// decided it (sim.js resolve); the review only shows it, and nothing is logged while it plays.
 import { COURT, BTN, serverOfMatch } from "./sim.js";
 import { spectators, captionFor, UMPIRE, REACTIONS } from "./gallery.js";
 
@@ -36,7 +38,21 @@ export const KIDS = [
 ];
 
 export const CUT_LEN = 270;   // 4.5 s of camera on a face, unless skipped
-const AB = BTN.A | BTN.B;
+const AB = BTN.A | BTN.B | BTN.C | BTN.PTR;
+// The review's timeline, in 60 Hz slots: the flight (FLIGHT), the camera coming down onto the mark
+// (ZOOM), the mark and the measurement (MARK, the slow clap under it), the verdict, the brand line.
+export const REVIEW = { FLIGHT: 12, ZOOM: 150, MARK: 250, VERDICT: 350, BRAND: 420, LEN: 490 };
+
+// How far the mark missed or touched the line, in the Department's words. m: sim.js lineMargin (the
+// overlap of the mark past the line's outer edge; below zero, the gap).
+export function measured(m) {
+  if (m < 0) { const mm = Math.max(1, Math.round(-m * 1000)); return { short: `OUT BY ${mm} MM`, long: `THE BALL WAS OUT BY ${mm} ${mm === 1 ? "MILLIMETRE" : "MILLIMETRES"}` }; }
+  // the mark (3 cm either side of the ball's centre) reaches the 5 cm line while m < 0.11
+  if (m < 0.11) return { short: "IN \u2014 TOUCHING THE LINE", long: "THE BALL WAS IN, TOUCHING THE LINE" };
+  const mm = Math.max(1, Math.round((m - 0.11) * 1000));
+  return { short: `IN BY ${mm} MM`, long: `THE BALL WAS IN BY ${mm} MILLIMETRES` };
+}
+export const BRAND = "THE DEPARTMENT'S EYE IS SPONSORED BY NOBODY. IT DOES NOT BLINK.";
 
 const WORDS = { LOVE: "LOVE", 15: "FIFTEEN", 30: "THIRTY", 40: "FORTY" };
 // The sim's call -> what the chair says. names: [near, far].
@@ -57,7 +73,7 @@ export function spoken(st, names, next = st.next) {
 }
 
 // opts: {seed, names: [near, far], opp: the opponent's key, cutaways: bool, st: the new match}
-export function createShow({ seed, names, opp, cutaways = true, st }) {
+export function createShow({ seed, names, formal = names, opp, cutaways = true, st }) {
   const r = prng((seed ^ 0x5eed7e11) >>> 0);
   const pool = spectators(opp);
   const S = {
@@ -73,7 +89,12 @@ export function createShow({ seed, names, opp, cutaways = true, st }) {
     look: 0,               // the chair's eye: -1 far end .. +1 near end
     ballX: 0, ballY: 0,
     upcoming: null, shown: new Set(), prevPhase: st?.phase || "serve",
+    review: null,          // {from, len, d}: THE DEPARTMENT'S EYE on screen (d: the sim's challenge, copied)
+    reviews: 0,
+    sr: null,              // {n, text}: what the screen reader hears of challenges and verdicts
   };
+  let srN = 0;
+  const tell = (text) => { S.sr = { n: ++srN, text }; };
   const pick = () => {
     if (r() < 1 / 6) return { key: UMPIRE.key };
     let left = pool.filter(p => !S.shown.has(p.slug));
@@ -94,10 +115,18 @@ export function createShow({ seed, names, opp, cutaways = true, st }) {
     S.since = 0; S.gap = 3 + Math.floor(r() * 3);
   }
   function endCut(skipped) { if (skipped) S.skips++; S.cut = null; }
+  function endReview(st) {
+    const d = S.review.d;
+    S.review = null;
+    const v = d.overturned ? "CALL OVERTURNED." : "THE CALL STANDS.";
+    say(S, "chair", `${v} ${spoken(st, names)}`, 0, 300);
+    S.crowd = d.overturned ? { mood: "stand", from: S.t, until: S.t + 150 } : { mood: "idle", from: S.t, until: 0 };
+  }
 
   return {
     state: S,
-    busy: () => Boolean(S.cut) || S.hold,
+    busy: () => Boolean(S.cut) || Boolean(S.review) || S.hold,
+    reviewAge: () => (S.review ? S.t - S.review.from : -1),
     cutAge: () => (S.cut ? S.t - S.cut.from : -1),
     skip() { if (S.cut && S.t - S.cut.from > 10) { endCut(true); S.hold = true; } },
     // One 60 Hz slot. -> true: step the sim with this mask (and log it); false: the match is held.
@@ -105,6 +134,13 @@ export function createShow({ seed, names, opp, cutaways = true, st }) {
       S.t++;
       tickKids(S, st); tickLook(S, st);
       if (S.queued && S.t >= S.queued.at) { say(S, "chair", S.queued.text, 0, 330); S.queued = null; }
+      if (S.review) {
+        const press = mask & ~S.prevMask & AB, age = S.t - S.review.from;
+        S.prevMask = mask;
+        if (press && age > 40) { endReview(st); S.hold = true; }
+        else if (age >= S.review.len) { endReview(st); S.hold = (mask & AB) !== 0; }
+        return false;
+      }
       if (S.cut) {
         const press = mask & ~S.prevMask & AB;
         S.prevMask = mask;
@@ -119,6 +155,25 @@ export function createShow({ seed, names, opp, cutaways = true, st }) {
     // After each sim step: what just happened.
     observe(st) {
       const ev = st.ev, b = st.ball;
+      if (ev.includes("challenge") && st.chal) {
+        const who = formal[st.chal.by] || names[st.chal.by];
+        S.queued = null;
+        say(S, "chair", `${who} IS CHALLENGING THE CALL.`, 0, 200);
+        tell(`${who} IS CHALLENGING THE CALL.`);
+        S.crowd = { mood: "idle", from: S.t, until: 0 };
+      }
+      if (ev.includes("review") && st.chal) {
+        const c = st.chal, mz = measured(c.m);
+        S.reviews++; S.bubble = null; S.queued = null;
+        S.review = { from: S.t, len: REVIEW.LEN, d: { x: c.x, y: c.y, vx: c.vx, vy: c.vy, vz: c.vz, grav: c.grav, t: c.t, m: c.m, line: c.line, called: c.called, truth: c.truth, overturned: c.overturned, outcome: c.outcome, serve: c.serve, by: c.by, surface: st.surface, words: mz } };
+        tell(`${mz.long}. ${c.overturned ? "CALL OVERTURNED" : "CALL STANDS"}.`);
+      }
+      if (ev.includes("violation") && st.tone) {
+        const T = st.tone, who = names[T.i];
+        const text = `THE UMPIRE HAS NOTED YOUR TONE. CODE VIOLATION, ${T.pen ? "POINT PENALTY" : "WARNING"}, ${who}.`;
+        say(S, "chair", text, 0, 300); tell(text);
+      }
+      if (ev.includes("penalty")) { say(S, "chair", `POINT PENALTY. ${spoken(st, names)}`, 0, 300); S.queued = null; }
       if (ev.includes("toss") || (ev.includes("hit") && S.bubble?.who === "chair")) { S.bubble = null; S.queued = null; }
       if (ev.includes("hit") || ev.includes("smash")) { if (S.crowd.mood !== "idle" && S.t - S.crowd.from > 30) S.crowd = { mood: "idle", from: S.t, until: 0 }; }
       if (ev.includes("point") || ev.includes("fault")) {

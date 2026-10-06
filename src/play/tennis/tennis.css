@@ -91,3 +91,14 @@
 }
 /* the picker's faces: 2x, as golf's; 1.5x on a phone */
 @media (max-width: 600px) { .tn-opp .tn-face { width: 48px !important; height: 72px !important; } }
+
+/* a challenge: the prompt (only while its window is open; the bar is the time left) and the board's
+   discreet count of challenges left this set, a code violation's W beside it */
+.tn-chal { position: absolute; left: 50%; bottom: 2%; transform: translateX(-50%); min-height: var(--hit-min); padding: 2px 12px 6px; display: flex; align-items: center; gap: 6px; white-space: nowrap; font: inherit; font-weight: 700; font-size: var(--t-s); letter-spacing: 0.06em; color: #0a0f0a; background: #ffe14a; border: 2px solid #0a0f0a; cursor: pointer; touch-action: manipulation; overflow: hidden; }
+.tn-chal kbd { color: #0a0f0a !important; background: #fff4b0 !important; border-color: #0a0f0a !important; }
+.tn-chal small { font-weight: 400; font-size: 0.75em; }
+.tn-chal i { position: absolute; left: 0; bottom: 0; height: 3px; background: #0a0f0a; }
+.tn-chal:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.tn-board td.ch { color: var(--fg-mute); font-size: 0.6em; letter-spacing: 0.1em; min-width: 4ch; text-align: left; }
+.tn-board td.ch b { color: var(--warn); font-size: 1.4em; letter-spacing: 0; }
+@media (max-width: 420px) { .tn-chal { font-size: var(--t-xs); } }
