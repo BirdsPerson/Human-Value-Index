@@ -4,13 +4,14 @@ import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC, AVATAR_ENUMS, CLOTH } from "../../avatar.js";
 import { readPad, GLYPHS } from "../../city/gamepad.js";
-import { newMatch, step, rleEncode, resultOf, replay, serverOfMatch, canChallenge, VERSION, BTN, SURFACES } from "./sim.js";
+import { newMatch, step, rleEncode, resultOf, replay, serverOfMatch, canChallenge, VERSION, BTN, SURFACES, LEVELS, LEVEL_ORDER } from "./sim.js";
 import { FORMATS } from "./score.js";
 import { OPPONENTS, OPP_BY_KEY, EASIEST, profileOf, spriteOf, pendingSpec, talkFor, formalName } from "./roster.js";
 import { draw, drawCutaway, drawReview, unproj, headFrom, faceBox, speakerAt, SURFACE_NAMES, W, H } from "./render.js";
 import { sheetHints } from "../heads.js";
 import { createShow, REVIEW } from "./show.js";
 import { createInput, SELECT_GLYPH } from "./input.js";
+import ControlsGuide, { guideSeen, markGuideSeen, namesFor } from "./Guide.jsx";
 import GameMenu from "../GameMenu.jsx";
 import * as SFX from "./audio.js";
 import CSS from "./tennis.css?inline";
@@ -26,6 +27,9 @@ function injectStyles() {
   if (!el) { el = document.createElement("style"); el.id = "tn-styles"; document.head.appendChild(el); }
   if (el.textContent !== CSS) el.textContent = CSS;
 }
+// the way you are likely to play, for the guide before there is a match to ask: a pad if one is plugged in, a phone, else keys
+const guideFamily = () => { const p = readPad(); return p.connected ? p.family : null; };
+const guideMode = () => (guideFamily() !== null ? "pad" : typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches ? "pointer" : "keys");
 const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); const c = q.get("court"); return { vs: q.get("vs"), fmt: q.get("fmt") === "short" ? "short" : "set", court: SURFACES[c] ? c : "hard" }; };
 // The three courts, in the picker's order: what each is called and how it plays.
 const COURTS = [
@@ -36,7 +40,29 @@ const COURTS = [
 const KEEP = "hvi-tennis-exhibitions", KEEP_N = 5;
 export function loadRecords() { try { const j = JSON.parse(localStorage.getItem(KEEP) || "[]"); return Array.isArray(j) ? j : []; } catch { return []; } }
 function saveRecord(rec) { try { localStorage.setItem(KEEP, JSON.stringify([rec, ...loadRecords()].slice(0, KEEP_N))); } catch { /* a full or private store: the match stays in the tab */ } }
-const NOTICE = "THIS MATCH DOES NOT COUNT. NEITHER, STATISTICALLY, DO YOU.";
+const NOTICE = "THIS MATCH IS NOT ON THE LADDER OR YOUR FILE.";
+const LEVEL_KEY = "hvi-tennis-level", HAND_KEY = "hvi-tennis-hand", TIPS_KEY = "hvi-tennis-tips";
+// The difficulty: ROOKIE for a new player, then whatever was picked last.
+const readLevel = () => { try { const v = localStorage.getItem(LEVEL_KEY); return LEVELS[v] ? v : "rookie"; } catch { return "rookie"; } };
+const writeLevel = (v) => { try { localStorage.setItem(LEVEL_KEY, v); } catch { /* the tab remembers */ } };
+const LEVEL_NOTES = {
+  rookie: "START HERE. THE CLUB'S PLAYER IS A LITTLE SLOWER AND LOOSER; YOU CATCH THE BALL A TOUCH LATE AND STILL HIT IT WELL.",
+  pro: "A FAIR MATCH. THE CLUB'S PLAYER AT THEIR RATING, YOU WITH NO HELP.",
+  allstar: "THE CLUB'S PLAYER IS QUICKER, HITS HARDER AND MAKES FEWER MISTAKES.",
+  champion: "THE CLUB'S PLAYER AT THEIR BEST. EVERY BALL COMES BACK.",
+};
+// The player's hand: their choice here ("L" | "R"); unset, a `hand` on their profile if the site has one; else right.
+function profileHand() {
+  const norm = (h) => (h === "L" || h === "left" || h === -1 || h === "LEFT" ? "L" : h === "R" || h === "right" || h === 1 || h === "RIGHT" ? "R" : null);
+  try { const p = JSON.parse(localStorage.getItem("hvi-profile") || "null"); const h = norm(p?.hand); if (h) return h; } catch { /* no profile */ }
+  const last = readLastResult();
+  return norm(last?.hand) || norm(last?.profile?.hand) || norm(last?.avatar?.hand) || norm(last?.avatar?.spec?.hand) || null;
+}
+const readHand = () => { try { const h = localStorage.getItem(HAND_KEY); if (h === "L" || h === "R") return h; } catch { /* the tab remembers */ } return profileHand() || "R"; };
+const writeHand = (v) => { try { localStorage.setItem(HAND_KEY, v); } catch { /* the tab remembers */ } };
+// First-run prompts: each shows until it has been used once, then never again (remembered).
+const readTips = () => { try { const j = JSON.parse(localStorage.getItem(TIPS_KEY) || "[]"); return Array.isArray(j) ? j : []; } catch { return []; } };
+const writeTips = (a) => { try { localStorage.setItem(TIPS_KEY, JSON.stringify(a)); } catch { /* the tab remembers */ } };
 
 // Who you are on court: your file's photo and kit, else a SUBJECT in the Department's grey.
 function useMe() {
@@ -70,16 +96,26 @@ export default function Tennis({ route }) {
   const [match, setMatch] = useState(null);   // {seed, key: n}
   const [done, setDone] = useState(null);
   const [more, setMore] = useState(false);   // CHANGE SETTINGS opens the picker's options
-  const start = (o, f) => { SFX.unlock(); if (f) setFmt(f); setOpp(o); setDone(null); setMore(false); setMatch({ seed: seedNow(), n: Date.now() }); };
+  const [level, setLevelS] = useState(readLevel);
+  const [hand, setHandS] = useState(readHand);
+  const [guide, setGuide] = useState(null);   // {o, f}: the controls guide, before the first match
+  const setLevel = (v) => { setLevelS(v); writeLevel(v); };
+  const setHand = (v) => { setHandS(v); writeHand(v); };
+  const begin = (o, f) => { SFX.unlock(); if (f) setFmt(f); setOpp(o); setDone(null); setMore(false); setGuide(null); setMatch({ seed: seedNow(), n: Date.now() }); };
+  // the first match shows the controls guide first (skippable, remembered)
+  const start = (o, f) => { if (!guideSeen()) { SFX.unlock(); setGuide({ o, f }); setOpp(o); setMatch(null); setDone(null); } else begin(o, f); };
+  const leaveGuide = () => { markGuideSeen(); if (guide) begin(guide.o, guide.f); };
   const toPicker = (open) => { setDone(null); setMatch(null); setMore(open); };
   return (
     <div className="tn">
-      <ScreenHead title="THE TENNIS CLUB" meta={`${SURFACE_NAMES[court]} // EXHIBITION // NOTHING IS AT STAKE. EVERYTHING IS RECORDED.`} />
-      {match && opp && !done
-        ? <Match key={match.n} seed={match.seed} fmt={fmt} court={court} opp={opp} me={me} onDone={setDone} onQuit={() => setMatch(null)} onRestart={() => start(opp)} />
-        : done
-          ? <Done done={done} me={me} onAgain={() => start(opp)} onPick={() => toPicker(false)} onSettings={() => toPicker(true)} />
-          : <Picker key={more ? "more" : "plain"} fmt={fmt} setFmt={setFmt} court={court} setCourt={setCourt} pre={vs ? opp?.key || null : null} open={more} onPick={start} />}
+      <ScreenHead title="THE TENNIS CLUB" meta={`${SURFACE_NAMES[court]} // EXHIBITION`} />
+      {guide
+        ? <ControlsGuide mode={guideMode()} family={guideFamily()} hand={hand} onDone={leaveGuide} />
+        : match && opp && !done
+          ? <Match key={match.n} seed={match.seed} fmt={fmt} court={court} opp={opp} me={me} level={level} hand={hand} onDone={setDone} onQuit={() => setMatch(null)} onRestart={() => begin(opp)} onSettings={() => toPicker(true)} />
+          : done
+            ? <Done done={done} me={me} level={level} onAgain={() => start(opp)} onPick={() => toPicker(false)} onSettings={() => toPicker(true)} />
+            : <Picker key={more ? "more" : "plain"} fmt={fmt} setFmt={setFmt} court={court} setCourt={setCourt} level={level} setLevel={setLevel} hand={hand} setHand={setHand} pre={vs ? opp?.key || null : null} open={more} onPick={start} />}
     </div>
   );
 }
@@ -89,7 +125,7 @@ function seedNow() {
 
 // ---- choosing ------------------------------------------------------------------------------------
 // One line, one button: PLAY NOW is a short match against the easiest member. The rest is folded.
-function Picker({ fmt, setFmt, court, setCourt, pre, open = false, onPick }) {
+function Picker({ fmt, setFmt, court, setCourt, level, setLevel, hand, setHand, pre, open = false, onPick }) {
   const [sel, setSel] = useState(() => Math.max(0, OPPONENTS.findIndex(o => o.key === pre)));
   const [more, setMore] = useState(Boolean(pre) || open);
   const refs = useRef([]), playRef = useRef(null);
@@ -116,11 +152,28 @@ function Picker({ fmt, setFmt, court, setCourt, pre, open = false, onPick }) {
       <p className="pg-lede">TENNIS AGAINST THE COMPUTER. ARROW KEYS MOVE, Z SWINGS, Z TWICE SERVES. A CONTROLLER WORKS, AND PHONES GET A PAD ON SCREEN. SOUND IS OPTIONAL.</p>
       <div className="pg-start">
         <Button variant="primary" ref={playRef} onClick={quick}>PLAY NOW</Button>
-        <span className="pg-sub">FIRST TO 4 GAMES, AGAINST THE EASIEST MEMBER OF THE CLUB, ON {SURFACE_NAMES[court]}.</span>
+        <span className="pg-sub">FIRST TO 4 GAMES, AGAINST THE EASIEST MEMBER OF THE CLUB, ON {SURFACE_NAMES[court]}. {LEVELS[level].name}{hand === "L" ? ", LEFT-HANDED" : ""}.</span>
       </div>
       <details className="pg-more" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
-        <summary>CHOOSE AN OPPONENT, THE COURT AND MATCH LENGTH ({OPPONENTS.length} ON COURT)</summary>
+        <summary>CHOOSE AN OPPONENT, DIFFICULTY, HAND, COURT AND MATCH LENGTH ({OPPONENTS.length} ON COURT)</summary>
         <div className="pg-more-body">
+          <div className="tn-opts">
+            <h3>DIFFICULTY</h3>
+            <div className="tn-fmt" role="radiogroup" aria-label="Difficulty">
+              {LEVEL_ORDER.map(id => (
+                <button key={id} type="button" role="radio" aria-checked={level === id} className={`tn-chip${level === id ? " on" : ""}`} onClick={() => setLevel(id)}>{LEVELS[id].name}</button>
+              ))}
+            </div>
+            <p className="tn-small">{LEVEL_NOTES[level]} REMEMBERED.</p>
+            <h3>YOUR HAND</h3>
+            <div className="tn-fmt" role="radiogroup" aria-label="Handedness">
+              {[["R", "RIGHT-HANDED"], ["L", "LEFT-HANDED"]].map(([k, l]) => (
+                <button key={k} type="button" role="radio" aria-checked={hand === k} className={`tn-chip${hand === k ? " on" : ""}`} onClick={() => setHand(k)}>{l}</button>
+              ))}
+            </div>
+            <p className="tn-small">A LEFT-HANDER STANDS AND TOSSES ON THE LEFT. THE BUTTONS ARE THE SAME. REMEMBERED.</p>
+            <h3>COURT</h3>
+          </div>
           <div className="tn-fmt" role="radiogroup" aria-label="Court surface">
             {COURTS.map(([id, label, how]) => (
               <button key={id} type="button" role="radio" aria-checked={court === id} className={`tn-chip${court === id ? " on" : ""}`} onClick={() => setCourt(id)} title={how}>
@@ -136,7 +189,7 @@ function Picker({ fmt, setFmt, court, setCourt, pre, open = false, onPick }) {
               </button>
             ))}
           </div>
-          <p className="tn-small">THEN PICK WHO TO PLAY; THE MATCH STARTS AT ONCE. SPEED, REACH AND NERVE FOLLOW THE RATING.</p>
+          <p className="tn-small">THEN PICK WHO TO PLAY; THE MATCH STARTS AT ONCE. SPEED, REACH AND NERVE FOLLOW THE RATING. A LEFT-HANDER ON THE LIST PLAYS LEFT.</p>
           <ul className="tn-opps">
             {OPPONENTS.map((o, i) => (
               <li key={o.key}>
@@ -154,7 +207,7 @@ function Picker({ fmt, setFmt, court, setCourt, pre, open = false, onPick }) {
         <summary>HOW TO PLAY</summary>
         <div className="pg-more-body"><Controls /></div>
       </details>
-      <p className="tn-notice"><b>EXHIBITION.</b> {NOTICE} NOT ON THE LADDER, NOT IN THE CUP, NOT ON YOUR FILE. THE DEPARTMENT KEEPS THE TAPE ANYWAY.</p>
+      <p className="tn-notice"><b>EXHIBITION.</b> {NOTICE} IT IS KEPT IN THIS BROWSER ONLY.</p>
     </>
   );
 }
@@ -267,7 +320,15 @@ function pointsShown(sc, i) {
   return PT[Math.min(a, 3)];
 }
 
-function Match({ seed, fmt, court, opp, me, onDone, onQuit, onRestart }) {
+// The first-run prompts, in the words of the way you are playing.
+function tipText(id, mode, pad) {
+  const n = namesFor(mode, pad);
+  if (id === "serve") return mode === "pointer" ? "PRESS TO TOSS, RELEASE TO SERVE" : `PRESS ${n.swing} TO TOSS, ${n.swing} AGAIN TO SERVE`;
+  if (id === "hit") return "HIT AS THE BALL ARRIVES";
+  return mode === "pointer" || mode === "touch" ? "TAP TO CHALLENGE A CALL" : `${n.challenge} TO CHALLENGE A CALL`;
+}
+
+function Match({ seed, fmt, court, opp, me, level, hand, onDone, onQuit, onRestart, onSettings }) {
   const canvasRef = useRef(null), wrapRef = useRef(null), inputRef = useRef(null), showRef = useRef(null);
   const [hud, setHud] = useState(null);
   const [paused, setPaused] = useState(false);
@@ -284,6 +345,7 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit, onRestart }) {
   const [cutsOn, setCutsOn] = useState(() => readFlag(CUTS_KEY, !REDUCED()));
   const [over, setOver] = useState(null);   // {bubble, cut}: the broadcast's words on the picture
   const [tell] = useState(() => talkFor(opp, "start", seed % 3));
+  const [tip, setTip] = useState(null);   // {id, gone}: a first-run prompt, fading once it has been used
   const pausedRef = useRef(false), mutedRef = useRef(muted);
   mutedRef.current = muted;
   const togglePause = (v) => { pausedRef.current = v ?? !pausedRef.current; setPaused(pausedRef.current); };
@@ -310,7 +372,10 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit, onRestart }) {
     const cpu = profileOf(opp.key);
     // the challenge window: 2 s, 3 s on a touch screen (part of the record: the sim keeps it)
     const win = window.matchMedia?.("(pointer: coarse)").matches ? 180 : 120;
-    const st = newMatch({ seed, fmt, cpu, surface: court, win });
+    const st = newMatch({ seed, fmt, cpu, surface: court, win, level, hand: hand === "L" ? "L" : null, oppHand: opp.hand === "L" ? "L" : null });
+    const used = new Set(readTips());   // the prompts already used, ever
+    const useTip = (id) => { if (!used.has(id)) { used.add(id); writeTips([...used]); } };
+    let tipKey = null;
     const log = [];
     const input = createInput(); inputRef.current = input;
     // the broadcast: its own generator, reads the match, never writes it (show.js)
@@ -347,7 +412,7 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit, onRestart }) {
     document.addEventListener("visibilitychange", onVis);
     const finish = () => {
       ended = true;
-      const rec = { version: VERSION, seed, fmt, surface: st.surface, win: st.win, opp: opp.key, inputLog: rleEncode(log), result: resultOf(st), at: Date.now() };
+      const rec = { version: VERSION, seed, fmt, surface: st.surface, win: st.win, level, ...(hand === "L" ? { hand: "L" } : {}), ...(opp.hand === "L" ? { oppHand: "L" } : {}), opp: opp.key, inputLog: rleEncode(log), result: resultOf(st), at: Date.now() };
       let verified = false;
       try { verified = JSON.stringify(replay(rec, cpu)) === JSON.stringify(rec.result); } catch { verified = false; }
       saveRecord(rec);
@@ -373,6 +438,9 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit, onRestart }) {
             const cr = SFX.crowdFor(st, srv);
             if (cr) { SFX.crowd(cr.kind, mutedRef.current); if (cr.say) setCrowdSay(cr.say); }
             show.observe(st);
+            if (st.ev.includes("hit") && st.ball?.last === 0 && st.ball.serve) useTip("serve");
+            else if ((st.ev.includes("hit") || st.ev.includes("smash")) && st.ball?.last === 0) useTip("hit");
+            if (st.ev.includes("challenge") && st.chal?.by === 0) useTip("challenge");
             if (st.phase === "over") { finish(); }
           } else if (ended) show.slot(st, 0);
         }
@@ -391,6 +459,16 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit, onRestart }) {
       const open = !S.review && !S.cut && canChallenge(st, 0);
       const pk = open ? `${st.chLeft[0]}|${Math.ceil(((st.chal.until - st.frame) / st.win) * 12)}` : "";
       if (pk !== promptKey) { promptKey = pk; setPrompt(open ? { left: st.chLeft[0], frac: Math.max(0, (st.chal.until - st.frame) / st.win) } : null); }
+      // the first-run prompts: the first one that applies and has not been used
+      const quiet = !S.review && !S.cut && !pausedRef.current;
+      const cand = !quiet ? null : st.phase === "serve" && serverOfMatch(st) === 0 && !used.has("serve") ? "serve"
+        : st.phase === "rally" && st.ball?.live && st.ball.last === 1 && !used.has("hit") ? "hit"
+        : open && !used.has("challenge") ? "challenge" : null;
+      if (cand !== tipKey) {
+        tipKey = cand;
+        setTip(t => (cand ? { id: cand, gone: false } : t ? { ...t, gone: true } : null));
+        if (!cand) setTimeout(() => setTip(t => (t && t.gone ? null : t)), 800);
+      }
       const sc = st.sc, server = sc.tb || st.phase !== "over" ? serverOfMatch(st) : -1;
       const call = st.phase === "dead" ? (st.t < 45 ? st.call : st.next) : st.phase === "serve" && st.sub === "ready" ? st.next : st.phase === "over" ? "GAME, SET AND MATCH" : "";
       // the board holds still while the review plays: the verdict is the review's to tell
@@ -468,17 +546,19 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit, onRestart }) {
               <small>THE DEPARTMENT OF LEISURE // {skipHint}</small>
             </div>
           )}
+          {tip && !paused && <div className={`tn-tip${tip.gone ? " gone" : ""}`} role="status">{tipText(tip.id, mode, pad)}</div>}
           {paused && <div className="tn-pause" aria-hidden="true"><b>PAUSED</b></div>}
         </div>
       </div>
       {paused && (
-        <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE DEPARTMENT HAS STOPPED THE CLOCK. IT DOES NOT USUALLY."
+        <GameMenu key="pause" kind="pause" title="PAUSED." summary={`THE MATCH IS PAUSED. ${LEVELS[level].name}${hand === "L" ? ", LEFT-HANDED" : ""}.`}
           onBack={() => togglePause(false)}
           options={{
             resume: () => togglePause(false),
             restart: onRestart,
-            controls: <Legend mode={mode} family={pad} compact />,
+            controls: <ControlsGuide mode={mode} family={pad} hand={hand} compact />,
             sound: { on: !muted, onSelect: toggleMute },
+            settings: { label: "CHANGE SETTINGS (DIFFICULTY, HAND, COURT)", onSelect: onSettings },
             quit: { label: "LEAVE THE COURT", onSelect: onQuit },
           }} />
       )}
@@ -574,10 +654,10 @@ function Done({ done, me, onAgain, onPick, onSettings }) {
           }} />
       )}
       <p className={`tn-big ${youWon ? "win" : "lose"}`}>{headline}</p>
-      <p className="tn-p">{youWon ? "THE DEPARTMENT HAS NOTED AN ANOMALY. IT WILL NOT BE REPEATED IN THE STANDINGS." : "AS PROJECTED. THE PROJECTION IS NOT ON YOUR FILE EITHER."}</p>
+      <p className="tn-p">{youWon ? `A WIN IS A WIN. THE DEPARTMENT HAS NOTED IT.${rec.level === "rookie" ? " READY FOR MORE? CHANGE SETTINGS AND TRY PRO." : ""}` : `THE DEPARTMENT RATES THE NEXT ONE HIGHER.${rec.level && rec.level !== "rookie" ? " ROOKIE IS UNDER CHANGE SETTINGS." : ""}`}</p>
       {tell && <p className={`tn-tell ${tell.kind}`}>{tell.kind === "say" ? `${opp.name}: "${tell.text}"` : tell.text}</p>}
       <p className="tn-notice">{NOTICE}</p>
-      <p className="tn-small">POINTS {r.pts[0]}-{r.pts[1]} // {Math.round(r.frames / 60)} SECONDS OF PLAY // {verified ? "RE-RUN FROM THE INPUT LOG: SAME RESULT. YOU ARE REPRODUCIBLE." : "THE RE-RUN DISAGREED. THE DEPARTMENT IS LOOKING INTO ITSELF."} KEPT IN THIS BROWSER ONLY.</p>
+      <p className="tn-small">POINTS {r.pts[0]}-{r.pts[1]} // {LEVELS[rec.level]?.name || "PRO"} // {Math.round(r.frames / 60)} SECONDS OF PLAY // {verified ? "THE MATCH WAS RE-RUN FROM ITS INPUT LOG AND CAME OUT THE SAME." : "THE RE-RUN FROM THE INPUT LOG DID NOT MATCH."} KEPT IN THIS BROWSER ONLY.</p>
       <ButtonRow>
         <Button variant="primary" onClick={onAgain}>Rematch</Button>
         <Button onClick={onPick}>Another opponent</Button>

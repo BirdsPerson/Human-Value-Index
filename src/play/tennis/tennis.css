@@ -65,7 +65,7 @@
 .tn-legend-head { display: flex; width: 100%; justify-content: space-between; gap: var(--s3); min-height: var(--hit-min); padding: 0 var(--s2); font: inherit; font-size: var(--t-xs); letter-spacing: 0.06em; color: var(--fg-dim); background: none; border: 0; cursor: pointer; text-align: left; }
 .tn-legend-head:hover, .tn-legend-head:focus-visible { color: var(--fg); outline: none; background: var(--panel-hi); }
 .tn-legend-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2px var(--s3); margin: 0; padding: 0 var(--s2) var(--s2); font-size: var(--t-xs); }
-.tn-legend-rows > div, .tn-legend-mini > div { display: grid; grid-template-columns: 7ch 1fr; gap: var(--s2); align-items: baseline; }
+.tn-legend-rows > div, .tn-legend-mini > div { display: grid; grid-template-columns: 10ch 1fr; gap: var(--s2); align-items: baseline; }
 .tn-legend-rows dt, .tn-legend-mini dt { color: var(--accent); font-weight: 700; }
 .tn-legend-rows dd, .tn-legend-mini dd { margin: 0; color: var(--fg-dim); }
 .tn-legend-rows dd span { display: block; color: var(--fg-mute); }
@@ -102,3 +102,19 @@
 .tn-board td.ch { color: var(--fg-mute); font-size: 0.6em; letter-spacing: 0.1em; min-width: 4ch; text-align: left; }
 .tn-board td.ch b { color: var(--warn); font-size: 1.4em; letter-spacing: 0; }
 @media (max-width: 420px) { .tn-chal { font-size: var(--t-xs); } }
+
+/* the controls guide and the first-run prompts */
+.tn-guide { margin: 0 0 var(--s3); }
+.tn-guide-h { font-size: var(--t-m); letter-spacing: 0.08em; margin: 0 0 var(--s2); }
+.tn-pad { display: block; width: 100%; max-width: 380px; height: auto; margin: 0 0 var(--s2); font-family: inherit; }
+.tn-guide-rows { margin: 0 0 var(--s2); display: grid; gap: var(--s2); }
+.tn-guide-rows div { display: grid; grid-template-columns: 9ch 1fr; gap: var(--s3); }
+.tn-guide-rows dt { color: var(--accent); font-weight: 700; font-size: var(--t-xs); }
+.tn-guide-rows dd { margin: 0; color: var(--fg); font-size: var(--t-s); line-height: 1.4; }
+.tn-guide.compact .tn-guide-rows div { grid-template-columns: 1fr; gap: 0; }
+.tn-guide-go { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); margin: 0; }
+.tn-tip { position: absolute; left: 4%; right: 4%; bottom: 30%; padding: 4px 6px; text-align: center; font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.08em; color: var(--accent-ink); background: var(--accent); pointer-events: none; opacity: 1; transition: opacity 600ms ease; }
+.tn-tip.gone { opacity: 0; }
+.tn-opts { margin: 0 0 var(--s2); }
+.tn-opts h3 { font-size: var(--t-xs); letter-spacing: 0.08em; color: var(--fg-dim); margin: var(--s2) 0 var(--s1); font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .tn-tip { transition: none; } }

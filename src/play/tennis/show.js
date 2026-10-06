@@ -52,7 +52,7 @@ export function measured(m) {
   const mm = Math.max(1, Math.round((m - 0.11) * 1000));
   return { short: `IN BY ${mm} MM`, long: `THE BALL WAS IN BY ${mm} MILLIMETRES` };
 }
-export const BRAND = "THE DEPARTMENT'S EYE IS SPONSORED BY NOBODY. IT DOES NOT BLINK.";
+export const BRAND = "THE DEPARTMENT'S EYE. LINE REVIEW.";
 
 const WORDS = { LOVE: "LOVE", 15: "FIFTEEN", 30: "THIRTY", 40: "FORTY" };
 // The sim's call -> what the chair says. names: [near, far].
@@ -166,11 +166,11 @@ export function createShow({ seed, names, formal = names, opp, cutaways = true, 
         const c = st.chal, mz = measured(c.m);
         S.reviews++; S.bubble = null; S.queued = null;
         S.review = { from: S.t, len: REVIEW.LEN, d: { x: c.x, y: c.y, vx: c.vx, vy: c.vy, vz: c.vz, grav: c.grav, t: c.t, m: c.m, line: c.line, called: c.called, truth: c.truth, overturned: c.overturned, outcome: c.outcome, serve: c.serve, by: c.by, surface: st.surface, words: mz } };
-        tell(`${mz.long}. ${c.overturned ? "CALL OVERTURNED" : "CALL STANDS"}.`);
+        tell(`CHALLENGE: ${mz.long.replace("THE BALL WAS ", "BALL ")}. ${c.overturned ? "CALL OVERTURNED" : "CALL STANDS"}.`);
       }
       if (ev.includes("violation") && st.tone) {
         const T = st.tone, who = names[T.i];
-        const text = `THE UMPIRE HAS NOTED YOUR TONE. CODE VIOLATION, ${T.pen ? "POINT PENALTY" : "WARNING"}, ${who}.`;
+        const text = `CODE VIOLATION, ${T.pen ? "POINT PENALTY" : "WARNING"}, ${who}.`;
         say(S, "chair", text, 0, 300); tell(text);
       }
       if (ev.includes("penalty")) { say(S, "chair", `POINT PENALTY. ${spoken(st, names)}`, 0, 300); S.queued = null; }

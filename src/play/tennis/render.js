@@ -167,7 +167,7 @@ function courtLayer(sf) {
   ctx.putImageData(img, 0, 0);
   // the back wall's boards: sponsor-free, the Department's own, two rows on the taller wall
   const [bl, by0] = proj(-sideX, backY, backH), [br, by1] = proj(sideX, backY, 0);
-  const rows = [[["HVI", 1], ["THE DEPARTMENT OF LEISURE", 0], ["HVI", 1]], [["QUIET", 0], ["APPLAUSE IS MONITORED", 1], ["QUIET", 0]]];
+  const rows = [[["HVI", 1], ["THE DEPARTMENT OF LEISURE", 0], ["HVI", 1]], [["QUIET", 0], ["PLEASE", 1], ["QUIET", 0]]];
   rows.forEach((row, ri) => {
     const tw = row.reduce((s, [t]) => s + textW(t) + 6, 0) + 2 * (row.length - 1);
     let bx = Math.round((bl + br) / 2 - tw / 2);
@@ -689,7 +689,7 @@ export function drawReview(ctx, d, age, reduced = false) {
   // the furniture: the name, the line, the call under review
   rect(ctx, 0, 0, W, 24, "#050a07"); rect(ctx, 0, 24, W, 1, RV.dim);
   text(ctx, "THE DEPARTMENT'S EYE", 6, 4, RV.eye, 2);
-  text(ctx, "// PROBABLY ACCURATE", 6, 16, RV.dim);
+  text(ctx, "// LINE REVIEW", 6, 16, RV.dim);
   const eyeX = W - 22; rect(ctx, eyeX, 6, 16, 10, "#0a0f0a"); rect(ctx, eyeX + 1, 9, 14, 4, RV.ink); rect(ctx, eyeX + 6, 8, 4, 6, RV.eye); rect(ctx, eyeX + 7, 10, 2, 2, "#050a07");
   rect(ctx, 0, H - 16, W, 16, "#050a07");
   text(ctx, `${d.line} // CALLED ${d.called ? "IN" : "OUT"} // ${d.serve ? "SERVE" : "RALLY"}`, 6, H - 11, RV.ink);

@@ -12,7 +12,7 @@ import { cpuProfile } from "./sim.js";
 export const OPPONENTS = [
   { key: "serena-williams", hon: "MS.", temper: 0.6, name: "SERENA WILLIAMS", rating: 98, died: null, kit: ["#d977a8", "#262626"], hint: { skin: "brown", hair_style: "bun", hair_color: "black", top_color: "pink", bottom_color: "black" } },
   { key: "venus-williams", hon: "MS.", temper: 0.3, name: "VENUS WILLIAMS", rating: 93, died: null, kit: ["#e0c040", "#e6e6e6"], hint: { skin: "brown", hair_style: "ponytail", hair_color: "black", top_color: "yellow", bottom_color: "white" } },
-  { key: "john-mcenroe", hon: "MR.", temper: 0.97, name: "JOHN MCENROE", rating: 92, died: null, kit: ["#e6e6e6", "#1f2f5a"] },
+  { key: "john-mcenroe", hon: "MR.", hand: "L", temper: 0.97, name: "JOHN MCENROE", rating: 92, died: null, kit: ["#e6e6e6", "#1f2f5a"] },
   { key: "arthur-ashe", hon: "MR.", temper: 0.08, name: "ARTHUR ASHE", rating: 91, died: "1993-02-06", kit: ["#e6e6e6", "#e6e6e6"] },
   { key: "club-pro", hon: "", temper: 0.3, name: "THE CLUB PRO", rating: 62, died: null, regular: true, note: "HITTING PARTNER GRADE. PAID BY THE HOUR. THE HOUR IS LOGGED.", kit: ["#3c8a46", "#e6e6e6"],
     spec: { skin: "light_tan", hair_style: "short", hair_color: "blonde", build: "average", top_color: "green", bottom_color: "white", facial_hair: "none", accessory: "cap" } },

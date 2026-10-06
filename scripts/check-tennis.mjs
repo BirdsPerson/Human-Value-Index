@@ -29,15 +29,106 @@
 //   pointer      (version 3) the drag -> the shot (up topspin, down slice, still flat, a big flick
 //                up a lob; left / right aims); the packed pointer round-trips; a match played with
 //                the mouse (and now and then the keys) replays to its result
+//   difficulty   a simulated casual human (swing timing +-100 ms, 250 ms to react, plain drives,
+//                rarely aims) against the club pro, 200 first-to-4 matches a level, four workers: ROOKIE
+//                65-75% of matches, PRO about half, ALL-STAR about 30%, CHAMPION 15-20%; PRO is the match
+//                as it always played; CPU v CPU ignores the level; level and hand ride in the record
 //   heads        the sports head cut (src/play/heads.js) takes Scott's head and leaves his pizza
 //                peel; every bundled file photo cuts to a head-sized box or to nothing
 // Run: node scripts/check-tennis.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 
 const S = await import("../src/play/tennis/sim.js");
 const SC = await import("../src/play/tennis/score.js");
 const R = await import("../src/play/tennis/roster.js");
+
+// ---- difficulty: a casual human (Scott, 2026-10-06: the sports games are too hard) ---------------------
+// Plays the human's end the way a person new to the game does, from the screen: moves to where the
+// ball will be as it was a quarter-second ago (15 frames; the keys), a little off in where he stops
+// and now and then late to start, presses A about 100 ms either side of the sweet spot (uniform
+// +-6 frames), hits a plain drive (no aim) and rarely holds LEFT / RIGHT (12%), lets some balls
+// that are going long go by, tosses and hits the serve about 100 ms either side of the top.
+function casualHuman(seed) {
+  const { BTN, COURT } = S;
+  let s = seed >>> 0;
+  const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const g = () => (rnd() + rnd() + rnd() + rnd() - 2) * 1.732;
+  const LAG = 15, hist = [];
+  let slopY = 0, slop = null, late = 0, prev = 0, tossAt = -1, hitAt = 0, readyAt = -1, eps = null, aim = 0, skip = null, lastBall = null;
+  const out = (m) => { prev = m; return m; };
+  const press = (bit) => (prev & bit ? 0 : bit);
+  const walk = (P, tx, ty, slop = 0.22) => { const dx = tx - P.x, dy = ty - P.y; let m = 0; if (dx > slop) m |= BTN.RIGHT; else if (dx < -slop) m |= BTN.LEFT; if (dy > slop) m |= BTN.DOWN; else if (dy < -slop) m |= BTN.UP; return m; };
+  return (st) => {
+    const P = st.p[0], b = st.ball;
+    if (b && b.live && b.last === 1) { hist.push({ x: b.x, y: b.y, z: b.z, vx: b.vx, vy: b.vy, vz: b.vz, grav: b.grav, bounce: b.bounce, keep: b.keep, bounces: b.bounces, serve: b.serve, netted: b.netted, roll: b.roll, live: true, last: 1 }); if (hist.length > LAG + 1) hist.shift(); }
+    else { hist.length = 0; slop = null; }
+    if (st.phase === "serve" && S.serverOfMatch(st) === 0) {
+      if (st.sub === "ready") {
+        tossAt = -1;
+        if (readyAt < 0) readyAt = st.frame + 30 + Math.floor(rnd() * 50);
+        if (st.frame >= readyAt) { readyAt = -1; tossAt = st.frame; eps = Math.round((rnd() * 2 - 1) * 6); aim = rnd() < 0.12 ? (rnd() < 0.5 ? BTN.LEFT : BTN.RIGHT) : 0; return out(BTN.A); }
+        return out(0);
+      }
+      if (st.frame - tossAt >= 38 + eps) return out(press(BTN.A) | aim);
+      return out(0);
+    }
+    readyAt = -1;
+    if (b && b.live && b.last === 1 && hist.length) {
+      if (slop === null) { slop = g() * 0.55; slopY = g() * 0.65; late = rnd() < 0.12 ? 14 : 0; }   // the stop is a little off; now and then he is late to start
+      if (late > 0) { late--; return out(0); }
+      // movement: where it will be, as read from what was seen a quarter second ago
+      const c = { ...hist[0] }; let tgt = null, lastGood = null;
+      for (let k = 0; k < 240; k++) {
+        const r = S.ballStep(c);
+        if (r === "net" || c.bounces >= 2) break;
+        if (c.bounces === 1 && c.z < 1.5 && c.z > 0.3 && c.y > 0) lastGood = { x: c.x, y: c.y };
+        if (c.bounces === 1 && c.z < 1.5 && c.z > 0.3 && c.y > COURT.hl - 2.2) { tgt = { x: c.x, y: c.y }; break; }
+        if (c.y > COURT.hl + 5) break;
+      }
+      tgt = tgt || lastGood || { x: c.x, y: Math.min(c.y, COURT.hl) };
+      const side = tgt.x >= P.x ? 1 : -1;
+      let m = walk(P, tgt.x - 0.45 * side + slop, Math.max(1, Math.min(tgt.y + slopY, COURT.hl + 3)));
+      // timing: when will it be within reach (as the eye sees it now), pressed 7 frames ahead, give or take
+      if (P.swing < 0) {
+        const sim = { ...b }; let k = 0, hitK = -1, firstIn = null;
+        for (; k < 120; k++) {
+          const r = S.ballStep(sim);
+          if (r === "net") break;
+          if (r === "bounce" && sim.bounces === 1) firstIn = Math.abs(sim.x) <= COURT.hw + 0.05 && sim.y <= COURT.hl + 0.05 && sim.y > 0;
+          const rx = P.x + side * 0.45, d = Math.hypot(sim.x - rx, sim.y - P.y);
+          if (sim.z < 2.6 && d < 1.0 && (sim.bounces > 0 || P.y < 6)) { hitK = k; break; }
+          if (sim.bounces >= 2) break;
+        }
+        if (skip === null) skip = rnd() < 0.35;
+        if (hitK >= 0 && !(skip && b.bounces === 0 && firstIn === false)) {
+          if (eps === null) eps = Math.round((rnd() * 2 - 1) * 6);
+          if (hitK <= 7 + eps) { eps = null; skip = null; return out(press(BTN.A) | m | (rnd() < 0.12 ? (rnd() < 0.5 ? BTN.LEFT : BTN.RIGHT) : 0)); }
+        }
+      }
+      return out(m);
+    }
+    skip = null; eps = null;
+    if (st.phase === "rally" && st.frame - st.hitAt < LAG) return out(0);
+    return out(walk(P, 0, COURT.hl - 0.5, 0.4));
+  };
+}
+const MEASURE_N = 400;
+function measureLevel(level, n) {
+  const t = { level, n, w: 0, p0: 0, pt: 0 };
+  for (let k = 1; k <= n; k++) {
+    const st = S.newMatch({ seed: k * 101, fmt: "short", cpu: R.profileOf("club-pro"), level });
+    const h = casualHuman(k * 7 + 1);
+    while (st.phase !== "over" && st.frame < 60 * 60 * 40) S.step(st, h(st));
+    if (st.sc.winner === 0) t.w++;
+    t.p0 += st.won[0]; t.pt += st.won[0] + st.won[1];
+  }
+  return t;
+}
+if (!isMainThread) { parentPort.postMessage(measureLevel(workerData.level, workerData.n)); process.exit(0); }
+// started now, read in the difficulty group: four levels in parallel while the rest of the checks run
+const DIFF = S.LEVEL_ORDER.map(level => new Promise((res, rej) => { const w = new Worker(new URL(import.meta.url), { workerData: { level, n: MEASURE_N } }); w.once("message", res); w.once("error", rej); }));
 let n = 0;
 const ok = (msg) => { n++; if (process.env.VERBOSE) console.log("ok", msg); };
 
@@ -469,6 +560,55 @@ function playBot(seed, fmt, key, cap = 60 * 60 * 40) {
   assert.deepEqual(S.replay(a.rec, R.profileOf("line-judge")), a.rec.result, "a mouse match replays");
   assert.deepEqual(S.replay(JSON.parse(JSON.stringify(a.rec)), R.profileOf("line-judge")), a.rec.result, "through JSON");
   ok(`pointer (mouse match ${a.rec.result.sets[0].join("-")}, ${a.rec.inputLog.length / 2} runs)`);
+}
+
+// ---- difficulty, hand (no new version: level and hand are part of the cfg) -----------------------------
+{
+  assert.deepEqual(S.LEVEL_ORDER, ["rookie", "pro", "allstar", "champion"]);
+  // PRO plays as the match always did: the same masks, the same result with or without it
+  const plain = playBot(4242, "short", "club-pro"), pro = (() => { const st = S.newMatch({ seed: 4242, fmt: "short", cpu: R.profileOf("club-pro"), level: "pro" }), m = []; while (st.phase !== "over" && st.frame < 60 * 60 * 40) { const k = bot(st); m.push(k); S.step(st, k); } return S.resultOf(st); })();
+  assert.deepEqual(pro, plain.rec.result, "PRO is the match as it always played (a record with no level replays unchanged)");
+  // a CPU v CPU match has no level: it plays the same at every level
+  const auto = (level) => { const st = S.newMatch({ seed: 4321, fmt: "short", cpu: S.cpuProfile(60), auto: S.cpuProfile(60), level }); while (st.phase !== "over" && st.frame < 60 * 60 * 60) S.step(st, 0); return S.resultOf(st); };
+  assert.deepEqual(auto("rookie"), auto(null), "CPU v CPU ignores the level");
+  assert.deepEqual(auto("champion"), auto(null), "at every level");
+  // each level is its own match, and replays from {seed, level} through JSON
+  for (const level of S.LEVEL_ORDER) {
+    const st = S.newMatch({ seed: 99, fmt: "short", cpu: R.profileOf("club-pro"), level }), masks = [];
+    assert.equal(st.level, level);
+    while (st.phase !== "over" && st.frame < 60 * 60 * 40) { const m = bot(st); masks.push(m); S.step(st, m); }
+    const rec = { version: S.VERSION, seed: 99, fmt: "short", surface: "hard", win: st.win, level, opp: "club-pro", inputLog: S.rleEncode(masks), result: S.resultOf(st) };
+    assert.deepEqual(S.replay(JSON.parse(JSON.stringify(rec)), R.profileOf("club-pro")), rec.result, `a ${level} match replays`);
+  }
+  // the levers run the right way: the CPU is slower, later and looser on ROOKIE than on CHAMPION; the human's window wider
+  const r = S.newMatch({ seed: 1, cpu: R.profileOf("club-pro"), level: "rookie" }), c = S.newMatch({ seed: 1, cpu: R.profileOf("club-pro"), level: "champion" });
+  assert.ok(r.p[1].cpu.react >= c.p[1].cpu.react + 5 && r.p[1].cpu.acc < c.p[1].cpu.acc && r.p[1].speed <= c.p[1].speed, "the CPU is slower and looser on ROOKIE");
+  assert.ok(S.LEVELS.rookie.win >= S.LEVELS.champion.win && S.LEVELS.rookie.assist >= S.LEVELS.champion.assist, "the human's help follows the level");
+  // the left hand: part of the cfg, mirrored stance and toss; a right-hander's match is untouched
+  {
+    const mk = (hand, oppHand) => { const st = S.newMatch({ seed: 5, fmt: "short", cpu: R.profileOf("john-mcenroe"), hand, oppHand }), m = []; while (st.phase !== "over" && st.frame < 60 * 60 * 40) { const k = bot(st); m.push(k); S.step(st, k); } return { st, m }; };
+    const right = mk(null, null), left = mk("L", null), both = mk("L", "L");
+    assert.deepEqual(S.resultOf(right.st), S.resultOf(S.newMatch({ seed: 5 }) && (() => { const st = S.newMatch({ seed: 5, fmt: "short", cpu: R.profileOf("john-mcenroe") }); for (const m of right.m) S.step(st, m); return st; })()), "a right-hander's match is as before");
+    const t = (hand) => { const st = S.newMatch({ seed: 5, fmt: "short", cpu: R.profileOf("club-pro"), hand }); st.sc.gameServer = 0; S.step(st, 0); const f = st.frame; for (let k = 0; k < 400 && st.sub !== "toss"; k++) S.step(st, (k % 50) === 49 ? S.BTN.A : 0); return st.ball ? st.ball.x - st.p[0].x : null; };
+    assert.ok(t("L") < 0 && t(null) > 0, "the left-hander tosses on the left");
+    assert.equal(left.st.p[0].hand, -1); assert.equal(both.st.p[1].hand, -1); assert.equal(right.st.p[0].hand, 1);
+    for (const [hand, oppHand, x] of [["L", null, left], ["L", "L", both]]) {
+      const rec = { version: S.VERSION, seed: 5, fmt: "short", surface: "hard", win: x.st.win, hand, oppHand: oppHand || undefined, opp: "john-mcenroe", inputLog: S.rleEncode(x.m), result: S.resultOf(x.st) };
+      assert.deepEqual(S.replay(JSON.parse(JSON.stringify(rec)), R.profileOf("john-mcenroe")), rec.result, `a ${hand}/${oppHand} match replays`);
+    }
+    assert.equal(R.OPP_BY_KEY.get("john-mcenroe").hand, "L", "McEnroe plays left");
+    assert.ok(R.OPPONENTS.filter(o => o.hand === "L").length >= 1 && R.OPPONENTS.every(o => !o.hand || o.hand === "L"), "the lefties are on file");
+  }
+  // THE CASUAL HUMAN against an equal opponent (the club pro): measured by four workers
+  const res = await Promise.all(DIFF), by = Object.fromEntries(res.map(x => [x.level, x]));
+  const pc = (a, b) => (b ? (100 * a) / b : 0);
+  const line = res.map(x => `${S.LEVELS[x.level].name} wins ${pc(x.w, x.n).toFixed(0)}% of matches, ${pc(x.p0, x.pt).toFixed(1)}% of points`).join("; ");
+  if (process.env.VERBOSE) console.log(line);
+  const band = (lv, lo, hi) => { const w = pc(by[lv].w, by[lv].n); assert.ok(w >= lo && w <= hi, `a casual human on ${S.LEVELS[lv].name} wins ${w.toFixed(0)}% of short matches (${lo}-${hi}): ${line}`); };
+  band("rookie", 65, 75); band("pro", 45, 58); band("allstar", 22, 38); band("champion", 10, 22);
+  assert.ok(pc(by.rookie.p0, by.rookie.pt) >= 52, `ROOKIE: the casual human wins most points (${line})`);
+  assert.ok(pc(by.rookie.w, by.rookie.n) > pc(by.pro.w, by.pro.n) && pc(by.pro.w, by.pro.n) > pc(by.allstar.w, by.allstar.n) && pc(by.allstar.w, by.allstar.n) > pc(by.champion.w, by.champion.n), "each level is harder than the last");
+  ok(`difficulty and hand (${line})`);
 }
 
 // ---- heads ---------------------------------------------------------------------------------------

@@ -27,6 +27,13 @@
 // or challenging with none left, is a code violation (two warnings, then a point penalty). And the
 // pointer: press on the court to run there, hold, drag for spin and aim, release to swing (PTR and
 // its packed target and gesture, ptrBits()). Versions 1 and 2 never read any of it.
+//
+// Not a version (2026-10-06): LEVEL and HAND, both part of the match's cfg and its record. A match
+// with no level plays exactly as it always did, so every old record replays unchanged; a level
+// (ROOKIE, PRO, ALL-STAR, CHAMPION) tunes the CPU's legs, reading and aim and gives the human a
+// longer contact window and a kinder timing curve and aim (LEVELS). Never in a CPU-v-CPU match.
+// HAND: a left-hander tosses on the left and stands left (the sprite and the racket side), the
+// human's or the CPU's; a right-hander's match is untouched.
 
 import { FORMATS, newScore, addPoint, serverOf, serveSide, callOf } from "./score.js";
 
@@ -41,6 +48,18 @@ export const SURFACES = {
   clay: { id: "clay", bz: 1.16, keep: 0.84, spin: 1.45, slide: 1, zlo: 0.3 },
   grass: { id: "grass", bz: 0.7, keep: 1.12, spin: 0.8, slide: 0, zlo: 0.1 },
 };
+// The difficulty, as levers on the CPU (speed, reaction frames, accuracy, power, how often it goes
+// for the lines and the depth: agg) and on the human (win: the last swing frame that can still meet
+// the ball; forgive: the timing curve's slope, the legacy 0.09 a frame off the sweet spot; assist:
+// how far a drive with no aim held is steered away from the CPU, and how much of the shot's
+// scatter is taken out). Tuned against a simulated casual human (scripts/check-tennis.mjs).
+export const LEVELS = {
+  rookie: { id: "rookie", name: "ROOKIE", speed: 1, react: 1, acc: -0.02, power: 1, agg: 1.03, pace: 1, win: 14, forgive: 0.09, assist: 0.12, reach: 1.0 },
+  pro: { id: "pro", name: "PRO", speed: 1, react: 0, acc: 0, power: 1, agg: 1, pace: 1, win: 14, forgive: 0.09, assist: 0, reach: 1 },
+  allstar: { id: "allstar", name: "ALL-STAR", speed: 1.17, react: -3, acc: 0.08, power: 1.09, agg: 0.78, pace: 1.06, win: 14, forgive: 0.09, assist: 0, reach: 1 },
+  champion: { id: "champion", name: "CHAMPION", speed: 1.23, react: -5, acc: 0.11, power: 1.13, agg: 0.65, pace: 1.09, win: 14, forgive: 0.09, assist: 0, reach: 1 },
+};
+export const LEVEL_ORDER = ["rookie", "pro", "allstar", "champion"];
 export const HZ = 60;
 const DT = 1 / HZ, G = 9.8;
 export const COURT = { hw: 4.115, dhw: 5.485, hl: 11.885, sv: 6.4, net: 0.914 };
@@ -94,24 +113,32 @@ export function cpuProfile(rating) {
   return { rating, sk, speed: 4.6 + 2.0 * sk, react: Math.round(18 - 12 * sk), acc: 0.5 + 0.38 * sk, power: 0.35 + 0.6 * sk, judge: 0.55 + 0.43 * sk, reach: 1.0 + 0.08 * sk, temper: 0.3 };
 }
 
-function mkPlayer(i, cpu) {
+function mkPlayer(i, cpu, hand = 1) {
   const s = cpu || HUMAN;
-  return { i, side: i === 0 ? 1 : -1, x: 0, y: 0, vx: 0, vy: 0, slide: 0, face: 1, swing: -1, kind: "A", done: false, mv: 0, cpu: cpu || null, speed: s.speed, power: s.power, reach: s.reach, plan: null, wait: 0, serveZ: 3, serveAim: 0 };
+  return { i, side: i === 0 ? 1 : -1, x: 0, y: 0, vx: 0, vy: 0, slide: 0, face: hand, hand, swing: -1, kind: "A", done: false, mv: 0, cpu: cpu || null, speed: s.speed, power: s.power, reach: s.reach, plan: null, wait: 0, serveZ: 3, serveAim: 0 };
+}
+// A level's CPU: the profile with its levers applied (a copy; the roster's is never touched).
+function leveled(cpu, lv) {
+  if (!lv || !cpu) return cpu;
+  return { ...cpu, speed: cpu.speed * lv.speed, react: Math.max(3, Math.round(cpu.react + lv.react)), acc: clamp(cpu.acc + lv.acc, 0.2, 0.97), power: cpu.power * lv.power, agg: lv.agg, pace: lv.pace };
 }
 
 // opts: {seed, fmt: "set" | "short", cpu: cpuProfile(...), auto: a profile for player 0 (the
 // demo and the checks: the CPU plays itself), surface: "hard" | "clay" | "grass", version (a
 // record's own, for a replay; version 1 is hard only)}
-export function newMatch({ seed = 1, fmt = "set", cpu, auto = null, surface = "hard", version = VERSION, win = 120 }) {
+export function newMatch({ seed = 1, fmt = "set", cpu, auto = null, surface = "hard", version = VERSION, win = 120, level = null, hand = null, oppHand = null }) {
   if (!VERSIONS.includes(version)) throw new Error(`tennis sim has no version ${version}`);
+  const lv = version >= 3 && !auto && LEVELS[level] ? LEVELS[level] : null;   // a CPU-v-CPU match has none
   const st = {
     v: version, surface: version === 1 || !SURFACES[surface] ? "hard" : surface, seed: seed >>> 0, rng: seed | 0, frame: 0, fmt: FORMATS[fmt] ? fmt : "set",
-    p: [mkPlayer(0, auto), mkPlayer(1, cpu || cpuProfile(60))],
+    p: [mkPlayer(0, auto, hand === "L" ? -1 : 1), mkPlayer(1, leveled(cpu || cpuProfile(60), lv), oppHand === "L" ? -1 : 1)],
+    level: lv ? level : null,
     ball: null, phase: "serve", sub: "ready", serveNo: 1, box: null, t: 0, deadFor: 0, after: null,
     call: "", next: "", prev: 0, mask: 0, ev: [], rally: 0, hitAt: 0, won: [0, 0],
   };
   st.sc = newScore(FORMATS[st.fmt], rnd(st) < 0.5 ? 0 : 1);
   if (version >= 3) Object.assign(st, { win: clamp(win | 0, 60, 240), chLeft: [CALLS.PER_SET, CALLS.PER_SET], viol: [0, 0], chal: null, cHold: 0, pen: null, tone: null, mis: [] });
+  if (lv) Object.assign(st.p[0], { win: lv.win, forgive: lv.forgive, assist: lv.assist, reach: st.p[0].reach * lv.reach });
   setupPoint(st);
   st.next = "PLAY";
   return st;
@@ -126,13 +153,13 @@ function setupPoint(st) {
   S.x = S.side * right * 1.0; S.y = S.side * (COURT.hl + 0.25);
   st.box = { sx: -Math.sign(S.x), sy: R.side };
   R.x = st.box.sx * 2.2; R.y = R.side * (COURT.hl + 0.6);
-  S.face = 1; R.face = 1;
+  S.face = S.hand; R.face = R.hand;
   st.ball = null; st.phase = "serve"; st.sub = "ready"; st.t = 0; st.rally = 0;
   if (S.cpu) { S.wait = 40 + Math.floor(rnd(st) * 40); S.serveZ = clamp(3.0 - Math.abs(gauss(st)) * (1 - S.cpu.acc) * 1.2, 1.8, 3.2); S.serveAim = Math.floor(rnd(st) * 3) - 1; }
 }
 
 function toss(st, S) {
-  st.ball = { x: S.x + 0.3 * S.side, y: S.y - 0.25 * S.side, z: 1.3, vx: 0, vy: 0, vz: 6.2, grav: 1, bounce: 0.7, keep: 0.85, bounces: 0, last: S.i, live: false, serve: true, netted: false, roll: false };
+  st.ball = { x: S.x + 0.3 * S.side * S.hand, y: S.y - 0.25 * S.side, z: 1.3, vx: 0, vy: 0, vz: 6.2, grav: 1, bounce: 0.7, keep: 0.85, bounces: 0, last: S.i, live: false, serve: true, netted: false, roll: false };
   st.sub = "toss"; S.swing = -1;
   st.ev.push("toss");
 }
@@ -200,7 +227,7 @@ function onSurface(st, spin) {
 
 function serveHit(st, S, q, aimX, spin = "serve") {
   const second = st.serveNo === 2, b = st.ball;
-  const speed = (17 + 11 * q * S.power) * (second ? 0.8 : 1) * (spin === "kick" ? 0.86 : spin === "sserve" ? 0.93 : 1);
+  const speed = (17 + 11 * q * S.power) * (S.cpu?.pace ?? 1) * (second ? 0.8 : 1) * (spin === "kick" ? 0.86 : spin === "sserve" ? 0.93 : 1);
   const noise = (1 - q) * (second ? 0.55 : 1) + 0.1;
   let tx = st.box.sx * 2.06 + aimX * 1.45, ty = st.box.sy * (COURT.sv - 0.9);
   tx += gauss(st) * noise * 0.9; ty += gauss(st) * noise * 1.0;
@@ -222,13 +249,16 @@ function hitBall(st, P, d) {
     q = clamp(P.cpu.acc + gauss(st) * 0.08 - 0.25 * (d / P.reach) * (d / P.reach), 0.2, 1);
   } else if (P.gest) {
     aimX = P.gest.aimX; aimD = P.gest.aimD;
-    const tq = 1 - Math.max(0, Math.abs(P.swing - 7) - 1) * 0.09;
+    const tq = 1 - Math.max(0, Math.abs(P.swing - 7) - 1) * (P.forgive ?? 0.09);
     q = tq * (1 - 0.35 * (d / P.reach));
+    if (P.assist) q = Math.min(1, q + (1 - q) * P.assist * 0.5);
   } else {
     aimX = (m & BTN.RIGHT ? 1 : 0) - (m & BTN.LEFT ? 1 : 0);
     aimD = (m & BTN.UP ? 1 : 0) - (m & BTN.DOWN ? 1 : 0);
-    const tq = 1 - Math.max(0, Math.abs(P.swing - 7) - 1) * 0.09;   // the sweet spot: contact 6-8 frames into the swing
+    const tq = 1 - Math.max(0, Math.abs(P.swing - 7) - 1) * (P.forgive ?? 0.09);   // the sweet spot: contact 6-8 frames into the swing
     q = tq * (1 - 0.35 * (d / P.reach));
+    // a level's help (ROOKIE, PRO): the shot's scatter is partly taken out; below, tx is steered away from the CPU
+    if (P.assist) q = Math.min(1, q + (1 - q) * P.assist * 0.5);
   }
   let shot;
   const g = P.cpu ? null : P.gest;
@@ -240,10 +270,11 @@ function hitBall(st, P, d) {
   let tx = aimX ? aimX * (COURT.hw - 0.8) : clamp(-b.x * 0.4, -1.5, 1.5);
   const depth = shot === "drive" || shot === "flat" ? [6.8, 9.3, 10.6][aimD + 1] : shot === "slice" ? [6.0, 8.8, 10.0][aimD + 1] : shot === "lob" ? 10.2 : 8.5 + aimD;
   let ty = -P.side * depth;
+  if (P.assist && !P.cpu && !aimX) { const O = st.p[1 - P.i]; tx += clamp(-O.x * 0.8, -2.2, 2.2) * P.assist; }   // no aim held: away from the CPU
   tx += gauss(st) * e * 1.5; ty += gauss(st) * e * 1.6;
   if (shot === "lob") launch(st, P, tx, ty, 0, SPIN.lob, 2.0, 1.55 + 0.25 * rnd(st));
   else {
-    const speed = (shot === "smash" ? 24 + 6 * q : shot === "slice" ? 12 + 4 * P.power : shot === "flat" ? 15 + 8 * P.power * q : 14 + 7 * P.power * q) * charge;
+    const speed = (shot === "smash" ? 24 + 6 * q : shot === "slice" ? 12 + 4 * P.power : shot === "flat" ? 15 + 8 * P.power * q : 14 + 7 * P.power * q) * charge * (P.cpu?.pace ?? 1);
     launch(st, P, tx, ty, speed, SPIN[shot], shot === "smash" ? 0.05 - e * 0.4 : shot === "flat" ? 0.15 - e * 0.6 : 0.25 - e * 0.6);
   }
   if (g) P.gest = null;
@@ -427,9 +458,9 @@ function planFor(st, P) {
   const face = rx >= P.x ? 1 : -1;
   const r = rnd(st);
   const kind = Math.abs(O.y) < 5 && r < 0.45 ? "B" : r < 0.08 + 0.1 * (1 - sk) ? "S" : "A";
-  const wide = rnd(st) < 0.35 + 0.45 * sk;
+  const ag = P.cpu.agg ?? 1, wide = rnd(st) < (0.35 + 0.45 * sk) * ag;
   const aimX = wide ? (O.x > 0 ? -1 : 1) : 0;
-  const aimD = kind === "S" ? -1 : rnd(st) < 0.65 ? 1 : 0;
+  const aimD = kind === "S" ? -1 : rnd(st) < 0.65 * ag ? 1 : 0;
   P.plan = { f: best.f, x: rx - face * RACKET, y: best.y, face, go: st.frame + P.cpu.react, leave, kind: kind === "S" ? "B" : kind, aimX, aimD };
 }
 
@@ -534,7 +565,7 @@ export function step(st, mask = 0) {
     if (st.v >= 3 && st.chal && st.chal.by === P.i && st.phase === "dead") appeal(st, P);
     else if (P.cpu) cpuThink(st, P); else humanThink(st, P, mask, press, prev);
     keepOnSide(P);
-    if (P.swing >= 0 && ++P.swing > SWING_END) P.swing = -1;
+    if (P.swing >= 0 && ++P.swing > SWING_END) { P.swing = -1; if (P.hand < 0) P.face = P.hand; }
   }
   const b = st.ball;
   if (b && st.phase === "serve" && st.sub === "toss") {
@@ -554,7 +585,7 @@ export function step(st, mask = 0) {
     // contact: a live ball, not the striker's, on this side, within reach during the swing
     if (b.live && !b.netted && st.phase === "rally" && b.bounces < 2) {
       for (const P of st.p) {
-        if (P.i === b.last || P.done || P.swing < WIN_FROM || P.swing > WIN_TO) continue;
+        if (P.i === b.last || P.done || P.swing < WIN_FROM || P.swing > (P.win || WIN_TO)) continue;
         if (b.serve && b.bounces === 0) continue;
         if (b.y * P.side < -0.2) continue;
         const rx = P.x + P.face * RACKET, d = Math.sqrt((b.x - rx) * (b.x - rx) + (b.y - P.y) * (b.y - P.y));
@@ -619,7 +650,7 @@ export function resultOf(st) {
 // with the result the browser claims. cpu: the opponent's profile (cpuProfile(rating)).
 export function replay(rec, cpu) {
   if (!VERSIONS.includes(rec.version)) throw new Error(`tennis record version ${rec.version}, sim ${VERSION}`);
-  const st = newMatch({ seed: rec.seed, fmt: rec.fmt, cpu, version: rec.version, surface: rec.surface || "hard", win: rec.win || 120 });
+  const st = newMatch({ seed: rec.seed, fmt: rec.fmt, cpu, version: rec.version, surface: rec.surface || "hard", win: rec.win || 120, level: rec.level || null, hand: rec.hand || null, oppHand: rec.oppHand || null });
   let i = 0;
   const log = rec.inputLog;
   for (let k = 0; k < log.length; k += 2) for (let n = 0; n < log[k + 1]; n++, i++) step(st, log[k]);
