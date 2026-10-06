@@ -33,6 +33,7 @@ import { storeLabel, tramAt, drawTram } from "./storefrontDraw.js";   // THE MAL
 import { nightLine } from "./nightlife.js";   // THE NIGHTLIFE QUARTERS: hours, tonight's bill, the rope
 import { storeButtons, openBusiness } from "./EnterprisePanel.jsx";
 import { openFunnel } from "./FunnelOverlay.jsx";
+import { takeTvBoxes, watchHref, ebtvLabel } from "./ebtvFrame.js";
 import { COAST_LOTS, COAST_PLACES, terrainH, onTerrain, TERRAIN } from "./coastGeo.js";
 import { drawCoastLot, drawCoastGround, drawPod, coastLabel, coastLine } from "./coastDraw.js";
 import { drawEastLot, drawSky, EAST_LOT_FILL } from "./eastDraw.js";
@@ -120,6 +121,7 @@ function labelsOn() { try { return localStorage.getItem(LABELS_KEY) === "1"; } c
 function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = null }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
+  const tvLinkRef = useRef(null);   // the TVs, for the keyboard: the real channel, labelled with what is on
   const apiRef = useRef({});
   const [sel, setSel] = useState(null);
   const [peek, setPeek] = useState(null);   // { id, line }: tapped once on a touch screen
@@ -591,6 +593,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       // the monolith on the line: here only its concourse (its pylons and its tower take their own
       // places in the painter's order), the whole of it when it is lifted out over the veil
       drawBody(archG(), b, it.m, { lod, night: nightAt(hour), hour, t: V.reduced ? 0 : performance.now() / 1000, lit, bid: bidOf(b.id), name: b.name, style: it.m.style }, it.m.solid && !top ? new Set(["base"]) : null);
+      for (const box of takeTvBoxes()) if (!top) V.hits.push({ kind: "ebtv", box });   // the station's screen: the real channel
       if (selected) poly(hull, null, "#4ade80");
       // up close: whoever is walking in or out, at the front door (when it faces us)
       if (lod === "near" && !top) {
@@ -1234,6 +1237,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
           }
         },
       });
+      for (const box of takeTvBoxes()) if (live) V.hits.push({ kind: "ebtv", panel: true, box });   // a TV on the wall: the real channel
       if (live) ctl.room(b, f, pid, rx, ry, rw, rh, sh, plan, byAnchor, now);   // DRIVE YOURSELF: the avatar in its room
       const fx = PARK_LOTS[b.id] && gameAt(pid, mt);
       nameTab(fx ? `${fx.name} // IN PLAY` : many ? PLACES[pid].name : f.name, rx, ry, rw);
@@ -1292,7 +1296,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = "#060a06"; ctx.fillRect(0, 0, V.cssW, V.cssH);
-      V.hits = []; V.labels = [];
+      V.hits = []; V.labels = []; takeTvBoxes();
       drawGround();
       // movers slot between buildings and track by depth
       const { items, order } = V.geo;
@@ -1507,7 +1511,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         for (let i = V.hits.length - 1; i >= 0; i--) {
           const h = V.hits[i];
           if (!h.panel || !inBox(h)) continue;
-          if (h.kind === "close") { unfollow(); select(null); } else if (h.kind === "funnel") openFunnel(h.spec); else if (h.kind === "casino") window.location.hash = h.go; else onOpenRef.current?.(h.s);
+          if (h.kind === "close") { unfollow(); select(null); } else if (h.kind === "funnel") openFunnel(h.spec); else if (h.kind === "ebtv") openFunnel({ href: watchHref(), campaign: "ebtv-tv" }); else if (h.kind === "casino") window.location.hash = h.go; else onOpenRef.current?.(h.s);
           return;
         }
         return;
@@ -1517,6 +1521,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         if (h.panel) continue;
         if (h.kind === "p" && inBox(h)) { onOpenRef.current?.(h.s); return; }
         if (h.kind === "prefect" && inBox(h)) { openPrefect(h.id); return; }
+        if (h.kind === "ebtv" && inBox(h)) { openFunnel({ href: watchHref(), campaign: "ebtv-tv" }); return; }
         if (h.kind === "chess" && inBox(h)) { window.location.hash = h.go; return; }   // PARK CHESS: sit at the table
         if (h.kind === "b" && inPoly(x, y, h.hull)) {
           unfollow();
@@ -1601,6 +1606,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     let raf = 0, onScreenNow = true, dead = false;
     function frame() {
       if (!V.reduced || V.need || censusRef.current?.v !== V.censusV) { V.need = false; draw(); }
+      const tl = tvLinkRef.current, lab = ebtvLabel();
+      if (tl && tl.getAttribute("aria-label") !== lab) tl.setAttribute("aria-label", lab);
       else if (V.geo) wantView(performance.now());   // still, and drawing nothing new: the camera settles
       raf = requestAnimationFrame(frame);
     }
@@ -1677,6 +1684,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       <TouchGate label="TAP TO EXPLORE" hint="DRAG · PINCH">
         <canvas ref={canvasRef} tabIndex={0} className="hvi-city-canvas" role="img"
           aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag or use the arrow keys to move, pinch or plus and minus to zoom, Q and E to turn. Tap a building, or press ] and [ to step through the buildings in view, to open its cutaway: every floor and room, and who is in it; Enter goes inside. The list under the city says what is happening now, and the district directory lists every district." />
+        <a ref={tvLinkRef} className="sr-only hvi-city-tvlink" href={watchHref()} target="_blank" rel="noopener" aria-label={ebtvLabel()}>Electric Basement TV, live</a>
       </TouchGate>
       <div className={`hvi-city-zoom${peek && !b ? " peeking" : ""}`} role="toolbar" aria-label="City view controls">
         {b && <span className="hint" title={b.name}>{b.name}</span>}

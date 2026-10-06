@@ -9,6 +9,7 @@
 //   EBTV        the sound stage with ELECTRIC BASEMENT TV on it, ON AIR when the channel is up
 //               (now.json read by FunnelHost), a dish on the roof, the mast with its beacons
 import { GAMES, cabColors, ebtvLive } from "./funnels.js";
+import { ebtvFrame, drawFrame, tvBox } from "./ebtvFrame.js";
 
 export const FUNNEL_MAT = { arcadewall: "#2a1f3d" };
 export const FUNNEL_ROOF = { arcadewall: "#1c1428" };
@@ -140,7 +141,7 @@ export function funnelDeco(X) {
       const front = f.s === "s";
       if (K.lod !== "far") { ctx.strokeStyle = "rgba(0,0,0,0.18)"; ctx.lineWidth = 1; ctx.beginPath(); const n = Math.floor(f.len * 4); for (let k = 1; k < n; k++) { const A = f.F(k / n, 0), B = f.F(k / n, p.h1); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); } ctx.stroke(); }
       if (!front) {
-        if (f.len > 3 && K.lod !== "far") faceText(K, f, 0.5, 1.1, "EBTV", 0.55, K.night ? "#f472b6" : "#e5e7eb", { stroke: "#1a1a1e", glow: K.night ? "rgba(244,114,182,0.35)" : null });
+        if (f.len > 3 && K.lod !== "far") { faceText(K, f, 0.5, 1.1, "EBTV", 0.55, K.night ? "#f472b6" : "#e5e7eb", { stroke: "#1a1a1e", glow: K.night ? "rgba(244,114,182,0.35)" : null }); stationScreen(K, f); }
         continue;
       }
       // the roller door, ON AIR over it, the name down the front
@@ -154,6 +155,30 @@ export function funnelDeco(X) {
       faceText(K, f, 0.66, 1.08, "TELEVISION // EBSN", 0.1, K.night ? "#67e8f9" : "#cbd5e1", { d: 0.02, stroke: "#1a1a1e" });
       door(K, f, 0.9, 0.4, 0.8, "#1a1a1e", { lit: true });
     }
+  }
+  // The big screen under EBTV on the station's side walls: what is actually airing (ebtvFrame.js), or the test card
+  function stationScreen(K, f) {
+    const half = Math.min(0.24, 1 / f.len);   // about two cells wide
+    let t0 = 0.5 - half, t1 = 0.5 + half;
+    const h0 = 0.1, h1 = 0.76, d = 0.03;
+    if (f.F(t1, h1, d)[0] < f.F(t0, h1, d)[0]) [t0, t1] = [t1, t0];   // keep the picture the right way round
+    K.G.poly(f.q(Math.min(t0, t1) - 0.015, Math.max(t0, t1) + 0.015, h0 - 0.06, h1 + 0.06, d - 0.01), "#0a0a0a");
+    const A = f.F(t0, h1, d), B = f.F(t1, h1, d), C = f.F(t0, h0, d), D = f.F(t1, h0, d);
+    const W = Math.hypot(B[0] - A[0], B[1] - A[1]), H = Math.hypot(C[0] - A[0], C[1] - A[1]);
+    if (W < 4 || H < 3) return;
+    const xs = [A[0], B[0], C[0], D[0]], ys = [A[1], B[1], C[1], D[1]];
+    tvBox(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+    const { ctx } = K, fr = ebtvFrame();
+    ctx.save();
+    ctx.transform((B[0] - A[0]) / W, (B[1] - A[1]) / W, (C[0] - A[0]) / H, (C[1] - A[1]) / H, A[0], A[1]);
+    if (fr) drawFrame(ctx, fr, 0, 0, W, H);
+    else {
+      const bars = ["#c0c0c0", "#c0c000", "#00c0c0", "#00c000", "#c000c0", "#c00000", "#0000c0"];
+      bars.forEach((col, i) => { ctx.fillStyle = col; ctx.fillRect(i * W / 7, 0, W / 7 + 0.5, H * 0.66); });
+      ctx.fillStyle = "#101010"; ctx.fillRect(0, H * 0.66, W, H * 0.34);
+      if (W > 40) { ctx.fillStyle = "#fef3c7"; ctx.font = `${Math.max(6, Math.round(H * 0.16))}px monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("EBTV // OFF AIR", W / 2, H * 0.83); }
+    }
+    ctx.restore();
   }
   function stationRoof(K, p) {
     if (!p.dish || K.lod === "far") return;

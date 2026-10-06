@@ -127,6 +127,7 @@ const css = `
   /* the stage: the map, the 3D city, a district's rooms, a building's floors */
   .hvi-city-stage { position: relative; background: #060a06; overflow: hidden; }
   .hvi-city-canvas { display: block; width: 100%; touch-action: none; cursor: grab; }
+  .hvi-city-tvlink:focus { width: auto; height: auto; clip: auto; margin: 0; padding: var(--s1) var(--s2); top: var(--s2); left: var(--s2); background: #000; color: #fef3c7; outline: 2px solid #f472b6; z-index: 5; }
   .hvi-city-canvas.pan { cursor: grabbing; }
   .hvi-city-canvas.point { cursor: pointer; }
   .hvi-district-canvas { display: block; width: 100%; touch-action: pan-y; }

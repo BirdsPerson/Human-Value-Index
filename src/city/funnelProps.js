@@ -10,6 +10,7 @@
 // Cabinets also stand in the Dive, the Lantern, the diner and a corner of the casino; the
 // bars and the diner get a TV showing what EBTV is playing (funnels.js ebtvNow).
 import { GAMES, GAME, PLAYABLE, cabColors, highScore, ebtvNow, ebtvLive, CAMPAIGN_OF_PLACE } from "./funnels.js";
+import { ebtvFrame, drawFrame, tvBox } from "./ebtvFrame.js";
 import { machineClock } from "./sim.js";
 
 export const FUNNEL_ROOM_TYPE = { arcade: "arcade", "eb-shop": "recordshop", "campus-lounge": "union", "studio-row": "ebtv", boardwalk: "boardwalk" };
@@ -219,22 +220,36 @@ export function funnelPropDrawers({ SIDE }) {
   return PROP;
 }
 
-// A wall TV showing EBTV: the picture, the bug, what is playing (when the room is big enough to read).
+// A wall TV showing EBTV: what is actually on (ebtvFrame.js, one pixelated frame, refreshed every
+// 30 s), the bug, the title crawling; no fresh frame is the test card. A tap is the real channel.
+const BARS = ["#c0c0c0", "#c0c000", "#00c0c0", "#00c000", "#c000c0", "#c00000", "#0000c0"];
 export function ebtvTv(c, x, y, u, t, wide = 26) {
   const w = wide * u, h = 15 * u;
   R(c, "#0a0a0a", x - u, y - u, w + 2 * u, h + 2 * u);
-  const live = ebtvLive() !== false;
-  const k = Math.floor(t * 0.7);
-  R(c, live ? ["#1e3a5f", "#3f2a4a", "#2a3f2a", "#4a3a1a"][k % 4] : "#111", x, y, w, h);
-  if (live) { R(c, "rgba(255,255,255,0.08)", x, y + ((t * 20) % h), w, u); R(c, "#f472b6", x + w - 5 * u, y + u, 4 * u, 2 * u); }
-  const now = ebtvNow();
+  tvBox(x - u, y - u, x + w + u, y + h + u);
+  const f = ebtvFrame();
+  if (f) {
+    drawFrame(c, f, x, y, w, h);
+    R(c, "rgba(0,0,0,0.12)", x, y + ((t * 20) % h), w, u);   // the roll bar
+    if (u >= 2) {
+      text(c, "EBTV", x + u, y + u, 3.2 * u, "#f9a8d4");
+      const title = f.title || ebtvNow()?.title, s = title ? `NOW: ${title}` : "ELECTRIC BASEMENT TV";
+      R(c, "rgba(0,0,0,0.55)", x, y + h - 5.5 * u, w, 4.5 * u);
+      c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
+      const tw = s.length * 2 * u, off = (t * 8 * u) % (tw + w);
+      text(c, s, x + w - off, y + h - 5 * u, 3 * u, "#fef3c7");
+      c.restore();
+    }
+    return;
+  }
+  // the test card: colour bars, the station's own admission
+  const bw = w / BARS.length;
+  BARS.forEach((col, i) => R(c, col, x + i * bw, y, bw + 0.5, h * 0.62));
+  R(c, "#101010", x, y + h * 0.62, w, h * 0.38);
   if (u >= 2) {
-    text(c, "EBTV", x + u, y + u, 3.2 * u, "#f9a8d4");
-    const s = live ? (now?.title ? `NOW: ${now.title}` : "ELECTRIC BASEMENT TV") : "OFF AIR";
-    c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
-    const tw = s.length * 2 * u, off = (t * 8 * u) % (tw + w);
-    text(c, s, x + w - off, y + h - 5 * u, 3 * u, "#fef3c7");
-    c.restore();
+    R(c, "#000", x + w * 0.03, y + h * 0.2, w * 0.94, 4.4 * u);
+    text(c, "EBTV // OFF AIR", x + w / 2, y + h * 0.2 + 0.7 * u, 2.6 * u, "#fef3c7", "center");
+    text(c, "SIGNAL NOT ON FILE", x + w / 2, y + h * 0.7, 2 * u, "#9ca3af", "center");
   }
 }
 
