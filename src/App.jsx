@@ -28,6 +28,7 @@ const Economy = lazy(() => import("./economy/Economy.jsx"));
 // YOUR FIRST DAY, one line on the logon for an assessed file that has not finished it (src/FirstDay.jsx).
 const FirstDay = lazy(() => import("./FirstDay.jsx"));
 const firstDayOpen = (id) => { try { return Boolean(id) && readLastResult()?.caseId === id && localStorage.getItem(`hvi-fd:${id}:done`) !== "1"; } catch { return false; } };
+const Market = lazy(() => import("./market/Market.jsx"));   // #market: THE MARKET (src/market/)
 const LEGAL = ["about", "privacy", "terms", "dispute"];
 const FigurePicker = lazy(() => import("./FigureIndex.jsx").then(m => ({ default: m.FigurePicker })));
 
@@ -76,7 +77,8 @@ const globalStyles = `
   @keyframes hvi-blink { 50% { opacity: 0; } }
 
   /* TICKER */
-  .hvi-carousel-wrap { overflow: hidden; white-space: nowrap; color: var(--fg-mute); font-size: var(--t-xs); margin-bottom: var(--s4); }
+  .hvi-carousel-wrap { display: block; overflow: hidden; white-space: nowrap; color: var(--fg-mute); font-size: var(--t-xs); margin-bottom: var(--s4); text-decoration: none; }
+  .hvi-carousel-wrap:focus-visible { outline: var(--focus); }
   .hvi-carousel-track { display: inline-block; animation: hvi-scroll 90s linear infinite; }
   .hvi-carousel-track:hover { animation-play-state: paused; }
   @keyframes hvi-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
@@ -243,13 +245,22 @@ function injectStyles() {
   if (el.textContent !== css) el.textContent = css;
 }
 
+// The ticker: THE MARKET's movers when the floor answers (fetched, never bundled: /api/market
+// ?ticker=1, cached a minute at the edge), the scores on file until then or if it does not.
 function Carousel() {
   const [items] = useState(() => FAMOUS_FIGURES.slice().sort(() => Math.random() - 0.5).slice(0, 24));
-  const line = items.map(f => `${displayName(f)} ${f.score} [${getTier(f.score).label.split(" ")[0]}]`).join("  ·  ") + "  ·  ";
+  const [market, setMarket] = useState(null);
+  useEffect(() => {
+    let off = false;
+    fetch("/api/market?ticker=1").then(r => (r.ok ? r.json() : null)).then(d => { if (!off && d?.ticker?.length) setMarket(d.ticker); }).catch(() => {});
+    return () => { off = true; };
+  }, []);
+  const line = market ? market.join("  ·  ") + "  ·  " : items.map(f => `${displayName(f)} ${f.score} [${getTier(f.score).label.split(" ")[0]}]`).join("  ·  ") + "  ·  ";
+  const head = market ? ">> THE MARKET: " : ">> KNOWN SUBJECTS: ";
   return (
-    <div className="hvi-carousel-wrap" aria-hidden="true">
-      <div className="hvi-carousel-track">{">> KNOWN SUBJECTS: "}{line}{">> KNOWN SUBJECTS: "}{line}</div>
-    </div>
+    <a className="hvi-carousel-wrap" href={market ? "#market" : "#scores"} aria-label={market ? "The market: live prices. Open the market." : "The scores. Open the scores."}>
+      <div className="hvi-carousel-track" aria-hidden="true">{head}{line}{head}{line}</div>
+    </a>
   );
 }
 
@@ -277,6 +288,7 @@ const MORE = [
   { label: "COUNCIL ELECTIONS", note: "ONE SEAT PER DISTRICT. NON-BINDING", go: "#elections" },
   { label: "THE DOCKET", note: "PETITION THE OVERLORD", go: "#docket" },
   { label: "THE TREASURY", note: "YOUR ALLOWANCE, IN CYCLES", go: "#economy" },
+  { label: "THE MARKET", note: "SHARES IN HUMANS. PRICES MOVE WITH THE CITY", go: "#market" },
 ];
 
 // The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
@@ -415,13 +427,13 @@ const GAMES = [
 const TITLES = {
   "#intake": "GET EVALUATED", "#file": "MY FILE", "#arrivals": "INTAKE", "#cube": "THE CUBE", "#city": "THE CITY",
   "#assembly": "THE ASSEMBLY", "#elections": "COUNCIL ELECTIONS", "#docket": "THE DOCKET", "#casino": "HOUSE EDGE CASINO",
-  "#economy": "THE TREASURY", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS",
+  "#economy": "THE TREASURY", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS",
   "#play": "THE GAMES", "#scores": "THE SCORES", "#about": "ABOUT", "#privacy": "PRIVACY", "#terms": "TERMS", "#dispute": "DISPUTE A SCORE",
   "#heights": "THE CITY", "#enterprise": "THE CITY", "#prefects": "THE CITY",
 };
 const PHASE_TITLES = { survey: "WRITTEN SURVEY", processing: "EVALUATING", result: "YOUR SCORE", leaderboard: "THE SCORES" };
 function pageTitle(routePath, phase) {
-  const room = TITLES[routePath] || (routePath.startsWith("#city") ? "THE CITY" : routePath.startsWith("#casino") ? "HOUSE EDGE CASINO" : null)
+  const room = TITLES[routePath] || (routePath.startsWith("#city") ? "THE CITY" : routePath.startsWith("#casino") ? "HOUSE EDGE CASINO" : routePath.startsWith("#market") ? "THE MARKET" : null)
     || (!routePath || routePath === "#" ? PHASE_TITLES[phase] : null);
   return room ? `${room} // HUMAN VALUE INDEX` : "HUMAN VALUE INDEX // THE MACHINE WILL ASSESS YOU NOW";
 }
@@ -603,6 +615,12 @@ export default function OverlordAssessment() {
     </Screen>
   );
 
+  // #market: THE MARKET (src/market/: shares in humans and the industries, CYCLES only)
+  if (routePath === "#market" || routePath.startsWith("#market/")) return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="OPENING THE FLOOR" />}><Market route={routePath} /></Suspense>
+    </Screen>
+  );
   // #economy: THE TREASURY (src/economy/, CYCLES: a play currency, terms §11)
   if (routePath === "#economy") return (
     <Screen nav={nav} wide>

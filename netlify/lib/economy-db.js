@@ -9,6 +9,7 @@
 // idempotency keys, the non-negative balance, the purge); check-economy can also run its
 // whole suite against a real Postgres with the migration applied (HVI_ECON_PG=1, psql).
 import { createHash } from "node:crypto";
+import { marketMemory } from "./market-db.js";
 
 const salt = () => process.env.HVI_IP_SALT || "hvi-limits-v1";
 const sha = (s) => createHash("sha256").update(s).digest("hex");
@@ -46,7 +47,7 @@ export function memoryLedger() {
   for (const id of DEPT) db.accounts.set(id, { id, case_hash: null, kind: "dept", industry: null, balance: 0 });
   const nowMs = () => (globalThis.__econNow ?? Date.now());
   const clone = (x) => JSON.parse(JSON.stringify(x));
-  const kindOf = (id) => (id.startsWith("dept:") ? "dept" : id.startsWith("inv:") ? "inv" : "cash");
+  const kindOf = (id) => (id.startsWith("dept:") ? "dept" : id.startsWith("inv:") ? "inv" : id.startsWith("esc:") ? "esc" : "cash");
 
   const fns = {
     econ_enrol(p) {
@@ -148,6 +149,10 @@ export function memoryLedger() {
       return { ok: true, txns: tids.size, accounts: na };
     },
   };
+  // THE MARKET's functions (market-db.js), and the view / purge with its rows
+  const M = marketMemory(db, { nowMs, clone });
+  const { wrapView, wrapPurge, ...mfns } = M;
+  Object.assign(fns, mfns, { econ_view: wrapView(fns.econ_view), econ_purge: wrapPurge(fns.econ_purge) });
   return {
     kind: "memory",
     db,

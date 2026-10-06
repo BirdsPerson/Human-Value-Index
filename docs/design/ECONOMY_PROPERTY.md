@@ -254,3 +254,301 @@ floor, the building id), the floor price (height premium) and the furniture cata
 the plan reading owners and dressing from the close's `econ` block (the sim stays immutable);
 MY APARTMENT's unit (today `G-07`, a hash of 24) switched to the cutaway flat (`residentFlat`)
 so the file and the tower name the same door.
+
+## § The Living Market (design and slice 1, 2026-10-05)
+
+**Scott's governing principles (2026-10-05). Every rule below has to satisfy both.**
+> "I want it to always be democratic. A fair society that actually has upward mobility, rewards
+> savviness as well as hard work — a model for living alongside a superintelligence that
+> provides, while keeping the ambition and sense of value humans most fear losing."
+
+> "There should always be some way things can be justified. We don't want to confine behaviour
+> so much that, like when you play a game long enough, you feel the machinery. We'd rather see
+> things get polarized occasionally and then some deus ex machina presents itself to stabilize
+> things."
+
+The first gives three tests, each an assertion in `scripts/check-market.mjs`:
+
+1. **Democratic.** Every knob that decides who can get rich is DATA with a default, applied only
+   at a real-day boundary, never mid-day and never backwards, and listed on THE BALLOT below so
+   the Assembly can vote on it.
+2. **Upward mobility.** A newcomer with only the allowance climbs: no holder may own more than
+   3% of any human; the NPC class is held back per human (guardrails, then walls); daily moves
+   are bounded; backing the overlooked pays. Checks: a UBI-only saver reaches the first rung
+   (an OUTER flat, 9,000) by day 13, and a newcomer who puts every allowance into the market
+   still reaches it within 16 days in every seed; with default knobs, 100 citizens of every kind
+   and the whole NPC class, the top 1% hold **13.2%** of market wealth after 90 days (bound 25%).
+3. **Savvy and hard work both pay.** Labour's month is 4,500 (the slice-3 wage band, 150 a day).
+   Skill's month, measured (a citizen who reads the board each morning: recent activity against
+   the record, price against fair value), is **0.64x** labour's (0.57, 0.60, 0.76 over three
+   seeds; band 0.5x-2x). Doing both beats either alone in every seed; chasing yesterday's risers
+   loses to reading the city. Crowded savvy earns less (the herd fills at its own price).
+
+The second shapes the NPCs and the events: behaviour comes from each figure's persona drive
+(a game-wide module, `src/city/drives.js`, which the civic layer, jobs, nightlife and leagues will
+adopt next; docs/design/DRIVES.md is the game-wide design), concentration is allowed to build past
+the guardrails, a stabilizer arrives as an in-world event, and every price move carries a
+one-line "because".
+
+### What is traded
+
+- **THE SEVEN INDUSTRIES**, unchanged (section 4: the daily yield, herding), still bought on the
+  Treasury page; the market page points there.
+- **SHARES IN HUMANS ON FILE.** Every figure the city houses (the 62 bundled and every referred or
+  engine figure: 747 listed of 838 today) except the untradable, `src/market/activity.js`
+  `untradable()`: the chess park's `barred()` rule (documented harm, SOYLENT GREEN, threat 80+;
+  check-market holds them equal on every bundled figure), a harm review pending or decided
+  `serious` / `gate`, the faiths' founders (`excluded.js`), and every private citizen (a player is
+  never a stock). FLOAT 10,000 whole shares each. A holder of a human who becomes untradable can
+  always sell at the last price (nobody is trapped); nobody can buy.
+- **THE HUMAN VALUE INDEX**: the equal-weighted mean of every listed human's price, 1,000 at the
+  first tick. The ticker on the landing leads with it.
+- **Living people** are a number and facts about their citizen's day in the city ("WORKED 9
+  WEIGHTED HOURS", "SEEN BY 267 IN PUBLIC", "STRONG FORM FOR THE DISTRICT"). No quotes, no news,
+  nothing from outside the Substrate. No living figure is an NPC investor in slice 1. The knob
+  `listLiving` (default on, Scott's decision) delists every living person at the next boundary;
+  `state.delist` delists one (the dispute route).
+
+### Price formation (pure, deterministic: `src/market/engine.js`)
+
+The market reads only machine days that have ENDED (a price never reveals a published-ahead day),
+one at a time, from its own input (below):
+
+1. **Activity** A per human per machine day: WORK 0.30 (worked hours x job satisfaction, more for
+   a shop owner, most for a thriving one), CROWD 0.25 (people-hours in the rooms they were out in:
+   the occupancy samples), SPORT 0.20 (league rosters by rating x the team's form, the tennis
+   ladder, the Pit), PLAY 0.15 (leisure hours, nightlife double), CIVIC 0.10 (a council seat, by
+   approval). Each term over the day's mean (0..4), weighted, then the day rescaled to a mean of
+   exactly 1. Assembly wins and file visits are reserved terms (weight 0) until each has a
+   per-person record. Measured on production days 601-604: a person's day-to-day sd of log
+   activity is ~0.22; the cross-section runs 0.45 (p10) to 1.36 (p90).
+2. **The record** S = EMA of A (alpha 0.01 per machine day, ~28 real hours half-life) and RECENT =
+   EMA of A (0.2). **Fair value** V = 100 x (0.25 + 0.75 S): 25..325, 100 for the average human. A
+   new listing opens at its first day's V.
+3. **The price is what they did times the mood about them**: P = V e^x. News from the city passes
+   straight into P through V; x (the mispricing) moves with order flow (0.5 x net shares / FLOAT),
+   boycotts and a noise (sd ~0.3% a machine day, an HMAC of the day and the slug under a server
+   secret: replayable by the server, not computable from a published plan), and decays 3% a
+   machine day toward 0. A value investor harvests only that decay.
+4. **Bands.** One machine day moves a price at most 3% (TICK_BAND); a real day at most 15% from
+   its open (DAY_BAND); a human that touches the day band is HALTED until 00:00 UTC (no orders).
+   Measured: median daily move 3.2%, p90 9%, about 3% of human-days halt.
+5. **No news** (a day built before the market's input existed, or an input missing 3 machine
+   days after its day ended): activity unchanged, recorded as such, never invented.
+
+### Orders: a batch auction at the next tick (after the Codex review)
+
+- **BUY** an amount of CYCLES (min 100) or **SELL** whole shares. The order is FILED (a buy's
+  CYCLES move from cash into the case's own escrow, `esc:<h>`; a sell's shares are reserved) and
+  FILLS AT THE NEXT TICK (within 24 real minutes) at that tick's price: every order in the batch
+  and every NPC order joins the flow, the price moves once, and everyone fills after the move at
+  the ASK (P + 0.25%) or the BID (P - 0.25%). Whoever moves a price pays for the move; nobody can
+  buy at a price they already know the next tick will raise. A position is held 24 hours after
+  its last purchase. The batch is JOURNALED (`j/<day>`) before any fill is posted, so a re-run of
+  the same tick (a lost state write) reads the same batch, reaches the same prices and posts
+  nothing twice (fills are keyed by order).
+- The counterparty is always the Department; a txn still touches one case only. There is no
+  player-to-player path: nothing to wash, no way to pass CYCLES to an alt.
+- **The daily close** (`econ-close`, hourly, once the market has rolled past the day): the
+  CONCENTRATION LEVY (0.2% a day of market wealth above 50,000: cash, industries and shares at the
+  close; NPCs and players alike; tripled during an emergency session) goes into `dept:commons`;
+  the pool (players' levies, NPCs' levies and scandal fines) becomes that day's CITIZENS'
+  DIVIDEND, split over the eligible citizens (a wallet a week old that collected in the week),
+  paid with the next COLLECT beside the allowance. Concentration flows back to everyone's UBI.
+
+### The NPC investor class (`npc:<slug>`, ids never reused)
+
+- **Who:** 28 dead figures on file, each with its documented persona drive (`drives.js` PERSONA):
+  MOGULS 300,000 (Rockefeller, J. P. Morgan, Vanderbilt: acquisitive; Mansa Musa, Kiichiro
+  Toyoda: cautious; Ross Perot: populist), the IDLE RICH 120,000 (Rockefeller Jr., Marie
+  Antoinette, Charles IV of Spain, Yves Saint Laurent: follow the crowd; Emperor Sakuramachi:
+  cautious; Dalí: speculator), DAY TRADERS 40,000 (Newton, Lorenz, Feigenbaum, Kepler, Fischer,
+  Heisenberg: speculators; Quesnay, Franklin, Faraday: cautious; Mandelbrot, Sun Tzu, Bohr:
+  contrarian; Edison: acquisitive; Nixon: populist; Karl Marx and César Chávez: revolutionary).
+  Up to 40, MOGUL_MAX 12. No UBI; they pay the levy (the populist finds the loophole: half). They
+  do not work; slice 1 draws them at their desks on the market page's FLOOR.
+- **Drives:** acquisitive (corners: two names, leaning on and past the guardrails up to the
+  walls), cautious (buys below fair value), speculator (chases what rises), contrarian (buys what
+  falls), the crowd (buys what is seen), populist (buys the most-seen, leans on the guardrails,
+  half the levy), revolutionary (buys the overlooked and calls BOYCOTTS on the most-cornered
+  human: each takes 0.2% a tick off its mispricing). Each sits down on its own cadence (4-12
+  machine days), from public state only, and sells only what has fallen well out of favour.
+- **Guardrails and walls.** Guardrails (votable): one NPC 3% of a human, the class 20%. Walls:
+  one NPC 20%, the class 50%; nothing passes a wall. Past a guardrail for two real days, a
+  **DEUS EX MACHINA** (deterministic from the state, varied by a hash of the day and the human):
+  ANTITRUST (the Department orders a sale), a SCANDAL (the biggest holder is fined 5% of the
+  position, paid into the dividend), or a RUN (the revolutionaries break the corner). Every NPC
+  holder sells down to its guardrail, the class to 90% of its own, the biggest stays off for three
+  days. Also: MARGIN CALL (the index up 20% in two real days: speculators and the crowd sell half,
+  every tick, for a sixth of a day), the AUDIT (a human priced past 1.65x fair value is repriced),
+  and the EMERGENCY SESSION (three NPC fortunes past half of all NPC wealth: the levy triples for
+  three days and the boycotts triple for one; at most weekly). Checked: in a 120-day run with
+  tight guardrails, 40 corners formed and every one was broken within 3 real days, walls never
+  passed; at the default knobs over 90 days, 2 events (rare enough to read as story).
+- **"Because."** Every listed human carries one line for today's move from its largest cause:
+  the city's record (which term), an NPC's orders (`drives.js because()`: "J. P. MORGAN BOUGHT
+  120 SHARES BECAUSE IT WANTED ALL OF IT."), the citizens' orders, or an event. No line quotes
+  anyone (checked).
+- **Plans stay immutable.** The NPCs live in the market state, not the city. Slice 2 gives them an
+  INVESTOR job (the Exchange by day, the Members' Club after) from an absolute machine day
+  MARKET_SIM_FROM, recorded with the sim and selector versions, chosen after the newest published
+  plan + LOOKAHEAD + 1, so every published day rebuilds identically (Codex objection 4).
+
+### The market's input, and immutability
+
+The plan builder, as it splits each NEW day (`publishSplit`), runs `marketTerms` (pure) on the
+plan it already holds and writes the result WRITE-ONCE to the market's own store (`hvi-market`,
+`in/<day>`, naming the plan version), never into the plan: the day's files, summary, manifest
+entry and version are byte-identical with and without it (checked), and a failure there never
+stops the city publishing. The input outlives the plan (kept 14 real days, the plans 2 machine
+days), so a delayed tick still has real inputs (Codex objection 2). A day split before this
+existed has no input and reads as no news.
+
+### The ballot (Assembly-votable; data in the market state, applied at the next 00:00 UTC)
+
+| Knob | Default | What it protects |
+|---|---|---|
+| POSITION_CAP | 3% of a human per holder | nobody corners a human |
+| NPC guardrails (NPC_EACH / NPC_CAP) | 3% / 20% | past them, a stabilizer arrives |
+| NPC walls (NPC_EACH_HARD / NPC_HARD) | 20% / 50% | never passed |
+| MOGUL_MAX | 12 | how many moguls the city tolerates |
+| LEVY_RATE / LEVY_FLOOR | 0.2% a day above 50,000 | concentration flows back |
+| DIVIDEND | 100% of the levy to the citizens' dividend | where it flows |
+| DAY_BAND / TICK_BAND / HALTS | 15% / 3% / on | bounded moves |
+| SPREAD | 0.25% each side | small edges do not pay |
+| MIN_HOLD | 24 h | no day trading by citizens |
+| LIST_LIVING | on | one switch delists every living person |
+| GROUND_RENT | (property slice) | see "Land" below |
+
+Slice 1 stores them, shows them on the page (THE BALLOT) and applies a change at the boundary
+(`state.next`); the Assembly ballot that writes them (a KNOB proposal through the docket, the
+substrate advisory, the 3-day session) is slice 2.
+
+### Land: ground rent to everyone (Scott, 2026-10-05; property slice, design only)
+
+Players own buildings, FLOORS (the tier between a flat and a building; the penthouse floor
+carries a premium) and flats outright, and dress their rooms. The Overlord owns the ground.
+Owners pay GROUND RENT on the land component of assessed value only (BASE x RING x DEMAND's land
+part, never the improvements) at an Assembly-voted rate, and all of it is paid out as a citizen
+dividend on top of UBI, beside the market's levy. What you build or dress is yours and untaxed.
+This replaces upkeep-as-a-tax on improvements (section 2) when the property slice is built. The
+market never prices land.
+
+### One megacity, gateways (Scott, 2026-10-05)
+
+One Substrate, one economy, one Assembly, growing outward forever on the endless grid (Snow
+Crash's Street, not a set of walled apps). New "cities" are boroughs founded inside it by Assembly
+vote and trade on the same market. Other worlds (a possible Internet City partnership) connect
+through the Port as GATEWAYS with their own economies: no CYCLES flow across a gateway, and no
+gateway's people are listed here.
+
+### The Consortium review (Codex, 2026-10-05) and what changed
+
+1. *Bit-for-bit replay under-specified.* Kept JS doubles (one runtime, Node 24) but every loop is
+   in sorted order, every stored number rounded (prices 0.01, state 1e-6), the noise key's
+   fingerprint is kept in the state, knobs change only at a boundary (`state.next`), and the
+   order batch is journaled per tick. Production replays from the journal and the input store;
+   the price series is the record. Residual: a Node upgrade could change `Math.exp` in the last
+   bit; the series, not a recomputation, is authoritative.
+2. *Retention breaks replay.* The input is archived in the market's own store for 14 real days;
+   "no news" only after 3 machine days' wait.
+3. *No immutable publication protocol for the input.* Write-once `in/<day>`, naming its plan
+   version, outside the plan's files.
+4. *MARKET_SIM_FROM moves.* Made absolute and recorded (slice 2).
+5. *Front-running* (plans 3 days ahead, the sim in the browser, deterministic NPCs): fills moved
+   to the next tick's batch at the post-move price, the noise under a server secret, the market
+   reads only ended days. Residual: a player who reruns the sim locally can estimate the next
+   few days' activity; the record's EMA moves ~1% a machine day toward it, inside the 24-hour
+   hold, and the board already shows RECENT against RECORD to everyone. Bounded, and public.
+6. *Sybil pumping and dividend farming.* The whole float is a hard cap (players + NPCs <= 10,000
+   shares), the position cap is per holder, alts already face slice 1's enrolment caps (IP,
+   device, email; one allowance per assessed case), and the dividend goes only to wallets a week
+   old that collected in the week. Residual: many assessed alts can each buy 3%; their own flow
+   makes them fill dearer and the 24-hour hold outlasts the impact (x decays ~50% in 23 ticks).
+7. *The Department as an unbounded mint.* Bounded by the float, the bands and the levy; fills
+   after the move remove the impact free lunch (measured: before that fix, the NPC moguls grew
+   7x in 30 days on their own price impact; after it, nobody can). A funded reserve is not built:
+   CYCLES are minted by design (UBI) and recycled by the levy.
+8. *Cost at scale.* The state is ~150 bytes a human (0.1 MB now); the board ~170 KB at 747
+   humans. Past ~5,000 humans the board splits (a top-N board plus per-shard lists) and the state
+   splits into the figure index's 64 shards. The tick asks the ledger only for the pending batch.
+   Supabase Free: one share row per holder per human; revisit at 50,000 rows.
+9. *Tautological fairness tests.* Rewritten: the rung test now includes newcomers who invest
+   everything; top 1% is over all holders (citizens of ten kinds and every NPC); skill is measured
+   against a fixed labour benchmark across three seeds; a deliberately polarized run checks the
+   stabilizers. Versioned with the engine (ENGINE_V).
+10. *Living people as tradable.* Scott decided to list them; kept, with guardrails: numbers and
+   in-city facts only, no living NPC investors, no quotes, one switch (`listLiving`) to delist
+   them all and a per-person delist, and the terms text below. **Codex's recommendation stands
+   on the record for Scott: launch with the dead only until a legal read.**
+
+### Ledger (migration `20261005230000_market_slice1.sql`)
+
+`econ_shares` (case, human, units, reserved, basis, locked_until), `econ_orders` (filed, filled or
+refused once, the tick that filled it), `econ_dividends` (day, pool, eligible, per citizen),
+accounts `esc:<h>` and `dept:commons`, txn kinds `oplace` / `ofill` / `levy`. Functions:
+`econ_order_place`, `econ_orders_batch`, `econ_orders_fill`, `econ_share_totals`, `econ_rich`,
+`econ_levy_close`, `econ_leaders`, and `econ_view` / `econ_purge` extended. RLS on, no grants to
+anon / authenticated, service role only, as slice 1. The memory twin is `netlify/lib/market-db.js`.
+
+### Legal (terms section 11, added text)
+
+"THE MARKET lists shares in the city's industries and in the humans on file. Share prices are
+computed only from what each person's citizen does inside the Substrate's simulation (work, crowds,
+leagues, the council) and from orders placed with the Department; they are not a statement about
+any real person, carry no information about them, and are never moved by news or by anything
+outside the simulation. The Department is the only counterparty: you cannot buy from, sell to, or
+pay another player. Shares are play positions in a play currency, not securities, not an
+investment and not advice; they can lose all their value. The Department may halt, cap, levy,
+adjust, delist or reset any price or position, and the Assembly may vote on the market's limits.
+Some people on file are not listed, by policy, and anyone listed may ask to be delisted through
+the dispute form."
+
+### As built: slice 1 (2026-10-05)
+
+- **Code:** `src/market/` (rules, engine, activity, the page, the Finance row), `src/city/drives.js`,
+  `netlify/lib/market.js` (tick, board, orders, close), `netlify/lib/market-db.js`,
+  `netlify/functions/market.js` (`/api/market`), `market-tick.js` (every 10 minutes),
+  `econ-close.js` (levy and dividend), `plans.js` (`putMarket`), `economy.js` (shares on the
+  wallet, the dividend in COLLECT). Check: `scripts/check-market.mjs` (+ `scripts/market-sim.mjs`).
+- **Pages:** `#market` (one line, one BUY per row, MORE for the rest, THE FLOOR, THE RICHEST
+  INVESTORS, THE FLOOR'S RECORD, THE BALLOT), linked from MORE ROOMS, the Treasury, MY FILE's
+  wallet and the Finance district (THE EXCHANGE row). The landing's ticker is the market's
+  (fetched, a minute's cache; the scores until it answers). The entry bundle stays at 83.7 KB
+  gzip: nothing of the market is bundled into the logon.
+- **Slice 2:** the Assembly ballot for knobs; NPC INVESTOR jobs in the sim (MARKET_SIM_FROM);
+  a SimTower floor in the Reserve Tower cutaway (the hook: `#city/finance/reserve-tower`, the
+  board's `floor` list); file-visit and Assembly terms; the board split past ~5,000 humans;
+  industries on the same page with their own buy; per-human charts beyond today.
+
+## Decided 2026-10-05, design only (not the market slice)
+
+### Customization: each rung of the ladder unlocks a bigger canvas
+
+- **FLAT:** room purposes and furniture; window light colour.
+- **FLOOR:** a nameplate, a balcony, window treatment, the lift's announcement.
+- **BUILDING:** facade material, the crown / roof, a wall sign, a blade sign, a rooftop billboard,
+  a rooftop terrace (people actually use it on the city clock), awnings, and a construction crane
+  with real-time build timers for upgrades.
+- **BLOCK:** a plaza, trees, street furniture, a corner billboard.
+- **SIGN MAKER** ships with the property ladder: text + neon colour + pixel font + an icon library
+  (a word filter only, no uploads). Image uploads (posters, logos) unlock at day 60, with the AI
+  screen and Scott's approval (section 6).
+- The differentiator from Internet City: signage drives real foot traffic in the sim (the
+  leisure pull), which the market's CROWD term prices. A good sign is worth something, visibly.
+
+### THE FURNITURE & OBJECTS SHOP (ships between the market and the property ladder)
+
+- Players buy items with CYCLES to dress their rooms, starting with the free assigned flat (no
+  ownership needed to furnish your own flat). Scott's example: "a JETSAM arcade cabinet for my
+  room, however many cycles."
+- The catalog includes house-brand goods from Scott's own properties as in-world items, priced in
+  tiers: a JETSAM cabinet (playable, or links to the JETSAM game), an EBTV set, EB Shop merch, a
+  Goodnight Irene's tap, a Sam's Pizza box.
+- Items appear in the cutaway room and on the resident's file. Some carry small in-sim effects
+  (an arcade cabinet draws visitors; a piano lifts a room's mood), so spending is a choice, not
+  only a look.
+- A CYCLES sink: purchases burn CYCLES (`dept:shops` -> burned), which helps hold inflation
+  against the allowance and the dividend.
+- No player-to-player transfer of items, except through THE MARKET's rules if that is ever
+  built (formula-priced, the Department as counterparty).

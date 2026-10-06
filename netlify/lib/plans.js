@@ -24,6 +24,7 @@ import { fullRoster } from "../../src/city/roster.js";
 import { splitDay, SECTORS, FORMAT as FORMAT2 } from "../../src/city/planSplit.js";
 import { civicFold, CIVIC_V, setSeats, setEntries } from "../../src/city/civic.js";
 import { stepEnterprise, simDay, publicBlock, satisfactionDay, satRow, ENT_V } from "../../src/city/enterprise.js";
+import { marketTerms } from "../../src/market/activity.js";
 
 export const STORE = "hvi-plans";
 export const FORMAT = SIM.PLAN_FORMAT;
@@ -105,6 +106,9 @@ export function planIo(s = store, { census, snapshots, civic, elections, entries
     },
     async list2() { return (await s().list({ prefix: `f${FORMAT2}/day/` })).blobs.map(b => b.key); },
     async getPart(key) { return s().get(key, { type: "json" }); },
+    // THE MARKET's input for a day (src/market/activity.js), write-once in the market's own store
+    // (netlify/lib/market.js MARKET_STORE): it outlives the plan it was read from.
+    async putMarket(day, terms) { await getStore({ name: "hvi-market", consistency: "strong" }).setJSON(`in/${day}`, terms, { onlyIfNew: true }); },
     lease: {
       async acquire(run, ms) {
         const now = Date.now();
@@ -315,6 +319,14 @@ export async function publishSplit(io, json, ver, roster, run, clock = Date.now,
   for (const sector of SECTORS) for (const w of windows[sector]) for (const [k, entry] of Object.entries(w.subjects)) { const x = sat.get(k); if (x) w.subjects[k] = [...entry, satRow(x)]; }
   summary.sat = Object.fromEntries(Object.keys(summary.onFile || {}).filter(k => sat.has(k)).map(k => [k, satRow(sat.get(k))]));
   civ.out?.set(json.day, summary.civic);
+  // THE MARKET (docs/design/ECONOMY_PROPERTY.md, "The Living Market"): what each human on file did
+  // today, read from this day once it exists. Write-once beside the plan, never in it: the day's
+  // files, summary and version are the same with or without it, and a failure here never stops
+  // the city being published.
+  if (io.putMarket) {
+    try { await io.putMarket(json.day, { ...marketTerms(json, people, summary, sat), ver }); }
+    catch (err) { console.warn("market terms skipped", json.day, err?.message); }
+  }
   const files = {}, jobs = [];
   let bytes = 0;
   summary.parts = {};

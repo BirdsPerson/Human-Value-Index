@@ -14,7 +14,7 @@ export function FileEconomy({ caseId }) {
       <Disclosure key={st.open ? "w-open" : "w-closed"} id="hvi-wallet" title="THE WALLET" meta={meta} defaultOpen={Boolean(w && w.tray.days && !w.tray.vesting)}>
         <WalletCard st={st} act={act} busy={busy} last={last} compact />
         {err && <div className="ec-err" role="status">{err}</div>}
-        <ButtonRow><Button variant="secondary" href="#economy">{st.open ? "THE TREASURY: INVEST IN THE DISTRICTS" : "THE TREASURY"}</Button></ButtonRow>
+        <ButtonRow><Button variant="secondary" href="#market">THE MARKET: SHARES IN HUMANS</Button><Button variant="secondary" href="#economy">{st.open ? "THE TREASURY: INVEST IN THE DISTRICTS" : "THE TREASURY"}</Button></ButtonRow>
         <LegalFine />
       </Disclosure>
       <Disclosure title="MY APARTMENT" meta={st.apartment ? st.apartment.buildingName : ""}>

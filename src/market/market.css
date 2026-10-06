@@ -1,0 +1,84 @@
+/* THE MARKET. The terminal's own tokens: gold (--warn) means CYCLES, --accent a rise, --harm a
+   fall; every rise and fall also carries an arrow and a sign, never colour alone. */
+.mk-lede { color: var(--fg); font-size: var(--t-m); line-height: var(--lh-tight); margin: 0 0 var(--s4); max-width: 60ch; }
+.mk-dim { color: var(--fg-mute); }
+.mk-up { color: var(--accent); }
+.mk-down { color: var(--harm); }
+.mk-flat { color: var(--fg-dim); }
+.mk-err { color: var(--harm); margin: var(--s2) 0; }
+.mk-p { margin: 0 0 var(--s3); }
+.mk-fine { font-size: var(--t-xs); color: var(--fg-mute); margin: var(--s3) 0; }
+.mk-wallet { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2) 2ch; border: var(--bw) solid var(--line); padding: var(--s3); margin: 0 0 var(--s4); }
+.mk-cash b { color: var(--warn); font-size: var(--t-l); }
+.mk-collect { color: var(--warn); }
+.mk-wallet .ui-btn-row { margin: 0; }
+
+.mk-tools { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); align-items: center; margin: 0 0 var(--s3); }
+.mk-find input { font: inherit; font-size: var(--t-m); background: var(--bg); color: var(--fg); border: var(--bw) solid var(--line-hi); height: var(--hit-min); padding: 0 var(--s2); width: min(100%, 26ch); text-transform: uppercase; }
+.mk-find input:focus { outline: var(--focus); }
+.mk-find input::placeholder { color: var(--fg-mute); }
+.mk-sorts { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.mk-sort { font: inherit; font-size: var(--t-xs); background: none; color: var(--fg-dim); border: var(--bw) solid var(--line); min-height: var(--hit-min); padding: 0 var(--s2); cursor: pointer; }
+.mk-sort.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.mk-sort:focus-visible { outline: var(--focus); outline-offset: 2px; }
+
+.mk-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.mk-table th, .mk-table td { text-align: left; padding: var(--s1) var(--s2); border-bottom: var(--bw) solid var(--line); vertical-align: middle; }
+.mk-table thead th { font-size: var(--t-xs); color: var(--fg-mute); font-weight: 400; letter-spacing: 0.04em; }
+.mk-table .n { text-align: right; white-space: nowrap; }
+.mk-row.on { background: var(--panel); }
+.mk-name { font-weight: 400; min-width: 0; }
+.mk-namebtn { font: inherit; color: var(--fg); background: none; border: 0; text-align: left; padding: 0; min-height: var(--hit-min); cursor: pointer; text-transform: uppercase; width: 100%; overflow-wrap: anywhere; }
+.mk-namebtn:hover { color: var(--accent); }
+.mk-namebtn:focus-visible, .mk-buy:focus-visible, .mk-more:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.mk-mine { color: var(--warn); font-size: var(--t-xs); }
+.mk-halt { color: var(--harm); font-size: var(--t-xs); }
+.mk-price { color: var(--warn); }
+.mk-act { width: 1%; }
+.mk-buy { font: inherit; font-weight: 700; color: var(--accent-ink); background: var(--accent); border: 0; min-height: var(--hit-min); min-width: 7ch; padding: 0 var(--s3); cursor: pointer; }
+.mk-buy:disabled { background: var(--panel-hi); color: var(--fg-mute); cursor: default; }
+.mk-open td { background: var(--panel); padding: var(--s3); }
+.mk-why { color: var(--fg); margin: 0 0 var(--s3); }
+.mk-amt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0 0 var(--s2); }
+.mk-amt input { font: inherit; font-size: var(--t-m); background: var(--bg); color: var(--warn); border: var(--bw) solid var(--line-hi); height: var(--hit-min); padding: 0 var(--s2); width: 11ch; }
+.mk-amt input:focus { outline: var(--focus); }
+.mk-more { font: inherit; font-size: var(--t-xs); background: none; color: var(--fg-dim); border: var(--bw) dashed var(--line-hi); min-height: var(--hit-min); padding: 0 var(--s3); cursor: pointer; margin-top: var(--s2); }
+.mk-detail { margin-top: var(--s3); }
+.mk-kv { display: grid; grid-template-columns: 16ch minmax(0, 1fr); gap: var(--s1) 1ch; margin: 0 0 var(--s3); }
+.mk-kv dt { color: var(--fg-mute); font-size: var(--t-xs); }
+.mk-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.mk-spark { display: block; width: 100%; max-width: 420px; height: 48px; margin: 0 0 var(--s3); }
+.mk-spark path { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.mk-ev { color: var(--warn); }
+.mk-list { list-style: none; margin: 0; padding: 0; }
+.mk-list li { padding: var(--s1) 0; border-bottom: var(--bw) dashed var(--line); }
+.mk-lb td:first-child { color: var(--fg-mute); width: 3ch; }
+.mk-knobs th { font-weight: 400; color: var(--fg-dim); font-size: var(--t-xs); }
+
+/* THE FLOOR: the tower in section, top floor first */
+.mk-tower { border: var(--bw) solid var(--line-hi); margin: 0 0 var(--s3); }
+.mk-storey { border-bottom: var(--bw) solid var(--line); padding: var(--s2) var(--s3); }
+.mk-storey h3 { font-size: var(--t-xs); font-weight: 400; letter-spacing: 0.06em; color: var(--fg-dim); margin: 0 0 var(--s2); }
+.mk-desks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s2) var(--s4); }
+.mk-desk { display: flex; gap: var(--s2); align-items: flex-start; min-width: 0; padding: var(--s1) 0; border-bottom: var(--bw) dashed var(--line); }
+/* a figure's sprite sheet is two 32x48 frames; the desk shows the first */
+.mk-face { flex: none; width: 32px; height: 48px; image-rendering: pixelated; background: var(--panel) 0 0 / 64px 48px no-repeat; border-bottom: 2px solid var(--line-hi); }
+.mk-desk > div { min-width: 0; overflow-wrap: anywhere; }
+.mk-doing { color: var(--warn); font-size: var(--t-xs); }
+.mk-note { color: var(--fg-mute); font-size: var(--t-xs); }
+.mk-ground { border-bottom: 0; background: var(--panel); }
+.mk-board-wrap { overflow: hidden; white-space: nowrap; border: var(--bw) solid var(--line); padding: var(--s1) 0; }
+.mk-board { display: inline-block; color: var(--warn); animation: mk-scroll 120s linear infinite; padding-left: 100%; }
+@keyframes mk-scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+
+@media (max-width: 520px) {
+  .mk-table th, .mk-table td { padding: var(--s1); }
+  .mk-kv { grid-template-columns: 1fr; }
+  .mk-kv dt { margin-top: var(--s2); }
+  .mk-buy { min-width: 0; padding: 0 var(--s2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mk-board { animation: none; padding-left: 0; white-space: normal; }
+  .mk-board-wrap { white-space: normal; }
+}
+.mk-cit td { color: var(--warn); }

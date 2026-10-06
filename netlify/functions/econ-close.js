@@ -6,6 +6,7 @@
 // UBI and the citizen's spending need no close: they are counted when the citizen COLLECTs.
 import { ledger } from "../lib/economy-db.js";
 import { closeDay } from "../lib/economy.js";
+import { closeMarketDay } from "../lib/market.js";
 import { utcDay, addDays } from "../../src/economy/rules.js";
 
 export const CATCH_UP_DAYS = 3;
@@ -21,7 +22,11 @@ export async function runClose(nowMs = Date.now()) {
     if (d <= through) continue;
     done.push(await closeDay(d));
   }
-  return { today, closed: done };
+  // THE MARKET's settlement: the concentration levy and the citizens' dividend for each of the
+  // last few days the market has rolled past (once each: the dividend row is the guard)
+  const market = [];
+  for (let d = addDays(today, -CATCH_UP_DAYS); d < today; d = addDays(d, 1)) market.push({ day: d, ...(await closeMarketDay(d).catch(e => ({ error: e?.message }))) });
+  return { today, closed: done, market };
 }
 
 export default async () => {

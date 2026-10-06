@@ -40,6 +40,7 @@ import SocialPanel from "./SocialPanel.jsx";
 import { useSocial, ensureSocial } from "./socialClient.js";
 // THE MASTER PLAN (docs/planning/MASTER_PLAN.md): the Pit's card, the club's fixture, the Dept of Planning
 import PitPanel from "./PitPanel.jsx";
+import ExchangeRow from "../market/ExchangeRow.jsx";   // THE MARKET's door in Finance
 import { pitEvents, boutAt, billLine, resultLine } from "./pit.js";
 import { tennisAt, tennisEvents } from "./tennis.js";
 import { planningLines } from "./planning.js";
@@ -429,6 +430,7 @@ export default function City({ route }) {
       {d && !b && <DistrictCivic districtId={d.id} onLeague={(e, sp) => { e.preventDefault(); window.location.hash = `#city/league${sp ? "/" + sp : ""}` + query; }} />}
       {(!d || d.id === "commons") && <AssemblyRow asm={asm} />}
       {!b && <PitPanel districtId={d?.id || null} />}
+      {d?.id === "finance" && <ExchangeRow />}
       {!d && !b && <SocialPanel />}
       {!iso && <div className="hvi-city-help">
         {b

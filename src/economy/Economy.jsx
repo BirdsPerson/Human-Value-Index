@@ -56,6 +56,11 @@ export default function Economy() {
         </Frame>
       )}
 
+      <Frame title="THE MARKET" meta="SHARES IN HUMANS">
+        <p className="ec-p">PUT YOUR DAILY CYCLES TO WORK. PRICES MOVE WITH WHAT HAPPENS IN THE CITY.</p>
+        <ButtonRow><Button variant="primary" href="#market">OPEN THE MARKET</Button></ButtonRow>
+      </Frame>
+
       <ButtonRow split stackOnMobile>
         <Button variant="back" onClick={() => { window.location.hash = ""; }}>Main menu</Button>
         <Button variant="secondary" href="#file">My file</Button>

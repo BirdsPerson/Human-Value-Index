@@ -4,7 +4,7 @@
 // into the steps it draws. Checked by scripts/check-firstday.mjs.
 
 // INVEST OR SAVE goes here. The single place to point it at the market page when it lands.
-export const MARKET_HREF = "#economy";
+export const MARKET_HREF = "#market";
 
 export const INTRO = "THE DEPARTMENT EXPECTS FIVE THINGS. NONE ARE MANDATORY. ALL ARE NOTED.";
 export const DONE_LINE = "ORIENTATION COMPLETE. YOU ARE NOW ORDINARY.";

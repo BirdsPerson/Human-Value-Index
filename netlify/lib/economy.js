@@ -8,6 +8,7 @@ import * as SIM from "../../src/city/sim.js";
 import { getStore } from "@netlify/blobs";
 import { STORE as PLANS, manifest2Cached, partKey } from "./plans.js";
 import { ledger, caseHash, ownerHash } from "./economy-db.js";
+import { sharesView } from "./market.js";
 import {
   UBI, TRAY_DAYS, MIN_INVEST, MAX_ORDER, LOCK_DAYS, IP_CAP, DEVICE_CAP, INDUSTRIES, INDUSTRY_IDS, industryOf,
   utcDay, addDays, vestDayOf, trayDays, spendFor, dayReturns, sharesOf, commentary, collectLine,
@@ -99,13 +100,28 @@ export async function walletView(caseId, rec, nowMs = Date.now()) {
   const spend = tray.days.reduce((n, d) => n + spendFor(h, d), 0);
   const positions = (v.positions || []).map(p => ({ industry: p.industry, name: industryOf(p.industry)?.name || p.industry.toUpperCase(), value: Number(p.value), basis: Number(p.basis), pl: Number(p.value) - Number(p.basis), lockedUntil: p.locked_until }));
   const invested = positions.reduce((n, p) => n + p.value, 0);
+  const market = await sharesView(v).catch(() => ({ shares: [], orders: [], escrow: Number(v.escrow) || 0, sharesValue: 0 }));
+  const div = dividendDays(tray.days, v.dividends, v.citizen);
   return {
     enrolled: Boolean(v.citizen), vestDay: vest, today,
-    balance: Number(v.cash) || 0, invested, worth: (Number(v.cash) || 0) + invested,
-    tray: { days: tray.days.length, gross: tray.days.length * UBI, spend, net: tray.days.length * UBI - spend, lost: tray.lost, from: tray.days[0] || null, vesting: vest > today },
-    positions,
+    balance: Number(v.cash) || 0, invested, worth: (Number(v.cash) || 0) + invested + market.sharesValue + market.escrow,
+    tray: { days: tray.days.length, gross: tray.days.length * UBI, spend, net: tray.days.length * UBI - spend + div.total, dividend: div.total, lost: tray.lost, from: tray.days[0] || null, vesting: vest > today },
+    positions, ...market,
     recent: (v.recent || []).map(t => ({ kind: t.kind, day: t.day ? String(t.day).slice(0, 10) : null, cash: Number(t.cash), inv: Number(t.inv), memo: t.memo || {}, at: t.created_at })),
   };
+}
+
+// The dividend each tray day carries: the per-citizen dividend declared for the day before, to a
+// citizen enrolled a week or more before it (the same aging the declaration counts).
+export function dividendDays(days, dividends = {}, citizen = null) {
+  const by = {};
+  let total = 0;
+  const enrolled = citizen?.enrolled_at ? String(citizen.enrolled_at).slice(0, 10) : null;
+  for (const d of days) {
+    const prev = addDays(d, -1), per = Number(dividends?.[prev]) || 0;
+    if (per > 0 && enrolled && enrolled <= addDays(prev, -6)) { by[d] = per; total += per; }
+  }
+  return { by, total };
 }
 
 // ---- COLLECT: every waiting day in one balanced txn, one claim row per day ----------------------
@@ -121,16 +137,19 @@ export async function collect(caseId, rec, { ip = null, deviceHash = null, owner
   const { days, lost } = trayDays({ today, vestDay: vest, claimed: (v.claims || []).map(d => String(d).slice(0, 10)), lastClaim: v.last_claim ? String(v.last_claim).slice(0, 10) : null });
   if (!days.length) return { ok: true, collected: 0, days: 0, line: collectLine({ days: 0 }), vesting: vest > today ? vest : null };
   const legs = [], memoDays = [];
+  const div = dividendDays(days, v.dividends, v.citizen);
   for (const d of days) {
     const s = spendFor(h, d);
     legs.push({ account: "dept:treasury", amount: -UBI }, { account: `cash:${h}`, kind: "cash", amount: UBI }, { account: `cash:${h}`, kind: "cash", amount: -s }, { account: "dept:shops", amount: s });
-    memoDays.push([d, UBI, s]);
+    // THE CITIZENS' DIVIDEND (the market's concentration levy, paid back): yesterday's, with today's allowance
+    if (div.by[d]) legs.push({ account: "dept:commons", amount: -div.by[d] }, { account: `cash:${h}`, kind: "cash", amount: div.by[d] });
+    memoDays.push(div.by[d] ? [d, UBI, s, div.by[d]] : [d, UBI, s]);
   }
   const r = await L.rpc("econ_post", { idem: `ubi:${h}:${days.join(",")}`, kind: "ubi", case_hash: h, day: today, memo: { days: memoDays, lost }, legs, claims: days });
   if (!r.ok) return { ok: false, error: r.error };
   if (r.dup) return { ok: true, dup: true, collected: 0, days: 0, line: "ALREADY DISBURSED. THE DEPARTMENT DOES NOT PAY TWICE FOR ONE DAY." };
-  const net = memoDays.reduce((n, [, u, s]) => n + u - s, 0);
-  return { ok: true, collected: net, days: days.length, gross: days.length * UBI, spend: days.length * UBI - net, lost, line: collectLine({ days: days.length, lost }) };
+  const net = memoDays.reduce((n, [, u, s, dv = 0]) => n + u - s + dv, 0);
+  return { ok: true, collected: net, days: days.length, gross: days.length * UBI, spend: days.length * UBI - net + div.total, dividend: div.total, lost, line: collectLine({ days: days.length, lost }) + (div.total ? ` THE CITIZENS' DIVIDEND ADDS ${div.total.toLocaleString("en-US")}: WHAT THE RICHEST PAID IN LEVY, SHARED.` : "") };
 }
 
 // ---- buy / sell: cash <-> the industry position, both the case's own accounts -------------------

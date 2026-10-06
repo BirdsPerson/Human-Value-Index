@@ -108,6 +108,20 @@ export function WalletCard({ st, act, busy, last, compact = false }) {
           ))}
         </div>
       )}
+      {w.shares?.length > 0 && (
+        <div className="ec-pos">
+          <div className="ec-tray-h">SHARES IN HUMANS <a href="#market">// THE MARKET</a></div>
+          {w.shares.map(p => (
+            <div key={p.slug} className="ec-pos-row">
+              <span className="n"><a href={`#market/${p.slug}`}>{p.name.toUpperCase()}</a> <span className="ec-dim">x{fmt(p.units)}</span></span>
+              <span className="v">{fmt(p.value)}</span>
+              <span className={`pl ${p.pl > 0 ? "ec-up" : p.pl < 0 ? "ec-down" : "ec-flat"}`}>{fmtSigned(p.pl)}</span>
+              <span className="lk">{p.halted ? "HALTED TODAY" : p.lockedUntil && Date.parse(p.lockedUntil) > Date.now() ? `HELD TO ${dateOf(p.lockedUntil)} ${String(p.lockedUntil).slice(11, 16)} UTC` : "FREE TO SELL"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {w.escrow > 0 && <p className="ec-p ec-dim">{fmt(w.escrow)} CYCLES ON ORDER. THEY FILL AT THE NEXT TICK.</p>}
       {!compact && w.recent.length > 0 && (
         <div className="ec-led">
           <div className="ec-tray-h">THE LEDGER, LATEST FIRST</div>
@@ -125,6 +139,9 @@ function LedgerLine({ t }) {
   else if (t.kind === "buy") what = `BOUGHT ${String(m.industry || "").toUpperCase()}`;
   else if (t.kind === "sell") what = `SOLD ${String(m.industry || "").toUpperCase()}`;
   else if (t.kind === "return") what = `${String(m.industry || "").toUpperCase()} RETURNED ${fmtPpm(m.ppm || 0)}`;
+  else if (t.kind === "oplace") what = `ORDER: ${String(m.slug || "").toUpperCase()}`;
+  else if (t.kind === "ofill") what = `${m.side === "sell" ? "SOLD" : "BOUGHT"} ${m.units || 0} ${String(m.slug || "").toUpperCase()}${m.side === "buy" && m.units ? "" : m.side === "buy" ? " (REFUNDED)" : ""}`;
+  else if (t.kind === "levy") what = "CONCENTRATION LEVY";
   else what = t.kind.toUpperCase();
   const amt = t.kind === "return" ? t.inv : t.cash;
   return (
