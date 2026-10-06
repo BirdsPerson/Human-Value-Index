@@ -403,8 +403,8 @@ function drawPlayer(ctx, cam, P, look, st, frame, ctl, hasBall, carrierRing) {
   const armL = -tw - 0.14, armR = tw + 0.01;
   if (pose === "catch" || pose === "celebrate") { arm(armL, 1.5, 0.55); arm(armR, 1.5, 0.55); hand(armL, 2.05); hand(armR, 2.05); }
   else if (pose === "swat") { arm(armR, 1.5, 0.6); hand(armR, 2.1); arm(armL, 0.95, 0.5); hand(armL, 0.9); }
-  else if (pose === "cock") { arm(armR + 0.08, 1.45, 0.5); hand(armR + 0.08, 1.95); R(armR + 0.04, 2.0, 0.2, 0.16, PAL.ball); arm(armL - 0.1, 1.2, 0.3); hand(armL - 0.1, 1.15); }
-  else if (pose === "throw") { arm(armR + 0.14, 1.5, 0.45); hand(armR + 0.3, 1.9); arm(armL, 1.0, 0.4); hand(armL, 0.95); }
+  else if (pose === "cock") { const M = (x, w = 0.13) => (look.lefty ? -x - w : x); arm(M(armR + 0.08), 1.45, 0.5); hand(M(armR + 0.08), 1.95); R(M(armR + 0.04, 0.2), 2.0, 0.2, 0.16, PAL.ball); arm(M(armL - 0.1), 1.2, 0.3); hand(M(armL - 0.1), 1.15); }
+  else if (pose === "throw") { const M = (x, w = 0.13) => (look.lefty ? -x - w : x); arm(M(armR + 0.14), 1.5, 0.45); hand(M(armR + 0.3), 1.9); arm(M(armL), 1.0, 0.4); hand(M(armL), 0.95); }   // look.lefty: the left-handed QB mirrors the arms, nothing else
   else if (pose === "stiff") { arm(armL, 1.0, 0.45); hand(armL, 0.95); R(armR, 1.3, 0.5, 0.12, look.jersey); hand(armR + 0.5, 1.3); }
   else if (pose === "block" || pose === "tackle") {
     // both arms out ahead at the chest: from behind or in front they show bent, hands at the sides

@@ -24,6 +24,8 @@
 //   difficulty   ALL-PRO changes nothing in a CPU v CPU game (the calibration stands); a bot's game
 //                on ALL-PRO replays; the fixture record from version 1 still replays to its result
 //                (scripts/fixtures/football-rec-v1.json; --write-fixture rewrites it after a version bump)
+//   casual       a simulated casual human (late reads, loose throws, ASK THE COORDINATOR, straight lines) vs an equal
+//                CPU team wins ROOKIE 65-75%, PRO 45-55%, ALL-PRO 20-30% of 200 games each
 //   calls        no line quotes anyone or has anyone speak; the crowd follows the home side
 // Run: node scripts/check-football.mjs
 import assert from "node:assert/strict";
@@ -285,6 +287,32 @@ ALLPRO_CHECK();
   assert.ok(ints >= 0.8 && ints <= 4.5, `interceptions: ${line}`);
   assert.ok(ypc >= 2, `rushing: ${line}`);
   ok("calibration");
+}
+
+// ---- a casual human against an equal CPU team --------------------------------------------------------
+// scripts/footballBot.mjs reads late, takes ASK THE COORDINATOR, rarely uses a move and runs straight.
+// Each level has a win band for him (the tilt in S.TILT is what the page sets).
+{
+  const { casualHuman, EQUAL } = await import("./footballBot.mjs");
+  const G = 200, bands = { rookie: [65, 75], pro: [45, 55], allpro: [20, 30] };
+  const flags = { rookie: { assist: true }, pro: {}, allpro: { hard: true } };
+  const out = [];
+  for (const [lv, [lo, hi]] of Object.entries(bands)) {
+    let w = 0;
+    for (let g = 0; g < G; g++) {
+      const st = S.newGame(31000 + g, { qlen: 2, ...flags[lv], tilt: S.TILT[lv], home: EQUAL("h", 74), away: EQUAL("a", 74), coach: [0.5, 0.5] });
+      const b = casualHuman(g + 1);
+      for (let f = 0; st.phase !== "over" && f < 500000; f++) S.step(st, b(st));
+      if (st.score[0] > st.score[1]) w++;
+    }
+    const pct = (100 * w) / G; out.push(`${lv} ${pct.toFixed(1)}%`);
+    assert.ok(pct >= lo && pct <= hi, `a casual human on ${lv} wins ${pct.toFixed(1)}% (want ${lo} to ${hi}) of ${G}`);
+  }
+  if (process.env.VERBOSE) console.log("casual human:", out.join(", "));
+  // tilt is a CPU-facing-a-human lever: a CPU v CPU game ignores it
+  const run = (tl) => { const st = S.newGame(777, { auto: true, qlen: 2, tilt: tl, home: R.FALLBACK.teams.hq, away: R.FALLBACK.teams.works }); for (let f = 0; st.phase !== "over" && f < 500000; f++) S.step(st, 0); return S.resultOf(st); };
+  assert.deepEqual(run(0), run(S.TILT.pro), "tilt changes nothing in a CPU v CPU game");
+  ok("a casual human beats the CPU at the rates for each level");
 }
 
 // ---- roster -------------------------------------------------------------------------------------------

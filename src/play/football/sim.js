@@ -32,6 +32,9 @@ export const BTN = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, A: 16, B: 32, X: 64, Y: 
 export const CALL_SHIFT = 16;
 export const CODE = { TIMEOUT: 60, PAT: 61, TWO: 62, COACH: 63, FLIP: 128 };
 export const QLENS = [2, 3, 5];
+// The tilt each level sets (cfg.tilt, see `tilt`): measured by scripts/check-football.mjs against a casual
+// human on an equal team (ROOKIE ~70% wins, PRO ~50%, ALL-PRO ~25%).
+export const TILT = { rookie: 1.2, pro: 1.5, allpro: 1.0 };
 // Offence slots and defence slots (an index into each team's eleven).
 export const OS = { QB: 0, RB: 1, WR1: 2, WR2: 3, TE: 4, WR3: 5, LT: 6, LG: 7, C: 8, RG: 9, RT: 10 };
 export const DS = { LE: 0, DT1: 1, DT2: 2, RE: 3, WLB: 4, MLB: 5, SLB: 6, CB1: 7, CB2: 8, FS: 9, SS: 10 };
@@ -184,7 +187,7 @@ export function newGame(seed = 1, cfg = {}) {
   const R0 = rows(cfg.home), R1 = rows(cfg.away);
   const st = {
     v: VERSION, seed: seed >>> 0, rng: seed | 0, frame: 0,
-    cfg: { qlen, assist: Boolean(cfg.assist), hard: Boolean(cfg.hard), auto: Boolean(cfg.auto), ot: cfg.ot !== false, coach: Array.isArray(cfg.coach) ? cfg.coach.map(Number) : [0.5, 0.5] },
+    cfg: { qlen, tilt: Number.isFinite(cfg.tilt) ? clamp(cfg.tilt, -2, 4) : 0, assist: Boolean(cfg.assist), hard: Boolean(cfg.hard), auto: Boolean(cfg.auto), ot: cfg.ot !== false, coach: Array.isArray(cfg.coach) ? cfg.coach.map(Number) : [0.5, 0.5] },
     p: [...R0.map((r, i) => mkPlayer(0, i, r)), ...R1.map((r, i) => mkPlayer(1, i, r))],
     off: [], def: [], kicker: [], ret: [],
     phase: "pre", pt: 0, q: 1, clock: qlen * 60 * HZ, score: [0, 0], to: [3, 3], poss: 0, los: 35, ballY: CY, down: 1, togo: 10, fd: 45,
@@ -210,6 +213,10 @@ function mkStat() { return { plays: 0, yds: 0, ra: 0, ry: 0, pa: 0, pc: 0, py: 0
 const human = (st, P) => !st.cfg.auto && P.t === 0 && P.g === st.ctl;
 // ALL-PRO: the CPU side against a human (never in a CPU v CPU game, so the calibration holds).
 const edge = (st, P) => st.cfg.hard && !st.cfg.auto && P.t === 1;
+// tilt: a number lever on top of ROOKIE / ALL-PRO, 0 when absent (so an old record plays as it did).
+// Above 0 the CPU side facing a human is a step slower, tackles the human's carrier less, throws
+// wilder, and the human's own passer is steadier; below 0 the other way. Never in a CPU v CPU game.
+const tilt = (st) => (st.cfg.auto ? 0 : st.cfg.tilt);
 function say(st, k, g = -1, extra = {}) { st.ev.push(k); st.note = { k, g, team: g >= 0 ? st.p[g].t : (extra.team ?? -1), frame: st.frame, ...extra }; }
 export const humanOn = (st) => (st.cfg.auto ? -1 : 0);
 
@@ -535,7 +542,7 @@ function pursue(st, D, C, sp = D.spd) {
 }
 // The defence reads run: everyone not engaged chases, after his own reaction.
 function chase(st, D, C) {
-  if (D.react === 0) D.react = st.pt + Math.round(((D.role.k === "zone" && D.role.deep ? 18 : D.role.k === "rush" ? 4 : 10) + (1 - D.awr) * 14 * (st.cfg.assist && D.t === 1 ? 1.4 : 1)) * (edge(st, D) ? 0.7 : 1));
+  if (D.react === 0) D.react = st.pt + Math.round(((D.role.k === "zone" && D.role.deep ? 18 : D.role.k === "rush" ? 4 : 10) + (1 - D.awr) * 14 * (st.cfg.assist && D.t === 1 ? 1.4 : 1)) * (edge(st, D) ? 0.7 : 1) + (D.t === 1 ? 4 * tilt(st) : 0));
   if (st.pt < D.react) return false;
   pursue(st, D, C);
   return true;
@@ -663,6 +670,7 @@ function throwTo(st, Q, Rr, lob) {
   if (lob) sig *= 1.15;
   if (st.cfg.assist) sig *= hum ? 0.6 : 1.1;
   if (edge(st, Q)) sig *= 0.85;
+  sig *= clamp(1 + (hum ? -0.12 : 0.15) * tilt(st), 0.4, 2);
   px += gauss(st) * sig * 1.12; py += gauss(st) * sig * 1.12;
   const T = Math.max(6, Math.round((len(px - Q.x, py - Q.y) / L.vh) * HZ));
   Object.assign(b, { st: "air", own: -1, from: Q.g, to: Rr.g, x: Q.x, y: Q.y, z: 2.0, f: 0, T, tx: px, ty: py, lob, away: false, swat: -99 });
@@ -671,7 +679,7 @@ function throwTo(st, Q, Rr, lob) {
   st.stat[Q.t].pa++; st.ps[Q.g].pa++;
   Rr.role = { k: "catch", r: Rr.role.r };
   if (hum) st.ctl = Rr.g;
-  for (const D of st.p) if (D.t !== Q.t) D.seen = st.pt + Math.round(5 + (1 - D.awr) * 12 + (st.cfg.assist && D.t === 1 ? 6 : 0) - (edge(st, D) ? 3 : 0));
+  for (const D of st.p) if (D.t !== Q.t) D.seen = st.pt + Math.round(5 + (1 - D.awr) * 12 + (st.cfg.assist && D.t === 1 ? 6 : 0) - (edge(st, D) ? 3 : 0) + (D.t === 1 ? Math.round(4 * tilt(st)) : 0));
   say(st, lob ? "lob" : "throw", Q.g, { to: Rr.g });
 }
 function throwAway(st, Q, Rr) {
@@ -790,7 +798,7 @@ function coverThink(st, D) {
     if (Rr.role.k === "pblock" || Rr.role.k === "rblock") {   // he stays in to block: sit underneath and read
       want(D, st.los + d * 6, clamp(st.ballY + (D.fy - st.ballY) * 0.4, 2, W - 2), D.spd * 0.7); return;
     }
-    const lag = Math.round(10 + (1 - D.cov) * 14 + (st.cfg.assist && D.t === 1 ? 6 : 0) - (edge(st, D) ? 4 : 0));
+    const lag = Math.round(10 + (1 - D.cov) * 14 + (st.cfg.assist && D.t === 1 ? 6 : 0) - (edge(st, D) ? 4 : 0) + (D.t === 1 ? Math.round(4 * tilt(st)) : 0));
     if (!D.seenR || st.frame - D.seenR.f >= lag) D.seenR = { f: st.frame, vx: Rr.vx, vy: Rr.vy };
     const deep = d * (Rr.x - st.los) > 12 ? 0.9 : 0.6, inside = Rr.y > st.ballY ? -0.6 : 0.6;
     const tx = Rr.x + D.seenR.vx * 0.3 + d * deep, ty = Rr.y + D.seenR.vy * 0.3 + inside;
@@ -1114,6 +1122,7 @@ function tackles(st) {
     if (hd) p += act === "wrap" ? 0.1 : act === "dive" ? -0.08 : act === "hit" ? -0.05 : -0.08;
     if (st.cfg.assist) { if (hd || D.t === 0) p += 0.06; if (hc) p -= 0.08; }
     if (edge(st, D)) p += 0.05;
+    p += D.t === 1 ? -0.05 * tilt(st) : 0.03 * tilt(st);
     if (C.role.k === "qb" || st.cur.sackable) p += 0.12;   // a passer in the pocket is not elusive
     p = clamp(p * engM, 0.05, 0.97);
     D.tkCool = 36;

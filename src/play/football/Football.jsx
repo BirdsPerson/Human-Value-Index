@@ -4,7 +4,7 @@ import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC } from "../../avatar.js";
 import GameMenu from "../GameMenu.jsx";
-import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, CALL_SHIFT, CODE, QLENS, PLAYS, DEFS, OFF_BOOK, DEF_BOOK, lineup, contextOf, iconsOf, coordinatorPick, legalOffence, downText, spotText, goalToGo, toGoal, OS, ICONS, DS_NAMES } from "./sim.js";
+import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, CALL_SHIFT, CODE, QLENS, TILT, PLAYS, DEFS, OFF_BOOK, DEF_BOOK, lineup, contextOf, iconsOf, coordinatorPick, legalOffence, downText, spotText, goalToGo, toGoal, OS, ICONS, DS_NAMES } from "./sim.js";
 import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortEleven, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS, divisionsOf, divisionOf, defaultLevelIndex, allClubs } from "./roster.js";
 import { draw, camInit, camFollow, headOf, skinOf, shade, W, H, PS_GLYPH, CAMS } from "./render.js";
 import { drawOffArt, drawDefArt, ART_W, ART_H } from "./playart.js";
@@ -12,6 +12,7 @@ import { FrontEnd, Setup, Sheet, Tapes, DIFF_IDS } from "./menus.jsx";
 import { sheetHints } from "../heads.js";
 import { callFor, crowdFor, bannerFor } from "./calls.js";
 import { createInput, PAD_GLYPHS, KEY_GLYPHS } from "./input.js";
+import ControlsGuide, { guideSeen, markGuideSeen, tipsSeen, markTip, tipFor } from "./Guide.jsx";
 import * as SFX from "./audio.js";
 import CSS from "./football.css?inline";
 import "../pages.css";
@@ -34,7 +35,7 @@ const parseRoute = (route) => {
   const ql = Number(q.get("q"));
   return { home: id("home"), vs: id("vs"), qlen: QLENS.includes(ql) ? ql : null, cam: q.get("cam") === "high" ? "high" : null };
 };
-const KEEP = "hvi-football-exhibitions", KEEP_N = 3, ASSIST_KEY = "hvi-football-easy", LEGEND_KEY = "hvi-football-legend", CAM_KEY = "hvi-football-cam", SETUP_KEY = "hvi-football-setup";
+const KEEP = "hvi-football-exhibitions", KEEP_N = 3, ASSIST_KEY = "hvi-football-easy", LEGEND_KEY = "hvi-football-legend", LEFTY_KEY = "hvi-football-lefty", CAM_KEY = "hvi-football-cam", SETUP_KEY = "hvi-football-setup";
 export function loadRecords() { try { const j = JSON.parse(localStorage.getItem(KEEP) || "[]"); return Array.isArray(j) ? j : []; } catch { return []; } }
 function saveRecord(rec) { try { localStorage.setItem(KEEP, JSON.stringify([rec, ...loadRecords()].slice(0, KEEP_N))); } catch { /* a full or private store: the game stays in the tab */ } }
 const readFlag = (k, dflt) => { try { const v = localStorage.getItem(k); return v === null ? dflt : v === "1"; } catch { return dflt; } };
@@ -109,7 +110,7 @@ export default function Football({ route }) {
   const start = (s) => {
     SFX.unlock();
     const user = s.side === "away" ? s.away : s.home, opp = s.side === "away" ? s.home : s.away;
-    const cfg = { qlen: s.qlen, assist: s.diff === "rookie", hard: s.diff === "allpro", home: elevenOf(league, user, me), away: elevenOf(league, opp, me), coach: [coachOf(user), coachOf(opp)], div: divisionOf(league, user) };   // div: the pyramid's division, data the sim carries
+    const cfg = { qlen: s.qlen, assist: s.diff === "rookie", hard: s.diff === "allpro", tilt: TILT[s.diff] ?? 0, home: elevenOf(league, user, me), away: elevenOf(league, opp, me), coach: [coachOf(user), coachOf(opp)], div: divisionOf(league, user) };   // div: the pyramid's division, data the sim carries
     setDone(null); setTape(null);
     setGame({ seed: seedNow(), n: Date.now(), home: user, away: opp, side: s.side, cfg, cam: s.cam });
   };
@@ -226,15 +227,22 @@ function Match({ game, me, tape = null, onDone, onQuit, onRestart }) {
   const [touch, setTouch] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer: coarse)").matches));
   const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, !touch));
   const [skipping, setSkipping] = useState(false);
-  const pausedRef = useRef(false), mutedRef = useRef(muted), skipRef = useRef(false), scaleRef = useRef(1);
+  const [guide, setGuide] = useState(() => !tape && !guideSeen());   // the controls guide, once, before the first game
+  const [tip, setTip] = useState({ text: "", gone: false });
+  const [lefty, setLefty] = useState(() => readFlag(LEFTY_KEY, false));   // a left-handed QB: the throwing arm mirrored, nothing else
+  const guideRef = useRef(guide), tipRef = useRef({ seen: null, shown: null }), leftyRef = useRef(lefty);
+  leftyRef.current = lefty;
+  const pausedRef = useRef(guide), mutedRef = useRef(muted), skipRef = useRef(false), scaleRef = useRef(1);
   mutedRef.current = muted; scaleRef.current = scale;
   const togglePause = (v) => { pausedRef.current = v ?? !pausedRef.current; setPaused(pausedRef.current); };
+  const dismissGuide = useCallback(() => { if (!guideRef.current) return; guideRef.current = false; markGuideSeen(); setGuide(false); pausedRef.current = false; setPaused(false); }, []);
   const teams = [teamName(home), teamName(away)], shorts = [teamShort(home), teamShort(away)];
   const mode = pad ? "pad" : touch ? "touch" : "keys";
   const modeRef = useRef(mode); modeRef.current = mode;
   const padRef = useRef(pad); padRef.current = pad;
   const sendCall = useCallback((code) => { SFX.unlock(); codeRef.current = code; }, []);
   const kits = useMemo(() => kitsOf(game), [game]);
+  const lookRef = useRef(null);
 
   useEffect(() => { const f = () => setTouch(true); window.addEventListener("touchstart", f, { once: true, passive: true }); return () => window.removeEventListener("touchstart", f); }, []);
   useEffect(() => {
@@ -256,6 +264,9 @@ function Match({ game, me, tape = null, onDone, onQuit, onRestart }) {
     let ti = 0;
     const input = createInput(); inputRef.current = input;
     const looks = looksFor(cfg, kits, me);
+    const qbG = lineup(cfg.home).os[OS.QB];
+    looks[qbG].lefty = leftyRef.current;
+    lookRef.current = looks[qbG];
     const names = [...cfg.home, ...cfg.away].map(r => r[1]);
     const reduced = REDUCED();
     const fx = { mood: "idle", t: 0, banner: null, shake: 0 };
@@ -279,8 +290,19 @@ function Match({ game, me, tape = null, onDone, onQuit, onRestart }) {
       if (dt > 0.25) dt = 0.25;
       const inp = input.sample();
       if (inp.pad !== undefined) setPad(p => (p === inp.pad ? p : inp.pad));
-      if (inp.start && !ended) togglePause();
       const press = inp.mask & ~prevMask; prevMask = inp.mask;
+      if (guideRef.current) { if (inp.start || press & BTN.A) dismissGuide(); }
+      else if (inp.start && !ended) togglePause();
+      // the first-run tips: shown while the thing is in front of him, marked used when it passes or he acts
+      if (!tape && !pausedRef.current) {
+        const T = tipRef.current; if (!T.seen) T.seen = tipsSeen();
+        const cx0 = contextOf(st), C = st.carrier >= 0 ? st.p[st.carrier] : null;
+        const close = cx0 === "run" && C && st.p.some(D => D.t === 1 && D.down <= 0 && Math.abs(D.x - C.x) < 3.2 && Math.abs(D.y - C.y) < 3.2 && D.x >= C.x - 0.5);
+        const want = tipFor(cx0, st.poss === 0, close, modeRef.current, padRef.current);
+        const key = want && !T.seen.has(want[0]) ? want[0] : null;
+        if (T.shown && T.shown !== key) { markTip(T.seen, T.shown); setTip(t => ({ ...t, gone: true })); T.shown = null; }
+        if (key && key !== T.shown) { T.shown = key; setTip({ text: want[1], gone: false }); }
+      }
       if (!tape && !pausedRef.current && contextOf(st) === "call") navRef.current?.(press);
       if (!pausedRef.current && !(import.meta.env?.DEV && window.__hviFootballFreeze)) {   // the freeze: a dev hook for screenshots
         acc += dt;
@@ -337,6 +359,7 @@ function Match({ game, me, tape = null, onDone, onQuit, onRestart }) {
 
   // a tap on a receiver throws to him (hold for a lob)
   const tapBit = useRef(0);
+  useEffect(() => { if (lookRef.current) lookRef.current.lefty = lefty; }, [lefty]);
   const onCanvasDown = (e) => {
     const st = stRef.current; if (!st || tape) return;
     SFX.unlock();
@@ -376,23 +399,26 @@ function Match({ game, me, tape = null, onDone, onQuit, onRestart }) {
       <div className="fb-stage" ref={wrapRef}>
         <div className="fb-screen" style={{ width: W * scale, height: H * scale }}>
           <canvas ref={canvasRef} width={W} height={H} style={{ width: W * scale, height: H * scale }} role="img" aria-label={`Football: ${teams[0]} against ${teams[1]}`} onPointerDown={onCanvasDown} onPointerUp={onCanvasUp} onPointerCancel={onCanvasUp} />
+          {guide && !tape && <div className="fb-guidewrap"><ControlsGuide mode={mode} family={pad} onDone={dismissGuide} /></div>}
           {tape && <div className="fb-tape">THE TAPE // {skipping ? "TO THE END" : "2X"}</div>}
           {!tape && hud?.call && !paused && <PlayCall info={hud.call} onCall={sendCall} navRef={navRef} mode={mode} family={pad} />}
         </div>
       </div>
+      {!tape && !guide && <p className={`fb-tip${tip.gone || !tip.text ? " gone" : ""}`} role="status">{tip.text || " "}</p>}
       {!tape && hud?.ctl && hud.cx !== "call" && <p className="fb-ctl">YOU: <b>{hud.ctl}</b> {hud.off ? "// ON OFFENCE" : "// ON DEFENCE"}</p>}
       {touch && !tape && <TouchPad input={inputRef} cx={hud?.cx} onStart={() => togglePause()} />}
       {!tape && <Legend mode={mode} family={pad} open={legendOpen} onToggle={toggleLegend} />}
       <ButtonRow>
         <Button onClick={() => togglePause()}>{paused ? "Resume" : "Pause"}</Button>
         <Button onClick={toggleMute}>{muted ? "Sound on" : "Mute"}</Button>
+        {!tape && <Button onClick={() => setLefty(v => { writeFlag(LEFTY_KEY, !v); return !v; })}>{lefty ? "QB: lefty" : "QB: righty"}</Button>}
         {tape && <Button onClick={() => { skipRef.current = true; setSkipping(true); }}>Skip to the end</Button>}
         <Button variant="back" onClick={onQuit}>{tape ? "Stop the tape" : "Leave the stadium"}</Button>
       </ButtonRow>
       <p className="fb-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{NOTICE}</p>
       {paused && !tape && (
         <GameMenu key="pause" kind="pause" title="PAUSED." summary={hud ? `${shorts[L]} ${hud.score[L]}, ${shorts[Rr]} ${hud.score[Rr]} // ${hud.period} ${hud.clock}` : ""} onBack={() => togglePause(false)}
-          options={{ resume: () => togglePause(false), restart: onRestart ? { label: "RESTART THE GAME", onSelect: onRestart } : null, controls: <Legend mode={mode} family={pad} inMenu />, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "LEAVE THE STADIUM", onSelect: onQuit } }} />
+          options={{ resume: () => togglePause(false), restart: onRestart ? { label: "RESTART THE GAME", onSelect: onRestart } : null, controls: <ControlsGuide mode={mode} family={pad} compact />, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "LEAVE THE STADIUM", onSelect: onQuit } }} />
       )}
     </div>
   );

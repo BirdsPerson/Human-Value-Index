@@ -13,7 +13,7 @@ import { CAM_NAMES } from "./render.js";
 // and right turn a setting; the keyboard the same with arrows, Enter, Escape; every row is a real
 // button for a mouse or a thumb. The focused row is inverse video, as every menu here.
 
-export const DIFFS = [["rookie", "ROOKIE", "A BIGGER CATCH RADIUS, STEADIER THROWS, SLOWER CPU READS, OPEN LANES SHOWN; YOUR RUNNER RUNS ON HIS OWN WHEN YOU LET GO."], ["pro", "PRO", "EVERYONE PLAYS AS RATED."], ["allpro", "ALL-PRO", "THE CPU READS FASTER, COVERS TIGHTER, TACKLES SURER AND THROWS TRUER."]];
+export const DIFFS = [["rookie", "ROOKIE", "A BIGGER CATCH RADIUS, STEADIER THROWS, SLOWER CPU READS, OPEN LANES SHOWN; YOUR RUNNER RUNS ON HIS OWN WHEN YOU LET GO."], ["pro", "PRO", "A FAIR GAME: THE CPU IS A TOUCH SLOWER TO REACT AND A TOUCH WILDER ON ITS THROWS."], ["allpro", "ALL-PRO", "THE CPU READS FASTER, COVERS TIGHTER, TACKLES SURER AND THROWS TRUER."]];
 export const DIFF_IDS = DIFFS.map(d => d[0]);
 const CAM_IDS = Object.keys(CAM_NAMES);
 
