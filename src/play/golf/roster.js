@@ -35,8 +35,11 @@ export const HINTS = {
 };
 // A file sprite whose prop crosses the head: the head's own box, [x, y, w, h] (looks.js headFrom).
 export const CROPS = { "babe-ruth": [10, 1, 10, 12] };
+// Who plays left-handed (the public record): Mickelson (a right-hander who golfs left), Ruth (left
+// in everything). Everyone else on file plays right.
+export const HANDS = { "phil-mickelson": "L", "babe-ruth": "L" };
 const BUNDLED = new Set(["jfk", "babe-ruth"]);
 export const golfers = () => GOLFERS.map(([slug, name, rating, shirt, pants, why]) => ({
-  slug, name, rating, shirt, pants, why, hint: HINTS[slug] || null, crop: CROPS[slug] || null, sprite: BUNDLED.has(slug) ? `/sprites/${slug}.png` : `/api/sprite/${slug}`,
+  slug, name, rating, shirt, pants, why, hand: HANDS[slug] || "R", hint: HINTS[slug] || null, crop: CROPS[slug] || null, sprite: BUNDLED.has(slug) ? `/sprites/${slug}.png` : `/api/sprite/${slug}`,
 }));
 export const golferBySlug = (slug) => golfers().find(g => g.slug === slug) || null;

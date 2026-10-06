@@ -18,10 +18,12 @@ export const holderName = (caseId) => `SUBJECT ${String(caseId).replace(/[^A-Za-
 
 // ---- the locked setup -------------------------------------------------------------------------------
 // golf: the round's cfg (src/play/golf/sim.js newRound) for leg 0. The player's name and colours draw
-// the golfer only; the sim's result does not read them.
-export function golfCfg(ev, div, player = null) {
+// the golfer only; the sim's result does not read them. opts.hand "L": a left-hander (the meter's early
+// press hooks the other way, so the hand is part of the setup the server re-plays; sent as the
+// submission's opts, like a bowler's ball).
+export function golfCfg(ev, div, player = null, opts = {}) {
   const c = ev.cond;
-  return { seed: seedOf(ev.id, 0), course: c.course, mode: "stroke", start: c.start, count: c.count, ...(div === "assisted" ? { easy: true, assist: 2 } : {}), player: player || { name: "SUBJECT" }, cpu: null };
+  return { seed: seedOf(ev.id, 0), course: c.course, mode: "stroke", start: c.start, count: c.count, ...(div === "assisted" ? { easy: true, assist: 2 } : {}), ...(opts?.hand === "L" ? { hand: "L" } : {}), player: player || { name: "SUBJECT" }, cpu: null };
 }
 // bowling: one game's cfg (src/play/bowling/sim.js newGame): the event's seed for the leg (the oil and
 // the rack), the foul line on, one bowler. The ball's weight and the hand are the bowler's own;

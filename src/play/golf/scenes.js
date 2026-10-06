@@ -18,12 +18,13 @@ import { drawText, textWidth, wrap } from "./font.js";
 import { spectator } from "./render.js";
 
 export const SCENES = ["champagne", "nineteenth", "alone", "snap", "goose"];
+// One light line each (2026-10-06: the satire takes a break in the sports games; a wink, no more)
 export const CAPTION = {
-  champagne: "ROUND FILED. THE CHAMPAGNE HAS BEEN EXPENSED. THE BELL WAS RUNG ONCE, AS PERMITTED.",
-  nineteenth: "ROUND FILED. THE HOT DOG HAS BEEN LOGGED AS A MEAL.",
-  alone: "ROUND FILED. THE BARTENDER HAS SEEN THIS BEFORE. THE BEER HAS NOT BEEN TOUCHED.",
-  snap: "ROUND FILED. ONE CLUB AND ONE BAG REPORTED LOST. THE CADDIE HAS RESIGNED.",
-  goose: "ROUND FILED. A GOOSE HAS TAKEN THE HOT DOG. THE GOOSE IS NOT UNDER REVIEW.",
+  champagne: "UNDER PAR. THE BELL GETS RUNG, AND THE FIRST ROUND IS ON YOU.",
+  nineteenth: "ABOUT PAR. A BEER, A HOT DOG, AND NOBODY MENTIONS THE SEVENTH.",
+  alone: "A LONG DAY. THE BARTENDER HAS SEEN WORSE. NOT THIS WEEK, BUT WORSE.",
+  snap: "ONE CLUB, ONE BAG, ONE CADDIE GONE. THE POND IS KEEPING THE FIRST TWO.",
+  goose: "A GOOSE HAS YOUR HOT DOG. THE GOOSE IS NOT SORRY.",
 };
 // What the gallery does (Golf.jsx plays it): a sound per scene, at a frame
 export const SCENE_SOUND = { champagne: [["bell", 70], ["roar", 90]], nineteenth: [["thin", 40]], alone: [["crickets", 30]], snap: [["crickets", 60]], goose: [["ooh", 150]] };
@@ -275,5 +276,5 @@ export function drawEnd(ctx, st, frame, looks, opts, K) {
   K.scorecard(ctx, st, "FINAL CARD // EXHIBITION");
   wrap(st.result?.line || "", 50).slice(0, 2).forEach((l, i) => drawText(ctx, l, 30, 154 + i * 10, K.PAL.gold));
   wrap(CAPTION[kind], 50).slice(0, 2).forEach((l, i) => drawText(ctx, l, 30, 180 + i * 10, K.PAL.grey));
-  drawText(ctx, "THE DEPARTMENT COUNTS IT ANYWAY.", 30, 206, K.PAL.dgrey);
+  drawText(ctx, "EXHIBITION. THE CARD STAYS IN THIS BROWSER.", 30, 206, K.PAL.dgrey);
 }

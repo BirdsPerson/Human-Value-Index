@@ -341,17 +341,26 @@ export function solveShot(h, P, club, tx, ty, wind, read = 1) {
 
 // ---- a new round -------------------------------------------------------------------------------
 // cfg: {seed, course: "links" (default) | "open", mode: "stroke" | "match", start (0 or 9), count (9 or 18), player: {name, color},
-//       cpu: {slug, name, rating, color} | null, easy, v (sim version; this module plays 2)}
+//       cpu: {slug, name, rating, color, hand} | null, easy, hand ("L": the player is left-handed; absent is right),
+//       v (sim version; this module plays 3)}
+// HANDEDNESS (2026-10-06, Scott: "I'm LEFT-HANDED"): P.hand is +1 (right) or -1 (left). The ball's
+// physics are the ball's: a positive line (a, sx) curves the ball to the RIGHT whoever hit it. What
+// mirrors is the player: the meter's early press hooks (curves AWAY from the player's trail side)
+// and the late one slices, for either hand (strike), the stance and the sprite (render.js), and
+// the words for a curve (gesture.js lineWord / pathWord). A drag or stick stroke's drift is kept
+// as it was read (right drift, right curve) because that is what a mirrored swing does too; its
+// name changes with the hand. cfg.hand is in the record, so old rounds (no hand) replay unchanged.
+export const handOf = (h) => (h === "L" || h === -1 || h === "left" ? -1 : 1);
 export function newRound(cfg) {
   const count = cfg.count === 9 ? 9 : 18, start = count === 9 && cfg.start === 9 ? 9 : 0;
   const seed = (cfg.seed >>> 0) || 1;
   const course = cfg.course === "open" ? "open" : "links";
-  const mk = (p, kind) => ({ name: String(p?.name || "SUBJECT").toUpperCase().slice(0, 18), kind, slug: p?.slug || null, rating: kind === "cpu" ? Math.max(0, Math.min(99, p.rating | 0)) : null, color: p?.color || null, card: [], x: 0, y: 0, lie: "tee", strokes: 0, holed: false, prev: null, plug: false, putts: 0 });
+  const mk = (p, kind) => ({ name: String(p?.name || "SUBJECT").toUpperCase().slice(0, 18), kind, slug: p?.slug || null, rating: kind === "cpu" ? Math.max(0, Math.min(99, p.rating | 0)) : null, color: p?.color || null, hand: handOf(kind === "human" ? cfg.hand : p?.hand), card: [], x: 0, y: 0, lie: "tee", strokes: 0, holed: false, prev: null, plug: false, putts: 0 });
   const players = [mk(cfg.player, "human")];
   const mode = cfg.mode === "match" && cfg.cpu ? "match" : "stroke";
   if (mode === "match") players.push(mk(cfg.cpu, "cpu"));
   const st = {
-    v: VERSION, cfg: { v: VERSION, seed, course, mode, start, count, player: cfg.player || null, cpu: mode === "match" ? cfg.cpu : null, ...(cfg.easy ? { easy: true } : {}), ...(cfg.easy && cfg.assist === 2 ? { assist: 2 } : {}) },
+    v: VERSION, cfg: { v: VERSION, seed, course, mode, start, count, player: cfg.player || null, cpu: mode === "match" ? cfg.cpu : null, ...(cfg.easy ? { easy: true } : {}), ...(cfg.easy && cfg.assist === 2 ? { assist: 2 } : {}), ...(handOf(cfg.hand) < 0 ? { hand: "L" } : {}) },
     rng: fnv(`golf|${seed}`), mode, course, holes: Array.from({ length: count }, (_, i) => start + i), hi: 0,
     players, cur: 0, honor: players.map((_, i) => i), phase: "intro", t: 0, tick: 0, prev: 0, hold: 0,
     aim: 0, aimTo: null, target: null, club: 0, meter: null, fl: null, ball: null, wind: null, msg: "", tone: "", ev: [], plan: null, result: null, shot: null,
@@ -540,9 +549,10 @@ function beginMeter(st) {
 // The meter's reading (or the mouse's stroke, fx) -> the shot.
 function strike(st, fx = null) {
   const P = st.players[st.cur], h = holeOf(st), c = CLUBS[st.club], m = st.meter;
-  // early (marker above the line): a < 0, a hook. EASY SWING keeps two fifths of the miss.
+  // early (marker above the line): a hook, the ball curving away from the player's trail side (left
+  // for a right-hander, right for a left-hander). EASY SWING keeps a share of the miss.
   const E = easeOf(st, P);
-  const a = c.putt ? 0 : Math.max(-E.cap, Math.min(E.cap, (fx ? fx.a : -m.acc / ACC_ZONE) * E.miss));
+  const a = c.putt ? 0 : Math.max(-E.cap, Math.min(E.cap, (fx ? fx.a : (-m.acc / ACC_ZONE) * (P.hand || 1)) * E.miss));
   if (fx) fx = { contact: fx.contact * E.contact, sx: fx.sx, sy: fx.sy };
   P.prev = { x: P.x, y: P.y, lie: P.lie };
   P.strokes++;
@@ -595,17 +605,23 @@ function roll(st) {
   if (r === "cup") return holed(st, h.pin.x, h.pin.y);
   if (r === "rest" || st.t > HZ * 30) rest(st, b.x, b.y, b.plug);   // never rolls forever
 }
-const LIE_MSG = { fairway: ["FAIRWAY.", "ACCEPTABLE."], rough: ["ROUGH.", "NOTED ON YOUR FILE."], bunker: ["BUNKER.", "SAND. AS PREDICTED."], trees: ["TREES.", "THE TREES WERE DISCLOSED."], green: ["ON THE GREEN.", "COMPLIANT."], fringe: ["FRINGE.", "NEARLY COMPLIANT."], tee: ["STILL ON THE TEE.", "THE DEPARTMENT SAW THAT."], waste: ["WASTE AREA.", "THE DEPARTMENT DID NOT WASTE IT."], path: ["THE ROAD.", "IT IS IN PLAY. SO ARE YOU."] };
+// The shot's result, in golf's own words (2026-10-06, Scott: give the satire a break inside the
+// sports games): the lie and what is left to the pin.
+const LIE_MSG = { fairway: "FAIRWAY.", rough: "IN THE ROUGH.", bunker: "IN THE BUNKER.", trees: "IN THE TREES.", green: "ON THE GREEN.", fringe: "ON THE FRINGE.", tee: "STILL ON THE TEE.", waste: "WASTE AREA.", path: "ON THE ROAD. IT'S IN PLAY." };
+// yards to the pin as a caddie says it: feet inside 30 yards
+export const leftWords = (d) => (d < 30 ? `${Math.round(d * 3)} FT` : `${Math.round(d)} YDS`);
 function rest(st, x, y, plug) {
   const P = st.players[st.cur], h = holeOf(st);
   P.x = Math.round(x * 100) / 100; P.y = Math.round(y * 100) / 100;
   P.lie = surfaceAt(h, P.x, P.y);
   P.plug = Boolean(plug) && P.lie === "bunker";
   st.ball = { x: P.x, y: P.y, z: 0 };
-  const m = LIE_MSG[P.lie] || ["", ""];
-  st.msg = st.fl?.putt && P.lie === "green" ? (Math.hypot(h.pin.x - P.x, h.pin.y - P.y) < 1 ? "TAP-IN. THE DEPARTMENT WAITS." : "MISSED. NOTED.") : P.plug ? "PLUGGED. THE SAND HAS FILED A CLAIM." : `${m[0]} ${m[1]}`;
+  const pin = Math.hypot(h.pin.x - P.x, h.pin.y - P.y), left = leftWords(pin);
+  if (st.fl?.putt) st.msg = pin < 1 ? "TAP-IN." : `MISSED. ${left} LEFT.`;
+  else if (P.plug) st.msg = `PLUGGED IN THE SAND. ${left} TO THE PIN.`;
+  else st.msg = `${LIE_MSG[P.lie] || ""} ${left} TO THE PIN.`.trim();
   st.tone = P.lie === "bunker" || P.lie === "trees" ? "warn" : "";
-  if (P.strokes >= MAX_STROKES) { P.holed = true; P.strokes = MAX_STROKES; st.msg = "PICKED UP. THE DEPARTMENT HAS SEEN ENOUGH."; st.tone = "harm"; }
+  if (P.strokes >= MAX_STROKES) { P.holed = true; P.strokes = MAX_STROKES; st.msg = "PICKED UP. TEN IS THE LIMIT."; st.tone = "harm"; }
   st.phase = "rest"; st.t = 0;
 }
 function penalty(st, kind, x, y) {
@@ -615,7 +631,7 @@ function penalty(st, kind, x, y) {
   if (st.shot) st.shot.splash = true;
   if (kind === "ob") {
     P.x = P.prev.x; P.y = P.prev.y; P.lie = P.prev.lie;
-    st.msg = "OUT OF BOUNDS. +1. PLAY IT AGAIN.";
+    st.msg = "OUT OF BOUNDS. ONE-STROKE PENALTY. PLAY IT AGAIN.";
   } else {
     // a drop where it went in: back along the line it came in on until dry
     const ox = st.fl.ox, oy = st.fl.oy, d = Math.hypot(x - ox, y - oy) || 1;
@@ -626,15 +642,15 @@ function penalty(st, kind, x, y) {
     if (s === "ob" || s === "water") { px = P.prev.x; py = P.prev.y; }
     P.x = Math.round(px * 100) / 100; P.y = Math.round(py * 100) / 100;
     P.lie = surfaceAt(h, P.x, P.y);
-    st.msg = "IN THE WATER. +1. THE WATER WAS DISCLOSED.";
+    st.msg = "IN THE WATER. ONE-STROKE PENALTY. DROP.";
   }
   P.plug = false;
   st.tone = "harm";
   st.ball = { x: P.x, y: P.y, z: 0 };
-  if (P.strokes >= MAX_STROKES) { P.holed = true; P.strokes = MAX_STROKES; st.msg = "PICKED UP. THE DEPARTMENT HAS SEEN ENOUGH."; }
+  if (P.strokes >= MAX_STROKES) { P.holed = true; P.strokes = MAX_STROKES; st.msg = "PICKED UP. TEN IS THE LIMIT."; }
   st.phase = "rest"; st.t = 0;
 }
-export const SCORE_NAME = (d, strokes) => strokes === 1 ? "HOLE IN ONE. AN AUDIT IS OPEN." : d <= -3 ? "ALBATROSS. UNDER REVIEW." : d === -2 ? "EAGLE. UNDER REVIEW." : d === -1 ? "BIRDIE. SUSPICIOUS." : d === 0 ? "PAR. COMPLIANT." : d === 1 ? "BOGEY. EXPECTED." : d === 2 ? "DOUBLE BOGEY. FILED." : `+${d}. FILED WITHOUT COMMENT.`;
+export const SCORE_NAME = (d, strokes) => strokes === 1 ? "HOLE IN ONE!" : d <= -3 ? "ALBATROSS!" : d === -2 ? "EAGLE!" : d === -1 ? "BIRDIE." : d === 0 ? "PAR." : d === 1 ? "BOGEY." : d === 2 ? "DOUBLE BOGEY." : d === 3 ? "TRIPLE BOGEY." : `${d} OVER.`;
 function holed(st, x, y) {
   const P = st.players[st.cur], h = holeOf(st);
   P.x = x; P.y = y; P.holed = true; P.lie = "green";
@@ -680,8 +696,8 @@ function finish(st) {
   if (st.mode === "match") {
     winner = c.won[0] > c.won[1] ? 0 : c.won[1] > c.won[0] ? 1 : null;
     const m = Math.abs(c.won[0] - c.won[1]);
-    line = winner == null ? "MATCH HALVED. NOBODY IS PROMOTED." : `${st.players[winner].name} WINS THE MATCH ${m} UP. EXHIBITION: IT COUNTS FOR NOTHING.`;
-  } else line = `${toParText(c.toPar[0])} OVER ${c.played} HOLES. EXHIBITION: IT COUNTS FOR NOTHING.`;
+    line = winner == null ? "MATCH HALVED." : `${st.players[winner].name} WINS THE MATCH, ${m} UP.`;
+  } else line = `${toParText(c.toPar[0])} OVER ${c.played} HOLES.`;
   st.result = { v: VERSION, mode: st.mode, holes: c.rows.map(r => ({ n: r.n, par: r.par, s: r.s })), total: c.total, par: c.par, toPar: c.toPar, won: c.won, halved: c.halved, winner, line, ticks: st.tick };
   st.phase = "done"; st.t = 0;
   st.ev.push("done");

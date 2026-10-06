@@ -3,11 +3,14 @@
 // render-only.
 //
 // Kept simple on purpose (Scott: "keep it simple"): a classic 16-bit sprite at the scene's own
-// scale, six key poses for a full swing (ADDRESS, HALF BACK, TOP, IMPACT, THROUGH, FINISH) and
-// three for the putter (ADDRESS, BACK, THROUGH), each a handful of joints in sprite pixels drawn
-// with flat two-tone limbs and a dark outline. The meter (or the mouse's drag, or the stick) picks
-// the backswing frame; the downswing plays on the shot's own clock. The club is a dark-outlined
-// light shaft so it reads against the grass. The head is the player's own (looks.js / heads.js).
+// scale, drawn from a handful of joints in sprite pixels as flat two-tone limbs with one dark
+// outline. Ten key poses for a full swing (ADDRESS and its waggle, HALF BACK, THREE-QUARTER BACK,
+// TOP, DOWN, IMPACT, RELEASE, THROUGH, FINISH) and four for the putter (ADDRESS, a short and a
+// long BACK, THROUGH). The meter (or the mouse's drag, or the stick) picks the backswing frame and
+// the downswing's; after contact the follow-through plays on the shot's own clock. The club is a
+// dark-outlined light shaft so it reads against the grass. The head is the player's own
+// (looks.js / heads.js). 2026-10-06: one notch up in our own style: broader shoulders on a
+// narrower waist, a far arm, a collar, shoes with soles, a real clubhead, more frames.
 
 export const GW = 60, GH = 80;                 // the sprite buffer; the feet sit on its bottom rows
 const OUT = "#120c14";
@@ -21,29 +24,37 @@ export const FEET = [20, 78];
 const J = (o) => o;
 export const POSES = {
   address: J({ h: [34, 22], s: [29, 31], p: [18, 49], k1: [24, 62], k2: [21, 63], f1: [22, 77], f2: [17, 78], w: [33, 52], c: [47, 77] }),
+  waggle: J({ h: [34, 22], s: [29, 31], p: [18, 49], k1: [24, 62], k2: [21, 63], f1: [22, 77], f2: [17, 78], w: [33, 51], c: [49, 75] }),
   half: J({ h: [33, 22], s: [28, 31], p: [18, 49], k1: [25, 62], k2: [21, 63], f1: [22, 77], f2: [17, 78], w: [25, 46], c: [8, 37] }),
+  back: J({ h: [33, 22], s: [27, 31], p: [18, 49], k1: [25, 62], k2: [20, 63], f1: [22, 77], f2: [17, 78], w: [21, 30], c: [3, 22] }),
   top: J({ h: [32, 22], s: [27, 31], p: [18, 49], k1: [25, 62], k2: [20, 63], f1: [22, 77], f2: [17, 78], w: [22, 14], c: [6, 26] }),
+  down: J({ h: [33, 23], s: [28, 32], p: [19, 49], k1: [25, 62], k2: [22, 63], f1: [22, 77], f2: [17, 78], w: [27, 38], c: [13, 57] }),
   impact: J({ h: [33, 23], s: [29, 32], p: [20, 49], k1: [25, 62], k2: [24, 63], f1: [22, 77], f2: [17, 78], w: [35, 52], c: [47, 77] }),
+  release: J({ h: [32, 22], s: [29, 31], p: [21, 48], k1: [25, 62], k2: [25, 64], f1: [22, 77], f2: [18, 77], w: [41, 46], c: [58, 54] }),
   through: J({ h: [31, 20], s: [28, 30], p: [21, 48], k1: [25, 62], k2: [25, 64], f1: [22, 77], f2: [19, 77], w: [41, 34], c: [55, 14] }),
-  finish: J({ h: [26, 13], s: [25, 22], p: [22, 46], k1: [24, 61], k2: [26, 62], f1: [22, 77], f2: [22, 76], w: [31, 10], c: [10, 22] }),
+  finish: J({ h: [27, 15], s: [26, 24], p: [21, 46], k1: [23, 61], k2: [27, 63], f1: [22, 77], f2: [22, 76], w: [20, 12], c: [4, 30] }),
   pAddress: J({ h: [33, 24], s: [28, 33], p: [18, 50], k1: [23, 63], k2: [20, 63], f1: [22, 77], f2: [17, 78], w: [33, 54], c: [41, 77] }),
   pBack: J({ h: [33, 24], s: [28, 33], p: [18, 50], k1: [23, 63], k2: [20, 63], f1: [22, 77], f2: [17, 78], w: [30, 54], c: [35, 76] }),
+  pBack2: J({ h: [33, 24], s: [28, 33], p: [18, 50], k1: [23, 63], k2: [20, 63], f1: [22, 77], f2: [17, 78], w: [27, 54], c: [29, 75] }),
   pThrough: J({ h: [33, 24], s: [28, 33], p: [18, 50], k1: [23, 63], k2: [20, 63], f1: [22, 77], f2: [17, 78], w: [36, 53], c: [47, 75] }),
 };
 
 // The frame for what the sim (or a drag) shows: -> {putt, frame}
-// opts: {putt, m (the meter's marker, 0..1), stage, t (ticks since contact), still}
+// opts: {putt, m (the meter's marker, 0..1), stage, power, t (ticks since contact), still, waggle}
 export function poseOf(phase, opts) {
-  const { putt, m = 0, stage = 1, t = 0, still = false } = opts;
+  const { putt, m = 0, stage = 1, power = 0, t = 0, still = false, waggle = 0 } = opts;
   const after = phase === "flight" || phase === "roll" || phase === "rest";
   if (putt) {
-    if (phase === "meter") return { putt, frame: m < 0.12 ? "pAddress" : "pBack" };
+    if (phase === "meter") return { putt, frame: stage === 2 ? "pAddress" : m < 0.1 ? "pAddress" : m < 0.5 ? "pBack" : "pBack2" };
     if (after) return { putt, frame: !still && t < 3 ? "pAddress" : "pThrough" };
     return { putt, frame: "pAddress" };
   }
-  if (phase === "meter") return { putt, frame: stage === 2 || m >= 0.55 ? "top" : m >= 0.12 ? "half" : "address" };
-  if (after) return { putt, frame: still ? "finish" : t <= 2 ? "impact" : t <= 9 ? "through" : "finish" };
-  return { putt, frame: "address" };
+  if (phase === "meter") {
+    if (stage === 2) return { putt, frame: m > power * 0.55 ? "top" : "down" };
+    return { putt, frame: m >= 0.68 ? "top" : m >= 0.38 ? "back" : m >= 0.12 ? "half" : "address" };
+  }
+  if (after) return { putt, frame: still ? "finish" : t <= 1 ? "impact" : t <= 4 ? "release" : t <= 9 ? "through" : "finish" };
+  return { putt, frame: waggle > 0.3 ? "waggle" : "address" };
 }
 
 // ---- the rasteriser: flat two-tone capsules, then one dark outline round everything ---------------
@@ -67,6 +78,11 @@ function limb(d, a, b, r, base, lit) {
     if (ox * ox + oy * oy > r * r) continue;
     put(d, x, y, lit && (ox + oy) < -r * 0.35 ? lit : base);
   }
+}
+// a limb that tapers from ra at a to rb at b
+function taper(d, a, b, ra, rb, base, lit) {
+  const n = Math.max(2, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1])));
+  for (let i = 0; i <= n; i++) { const t = i / n, q = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; limb(d, q, q, ra + (rb - ra) * t, base, lit); }
 }
 function seg(d, a, b, col) {
   let x0 = Math.round(a[0]), y0 = Math.round(a[1]);
@@ -99,27 +115,43 @@ export function golferCanvas(pose, look = {}) {
   const J0 = POSES[pose.frame] || POSES.address, d = new Uint8ClampedArray(GW * GH * 4);
   const shirt = look.shirt || "#3cbcfc", pants = look.pants || "#7c7c7c", skin = look.skin || "#e8a070", hair = look.hair || "#503000", cap = look.cap || "#fcfcfc", glove = look.glove || "#fcfcfc";
   const { h, s, p, k1, k2, f1, f2, w, c } = J0;
-  // legs: the trail leg behind, then the lead; white shoes
-  limb(d, p, k2, 3.2, sh(pants, 0.72)); limb(d, k2, f2, 2.8, sh(pants, 0.72));
-  limb(d, p, k1, 3.4, pants, sh(pants, 1.2)); limb(d, k1, f1, 3, pants, sh(pants, 1.2));
-  limb(d, f2, [f2[0] + 4, f2[1]], 1.6, "#c8c8cc"); limb(d, f1, [f1[0] + 4, f1[1]], 1.7, "#fcfcfc");
-  // the trunk: the polo's back, a belt
-  limb(d, p, s, 6, shirt, sh(shirt, 1.25));
-  seg(d, mid(p, s, 0.12, -5, 0), mid(p, s, 0.12, 5, 0), "#24202a");
-  // the club under the arms: a dark-cored light shaft, a head
+  const shirtD = sh(shirt, 0.7), shirtL = sh(shirt, 1.25), pantsD = sh(pants, 0.72), pantsL = sh(pants, 1.2);
+  const finish = pose.frame === "finish", clubUp = c[1] < w[1];
+  // the far arm (the left, for a right-hander): behind everything, a darker sleeve from the far
+  // shoulder to the hands
+  const fs = [s[0] - 4, s[1] + 1];
+  limb(d, fs, mid(fs, w, 0.5, -1, 1), 2.2, shirtD); limb(d, mid(fs, w, 0.5, -1, 1), w, 1.8, sh(skin, 0.8));
+  // legs: the trail leg behind, then the lead; a tapered thigh, a shin, shoes with soles
+  taper(d, p, k2, 3.4, 2.8, pantsD); limb(d, k2, f2, 2.6, pantsD);
+  taper(d, p, k1, 3.6, 3, pants, pantsL); limb(d, k1, f1, 2.8, pants, pantsL);
+  limb(d, [f2[0] - 1, f2[1]], [f2[0] + 4, f2[1]], 1.6, "#c8c8cc"); put(d, f2[0] + 4, f2[1] + 1, "#6c6c74"); put(d, f2[0] + 2, f2[1] + 1, "#6c6c74");
+  limb(d, [f1[0] - 1, f1[1]], [f1[0] + 4, f1[1]], 1.7, "#fcfcfc"); put(d, f1[0] + 4, f1[1] + 1, "#8c8c94"); put(d, f1[0] + 1, f1[1] + 1, "#8c8c94");
+  // the trunk: narrower at the waist, broader through the shoulders; a belt; a collar
+  taper(d, p, mid(p, s, 0.55), 5.2, 6, shirt, shirtL);
+  taper(d, mid(p, s, 0.55), s, 6, 6.6, shirt, shirtL);
+  seg(d, mid(p, s, 0.1, -5, 0), mid(p, s, 0.1, 5, 0), "#24202a"); put(d, mid(p, s, 0.1, 1, 0)[0], mid(p, s, 0.1, 1, 0)[1], "#c8a850");
+  limb(d, [s[0], s[1] - 4], [s[0], s[1] - 4], 2.4, shirtL); put(d, s[0], s[1] - 5, skin);
+  // the club behind the arms when it is up (the top, the finish), under them otherwise
   const grip = mid(w, c, 0.14);
-  seg(d, w, grip, "#202024"); seg(d, grip, c, "#e0e4ec");
-  limb(d, c, [c[0] + (pose.putt ? 2 : 3), c[1] - (pose.putt ? 0 : 1)], pose.putt ? 1.3 : 1.7, "#50505c", "#a0a4b0");
-  // the arms, shoulder to hands: sleeve then forearm, a glove on the hands
+  const drawClub = () => {
+    seg(d, w, grip, "#202024"); seg(d, grip, c, "#e0e4ec");
+    if (pose.putt) { limb(d, [c[0] - 1, c[1]], [c[0] + 3, c[1]], 1.3, "#50505c", "#a0a4b0"); }
+    else if (clubUp) { limb(d, c, [c[0] - 2, c[1] - 1], 1.6, "#3c3c48", "#8c90a0"); }
+    else { limb(d, c, [c[0] + 3, c[1] - 1], 1.9, "#3c3c48", "#8c90a0"); put(d, c[0] + 1, c[1] - 2, "#c0c4d0"); }
+  };
+  if (clubUp && !finish) drawClub();
+  // the near arm, shoulder to hands: sleeve then forearm, a glove on the hands
   const e = mid(s, w, 0.48, 1, 1);
-  limb(d, s, e, 2.6, shirt, sh(shirt, 1.25)); limb(d, e, w, 2, skin);
-  limb(d, w, w, 2, glove);
-  // the head: hair, then the cap, its brim toward where he looks
+  limb(d, s, e, 2.7, shirt, shirtL); limb(d, e, w, 2, skin, sh(skin, 1.12));
+  limb(d, w, w, 2.1, glove); put(d, w[0] + 1, w[1] + 1, sh(glove, 0.8));
+  if (!clubUp || finish) drawClub();
+  // the head: hair, then the cap with its bill toward where he looks (round to the target at the finish)
   limb(d, h, h, 5, hair, sh(hair, 1.25));
   limb(d, [h[0], h[1] - 3], [h[0], h[1] - 3], 4.4, cap, sh(cap, 1.1));
-  const brim = pose.frame === "finish" ? [h[0] + 1, h[1] - 6] : [h[0] + 6, h[1] - 2];
-  seg(d, [h[0] + 1, h[1] - 2], brim, sh(cap, 0.75));
+  const bill = finish ? [h[0] - 1, h[1] - 6] : [h[0] + 7, h[1] - 2];
+  seg(d, [h[0] + 1, h[1] - 2], bill, sh(cap, 0.75)); seg(d, [h[0] + 1, h[1] - 3], [bill[0], bill[1] - 1], sh(cap, 0.9));
   put(d, h[0] + 4, h[1] + 1, skin);   // an ear
+  put(d, h[0] + 4, h[1] + 2, sh(skin, 0.85));
   outline(d);
   const cv = document.createElement("canvas");
   cv.width = GW; cv.height = GH;
@@ -133,7 +165,7 @@ export function golferCanvas(pose, look = {}) {
     g.imageSmoothingEnabled = false;
     g.drawImage(hd, Math.round(h[0] - hw / 2), Math.round(h[1] + 5 - hh), hw, hh);
   }
-  if (CACHE.size > 120) CACHE.delete(CACHE.keys().next().value);
+  if (CACHE.size > 160) CACHE.delete(CACHE.keys().next().value);
   CACHE.set(key, cv);
   return cv;
 }

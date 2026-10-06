@@ -2495,6 +2495,57 @@ or any score.
   they replay. check-golf plays a casual first-timer (keys, a fifth of the wind read, ~100 ms timing
   sd, putts within 25% pace) over the Open's front nine: about +8 on easy (bogey golf), about +29
   without.
+- **Golf polish, 2026-10-06** (Scott, after his first rounds: the stick "could be a little better",
+  the graphics "slightly better", the satire "a little too overboard sometimes"; and "I'm
+  LEFT-HANDED"):
+  - **The right stick, read properly** (`gesture.js stickReader / stickRead`): the pad's own
+    outer ring learned from the furthest push (a round gate that stops at 0.9 and a square gate's
+    1.4 diagonal both read as 1.0), a radial 0.12 dead zone rescaled from its edge, and the
+    one-euro filter (1.5 Hz at rest, opening with speed) in place of a fixed average: a still
+    thumb's jitter comes through at a fifth, a push with under a frame's lag. `stickSwing`: full
+    power at 0.82 of the ring (`STICK_FULL`, a natural pull, no slamming) on a gentle curve
+    (`stickPower`), tempo counted from the moment the stick leaves the bottom (resting at the top
+    of the backswing is not a slow push; band 35-230 ms, EASY 20-360), straightness dead zone 0.06
+    (EASY 0.14) and ramp 0.5 (EASY 0.7); the putter's pace on `u^1.3` of 0.9 of the stick, so
+    short putts take more of it. Same compact `["s", ...]` / `["p", ...]` events: no version bump,
+    every round replays.
+  - **The swing path** (`render.js swingPath`, `gesture.js swingTrace`): after every drag or stick
+    stroke a small box above the panel shows the path (backswing grey, push white, the strike a
+    red dot) with the verdict, STRAIGHT / PULLED / PUSHED and GOOD TEMPO / TOO SLOW / TOO FAST
+    (a putt: its pace), for five seconds. Render-only; nothing reaches the sim.
+  - **Practice swings**: Y (triangle) on a pad, or P: every swing is read and traced, none is
+    played or logged, until pressed again. The hint line says so.
+  - **LEFT-HANDED** (the course screen, remembered in `hvi-golf-hand`; else a profile `hand` if
+    the file ever carries one; default right): `cfg.hand = "L"` is in the record, so old rounds
+    (no hand) replay unchanged. The sprite is mirrored and stands on the other side of the ball
+    (the camera sits behind his back), the meter's early press still hooks and the late one
+    slices, the way a lefty's do (`strike` flips the sign by `P.hand`); a drag or stick path
+    that drifts right still curves the ball right (what a mirrored swing does), and the words
+    follow the hand (`lineWord`, `pathWord`: a lefty drifting right has PULLED it). Figures'
+    hands from the record (`roster.js HANDS`: Mickelson, Ruth play left). Tournament rounds carry
+    the hand in `golfCfg(ev, div, player, {hand})` and file it as the submission's `opts.hand`;
+    the server re-plays with it (`tournament-verify.js`), as a bowler's ball travels.
+  - **A notch up in the art, our own**: the golfer has a far arm, broader shoulders on a
+    narrower waist, a collar, shoes with soles, a real clubhead and four more frames (a
+    three-quarter backswing, a downswing on the meter's fall, a release after impact, a waggle
+    at address); two variants each of the pine and the oak, lit from the upper left with bright
+    needle tips and darker clumps; a mown collar round the green and fringe in rings; shallows
+    where water meets land and the far bank's shadow on it; raked sand; a sun with a dithered
+    glow that turns with the hills; birds now and then; the gallery sits while a shot is lined up
+    and stands for the swing; club and flag glyphs in the HUD; the hole card on a dark green
+    backdrop with the hole number and par large and a gold rule. Draw time median 0.4-1.8 ms
+    (320 px, 600 frames of flight and roll, three holes); the floor rebuild is the cost, as before.
+  - **Plain copy inside the game**: the shot's result is the lie and what is left ("FAIRWAY. 142
+    YDS TO THE PIN.", "MISSED. 3 FT LEFT.", "TAP-IN."), scores as golf names them ("BIRDIE.",
+    "DOUBLE BOGEY."), penalties in strokes, "PICKED UP. TEN IS THE LIMIT."; the end captions one
+    light line each; the hole notes keep a wink (two Department lines in eighteen); the pause and
+    end menus plain ("THE ROUND WAITS.", "ROUND OVER."). The setup page keeps the site's voice.
+  - Checks (`check-golf.mjs`): the stick reader (dead zone, ring, square gate, jitter, lag,
+    the power curve), tempo from leaving the bottom, EASY's wider dead zone, the finer putt, the
+    trace and its words, the hand (cfg, the mirrored early press, a path's curve the same for
+    either hand, the words, a lefty round replays, the figures' hands), the tone (no office
+    voice in the sim's messages, the notes, the captions). `check-tournament.mjs`: a
+    left-hander's card verifies with `opts.hand`.
 - **Not yet**: a server that verifies a submitted log; the course in the city map; a replay viewer.
 - **Menus**: the shared `src/play/GameMenu.jsx`. Pause (Enter / Esc / Start / II): RESUME, RESTART,
   CONTROLS (the how-to legend), SOUND, QUIT TO PLAY; the sim and the input log stand still under it.

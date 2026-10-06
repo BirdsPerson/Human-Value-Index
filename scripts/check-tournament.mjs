@@ -90,6 +90,10 @@ const g1 = golfRound(evG, "open");
   ok(!dv.ok, "golf: a doctored log fails the claimed card");
   ok(!V.golf.verify(C.eventById("golf-daily-2026-10-08"), 0, "open", { inputLog: g1.log, claim: g1.claim }).ok, "golf: another event's seed does not verify");
   ok(!V.golf.verify(evG, 0, "assisted", { inputLog: g1.log, claim: g1.claim }).ok, "golf: an OPEN card does not verify as ASSISTED (the assists change the round)");
+  // a left-hander (golf's LEFT-HANDED option, 2026-10-06): the hand rides in the submission's opts and the server re-plays it left-handed
+  const lcfg = { ...R.golfCfg(evG, "open", null, { hand: "L" }), v: GOLF.VERSION }, la = GOLF.autoplay(lcfg), lclaim = { total: la.st.result.total[0], holes: la.st.result.holes.map(h => h.s[0]) };
+  ok(lcfg.hand === "L" && R.golfCfg(evG, "open").hand === undefined, "golf: the hand is in the setup only when the player says left");
+  ok(V.golf.verify(evG, 0, "open", { inputLog: la.log, claim: lclaim, v: GOLF.VERSION, opts: { hand: "L" } }).ok, "golf: a left-hander's card verifies when filed with opts.hand");
   ok(!V.golf.verify(evG, 0, "open", { inputLog: g1.log.slice(0, g1.log.length - 30), claim: g1.claim }).ok, "golf: a card cut short is not a finished round");
   ok(!V.golf.verify(evG, 0, "open", { inputLog: [1, 2, 3], claim: g1.claim }).ok && !V.golf.verify(evG, 0, "open", { inputLog: [[ "z", 1 ], 0], claim: g1.claim }).ok, "golf: an illegible log fails");
   ok(!V.golf.verify(evG, 0, "open", { inputLog: g1.log, claim: g1.claim, v: 2 }).ok, "golf: a card from another version of the course is refused");

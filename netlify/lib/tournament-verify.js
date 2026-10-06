@@ -48,12 +48,12 @@ function golfLogOk(log) {
 const golfTicks = (log) => { let t = 0; for (let i = 0; i < log.length; i += 2) if (typeof log[i] === "number") t += log[i + 1]; return t; };
 export const golf = {
   game: "golf", lower: true, hz: GOLF.HZ, logTicks: golfTicks,
-  verify(ev, leg, div, { inputLog, claim, v }) {
+  verify(ev, leg, div, { inputLog, claim, v, opts }) {
     if (leg !== 0) return no("A ROUND OF GOLF IS ONE CARD.");
     if (v != null && Number(v) !== GOLF.VERSION) return no("THAT CARD WAS PLAYED ON ANOTHER VERSION OF THE COURSE. RELOAD AND PLAY IT AGAIN.");
     if (!golfLogOk(inputLog)) return no("THE CARD'S LOG IS NOT LEGIBLE.");
     if (!claim || !int(claim.total) || !Array.isArray(claim.holes)) return no("THE CLAIM IS NOT LEGIBLE: A TOTAL AND THE HOLES.");
-    const cfg = { ...golfCfg(ev, div), v: GOLF.VERSION };
+    const cfg = { ...golfCfg(ev, div, null, { hand: opts?.hand === "L" ? "L" : "R" }), v: GOLF.VERSION };   // a left-hander's card re-plays left-handed
     let st;
     try { st = replayRecord({ cfg, inputLog }, golfTicks(inputLog) + 2000); } catch { return no("THE CARD COULD NOT BE RE-PLAYED."); }
     if (st.phase !== "done" || !st.result) return no("THE RE-PLAY DID NOT FINISH THE ROUND. THE DEPARTMENT FILES FINISHED CARDS.");

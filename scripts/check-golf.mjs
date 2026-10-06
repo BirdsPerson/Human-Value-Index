@@ -32,11 +32,12 @@ import { OSM } from "../src/play/golf/holes/osm.js";
 import { replayRecord, versionOf } from "../src/play/golf/replay.js";
 import * as V1 from "../src/play/golf/v1/sim.js";
 import * as V2 from "../src/play/golf/v2/sim.js";
-import { readSwing, liveSwing, stickSwing, PULL_FULL, PULL_PUTT } from "../src/play/golf/gesture.js";
+import { readSwing, liveSwing, stickSwing, PULL_FULL, PULL_PUTT, stickRead, stickReader, stickPower, STICK_FULL, STICK_DZ, pathWord, tempoWord, swingTrace, lineWord } from "../src/play/golf/gesture.js";
 import { FAMOUS } from "../src/play/golf/holes/famous.js";
-import { newRound, step, autoplay, replay, cardOf, toParText, BTN, CLUBS, RISE_PUTT, holeOf, MAX_STROKES, VERSION, predict, makeFlight, flightAt, solveShot, puttMark, puttPace, lineFor, act, logPush, logEvent, aimEvent, swingEvent, puttEvent, clubFor, planShot, dirOf, reachOf } from "../src/play/golf/sim.js";
+import { newRound, step, autoplay, replay, cardOf, toParText, BTN, CLUBS, RISE_PUTT, holeOf, MAX_STROKES, VERSION, predict, makeFlight, flightAt, solveShot, puttMark, puttPace, lineFor, act, logPush, logEvent, aimEvent, swingEvent, puttEvent, clubFor, planShot, dirOf, reachOf, handOf, SCORE_NAME } from "../src/play/golf/sim.js";
 import { fnv } from "../src/play/golf/course.js";
-import { GOLFERS } from "../src/play/golf/roster.js";
+import { GOLFERS, golferBySlug, HANDS } from "../src/play/golf/roster.js";
+import { CAPTION } from "../src/play/golf/scenes.js";
 
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n++; if (process.env.V) console.log(m); };
@@ -193,9 +194,10 @@ ok(JSON.stringify(erp.result) === JSON.stringify(ea.st.result) && erp.tick === e
 // ---- versions: v3 is live; every v1 and v2 round recorded before it still replays on its own sim, exactly
 ok(VERSION === 3 && a.st.cfg.v === 3 && a.st.result.v === 3, "new rounds are sim v3 and say so in their cfg");
 ok(versionOf({ v: 1, cfg: { seed: 1 } }) === 1 && versionOf({ v: 2, cfg: { v: 2 } }) === 2 && versionOf({ v: 3, cfg: { v: 3 } }) === 3 && versionOf({ cfg: {} }) === 1, "a record without a version is v1");
-{ // a round of button bits plays the same on v3 as it did on v2 (the mouse only adds)
-  const v2a = V2.autoplay(cfg);
-  ok(JSON.stringify(v2a.log) === JSON.stringify(a.log) && JSON.stringify({ ...v2a.st.result, v: 3 }) === JSON.stringify(a.st.result), "bits only, v3 plays exactly as v2 did");
+{ // a round of button bits plays the same on v3 as it did on v2 (the mouse only adds; the result's
+  // one line of words is v3's own since the copy went plain, so it is compared without it)
+  const v2a = V2.autoplay(cfg), strip = (r) => JSON.stringify({ ...r, v: 3, line: "" });
+  ok(JSON.stringify(v2a.log) === JSON.stringify(a.log) && strip(v2a.st.result) === strip(a.st.result) && v2a.st.tick === a.st.tick, "bits only, v3 plays exactly as v2 did");
 }
 const FIX2 = JSON.parse(readFileSync(new URL("./fixtures/golf-v2-rounds.json", import.meta.url), "utf8"));
 const traceV2 = (cfg, log) => { const st = V2.newRound(cfg); let hh = 0x811c9dc5, ph = st.phase;
@@ -365,12 +367,92 @@ const trail = (pull, drift = 0, ms = 150, through = true) => {
   const s0 = stickSwing(stick(1)), sr = stickSwing(stick(1, 0.3)), sl = stickSwing(stick(1, -0.3));
   ok(s0.kind === "swing" && s0.a === 0 && s0.power === 1 && s0.contact === 0, `stick: a straight push is straight, full at the bottom, pure (${JSON.stringify(s0)})`);
   ok(sr.a > 0.1 && sl.a < -0.1, `stick: drift right is a slice for a right-hander, left a hook (${sr.a.toFixed(2)}, ${sl.a.toFixed(2)})`);
-  ok(stickSwing(stick(0.5)).power < 0.6 && stickSwing(stick(0.5)).power > 0.45, "stick: half a pull, half the power");
+  const half = stickSwing(stick(STICK_FULL / 2)).power;
+  ok(half > 0.5 && half < 0.6, `stick: half a natural pull is a little over half the power (${half.toFixed(2)}: a gentle curve)`);
+  ok(stickSwing(stick(STICK_FULL)).power === 1 && stickSwing(stick(1)).power === 1 && STICK_FULL < 0.9, `stick: a natural full pull (${STICK_FULL} of the ring) is full power; slamming it adds nothing`);
   ok(stickSwing(stick(1, 0, 600)).contact < 0 && stickSwing(stick(1, 0, 12)).contact > 0, "stick: slow push fat, a snap thin");
+  ok(stickSwing(stick(1, 0, 100, true, 40)).contact === 0, "stick: resting at the top of the backswing is not a slow push (tempo counts from leaving the bottom)");
+  ok(stickSwing(stick(1, 0.3), { easy: true }).a < sr.a && stickSwing(stick(1, 0.12), { easy: true }).a === 0 && stickSwing(stick(1, 0.12)).a > 0, "stick: EASY SWING forgives more of the same drift, and all of a small one");
   ok(stickSwing(stick(1, 0, 100, false)).kind === "cancel", "stick: back to the centre and left there: called off");
   ok(stickSwing(stick(0.6, 0, 100, true), { putt: true }).kind === "putt", "stick: a putt is pull back, push forward");
+  const pm = (p) => stickSwing(stick(p, 0, 100, true), { putt: true }).m;
+  ok(pm(0.3) < 0.3 && pm(0.3) > 0.15 && pm(0.6) > pm(0.3) && pm(0.9) === 1, `stick: the putter's pace is finer short (${pm(0.3).toFixed(2)} at a third of the stick, ${pm(0.6).toFixed(2)} at two thirds, 1 at ${0.9})`);
   const rS = (g) => { const st = at(0, 0, "fairway"); st.wind = { mph: 0, dir: 0, x: 0, y: 0 }; st.aim = 0; st.club = 4; for (let i = 0; i < 8; i++) step(st, 0); act(st, swingEvent(g)); return st.fl.curve; };
   ok(Math.abs(rS(s0)) < 1e-9 && rS(sr) > 2 && rS(sl) < -2, "stick: through the sim, straight is straight, right drift curves right");
+}
+{ // reading the stick (gesture.js stickRead): the pad's ring, the dead zone, the one-euro filter
+  const r = stickReader();
+  ok(stickRead(r, STICK_DZ * 0.7, 0, 0).mag === 0 && stickRead(r, 0, STICK_DZ * 0.7, 16).mag === 0, "stick read: inside the dead zone is zero");
+  const r2 = stickReader(); let v = null;
+  for (let i = 0; i < 8; i++) v = stickRead(r2, 0, 0.9, i * 16.7);
+  ok(r2.ring === 0.9 && Math.abs(v.y - 1) < 0.02, `stick read: a pad whose ring stops at 0.9 reads a full pull as full (${v.y.toFixed(3)})`);
+  const r3 = stickReader();
+  for (let i = 0; i < 8; i++) v = stickRead(r3, 1, 1, i * 16.7);
+  ok(r3.ring === 1 && Math.abs(v.mag - 1) < 1e-6, "stick read: a square gate's diagonal (1.4) is clamped to the ring");
+  const r4 = stickReader(); const ys = [];
+  for (let i = 0; i < 60; i++) { const n = i % 2 ? 0.03 : -0.03; ys.push(stickRead(r4, n, 0.5 + n, i * 16.7).y); }
+  const sd = Math.sqrt(ys.slice(30).reduce((s2, y) => s2 + (y - 0.5) ** 2, 0) / 30);
+  ok(sd < 0.01, `stick read: a still thumb's jitter (sd 0.03) comes through at sd ${sd.toFixed(4)}`);
+  const r5 = stickReader();
+  for (let i = 0; i < 20; i++) stickRead(r5, 0, 0.85, i * 16.7);
+  const fil = []; for (let i = 1; i <= 8; i++) fil.push(stickRead(r5, 0, Math.max(-0.95, 0.85 - (1.75 * i) / 6), (20 + i) * 16.7).y);
+  const cross = (arr) => { for (let i = 1; i < arr.length; i++) if (arr[i] <= -0.4) return i - 1 + (arr[i - 1] + 0.4) / (arr[i - 1] - arr[i]); return 99; };
+  const raw = []; for (let i = 1; i <= 8; i++) raw.push(Math.max(-0.95, 0.85 - (1.75 * i) / 6));
+  ok(cross(fil) - cross(raw) < 0.6, `stick read: a push comes through the filter with under a frame's lag (${((cross(fil) - cross(raw)) * 16.7).toFixed(1)} ms)`);
+  ok(stickPower(STICK_FULL) === 1 && stickPower(STICK_FULL * 0.5) > 0.5 && stickPower(STICK_FULL * 0.25) > 0.25 && stickPower(0) === 0, "stick power: a gentle curve, full at the natural pull");
+}
+{ // the swing path trace and its words (gesture.js swingTrace), for the player to learn from
+  const S = trail(60, 14), r = readSwing(S), tr = swingTrace(r, S, PULL_FULL);
+  ok(tr && tr.pts.length > 4 && tr.pts.every(p => Math.abs(p[0]) <= 1 && Math.abs(p[1]) <= 1) && tr.words[0] === "PUSHED" && tr.words[1] === "GOOD TEMPO" && !tr.putt, `trace: a drag drifting right, good tempo -> ${JSON.stringify(tr.words)}`);
+  ok(swingTrace(readSwing(trail(60, -14, 900)), trail(60, -14, 900), PULL_FULL).words.join("/") === "PULLED/TOO SLOW" && swingTrace(readSwing(trail(60, 0, 25)), trail(60, 0, 25), PULL_FULL).words.join("/") === "STRAIGHT/TOO FAST", "trace: pulled and slow, straight and fast, named");
+  const mx = Math.max(...tr.pts.map(p => p[1]));
+  ok(mx > 0.7 && tr.pts[tr.pts.length - 1][1] < 0, "trace: the pull goes down the box (+y), the strike comes back above the start");
+  ok(pathWord(0.5) === "PUSHED" && pathWord(-0.5) === "PULLED" && pathWord(0.05) === "STRAIGHT" && tempoWord(-0.5) === "TOO SLOW" && tempoWord(0.5) === "TOO FAST" && tempoWord(0) === "GOOD TEMPO", "trace: the words");
+  const pt = readSwing(trail(36, 0, 150, false), { putt: true }), ptr = swingTrace(pt, trail(36, 0, 150, false), PULL_FULL);
+  ok(ptr.putt && ptr.words[0] === "PACE 50%" && ptr.words[1] === "STRAIGHT", `trace: a putt names its pace (${ptr.words.join(", ")})`);
+}
+{ // LEFT-HANDED (2026-10-06, Scott: "I'm LEFT-HANDED"): the stance mirrors, the meter's hook and
+  // slice follow the hand, the ball's own physics do not, the words do, and the cfg remembers
+  ok(handOf("L") === -1 && handOf(-1) === -1 && handOf("left") === -1 && handOf("R") === 1 && handOf(undefined) === 1, "hand: L / left / -1 are left, anything else right");
+  const base = { seed: 99, mode: "stroke", count: 18, start: 0, player: { name: "T" } };
+  ok(newRound(base).cfg.hand === undefined && newRound(base).players[0].hand === 1, "a round without a hand is right-handed and says nothing in its cfg (old rounds replay as they were)");
+  ok(newRound({ ...base, hand: "L" }).cfg.hand === "L" && newRound({ ...base, hand: "L" }).players[0].hand === -1, "a left-handed round carries hand: L in its cfg and the player plays left");
+  // the meter pressed early: a hook, away from the trail side (left for a right-hander, right for a left-hander)
+  const early = (hand) => {
+    const st = newRound({ ...base, hand }); step(st, BTN.A); step(st, 0); step(st, 0);
+    while (st.phase === "intro") step(st, st.t > 12 && !(st.prev & BTN.A) ? BTN.A : 0);
+    Object.assign(st.players[0], { x: 0, y: 0, lie: "fairway" }); st.wind = { mph: 0, dir: 0, x: 0, y: 0 }; st.aim = 0; st.club = 4;
+    while (st.phase === "aim") step(st, st.prev & BTN.A ? 0 : st.t > 7 ? BTN.A : 0);
+    while (st.phase === "meter" && st.meter.stage === 1) step(st, st.meter.m >= 0.8 && !(st.prev & BTN.A) ? BTN.A : 0);
+    while (st.phase === "meter") step(st, st.meter.m <= 0.5 && st.meter.m > 0.3 && !(st.prev & BTN.A) ? BTN.A : 0);   // well before the line: early
+    return st.fl;
+  };
+  const eR = early("R"), eL = early("L");
+  ok(eR.curve < -2 && eL.curve > 2 && Math.abs(eR.curve + eL.curve) < 1e-9, `the meter's early press hooks either way: a right-hander's curves left (${eR.curve.toFixed(1)}), a left-hander's right (${eL.curve.toFixed(1)})`);
+  // a drag or stick stroke is the ball's: the same event flies the same for either hand
+  const ev = swingEvent(readSwing(trail(64, 14)));
+  const fly = (hand) => { const st = newRound({ ...base, hand }); step(st, BTN.A); step(st, 0); step(st, 0); while (st.phase === "intro") step(st, st.t > 12 && !(st.prev & BTN.A) ? BTN.A : 0); Object.assign(st.players[0], { x: 0, y: 0, lie: "fairway" }); st.wind = { mph: 0, dir: 0, x: 0, y: 0 }; st.aim = 0; st.club = 4; for (let i = 0; i < 8; i++) step(st, 0); act(st, ev); return st.fl; };
+  ok(fly("R").curve > 2 && fly("R").curve === fly("L").curve, "a swing path drifting right curves the ball right for either hand (what a mirrored swing does too)");
+  ok(lineWord(0.8) === "SLICE" && lineWord(0.8, -1) === "HOOK" && lineWord(-0.8, -1) === "SLICE" && lineWord(-0.3, -1) === "FADE" && lineWord(0.3, -1) === "DRAW" && lineWord(0, -1) === "STRAIGHT", "the words follow the hand: a left-hander's curve to the right is a hook");
+  ok(pathWord(0.5, -1) === "PULLED" && pathWord(-0.5, -1) === "PUSHED" && swingTrace(readSwing(trail(60, 14)), trail(60, 14), PULL_FULL, -1).words[0] === "PULLED", "the trace's words follow the hand: a lefty drifting right has pulled it");
+  // a left-handed round replays tick for tick, and is its own round (the early presses go the other way)
+  const lcfg = { ...cfg, hand: "L" }, la2 = autoplay(lcfg), lr = replay(lcfg, la2.log);
+  ok(la2.st.phase === "done" && la2.st.cfg.hand === "L" && JSON.stringify(lr.result) === JSON.stringify(la2.st.result) && lr.tick === la2.st.tick, "a left-handed round finishes and replays tick for tick from its log");
+  ok(JSON.stringify(replayRecord({ v: VERSION, cfg: la2.st.cfg, inputLog: JSON.parse(JSON.stringify(la2.log)) }).result) === JSON.stringify(la2.st.result), "... and through replay.js after a trip through JSON");
+  ok(HANDS["phil-mickelson"] === "L" && golferBySlug("phil-mickelson").hand === "L" && golferBySlug("tiger-woods").hand === "R", "the figures' hands are on file: Mickelson plays left, Woods right");
+  const vsPhil = newRound({ ...cfg, cpu: { slug: "phil-mickelson", name: "PHIL MICKELSON", rating: 88, hand: "L" } });
+  ok(vsPhil.players[1].hand === -1 && vsPhil.players[0].hand === 1, "a match against Mickelson: he plays left, you play as you said");
+}
+{ // tone (2026-10-06, Scott: the Overlord satire takes a break in the sports games): the sim's words are golf's
+  const simSrc = readFileSync(new URL("../src/play/golf/sim.js", import.meta.url), "utf8");
+  ok(!/DEPARTMENT|AUDIT|COMPLIANT|FILED|UNDER REVIEW/.test(simSrc.replace(/\/\/[^\n]*/g, "")), "the sim's messages carry none of the office voice");
+  ok(SCORE_NAME(0, 4) === "PAR." && SCORE_NAME(-1, 3) === "BIRDIE." && SCORE_NAME(1, 5) === "BOGEY." && SCORE_NAME(0, 1) === "HOLE IN ONE!" && SCORE_NAME(2, 6) === "DOUBLE BOGEY.", "scores are named as golf names them");
+  ok(FAMOUS.filter(d => /DEPARTMENT/.test(d.note)).length <= 2 && FAMOUS.every(d => d.note.length <= 120), "the hole cards' notes: at most a light wink, two Department lines in eighteen");
+  ok(Object.values(CAPTION).every(c => !/DEPARTMENT|FILED|LOGGED|EXPENSED|UNDER REVIEW/.test(c) && c.length <= 90), "the end scenes' captions: one light line each, no filing");
+  const h0 = COURSE[0], r0 = at(h0.pin.x, h0.pin.y - 40, "fairway");
+  r0.wind = { mph: 0, dir: 0, x: 0, y: 0 };
+  swing(r0, Math.atan2(0, 40), 7, 0.3);
+  ok(/TO THE PIN\.$|^TAP-IN\.$|LEFT\.$|HOLE IN ONE|BIRDIE|PAR\.|BOGEY/.test(r0.msg), `a shot's result says where it is and what is left (${r0.msg})`);
 }
 // the strokes in the sim: same lie, calm, straight up a flat fairway
 const strokeAt = (ev, club = 4, lie = "fairway") => {

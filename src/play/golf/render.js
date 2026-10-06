@@ -136,10 +136,15 @@ export function terrain(h, v) {
   const c = document.createElement("canvas");
   c.width = v.w; c.height = v.h;
   const g = c.getContext("2d"), img = g.createImageData(v.w, v.h), d = img.data;
+  const e = Math.max(0.5, v.s);   // one map pixel, in yards: the edges below look that far
   for (let py = 0; py < v.h; py++) for (let qx = 0; qx < v.w; qx++) {
     const x = v.cx + (qx + 0.5 - v.w / 2) * v.s, y = v.cy - (py + 0.5 - v.h / 2) * v.s;
     const s = surfaceAt(h, x, y);
-    const col = turf(h, s, x, y, qx, py, s === "fairway" && v.kind === "green" ? -0.3 : 0);
+    let extra = s === "fairway" && v.kind === "green" ? -0.3 : 0;
+    // the water's rim (shallows) and the collar round the green, as the view draws them
+    if (s === "water" && v.s < 2.5) { if (surfaceAt(h, x - e, y) !== "water" || surfaceAt(h, x + e, y) !== "water" || surfaceAt(h, x, y - e) !== "water" || surfaceAt(h, x, y + e) !== "water") extra += 1.6; }
+    else if (s === "fringe") { if (surfaceAt(h, x - e, y) === "green" || surfaceAt(h, x + e, y) === "green" || surfaceAt(h, x, y - e) === "green" || surfaceAt(h, x, y + e) === "green") extra += 1.3; }
+    const col = turf(h, s, x, y, qx, py, extra);
     const i = (py * v.w + qx) * 4;
     d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
   }
@@ -265,7 +270,8 @@ function cameraOf(st, h) {
   }
   if (!moving) { mem.adv = 0; mem.lat = 0; mem.trail = []; }
   else { mem.adv += (adv - mem.adv) * 0.12; mem.lat += (lat - mem.lat) * 0.12; }
-  const side = M.side * Math.max(0, 1 - mem.adv / 60);
+  // the camera sits a little behind the golfer's back: left of the ball for a right-hander, right for a left-hander
+  const side = M.side * (P.hand || 1) * Math.max(0, 1 - mem.adv / 60);
   const cx = ox + dx * (mem.adv - M.back) + rx * (mem.lat - side), cy = oy + dy * (mem.adv - M.back) + ry * (mem.lat - side);
   const H0 = horizonOf(h);
   return { ...M, putt, x: cx, y: cy, dx, dy, rx, ry, aim, ox, oy, H0, K: M.back * (M.ballY - H0) ** 2, adv: mem.adv };
@@ -300,14 +306,29 @@ function floor(ctx, st, h, cam, frame, still) {
         const s = NAME[c];
         let extra = haze * 0.9;
         if (s === "bunker" || s === "waste") {
-          // the lip: the far edge in shadow, the near edge lit
+          // the lip: the far edge in shadow, the near edge lit; raked sand in faint diagonal lines
           const far = cellAt(h, R, wx + cam.dx * 0.7, wy + cam.dy * 0.7), nr = cellAt(h, R, wx - cam.dx * 0.6, wy - cam.dy * 0.6);
           if (far !== CODE.bunker && far !== CODE.waste) extra -= 1.6;
           else if (nr !== CODE.bunker && nr !== CODE.waste) extra += 1.1;
+          else if (s === "bunker" && z < 90) extra += (Math.floor((wx + wy) * 1.4) & 3) === 0 ? -0.35 : 0.1;
         } else if (s === "water") {
           extra = z > 220 ? -0.8 : (z < 40 ? 0.4 : 0);
+          // the shore: the far bank's shadow lies on the water; the near edge and the sides are shallows
+          const isW = (v) => v === CODE.water || (ocean && v === 10);
+          if (z < 160) {
+            const far = cellAt(h, R, wx + cam.dx * 0.9, wy + cam.dy * 0.9);
+            if (!isW(far)) extra -= 1.5;
+            else if (!isW(cellAt(h, R, wx - cam.dx * 0.8, wy - cam.dy * 0.8)) || !isW(cellAt(h, R, wx + cam.rx * 0.8, wy + cam.ry * 0.8)) || !isW(cellAt(h, R, wx - cam.rx * 0.8, wy - cam.ry * 0.8))) extra += 1.7;
+          }
           if ((hash(Math.floor(wx * 2), Math.floor(wy * 2)) % 13 === 3) && (r & 1) === 0) water.push(r * W + x);
-        } else if (s === "fairway" || s === "rough" || s === "fringe") {
+        } else if (s === "fringe") {
+          // the collar: the ring of fringe against the green is mown lighter; the rest in rings round it
+          const near = (dx, dy) => cellAt(h, R, wx + dx, wy + dy) === CODE.green;
+          if (near(cam.dx * 0.6, cam.dy * 0.6) || near(-cam.dx * 0.6, -cam.dy * 0.6) || near(cam.rx * 0.6, cam.ry * 0.6) || near(-cam.rx * 0.6, -cam.ry * 0.6)) extra += 1.4;
+          else extra += (Math.floor(Math.hypot(wx - h.green.x, wy - h.green.y) * 0.9) & 1) ? 0.4 : -0.2;
+          const [sx, sy] = slopeAt(h, wx, wy);
+          extra += -(sx * LIGHT[0] + sy * LIGHT[1]) * 3;
+        } else if (s === "fairway" || s === "rough") {
           // the ground's own swell, lit from the upper left
           const [sx, sy] = slopeAt(h, wx, wy);
           extra += -(sx * LIGHT[0] + sy * LIGHT[1]) * 3;
@@ -391,9 +412,45 @@ function hillLayer(h, H0) {
   HILLS.set(key, c);
   return c;
 }
+// The sun: a dithered disc with a glow, cached (alpha where the dither says so)
+let SUN = null;
+function sunSprite() {
+  if (SUN) return SUN;
+  const S = 26, c = document.createElement("canvas"); c.width = S; c.height = S;
+  const g = c.getContext("2d"), img = g.createImageData(S, S), d = img.data, m = S / 2;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const r = Math.hypot(x + 0.5 - m, y + 0.5 - m), i = (y * S + x) * 4;
+    if (r <= 4.2) { d[i] = 252; d[i + 1] = 248; d[i + 2] = 228; d[i + 3] = 255; continue; }
+    const glow = Math.max(0, 1 - (r - 4.2) / 9);   // fades over nine pixels
+    if (glow <= 0 || glow < BAY[((y & 3) << 2) | (x & 3)] * 1.1) continue;
+    d[i] = 240; d[i + 1] = 236; d[i + 2] = 220; d[i + 3] = Math.round(70 + glow * 90);
+  }
+  g.putImageData(img, 0, 0);
+  SUN = c;
+  return c;
+}
+// Birds: a loose line of five crosses the sky now and then (deterministic by hole and frame),
+// far enough off to turn with the hills
+function birds(ctx, h, cam, frame) {
+  const seed = fnv(`birds|${h.id || h.n}`), period = 1700, f = (frame + (seed % period)) % period;
+  if (f > 560) return;
+  const dir = (seed >> 4) & 1 ? 1 : -1, x0 = dir > 0 ? -40 + f * 0.7 : W + 40 - f * 0.7;
+  const bx = x0 - cam.aim * cam.F * 0.45;
+  for (let i = 0; i < 5; i++) {
+    const x = Math.round(bx - dir * i * 7 + ((i & 1) ? 2 : 0)), y = Math.round(12 + ((seed >> (6 + i * 2)) % 7) + i * 1.4 + Math.sin(frame / 25 + i * 1.3) * 1.5);
+    if (x < -3 || x > W + 3 || y >= cam.H0 - 14) continue;
+    const up = ((frame + i * 4) >> 3) & 1;
+    px(ctx, x, y, 1, 1, "#1c2434"); px(ctx, x - 1, y - up, 1, 1, "#1c2434"); px(ctx, x + 1, y - up, 1, 1, "#1c2434");
+    if (!up) { px(ctx, x - 2, y - 1, 1, 1, "#1c2434"); px(ctx, x + 2, y - 1, 1, 1, "#1c2434"); }
+  }
+}
 function sky(ctx, st, h, cam, frame, still) {
   const H0 = cam.H0;
   ctx.drawImage(skyLayer(H0), 0, 0);
+  // the sun, high and to the left of the name box (LIGHT: behind the golfer's left shoulder when he
+  // faces the hole); it slides with the far hills as the aim turns
+  { const sx = Math.round(20 - cam.aim * cam.F * 0.35); if (sx > -20 && sx < W + 20) ctx.drawImage(sunSprite(), sx - 13, 6); }
+  if (!still) birds(ctx, h, cam, frame);
   // clouds: fixed per hole, drifting with the wind across the view, turning with the aim (slowly:
   // they are far)
   const seed = fnv(`clouds|${h.id || h.n}`), rnd = rngOf(seed);
@@ -436,9 +493,12 @@ function sky(ctx, st, h, cam, frame, still) {
 let EDGE = null, EDGE_IMG = null;
 
 // ---- sprites: trees (crown and trunk apart, so the crown can sway) -------------------------------------
+// Two variants of the pine and the oak (v: 0 or 1, by where the tree stands) so a line of them is
+// not one stamp; lit from the upper left, darker to the lower right, a few bright needle tips.
 const SPR = {};
-function sprite(kind) {
-  if (SPR[kind]) return SPR[kind];
+function sprite(kind, v = 0) {
+  const kk = `${kind}${v}`;
+  if (SPR[kk]) return SPR[kk];
   const mk = (w, h, f) => {
     const c = document.createElement("canvas"); c.width = w; c.height = h;
     const g = c.getContext("2d"), img = g.createImageData(w, h), d = img.data;
@@ -451,16 +511,34 @@ function sprite(kind) {
     g.putImageData(img, 0, 0);
     return c;
   };
-  const T = RR.tree, BARK = ["#3c2410", "#5c3a1c", "#7c5430"].map(rgbOf);
+  const T = RR.tree, BARK = ["#3c2410", "#5c3a1c", "#7c5430"].map(rgbOf), TIP = rgbOf("#5aa858");
   let c, trunk = 0.25;
   if (kind === "pine") { trunk = 0.16; c = mk(18, 36, (set) => {
-    for (let y = 30; y < 36; y++) for (let x = 8; x < 10; x++) set(x, y, BARK[x === 8 ? 1 : 0]);
-    for (let y = 0; y < 31; y++) { const tier = Math.floor(y / 8), k = y % 8, w = 1 + k + tier * 1.6; for (let x = Math.round(9 - w); x <= Math.round(8 + w); x++) { const u = (x - 8.5) / (w + 0.5); set(x, y, dith(T, 3.4 - u * 2.2 - (k / 8) * 1.4 - tier * 0.2, x, y)); } }
+    for (let y = 29; y < 36; y++) for (let x = 8; x < 10; x++) set(x, y, BARK[x === 8 ? 1 : 0]);
+    // four tiers of needles, each a little wider, ragged at the edge; the left lit, the right in shade
+    const tiers = v ? [[0, 7, 1.2], [7, 15, 2.6], [15, 23, 4.2], [23, 31, 5.8]] : [[0, 8, 1.4], [8, 16, 3], [16, 24, 4.6], [24, 31, 6.2]];
+    tiers.forEach(([y0, y1, w0], ti) => {
+      for (let y = y0; y < y1; y++) {
+        const k = (y - y0) / (y1 - y0), w = w0 + k * 2.4 + ((hash(y, ti, v) % 3) === 0 ? 0.7 : 0);
+        for (let x = Math.round(8.5 - w); x <= Math.round(8.5 + w); x++) {
+          const u = (x - 8.5) / (w + 0.5);
+          if (Math.abs(u) > 0.92 && (hash(x, y, 5) % 3) === 0) continue;   // a ragged edge
+          const tip = k < 0.2 && u < -0.2 && (hash(x, y, 7) % 4) === 0;
+          set(x, y, tip ? TIP : dith(T, 3.5 - u * 2 - k * 1.5 - ti * 0.15 - (u > 0.4 ? 0.5 : 0), x, y));
+        }
+      }
+    });
   }); }
   else if (kind === "oak") { trunk = 0.3; c = mk(24, 26, (set) => {
-    for (let y = 17; y < 26; y++) for (let x = 10; x < 14; x++) set(x, y, BARK[x === 10 ? 2 : x === 13 ? 0 : 1]);
-    const lobes = [[12, 9, 9], [6, 12, 6], [18, 12, 6], [9, 5, 6], [15, 5, 6], [12, 15, 6]];
-    for (let y = 0; y < 21; y++) for (let x = 0; x < 24; x++) { let q = -1; for (const [cx, cy, r] of lobes) q = Math.max(q, 1 - Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / r); if (q < 0) continue; set(x, y, dith(T, 1.4 + q * 2.2 - ((x - 12) * -0.06 + (y - 10) * 0.09) * 1.6, x, y)); }
+    for (let y = 16; y < 26; y++) { const fl = y > 23 ? 1 : 0; for (let x = 10 - fl; x < 14 + fl; x++) set(x, y, BARK[x <= 10 ? 2 : x >= 13 ? 0 : 1]); }
+    const lobes = v ? [[12, 9, 9], [5, 11, 5.5], [19, 11, 6], [8, 4, 5.5], [16, 5, 6.5], [12, 15, 6]] : [[12, 9, 9], [6, 12, 6], [18, 12, 6], [9, 5, 6], [15, 5, 6], [12, 15, 6]];
+    for (let y = 0; y < 21; y++) for (let x = 0; x < 24; x++) {
+      let q = -1; for (const [cx, cy, r] of lobes) q = Math.max(q, 1 - Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / r);
+      if (q < 0) continue;
+      const clump = (hash(x >> 1, y >> 1, 3) % 5) === 0 ? -0.8 : 0;   // darker clumps inside the crown
+      const lit = ((12 - x) * 0.07 + (10 - y) * 0.1) * 1.6;
+      set(x, y, q > 0.08 && lit > 0.6 && (hash(x, y, 9) % 6) === 0 ? TIP : dith(T, 1.6 + q * 2 + lit + clump, x, y));
+    }
   }); }
   else if (kind === "cypress") { trunk = 0.4; c = mk(30, 22, (set) => {
     for (let y = 9; y < 22; y++) for (let x = 13; x < 16; x++) set(x + ((y < 14) ? (14 - y) >> 2 : 0), y, BARK[x === 13 ? 2 : 1]);
@@ -475,10 +553,11 @@ function sprite(kind) {
   else { trunk = 0; c = mk(14, 9, (set) => {
     for (let y = 0; y < 9; y++) for (let x = 0; x < 14; x++) { const q = 1 - Math.hypot((x + 0.5 - 7) / 7, (y + 0.5 - 6) / 5.5); if (q < 0) continue; set(x, y, (hash(x, y, 9) % 9 === 0) ? rgbOf(PAL.gold) : dith(T, 1.2 + q * 2.4, x, y)); }
   }); }
-  SPR[kind] = { c, trunk };
-  return SPR[kind];
+  SPR[kk] = { c, trunk };
+  return SPR[kk];
 }
 const treeKind = (h, t) => t.k || (hash(Math.round(t.x * 10), Math.round(t.y * 10)) % 3 === 0 ? "oak" : "pine");
+const treeVar = (t) => hash(Math.round(t.x * 7), Math.round(t.y * 3), 1) & 1;
 const SHIRTS = ["#d82800", "#fcfcfc", "#f8b800", "#0058f8", "#00a800", "#f878f8", "#7c7c7c", "#202020", "#3cbcfc", "#a85000"];
 
 // The crowd: a few dozen people round the green, on the side the hole names, out of the water.
@@ -509,6 +588,7 @@ export function spectator(ctx, c, x, y, hh, mood, f) {
   else if (mood === "warm" || mood === "polite" || mood === "thin") arms = ((t >> 2) & 1) && (mood !== "thin" || c.ph < 1.5) ? 1 : 0;
   else if (mood === "ooh" || mood === "groan") arms = 3;
   else if (mood === "crickets") sit = c.ph < 3 ? Math.round(hh * 0.25) : 0;
+  else if (mood === "sit") sit = c.ph < 2.4 ? Math.round(hh * 0.25) : 0;   // two in five sit while the shot is lined up
   const top = y - hh + 1 + sit;
   px(ctx, x - (w >> 1), top, w, head, c.skin);
   if (c.hat && hh > 6) px(ctx, x - (w >> 1), top, w, 1, PAL.white);
@@ -524,9 +604,10 @@ export function spectator(ctx, c, x, y, hh, mood, f) {
 function poseFor(st, frame, still, drag) {
   const putt = st.fl?.putt || (!st.fl && CLUBS[st.club]?.putt) || (st.phase !== "flight" && st.phase !== "roll" && st.phase !== "rest" && CLUBS[st.club]?.putt);
   // a drag in progress: the club goes back as far as the pull, and comes down with the push
-  if (drag && st.phase === "aim") return poseOf("meter", { putt: Boolean(putt), m: drag.m, stage: 1, power: drag.m, still });
+  if (drag && st.phase === "aim") return poseOf("meter", { putt: Boolean(putt), m: drag.m, stage: drag.stage || 1, power: drag.power ?? drag.m, still });
   const m = st.meter;
-  const waggle = st.phase === "aim" && !still ? Math.sin(frame / 11) * 0.5 : 0;
+  // the waggle: every few seconds at address, three small twitches of the clubhead
+  const waggle = st.phase === "aim" && !still && (frame % 170) < 24 && ((frame >> 2) & 1) ? 1 : 0;
   const mem = memOf(st);
   const after = st.phase === "flight" || st.phase === "roll" || st.phase === "rest";
   if (after) { if (mem.shotT === 0) mem.shotT = frame; } else mem.shotT = 0;
@@ -546,7 +627,7 @@ function behindView(ctx, st, frame, looks, still, ui) {
   for (const list of [h.trees, h.decor || []]) for (const t of list) {
     const p = project(cam, t.x, t.y);
     if (!p || p[3] < 2.5 || !vis(p, t.r)) continue;
-    const k = treeKind(h, t), sp = sprite(k), img = sp.c;
+    const k = treeKind(h, t), sp = sprite(k, treeVar(t)), img = sp.c;
     const w = Math.max(2, Math.round(2 * t.r * p[2] * (k === "gorse" ? 1 : 1.15))), hh = Math.max(2, Math.round((w * img.height) / img.width * (k === "gorse" ? 0.8 : (t.h || 11) / 11)));
     const lean = still ? 0 : Math.round((Math.sign(wl) * gust * 0.6 + Math.sin(frame / (9 - gust * 3) + t.x * 0.7) * gust * 0.8) * Math.min(4, hh / 14));
     items.push({ d: p[3], f: () => {
@@ -558,8 +639,9 @@ function behindView(ctx, st, frame, looks, still, ui) {
       ctx.drawImage(img, 0, 0, img.width, shh, x0 + lean, y0, w, cut);
     } });
   }
-  // the crowd, in the gallery's mood
-  const mood = mem.react && frame - mem.react.f0 < 260 ? mem.react.kind : null;
+  // the crowd, in the gallery's mood; while a full shot is lined up some of them sit, and they
+  // stand as the swing begins
+  const mood = mem.react && frame - mem.react.f0 < 260 ? mem.react.kind : st.phase === "aim" && !cam.putt ? "sit" : null;
   for (const c of crowdOf(h)) {
     const p = project(cam, c.x, c.y);
     if (!p || p[3] < 3 || !vis(p, 1)) continue;
@@ -605,13 +687,16 @@ function behindView(ctx, st, frame, looks, still, ui) {
     const p = project(cam, cam.ox, cam.oy);
     if (p) {
       const k = Math.min(1, p[2] / (cam.F / cam.back)), look = looks?.[st.cur] || { shirt: P.color?.shirt, pants: P.color?.pants };
-      const pose = poseFor(st, frame, still, ui?.drag), [bx, by] = ballPx(pose.putt);
+      const pose = poseFor(st, frame, still, ui?.drag), [bx0, by] = ballPx(pose.putt), lefty = (P.hand || 1) < 0;
+      // a left-hander is the same sprite mirrored: he stands on the other side of the ball
+      const bx = lefty ? GW - bx0 : bx0;
       items.push({ d: p[3] + 0.05, f: () => {
         const sp = golferCanvas(pose, look), w = Math.round(GW * k), hh = Math.round(GH * k);
         const x0 = Math.round(p[0] - bx * k), y0 = Math.round(p[1] + 1 - by * k);
         // his shadow: on the turf down and to the right of his feet (the sun is behind his left shoulder)
-        shadow(ctx, x0 + (FEET[0] + 6) * k, y0 + FEET[1] * k, 13 * k, 2.5 * k, 0.3);
-        ctx.drawImage(sp, x0, y0, w, hh);
+        shadow(ctx, x0 + (lefty ? GW - FEET[0] + 6 : FEET[0] + 6) * k, y0 + FEET[1] * k, 13 * k, 2.5 * k, 0.3);
+        if (!lefty) ctx.drawImage(sp, x0, y0, w, hh);
+        else { ctx.save(); ctx.translate(x0 + w, y0); ctx.scale(-1, 1); ctx.drawImage(sp, 0, 0, w, hh); ctx.restore(); }
       } });
     }
   }
@@ -730,11 +815,16 @@ function hud(ctx, st, frame, looks, ui) {
   px(ctx, 0, PANEL_Y, W, 1, PAL.white);
   px(ctx, 0, PANEL_Y + 1, W, 1, PAL.panel2);
   const carry = c.putt ? "" : yds(c.carry * (LIE[P.lie] ?? 1));
-  drawText(ctx, `${c.id} ${carry}`, 4, 172, PAL.white);
+  // a club glyph (a shaft and a head, a blade for the putter), then the club and its carry
+  if (c.putt) { px(ctx, 7, 171, 1, 6, PAL.grey); px(ctx, 5, 177, 5, 2, PAL.white); }
+  else { line(ctx, 9, 171, 6, 176, PAL.grey); px(ctx, 4, 176, 4, 2, PAL.white); px(ctx, 4, 178, 3, 1, PAL.dgrey); }
+  drawText(ctx, `${c.id} ${carry}`, 13, 172, PAL.white);
   // the club chip (the mouse): a click on it, or the wheel, changes the club
-  if (ui?.mouse && st.phase === "aim" && P.kind === "human") { const w = textWidth(`${c.id} ${carry}`) + 5; px(ctx, CLUB_CHIP.x, CLUB_CHIP.y, w, 1, PAL.dgrey); px(ctx, CLUB_CHIP.x, CLUB_CHIP.y + CLUB_CHIP.h - 1, w, 1, PAL.dgrey); px(ctx, CLUB_CHIP.x, CLUB_CHIP.y, 1, CLUB_CHIP.h, PAL.dgrey); px(ctx, CLUB_CHIP.x + w - 1, CLUB_CHIP.y, 1, CLUB_CHIP.h, PAL.dgrey); }
+  if (ui?.mouse && st.phase === "aim" && P.kind === "human") { const w = textWidth(`${c.id} ${carry}`) + 14; px(ctx, CLUB_CHIP.x, CLUB_CHIP.y, w, 1, PAL.dgrey); px(ctx, CLUB_CHIP.x, CLUB_CHIP.y + CLUB_CHIP.h - 1, w, 1, PAL.dgrey); px(ctx, CLUB_CHIP.x, CLUB_CHIP.y, 1, CLUB_CHIP.h, PAL.dgrey); px(ctx, CLUB_CHIP.x + w - 1, CLUB_CHIP.y, 1, CLUB_CHIP.h, PAL.dgrey); }
   const pin = Math.hypot(h.pin.x - P.x, h.pin.y - P.y), pinTxt = `PIN ${pin < 30 ? `${Math.round(pin * 3)}FT` : yds(pin)}`;
-  drawText(ctx, pinTxt, 84, 172, PAL.white);
+  // a flag glyph, then the distance to the pin
+  px(ctx, 92, 171, 1, 8, PAL.white); px(ctx, 93, 171, 3, 3, PAL.red); px(ctx, 91, 178, 3, 1, PAL.dgrey);
+  drawText(ctx, pinTxt, 99, 172, PAL.white);
   const lie = `LIE ${P.lie === "path" ? "ROAD" : P.lie.toUpperCase()}${P.plug ? " PLUGGED" : ""}`;
   drawText(ctx, lie, W - 4 - textWidth(lie), 172, P.lie === "bunker" || P.lie === "trees" || P.plug ? PAL.gold : PAL.grey);
   meter(ctx, st, h, P, ui?.drag);
@@ -760,7 +850,7 @@ function hud(ctx, st, frame, looks, ui) {
 export const PIP = { x: W - 86, y: 4, w: 82, h: 104 };
 // the mouse's targets on the picture: the spin ball (under the window; full swings only) and the club chip
 export const SPIN = { x: W - 19, y: 118, r: 7 };
-export const CLUB_CHIP = { x: 1, y: 169, w: 78, h: 12 };
+export const CLUB_CHIP = { x: 1, y: 169, w: 86, h: 12 };
 export const showSpin = (st, ui) => Boolean(ui?.mouse) && st.phase === "aim" && st.players[st.cur].kind === "human" && !CLUBS[st.club]?.putt;
 export const onSpin = (gx, gy) => Math.hypot(gx - SPIN.x, gy - SPIN.y) <= SPIN.r + 4;
 export const onClubChip = (gx, gy) => gx >= CLUB_CHIP.x && gx < CLUB_CHIP.x + CLUB_CHIP.w && gy >= CLUB_CHIP.y - 2 && gy < CLUB_CHIP.y + CLUB_CHIP.h + 2;
@@ -896,26 +986,47 @@ function pip(ctx, st, frame, still, ui) {
 }
 
 // ---- overlays -------------------------------------------------------------------------------------------
+// The hole card's backdrop: dark green, dithered darker toward the bottom, a faint pinstripe
+let CARD_BG = null;
+function cardBackdrop() {
+  if (CARD_BG) return CARD_BG;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d"), img = g.createImageData(W, H), d = img.data;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const col = dith(RR.woods, 2.2 - (y / H) * 1.8 + (((x + y) & 7) === 0 ? 0.5 : 0), x, y), i = (y * W + x) * 4;
+    d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  CARD_BG = c;
+  return c;
+}
 function intro(ctx, st, frame, looks) {
   const h = holeOf(st);
-  px(ctx, 0, 0, W, H, PAL.black);
+  ctx.drawImage(cardBackdrop(), 0, 0);
   const v = holeView(h, 112, 200);
   box(ctx, 3, 3, 116, 204);
   mapIn(ctx, st, v, 5, 5, frame, false);
   const x = 128, w = 31;
-  let y = 8;
+  // the hole number large, the par with it; a gold rule under them
+  drawText(ctx, `HOLE ${h.n}`, x, 8, PAL.gold, 2);
+  const parT = `PAR ${h.par}`;
+  drawText(ctx, parT, W - 6 - textWidth(parT, 2), 8, PAL.white, 2);
+  px(ctx, x, 25, W - 6 - x, 1, PAL.gold); px(ctx, x, 26, W - 6 - x, 1, "#7c5c00");
+  let y = 31;
   const put = (s, c, gap = 10) => { drawText(ctx, s, x, y, c); y += gap; };
-  put(`HOLE ${h.n} // PAR ${h.par}`, PAL.gold, 12);
   for (const l of wrap(h.name || "THE DEPARTMENT LINKS", w)) put(l, PAL.white);
-  for (const l of wrap(h.after ? `AFTER: ${h.after}` : "AFTER: APPLICATION 001", w)) put(l, PAL.dgrey);
-  y += 2;
+  for (const l of wrap(h.after ? `AFTER: ${h.after}` : "AFTER: APPLICATION 001", w)) put(l, PAL.grey);
+  y += 3;
+  // the numbers: yards, then the wind with its arrow (as you face the hole)
   put(`${h.yards} YARDS`, PAL.white);
-  put(st.wind.mph ? `WIND ${st.wind.mph} MPH ${windWords(st.wind, 0)}` : "NO WIND", PAL.grey, 13);
-  for (const l of wrap(h.note || "THE ASSEMBLY DECLINED THIS HOLE. THE DEPARTMENT KEPT THE DRAWINGS.", w).slice(0, 6)) put(l, PAL.lime);
+  if (st.wind.mph) { windIcon(ctx, x, y - 3, st.wind, 0); drawText(ctx, `${st.wind.mph} MPH ${windWords(st.wind, 0)}`, x + 16, y, st.wind.mph >= 10 ? PAL.gold : PAL.grey); y += 14; }
+  else put("NO WIND", PAL.grey, 14);
+  for (const l of wrap(h.note || "ONE OF THE EIGHTEEN THE CITY VOTED DOWN. PLAYED HERE ANYWAY.", w).slice(0, 5)) put(l, PAL.lime);
+  // the players, and whose honour it is
   const cards = st.players.map((Q, i) => looks?.[i]?.card).filter(Boolean);
-  cards.forEach((c, i) => ctx.drawImage(c, x + i * 40, 148, 32, 48));
-  drawText(ctx, `${st.players[st.honor[0]].name.split(" ").pop()} ON THE TEE`.slice(0, 22), x, 200, PAL.white);
-  if ((frame >> 5) % 2) drawText(ctx, "A TO PLAY", W - 4 - textWidth("A TO PLAY"), 200, PAL.dgrey);
+  cards.forEach((c, i) => { shadow(ctx, x + i * 40 + 16, 196, 12, 2, 0.35); ctx.drawImage(c, x + i * 40, 148, 32, 48); });
+  drawText(ctx, `${st.players[st.honor[0]].name.split(" ").pop()} ON THE TEE`.slice(0, 22), x, 202, PAL.white);
+  if ((frame >> 5) % 2) drawText(ctx, "A TO PLAY", W - 6 - textWidth("A TO PLAY"), 202, PAL.grey);
   // the shapes' source, in the small print (ODbL)
   if (h.osm) drawText(ctx, "MAP DATA (C) OPENSTREETMAP CONTRIBUTORS", 4, H - 10, PAL.dgrey);
   else drawText(ctx, h.famous ? "SHAPES DRAWN BY THE DEPARTMENT" : "THE DEPARTMENT'S DRAWINGS", 4, H - 10, PAL.dgrey);
@@ -989,11 +1100,38 @@ export function draw(ctx, st, frame, paused, looks, opts = {}) {
     hud(ctx, st, frame, looks, opts.ui);
     pip(ctx, st, frame, Boolean(opts.still), opts.ui);
     if (showSpin(st, opts.ui)) spinBall(ctx, opts.ui.spin);
+    swingPath(ctx, st, frame, opts.ui);
   }
   if (st.phase === "holeEnd") scorecard(ctx, st, `AFTER HOLE ${holeOf(st).n}`);
   if (paused) {
     box(ctx, 60, 90, W - 120, 40);
     drawText(ctx, "PAUSED", Math.round(W / 2 - textWidth("PAUSED") / 2), 98, PAL.gold);
-    drawText(ctx, "THE DEPARTMENT WAITS.", Math.round(W / 2 - textWidth("THE DEPARTMENT WAITS.") / 2), 112, PAL.grey);
+    drawText(ctx, "THE ROUND WAITS.", Math.round(W / 2 - textWidth("THE ROUND WAITS.") / 2), 112, PAL.grey);
   }
+}
+
+// ---- the swing path: the last stroke's trace and its verdict, for a few seconds -----------------------
+// ui.trace (Golf.jsx, from gesture.js swingTrace): {pts (-1..1 across, back is +y), words, power,
+// putt, f0 (the frame it was struck), practice}. Drawn above the panel on the right, where nothing
+// else sits: the path with the backswing grey and the push white, the strike a red dot, the
+// straight line and the ball's level faint behind it; the words beside.
+export const TRACE = { x: W - 118, y: 128, w: 114, h: 38, len: 300 };
+function swingPath(ctx, st, frame, ui) {
+  const tr = ui?.trace;
+  if (!tr || frame - tr.f0 > TRACE.len || st.phase === "intro" || st.phase === "holeEnd") return;
+  const { x, y, w, h } = TRACE;
+  ctx.fillStyle = "#000000b4"; ctx.fillRect(x, y, w, h);
+  px(ctx, x, y, w, 1, PAL.dgrey); px(ctx, x, y + h - 1, w, 1, PAL.dgrey); px(ctx, x, y, 1, h, PAL.dgrey); px(ctx, x + w - 1, y, 1, h, PAL.dgrey);
+  const bx = x + 4, by = y + 3, bw = 30, bh = h - 6, cx = bx + bw / 2, cy = by + bh / 3, sx = bw / 2, sy = (bh * 2) / 3;
+  const X = (v) => Math.round(cx + v * sx), Y = (v) => Math.round(Math.max(by, Math.min(by + bh - 1, cy + v * sy)));
+  px(ctx, Math.round(cx), by, 1, bh, "#2c2c40"); px(ctx, bx, Math.round(cy), bw, 1, "#2c2c40");
+  let ib = 0;
+  tr.pts.forEach((q, i) => { if (q[1] >= tr.pts[ib][1]) ib = i; });
+  for (let i = 1; i < tr.pts.length; i++) { const a = tr.pts[i - 1], b = tr.pts[i]; line(ctx, X(a[0]), Y(a[1]), X(b[0]), Y(b[1]), i <= ib ? PAL.dgrey : PAL.white); }
+  const e = tr.pts[tr.pts.length - 1];
+  px(ctx, X(e[0]) - 1, Y(e[1]) - 1, 3, 3, PAL.red);
+  const tx = bx + bw + 6, good = (s) => s === "STRAIGHT" || s === "GOOD TEMPO" || s.startsWith("PACE");
+  drawText(ctx, tr.practice ? "PRACTICE" : tr.putt ? "PUTT" : `POWER ${Math.round(tr.power * 100)}%`, tx, y + 4, PAL.gold);
+  drawText(ctx, tr.words[0], tx, y + 14, good(tr.words[0]) ? PAL.lime : PAL.white);
+  drawText(ctx, tr.words[1], tx, y + 24, good(tr.words[1]) ? PAL.lime : PAL.gold);
 }
