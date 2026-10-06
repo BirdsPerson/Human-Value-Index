@@ -1,25 +1,23 @@
 // THE COURTS, playable: the sound. WebAudio blips and a noise-band crowd, made on the first gesture
 // (browsers keep audio closed until then). Muted is kept in this browser.
 //
-// The crowd: the shared crowd module (src/play/crowdAudio.js, golf's and tennis's) is used when it
-// is in the build (import.meta.glob finds it, or finds nothing and the build still passes); until
-// then a swell of filtered noise stands in: a cheer on dunks, threes and blocks, a groan on airballs.
+// The crowd: the shared crowd module (../crowdAudio.js, golf's and tennis's), under this page's
+// mute: a roar for a dunk or a shot at the buzzer, cheers for threes and blocks, polite applause
+// for an ordinary basket, a gasp when it rims out, a groan for an airball or the shot clock.
+import { makeCrowd } from "../crowdAudio.js";
 const KEY = "hvi-hoops-muted";
 let ac = null;
 export const isMuted = () => { try { return localStorage.getItem(KEY) === "1"; } catch { return false; } };
 export const setMuted = (m) => { try { localStorage.setItem(KEY, m ? "1" : "0"); } catch { /* the tab remembers */ } };
 
-const SHARED = import.meta.glob("../crowdAudio.js");
-let shared = null;
-const sharedLoad = SHARED["../crowdAudio.js"];
-if (sharedLoad) sharedLoad().then(m => { shared = m; }).catch(() => { shared = null; });
+const CROWD = makeCrowd({ ctx: () => ac, muted: isMuted });
 
 function ctx() {
   if (ac) return ac;
   try { const C = window.AudioContext || window.webkitAudioContext; ac = C ? new C() : null; } catch { ac = null; }
   return ac;
 }
-export function unlock() { const a = ctx(); if (a && a.state === "suspended") a.resume().catch(() => {}); shared?.unlock?.(); }
+export function unlock() { const a = ctx(); if (a && a.state === "suspended") a.resume().then(() => CROWD.warm()).catch(() => {}); else if (a) CROWD.warm(); }
 
 function blip(freq, dur, type = "square", vol = 0.05, slide = 0, at = 0) {
   const a = ctx();
@@ -30,26 +28,13 @@ function blip(freq, dur, type = "square", vol = 0.05, slide = 0, at = 0) {
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g).connect(a.destination); o.start(t); o.stop(t + dur + 0.02);
 }
-function swell(dur, { vol = 0.07, lo = 500, hi = 2400, at = 0 } = {}) {
-  const a = ctx();
-  if (!a || a.state !== "running") return;
-  const n = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
-  let s = 7;
-  for (let i = 0; i < n; i++) { s = (s * 16807) % 2147483647; const e = i / n; d[i] = ((s / 2147483647) * 2 - 1) * Math.min(1, e * 6) * (1 - e); }
-  const src = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
-  f.type = "bandpass"; f.frequency.value = (lo + hi) / 2; f.Q.value = 0.6; g.gain.value = vol;
-  src.buffer = buf; src.connect(f).connect(g).connect(a.destination); src.start(a.currentTime + at);
-}
-// The crowd's answer: "cheer" | "groan" | "stand".
-export function crowd(kind, muted) {
-  if (muted || !kind) return;
-  if (shared) {
-    const fn = shared[kind] || shared.react || shared.play;
-    if (typeof fn === "function") { try { fn === shared[kind] ? fn() : fn(kind); return; } catch { /* fall through to ours */ } }
-  }
-  if (kind === "cheer") swell(1.4, { vol: 0.09, lo: 700, hi: 3000 });
-  else if (kind === "stand") swell(0.8, { vol: 0.05 });
-  else if (kind === "groan") { swell(1.1, { vol: 0.07, lo: 180, hi: 600 }); blip(196, 0.5, "triangle", 0.04, -60, 0.05); }
+// The crowd's answer. mood: calls.js crowdFor ("cheer" | "stand" | "groan"); k: the event; buzzer:
+// the ball was in the air at the buzzer.
+const KIND = { dunk: "roar", three: "cheer", block: "cheer", two: "polite", steal: "thin", intercept: "thin", rimout: "ooh", airball: "groan", shotclock: "groan" };
+export function crowd(mood, muted, k = null, buzzer = false) {
+  if (muted || !mood) return;
+  const kind = buzzer && (k === "two" || k === "three" || k === "dunk") ? "roar" : KIND[k] || { cheer: "cheer", stand: "polite", groan: "groan" }[mood];
+  if (kind) CROWD.play(kind);
 }
 
 // The sim's events for a step -> sounds.

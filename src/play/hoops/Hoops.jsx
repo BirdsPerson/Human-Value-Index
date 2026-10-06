@@ -295,7 +295,7 @@ function Match({ game, me, tape = null, onDone, onQuit }) {
               const line = callFor(N, names, teams, N.frame);
               if (line) setCall(line);
               const mood = crowdFor(N.k);
-              if (mood) { fx.mood = mood; fx.t = 0; if (!skipRef.current) SFX.crowd(mood, mutedRef.current); }
+              if (mood) { fx.mood = mood; fx.t = 0; if (!skipRef.current) SFX.crowd(mood, mutedRef.current, N.k, st.buzzer); }
               if (N.k === "dunk") { fx.dunk = { side: dirOf(N.team), age: 0 }; fx.shake = 10; }
             }
             if (st.phase === "over") finish();

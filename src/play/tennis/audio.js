@@ -1,5 +1,6 @@
 // THE TENNIS CLUB, playable: the sound. WebAudio square and triangle blips, made on the first
 // gesture (browsers keep audio closed until then). Muted is kept in this browser.
+import { makeCrowd } from "../crowdAudio.js";
 const KEY = "hvi-tennis-muted";
 let ac = null;
 export const isMuted = () => { try { return localStorage.getItem(KEY) === "1"; } catch { return false; } };
@@ -10,7 +11,7 @@ function ctx() {
   try { const C = window.AudioContext || window.webkitAudioContext; ac = C ? new C() : null; } catch { ac = null; }
   return ac;
 }
-export function unlock() { const a = ctx(); if (a && a.state === "suspended") a.resume().catch(() => {}); }
+export function unlock() { const a = ctx(); if (a && a.state === "suspended") a.resume().then(() => CROWD.warm()).catch(() => {}); else if (a) CROWD.warm(); }
 
 function blip(freq, dur, type = "square", vol = 0.06, slide = 0, at = 0) {
   const a = ctx();
@@ -36,3 +37,24 @@ export function play(ev, muted) {
     else if (e === "match") { [523, 659, 784, 1047].forEach((f, i) => blip(f, 0.12, "square", 0.05, 0, 0.12 * i + 0.2)); }
   }
 }
+
+// ---- the crowd, heard (the shared ../crowdAudio.js, under this page's mute) -----------------------
+// Read-only: what a step's events and call say about the point -> {kind, say} | null. A serve's toss
+// is the chair's QUIET PLEASE: the crowd stops.
+const CROWD = makeCrowd({ ctx: () => ac, muted: isMuted });
+const SAY = { roar: "THE CROWD ROARS.", cheer: "THE CROWD CHEERS.", polite: "APPLAUSE.", ooh: "THE CROWD GASPS.", groan: "THE CROWD GROANS.", crickets: "SILENCE. SOMEONE COUGHS." };
+export function crowdFor(st, serverBefore) {
+  const ev = st.ev;
+  if (ev.includes("toss")) return { kind: "quiet", say: "" };
+  if (!ev.includes("point")) return null;
+  const call = st.call || "", r = (kind) => ({ kind, say: SAY[kind] });
+  if (ev.includes("match")) return r("roar");
+  if (call === "DOUBLE FAULT") return r("groan");
+  if (call === "ACE") return r("roar");
+  if (ev.includes("game") && serverBefore >= 0 && st.lastWinner !== serverBefore) return r("roar");   // a break
+  if (st.rally >= 8) return r("roar");
+  if (call === "OUT" || call === "NET") return st.rally <= 1 && call === "NET" ? r("crickets") : r("ooh");
+  if (ev.includes("game") || st.rally >= 5) return r("cheer");
+  return r("polite");
+}
+export function crowd(kind, muted) { if (!muted && kind) CROWD.play(kind); else if (kind === "quiet") CROWD.play("quiet"); }

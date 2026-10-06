@@ -251,6 +251,7 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
   const [hud, setHud] = useState(null);
   const [paused, setPaused] = useState(false);
   const [muted, setMutedS] = useState(() => SFX.isMuted());
+  const [crowdSay, setCrowdSay] = useState("");   // the crowd, for the screen reader (audio.js crowdFor)
   const [scale, setScale] = useState(1);
   const [pad, setPad] = useState(null);
   const [touch, setTouch] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer: coarse)").matches));
@@ -337,7 +338,10 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
           acc -= 1 / 60; n++;
           // the broadcast holds the match during a cutaway: no step, nothing in the log
           if (!ended && show.slot(st, inp.mask)) {
+            const srv = serverOfMatch(st);
             log.push(inp.mask); step(st, inp.mask); SFX.play(st.ev, mutedRef.current);
+            const cr = SFX.crowdFor(st, srv);
+            if (cr) { SFX.crowd(cr.kind, mutedRef.current); if (cr.say) setCrowdSay(cr.say); }
             show.observe(st);
             if (st.phase === "over") { finish(); }
           } else if (ended) show.slot(st, 0);
@@ -379,6 +383,7 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
           ))}
         </tbody>
       </table>
+      <p className="sr-only" aria-live="polite">{crowdSay}</p>
       <div className="tn-call" aria-live="polite" aria-atomic="true">{hud?.call ? `${hud.call}${hud.tb && hud.call !== "TIEBREAK" ? " // TIEBREAK" : ""}` : " "}{hud?.call && <span className="sr-only">. Games: {names[0]} {hud.rows[0].games}, {names[1]} {hud.rows[1].games}.</span>}</div>
       <div className="tn-stage" ref={wrapRef}>
         <div className="tn-screen" style={{ width: W * scale, height: H * scale }}>
