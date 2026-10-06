@@ -48,7 +48,7 @@ export const WIDGETS = [
   { id: "cups", name: "TOURNAMENTS", note: "WHAT IS OPEN NOW, AND WHO LEADS" },
   { id: "league", name: "LEAGUE TABLE", note: "THE DEPARTMENTAL CUP, TOP FIVE" },
 ];
-export const DEFAULT_WIDGETS = ["market", "wire", "cam", "notice"];
+export const DEFAULT_WIDGETS = ["market", "wire", "watch", "set", "notice"];
 const KNOWN = new Set(WIDGETS.map(w => w.id));
 export function loadWidgets() {
   try {

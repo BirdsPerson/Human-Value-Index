@@ -11,7 +11,7 @@ const ids = [...prefs.split("export const DEFAULT_WIDGETS")[0].split("export con
 assert.ok(ids.length >= 10, "the widget list");
 const NOW = desk.match(/const NOW = \{([^}]*)\}/)[1], LAZY = desk.match(/const LAZY = \{([\s\S]*?)\n\};/)[1];
 for (const id of ids) assert.ok(new RegExp(`\\b${id}:`).test(NOW) || new RegExp(`\\b${id}:`).test(LAZY), `widget ${id} has no renderer in FrontDesk.jsx`);
-assert.deepEqual(JSON.parse(prefs.match(/DEFAULT_WIDGETS = (\[[^\]]*\])/)[1]), ["market", "wire", "cam", "notice"], "the default desk is today's four");
+assert.deepEqual(JSON.parse(prefs.match(/DEFAULT_WIDGETS = (\[[^\]]*\])/)[1]), ["market", "wire", "watch", "set", "notice"], "the default desk");
 
 const { watchList, watchable } = await import("../netlify/functions/watch.js");
 const w = watchList(Date.UTC(2026, 9, 6, 12, 0));
