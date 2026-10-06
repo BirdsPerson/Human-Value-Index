@@ -11,6 +11,7 @@ import { draw, drawCutaway, drawReview, unproj, headFrom, faceBox, speakerAt, SU
 import { sheetHints } from "../heads.js";
 import { createShow, REVIEW } from "./show.js";
 import { createInput, SELECT_GLYPH } from "./input.js";
+import GameMenu from "../GameMenu.jsx";
 import * as SFX from "./audio.js";
 import CSS from "./tennis.css?inline";
 import "../pages.css";
@@ -68,15 +69,17 @@ export default function Tennis({ route }) {
   const [opp, setOpp] = useState(() => (vs && OPP_BY_KEY.get(vs)) || null);
   const [match, setMatch] = useState(null);   // {seed, key: n}
   const [done, setDone] = useState(null);
-  const start = (o, f) => { SFX.unlock(); if (f) setFmt(f); setOpp(o); setDone(null); setMatch({ seed: seedNow(), n: Date.now() }); };
+  const [more, setMore] = useState(false);   // CHANGE SETTINGS opens the picker's options
+  const start = (o, f) => { SFX.unlock(); if (f) setFmt(f); setOpp(o); setDone(null); setMore(false); setMatch({ seed: seedNow(), n: Date.now() }); };
+  const toPicker = (open) => { setDone(null); setMatch(null); setMore(open); };
   return (
     <div className="tn">
       <ScreenHead title="THE TENNIS CLUB" meta={`${SURFACE_NAMES[court]} // EXHIBITION // NOTHING IS AT STAKE. EVERYTHING IS RECORDED.`} />
       {match && opp && !done
-        ? <Match key={match.n} seed={match.seed} fmt={fmt} court={court} opp={opp} me={me} onDone={setDone} onQuit={() => setMatch(null)} />
+        ? <Match key={match.n} seed={match.seed} fmt={fmt} court={court} opp={opp} me={me} onDone={setDone} onQuit={() => setMatch(null)} onRestart={() => start(opp)} />
         : done
-          ? <Done done={done} me={me} onAgain={() => start(opp)} onPick={() => { setDone(null); setMatch(null); }} />
-          : <Picker fmt={fmt} setFmt={setFmt} court={court} setCourt={setCourt} pre={vs ? opp?.key || null : null} onPick={start} />}
+          ? <Done done={done} me={me} onAgain={() => start(opp)} onPick={() => toPicker(false)} onSettings={() => toPicker(true)} />
+          : <Picker key={more ? "more" : "plain"} fmt={fmt} setFmt={setFmt} court={court} setCourt={setCourt} pre={vs ? opp?.key || null : null} open={more} onPick={start} />}
     </div>
   );
 }
@@ -86,9 +89,9 @@ function seedNow() {
 
 // ---- choosing ------------------------------------------------------------------------------------
 // One line, one button: PLAY NOW is a short match against the easiest member. The rest is folded.
-function Picker({ fmt, setFmt, court, setCourt, pre, onPick }) {
+function Picker({ fmt, setFmt, court, setCourt, pre, open = false, onPick }) {
   const [sel, setSel] = useState(() => Math.max(0, OPPONENTS.findIndex(o => o.key === pre)));
-  const [more, setMore] = useState(Boolean(pre));
+  const [more, setMore] = useState(Boolean(pre) || open);
   const refs = useRef([]), playRef = useRef(null);
   const quick = () => onPick(OPP_BY_KEY.get(EASIEST), "short");
   useEffect(() => { if (!pre) playRef.current?.focus({ preventScroll: true }); }, [pre]);
@@ -264,7 +267,7 @@ function pointsShown(sc, i) {
   return PT[Math.min(a, 3)];
 }
 
-function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
+function Match({ seed, fmt, court, opp, me, onDone, onQuit, onRestart }) {
   const canvasRef = useRef(null), wrapRef = useRef(null), inputRef = useRef(null), showRef = useRef(null);
   const [hud, setHud] = useState(null);
   const [paused, setPaused] = useState(false);
@@ -404,6 +407,7 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleLegend = () => setLegendOpen(v => { writeFlag(LEGEND_KEY, !v); return !v; });
+  const toggleMute = () => { const m = !muted; setMutedS(m); SFX.setMuted(m); if (!m) SFX.unlock(); };
   const toggleClassic = () => setClassic(v => { writeFlag(CLASSIC_KEY, !v); return !v; });
   // the pointer on the picture: logical pixels, and the court floor under them
   const at = (e) => { const r = canvasRef.current.getBoundingClientRect(); return [((e.clientX - r.left) * W) / r.width, ((e.clientY - r.top) * H) / r.height]; };
@@ -464,22 +468,26 @@ function Match({ seed, fmt, court, opp, me, onDone, onQuit }) {
               <small>THE DEPARTMENT OF LEISURE // {skipHint}</small>
             </div>
           )}
-          {paused && (
-            <div className="tn-pause">
-              <b>PAUSED</b>
-              <span>THE DEPARTMENT HAS STOPPED THE CLOCK. IT DOES NOT USUALLY.</span>
-              <Legend mode={mode} family={pad} compact />
-              <span>{mode === "pad" ? (GLYPHS[pad] || GLYPHS.generic).start : mode === "touch" ? "START" : "ENTER / ESC"} TO RESUME</span>
-            </div>
-          )}
+          {paused && <div className="tn-pause" aria-hidden="true"><b>PAUSED</b></div>}
         </div>
       </div>
+      {paused && (
+        <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE DEPARTMENT HAS STOPPED THE CLOCK. IT DOES NOT USUALLY."
+          onBack={() => togglePause(false)}
+          options={{
+            resume: () => togglePause(false),
+            restart: onRestart,
+            controls: <Legend mode={mode} family={pad} compact />,
+            sound: { on: !muted, onSelect: toggleMute },
+            quit: { label: "LEAVE THE COURT", onSelect: onQuit },
+          }} />
+      )}
       {touch && classic && <TouchPad input={inputRef} onStart={() => togglePause()} />}
       <Legend mode={mode} family={pad} open={legendOpen} onToggle={toggleLegend} />
       {tell && <p className={`tn-tell ${tell.kind}`}>{tell.kind === "say" ? `${opp.name}: "${tell.text}"` : tell.text}</p>}
       <ButtonRow>
         <Button onClick={() => togglePause()}>{paused ? "Resume" : "Pause"}</Button>
-        <Button onClick={() => { const m = !muted; setMutedS(m); SFX.setMuted(m); if (!m) SFX.unlock(); }}>{muted ? "Sound on" : "Mute"}</Button>
+        <Button onClick={toggleMute}>{muted ? "Sound on" : "Mute"}</Button>
         <Button onClick={toggleCuts}>{cutsOn ? "Crowd cameras: on" : "Crowd cameras: off"}</Button>
         {touch && <Button onClick={toggleClassic}>{classic ? "\u2212 Touch buttons" : "+ Touch buttons"}</Button>}
         <Button variant="back" onClick={onQuit}>Leave the court</Button>
@@ -539,19 +547,33 @@ function TouchPad({ input, onStart }) {
 }
 
 // ---- the whistle ---------------------------------------------------------------------------------
-function Done({ done, me, onAgain, onPick }) {
+function Done({ done, me, onAgain, onPick, onSettings }) {
+  const [shut, setShut] = useState(false);   // the menu closed to look at the result
   const { rec, verified, opp } = done, r = rec.result, youWon = r.winner === 0;
   const score = r.sets.map(s => (youWon ? `${s[0]}-${s[1]}` : `${s[1]}-${s[0]}`)).join(" ");
   const tell = talkFor(opp, youWon ? "lose" : "win", rec.seed % 2);
   useEffect(() => {
     let raf, prev = null;
+    if (!shut) return undefined;   // the menu has the pad while it is open
     const tick = () => { raf = requestAnimationFrame(tick); const p = readPad(); if (p.connected && prev && ((p.held.act && !prev.act) || (p.held.start && !prev.start))) onAgain(); prev = p.connected ? p.held : null; };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [onAgain]);
+  }, [onAgain, shut]);
+  const headline = youWon ? `${me.name} DEFEATS ${opp.name}, ${score}.` : `${opp.name} DEFEATS ${me.name}, ${score}.`;
   return (
     <Frame box title="GAME, SET AND MATCH" meta="EXHIBITION">
-      <p className={`tn-big ${youWon ? "win" : "lose"}`}>{youWon ? `${me.name} DEFEATS ${opp.name}, ${score}.` : `${opp.name} DEFEATS ${me.name}, ${score}.`}</p>
+      {!shut && (
+        <GameMenu key="end" kind="end" title="GAME, SET AND MATCH." summary={headline} onBack={() => setShut(true)}
+          options={{
+            again: { label: `PLAY AGAIN: ${opp.name}`, onSelect: onAgain },
+            rematch: { label: "NEW OPPONENT", onSelect: onPick },
+            settings: { label: "CHANGE SETTINGS", onSelect: onSettings },
+            look: { label: "LOOK AT THE RESULT", onSelect: () => setShut(true) },
+            play: true,
+            city: true,
+          }} />
+      )}
+      <p className={`tn-big ${youWon ? "win" : "lose"}`}>{headline}</p>
       <p className="tn-p">{youWon ? "THE DEPARTMENT HAS NOTED AN ANOMALY. IT WILL NOT BE REPEATED IN THE STANDINGS." : "AS PROJECTED. THE PROJECTION IS NOT ON YOUR FILE EITHER."}</p>
       {tell && <p className={`tn-tell ${tell.kind}`}>{tell.kind === "say" ? `${opp.name}: "${tell.text}"` : tell.text}</p>}
       <p className="tn-notice">{NOTICE}</p>
