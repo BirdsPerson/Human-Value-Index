@@ -35,7 +35,7 @@ function saveRound(rec) {
   MEMORY.unshift(rec);
   try { localStorage.setItem(KEEP, JSON.stringify([rec, ...loadRounds()].slice(0, 8))); } catch { /* private window: the tab keeps it */ }
 }
-const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); return { vs: q.get("vs") || null, course: ["open", "links"].includes(q.get("course")) ? q.get("course") : null, preset: ["cabinet", "sim"].includes(q.get("preset")) ? q.get("preset") : null }; };
+const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); return { cab: q.get("cab") === "1", vs: q.get("vs") || null, course: ["open", "links"].includes(q.get("course")) ? q.get("course") : null, preset: ["cabinet", "sim"].includes(q.get("preset")) ? q.get("preset") : null }; };
 // ?preset=: played at home on a piece from THE SHOPS (src/economy/shops.js PLAY_AT_HOME). The same
 // game, framed: the bar-top cabinet is the mouse / trackball drag swing, the simulator the pad's right-stick swing.
 const PRESET = {
@@ -82,7 +82,7 @@ function GolfCard({ g }) {
 }
 
 export default function Golf({ route }) {
-  const { vs, course: course0, preset } = useMemo(() => parseRoute(route), [route]);
+  const { vs, course: course0, preset, cab } = useMemo(() => parseRoute(route), [route]);
   const home = preset ? PRESET[preset] : null;
   const [course, setCourse] = useState(course0 || "open");
   const [count, setCount] = useState(9);
@@ -108,6 +108,9 @@ export default function Golf({ route }) {
     setGame({ key: seed, args: [g, demo, o], cfg: { seed, course: c.course, mode: g ? "match" : "stroke", start: c.start, count: c.count, ...(c.easy && !demo ? { easy: true, assist: 2 } : {}), player: demo ? { name: "THE CADDIE", color: { shirt: "#7c7c7c", pants: "#000000" } } : { name: p.name, color: p.color }, cpu: g ? { slug: g.slug, name: g.name, rating: g.rating, color: { shirt: g.shirt, pants: g.pants } } : null }, demo, looks: [demo ? lookFor({ hint: { skin: "light_tan", hair_style: "short", hair_color: "grey" }, shirt: "#7c7c7c", pants: "#000000" }) : lookOfMe(p), ...(g ? [lookOfGolfer(g)] : [])] });
   };
   const done = (rec) => { saveRound(rec); setRounds(loadRounds()); };
+  // TEE'D OFF, the bar cabinet (src/city/houseGames.js, ?cab=1): straight onto the first tee, the
+  // mouse's drag swing first, the trackball's feel
+  useEffect(() => { if (cab && !game) begin(null, false, { course: "open", start: 0, count: 9 }); }, [cab]);   // eslint-disable-line react-hooks/exhaustive-deps
   const toggleMute = () => { sfx.setMuted(!muted); setMuted(!muted); };
 
   return (
@@ -116,7 +119,7 @@ export default function Golf({ route }) {
       {home && <p className="pg-lede">{home.line}</p>}
       {game ? (
         <>
-          <Play key={game.key} cfg={game.cfg} demo={game.demo} lookP={game.looks} onDone={game.demo ? () => {} : done} muted={muted} onMute={toggleMute}
+          <Play key={game.key} trackball={cab || preset === "cabinet"} cfg={game.cfg} demo={game.demo} lookP={game.looks} onDone={game.demo ? () => {} : done} muted={muted} onMute={toggleMute}
             onAgain={() => begin(...game.args)}
             onNewCourse={() => { const [g, d, o] = game.args, next = (game.cfg.course === "open" ? "links" : "open"); setCourse(next); begin(g, d, { ...o, course: next }); }}
             onSettings={() => setGame(null)} />
@@ -226,7 +229,7 @@ function Rounds({ rounds }) {
 const KEYMAP = { ArrowLeft: BTN.L, ArrowRight: BTN.R, ArrowUp: BTN.U, ArrowDown: BTN.D, " ": BTN.A, z: BTN.A, Z: BTN.A, x: BTN.B, X: BTN.B };
 const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); };
 
-function Play({ cfg, demo, lookP, onDone, muted, onMute, onAgain, onNewCourse, onSettings }) {
+function Play({ trackball = false, cfg, demo, lookP, onDone, muted, onMute, onAgain, onNewCourse, onSettings }) {
   const [endMenu, setEndMenu] = useState(false);   // the shared end menu (../GameMenu.jsx), once the card is up
   const canvas = useRef(null), wrap = useRef(null);
   const touch = useRef(0);
@@ -238,7 +241,7 @@ function Play({ cfg, demo, lookP, onDone, muted, onMute, onAgain, onNewCourse, o
   const [pad, setPad] = useState(null);
   const [say, setSay] = useState("");   // the screen reader's line: the hole, then each shot's verdict
   const coarse = useMemo(() => { try { return window.matchMedia("(pointer: coarse)").matches; } catch { return false; } }, []);
-  const [mode, setMode] = useState(coarse ? "pointer" : "keys");   // the legend follows the last input used
+  const [mode, setMode] = useState(coarse || trackball ? "pointer" : "keys");   // the legend follows the last input used
   const [classic, setClassic] = useState(false);                     // a phone: the old buttons, on request
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
@@ -268,7 +271,7 @@ function Play({ cfg, demo, lookP, onDone, muted, onMute, onAgain, onNewCourse, o
     const ctx = canvas.current.getContext("2d");
     // ---- the mouse / a finger: aim on the map, drag to swing (gesture.js), logged as events (sim.js act)
     const cv = canvas.current;
-    const ui = { mouse: coarse, drag: null, spin: { x: 0, y: 0 }, hint: null };
+    const ui = { mouse: coarse || trackball, drag: null, spin: { x: 0, y: 0 }, hint: null };
     const ptr = { id: null, mode: null, S: [], putt: false, aim: null, aimTick: -99, ev: [], sayAim: false };
     const HINT = "hvi-golf-drag-hint";
     let hints = 0;

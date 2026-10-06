@@ -17,7 +17,7 @@ import { lotPhase, resortPhase, machineClock } from "./sim.js";
 import { PLANNING_ROOM_TYPE, PLANNING_LOOK, planningPlans, planningPropDrawers } from "./planning.js";
 import { STORE_ROOM_TYPE, STORE_LOOK, storePlans, storePropDrawers, storeRoomType, storeRoomDrawers } from "./storefrontProps.js";   // THE MALL
 import { NIGHT_ROOM_TYPE, NIGHT_LOOK, nightPlans, nightPropDrawers, nightRoomDrawers, nightLive } from "./nightlifeProps.js";   // THE NIGHTLIFE QUARTERS
-import { FUNNEL_ROOM_TYPE, FUNNEL_LOOK, FUNNEL_ACTS, funnelPlans, funnelPropDrawers, funnelRooms, withTv, customsSign } from "./funnelProps.js";
+import { FUNNEL_ROOM_TYPE, FUNNEL_LOOK, FUNNEL_ACTS, funnelPlans, funnelPropDrawers, funnelRooms, withTv, customsSign, housePlans, houseAliases } from "./funnelProps.js";
 import { floorRoomType, casinoPlans, casinoLook, casinoDraw, casinoLive, casinoProps } from "../casino/cityRooms.js";
 
 // place id -> interior type
@@ -323,6 +323,7 @@ nightPlans(PLANS, { A, M, P, SIDE });   // THE NIGHTLIFE QUARTERS
 planningPlans(PLANS, { A, M, P, SIDE });   // the Dept of Planning (planning.js)   // new rooms, and a JETSAM! cabinet in the bars, the diner, the casino
 Object.assign(PLANS, casinoPlans({ A, M, P }));
 Object.assign(LOOK, casinoLook);
+housePlans(PLANS, LOOK, { A, M, P, SIDE });   // HOUSE GAMES: our own games as cabinets in the bars (funnelProps.js)
 export const PLANNED_TYPES = Object.keys(PLANS);
 
 // Rooms deep enough for two rows get a back row, smaller and set up the wall.
@@ -796,6 +797,7 @@ Object.assign(DRAW, storeRoomDrawers());   // THE MALL's walls
 Object.assign(DRAW, nightRoomDrawers());   // THE NIGHTLIFE QUARTERS' walls
 DRAW.planning = DRAW.office;   // the Dept of Planning's drawing office: the office's walls
 Object.assign(DRAW, casinoDraw({ R, across }));
+Object.assign(DRAW, houseAliases(DRAW));   // THE LANTERN, the summit lodge: a bar's walls
 export const DRAWN_TYPES = Object.keys(DRAW);
 
 // ---- ambient life: subtle, in the terminal palette; still when motion is reduced --------
@@ -890,6 +892,7 @@ const LIVE = {
 };
 Object.assign(LIVE, FUNNEL_ROOMS.LIVE, LIVE.market ? { boardwalk: LIVE.market } : {}); withTv(LIVE);   // EBTV on the telly in the bars and the diner
 Object.assign(LIVE, nightLive());   // THE NIGHTLIFE QUARTERS: the beams, the strobe, the stage light; EBTV in the bars
+Object.assign(LIVE, houseAliases(LIVE));   // THE LANTERN, the summit lodge: a bar's life
 
 // ---- furniture ---------------------------------------------------------------------------
 // PROP[name] = {back, front}: back is drawn before the row's people, front after them.

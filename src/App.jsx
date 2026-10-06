@@ -410,7 +410,13 @@ function Logon({ onPick: pick }) {
 
 // Every screen: the one-line header (banner on the menu only), the page, and the
 // phone command bar.
+// A house cabinet in the city's CRT (src/city/houseGames.js: a bar's TAGGED OUT, TEE'D OFF...): the
+// game framed on its own, ?cab=1, with no page chrome; any way out of the game closes the cabinet and
+// leaves the player in the bar (FunnelOverlay listens for the message).
+const CABINET = (() => { try { return window.self !== window.top && /[?&]cab=1(&|$)/.test(window.location.hash); } catch { return false; } })();
+const CAB_ROOM = CABINET ? window.location.hash.split(/[/?]/)[0] : null;
 function Screen({ nav, wide = false, banner = false, children }) {
+  if (CABINET) return <div className="hvi-app hvi-cabinet"><div className={`hvi-wrap${wide ? " wide" : ""}`}>{children}</div></div>;
   return (
     <div className="hvi-app">
       <AppHeader active={nav.active} onNav={nav.onNav} />
@@ -479,6 +485,7 @@ export default function OverlordAssessment() {
     let prev = window.location.hash;
     const onHash = () => {
       const h = window.location.hash, path = (x) => x.split("?")[0];
+      if (CABINET && h.split(/[/?]/)[0] !== CAB_ROOM) { try { window.parent.postMessage({ hvi: "cabinet-close" }, window.location.origin); } catch { /* not framed */ } window.history.back(); return; }
       if (path(h) !== path(prev)) window.scrollTo(0, 0);
       prev = h;
       setRoute(h);

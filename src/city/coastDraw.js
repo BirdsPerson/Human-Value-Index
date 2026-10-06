@@ -614,7 +614,12 @@ function foothills(K) {
   put(P.x, P.y, () => {
     G.prism(rectPts(P.x - 0.7, P.y - 0.5, P.x + 0.7, P.y + 0.5), 0, 0.85, "#7a5232", 1.15);
     G.prism(rectPts(P.x - 0.85, P.y - 0.65, P.x + 0.85, P.y + 0.65), 0.85, 0.95, "#3f5a3a", 1.3);
-    if (lod === "near") { const [mx, my] = G.Q(P.x, P.y + 0.52, 0.6); c.font = `bold ${Math.max(6, Math.round(G.z * 0.3))}px 'Fira Mono', monospace`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "#fde68a"; c.fillText("RANGER", mx, my); }
+    if (lod === "near") { const [mx, my] = G.Q(P.x, P.y + 0.52, 0.6); c.font = `bold ${Math.max(6, Math.round(G.z * 0.3))}px 'Fira Mono', monospace`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "#fde68a"; c.fillText("OUTFITTER", mx, my); }
+    // THE OUTFITTER's stock on the porch (houseGames / funnels OUTFITTER): capture crates with air
+    // holes and a rolled net. Wildlife capture, never a hunt: the Safari Zone opens from here (soon).
+    G.prism(rectPts(P.x + 0.75, P.y + 0.1, P.x + 1.25, P.y + 0.55), 0, 0.4, "#a8844e", 1.1);
+    G.prism(rectPts(P.x + 0.8, P.y - 0.45, P.x + 1.2, P.y - 0.05), 0, 0.32, "#94733f", 1.1);
+    if (lod === "near") { c.fillStyle = "#1a120a"; for (const [hx, hy] of [[1.0, 0.33], [1.0, -0.25]]) { const [qx, qy] = G.Q(P.x + hx, P.y + hy + 0.23, 0.2); c.fillRect(Math.round(qx) - 1, Math.round(qy) - 1, 2, 2); } }
   }, 0.02);
 }
 

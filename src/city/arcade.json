@@ -82,5 +82,167 @@
     "neighbour": true,
     "frame": false,
     "campaign": "internet-city-cabinet"
+  },
+  {
+    "slug": "house-golf",
+    "title": "TEE'D OFF",
+    "status": "live",
+    "role": "Trackball golf",
+    "year": "",
+    "line": "THE DEPARTMENT LINKS ON A TRACKBALL. DRAG DOWN, PUSH UP.",
+    "play": null,
+    "itch": null,
+    "house": true,
+    "route": "#golf",
+    "campaign": "house-golf",
+    "hs": {
+      "fmt": "par",
+      "lo": -12,
+      "hi": -3
+    }
+  },
+  {
+    "slug": "house-hunt",
+    "title": "TAGGED OUT",
+    "status": "live",
+    "role": "Light-gun hunting",
+    "year": "",
+    "line": "BUCKS AND BULLS ONLY. TWO PLASTIC RIFLES ON A CHAIN.",
+    "play": null,
+    "itch": null,
+    "house": true,
+    "route": "#hunt",
+    "campaign": "house-hunt",
+    "hs": {
+      "fmt": "pts",
+      "lo": 38000,
+      "hi": 78000
+    }
+  },
+  {
+    "slug": "house-bowling",
+    "title": "LANE NINE",
+    "status": "live",
+    "role": "Bowling",
+    "year": "",
+    "line": "TEN PINS. THE DEPARTMENT KEEPS THE SHOES.",
+    "play": null,
+    "itch": null,
+    "house": true,
+    "route": "#bowling",
+    "campaign": "house-bowling",
+    "hs": {
+      "fmt": "pins",
+      "lo": 190,
+      "hi": 300
+    }
+  },
+  {
+    "slug": "house-tennis",
+    "title": "SET POINT",
+    "status": "live",
+    "role": "Tennis",
+    "year": "",
+    "line": "EXHIBITIONS AGAINST THE FAMOUS. ONE SET.",
+    "play": null,
+    "itch": null,
+    "house": true,
+    "route": "#tennis",
+    "campaign": "house-tennis",
+    "hs": {
+      "fmt": "sets",
+      "lo": 0,
+      "hi": 0
+    }
+  },
+  {
+    "slug": "house-hoops",
+    "title": "BUCKETS",
+    "status": "live",
+    "role": "Basketball",
+    "year": "",
+    "line": "THE LEAGUE'S OWN TEAMS, FIVE ON FIVE. THE HOOP IS REAL; THE BALL IS NOT.",
+    "play": null,
+    "itch": null,
+    "house": true,
+    "route": "#hoops",
+    "campaign": "house-hoops",
+    "hs": {
+      "fmt": "hoops",
+      "lo": 24,
+      "hi": 60
+    }
+  },
+  {
+    "slug": "house-football",
+    "title": "FOURTH AND LONG",
+    "status": "live",
+    "role": "Football",
+    "year": "",
+    "line": "THE GRIDIRON, IN A BOX.",
+    "play": null,
+    "itch": null,
+    "house": true,
+    "route": "#football",
+    "campaign": "house-football",
+    "hs": {
+      "fmt": "line",
+      "lo": 0,
+      "hi": 0
+    }
+  },
+  {
+    "slug": "house-soccer",
+    "title": "EXTRA TIME",
+    "status": "live",
+    "role": "Soccer",
+    "year": "",
+    "line": "THE PITCH, IN A BOX.",
+    "play": null,
+    "itch": null,
+    "house": true,
+    "route": "#soccer",
+    "campaign": "house-soccer",
+    "hs": {
+      "fmt": "line",
+      "lo": 0,
+      "hi": 0
+    }
+  },
+  {
+    "slug": "house-fish",
+    "title": "REEL TIME",
+    "status": "live",
+    "role": "Fishing",
+    "year": "",
+    "line": "A ROD ON THE FRONT. THE PIER AND THE RIVER INSIDE.",
+    "play": null,
+    "itch": null,
+    "house": true,
+    "route": "#fish",
+    "campaign": "house-fish",
+    "hs": {
+      "fmt": "lb",
+      "lo": 900,
+      "hi": 4200
+    }
+  },
+  {
+    "slug": "house-ski",
+    "title": "FRESH POWDER",
+    "status": "live",
+    "role": "Skiing",
+    "year": "",
+    "line": "DOWN THE MOUNTAIN. THE LIFT IS FREE.",
+    "play": null,
+    "itch": null,
+    "house": true,
+    "route": "#ski",
+    "campaign": "house-ski",
+    "hs": {
+      "fmt": "time",
+      "lo": 620,
+      "hi": 980
+    }
   }
 ]

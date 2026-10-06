@@ -9,13 +9,14 @@
 //               beside whoever presents), cameras and crew, the vision mixer, a studio audience
 // Cabinets also stand in the Dive, the Lantern, the diner and a corner of the casino; the
 // bars and the diner get a TV showing what EBTV is playing (funnels.js ebtvNow).
-import { GAMES, GAME, PLAYABLE, OWN_GAMES, NEIGHBOURS, cabColors, highScore, ebtvNow, ebtvLive, CAMPAIGN_OF_PLACE, campaignFor } from "./funnels.js";
+import { GAMES, GAME, PLAYABLE, OWN_GAMES, NEIGHBOURS, HOUSE, cabColors, highScore, marqueeScore, ebtvNow, ebtvLive, CAMPAIGN_OF_PLACE, campaignFor } from "./funnels.js";
+import { HOUSE_PLACES, HOUSE_PLACE_TYPES, houseFor, houseScreen, houseExtras, loadVerified } from "./houseGames.js";
 import { ebtvFrame, drawFrame, tvBox } from "./ebtvFrame.js";
 import { machineClock } from "./sim.js";
 import { shopState, wallOpen, loadShop, shopSlots, thumb, shopFocus } from "./shopStock.js";
 import { HOSTS as CAST, shiftAt, chatterAt, pitching } from "./hostsLive.js";
 
-export const FUNNEL_ROOM_TYPE = { "customs-house": "customs", arcade: "arcade", "eb-shop": "recordshop", "campus-lounge": "union", "studio-row": "ebtv", boardwalk: "boardwalk" };
+export const FUNNEL_ROOM_TYPE = { ...HOUSE_PLACE_TYPES, "customs-house": "customs", arcade: "arcade", "eb-shop": "recordshop", "campus-lounge": "union", "studio-row": "ebtv", boardwalk: "boardwalk" };
 export const FUNNEL_LOOK = { boardwalk: ["#241c10", "#5a4630"], arcade: ["#140c20", "#2a1a3a"], recordshop: ["#241a16", "#3e2c22"], union: ["#1c1a22", "#34303c"], ebtv: ["#12282a", "#2a2a30"] };
 export const FUNNEL_ACTS = ["arcade", "browse"];
 export const HOSTS = ["carol", "dale", "asuka", "hector", "joan", "vern"];
@@ -61,6 +62,30 @@ export function funnelPlans(PLANS, { A, M, P, SIDE }) {
   if (PLANS.casino) { withCab(PLANS.casino.front); if (PLANS.casino.solo) withCab(PLANS.casino.solo); }
 }
 
+// ---- the house games (houseGames.js): our own games as cabinets in the bars, THE ARCADE's back row --
+// Called by props.js once every plan exists (the brewpub's, the casino's): each room type in
+// HOUSE_PLACES gets its house cabinets after its first cabinet (players at them), the bar-like types
+// only here (bar-lantern, bar-lodge) are a bar furnished with their own set, and THE ARCADE's back row
+// opens with HOUSE GAMES, a cabinet for every one (one player; the rest wait for theirs).
+export const HOUSE_TYPES = Object.keys(HOUSE_PLACES).filter(t => t.includes("-"));
+export function housePlans(PLANS, LOOK, { A, M, P, SIDE }) {
+  const cab = (slug) => M(A("stand", "arcade", "patron", 1), `cab:${slug}`, 1.6, SIDE);
+  for (const t of HOUSE_TYPES) { const base = t.split("-")[0]; if (PLANS[base] && !PLANS[t]) { PLANS[t] = JSON.parse(JSON.stringify(PLANS[base])); if (LOOK[base]) LOOK[t] = LOOK[base]; } }
+  for (const [t, slugs] of Object.entries(HOUSE_PLACES)) {
+    const cabs = houseFor(t).map(cab), def = PLANS[t];
+    if (!def || !cabs.length || !slugs.length) continue;
+    const addTo = (row) => { if (!row) return; const h = row.head || []; const k = h.findIndex(m => typeof m.prop === "string" && m.prop.startsWith("cab:")); row.head = k < 0 ? [...cabs, ...h] : [...h.slice(0, k + 1), ...cabs, ...h.slice(k + 1)]; };
+    if (t === "union") { addTo(def.back); addTo(def.solo); } else { addTo(def.front); addTo(def.solo); }
+  }
+  if (PLANS.arcade && HOUSE.length) {
+    const row = HOUSE.map((g, i) => (i === 0 ? cab(g.slug) : P(`cab:${g.slug}`, 1.6)));
+    PLANS.arcade.back = { ...PLANS.arcade.back, head: row };
+  }
+}
+// The bar-like types' walls and life: the base type's, looked up when drawn (so the TV and the
+// nightlife wrappers added after this still apply).
+export function houseAliases(T) { return Object.fromEntries(HOUSE_TYPES.map(t => [t, (...a) => T[t.split("-")[0]]?.(...a)])); }
+
 // ---- drawing ----------------------------------------------------------------------------
 function R(c, col, x, y, w, h) { c.fillStyle = col; c.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h))); }
 function hk(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
@@ -102,14 +127,20 @@ function cabinet(slug, side) {
       R(c, "#16121e", bx0, top, w, CAB_H * p);                       // the body
       R(c, dark ? "#2a2a2e" : c2, bx0, top + 8 * p, 2 * p, 30 * p);   // side art
       R(c, dark ? "#3a3a3a" : c1, bx0, top, w, 6 * p);                // the marquee
-      const hs = g.neighbour ? null : highScore(slug, g.slug, today());
-      if (p >= 1.4) text(c, dark ? "OUT OF ORDER" : hs ? `${hs.initials} ${hs.score}` : g.title, bx0 + w / 2, top + 1.2 * p, 3.4 * p, dark ? "#9ca3af" : "#0b0b0f", "center");
+      if (g.house) loadVerified();
+      const hs = g.neighbour ? null : g.house ? marqueeScore(slug, g.slug, today()) : highScore(slug, g.slug, today());
+      // a house cabinet's marquee: its title and the day's high score taking turns (a player's in white)
+      const showTitle = g.house && Math.floor(t / 3 + (a?.i || 0) * 0.5) % 2 === 0;
+      if (hs?.player) R(c, "#0b0b0f", bx0, top, w, 6 * p);
+      if (p >= 1.4) text(c, dark ? "OUT OF ORDER" : showTitle ? g.title : hs ? `${hs.initials} ${hs.score}` : g.title, bx0 + w / 2, top + 1.2 * p, 3.4 * p, dark ? "#9ca3af" : hs?.player && !showTitle ? "#fef3c7" : "#0b0b0f", "center");
       // the screen
       const sx = bx0 + 2 * p, sy = top + 9 * p, sw = w - 4 * p, sh = 12 * p;
       R(c, "#050608", sx, sy, sw, sh);
       if (dark) {
         R(c, "#e8d36a", sx + sw * 0.15, sy + sh * 0.3, sw * 0.7, sh * 0.4);   // the taped sign
         R(c, "#6b5a1a", sx + sw * 0.25, sy + sh * 0.45, sw * 0.5, p);
+      } else if (g.house) {
+        houseScreen(c, slug, sx, sy, sw, sh, p, t, a?.i || 0);
       } else if (g.neighbour) {
         // the attract screen, ours: a little isometric skyline, its windows coming on
         neighbourScreen(c, sx, sy, sw, sh, p, t, c1, c2);
@@ -136,6 +167,7 @@ function cabinet(slug, side) {
       R(c, c1, bx0 + w - 7 * p, top + 23 * p, 2 * p, p); R(c, c2, bx0 + w - 4 * p, top + 23 * p, 2 * p, p);
       R(c, "#0d0b12", bx0 + w / 2 - 3 * p, top + 32 * p, 6 * p, 6 * p);
       R(c, dark ? "#444" : "#fbbf24", bx0 + w / 2 - p, top + 34 * p, 2 * p, 2 * p);
+      if (g.house) houseExtras(c, slug, bx0, top, w, p, t);
     },
   };
 }
@@ -303,7 +335,7 @@ export function turntableBox(X, Y, W, p) { const s = Math.round(13 * p), x0 = X 
 
 export function funnelPropDrawers({ SIDE }) {
   const PROP = {};
-  for (const g of GAMES) PROP[`cab:${g.slug}`] = cabinet(g.slug, SIDE);
+  for (const g of [...GAMES, ...HOUSE]) PROP[`cab:${g.slug}`] = cabinet(g.slug, SIDE);
   for (const h of HOSTS) PROP[`standee:${h}`] = {};   // the hosts work the floor in person now (drawHosts)
   void standee;
   PROP.prizeCounter = {
@@ -424,6 +456,8 @@ export function funnelRooms() {
       const d = today();
       PLAYABLE.slice(0, 3).forEach((g, i) => { const hs = highScore(g.slug, "arcade", d); text(c, `${hs.initials} ${hs.score}`, bx + 1.5 * u, y + 9.4 * u + i * 2.8 * u, 2 * u, blink(t, 0.8, i * 0.3) ? "#67e8f9" : "#22d3ee"); });
       text(c, "THE ARCADE", x + 4 * u, y + 6 * u, 2.6 * u, "#a78bfa");
+      // the back row's sign: our own games, in a row of their own
+      if (HOUSE.length) { R(c, "#050308", x + 4 * u, y + 10 * u, 22 * u, 4.4 * u); text(c, "HOUSE GAMES", x + 5 * u, y + 10.6 * u, 2.6 * u, blink(t, 0.5) ? "#4ade80" : "#86efac"); }
     },
     recordshop(c, x, y, w, h, u) {
       // the racks: the live stock, framed, face-out on the back wall (shopStock.js); closed or

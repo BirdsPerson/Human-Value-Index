@@ -1196,6 +1196,32 @@ one-line hooks.
   The share link `#city?welcome=internetcity` glides to THE ARCADE, opens it and shows one
   dismissable line, "WELCOME, NEIGHBOUR. YOUR CITY HAS A CABINET HERE."; the parameter is
   dropped from the address at once (City.jsx `WELCOMES`).
+- **House games** (2026-10-05; Scott: "Golden Tee-type stuff — we want all these new games to be
+  arcade games inside of the bars"). Our own playable games as cabinets: `arcade.json` entries with
+  `"house": true` (kept by `sync-arcade.mjs` like the neighbours, off the studio's list), each naming
+  its route: TEE'D OFF (#golf; on this cabinet the mouse's drag swing is the default, the trackball's
+  feel, and it goes straight to the first tee), TAGGED OUT (#hunt, two plastic rifles on chains),
+  SET POINT (#tennis), BUCKETS (#hoops, the shooting machine: backboard, rim and net on top), REEL
+  TIME (#fish, a rod down the side), and LANE NINE (#bowling), FOURTH AND LONG (#football), EXTRA
+  TIME (#soccer), FRESH POWDER (#ski), each hidden everywhere until App.jsx serves its route (the
+  build's route table, as the #play tiles). `houseGames.js`: where they stand (`HOUSE_PLACES`, by
+  room type: every bar like THE DIVE has the hunt and golf after JETSAM!; GOODNIGHT IRENE'S golf and
+  the hunt; THE LANTERN its own type `bar-lantern`, the shooting machine and tennis; the summit
+  lodge `bar-lodge`; the casino's corner golf; the boardwalk the shooting machine and fishing; the
+  diner fishing; the Union bowling and football when they land), their attract screens and
+  furniture, and THE ARCADE's back row, HOUSE GAMES, one of each. `housePlans()` / `houseAliases()`
+  are props.js's two hooks. A tap opens the game in the CRT: our own route with `?cab=1`, which
+  App.jsx draws with no page chrome; BACK TO THE BAR, or any way out of the game, posts
+  `cabinet-close` and the overlay closes, leaving you in the bar. Marquees take turns: the title,
+  then the machine day's high score in the game's own units (`houseScore`: strokes under par,
+  points, pins...) held by a dead figure; where a server re-plays scores (TAGGED OUT's day board,
+  the aquarium's heaviest plaque) a player's verified score that beats it puts their tag up in
+  white (`marqueeScore`). Each cabinet counts as its own campaign. `scripts/check-funnels.mjs` §7.
+- **THE OUTFITTER** (2026-10-05). The foothills' ranger post is a wildlife capture outfitter:
+  tranquilliser darts, nets, crates with air holes on the porch. "CAPTURE PERMITS ISSUED. THE
+  ANIMALS WILL BE HOUSED, AT GREAT EXPENSE." Scott: in the city nothing is killed; the hunting in
+  the bars is a video game. It is the future door to THE SAFARI ZONE and its zoo ("OPENING SOON":
+  designed separately, not built). The foothills' building offers OUTFITTER; FIND finds it.
 - **The shop proxy.** `/api/funnel?shop=1` (`netlify/lib/funnels.js`): Shopify's public
   `products.json` (up to 3 pages) and the newest 36 in-stock products' `.js` pages for their
   video, the shop's own listings (vendor EBShop) first, 24 shown, videos first. Blobs keeps the
@@ -2836,3 +2862,37 @@ the summary publishes `emerge` (status, posts, today's drone routes and helicopt
 derived from that day's plan). Slice 1: DELIVERY DRONES (the Parts Depot) and PRIVATE
 HELICOPTERS (rooftop pads). Drawn in the iso view's sky pass (`emergeDraw.js`); NOW, the PA and
 the file's assignment line carry it. Check: `scripts/check-emergence.mjs`.
+
+
+## THE HUNT: TAGGED OUT, the light-gun bar cabinet (2026-10-05)
+
+Scott: "a hunting game like the arcade-style game in bars everywhere." The shape of that cabinet
+(never its name or its art): `#hunt`, `src/play/hunt/`. A video game, in the bars and on #play;
+in the city itself nothing is killed (THE OUTFITTER captures).
+
+- **A trip** (`data.js` TRIPS, ranked): WHITETAIL, ELK, MOOSE, CARIBOU, and THE DEPARTMENT SHOOT
+  (cardboard bucks, Department property; live does wander through). Five stages on a slow rail
+  across our own ground: the foothills meadow, the forest belt, THE ATTRITION's bank, the
+  mountain ridge, the Retention Pool marsh, above the tree line, the Department range; a bonus
+  round in the middle (ducks over THE ATTRITION, or the paperwork shoot: forms, a gold seal pays).
+  The light follows the city's clock; the seasons open by species on the fishing calendar (out of
+  season it is an exhibition; the Department looks away).
+- **Rules** (`RULES`, all held by `scripts/check-hunt.mjs`): five shells; shoot off the screen
+  (or right-click, R, X, the pad's X) to reload; a male is its antler points and size, behind the
+  shoulder x2, the head x1.5, the body x1, plus a quick-shot bonus; a female is -500 and a
+  strike; three strikes revoke the licence; a hunting stage needs a male filed or the season
+  closes; critters +200, ducks +100 (gold +500); +500 a tag at each tally; up to +2000 for
+  accuracy. Trees, brush, rocks and reeds stop a shot; a shot spooks everything near it.
+  The trophy: the best male on a plaque, in tenths of an inch on the Department's own scale.
+- **Input**: the mouse is the light gun (the reticle is the cursor), a tap shoots where it lands,
+  the arrow keys and Space work; a pad's stick moves the reticle with an acceleration ramp and a
+  mild aim assist (slows over a legal target, never a female), RT or A fires.
+- **The sim** (`sim.js`): pure, 60 Hz, seeded, no Math.random or transcendental Math. The log is
+  run-length `[x, y, bits, n]` with the pointer quantized to the 320x180 frame (-1 off it);
+  `replay()`, `verifyHunt()`, version 1 (a log from another version is refused). The attract
+  mode, THE DEPARTMENT'S MARKSMAN, is `botInput()`, deterministic.
+- **The board** (`/api/hunt`, `netlify/lib/hunt-store.js`): a signed permit (HMAC over id, seed,
+  start, trip; nothing stored until filed) gives the seed and the start; filing re-plays the log
+  on the server and puts the trip on the machine day's board only at exactly the claimed score,
+  one filing per permit, never longer than the time since the permit. Initials (three) are the
+  only name. The bar cabinets' marquees show the board's best when it beats the dead figure's.

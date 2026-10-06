@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { GAME, GAMES, ITCH_LINE, EB_SHOP, EBTV_SITE, EBTV_STREAM, EBTV_NOW, utm, highScore, clickBody, setEbtvNow, ebtvNow, campaignFor, cabColors } from "./funnels.js";
+import { GAME, GAMES, HOUSE, OUTFITTER, ITCH_LINE, EB_SHOP, EBTV_SITE, EBTV_STREAM, EBTV_NOW, utm, highScore, marqueeScore, clickBody, setEbtvNow, ebtvNow, campaignFor, cabColors } from "./funnels.js";
+import { houseSrc, loadVerified } from "./houseGames.js";
 import { machineClock } from "./sim.js";
 import { loadShop, shopState, onShop, setShopFocus, wallOpen } from "./shopStock.js";
 import { tapHost, shiftAt, HOSTS as CAST } from "./hostsLive.js";
@@ -115,6 +116,12 @@ export default function FunnelHost() {
     return () => window.removeEventListener("hvi-funnel", on);
   }, []);
   const close = useCallback(() => setSpec(null), []);
+  // a house cabinet's game, in the CRT, says when the player is done: back to the bar
+  useEffect(() => {
+    const on = (e) => { if (e.origin === window.location.origin && e.data?.hvi === "cabinet-close") setSpec(null); };
+    window.addEventListener("message", on);
+    return () => window.removeEventListener("message", on);
+  }, []);
   if (!spec) return null;
   // on the body: the page's own layers (the bottom bar, the animated frames) stay underneath
   return createPortal(<Overlay spec={spec} setSpec={setSpec} close={close} now={now} />, document.body);
@@ -131,6 +138,7 @@ function Overlay({ spec, setSpec, close, now }) {
   }, [close]);
   let title, meta, body;
   if (spec.kind === "game") ({ title, meta, body } = gameView(spec, setSpec));
+  else if (spec.kind === "outfitter") ({ title, meta, body } = { title: OUTFITTER.title, meta: "THE FOOTHILLS", body: <Outfitter /> });
   else if (spec.kind === "arcade") ({ title, meta, body } = { title: "THE ARCADE // CABINET FLOOR", meta: `${GAMES.length} CABINETS`, body: <ArcadeFloor setSpec={setSpec} /> });
   else if (spec.kind === "shop") ({ title, meta, body } = { title: "EB SHOP // LIVE STOCK", meta: "SHOP.ELECTRICBASEMENT.TV", body: <Shop key={`${spec.item || "all"}|${spec.pitch?.line || ""}`} campaign={spec.campaign || "eb-shop"} item={spec.item || null} pitch={spec.pitch || null} /> });
   else ({ title, meta, body } = { title: "ELECTRIC BASEMENT TV", meta: "LIVE", body: <Ebtv campaign={spec.campaign || "ebtv-station"} now={now} /> });
@@ -154,6 +162,7 @@ function gameView(spec, setSpec) {
   const g = GAME[spec.slug];
   const campaign = campaignFor(spec.slug, spec.campaign || "the-arcade");
   if (g?.neighbour) return neighbourView(g, campaign);
+  if (g?.house) return houseView(g, spec);
   if (!g) return { title: "CABINET UNPLUGGED", meta: "", body: <p className="hvi-fn-note">THIS CABINET HAS BEEN REMOVED FROM THE FLOOR. THE DEPARTMENT KEEPS THE COINS.</p> };
   const hs = highScore(g.slug, spec.place || "arcade", machineClock().day);
   const tag = <span className={`hvi-fn-tag ${g.status}`}>{g.status === "live" ? "NOW PLAYING" : g.status === "beta" ? "BETA" : "OUT OF ORDER"}</span>;
@@ -181,6 +190,43 @@ function gameView(spec, setSpec) {
   );
   void setSpec;
   return { title: g.title, meta: g.role ? g.role.toUpperCase() : "", body };
+}
+
+// A house cabinet: our own game, on our own site, in the CRT (the route's cabinet mode: no page
+// chrome; its BACK TO THE BAR, or any way out of the game, closes this and leaves you in the bar).
+function houseView(g, spec) {
+  const hs = marqueeScore(g.slug, spec.place || "arcade", machineClock().day);
+  const body = (
+    <>
+      <div className="hvi-fn-crt"><div className="glass">
+        <iframe title={`${g.title}, playing`} src={houseSrc(g)} allow="autoplay; fullscreen; gamepad" allowFullScreen onLoad={() => countFunnel(campaignFor(g.slug), "play", null)} />
+        <div className="scan" /></div><span className="brand">{g.title}</span><span className="led" /></div>
+      <div className="hvi-fn-foot">
+        <span className="hvi-fn-tag live">HOUSE GAME</span>
+        <span>{hs.player ? `TODAY'S HIGH SCORE ON THIS CABINET: ${hs.initials}, ${hs.score}. VERIFIED BY REPLAY.` : `TODAY'S HIGH SCORE ON THIS CABINET: ${hs.name.toUpperCase()}, ${hs.score}.`}</span>
+      </div>
+      <div className="hvi-fn-foot">
+        <span>{g.line}</span>
+        <button type="button" className="hvi-fn-btn" onClick={() => { window.location.hash = g.route; }}>PLAY IT FULL SCREEN</button>
+      </div>
+    </>
+  );
+  return { title: g.title, meta: g.role ? g.role.toUpperCase() : "HOUSE GAME", body };
+}
+
+// THE OUTFITTER, in the foothills: wildlife capture (darts, nets, crates), never a hunt. The future
+// door to THE SAFARI ZONE (and its zoo), which is not built yet.
+function Outfitter() {
+  return (
+    <>
+      <div className="hvi-fn-dark" style={{ color: "#d9f99d" }}>
+        <b>{OUTFITTER.line}</b>
+        <span>TRANQUILLISER DARTS. NETS. CRATES WITH AIR HOLES. EVERY ANIMAL CAPTURED GOES TO A ZOO YOU CAN VISIT, AT THE DEPARTMENT'S EXPENSE, WHICH IS YOURS.</span>
+        <span style={{ color: "#fbbf24" }}>{OUTFITTER.soon}</span>
+      </div>
+      <div className="hvi-fn-foot"><span>THE FOOTHILLS. NOTHING IN THE CITY IS SHOT. THE HUNTING IN THE BARS IS A VIDEO GAME.</span></div>
+    </>
+  );
 }
 
 // A neighbour's cabinet (INTERNET CITY): their game is theirs. Our attract screen in the CRT, a
@@ -237,7 +283,30 @@ function ArcadeFloor({ setSpec }) {
           );
         })}
       </div>
+      {HOUSE.length > 0 && <HouseRow setSpec={setSpec} day={day} />}
       <div className="hvi-fn-foot"><span>THE PRIZE COUNTER ACCEPTS TICKETS. THE DEPARTMENT ISSUES NO TICKETS.</span></div>
+    </>
+  );
+}
+// THE ARCADE's back row: the house games, our own, each in the CRT.
+function HouseRow({ setSpec, day }) {
+  useEffect(() => { loadVerified(); }, []);
+  return (
+    <>
+      <p className="hvi-fn-note">HOUSE GAMES: THE CITY'S OWN. THE SAME CABINETS STAND IN THE BARS.</p>
+      <div className="hvi-fn-grid">
+        {HOUSE.map(g => {
+          const hs = marqueeScore(g.slug, "arcade", day);
+          return (
+            <button key={g.slug} type="button" className="hvi-fn-cab live" onClick={() => setSpec({ kind: "game", slug: g.slug, campaign: campaignFor(g.slug), place: "arcade", back: { kind: "arcade" } })} aria-label={`${g.title}, ${g.role}, a house game`}>
+              <span className="mq" style={{ background: cabColors(g.slug)[0] }}>{g.title}</span>
+              <span className="hvi-fn-tag live" style={{ alignSelf: "flex-start" }}>HOUSE GAME</span>
+              <span style={{ fontSize: 12, color: "#9ca3af" }}>{g.role}</span>
+              <span className="hs">HI {hs.initials} {hs.score}{hs.player ? " (VERIFIED)" : ""}</span>
+            </button>
+          );
+        })}
+      </div>
     </>
   );
 }

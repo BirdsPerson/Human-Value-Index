@@ -204,7 +204,73 @@ for (const [pid, games] of Object.entries(F.CABINET_PLACES)) {
   for (const g of F.GAMES) for (const u of [g.play, g.itch]) if (u) ok(L.HOSTS.has(new URL(u).host), `the counter accepts ${new URL(u).host}`);
 }
 
-// 7. The standees' faces ship with the site.
+// 7. The house games (src/city/houseGames.js): our own games as cabinets in the bars and THE ARCADE's
+//    back row. Every one placed resolves to a route App.jsx serves; one whose route is missing is
+//    hidden everywhere (no cabinet, no button), like the #play tiles.
+{
+  const HG = await import("../src/city/houseGames.js");
+  const { routesIn } = await import("../src/play/games.js");
+  const routes = new Set(routesIn(readFileSync(join(ROOT, "src/App.jsx"), "utf8")));
+  const kept = HG.HOUSE_ALL;
+  ok(kept.length >= 8 && kept.every(g => g.house === true && g.route && /^#[a-z]/.test(g.route) && g.status === "live" && !g.play), "the house list: our own games, each naming its route, nothing off-site");
+  const sync = await import("./sync-arcade.mjs");
+  ok(sync.houseIn(readFileSync(join(ROOT, "src/city/arcade.json"), "utf8")).length === kept.length, "the sync keeps the house games it finds in arcade.json");
+  ok(!F.GAMES.some(g => g.house) && F.OWN_GAMES.every(g => !g.house), "the house games stay off the studio's list (the works.json check is unchanged)");
+  for (const want of ["#golf", "#hunt", "#tennis", "#hoops", "#fish", "#bowling", "#football", "#soccer", "#ski"]) ok(kept.some(g => g.route === want), `a house cabinet for ${want}`);
+  const live = HG.houseLive(routes), liveSet = new Set(live.map(g => g.slug));
+  for (const g of live) ok(routes.has(g.route.split(/[/?]/)[0]), `${g.slug}: its route ${g.route} is served`);
+  for (const g of kept.filter(g => !routes.has(g.route.split(/[/?]/)[0]))) ok(!liveSet.has(g.slug) && !HG.houseFor("union", liveSet).includes(g.slug), `${g.slug}: ${g.route} is not served yet, so the cabinet is hidden`);
+  ok(HG.houseLive(new Set(["#golf"])).map(g => g.slug).join() === "house-golf", "a route missing hides its cabinet (#golf alone: TEE'D OFF alone)");
+  ok(["house-golf", "house-hunt", "house-tennis", "house-hoops", "house-fish"].every(s => liveSet.has(s)), "golf, the hunt, tennis, basketball and fishing are live cabinets today");
+  // the rooms (node has no route table: every house game is placed; the build hides the missing ones)
+  const placed = (pid) => { const pl = PROPS.roomPlan(PROPS.typeOf(pid), 916, 120, 32, Math.round(SIM.PLACES[pid].cap / SIM.PLACES[pid].floors.length)); return { pl, cabs: pl.rows.flatMap(r => r.items.map(i => FP.cabinetGame(i.prop)).filter(Boolean)) }; };
+  const dive = placed("dive-bar").cabs;
+  ok(dive.includes("jetsam") && dive.includes("house-hunt") && dive.includes("house-golf"), "THE DIVE: JETSAM!, TAGGED OUT and TEE'D OFF");
+  ok(["house-golf", "house-hunt"].every(s => placed("goodnight-irenes").cabs.includes(s)), "GOODNIGHT IRENE'S: golf and the hunt");
+  ok(PROPS.typeOf("the-lantern") === "bar-lantern" && placed("the-lantern").cabs.includes("house-hoops") && placed("the-lantern").cabs.includes("jetsam"), "THE LANTERN: the shooting machine and JETSAM!");
+  ok(placed("casino").cabs.includes("house-golf") && placed("casino").cabs.includes("jetsam"), "the casino's corner: golf beside JETSAM!");
+  ok(PROPS.roomPlan("bar-lantern", 460, 150, 32).anchors.some(a => a.role === "staff" && a.act === "pour"), "THE LANTERN keeps its bartender");
+  ok(PROPS.PLANNED_TYPES.includes("bar-lantern") && PROPS.DRAWN_TYPES.includes("bar-lantern"), "THE LANTERN's own type is planned and drawn (a bar's walls)");
+  for (const [w, h, sw] of [[916, 120, 32], [700, 110, 32]]) {
+    const pl = PROPS.roomPlan("arcade", w, h, sw, 8);
+    const back = pl.rows.length > 1 ? pl.rows[0].items.map(i => FP.cabinetGame(i.prop)).filter(Boolean) : [];
+    ok(F.HOUSE.every(g => back.includes(g.slug)), `arcade ${w}x${h}: the back row is HOUSE GAMES, every one`);
+  }
+  for (const g of F.HOUSE) ok(!!PROPS.PROP[`cab:${g.slug}`], `cab:${g.slug} is drawn`);
+  // a tap on a house cabinet opens it, and it resolves to its own route in the CRT
+  const { pl } = placed("dive-bar");
+  const hits = FP.funnelRoomHits("dive-bar", pl);
+  for (const s of ["house-hunt", "house-golf"]) {
+    const h = hits.find(x => x.spec.slug === s);
+    ok(h && h.spec.kind === "game" && h.spec.campaign === s && L.CAMPAIGNS.has(s), `a tap on THE DIVE's ${s} cabinet opens it, counted as itself`);
+    ok(FP.funnelTapAt("dive-bar", pl, (h.box[0] + h.box[2]) / 2, (h.box[1] + h.box[3]) / 2)?.slug === s, `${s}: the tap lands on its own box`);
+    ok(HG.houseSrc(F.GAME[s]) === `/${F.GAME[s].route}?cab=1`, `${s} plays its own route in the CRT, in cabinet mode`);
+  }
+  ok(F.funnelButtons("the-dive").some(b => b.label === "TAGGED OUT") && F.funnelButtons("goodnight-irenes").some(b => b.label === "TEE'D OFF"), "the toolbar offers the house cabinets in their buildings");
+  // the marquee: the dead hold the day's high score in the game's own units; a verified player's beats it
+  const hs = F.highScore("house-golf", "dive-bar", 600);
+  ok(/^-\d+ \(\d+\)$/.test(hs.score) && hs.low && hs.initials.length === 3, "TEE'D OFF's high score is strokes under par, held by a figure on file");
+  ok(/^\d{1,3}(,\d{3})+$/.test(F.highScore("house-hunt", "x", 600).score), "TAGGED OUT's is points");
+  const day = 600, dead = F.highScore("house-hunt", "x", day);
+  HG.setVerified("house-hunt", { tag: "SBX", n: dead.n + 10, day });
+  const m = F.marqueeScore("house-hunt", "x", day);
+  ok(m.player && m.initials === "SBX", "a verified score that beats the dead puts the player's tag on the marquee");
+  HG.setVerified("house-hunt", { tag: "SBX", n: dead.n - 10, day });
+  ok(!F.marqueeScore("house-hunt", "x", day).player, "a lower one does not");
+  HG.setVerified("house-hunt", { tag: "SBX", n: dead.n + 10, day: day - 1 });
+  ok(!F.marqueeScore("house-hunt", "x", day).player, "yesterday's board does not hold today's marquee");
+  HG.setVerified("house-hunt", null);
+  ok(!F.marqueeScore("house-golf", "x", day).player, "no verification, no player's tag (TEE'D OFF is not re-played)");
+  const ov = readFileSync(join(ROOT, "src/city/FunnelOverlay.jsx"), "utf8"), app = readFileSync(join(ROOT, "src/App.jsx"), "utf8");
+  ok(/src=\{houseSrc\(g\)\}/.test(ov) && /cabinet-close/.test(ov) && /cabinet-close/.test(app) && /CABINET/.test(app), "the CRT plays our own route, and leaving the game returns to the bar");
+  // in the city nothing is killed: the foothills' outfitter captures (Scott, 2026-10-05)
+  ok(/CAPTURE PERMITS ISSUED\. THE ANIMALS WILL BE HOUSED, AT GREAT EXPENSE\./.test(F.OUTFITTER.line) && /SAFARI ZONE: OPENING SOON/.test(F.OUTFITTER.soon), "the outfitter captures; the Safari Zone opens soon");
+  ok(F.funnelButtons("the-foothills").some(b => b.spec.kind === "outfitter") && F.findFunnel("safari").some(f => f.id === "the-foothills"), "the foothills offer the outfitter; FIND finds it");
+  const city = ["src/city/funnels.js", "src/city/coastDraw.js", "src/city/houseGames.js"].map(f => readFileSync(join(ROOT, f), "utf8")).join("\n").replace(/house-hunt|TAGGED OUT|hunt\b|the hunt|a hunt|Light-gun hunting/gi, "");
+  ok(!/\b(kill|hunting lodge|tags issued)\b/i.test(city), "the city's outfitter copy has no killing in it");
+}
+
+// 8. The standees' faces ship with the site.
 ok(existsSync(join(ROOT, "public/funnels/hosts.png")), "public/funnels/hosts.png is there");
 
 console.log(failed ? `check-funnels: ${failed} of ${n} FAILED` : `check-funnels: ${n} checks passed`);
