@@ -2544,3 +2544,67 @@ opens as a SimTower cross-section.
   room, a stretch of the evening, hashed by flat and day; the sheet says so), so the tower reads
   as a pattern of lit and dark rooms; the facade edge glows beside a lit end room; corridor lights
   on every floor. No new labels: names and words on pieces appear only at sheet scale.
+
+## THE ATTRITION: the river from the mountain to the sea (layout 7, 2026-10-06)
+
+Scott: "an endless river from the mountain to the sea." The move, why there and what it cost:
+docs/planning/MASTER_PLAN.md "THE ATTRITION". Code: `src/city/river.js` (pure, no imports: the courses,
+widths, bridges, walking blocks, fishing spots, the day), `src/city/riverDraw.js` (the iso painter),
+hooks in `sim.js` (the ground), `CityIso.jsx`, `CityMap.jsx`, `Street.jsx`, `coastDraw.js`,
+`mountainDraw.js`, `mountainGeo.js` (the pool's bench), `control.js` / `controlIso.js` (DRIVE
+YOURSELF), `prefects.js` (patrols), `src/play/fish/data.js` (the fishing game's spots). Check:
+`scripts/check-river.mjs`.
+
+- **The course** (river.js `MAIN`, `MELT`: control points `[x, y, width, corner radius]`, filleted and
+  sampled every half cell, `nearest`, `pointAt`, `waterAt`, `wetAt`). THE ATTRITION comes in from y -6000
+  (beyond anything the view reaches: no source edge, it runs off the grid), down the seam between THE
+  FARMLAND and the mountain's foot, joined at THE MERGER by THE BURNOUT (the snowmelt from 25 storeys under
+  THE GLASS CEILING: falls, THE RETENTION POOL on a graded bench, rapids), across the village's west end
+  and THE FOOTHILLS, through the city's gutters and streets, along THE CHANNEL behind the Pit, under the
+  Shore Line, through the gap beside THE SURFSIDE and under the boardwalk, and out over the sand as THE
+  OUTPLACEMENT (the estuary, sandbars) into the sea beside THE PIER. 1.2-1.5 cells wide in the city, 2.9
+  in the coast gap, 6.4 at the sand's edge, 13 out in the sea.
+- **The day** (`RIVER_DAY` 614, `RIVER_LAYOUT` 7). `sim.layoutOn(day)` names a plan's layout (6 before,
+  7 from); `sim.onGround(day, fn)` lays walks out on that day's ground: ground 0 is the city's corner
+  graph as it was, ground 1 adds `RIVER_BLOCKS` (the water as boxes, cut exactly at each walked bridge's
+  deck). `planDay` uses its own day's ground (the tail of yesterday in today's plan is yesterday's);
+  `whereAt` walks a trip on the ground of the day it set out; stand-ins and prefects' patrols on the
+  moment's. Every route memo (`rt`, `rtm`, `rt3`, `dr`, `rl`) names its ground. A day before 614 is
+  built byte for byte as before (check-river against `fixtures/river-pre.json`, built by c90be9f).
+- **Bridges** (`BRIDGES`, 19, each `{id, name, kind, x, y, s, deck, span, walk}`): rail (the Loop north
+  and south, the Shore Line: the viaduct's span over the water hung on a steel truss, `drawGirders`, and
+  no viaduct pier in the water), road (a concrete deck, parapets, the centre line), foot (steel), trail
+  (timber, THE FOOTHILLS), THE BOARDWALK (its own deck). Walkers, prefects and DRIVE YOURSELF (control.js
+  `setRiverLive`: the water is solid) cross at the walked ones only.
+- **Fishing spots** (`FISHING_SPOTS`, read by the fishing game: `{id, name, water, x, y (on the water),
+  stand (the angler, dry), place, district, note}`): THE PIER (`pier`, ocean), THE OUTPLACEMENT
+  (`estuary`), THE SEVERANCE, THE BREAK ROOM, THE UNDERPASS, THE COOLING-OFF PERIOD (`river`), THE MERGER
+  (river), THE RETENTION POOL (`lake`). The ids `pier`, `estuary`, `river` and `lake` are the fishing
+  game's placeholders', so every catch and plaque on file names its water; OLD MOSSBACK roams every
+  riverbank spot. In DRIVE YOURSELF, from the river's day, E on a spot's bank fishes it (`#fish?spot=`).
+- **The riverside** (`PATH`, `PARKS`): a paved path along the east bank of the two gutters; THE SEVERANCE
+  GARDEN (the coast gap), THE WATERFRONT (MONITORED) (by the Diamond), THE BREAK ROOM (the Commons' bank):
+  grass, benches, trees, a lamp lit after dark. Drawn only: no sim place was added (the plans' places
+  are fixed).
+- **Drawn** (riverDraw.js). CITY: the flat water, banks (stone in the city, earth in the woods, rock on
+  the mountain), the road and foot bridges, the path and parks go into the cached ground layer with the
+  substrate grid (redrawn only when the camera, the day/night or the level of detail changes); each frame
+  the flow, light dashes in three lanes drifting downstream (still under reduced motion), and the floats
+  at the fishing spots (near). THE FOOTHILLS and THE BEACH paint their own reach after their ground
+  (`lotRiver`); the mountain's bands paint THE BURNOUT piece by piece after the ground under each (falls
+  white, foam streaks running with the water) and THE RETENTION POOL (rings drifting out). The pines,
+  towels, umbrellas and beach anchors in the water are left out. MAP: the water, a wave glyph every few
+  cells, the bridges. STREET: the water and the bridges' decks near the eye.
+- **Names** (the labels rule): the reach under the pointer is named (THE ATTRITION, THE BURNOUT, THE
+  RETENTION POOL, THE OUTPLACEMENT; a float: its spot); a tap holds the name with its line ("THE
+  ATTRITION // EVERYTHING FLOWS OUT. NOTHING IS REPLACED.") until the next tap elsewhere.
+- **Dev**: `#city?river=1` (or `0`) shows or hides the water whatever the day (the views only; walks follow
+  the day).
+- **Checks** (check-river, 87): continuous from past the edge and from 25 storeys to the sea, downhill,
+  widening; no lot (but the mountain's bands, the foothills, the sand, the boardwalk), platform, stair,
+  lodge, lift station or ski trail in the water; the path and parks dry; every rail crossing bridged and
+  every bridge carrying a line; every street the river crosses carried; the trail and the boardwalk;
+  the blocks cover the water but the decks; every walked bridge walked straight across; no bank cut off
+  (21 cells round at worst); days 612-613 byte for byte; day 614 on layout 7, read back from its plan the
+  same as the sim, nobody on the water but over a bridge, nobody jumping at midnight; the views from 00:00
+  of the day; every spot on its water with a dry stand within a cast; the fishing game reads them.

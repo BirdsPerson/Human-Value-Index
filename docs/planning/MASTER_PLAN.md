@@ -319,3 +319,51 @@ existing id, lot and station unmoved):
   fold charges the neighbours for the noise (the Sprawl -1 when Downtown roars; the Archive -1 at the
   very loudest).
 - **Not here.** No homes in either quarter; no adult venue of any kind (the site is 16+).
+
+## THE ATTRITION: the river, layout 7 (2026-10-06)
+
+Scott: "an endless river from the mountain to the sea." Code and behaviour: docs/CITY_SPEC.md "THE
+ATTRITION"; the data `src/city/river.js`, the drawing `src/city/riverDraw.js`, the check
+`scripts/check-river.mjs`.
+
+**The move.** A river through the gaps the plan already leaves, no building moved, no id changed:
+
+| Reach | Where (map cells) | What it is |
+|---|---|---|
+| upstream | x -12 to -6, from y -6000 to the mountain's foot | the main stem comes in from far past the edge of the drawn world, down the seam between THE FARMLAND and the mountain's west foot (flat ground) |
+| THE BURNOUT | x 14 to -6, y -87 to -49 | the snowmelt: rises at 25 storeys (2,790 FT) under THE GLASS CEILING, falls down the west face (2.1 storeys a cell at its steepest), rests in THE RETENTION POOL (the mountain lake, a graded bench at 7.2 storeys), runs over the rapids to THE MERGER |
+| the village's west end, THE FOOTHILLS | (-6, -31) to (26.5, -3.6) | across the forest belt on the diagonal, under THE TRAIL BRIDGE |
+| the city | x 26.5 and 32.5, y -3 to 74 | the gutter between the Arts and Campus, under the Loop, round the Diamond's corner, the street between the Arena and DEPT HQ, under the Loop again, the gutter between the Commons and the Works |
+| THE CHANNEL | y 74.2, x 26.5 to 56.8 | the strip of street between the Pit and the Shore Line's platforms (1.2 cells: the narrowest reach), under the Shore Line |
+| the coast | x 55, y 75 to 98 | the gap between SEAVIEW FLATS and THE SURFSIDE (THE SEVERANCE GARDEN on its bank), under the boardwalk, across the sand |
+| THE OUTPLACEMENT | x 54 to 64, y 91 to 107 | the estuary, widening from 3.8 to 13 cells, its sandbars, into the sea beside THE PIER |
+
+**Why there.** The only north-south corridors through the core's bottom row are the gutter between the
+Commons and the Works (x 24-29: clear) and the one between the Works and the Sprawl (the Shore Line's
+viaduct is in it); the coast row's only gap wider than half a cell is the one beside the pier. So the
+river comes down the west-centre gutter and turns along the Shore Line's street to that gap: it meets
+the sea by the pier, as asked. A western route (the 6-8 cell seam between the Old Town and Port and the
+core) was simpler but reached the sea 65 cells from the pier, past the Loop's Arena station.
+
+**Bridges** (river.js `BRIDGES`, 19): rail 3 (the Loop's north and south spans, the Shore Line's, a
+truss on the viaduct over the water, no pier in it); road 4; foot and trail 11; THE BOARDWALK. Every
+street the river crosses is carried across; check-river walks from either bank, every 3 cells through
+the city, to the other: the longest way round is 21 cells.
+
+**The day boundary.** The first layout with a day of its own in the code. `river.RIVER_DAY` = **614**
+(begins 2026-10-06 05:12 UTC, 01:12 EDT); at the push the builder had published to day 608 (today 607),
+and builds at most today + 3. Before it, `sim.layoutOn(day)` is 6 and every walk is laid out on the old
+ground (`sim.onGround`: two corner graphs, every route memo names its ground), so a day before 614 is
+byte for byte what the code before built (check-river holds days 612 and 613, plans and whereAt, against
+c90be9f's hashes, `scripts/fixtures/river-pre.json`). From it: layout 7, the water is a wall to
+walkers but at the bridges, and every view draws it.
+
+**What it costs.** Walkers go round by a bridge: on a synthetic 430-subject census, 58 subjects' days
+(13%) change on day 614 (231 of 1,500); nobody jumps at the midnight into it (largest move in a machine
+minute 1.0 cells). The plan builder's first river day builds the river's corner graph
+once (about 0.2 s). Drawing: the water is in the cached ground layer; frame cost unchanged within run
+to run noise (desktop 1440, all views 6-19 ms either way; phone 390 at 4x CPU throttle: overview 61-69 ms
+off, 63-69 on; core 30-32 / 32; the coast 20 / 21-22).
+
+**Next.** NPC anglers at the fishing spots (the fishing game may add them as their own layout version);
+a water taxi on THE CHANNEL; the river in the 3D STACK view.

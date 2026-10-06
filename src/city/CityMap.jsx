@@ -6,6 +6,8 @@ import { CELL_W, CELL_H, layoutDistricts, FAMILY_COLOR, familyOf, lodFor, roomLa
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { wantSectors } from "./planClient.js";
 import { FONT, SubjectTip, ZoomBar } from "./cityUi.jsx";
+// THE ATTRITION (river.js): the river on the map from its day, its name on hover or a tap
+import { riverShown, COURSES, MAIN, MELT, TARN, ESTUARY, BRIDGES, NAME, nearest } from "./river.js";
 
 // THE SUBSTRATE: the whole city as one canvas. District blocks drawn in box characters,
 // the Loop as a railed ring with a platform at every district and its trains on it
@@ -250,6 +252,37 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
           if (rh > 1) b.fillText("└" + "─".repeat(Math.max(0, rw - 2)) + "┘", SX(rx), SY(ry + rh - 1));
         }
       }
+      // THE ATTRITION: the water over the ground between the blocks, the bridges across it
+      if (V.river) {
+        const xy = (x, y) => { const m = toMap({ x, y }); return [SX(m.x), SY(m.y)]; };
+        for (const C of COURSES) {
+          const P = C.pts.filter(p => p.y > -400), L = [], R = [];
+          for (const p of P) { const nx = -p.dy * p.w / 2, ny = p.dx * p.w / 2; L.push(xy(p.x + nx, p.y + ny)); R.push(xy(p.x - nx, p.y - ny)); }
+          const ring = [...L, ...R.reverse()];
+          b.beginPath(); ring.forEach(([x, y], i) => (i ? b.lineTo(x, y) : b.moveTo(x, y))); b.closePath();
+          b.fillStyle = "#0c2c3c"; b.fill();
+          b.strokeStyle = "#1f6f8f"; b.lineWidth = 1; b.stroke();
+        }
+        { const [cx, cy] = xy(TARN.x, TARN.y); b.beginPath(); b.ellipse(cx, cy, TARN.rx * cw, TARN.ry * ch, 0, 0, Math.PI * 2); b.fillStyle = "#0c2c3c"; b.fill(); b.strokeStyle = "#1f6f8f"; b.stroke(); }
+        if (textLod) {
+          // the flow: a wave glyph every few cells down the middle
+          b.fillStyle = "#2b7fa3"; b.textAlign = "center";
+          for (const C of COURSES) for (let s = 0; s < C.L; s += 3.2) {
+            const p = nearestAt(C, s);
+            if (!p || p.y < -400) continue;
+            const [x, y] = xy(p.x, p.y);
+            if (x > -10 && y > -10 && x < V.cssW + 10 && y < V.cssH + 10) b.fillText("≈", x, y - ch * 0.5);
+          }
+          b.textAlign = "left";
+        }
+        b.strokeStyle = "#8a8f94"; b.lineWidth = Math.max(1, ch * 0.18);
+        for (const B of BRIDGES) {
+          if (B.kind === "boardwalk") continue;
+          const nx = -B.dy * B.span / 2, ny = B.dx * B.span / 2, [ax, ay] = xy(B.x + nx, B.y + ny), [bx, by] = xy(B.x - nx, B.y - ny);
+          b.strokeStyle = B.kind === "rail" ? "#2f6a42" : "#8a8f94";
+          b.beginPath(); b.moveTo(ax, ay); b.lineTo(bx, by); b.stroke();
+        }
+      }
       V.textLod = textLod; V.fpx = fpx;
       V.dirty = false;
     }
@@ -350,8 +383,23 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       wantSectors("map", ids);
     }
 
+    // a point on a course by arclength (the map's wave glyphs)
+    function nearestAt(C, s) {
+      const P = C.pts; let lo = 0, hi = P.length - 1;
+      while (hi - lo > 1) { const m = (lo + hi) >> 1; if (P[m].s <= s) lo = m; else hi = m; }
+      return P[lo];
+    }
+    // THE ATTRITION under the pointer (map cells): a reach's id, or null
+    function hitRiver(mx, my) {
+      if (!V.river) return null;
+      const c = V.cam, wx = (c.x + mx / c.z) / CELL_W - layout.ox, wy = (c.y + my / c.z) / CELL_H - layout.oy;
+      if (((wx - TARN.x) / TARN.rx) ** 2 + ((wy - TARN.y) / TARN.ry) ** 2 < 1) return TARN.name;
+      for (const C of COURSES) { const n = nearest(C, wx, wy); if (n.d <= n.w / 2 + 0.4) return C === MELT ? MELT.name : wy >= ESTUARY.y0 ? ESTUARY.name : NAME; }
+      return null;
+    }
     function draw() {
       wantView();
+      { const rv = riverShown(censusRef.current?.mt ?? clockAt(Date.now()).mt); if (rv !== V.river) { V.river = rv; V.dirty = true; } }
       if (V.dirty) drawStatic();
       const C0 = censusRef.current;
       const { dpr } = V;
@@ -519,6 +567,14 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
         }
       }
 
+      // THE ATTRITION's name, at the pointer (hover) or where it was tapped
+      if (V.river && V.riverAt) {
+        const [rx, ry, text] = V.riverAt;
+        ctx.font = `11px ${FONT}`; ctx.textBaseline = "bottom"; ctx.textAlign = "left";
+        const w = ctx.measureText(text).width + 8, x = clampN(rx - w / 2, 2, V.cssW - w - 2), y = Math.max(16, ry - 10);
+        ctx.fillStyle = "rgba(6,10,6,0.86)"; ctx.fillRect(x, y - 15, w, 16);
+        ctx.fillStyle = "#67e8f9"; ctx.fillText(text, x + 4, y);
+      }
       // the tooltip follows its subject
       const tipEl = tipRef.current;
       if (tipEl) {
@@ -597,6 +653,9 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
         return;
       }
       if (ev.pointerType === "mouse" && !g) {
+        const rn = hitRiver(x, y), was = V.riverAt?.[2] || null;
+        V.riverAt = rn ? [x, y, rn] : V.riverTap || null;
+        if (rn || was) V.need = true;
         const e = hitSubject(x, y, false);
         if (e !== V.hover) {
           V.hover = e;
@@ -626,6 +685,10 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
         else showTip(e);
         return;
       }
+      // THE ATTRITION: a tap on the water names it (a second tap anywhere clears it)
+      const rn = hitRiver(x, y);
+      if (rn && (!V.riverTap || V.riverTap[2] !== rn)) { V.riverTap = V.riverAt = [x, y, rn]; V.need = true; return; }
+      if (V.riverTap) { V.riverTap = V.riverAt = null; V.need = true; }
       const d = hitDistrict(x, y);
       if (d) { onDistrictRef.current(d.id); return; }
       showTip(null);

@@ -17,6 +17,7 @@ import { STEP5_DISTRICTS, STEP5_PLACES, STEP5_BUILDINGS, STEP5_OPEN_LOTS, STEP5_
 import { EAST_DISTRICTS, EAST_PLACES, EAST_BUILDINGS, EAST_OPEN_LOTS, EAST_ARCH, EAST_HOUSING, EAST_JOBS, EAST_LEISURE_BAND, EAST_LEISURE_FIELD, EAST_FAMILY, EAST_FIXTURES, SUBURB_HOUSES, SUBURB_STARTERS } from "./eastSim.js";
 import { MOUNTAIN_PLACES, MOUNTAIN_BUILDINGS, MOUNTAIN_ARCH, MOUNTAIN_JOBS, MOUNTAIN_LEISURE_BAND, MOUNTAIN_LEISURE_FIELD, MOUNTAIN_FAMILY, MOUNTAIN_FIXTURES, MOUNTAIN_OPEN_LOTS, MOUNTAIN_SPOTS } from "./mountainSim.js";   // THE MOUNTAIN (mountainGeo.js)
 import { shuttle, lineTrainState, lineNextArrival, lineRide } from "./lines.js";
+import { RIVER_DAY, RIVER_LAYOUT, RIVER_BLOCKS } from "./river.js";   // THE ATTRITION: the river's ground from its day (layout 7)
 // THE NIGHTLIFE QUARTERS (nightlifeSim.js): UPTOWN and DOWNTOWN, their venues, hours, the rope, the lineups
 import { NIGHT_DISTRICTS, NIGHT_PLACES, NIGHT_BUILDINGS, NIGHT_ARCH, NIGHT_JOBS, NIGHT_LEISURE_BAND, NIGHT_LEISURE_FIELD, NIGHT_FAMILY, NIGHT_FIELD_RULES, NIGHT_FIXTURES, NIGHT_SET, HOURS as NIGHT_HOURS, openAt as nightOpenAt, openThrough as nightOpenThrough, closeFor as nightCloseFor, NIGHT_OUT_P, ropeCheck, ROPE_PLACES, gigOf } from "./nightlifeSim.js";
 
@@ -55,8 +56,12 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // the Port; the Works keeps light industry), the Shore Line to the Port, the West Line. Version 5:
 // THE SUBURBS and THE AIRPORT to the east, on THE EAST LINE (eastSim.js). Version 6: THE FARMLAND and
 // THE ENGINE (farmSim.js; the data hall moved from the Works to the Engine), on the West Line's second
-// version and THE ENGINE SHUTTLE.
-export const LAYOUT_VERSION = 6;
+// version and THE ENGINE SHUTTLE. Version 7: THE ATTRITION, the river from the mountain to the sea
+// (river.js), through the gaps the districts already leave; walkers cross it at its bridges. The first
+// layout with a day of its own in the code: days before RIVER_DAY are laid out on version 6's ground
+// whatever the code, so a published day (or one rebuilt) is byte for byte what it was (check-river).
+export const LAYOUT_VERSION = RIVER_LAYOUT;
+export const layoutOn = (day) => (day >= RIVER_DAY ? RIVER_LAYOUT : 6);
 export const HEIGHTS_DY = -10, COAST_DY = 12;
 const heightsY = (y) => y + HEIGHTS_DY, coastY = (y) => y + COAST_DY;
 
@@ -2039,16 +2044,40 @@ const KERB = 0.4, CORNER = 0.3;   // the street view's footprints are the lot le
 // round the thing. DEPT HQ's plaza, since the Central Line's stations stand in it (PHASE 2): the
 // monolith in its middle (archGeo.js), and the Department watches whoever crosses.
 export const WALK_BLOCK = { hq: { x: 50.9, y: 27.6, w: 7.2, h: 3.8 } };
-const FOOT = (() => {
-  const blocks = BUILDINGS.filter(b => !OPEN_LOTS.has(b.id)).map(b => { const r = WALK_BLOCK[b.id]; return r ? { id: b.id, x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h } : { id: b.id, x0: b.rect.x + KERB, y0: b.rect.y + KERB, x1: b.rect.x + b.rect.w - KERB, y1: b.rect.y + b.rect.h - KERB }; });
+// THE ATTRITION (layout 7): from RIVER_DAY the river is ground nobody walks on but at its bridges
+// (river.js RIVER_BLOCKS: the water as boxes, a gap at every bridge). Two grounds, each its own corner
+// graph: 0 the city as it was, 1 with the river. GROUND is the one being laid out (onGround: the day a
+// trip was planned on), and every route memo names it.
+let GROUND = 0;
+export const groundOn = (day) => (day >= RIVER_DAY ? 1 : 0);
+export function onGround(day, fn) {
+  const was = GROUND;
+  GROUND = groundOn(day);
+  try { return fn(); } finally { GROUND = was; }
+}
+const GR = () => (GROUND ? "R" : "");
+const FOOT_BLOCKS = BUILDINGS.filter(b => !OPEN_LOTS.has(b.id)).map(b => { const r = WALK_BLOCK[b.id]; return r ? { id: b.id, x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h } : { id: b.id, x0: b.rect.x + KERB, y0: b.rect.y + KERB, x1: b.rect.x + b.rect.w - KERB, y1: b.rect.y + b.rect.h - KERB }; });
+function makeFoot(blocks) {
   const inside = (p) => blocks.some(o => p.x > o.x0 && p.x < o.x1 && p.y > o.y0 && p.y < o.y1);
   const nodes = [];
   for (const o of blocks) for (const [x, y] of [[o.x0 - CORNER, o.y0 - CORNER], [o.x1 + CORNER, o.y0 - CORNER], [o.x1 + CORNER, o.y1 + CORNER], [o.x0 - CORNER, o.y1 + CORNER]]) {
     const p = { x, y };
     if (!inside(p)) nodes.push(p);
   }
-  return { blocks, nodes, adj: null };
-})();
+  // The blocks by a coarse grid (FOOT_CELL cells a side), so a leg only tests the blocks near it: the
+  // city grew to hundreds of blocks and every footpath tests every corner it can see.
+  const grid = new Map();
+  blocks.forEach((o, i) => {
+    for (let gx = Math.floor(o.x0 / FOOT_CELL); gx <= Math.floor(o.x1 / FOOT_CELL); gx++) for (let gy = Math.floor(o.y0 / FOOT_CELL); gy <= Math.floor(o.y1 / FOOT_CELL); gy++) {
+      const k = gx * 65536 + gy; let l = grid.get(k); if (!l) grid.set(k, (l = [])); l.push(i);
+    }
+  });
+  return { blocks, nodes, adj: null, grid, seen: new Uint32Array(blocks.length), stamp: 0 };
+}
+const FOOT_CELL = 8;
+const FEET = [makeFoot(FOOT_BLOCKS), null];
+const footOf = (g = GROUND) => FEET[g] || (FEET[g] = makeFoot([...FOOT_BLOCKS, ...RIVER_BLOCKS]));
+export const footBlocks = (g = GROUND) => footOf(g).blocks;
 // Does the segment a-b pass through the open interior of box o? (Liang-Barsky clip.)
 function crosses(a, b, o) {
   const e = 1e-6, dx = b.x - a.x, dy = b.y - a.y;
@@ -2060,24 +2089,15 @@ function crosses(a, b, o) {
   }
   return t1 - t0 > 1e-9;
 }
-// The blocks by a coarse grid (FOOT_CELL cells a side), so a leg only tests the blocks near it: the
-// city grew to hundreds of blocks and every footpath tests every corner it can see.
-const FOOT_CELL = 8, FOOT_GRID = new Map(), FOOT_SEEN = new Uint32Array(FOOT.blocks.length);
-let FOOT_STAMP = 0;
-FOOT.blocks.forEach((o, i) => {
-  for (let gx = Math.floor(o.x0 / FOOT_CELL); gx <= Math.floor(o.x1 / FOOT_CELL); gx++) for (let gy = Math.floor(o.y0 / FOOT_CELL); gy <= Math.floor(o.y1 / FOOT_CELL); gy++) {
-    const k = gx * 65536 + gy; let l = FOOT_GRID.get(k); if (!l) FOOT_GRID.set(k, (l = [])); l.push(i);
-  }
-});
-function clear(a, b, skip) {
-  if (++FOOT_STAMP === 0xffffffff) { FOOT_SEEN.fill(0); FOOT_STAMP = 1; }
+function clear(a, b, skip, F = footOf()) {
+  if (++F.stamp === 0xffffffff) { F.seen.fill(0); F.stamp = 1; }
   const gx0 = Math.floor(Math.min(a.x, b.x) / FOOT_CELL), gx1 = Math.floor(Math.max(a.x, b.x) / FOOT_CELL), gy0 = Math.floor(Math.min(a.y, b.y) / FOOT_CELL), gy1 = Math.floor(Math.max(a.y, b.y) / FOOT_CELL);
   for (let gx = gx0; gx <= gx1; gx++) for (let gy = gy0; gy <= gy1; gy++) {
-    const l = FOOT_GRID.get(gx * 65536 + gy);
+    const l = F.grid.get(gx * 65536 + gy);
     if (l) for (const i of l) {
-      if (FOOT_SEEN[i] === FOOT_STAMP) continue;
-      FOOT_SEEN[i] = FOOT_STAMP;
-      const o = FOOT.blocks[i];
+      if (F.seen[i] === F.stamp) continue;
+      F.seen[i] = F.stamp;
+      const o = F.blocks[i];
       if (!skip.has(o.id) && crosses(a, b, o)) return false;
     }
   }
@@ -2085,12 +2105,13 @@ function clear(a, b, skip) {
 }
 // -> [a, ...corners, b]: the shortest street path from a to b, the buildings in `skip` passable.
 export function footpath(a, b, skip = new Set()) {
-  if (clear(a, b, skip)) return [a, b];
+  const FOOT = footOf();
+  if (clear(a, b, skip, FOOT)) return [a, b];
   const N = FOOT.nodes, n = N.length;
-  if (!FOOT.adj) {   // corner to corner, once: every building solid
+  if (!FOOT.adj) {   // corner to corner, once per ground: every building (and the water) solid
     const none = new Set();
     FOOT.adj = N.map(() => []);
-    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (clear(N[i], N[j], none)) { const d = dist(N[i], N[j]); FOOT.adj[i].push([j, d]); FOOT.adj[j].push([i, d]); }
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (clear(N[i], N[j], none, FOOT)) { const d = dist(N[i], N[j]); FOOT.adj[i].push([j, d]); FOOT.adj[j].push([i, d]); }
   }
   // Dijkstra over the corners, a and b joined to every corner they can see. Whether a corner sees a
   // or b is only tested when it could matter (the straight line is a lower bound): the same answer
@@ -2112,11 +2133,11 @@ export function footpath(a, b, skip = new Set()) {
     if (done[i] || ki !== keyOfNode(i)) continue;   // finished, or a stale entry
     if (ki >= best) break;
     if (seen[i] !== 2 && direct[i] <= Dg[i]) {
-      if (seen[i] === 1 || clear(a, N[i], skip)) { seen[i] = 1; D[i] = direct[i]; prev[i] = -1; }
+      if (seen[i] === 1 || clear(a, N[i], skip, FOOT)) { seen[i] = 1; D[i] = direct[i]; prev[i] = -1; }
       else { seen[i] = 2; if (Dg[i] < Infinity) push([Dg[i], i]); continue; }
     } else { D[i] = Dg[i]; prev[i] = prevG[i]; }
     done[i] = true;
-    if (D[i] + dist(N[i], b) < best && clear(N[i], b, skip)) { best = D[i] + dist(N[i], b); last = i; }
+    if (D[i] + dist(N[i], b) < best && clear(N[i], b, skip, FOOT)) { best = D[i] + dist(N[i], b); last = i; }
     for (const [j, d] of FOOT.adj[i]) if (!done[j] && D[i] + d < Dg[j]) { Dg[j] = D[i] + d; prevG[j] = i; const k = keyOfNode(j); if (k === Dg[j]) push([k, j]); }
   }
   if (last < 0) return [a, b];   // boxed in (never, with streets between every block)
@@ -2160,7 +2181,7 @@ function route(from, to, key, seed, net = NET) {
   if (net >= 3 && PLACES[from].district !== PLACES[to].district && (net >= 6 || !(LOOP_SET.has(PLACES[from].district) && LOOP_SET.has(PLACES[to].district)))) return railRoute(from, to, key, seed);
   // a trip published before a place moved district is laid out from its old one (MOVED_FROM)
   const moved = net === 2 && (MOVED_FROM[from] || MOVED_FROM[to]);
-  return remember(`${moved ? "rtm" : "rt"}|${seed}|${key}|${from}|${to}`, () => {
+  return remember(`${GR()}${moved ? "rtm" : "rt"}|${seed}|${key}|${from}|${to}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
     const dA = moved ? legacyDistrict(from) : PLACES[from].district, dB = moved ? legacyDistrict(to) : PLACES[to].district, hA = hubOf(dA), hB = hubOf(dB);
     if (dA === dB) {
@@ -2252,7 +2273,7 @@ const RAIL_GRAPH = () => remember(`rg|${NET}`, () => {
   return { stations, from };
 });
 function railRoute(from, to, key, seed) {
-  return remember(`rt3|${seed}|${key}|${from}|${to}`, () => {
+  return remember(`${GR()}rt3|${seed}|${key}|${from}|${to}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
     const dA = PLACES[from].district, dB = PLACES[to].district;
     const { stations, from: G } = RAIL_GRAPH();
@@ -2286,7 +2307,7 @@ function railRoute(from, to, key, seed) {
 const lineRideOf = (line, a, b) => (line === LOOP ? rideHours(line.stops[a].id, line.stops[b].id) : lineRide(line, a, b));
 // All the way on foot (network 3, across a district line).
 function directRoute(from, to, key, seed) {
-  return remember(`dr|${seed}|${key}|${from}|${to}`, () => {
+  return remember(`${GR()}dr|${seed}|${key}|${from}|${to}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
     const leg = walkLeg(A, B, PLACES[from].district, ownBlocks(from, to));
     leg.dur = Math.max(leg.dur, 0.12);
@@ -2299,7 +2320,7 @@ function directRoute(from, to, key, seed) {
 // is laid out per trip (railTrip).
 function railLegs(from, to, key, seed, rides) {
   const sig = rides.map(r => `${r.line}.${r.a}.${r.b}`).join(",");
-  return remember(`rl|${seed}|${key}|${from}|${to}|${sig}`, () => {
+  return remember(`${GR()}rl|${seed}|${key}|${from}|${to}|${sig}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
     const dA = PLACES[from].district, dB = PLACES[to].district;
     const stop = (i, e) => LINES[rides[i].line].stops[rides[i][e]];
@@ -2437,7 +2458,9 @@ function planStops(s, day, seed, pick) {
   return { stops, key, home };
 }
 
-function planDay(s, day, seed, raw = false) {
+// A day's trips are laid out on that day's ground (THE ATTRITION: the river from RIVER_DAY).
+function planDay(s, day, seed, raw = false) { return onGround(day, () => planDayOn(s, day, seed, raw)); }
+function planDayOn(s, day, seed, raw) {
   const pick = raw ? (i, avoid, hr) => pickLeisure(s, day, i, seed, avoid, hr) : (i, avoid, hr) => allocatedPick(s, day, i, seed, avoid, hr);
   const { stops, key, home } = planStops(s, day, seed, pick);
   // Lay out: commute in front of each stop (arrive on time if possible), then home.
@@ -2635,7 +2658,7 @@ export function buildPlan(day, seed = SEED) {
     }
     subjects[key] = row;
   }
-  return { format: PLAN_FORMAT, day, seed, layout: LAYOUT_VERSION, roster: ROSTER_VER, social: { [day]: socialVer(day), [day - 1]: socialVer(day - 1) }, n: ROSTER_ORDER.length, places, subjects };
+  return { format: PLAN_FORMAT, day, seed, layout: layoutOn(day), roster: ROSTER_VER, social: { [day]: socialVer(day), [day - 1]: socialVer(day - 1) }, n: ROSTER_ORDER.length, places, subjects };
 }
 
 // ---- sector windows (scaling step 4: netlify/lib/plans.js, src/city/sectors.js) --------------
@@ -2732,6 +2755,9 @@ export function standInAt(placeId, key, activity, seed = SEED) {
 // A walker in a district: back and forth between two of its places, at walking pace.
 const DPLACES = Object.fromEntries(DISTRICTS.map(d => [d.id, PLACE_LIST.filter(p => p.district === d.id).map(p => p.id)]));
 export function standInWalk(districtId, i, machineTime, seed = SEED) {
+  return onGround(Math.floor(toHours(machineTime) / 24) + 1, () => standInWalkOn(districtId, i, machineTime, seed));
+}
+function standInWalkOn(districtId, i, machineTime, seed) {
   const ps = DPLACES[districtId] || [];
   if (ps.length < 2) return null;
   const tpl = i % 12, a = ps[fnv(`~w|${districtId}|${tpl}|a`) % ps.length];
@@ -2825,6 +2851,8 @@ export function whereAt(s, machineTime, seed = SEED) {
   const segs = schedule(s, d0 + 1, seed);
   let g = segs[segs.length - 1];
   for (const x of segs) if (h >= x.from && h < x.to) { g = x; break; }
+  // a trip is walked on the ground of the day it set out on (a tail from yesterday on yesterday's)
+  if (g.activity === "commute") { const gd = g.span && g.span[0] < 0 ? d0 : d0 + 1; if (groundOn(gd) !== GROUND) return onGround(gd, () => whereAt(s, machineTime, seed)); }
   const key = keyOf(s);
   const [a, b] = g.span || [g.from, g.to];
   const progress = clamp((h - a) / Math.max(1e-9, b - a), 0, 1);

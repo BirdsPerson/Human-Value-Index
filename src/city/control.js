@@ -14,6 +14,7 @@
 // of the ground floor.
 
 import { BUILDINGS, BUILDING, OPEN_LOTS, STATIONS, STOPS, PLACES, linesOn } from "./sim.js";
+import { RIVER_BLOCKS } from "./river.js";   // THE ATTRITION: from its day nobody walks on the water (the bridges are gaps)
 import { massingOf } from "./archGeo.js";
 import { PARK_LOTS } from "./parkGeo.js";
 import { PLAT_IN, PLAT_OUT, STAIR_W, STAIR_L } from "./loopGeo.js";
@@ -53,8 +54,12 @@ export function solids() {
   }
   return SOLIDS;
 }
+let RIVER_LIVE = false;
+export function setRiverLive(on) { RIVER_LIVE = !!on; }
 export function solidAt(x, y, r = RADIUS) {
   for (const o of solids()) if (x > o.x0 - r && x < o.x1 + r && y > o.y0 - r && y < o.y1 + r) return o;
+  // the water: a step into it stops at the bank (no radius: the bank is walked right up to)
+  if (RIVER_LIVE) for (const o of RIVER_BLOCKS) if (x > o.x0 && x < o.x1 && y > o.y0 && y < o.y1) return o;
   return null;
 }
 const inBounds = (x, y) => [clamp(x, BOUNDS.x0 + 0.5, BOUNDS.x1 - 0.5), clamp(y, BOUNDS.y0 + 0.5, BOUNDS.y1 - 0.5)];

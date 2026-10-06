@@ -45,6 +45,9 @@ import { raceAt, lastRace } from "./race.js";   // THE WEEKEND RACE: the racer o
 import { VENUE_LOTS, VENUE_PLACES, GARDEN_TREES } from "./venueGeo.js";
 import { drawVenueLot, venueLabel, venueLine } from "./venueDraw.js";
 import { drawChessTables } from "../chess/tableDraw.js";   // PARK CHESS: the stone tables on the Green and in the estate gardens
+// THE ATTRITION (river.js, riverDraw.js): the river from its day; its name on hover or a tap
+import { riverShown, railBridgeAt, forceRiver } from "./river.js";
+import { drawRiverGround, drawRiverFlow, lotRiver, mountainRiver, drawGirders, drawSpots, REACH_NAME, REACH_LINE, spotName } from "./riverDraw.js";
 
 // THE SUBSTRATE, SimCity-style: every building drawn in its own architecture (archGeo.js
 // massing, archDraw.js drawing: the projects, brownstones, the glass tower, the monolith...),
@@ -145,6 +148,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     const canvas = canvasRef.current, wrap = wrapRef.current;
     const ctx = canvas.getContext("2d");
     const mq = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    // dev only: #city?river=1 shows THE ATTRITION before its day (river=0 hides it), to inspect it
+    if (import.meta.env?.DEV) { const m = /[?&]river=([01])/.exec(window.location.hash); forceRiver(m ? m[1] === "1" : null); }
     const V = {
       cssW: 0, cssH: 0, dpr: 1, cam: { z: 6, ox: 0, oy: 0, r: 0 }, camTo: null, fitZ: 6, reduced: !!mq?.matches, need: true,
       sel: null, shown: null, lift: 0, geo: null, censusV: -1, inside: new Map(), occ: {}, outdoors: [], hits: [], labels: [], panel: null,
@@ -153,6 +158,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       // LABELS: off by default, only what is hovered (hover: an id) or selected is named; peek: a
       // building tapped once on a touch screen (outlined, named, its chip up; a second tap opens it)
       hover: null, peek: null, allLabels: labelsOn(),
+      // THE ATTRITION: shown (from its day), its hit areas (the ground layer's), a reach or spot picked
+      river: false, riverHits: [], riverSel: null, ptr: null,
     };
 
     // ---- geometry for the current quarter turn ----------------------------------------
@@ -377,6 +384,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       visit: (id) => { if (BUILDING[id]) { unfollow(); select(id); } },
       find: startFind, follow: refollow, endFind: () => onFindEndRef.current?.(),
     };
+    if (import.meta.env?.DEV) window.__hviIsoQ = (x, y, h) => { const [u, v] = rot(x, y, V.cam.r); return project(u, v, h, V.cam); };   // dev: where a map point is on screen
 
     // Only a real change of size resets the canvas (assigning width/height clears it): the
     // toolbar's hint changing under a phone's canvas must not blank the picture.
@@ -440,8 +448,10 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     // The lines only move with the camera: drawn once into a layer of their own and laid down
     // whole on every frame the camera holds still (most of them: the city moves, the ground not).
     let gridLayer = null, gridKey = "";
+    // THE ATTRITION's water, banks, bridges and parks are drawn into the same layer, under the lines.
     function drawSubstrateGrid() {
-      const key = `${V.cam.z}|${V.cam.ox}|${V.cam.oy}|${V.cam.r}|${V.cssW}|${V.cssH}|${V.dpr}`;
+      const night = nightAt(((V.mt % 24) + 24) % 24), lod = lodFor(V.cam.z);
+      const key = `${V.cam.z}|${V.cam.ox}|${V.cam.oy}|${V.cam.r}|${V.cssW}|${V.cssH}|${V.dpr}|${V.river ? `${night}|${lod}` : "-"}`;
       if (key !== gridKey) {
         gridKey = key;
         gridLayer ||= document.createElement("canvas");
@@ -449,6 +459,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         if (gridLayer.width !== w || gridLayer.height !== h) { gridLayer.width = w; gridLayer.height = h; } else gridLayer.getContext("2d").clearRect(0, 0, w, h);
         const g = gridLayer.getContext("2d");
         g.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+        V.riverHits = V.river ? drawRiverGround({ ctx: g, Q, z: V.cam.z, r: V.cam.r, w: V.cssW, h: V.cssH }, lod, night) : [];
         strokeGrid(g);
       }
       ctx.drawImage(gridLayer, 0, 0, V.cssW, V.cssH);
@@ -479,6 +490,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     // ...and the one the Coast and the Heights draw with (coastDraw.js)
     const coastG = () => ({ ctx, Q, poly, prism, wall, facing, z: V.cam.z, r: V.cam.r, cam: V.cam, t: V.reduced ? 0 : performance.now() / 1000, hits: V.hits, w: V.cssW, h: V.cssH });
     const archG = () => { AG ||= { ctx, Q, poly, facing, z: 0, r: 0 }; AG.z = V.cam.z; AG.r = V.cam.r; return AG; };
+    const riverK = () => ({ ctx, Q, z: V.cam.z, r: V.cam.r, w: V.cssW, h: V.cssH, hits: V.hits });
     function drawYard(it, lod) {
       if (it.p.k === "pylon") { const hour = ((V.mt % 24) + 24) % 24; drawBody(archG(), it.b, it.m, { lod, night: nightAt(hour), hour, t: 0, lit: 0.45, bid: bidOf(it.b.id), name: it.b.name, style: it.m.style }, new Set([it.p.part])); return; }
       const [x, y] = Q(it.p.x, it.p.y, 0);
@@ -653,6 +665,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     const px1 = () => Math.max(1, V.cam.z * 0.07);
     // A pier: a square column to the ground and a cap across the deck's width.
     function pier(m, d, lod) {
+      if (V.river && railBridgeAt(m[0], m[1], 0.3)) return;   // THE ATTRITION: the span carries it
       const p = [-d[1], d[0]], top = DECK - DECK_T;
       const sq = (a, b, la, lb) => [add(add(m, d, a), p, la), add(add(m, d, b), p, la), add(add(m, d, b), p, lb), add(add(m, d, a), p, lb)];
       prism(sq(-0.19, 0.19, 0.19, -0.19), 0, top - (lod === "far" ? 0 : 0.14), LOOP.pier, 1.1);
@@ -701,6 +714,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       if (it.pillar) pier(m, d, lod);
       prism(slab, DECK - DECK_T, DECK, LOOP.deck, 1.12);
       deckDressing([a, b], [p, p], lod, len);
+      if (V.river) drawGirders(riverK(), [a, b], DECK_HW, DECK, lod, nightAt(((V.mt % 24) + 24) % 24));
     }
     function drawCorner(it, lod) {
       const c = it.corner, N = lod === "far" ? 4 : 10;
@@ -784,6 +798,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     // terminal's stub), the line's colour on the fascia. A deck along map points with the deck's
     // half-width, each track's offset and the ground under it at every point.
     function pierAt(m, d, lod, z, hw) {
+      if (V.river && railBridgeAt(m[0], m[1], 0.3)) return;
       const p = [-d[1], d[0]], top = DECK + z - DECK_T, g0 = z > 0 && onTerrain(m[0], m[1]) ? terrainH(m[0], m[1]) : 0;
       const sq = (a, b, la, lb) => [add(add(m, d, a), p, la), add(add(m, d, b), p, la), add(add(m, d, b), p, lb), add(add(m, d, a), p, lb)];
       prism(sq(-0.22, 0.22, 0.24, -0.24), g0, top - (lod === "far" ? 0 : 0.14), LOOP.pier, 1.1);
@@ -843,6 +858,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       if (p.pillar && k0 <= 0.5 && k1 > 0.5) pierAt(lerp2(p.a, p.b, 0.5), d, lod, (p.zA + p.zB) / 2, Math.max(p.hwA, p.hwB));
       const line = it.line, L = line.L;
       lineDeck([a, b], [nrm, nrm], [hwA, hwB], [lerpN(p.latA, p.latB, k0), lerpN(p.latA, p.latB, k1)], [zA, zB], lod, Math.hypot(b[0] - a[0], b[1] - a[1]), line.color, [k0 === 0 && p.ua < 1e-6, k1 === 1 && p.ub > L - 1e-6]);
+      if (V.river && zA === 0 && zB === 0) drawGirders(riverK(), [a, b], Math.max(hwA, hwB), DECK, lod, nightAt(((V.mt % 24) + 24) % 24));
     }
     function drawLineCorner(it, lod) {
       const c = it.corner, N = lod === "far" ? 4 : 10, R = c.R;
@@ -852,6 +868,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       pierAt(at(Math.PI / 4, R), [(c.dout[0] + c.din[0]) * Math.SQRT1_2, (c.dout[1] + c.din[1]) * Math.SQRT1_2], lod, 0, LINE_HW);
       const pts = th.map(t => at(t, R)), nrm = th.map(t => [-c.dout[0] * Math.cos(t) + c.din[0] * Math.sin(t), -c.dout[1] * Math.cos(t) + c.din[1] * Math.sin(t)]);
       lineDeck(pts, nrm, pts.map(() => LINE_HW), pts.map(() => LINE_HW - 0.65), pts.map(() => 0), lod, R * Math.PI / 2, it.line.color);
+      if (V.river) drawGirders(riverK(), pts, LINE_HW, DECK, lod, nightAt(((V.mt % 24) + 24) % 24));
     }
     // The mountain's share (coastDraw.js paints it with the terrain, back to front): the Alpine
     // Line's deck in short lengths, its Summit platforms, and the cars on it.
@@ -871,6 +888,16 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         }
       }
       for (const m of V.mtnCars || []) { const p = m.c.pose; if (inLot(p.x, p.y)) out.push({ x: p.x, y: p.y, bias: 0.1, draw: () => drawCar(m, lod) }); }
+      // THE ATTRITION's reach on this lot: the foothills' and the beach's first among their things, the
+      // mountain's piece by piece after the ground under each
+      if (V.river) {
+        const tr = V.reduced ? 0 : performance.now() / 1000, night = nightAt(((V.mt % 24) + 24) % 24);
+        if (lotId === "the-foothills" || lotId === "the-beach") out.push({ x: R.x, y: R.y, bias: -1e6, draw: () => lotRiver(riverK(), lotId === "the-beach" ? "beach" : "foothills", lod, tr, night) });
+        else if (R.y + R.h <= -40.5 + 1e-6) {
+          const [u0, v0] = rot(0, 0, V.cam.r);
+          for (const it of mountainRiver(riverK(), R, lod, tr, night)) out.push({ x: 0, y: 0, bias: it.k - (u0 + v0), draw: it.draw });
+        }
+      }
       return out;
     }
 
@@ -1298,7 +1325,15 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = "#060a06"; ctx.fillRect(0, 0, V.cssW, V.cssH);
       V.hits = []; V.labels = []; takeTvBoxes();
+      V.river = riverShown(mt);
       drawGround();
+      if (V.river) {
+        // THE ATTRITION: the flow over the cached water, its reaches as hit areas under everything, the floats
+        const RK = riverK(), tr = V.reduced ? 0 : performance.now() / 1000, night = nightAt(((mt % 24) + 24) % 24);
+        drawRiverFlow(RK, lod, tr, night);
+        for (const h of V.riverHits) V.hits.push({ kind: "river", id: h.id, hull: h.hull, at: h.at });
+        drawSpots(RK, lod, tr, night, V.hits);
+      }
       // movers slot between buildings and track by depth
       const { items, order } = V.geo;
       V.trainIn = new Set(trains.filter(t => t.dwell).map(t => t.stationId));
@@ -1333,6 +1368,15 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       drawSky(archG(), lod, mt, nightAt(((mt % 24) + 24) % 24));   // THE AIRPORT's aircraft on finals and climbing out, over everything
       // the overview's landmarks: where to look first (they fade as the street labels come up)
       if (V.cam.z < V.fitZ * 1.3 && !V.sel) for (const [id, text, x, y, h] of LANDMARKS) { const [lx, ly] = Q(x, y, h); V.labels.push({ id: `lm:${id}`, text, x: lx, y: ly, landmark: true, rank: 1e9 }); }
+      // THE ATTRITION: the reach or fishing spot under the pointer, or the one tapped
+      {
+        const hov = V.hover?.startsWith("rv:") || V.hover?.startsWith("sp:") ? V.hover : null, pick = V.riverSel;
+        for (const [id, at, selected] of [[pick?.id, pick && Q(pick.at[0], pick.at[1], pick.at[2] + 0.2), true], [hov !== pick?.id ? hov : null, V.ptr, false]]) {
+          if (!id || !at) continue;
+          const rid = id.slice(3), text = id.startsWith("sp:") ? spotName(rid) : `${REACH_NAME[rid] || ""}${selected && REACH_LINE[rid] ? ` // ${REACH_LINE[rid]}` : ""}`;
+          if (text) V.labels.push({ id, text: text.length > 60 ? text.slice(0, 59) + "…" : text, x: at[0], y: at[1] - 10, selected, rank: 1e8 });
+        }
+      }
       if (V.hover?.startsWith("p:")) {
         const h = V.hits.find(q => q.kind === "p" && `p:${who(q.s)}` === V.hover);
         if (h) V.labels.push({ id: V.hover, text: String(h.s.name || h.s.slug || "").toUpperCase(), x: (h.box[0] + h.box[2]) / 2, y: h.box[1] - 2, rank: 1e8 });
@@ -1469,7 +1513,10 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         if (h.kind === "p" && inBox) id = `p:${who(h.s)}`;
         else if (h.kind === "prefect" && inBox) id = `pf:${h.id}`;
         else if (h.kind === "b" && inPoly(x, y, h.hull)) id = h.id;
+        else if (h.kind === "spot" && inBox) id = `sp:${h.id}`;
+        else if (h.kind === "river" && inPoly(x, y, h.hull)) id = `rv:${h.id}`;
       }
+      if (id?.startsWith("rv:") || id?.startsWith("sp:")) { V.ptr = [x, y]; V.need = true; }
       if (id !== V.hover) { V.hover = id; V.need = true; canvas.classList.toggle("point", !!id); }
     }
     function onMove(e) {
@@ -1524,6 +1571,9 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         if (h.kind === "prefect" && inBox(h)) { openPrefect(h.id); return; }
         if (h.kind === "ebtv" && inBox(h)) { openFunnel({ href: watchHref(), campaign: "ebtv-tv" }); return; }
         if (h.kind === "chess" && inBox(h)) { window.location.hash = h.go; return; }   // PARK CHESS: sit at the table
+        // THE ATTRITION: a tap names the reach (or the fishing spot) until the next tap elsewhere
+        if (h.kind === "spot" && inBox(h)) { V.riverSel = { id: `sp:${h.id}`, at: h.at }; V.need = true; return; }
+        if (h.kind === "river" && inPoly(x, y, h.hull)) { const [mx, my] = screenToMap(x, y, V.cam); V.riverSel = { id: `rv:${h.id}`, at: h.at[2] > 0.5 ? h.at : [mx, my, 0] }; V.need = true; return; }
         if (h.kind === "b" && inPoly(x, y, h.hull)) {
           unfollow();
           // touch: the first tap names it, the second opens it, a third goes inside
@@ -1534,6 +1584,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
           return;
         }
       }
+      if (V.riverSel) { V.riverSel = null; V.need = true; }
       if (V.peek) setPeekState(null);
       if (V.sel) { unfollow(); select(null); }
     }

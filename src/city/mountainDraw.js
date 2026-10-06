@@ -21,6 +21,7 @@ import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { drawPose, phaseOf } from "./poses.js";
 import { projected } from "./venueDraw.js";
 import { racerName, fmt, RACER } from "./race.js";
+import { riverShown, wetAt } from "./river.js";   // THE ATTRITION: no pine stands in THE BURNOUT or THE RETENTION POOL
 import {
   MTN, SLOPES_TOP, terrainH, slopeAt, TREELINE, LIFTS, liftCar, liftOpen, ropeH, LODGES, STATIONS, PEAKS, feetAt, maxIn, onPad,
   TRAILS, TRAIL, PINES, RATING, GATES, PARK, GUNS, catAt, CATS, trailStatus, RACE_COURSE, BOARDS, lightsOn, snowmaking, racerAt,
@@ -81,7 +82,8 @@ export function drawMountainBand(G, rect, lod, mt, crowd, opts = {}) {
   const items = [], c = G.ctx;
   const inRect = (x, y) => x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h;
   const put = (x, y, draw, bias = 0) => { const [u, v] = rot(x, y, G.r); items.push({ k: u + v + bias, draw }); };
-  const K = { G, lod, night, hour, mt, t: G.t || 0, put, inRect, nf: night ? 0.62 : 1, clear: opts.clear || null, crowd, rect };
+  const clear = riverShown(mt) ? (opts.clear ? (x, y) => opts.clear(x, y) || wetPine(x, y) : wetPine) : opts.clear || null;
+  const K = { G, lod, night, hour, mt, t: G.t || 0, put, inRect, nf: night ? 0.62 : 1, clear, crowd, rect };
   const W = G.w, H = G.h, pad = 30;
   const vis = (sx, sy) => sx > -pad && sx < W + pad && sy > -pad * 4 && sy < H + pad * 2;
 
@@ -174,6 +176,9 @@ function visibleBox(G, rect, pad) {
   for (const [A, B] of [[A0, B0], [A1, B0], [A1, B1], [A0, B1]]) { const [x, y] = unrot((A + B) / 2, (B - A) / 2, cam.r); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
   return { x0, y0, x1, y1 };
 }
+// THE ATTRITION: the pines in the water or on its banks (looked up once)
+let WET_PINES = null;
+const wetPine = (x, y) => x < 17 && y > -92 && y < -44 && (WET_PINES ||= new Set(PINES.filter(p => wetAt(p[0], p[1], 0.8)).map(p => `${p[0]}|${p[1]}`))).has(`${x}|${y}`);
 // The pines in buckets of 6 cells, so a band at close range walks only those near the screen.
 const PB = 6, PINE_BUCKETS = new Map();
 for (const p of PINES) { const k = `${Math.floor(p[0] / PB)}|${Math.floor(p[1] / PB)}`; (PINE_BUCKETS.get(k) || PINE_BUCKETS.set(k, []).get(k)).push(p); }

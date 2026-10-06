@@ -269,9 +269,11 @@ export function stopOf(id, k, summary = null, block = null) {
 }
 const PATHS = new Map();
 const NONE = new Set();
-function pathOf(a, b) {
-  return remember(PATHS, `${a.x.toFixed(2)},${a.y.toFixed(2)}>${b.x.toFixed(2)},${b.y.toFixed(2)}`, () => {
-    const pts = SIM.footpath(a, b, NONE);
+// (on the day's ground: from THE ATTRITION's day the river is crossed at its bridges)
+function pathOf(a, b, day) {
+  const g = SIM.groundOn(day);
+  return remember(PATHS, `${g}|${a.x.toFixed(2)},${a.y.toFixed(2)}>${b.x.toFixed(2)},${b.y.toFixed(2)}`, () => {
+    const pts = SIM.onGround(day, () => SIM.footpath(a, b, NONE));
     let len = 0;
     for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
     return { pts, len };
@@ -282,7 +284,7 @@ const ANIMS = { council: ["idle", "idle", "point"], game: ["point", "clap", "idl
 export function patrolAt(id, mt, summary = null, block = null) {
   const k = Math.floor(mt / SLOT), t = mt - k * SLOT;
   const A = stopOf(id, k - 1, summary, block), B = stopOf(id, k, summary, block);
-  const path = pathOf(A, B);
+  const path = pathOf(A, B, Math.floor(mt / 24) + 1);
   const walk = Math.min(WALK_MAX * SLOT, path.len / (SIM.V_WALK * PACE));
   if (t < walk && path.len > 0.05) {
     let d = (t / walk) * path.len;

@@ -1,0 +1,15 @@
+{
+ "note": "THE ATTRITION (check-river): plan and whereAt hashes for synthRoster(430), built by the code before the river; days before riverDay must match byte for byte, riverDay must not",
+ "commit": "c90be9f",
+ "riverDay": 614,
+ "n": 430,
+ "plans": {
+  "612": "23213936602b919c",
+  "613": "bd57a973823973f1",
+  "614": "36ff3255b3655d00"
+ },
+ "where": {
+  "612": "eddeff350aacd0d6",
+  "613": "b968a254952f7de1"
+ }
+}

@@ -15,6 +15,7 @@ import { drawPose, phaseOf } from "./poses.js";
 import { assignAnchors, roleOf } from "./props.js";
 import { SPURS, PLACES, BUILDING, resortPhase, COAST_DY } from "./sim.js";
 import { drawMountainBand, drawMountainApron } from "./mountainDraw.js";   // THE MOUNTAIN: every band of it, the parcel's ground too
+import { riverShown, wetAt } from "./river.js";   // THE ATTRITION: nothing stands in its water (its own reach is CityIso's extra)
 import { APPLICATIONS2 } from "../assembly/content002.js";
 import {
   COAST_LOTS, COAST_ANCHORS, SEA, SEA_Y, terrainH, BEACH, BOARDWALK, PIER, BREAK, FOOTHILLS, MOUNTAIN_LOT_PLACES,
@@ -190,9 +191,12 @@ export function drawCoastLot(G, lotId, lod, mt, people, prev) {
   const phase = PARCEL_ANCHORS[pid] ? resortPhase(pid, mt) : null;
   const face = phase ? parcelFace(phase) : pid;
   K.phase = phase; K.face = face;
-  const anchors = phase ? PARCEL_ANCHORS[pid][face] || [] : COAST_ANCHORS[pid] || [];
+  // THE ATTRITION: from its day the estuary takes the beach's east end (its towels and their sunbathers)
+  K.river = riverShown(mt);
+  if (pid === "beach" && K.river) K.face = `${face}|river`;
+  const anchors = phase ? PARCEL_ANCHORS[pid][face] || [] : pid === "beach" && K.river ? dryBeach() : COAST_ANCHORS[pid] || [];
   const list = people.map(o => ({ key: who(o.s), role: roleOf(o.w), pri: 0, s: o.s }));
-  const { at } = assignAnchors(anchors, list, prev && prev.face === face ? prev.at : null, hour, true);
+  const { at } = assignAnchors(anchors, list, prev && prev.face === K.face ? prev.at : null, hour, true);
   const present = [];
   for (const p of list) { const i = at.get(p.key); if (i != null) present.push({ p, a: anchors[i] }); }
 
@@ -220,12 +224,18 @@ export function drawCoastLot(G, lotId, lod, mt, people, prev) {
   }
   // THE MOUNTAIN's bands (and the parcel's ground): the terrain, the pines, the trails, the lifts,
   // the lodges and the skiers, painted with whatever this lot put in (mountainDraw.js)
-  if (MOUNTAIN_LOT_PLACES.has(pid)) { drawMountainBand(G, BUILDING[lotId].rect, lod, mt, G.crowd, { items, clear: pid === "summit-lot" ? parcelClear(face) : null }); return { at, face }; }
+  if (MOUNTAIN_LOT_PLACES.has(pid)) { drawMountainBand(G, BUILDING[lotId].rect, lod, mt, G.crowd, { items, clear: pid === "summit-lot" ? parcelClear(face) : null }); return { at, face: K.face }; }
   for (const e of G.extra || []) put(e.x, e.y, e.draw, e.bias || 0);
   items.sort((a, b) => a.k - b.k);
   for (const it of items) it.draw();
-  return { at, face };
+  return { at, face: K.face };
 }
+
+// THE BEACH's anchors with THE ATTRITION's estuary across its east end: none in the water.
+let DRY = null, WETS = null;
+// the towels, umbrellas and pines THE ATTRITION's water takes (looked up once)
+const WET = () => WETS || (WETS = new Set([...BEACH.towels.filter(t => wetAt(t.x, t.y, 0.7)), ...BEACH.umbrellas.filter(u => wetAt(u.x, u.y, 0.8)), ...FOOTHILLS.trees.filter(([x, y]) => wetAt(x, y, 0.75))]));
+const dryBeach = () => DRY || (DRY = (COAST_ANCHORS.beach || []).filter(a => !wetAt(a.x, a.y, 0.7)));
 
 // A label and a cutaway line for each lot (a parcel's follow session 002).
 const PARCEL_NAME = { "shore-lot": "PARCEL 0xAD06", "summit-lot": "PARCEL 0xBE06" };
@@ -264,7 +274,7 @@ function beach(K) {
   ground(rectPts(L.x + 0.05, L.y + 0.05, L.x + L.w - 0.05, SEA_Y), shade(SAND, nf));
   ground(rectPts(L.x + 0.05, SEA_Y - 0.9, L.x + L.w - 0.05, SEA_Y), shade(SAND_WET, nf), 0.011);
   if (lod === "far") return;
-  for (const t of BEACH.towels) ground(rectPts(t.x - 0.5, t.y - 0.18, t.x + 0.5, t.y + 0.22), shade(t.col, nf * 0.95), 0.012);
+  for (const t of BEACH.towels) if (!(K.river && WET().has(t))) ground(rectPts(t.x - 0.5, t.y - 0.18, t.x + 0.5, t.y + 0.22), shade(t.col, nf * 0.95), 0.012);
   // the towers: legs, a platform, a roof, the flag
   for (const T of BEACH.towers) put(T.x, T.y, () => {
     for (const [dx, dy] of [[-0.3, -0.25], [0.3, -0.25], [-0.3, 0.25], [0.3, 0.25]]) vline(T.x + dx, T.y + dy, 0, T.h, "#e5e7eb", Math.max(1, G.z * 0.06));
@@ -280,7 +290,7 @@ function beach(K) {
     G.poly([G.Q(N.x, N.y0, 0.95), G.Q(N.x, N.y1, 0.95), G.Q(N.x, N.y1, 0.65), G.Q(N.x, N.y0, 0.65)], "rgba(240,240,240,0.35)", "rgba(240,240,240,0.8)");
     if (K.t) { const k = frac(K.t / 2.4), [bx, by] = G.Q(N.x - 1.1 + k * 2.2, N.y0 + 0.6 + k * 0.8, 0.9 + Math.sin(k * Math.PI) * 1.4); c.fillStyle = "#f5f5f4"; c.beginPath(); c.arc(bx, by, Math.max(1.5, G.z * 0.1), 0, Math.PI * 2); c.fill(); }
   });
-  for (const u of BEACH.umbrellas) put(u.x, u.y, () => {
+  for (const u of BEACH.umbrellas) if (!(K.river && WET().has(u))) put(u.x, u.y, () => {
     vline(u.x, u.y, 0, 0.9, "#e5e5e5", Math.max(1, G.z * 0.04));
     const [sx, sy] = G.Q(u.x, u.y, 0.95);
     c.fillStyle = (Math.round(u.x) % 2) ? "#f97316" : "#0ea5e9"; c.beginPath(); c.ellipse(sx, sy, G.z * 0.55, G.z * 0.24, 0, Math.PI, 0); c.fill();
@@ -582,7 +592,7 @@ function foothills(K) {
     ground(rectPts(L.x + 0.6, L.y + 0.6, F.spurX - F.clear, L.y + L.h - 0.6), shade("#183322", nf), 0.012);
     ground(rectPts(F.spurX + F.clear, L.y + 0.6, L.x + L.w - 0.6, L.y + L.h - 0.6), shade("#183322", nf), 0.012);
     c.fillStyle = shade("#2c5e3a", nf);
-    F.trees.forEach(([x, y, s], i) => { if (i % 2) return; const [a, b] = G.Q(x, y, 0.4 * s), w = Math.max(1.5, G.z * 0.45 * s); c.beginPath(); c.moveTo(a, b - w * 1.4); c.lineTo(a - w, b + w * 0.4); c.lineTo(a + w, b + w * 0.4); c.closePath(); c.fill(); });
+    F.trees.forEach((tr, i) => { const [x, y, s] = tr; if (i % 2 || (K.river && WET().has(tr))) return; const [a, b] = G.Q(x, y, 0.4 * s), w = Math.max(1.5, G.z * 0.45 * s); c.beginPath(); c.moveTo(a, b - w * 1.4); c.lineTo(a - w, b + w * 0.4); c.lineTo(a + w, b + w * 0.4); c.closePath(); c.fill(); });
     return;
   }
   // the trail: a packed-earth band along its line
@@ -590,14 +600,14 @@ function foothills(K) {
   F.trail.forEach(([x, y], i) => { const [a, b] = G.Q(x, y, 0.012); if (i) c.lineTo(a, b); else c.moveTo(a, b); });
   c.stroke();
   // the pines, tall and short, in the painter's order with the walkers
-  for (const [x, y, s] of F.trees) put(x, y, () => {
+  for (const tr of F.trees) if (!(K.river && WET().has(tr))) { const [x, y, s] = tr; put(x, y, () => {
     const s1 = lod === "near" ? s : s * 0.9;
     K.vline(x, y, 0, 0.25, shade("#4a3222", nf), Math.max(1, G.z * 0.08));
     for (let k = 0; k < 3; k++) {
       const hb = 0.18 + k * 0.42 * s1, w = (0.5 - k * 0.12) * s1 * G.z * 1.35, [ax, ay] = G.Q(x, y, hb + 0.7 * s1), [mx, my] = G.Q(x, y, hb);
       c.fillStyle = shade(k === 2 ? "#2f6b3e" : k === 1 ? "#255a34" : "#1f4d2e", nf); c.beginPath(); c.moveTo(ax, ay); c.lineTo(mx - w, my); c.lineTo(mx + w, my); c.closePath(); c.fill();
     }
-  }, 0.01);
+  }, 0.01); }
   // benches at the viewpoints, the ranger's post (a timber hut, its sign)
   for (const [bx, by] of F.benches) put(bx, by, () => G.prism(rectPts(bx - 0.6, by - 0.12, bx + 0.6, by + 0.12), 0, 0.18, "#6a4a30", 1.2), 0.005);
   const P = F.post;

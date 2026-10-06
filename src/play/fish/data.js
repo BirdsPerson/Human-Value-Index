@@ -4,17 +4,18 @@
 // a pound). Read by sim.js, the renderer, the aquarium, the endpoint and scripts/check-fish.mjs.
 
 // ---- the spots -------------------------------------------------------------------------------------
-// Shape {id, name, water: "ocean" | "river" | "lake" | "estuary", ...}: the shape the river
-// layout (src/city/river.js, from the mountain to the sea) exports its fishing spots in. THE PIER
-// and THE BREAK exist on the coast today (sim.js places "pier" and "surf"); the other three are the
-// river's reaches as data until river.js lands, when its list replaces them here (same ids where
-// the river names the same water). depth: feet at the far end of a cast; cast: yards at full power.
+// Shape {id, name, water: "ocean" | "river" | "lake" | "estuary", ...}: THE PIER and THE BREAK on the
+// coast (sim.js places "pier" and "surf"), and the river's spots from src/city/river.js (THE ATTRITION,
+// from the mountain to the sea): THE OUTPLACEMENT (the estuary, id "estuary"), the riverbank spots (the
+// foothills' reach keeps the id "river"), THE RETENTION POOL (the mountain lake, id "lake"). The ids are
+// the ones the placeholders had, so every catch and plaque on file still names its water.
+// depth: feet at the far end of a cast; cast: yards at full power.
+import { FISHING_SPOTS } from "../../city/river.js";
+const BY_WATER = { river: { depth: 7, cast: 30 }, estuary: { depth: 11, cast: 40 }, lake: { depth: 26, cast: 40 } };
 export const SPOTS = [
   { id: "pier", name: "THE PIER", water: "ocean", depth: 22, cast: 46, place: "pier", building: "the-pier", district: "coast", note: "FISHING BY PERMIT. THE PERMIT IS THIS SENTENCE." },
   { id: "break", name: "THE BREAK", water: "ocean", depth: 9, cast: 52, place: "surf", building: "the-break", district: "coast", note: "SURF CASTING. THE WAVES ARE SCHEDULED." },
-  { id: "estuary", name: "THE RIVER MOUTH", water: "estuary", depth: 11, cast: 40, place: null, building: null, district: null, note: "WHERE THE RIVER MEETS THE SEA. BRACKISH. SO ARE WE." },
-  { id: "river", name: "THE FOOTHILLS REACH", water: "river", depth: 7, cast: 30, place: null, building: null, district: null, note: "FAST WATER UNDER THE HEIGHTS. THE CURRENT IS UNSUPERVISED." },
-  { id: "lake", name: "THE RESERVOIR", water: "lake", depth: 26, cast: 40, place: null, building: null, district: null, note: "THE CITY'S DRINKING WATER. CATCH AND RELEASE IS ENCOURAGED. KEEPING IS NOTED." },
+  ...FISHING_SPOTS.filter(f => f.id !== "pier").map(f => ({ id: f.id, name: f.name, water: f.water, ...BY_WATER[f.water], place: f.place, building: null, district: f.district, note: f.note, x: f.x, y: f.y })),
 ];
 export const SPOT = Object.fromEntries(SPOTS.map(s => [s.id, s]));
 export const WATERS = ["ocean", "river", "lake", "estuary"];
@@ -118,14 +119,14 @@ export const SPECIES = [
     art: { shape: "fish", body: "#d4844c", back: "#a4542c", belly: "#fce4c4", pattern: "eyespot", mark: "#1c1c1c", fin: "#c46c3c", h: 0.27 } },
   { id: "sturgeon", name: "THE ATLANTIC STURGEON", legend: true, spot: "estuary", water: ["estuary"], lb: [80, 190], k: 16.2, band: [0.9, 1], lures: { worm: 1, minnow: 0.6, spoon: 0, popper: 0 }, season: [1.3, 0.8, 0.8, 0], light: [1, 0.7, 1, 1], power: 1.2, stamina: 1.8, wary: 0.6, rate: 0.01, protected: true,
     art: { shape: "long", body: "#7c746c", back: "#4c4844", belly: "#d4ccc4", pattern: "scutes", mark: "#c4bcac", fin: "#5c5450", h: 0.15 } },
-  { id: "mossback", name: "OLD MOSSBACK", legend: true, spot: "river", water: ["river"], lb: [16, 26], k: 12.8, band: [0.6, 1], lures: { worm: 0.6, minnow: 1.2, spoon: 0.8, popper: 0.2 }, season: [1, 0.5, 1.3, 0.4], light: [1, 0, 1, 1.3], power: 1, stamina: 1.4, wary: 0.9, jumps: true, rate: 0.012,
+  { id: "mossback", name: "OLD MOSSBACK", legend: true, spot: "river", also: FISHING_SPOTS.filter(f => f.water === "river" && f.id !== "river").map(f => f.id), water: ["river"], lb: [16, 26], k: 12.8, band: [0.6, 1], lures: { worm: 0.6, minnow: 1.2, spoon: 0.8, popper: 0.2 }, season: [1, 0.5, 1.3, 0.4], light: [1, 0, 1, 1.3], power: 1, stamina: 1.4, wary: 0.9, jumps: true, rate: 0.012,
     art: { shape: "fish", body: "#a48444", back: "#5c4c2c", belly: "#f4dca4", pattern: "spots", mark: "#c43c2c", fin: "#8c6c3c", h: 0.26 } },
   { id: "warden", name: "THE WARDEN", legend: true, spot: "lake", water: ["lake"], lb: [38, 54], k: 14.9, band: [0.2, 0.7], lures: { worm: 0, minnow: 1, spoon: 1.2, popper: 0.5 }, season: [1, 0.6, 1.4, 0.6], light: [1.2, 0.6, 1.2, 0.1], power: 1.15, stamina: 1.5, wary: 0.8, rate: 0.012,
     art: { shape: "long", body: "#9cac7c", back: "#5c6c3c", belly: "#ecf0d4", pattern: "bars", mark: "#4c5c2c", fin: "#8c7c4c", h: 0.17 } },
 ];
 export const SPECIES_BY = Object.fromEntries(SPECIES.map(s => [s.id, s]));
-// what can bite at a spot: its water's species and its own legend
-export const speciesAt = (spotId) => { const sp = SPOT[spotId]; return sp ? SPECIES.filter(s => s.water.includes(sp.water) && (!s.legend || s.spot === spotId)) : []; };
+// what can bite at a spot: its water's species and its own legend (OLD MOSSBACK roams every reach of the river)
+export const speciesAt = (spotId) => { const sp = SPOT[spotId]; return sp ? SPECIES.filter(s => s.water.includes(sp.water) && (!s.legend || s.spot === spotId || s.also?.includes(spotId))) : []; };
 
 // A species' appetite at an hour: rate x season x light x weather. A legend's 0 is "never then".
 export function appetite(s, c) { return s.rate * s.season[c.season] * s.light[c.light] * (WX_BITE[c.weather] ?? 1) * (s.wx?.[c.weather] ?? 1); }

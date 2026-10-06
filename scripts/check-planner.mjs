@@ -84,7 +84,7 @@ const OLD = JSON.parse(readFileSync(new URL("./fixtures/layout1-ids.json", impor
   const roster = baseRoster();
   SIM.setRoster(roster);
   const fresh = SIM.buildPlan(plan.day);
-  ok(fresh.layout === SIM.LAYOUT_VERSION && plan.layout == null, "a plan names the layout it was built on (layout 1's did not)");
+  ok(fresh.layout === SIM.layoutOn(plan.day) && plan.layout == null, "a plan names the layout it was built on (layout 1's did not; from THE ATTRITION's day, the layout of its own day)");
   const worst = (json) => {
     SIM.clearPlans(); SIM.setPlan(json, `v-${json.layout || 1}`);
     let w = 0, eg = "", n = 0, mw = 0;

@@ -21,9 +21,10 @@ import { readPad, pressedSince } from "./gamepad.js";
 import { tableNear, tableGo } from "../chess/park.js";   // PARK CHESS: E at a stone table
 import { TENNIS } from "./venueGeo.js";   // THE TENNIS CLUB, playable: E on the courts
 import { PIER } from "./coastGeo.js";   // THE WATERS, playable: E at the pier's rail (src/play/fish/)
+import { riverShown, FISHING_SPOTS } from "./river.js";
 import {
   CTL, publishUi, keysVector, screenToMapDir, stepStreet, stepInside, stateFromTarget, loadControl, saveControl,
-  doorOf, doorNear, groundAt, isClassified, benchNear, stationNear, stairFoot, platformPoint, platformStep, stationGeoOf,
+  doorOf, doorNear, groundAt, setRiverLive, isClassified, benchNear, stationNear, stairFoot, platformPoint, platformStep, stationGeoOf,
   trainIn, nearestCar, entryFloor, roomAt, isExitFloor, nearestSeat, exitPoint, freeSpot, floorsWithRooms,
   PERSON_REACH, BUMP_ENTER, DOOR_REACH, LIFT_X, EXIT_X, PLAT_LA, WALK_SPEED, RUN_SPEED,
 } from "./control.js";
@@ -141,6 +142,7 @@ export function makeIsoControl(K) {
 
   // ---- every frame ------------------------------------------------------------------------------
   function step(mt, trains) {
+    setRiverLive(riverShown(mt));   // THE ATTRITION: its water is solid from its day
     const now = performance.now(), dt = Math.min(0.1, last ? (now - last) / 1000 : 0);
     last = now;
     // the pad: connect/disconnect, and Start takes (or releases) control
@@ -237,6 +239,8 @@ export function makeIsoControl(K) {
       if (st.x > fz.x0 && st.x < fz.x1 && st.y > fz.y0 && st.y < fz.y1) { near = { kind: "tennis", go: "#tennis", label: "PLAY TENNIS: AN EXHIBITION" }; return; }
       const pd = PIER.deck;   // the seaward deck: fish off it (the landward end still steps onto THE PIER)
       if (st.x > pd.x0 - 0.4 && st.x < pd.x1 + 0.4 && st.y > pd.y0 + 2 && st.y < pd.y1 + 0.4) { near = { kind: "fish", go: "#fish?spot=pier", label: "FISH OFF THE PIER" }; return; }
+      // THE ATTRITION (river.js): from its day, E on a fishing spot's bank fishes that water
+      if (riverShown(mt)) for (const f of FISHING_SPOTS) if (f.id !== "pier" && Math.hypot(st.x - f.stand[0], st.y - f.stand[1]) < 1.4) { near = { kind: "fish", go: `#fish?spot=${f.id}`, label: `FISH ${f.name}` }; return; }
       const g = groundAt(st.x, st.y);
       // THE COURTS, playable: E in the middle of the hardcourt (its edge still steps in)
       if (g?.id === "the-courts" && Math.abs(st.x - (g.rect.x + g.rect.w / 2)) < g.rect.w * 0.25 && Math.abs(st.y - (g.rect.y + g.rect.h / 2)) < g.rect.h * 0.25) { near = { kind: "hoops", go: "#hoops", label: "PLAY BASKETBALL: AN EXHIBITION" }; return; }

@@ -19,6 +19,7 @@ import { PARK_LOTS, PARK_PLACES } from "./parkGeo.js";
 import { drawParkLot } from "./parkDraw.js";
 import { DECK_HW, CAR_HW } from "./loopGeo.js";
 import { streetKitG, SH, shade } from "./streetArch.js";
+import { riverShown, MAIN, BRIDGES } from "./river.js";   // THE ATTRITION: the water on the ground, from its day
 import {
   PERSON_H, EYE_H, NEAR, FAR, FOV, WALK_SPEED, TURN_SPEED, RIDE_SPEED, TOUR_SPEED,
   STREET_BUILDINGS, toCam, project, viewFor, clipNear, clipSeg, inFov,
@@ -260,6 +261,27 @@ function Street({ censusRef, onOpen, onEnter }) {
       const gy0 = Math.max(BOUNDS.y0, Math.floor((c.y - FAR) / GS) * GS), gy1 = Math.min(BOUNDS.y1, c.y + FAR);
       for (let x = gx0; x <= gx1; x += GS) seg(x, gy0, x, gy1, "rgba(74,222,128,0.05)");
       for (let y = gy0; y <= gy1; y += GS) seg(gx0, y, gx1, y, "rgba(74,222,128,0.05)");
+      // THE ATTRITION: its water near the eye (a flat band down the gaps), its road and foot bridges' decks
+      if (riverShown(mt)) {
+        const polyFlat = (pts, fill) => {
+          const cp = clipNear(pts.map(([x, y]) => toCam(c, x, y, 0.004)));
+          if (cp.length < 3) return;
+          ctx.beginPath(); cp.forEach((p, i) => { const q = project(p, view); if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); }); ctx.closePath();
+          ctx.fillStyle = fill; ctx.fill();
+        };
+        const P = MAIN.pts, water = night ? "#173a52" : "#2f7397";
+        for (let i = 1; i < P.length; i++) {
+          const a = P[i - 1], b = P[i];
+          if (Math.hypot(a.x - c.x, a.y - c.y) > FAR + 4 || Math.hypot(b.x - a.x, b.y - a.y) > 4) continue;
+          const q = (p, k) => [p.x - p.dy * p.w / 2 * k, p.y + p.dx * p.w / 2 * k];
+          polyFlat([q(a, 1.06), q(b, 1.06), q(b, -1.06), q(a, -1.06)], water);
+        }
+        for (const B of BRIDGES) {
+          if (B.kind === "rail" || B.kind === "boardwalk" || Math.hypot(B.x - c.x, B.y - c.y) > FAR) continue;
+          const ax = B.dx * B.deck / 2, ay = B.dy * B.deck / 2, nx = -B.dy * B.span / 2, ny = B.dx * B.span / 2;
+          polyFlat([[B.x - ax + nx, B.y - ay + ny], [B.x + ax + nx, B.y + ay + ny], [B.x + ax - nx, B.y + ay - ny], [B.x - ax - nx, B.y - ay - ny]], night ? "#3a3e42" : "#5d6267");
+        }
+      }
 
       // ---- what stands: gather, then paint far to near --------------------------------
       const tanH = Math.tan(FOV / 2) + 0.2;

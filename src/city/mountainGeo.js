@@ -97,7 +97,8 @@ function rawH(x, y) {
 }
 // The graded sites: the ground levelled (a bench cut and filled) under the lodges, the gondola's
 // stations and THE UPPER BASE. [cx, cy, rx, ry]: level inside, eased back to the slope over 3 cells.
-const PADS = [[46.6, -86.4, 6.8, 3], [30.2, -64.4, 4.8, 3], [46.4, -45.8, 6, 2.8, 6.8]].map(([x, y, rx, ry, h]) => ({ x, y, rx, ry, h: h ?? rawH(x, y) }));
+// (and THE RETENTION POOL, the river's mountain lake: river.js TARN, its water at the bench's level)
+const PADS = [[46.6, -86.4, 6.8, 3], [30.2, -64.4, 4.8, 3], [46.4, -45.8, 6, 2.8, 6.8], [5.4, -69.4, 3.0, 2.1]].map(([x, y, rx, ry, h]) => ({ x, y, rx, ry, h: h ?? rawH(x, y) }));
 const EASE = 2.5;
 // Is a point on a graded site or its banks? (the banks are cut snow, not rock)
 export const onPad = (x, y) => PADS.some(P => Math.hypot((x - P.x) / P.rx, (y - P.y) / P.ry) < 1 + (EASE + 0.8) / Math.min(P.rx, P.ry));
