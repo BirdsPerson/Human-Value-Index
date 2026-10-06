@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
 import { buildAtlas } from './scripts/sprite-atlas.mjs'
 import { FAMOUS_FIGURES } from './src/figures.js'
+import { readFileSync } from 'node:fs'
+import { routesIn } from './src/play/games.js'
 
 const SPRITES = fileURLToPath(new URL('./public/sprites/', import.meta.url))
 
@@ -42,6 +44,8 @@ function shareScores() {
 }
 
 export default defineConfig({
+  // #play greys out a game tile whose route App.jsx does not serve yet (src/play/games.js).
+  define: { __HVI_ROUTES__: JSON.stringify(routesIn(readFileSync(new URL('./src/App.jsx', import.meta.url), 'utf8'))) },
   plugins: [react(), spriteAtlas(), shareScores()],
   // Dev only: /api/* goes to `netlify functions:serve --port 9999` (local Blobs sandbox).
   // The functions' same-origin check sees the functions host, so the proxy presents it.

@@ -278,7 +278,7 @@ function hooked(sp, cw, x = 20) {
   const ctl = read("../src/city/controlIso.js"), bv = read("../src/city/BuildingView.jsx"), app = read("../src/App.jsx");
   ok(/kind: "fish", go: "#fish\?spot=pier"/.test(ctl) && /n\.kind === "fish"/.test(ctl), "E at the pier's rail fishes");
   ok(/"the-pier": \[.*#fish\?spot=pier/.test(bv) && /"city-museum": \[.*#aquarium/.test(bv), "THE PIER's door fishes; the museum's wing is the aquarium");
-  ok((app.match(/href: "#fish"/g) || []).length === 1 && /routePath === "#fish"/.test(app) && /routePath === "#aquarium"/.test(app), "#fish and #aquarium routed; one line on #play");
+  ok((read("../src/play/games.js").match(/href: "#fish"/g) || []).length === 1 && /routePath === "#fish"/.test(app) && /routePath === "#aquarium"/.test(app), "#fish and #aquarium routed; one tile on #play (src/play/games.js)");
   const { CATALOG } = await import("../src/city/furniture.js");
   ok(CATALOG["mounted-fish"]?.wall === true, "the furniture catalog has a MOUNTED FISH for the wall (data only)");
   const sim = await import("../src/city/sim.js");

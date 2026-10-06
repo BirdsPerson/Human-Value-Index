@@ -22,6 +22,7 @@ const Elections = lazy(() => import("./elections/Elections.jsx"));
 const Docket = lazy(() => import("./assembly/Docket.jsx"));
 const Casino = lazy(() => import("./casino/Casino.jsx"));
 const Chess = lazy(() => import("./chess/Chess.jsx"));
+const PlayGrid = lazy(() => import("./play/PlayGrid.jsx"));   // #play: the games as square tiles
 const Tennis = lazy(() => import("./play/tennis/Tennis.jsx"));   // THE TENNIS CLUB, playable (#tennis)
 const Golf = lazy(() => import("./play/golf/Golf.jsx"));   // #golf: THE DEPARTMENT LINKS (exhibition golf)
 const Hoops = lazy(() => import("./play/hoops/Hoops.jsx"));   // #hoops: THE COURTS (exhibition basketball)
@@ -417,17 +418,7 @@ function Screen({ nav, wide = false, banner = false, children }) {
   );
 }
 
-// #play: the games, one list. Each is its own page (src/play, src/chess, src/casino).
-const GAMES = [
-  { href: "#tennis", label: "THE TENNIS CLUB", sub: "EXHIBITIONS AGAINST THE FAMOUS. KEYS, TOUCH OR PAD" },
-  { href: "#golf", label: "THE DEPARTMENT LINKS", sub: "NINE HOLES. THE COURSE THE ASSEMBLY DECLINED" },
-  { href: "#hoops", label: "THE COURTS", sub: "BASKETBALL, FIVE ON FIVE, WITH THE LEAGUE'S OWN TEAMS" },
-  { href: "#fish", label: "THE WATERS", sub: "FISH THE PIER AND THE RIVER. DONATE TO THE AQUARIUM (#aquarium)" },
-  { href: "#chess", label: "PARK CHESS", sub: "SIT AT A STONE TABLE OPPOSITE A FIGURE ON FILE" },
-  { href: "#casino", label: "HOUSE EDGE CASINO", sub: "PLAY CHIPS ONLY. THE HOUSE IS THE MACHINE" },
-  { href: "#market", label: "THE MARKET", sub: "SHARES IN HUMANS. PRICES MOVE WITH WHAT THEY DO IN THE CITY" },
-  { href: "#city/league", label: "THE LEAGUES", sub: "WATCH THE CITY'S SEASONS. STANDINGS, BOX SCORES" },
-];
+// #play: the games, one tile each. The list is src/play/games.js; the grid src/play/PlayGrid.jsx.
 
 // Page titles, per room: what a tab, a bookmark and a screen reader announce.
 const TITLES = {
@@ -677,9 +668,7 @@ export default function OverlordAssessment() {
   if (routePath === "#play") return (
     <Screen nav={nav}>
       <ScreenHead title="THE GAMES" meta="EXHIBITIONS AGAINST HUMANS ON FILE. NO SOUND OR GAMEPAD REQUIRED. RESULTS ARE LOGGED." />
-      <CommandList label="Games">
-        {GAMES.map((g, i) => <Command key={g.href} n={String(i + 1)} href={g.href} label={g.label} sub={g.sub} />)}
-      </CommandList>
+      <Suspense fallback={<Loading what="RACKING THE GAMES" />}><PlayGrid /></Suspense>
     </Screen>
   );
 
