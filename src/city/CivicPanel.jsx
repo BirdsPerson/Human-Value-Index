@@ -96,25 +96,28 @@ export function DistrictCivic({ districtId, onLeague }) {
 function DistrictTeams({ districtId, block, h, onLeague }) {
   const x = block.districts[districtId];
   if (!x.teams) return <><span className="k">TEAMS</span><span className="v dim">NOT IN THE LEAGUES. THE DISTRICT WAS BUILT AFTER THE DRAFT. IT WATCHES.</span></>;
-  const cup = cupTableAt(block, h), ci = cup.findIndex(r => r.id === districtId);
-  const link = (sp) => onLeague ? <> // <a href={`#city/league/${sp}`} onClick={(e) => onLeague(e, sp)}>{sp === "cup" ? "THE CUP" : "TABLE"}</a></> : null;
+  const cup = cupTableAt(block, h), ci = cup.findIndex(r => r.id === districtId), py = block.leagues.pyramid;
+  const link = (sp, k = 0) => onLeague ? <> // <a href={`#city/league/${sp}${k ? `?div=${k}` : ""}`} onClick={(e) => onLeague(e, k ? `${sp}?div=${k}` : sp)}>{sp === "cup" ? "THE CUP" : "TABLE"}</a></> : null;
+  const sports = L.SPORTS.filter(sp => x.teams[sp]);
   return (
     <>
       <span className="k">CUP</span>
-      <span className="v"><b>{ord(ci + 1)} OF {cup.length}</b> IN THE DEPARTMENTAL CUP ON {cup[ci].pts} PTS{link("cup")}</span>
-      {L.SPORTS.map(sp => {
-        const r = sportTableAt(block, sp, h).find(y => y.id === districtId), t = x.teams[sp];
+      <span className="v"><b>{ord(ci + 1)} OF {cup.length}</b> IN THE DEPARTMENTAL CUP ON {cup[ci]?.pts ?? 0} PTS{link("cup")}</span>
+      {sports.map(sp => {
+        // the club's own division's table (the pyramid, from season 24); the one league before it
+        const t = x.teams[sp], k = t.div || 0;
+        const r = sportTableAt(block, sp, h, k).find(y => y.id === districtId) || { pos: t.pos, pts: t.pts, w: t.w, d: t.d, l: t.l, form: t.form };
         return (
           <span key={sp} style={{ display: "contents" }}>
             <span className="k">{sp === "basketball" ? "HOOPS" : L.SPORT[sp].name}</span>
-            <span className="v"><b>{L.sportTeamName(districtId, sp)}</b> // {ord(r.pos)} // {r.pts} PTS // {r.w}-{r.d}-{r.l}{r.form ? ` // FORM ${r.form}` : ""}{link(sp)}</span>
+            <span className="v"><b>{L.sportTeamName(districtId, sp)}</b>{py ? ` // ${L.divShort(k)}` : ""} // {ord(r.pos)} // {r.pts} PTS // {r.w}-{r.d}-{r.l}{r.form ? ` // FORM ${r.form}` : ""}{link(sp, k)}</span>
           </span>
         );
       })}
       <span className="k">ROSTERS</span>
       <span className="v dim">
-        <Disclosure className="hvi-city-disc" title="RATED" meta={L.SPORTS.map(sp => x.teams[sp].rating).join(" / ")}>
-          {L.SPORTS.map(sp => <div key={sp} className="hvi-civic-line"><b>{L.SPORT[sp].name}</b> (RATING {x.teams[sp].rating}): {x.teams[sp].roster.map(p => p[1]).join(", ") || "NOBODY. THE DEPARTMENT FIELDS A CONE."}</div>)}
+        <Disclosure className="hvi-city-disc" title="RATED" meta={sports.map(sp => x.teams[sp].rating).join(" / ")}>
+          {sports.map(sp => <div key={sp} className="hvi-civic-line"><b>{L.SPORT[sp].name}</b> (RATING {x.teams[sp].rating}): {x.teams[sp].roster.map(p => p[1]).join(", ") || "NOBODY. THE DEPARTMENT FIELDS A CONE."}</div>)}
         </Disclosure>
       </span>
     </>
@@ -299,15 +302,20 @@ export function civicPaLines(block, here) {
 // The leagues' PA: draft day (each league's first pick and the Commissioner's trades), the Cup, a
 // district's four teams inside it.
 function leaguesPaLines(block, here, say, seatLine) {
-  const lg = block.leagues, out = [];
+  const lg = block.leagues, out = [], py = lg.pyramid;
   const cup = lg.cup.table.map(([id, pts]) => ({ id, pts }));
   if (lg.day <= 2) {
     for (const sp of L.SPORTS) {
-      const V = leaguesView(block), b = L.draftBoard(lg.sports[sp].draft, V.rosters[sp], L.SPORT[sp].n);
+      const V = leaguesView(block), b = L.draftBoard(py ? lg.sports[sp].divs[0].draft : lg.sports[sp].draft, V.rosters[sp], L.SPORT[sp].n);
       if (b[0]) out.push(`WITH THE FIRST PICK IN THE SEASON ${lg.season} ${L.SPORT[sp].name} DRAFT, ${L.sportTeamName(b[0].team, sp)} SELECT ${String(b[0].player[1]).toUpperCase()}. RATING ${b[0].player[2]}. CONGRATULATIONS ARE NOT REQUIRED.`);
+      // the pyramid's boundary: who went up, who went down (docs/design/PYRAMID.md section 4)
+      const mv = py?.moves?.[sp];
+      if (mv?.down?.length) out.push(`RELEGATED IN ${L.SPORT[sp].name}: ${mv.down.map(teamName).join(", ")}. THE DEPARTMENT HAS NOTED THEIR EFFORT. THE NOTE IS NOT FAVOURABLE.`);
+      if (mv?.up?.length) out.push(`PROMOTED IN ${L.SPORT[sp].name}: ${mv.up.map(teamName).join(", ")}. THEY WILL FIND THE AIR THINNER.`);
     }
-    const tr = L.SPORTS.reduce((n, sp) => n + (lg.sports[sp].draft.trades?.length || 0), 0);
-    if (tr) out.push(`THE COMMISSIONER HAS ORDERED ${tr} TRADE${tr === 1 ? "" : "S"} ACROSS THE FOUR DRAFTS. BALANCE HAS BEEN IMPOSED.`);
+    const tr = L.SPORTS.reduce((n, sp) => n + ((py ? lg.sports[sp].divs.reduce((m, d) => m + (d.draft.trades?.length || 0), 0) : lg.sports[sp].draft.trades?.length) || 0), 0);
+    if (tr) out.push(`THE COMMISSIONER HAS ORDERED ${tr} TRADE${tr === 1 ? "" : "S"} ACROSS THE ${py ? "DRAFTS" : "FOUR DRAFTS"}. BALANCE HAS BEEN IMPOSED.`);
+    if (py && lg.season === L.PYRAMID_FROM + 1) out.push(`THE LEAGUES ARE NOW A PYRAMID: ${py.divs} DIVISIONS A SPORT, TEN CLUBS EACH, THREE UP AND THREE DOWN EVERY SEASON. THE EXPANSION DISTRICTS FIELD CLUBS IN THE CHAMPIONSHIP. THE TOP FLIGHT HAS THE BEST PLAYERS. THAT IS WHAT TOP MEANS.`);
     if (lg.cup.last) out.push(`LAST SEASON'S DEPARTMENTAL CUP WAS WON BY ${teamName(lg.cup.last.champion)}. THE TROPHY HAS BEEN RETAINED BY THE DEPARTMENT.`);
   }
   if (here && block.districts[here]) {
@@ -315,8 +323,8 @@ function leaguesPaLines(block, here, say, seatLine) {
     const x = block.districts[here];
     if (x.teams) {
       out.push(`${teamName(here)} STAND ${ord(x.cup.pos)} IN THE DEPARTMENTAL CUP ON ${x.cup.pts} POINTS. ${seatLine(here)}`);
-      const best = L.SPORTS.map(sp => [sp, x.teams[sp].pos]).sort((a, b) => a[1] - b[1])[0];
-      out.push(`${L.sportTeamName(here, best[0])} ARE ${ord(best[1])} IN ${L.SPORT[best[0]].name}. THE DISTRICT'S OTHER TEAMS HAVE BEEN INFORMED.`);
+      const best = L.SPORTS.filter(sp => x.teams[sp]).map(sp => [sp, x.teams[sp].pos, x.teams[sp].div || 0]).sort((a, b) => a[2] - b[2] || a[1] - b[1])[0];
+      if (best) out.push(`${L.sportTeamName(here, best[0])} ARE ${ord(best[1])} IN ${py ? `${L.SPORT[best[0]].name}'S ${L.divName(best[2])}` : L.SPORT[best[0]].name}. THE DISTRICT'S OTHER TEAMS HAVE BEEN INFORMED.`);
     }
     return out;
   }

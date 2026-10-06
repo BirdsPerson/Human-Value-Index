@@ -50,8 +50,78 @@ export const TEAMS = {
   works: ["THE PROCESSED", "PROCESSED"],
   sprawl: ["THE RETURNED", "RETURNED"],
 };
-export const teamName = (id) => TEAMS[id]?.[0] || String(id || "").toUpperCase();
-export const teamShort = (id) => TEAMS[id]?.[1] || String(id || "").toUpperCase();
+// THE PYRAMID (Scott 2026-10-06, docs/design/PYRAMID.md): from season 24 (0-based PYRAMID_FROM) every
+// sport is a ladder of divisions of ten clubs; the expansion districts' clubs are founded into the
+// Championship, named by the Overlord from the district's own blurb; reserves (SECOND, II) and thirds
+// (THIRD, III) are founded when the census asks for more divisions.
+export const PYRAMID_FROM = 23;   // 0-based: season 24, machine day 2417 (2026-11-05 06:24 UTC)
+export const PYRAMID_V = 1;
+export const DIV_N = 10;          // clubs a division (the circle, the snake, the Cup's points table)
+export const DIV_MAX = 5;         // the ceiling: at most 1,800 rostered players whatever the census
+export const UP_N = 3;            // two automatic places and the promotion playoff; three go down
+export const EXPANSION_CLUBS = {
+  coast: ["THE LIFEGUARDED", "LIFEGUARDED"],
+  heights: ["THE DESCENDED", "DESCENDED"],
+  port: ["THE DECLARED", "DECLARED"],
+  oldtown: ["THE PRESERVED", "PRESERVED"],
+  uptown: ["THE ADMITTED", "ADMITTED"],
+  downtown: ["THE AMPLIFIED", "AMPLIFIED"],
+  suburbs: ["THE MEASURED", "MEASURED"],
+  airport: ["THE SCREENED", "SCREENED"],
+  farmland: ["THE HARVESTED", "HARVESTED"],
+  engine: ["THE COMPUTED", "COMPUTED"],
+};
+const EXPANSION = Object.keys(EXPANSION_CLUBS);
+// The founding order, append-only (a census-only recompute founds the same clubs the chain did,
+// whatever districts the city adds later): the Loop, the expansion districts, the Loop's reserves,
+// the expansion districts' reserves, the Loop's thirds. Fifty clubs name the whole ceiling.
+export const PYRAMID_CLUBS = [...DIST, ...EXPANSION, ...DIST.map(d => `${d}-2`), ...EXPANSION.map(d => `${d}-2`), ...DIST.map(d => `${d}-3`)];
+export const clubDistrict = (id) => String(id || "").split("-")[0];
+export const clubTier = (id) => Number(String(id || "").split("-")[1]) || 1;
+const TIER_WORD = { 2: ["SECOND", "II"], 3: ["THIRD", "III"] };
+const baseName = (d) => TEAMS[d] || EXPANSION_CLUBS[d] || null;
+export function teamName(id) {
+  const d = clubDistrict(id), t = clubTier(id), b = baseName(d);
+  if (!b) return String(id || "").toUpperCase();
+  return t > 1 ? `${b[0]} ${TIER_WORD[t]?.[0] || t}` : b[0];
+}
+export function teamShort(id) {
+  const d = clubDistrict(id), t = clubTier(id), b = baseName(d);
+  if (!b) return String(id || "").toUpperCase();
+  return t > 1 ? `${b[1]} ${TIER_WORD[t]?.[1] || t}` : b[1];
+}
+export const DIV_NAMES = [["THE PREMIER DIVISION", "PREMIER"], ["THE CHAMPIONSHIP", "CHAMPIONSHIP"], ["LEAGUE ONE", "LEAGUE ONE"], ["LEAGUE TWO", "LEAGUE TWO"], ["THE SUNDAY LEAGUE", "SUNDAY"]];
+export const divName = (k) => DIV_NAMES[Math.min(k, DIV_MAX - 1)]?.[0] || `DIVISION ${k + 1}`;
+export const divShort = (k) => DIV_NAMES[Math.min(k, DIV_MAX - 1)]?.[1] || `DIV ${k + 1}`;
+// The Cup's points by division (division 0 pays POS_PTS, below).
+export const DIV_PTS_LOWER = [[5, 4, 3, 3, 2, 2, 1, 1, 0, 0], [3, 2, 2, 1, 1, 1, 1, 0, 0, 0], [2, 1, 1, 1, 0, 0, 0, 0, 0, 0], [2, 1, 1, 1, 0, 0, 0, 0, 0, 0]];
+// The kits of the expansion districts' clubs [shirt, trim] (the Loop's are the districts' CLOTH
+// values, in the games' KITS); reserves wear them swapped, thirds the trim alone.
+export const EXPANSION_KITS = {
+  coast: ["#e8d8a8", "#2a7f9e"], heights: ["#f0f4f8", "#4a6fa5"], port: ["#9a4a2a", "#c0c0c0"], oldtown: ["#8b3a3a", "#f0e6d0"], uptown: ["#1a1a1a", "#d4af37"],
+  downtown: ["#5a2d82", "#39ff14"], suburbs: ["#4f8f3a", "#ffffff"], airport: ["#6b7280", "#ff8c00"], farmland: ["#d9b44a", "#3f6b2a"], engine: ["#1f8a8a", "#111111"],
+};
+// Where a division plays (labels for the hub, the paper and the PA; the board stays at division 0's
+// ground, and sim.GAMES is untouched so no published crowd moves).
+export const DIV_GROUND = {
+  baseball: ["THE DIAMOND", "THE RECREATION GROUND", "THE GREEN (A DIAMOND CHALKED OUT)", "THE PADDOCK (THE FARMLAND)", "SUNDAY FIELD (THE SPRAWL)"],
+  basketball: ["THE COURTS", "THE CONDITIONING HALL", "THE BOARDWALK COURT (THE COAST)", "THE SCHOOL GYM (THE SUBURBS)", "THE LOADING BAY (THE PORT)"],
+  football: ["THE BOWL", "THE RECREATION GROUND", "THE FOOTHILLS MEADOW (THE HEIGHTS)", "THE APRON (THE AIRPORT)", "THE PADDOCK (THE FARMLAND)"],
+  soccer: ["THE ESTATE PITCH", "THE GREEN", "THE RECREATION GROUND", "THE BOARDWALK PITCH (THE COAST)", "THE PADDOCK (THE FARMLAND)"],
+};
+export const divGround = (sport, k) => DIV_GROUND[sport]?.[Math.min(k, DIV_MAX - 1)] || DIV_GROUND[sport]?.[0] || "";
+// Sponsorship hooks for the ads system (docs/design/ADS.md): the slots a block offers, and the
+// binding, null until the ads system fills it (the hub prints the plain name meanwhile).
+export function sponsorSlots(block) {
+  const out = [{ id: "cup-title", kind: "cup" }];
+  const py = block?.leagues?.pyramid;
+  for (const sp of SPORTS) {
+    const divs = py?.clubs?.[sp] || [DIST];
+    divs.forEach((ids, k) => { out.push({ id: `league-title:${sp}:${k}`, kind: "league-title", sport: sp, div: k }, { id: `ground:${sp}:${k}`, kind: "ground", sport: sp, div: k }); for (const c of ids) out.push({ id: `shirt:${sp}:${c}`, kind: "shirt", sport: sp, div: k, club: c }); });
+  }
+  return out;
+}
+export const sponsorOf = () => null;
 
 // ---- the sports ------------------------------------------------------------------------------------
 // n: the roster; rounds: a short (28-day) season's regular rounds of the circle (9 = every pair once,
@@ -147,6 +217,28 @@ export function entrantsBySport(entries) {
   for (const sp of ENTRY_SPORTS) out[sp] = out[sp].sort((a, b) => b.r - a.r || (a.key < b.key ? -1 : 1)).slice(0, sp === "tennis" ? LADDER_ENTRANTS_MAX : ENTRANTS_MAX);
   return out;
 }
+// THE PYRAMID's entrants (docs/design/PYRAMID.md section 5): the same well-formed list, every entrant
+// given the band of their STANDING (standingOf(key, sport) -> k | null; null is a first entry, placed
+// by the band rule in sportPools), at most ENTRANTS_MAX a band a sport, the oldest entries first
+// (`since`, in snapshots frozen from season 24), then the key. -> {sport: [{key, name, r, g, k, since}]}
+export function entrantsByBand(entries, standingOf, divs) {
+  const seen = new Set(), out = Object.fromEntries(SPORTS.map(sp => [sp, []]));
+  const list = (Array.isArray(entries) ? entries : []).filter(e => e && CITIZEN_RE.test(e.key) && Array.isArray(e.sports))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  for (const e of list) {
+    if (seen.has(e.key)) continue;
+    seen.add(e.key);
+    const sports = [...new Set(e.sports)].filter(sp => SPORTS.includes(sp)).slice(0, ENTRY_MAX_SPORTS);
+    for (const sp of sports) {
+      const r = Number.isInteger(e.r?.[sp]) ? clamp(e.r[sp], 0, 99) : null;
+      if (r == null) continue;
+      const k = standingOf ? standingOf(e.key, sp) : null;
+      out[sp].push({ key: e.key, name: entrantName(e.key), r, g: 2, k: Number.isInteger(k) ? clamp(k, 0, divs - 1) : null, since: typeof e.since === "string" ? e.since : "" });
+    }
+  }
+  return out;
+}
+const byAge = (a, b) => (a.since < b.since ? -1 : a.since > b.since ? 1 : a.key < b.key ? -1 : 1);
 
 // ---- the pools -----------------------------------------------------------------------------------
 // Which sport a figure plays on the record: the figures on file by name, everyone else by the text.
@@ -197,9 +289,9 @@ const byPool = (a, b) => b.g - a.g || b.r - a.r || (a.key < b.key ? -1 : a.key >
 // Each pool holds exactly ten teams' worth (fewer only if the census runs out).
 // entrants: the season's entries (entrantsBySport's input); each entrant takes a place in their
 // sports' pools among the athletes, and leaves the census's rows for everyone else.
-export function sportPools(subjects, entrants = []) {
+export function sportPools(subjects, entrants = [], divs = 1) {
   const ent = entrantsBySport(entrants), entKeys = new Set(Object.values(ent).flat().map(x => x.key));
-  const need = Object.fromEntries(SPORTS.map(s => [s, DIST.length * SPORT[s].n - ent[s].length]));
+  const need = Object.fromEntries(SPORTS.map(s => [s, divs * DIST.length * SPORT[s].n - ent[s].length]));
   const pools = Object.fromEntries(SPORTS.map(s => [s, []]));
   const room = (s) => pools[s].length < need[s];
   const fill = (s) => pools[s].length / need[s];
@@ -231,6 +323,104 @@ export function sportPools(subjects, entrants = []) {
   for (const s of SPORTS) pools[s].sort(byPool);
   return pools;
 }
+// Who counts for the pyramid's size: the figures on file less the individual sports' own (fighters,
+// tennis players); never the citizens, so no number of entries (or fake files) changes the shape.
+export const eligibleCount = (subjects) => subjects.reduce((n, s) => n + (individual(s) || s?.kind === "citizen" || /^citizen-/.test(SIM.keyOf(s)) ? 0 : 1), 0);
+// Divisions a season has: one band of DIV_N clubs' worth per 360 eligible figures, at least one, at
+// most DIV_MAX (docs/design/PYRAMID.md section 1).
+const BAND_SIZE = SPORTS.reduce((n, sp) => n + DIV_N * SPORT[sp].n, 0);   // 360
+export const divisionsFor = (eligible) => clamp(Math.floor(eligible / BAND_SIZE), 1, DIV_MAX);
+// THE PYRAMID's pools (docs/design/PYRAMID.md section 3): the same exclusive, g-first, rating-ordered
+// pools, filled to divs x DIV_N x n a sport, cut into bands of DIV_N x n (band 0 the top flight's).
+// Entrants join the band of their standing (standingOf -> {k, stuck} | null); a first entry takes the
+// band one below where its rating sits among the figures by rating alone (the cut-points; never band
+// 0, the bottom band if the rating is in it), among the athletes (g 2). A band takes at most
+// ENTRANTS_MAX entrants: the incumbents who kept or earned the band first, then first entries by age,
+// then incumbents relegated with nowhere lower to go (`stuck`); first entries over the cap go one
+// band down, or wait a season at the bottom. The band keeps its size, so the lowest figure in it
+// slips to the band below, and the bottom band's lowest leaves the pyramid.
+// -> {sport: {bands: [[rows]], entry: {key: k} (the first entries placed), waiting: [keys]}}
+export function pyramidPools(subjects, entries, divs, standingOf) {
+  const ent = entrantsByBand(entries, (key, sp) => standingOf?.(key, sp)?.k ?? null, divs), entKeys = new Set(Object.values(ent).flat().map(x => x.key));
+  const figures = sportPools(subjects.filter(s => !entKeys.has(SIM.keyOf(s))), [], divs);
+  const out = {};
+  for (const sp of SPORTS) {
+    const size = DIV_N * SPORT[sp].n, F = figures[sp];
+    const byR = F.map(x => x.r).sort((a, b) => b - a);
+    const cut = Array.from({ length: divs }, (_, k) => byR[Math.min(byR.length - 1, (k + 1) * size - 1)] ?? 0);   // band k's lowest rating, by rating alone
+    const bandOf = (r) => { for (let k = 0; k < divs; k++) if (r >= cut[k]) return k; return divs - 1; };
+    const entry = {}, waiting = [];
+    const rows = ent[sp].map(x => { const st = x.k == null ? null : standingOf?.(x.key, sp); const first = x.k == null; const k = first ? Math.min(divs - 1, Math.max(1, bandOf(x.r) + 1)) : x.k; return { ...x, k, first, stuck: Boolean(st?.stuck) }; });
+    const bands = [];
+    let i = 0, carry = [];
+    for (let k = 0; k < divs; k++) {
+      const here = [...rows.filter(x => x.k === k), ...carry.map(x => ({ ...x, k }))];
+      const pick = [...here.filter(x => !x.first && !x.stuck).sort(byAge), ...here.filter(x => x.first).sort(byAge), ...here.filter(x => !x.first && x.stuck).sort(byAge)];
+      const taken = pick.slice(0, ENTRANTS_MAX), over = pick.slice(ENTRANTS_MAX);
+      carry = over.filter(x => x.first);
+      for (const x of taken) if (x.first) entry[x.key] = k;
+      if (k === divs - 1) waiting.push(...carry.map(x => x.key));
+      const band = taken.map(({ key, name, r, g }) => ({ key, name, r, g }));
+      while (band.length < size && i < F.length) band.push(F[i++]);
+      bands.push(band.sort(byPool));
+    }
+    out[sp] = { bands, entry, waiting: waiting.sort() };
+  }
+  return out;
+}
+
+// ---- THE PYRAMID's boundary (docs/design/PYRAMID.md section 4) -----------------------------------------
+// prev: last season's {clubs: {sport: [[ids] per division]}} or null (the founding: the Loop's ten are
+// division 0). ends: {sport: [sportEnd per division]} of last season. D: divisions next season.
+// Between two divisions that existed last season and exist next, three go down (the table's last
+// three) and three come up (the two automatic places, then the playoff winner); a reserve side is
+// never promoted into a division holding a club of its own district of a lower tier (the next club in
+// the table goes instead). A founded division takes the first DIV_N clubs of PYRAMID_CLUBS without a
+// team in the sport; a dissolved one's clubs fall dormant. Each division is listed in its composite
+// order (relegated-in, stayers, promoted-in, each by finish): its draft order is the reverse.
+// -> {clubs: {sport: [[ids]]}, moves: {sport: {up: [ids], down: [ids]}}}
+export function nextDivisions(prev, ends, D) {
+  const clubs = {}, moves = {};
+  for (const sp of SPORTS) {
+    const old = prev?.clubs?.[sp] || [DIST], Dold = old.length, E = ends[sp] || [];
+    const K = Math.min(Dold, D);
+    const exch = (k) => k >= 0 && k + 1 < K;   // divisions k and k+1 both last season and next
+    const table = (k) => E[k]?.table || old[k];
+    // pass 1, top-down: who leaves each division downward (its last three) and who comes up into it
+    // (the two automatic places and the playoff winner of the division below, a blocked reserve
+    // replaced by the next club in that table that is not itself going down)
+    const downFrom = [], upFrom = [];
+    for (let k = 0; k < K; k++) {
+      downFrom[k] = exch(k) ? table(k).slice(-UP_N) : [];
+      upFrom[k] ||= [];
+      if (!exch(k)) continue;
+      const below = table(k + 1), belowDown = exch(k + 1) ? below.slice(-UP_N) : [];
+      const want = E[k + 1]?.up || below.slice(0, UP_N);
+      const home = [...(downFrom[k - 1] || []), ...table(k).filter(c => !downFrom[k].includes(c) && !upFrom[k].includes(c))];
+      const blocked = (c) => belowDown.includes(c) || (clubTier(c) > 1 && home.some(h => clubDistrict(h) === clubDistrict(c) && clubTier(h) < clubTier(c)));
+      const list = want.filter(c => !blocked(c));
+      for (const c of below) { if (list.length >= UP_N) break; if (!list.includes(c) && !blocked(c)) list.push(c); }
+      upFrom[k + 1] = list;
+    }
+    // pass 2: each division's composite listing (relegated-in, stayers, promoted-in)
+    const next = [];
+    for (let k = 0; k < K; k++) {
+      const stay = table(k).filter(c => !downFrom[k].includes(c) && !upFrom[k].includes(c));
+      next.push([...(downFrom[k - 1] || []), ...stay, ...(upFrom[k + 1] || [])]);
+    }
+    for (let k = K; k < D; k++) {
+      const active = new Set(next.flat()), band = [];
+      for (const c of PYRAMID_CLUBS) { if (band.length >= DIV_N) break; if (!active.has(c)) { band.push(c); active.add(c); } }
+      next.push(band);
+    }
+    clubs[sp] = next; moves[sp] = { up: upFrom.flat(), down: downFrom.flat() };
+  }
+  return { clubs, moves };
+}
+// A division's draft order from its composite listing: the promoted pick first, the relegated last;
+// a founded division in reverse founding order. (The top flight's first pyramid draft keeps today's
+// rule: the reverse of its own table, the champion last.)
+export const divDraftOrder = (ids) => [...ids].reverse();
 
 // ---- the draft -----------------------------------------------------------------------------------
 export const CAP_GAP = 2, MAX_TRADES = 4;
@@ -271,9 +461,9 @@ export function snakeDraftN(pool, order, n, { fine = false, maxTrades = MAX_TRAD
   }
   return { rosters, trades };
 }
-export function draftOrder(table, champion) {
-  const rev = [...table].reverse().filter(id => DIST.includes(id));
-  for (const id of DIST) if (!rev.includes(id)) rev.unshift(id);
+export function draftOrder(table, champion, ids = DIST) {
+  const rev = [...table].reverse().filter(id => ids.includes(id));
+  for (const id of ids) if (!rev.includes(id)) rev.unshift(id);
   return champion && rev.includes(champion) ? [...rev.filter(id => id !== champion), champion] : rev;
 }
 export const L_TRADES = 8;   // the leagues' cap: up to eight trades a draft
@@ -306,25 +496,28 @@ function slotsBetween(sport, d0, d1) {
   return k;
 }
 // The regular season's rounds, and the playoff matchdays after them (the semis, then the final).
-export const roundsOf = (sport, season) => (isLong(season) ? SPORT[sport].longRounds : SPORT[sport].rounds);
+// A lower division (div >= 1, the pyramid, long seasons only) plays fewer: max(18, 9 x round(R / 2^div
+// / 9)) (football: at least 9), spread over the same scored slots, behind closed doors.
+const divRounds = (sport, R0, div) => Math.max(SPORT[sport].finalOnly ? 9 : 18, 9 * Math.round(R0 / 2 ** div / 9));
+export const roundsOf = (sport, season, div = 0) => { const R0 = isLong(season) ? SPORT[sport].longRounds : SPORT[sport].rounds; return div > 0 ? divRounds(sport, R0, div) : R0; };
 const playoffMds = (sport) => (SPORT[sport].finalOnly ? 1 : 2);
 // A season's matchdays: a short season numbers every scored slot (the ones after the final are
 // exhibitions); a long season numbers only its league matchdays, the regular rounds and the playoffs.
-export const matchdays = (sport, season) => (isLong(season) ? roundsOf(sport, season) + playoffMds(sport) : slotsBetween(sport, seasonStart(season), seasonStart(season + 1)));
+export const matchdays = (sport, season, div = 0) => (isLong(season) ? roundsOf(sport, season, div) + playoffMds(sport) : slotsBetween(sport, seasonStart(season), seasonStart(season + 1)));
 // A long season's calendar: its scored slots M; the regular round i sits on slot floor(i * (M - P) / R),
 // the playoffs on the last P slots, so the final is the season's last scored slot.
 const LONG_CAL = new Map();
-function longCal(sport, season) {
-  const key = `${sport}|${season}`;
+function longCal(sport, season, div = 0) {
+  const key = `${sport}|${season}|${div}`;
   if (!LONG_CAL.has(key)) {
-    LONG_CAL.set(key, { M: slotsBetween(sport, seasonStart(season), seasonStart(season + 1)), R: roundsOf(sport, season), P: playoffMds(sport) });
-    if (LONG_CAL.size > 32) LONG_CAL.delete(LONG_CAL.keys().next().value);
+    LONG_CAL.set(key, { M: slotsBetween(sport, seasonStart(season), seasonStart(season + 1)), R: roundsOf(sport, season, div), P: playoffMds(sport) });
+    if (LONG_CAL.size > 64) LONG_CAL.delete(LONG_CAL.keys().next().value);
   }
   return LONG_CAL.get(key);
 }
 // slot n (0-based in a long season) -> its matchday, or null for an exhibition
-function longMd(sport, season, n) {
-  const { M, R, P } = longCal(sport, season), span = M - P;
+function longMd(sport, season, n, div = 0) {
+  const { M, R, P } = longCal(sport, season, div), span = M - P;
   if (n >= span) return n < M ? R + (n - span) : null;
   const i = Math.ceil((n * R) / span);
   return i < R && Math.floor((i * span) / R) === n ? i : null;
@@ -332,24 +525,27 @@ function longMd(sport, season, n) {
 // The sport's league matchdays on a day: -> [{md (0-based in the season), day, from, to, name}]. A
 // short season lists every scored slot (md past the final: an exhibition); a long season lists only
 // the slots that are league matchdays (the rest are exhibitions: the board's generic sides).
-export function slotsOn(sport, day) {
+export function slotsOn(sport, day, div = 0) {
   const S = SLOTS[sport], season = seasonOf(day), wd = SIM.weekdayOf(day);
   const n0 = slotsBetween(sport, seasonStart(season), day);
   const list = S.byWd[wd].map((g, j) => ({ md: n0 + j, day, ...g }));
   if (!isLong(season)) return list;
-  return list.map(x => ({ ...x, md: longMd(sport, season, x.md) })).filter(x => x.md != null);
+  return list.map(x => ({ ...x, md: longMd(sport, season, x.md, div) })).filter(x => x.md != null);
 }
-export function stageOf(sport, md, season = 0) {
-  const R = roundsOf(sport, season);
+export function stageOf(sport, md, season = 0, div = 0) {
+  const R = roundsOf(sport, season, div);
   if (md < R) return "regular";
   if (SPORT[sport].finalOnly) return md === R ? "final" : "off";
   return md === R ? "semi" : md === R + 1 ? "final" : "off";
 }
 export const STAGE_NAME = { regular: "LEAGUE", semi: "SEMI-FINAL", final: "THE FINAL", off: "EXHIBITION" };
-// The circle method over the districts, reshuffled each season and sport; the second half of a
-// double round robin swaps the sides.
-function circle(season, sport) {
-  const t = [...DIST].sort((a, b) => h01(`order|${sport}|${season}|${a}`) - h01(`order|${sport}|${season}|${b}`));
+// A lower division's playoffs decide the third promotion place, not a title.
+export const stageLabel = (stage, div = 0) => (div > 0 && stage === "semi" ? "PROMOTION SEMI-FINAL" : div > 0 && stage === "final" ? "PROMOTION FINAL" : STAGE_NAME[stage]);
+// The circle method over a division's clubs, reshuffled each season and sport; the second half of a
+// double round robin swaps the sides. Division 0's hash is the old one, so nothing published moves.
+function circle(season, sport, ids = DIST, div = 0) {
+  const tag = div > 0 ? `|d${div}` : "";
+  const t = [...ids].sort((a, b) => h01(`order|${sport}|${season}${tag}|${a}`) - h01(`order|${sport}|${season}${tag}|${b}`));
   const n = t.length, rounds = [];
   let arr = t.slice();
   for (let r = 0; r < n - 1; r++) {
@@ -361,16 +557,16 @@ function circle(season, sport) {
   return rounds;
 }
 const CIRCLES = new Map();
-export function roundOf(season, sport, md) {
-  const key = `${season}|${sport}`;
-  if (!CIRCLES.has(key)) { CIRCLES.set(key, circle(season, sport)); if (CIRCLES.size > 16) CIRCLES.delete(CIRCLES.keys().next().value); }
+export function roundOf(season, sport, md, ids = DIST, div = 0) {
+  const key = `${season}|${sport}|${div}|${ids.join(",")}`;
+  if (!CIRCLES.has(key)) { CIRCLES.set(key, circle(season, sport, ids, div)); if (CIRCLES.size > 64) CIRCLES.delete(CIRCLES.keys().next().value); }
   const c = CIRCLES.get(key), r = c[md % c.length];
   return Math.floor(md / c.length) % 2 ? r.map(([a, b]) => [b, a]) : r;
 }
 // The match on the board at a matchday's ground: the Courts play all of theirs on the board, one
 // game after another; elsewhere one tie a matchday (rotating through the round), the final and the
-// first semi-final.
-export const featuredOf = (sport, md, stage) => (SPORT[sport].kind === "hoops" ? -1 : stage === "regular" ? md % MATCHES_PER_DAY : 0);
+// first semi-final. A lower division has no board: every tie is behind closed doors.
+export const featuredOf = (sport, md, stage, div = 0) => (div > 0 ? -1 : SPORT[sport].kind === "hoops" ? -1 : stage === "regular" ? md % MATCHES_PER_DAY : 0);
 
 // ---- a result ---------------------------------------------------------------------------------------
 // The board's final for match j of a matchday: the ground's own scoreboard (sim gameAt at the
@@ -381,19 +577,23 @@ function closedDoor(kind, seed) {
   if (kind === "ball") for (let k = 0; k < 18; k++) { const r = h01(`${seed}|runs|${k}`); sc[k % 2] += r < 0.58 ? 0 : r < 0.84 ? 1 : r < 0.95 ? 2 : 3; }
   else if (kind === "gridiron") for (let k = 0; k < 20; k++) { const r = h01(`${seed}|drive|${k}`); sc[k % 2] += r < 0.5 ? 0 : r < 0.72 ? 3 : r < 0.96 ? 7 : 6; }
   else if (kind === "soccer") for (let k = 0; k < 18; k++) { if (h01(`${seed}|goal|${k}`) < 0.15) sc[h01(`${seed}|goalby|${k}`) < 0.52 ? 0 : 1]++; }
+  else if (kind === "hoops") { const w = h01(`${seed}|hoopwin`) < 0.5 ? 0 : 1; sc[w] = 21; sc[1 - w] = 8 + Math.floor(h01(`${seed}|hooplose`) * 12); }   // a lower division's game to 21, no board
   return sc;
 }
+// A match's seed tag: division 0 keeps the old seeds (every published result stands); a lower
+// division's results come from its own.
+const divTag = (m) => (m.div > 0 ? `|d${m.div}` : "");
 export function matchFinal(m) {
   if (m.featured) {
     const g = SIM.gameAt(m.placeId, (m.day - 1) * 24 + m.to - (m.kind === "hoops" ? 1e-4 : 1e-6));
     if (g?.score) return [g.score[0], g.score[1]];
   }
-  return closedDoor(m.kind, `cd|${m.sport}|${m.day}|${m.from}|${m.j}`);
+  return closedDoor(m.kind, `cd|${m.sport}${divTag(m)}|${m.day}|${m.from}|${m.j}`);
 }
 const LUCK = 50;
 function play(m, pair, rating) {
-  const [x, y] = pair;
-  const qx = rating[x] + LUCK * h01(`luck|${m.sport}|${m.day}|${m.from}|${m.j}|${x}`), qy = rating[y] + LUCK * h01(`luck|${m.sport}|${m.day}|${m.from}|${m.j}|${y}`);
+  const [x, y] = pair, dt = divTag(m);
+  const qx = rating[x] + LUCK * h01(`luck|${m.sport}${dt}|${m.day}|${m.from}|${m.j}|${x}`), qy = rating[y] + LUCK * h01(`luck|${m.sport}${dt}|${m.day}|${m.from}|${m.j}|${y}`);
   const better = qx >= qy ? x : y, worse = better === x ? y : x;
   const sc = matchFinal(m);
   const won = sc[0] > sc[1] ? 0 : sc[1] > sc[0] ? 1 : -1;
@@ -404,81 +604,94 @@ function play(m, pair, rating) {
 export const winnerOf = (m) => (m.score[0] > m.score[1] ? m.sides[0] : m.score[1] > m.score[0] ? m.sides[1] : m.tiebreak || null);
 export const loserOf = (m) => { const w = winnerOf(m); return w ? m.sides.find(x => x !== w) : null; };
 
-export function tableOf(played) {
-  const table = Object.fromEntries(DIST.map(id => [id, { p: 0, w: 0, d: 0, l: 0, f: 0, a: 0, pts: 0 }]));
+export function tableOf(played, ids = DIST) {
+  const table = Object.fromEntries(ids.map(id => [id, { p: 0, w: 0, d: 0, l: 0, f: 0, a: 0, pts: 0 }]));
   for (const m of played) {
     if (m.stage !== "regular") continue;
     const [x, y] = m.sides, [sx, sy] = m.score, X = table[x], Y = table[y];
+    if (!X || !Y) continue;
     X.p++; Y.p++; X.f += sx; X.a += sy; Y.f += sy; Y.a += sx;
     if (sx > sy) { X.w++; Y.l++; X.pts += 3; } else if (sy > sx) { Y.w++; X.l++; Y.pts += 3; } else { X.d++; Y.d++; X.pts++; Y.pts++; }
   }
   return table;
 }
-export function order(table) {
-  return [...DIST].sort((a, b) => table[b].pts - table[a].pts || (table[b].f - table[b].a) - (table[a].f - table[a].a) || table[b].f - table[a].f || DIST.indexOf(a) - DIST.indexOf(b));
+export function order(table, ids = DIST) {
+  return [...ids].sort((a, b) => table[b].pts - table[a].pts || (table[b].f - table[b].a) - (table[a].f - table[a].a) || table[b].f - table[a].f || ids.indexOf(a) - ids.indexOf(b));
 }
 // Every match of a sport's season on days [start, until), in order (day, time, match).
-// rating: {district: r}. The playoffs follow the regular table once it is complete.
+// rating: {club: r}; ids: the division's clubs (the Loop's ten before the pyramid); div: the division
+// (0 the top flight, on the board; below it every tie is closed-door, fewer rounds, its own seeds,
+// and the playoffs are the promotion playoff: 3rd v 6th, 4th v 5th, then the final; football's
+// Bowl-Game slot is 3rd v 4th). The playoffs follow the regular table once it is complete.
 const SEASON_MEMO = new Map();
-export function sportSeason(sport, season, until, rating) {
-  const key = `${sport}|${season}|${until}|${DIST.map(id => rating[id]).join(",")}`;
+export function sportSeason(sport, season, until, rating, ids = DIST, div = 0) {
+  const key = `${sport}|${season}|${until}|${div}|${ids.map(id => `${id}=${rating[id]}`).join(",")}`;
   if (SEASON_MEMO.has(key)) return SEASON_MEMO.get(key);
   const sp = SPORT[sport], played = [];
   let semis = [];
   const end = Math.min(until, seasonStart(season + 1));
-  for (let day = seasonStart(season); day < end; day++) for (const slot of slotsOn(sport, day)) {
-    const stage = stageOf(sport, slot.md, season), feat = featuredOf(sport, slot.md, stage);
+  const o = () => order(tableOf(played, ids), ids);
+  for (let day = seasonStart(season); day < end; day++) for (const slot of slotsOn(sport, day, div)) {
+    const stage = stageOf(sport, slot.md, season, div), feat = featuredOf(sport, slot.md, stage, div);
     let pairs;
-    if (stage === "regular") pairs = roundOf(season, sport, slot.md);
-    else if (stage === "semi") { const t = order(tableOf(played)); pairs = [[t[0], t[3]], [t[1], t[2]]]; }
-    else if (stage === "final") pairs = sp.finalOnly ? (() => { const t = order(tableOf(played)); return [[t[0], t[1]]]; })() : semis.length === 2 ? [[winnerOf(semis[0]), winnerOf(semis[1])]] : [];
+    if (stage === "regular") pairs = roundOf(season, sport, slot.md, ids, div);
+    else if (stage === "semi") { const t = o(); pairs = div > 0 ? [[t[2], t[5]], [t[3], t[4]]] : [[t[0], t[3]], [t[1], t[2]]]; }
+    else if (stage === "final") pairs = sp.finalOnly ? (() => { const t = o(); return div > 0 ? [[t[2], t[3]]] : [[t[0], t[1]]]; })() : semis.length === 2 ? [[winnerOf(semis[0]), winnerOf(semis[1])]] : [];
     else continue;
     pairs.forEach((pair, j) => {
       const hoops = sp.kind === "hoops";
       const base = { sport, k: slot.md, j, day, placeId: sp.venue, kind: sp.kind, stage, slotFrom: slot.from,
-        from: hoops ? slot.from + j * HOOP_LEN : slot.from, to: hoops ? slot.from + (j + 1) * HOOP_LEN : slot.to, featured: hoops || j === feat };
+        from: hoops ? slot.from + j * HOOP_LEN : slot.from, to: hoops ? slot.from + (j + 1) * HOOP_LEN : slot.to, featured: div > 0 ? false : hoops || j === feat, ...(div > 0 ? { div } : {}) };
       const m = play(base, pair, rating);
       played.push(m);
       if (m.stage === "semi") semis = [...semis, m];
     });
   }
   SEASON_MEMO.set(key, played);
-  if (SEASON_MEMO.size > 64) SEASON_MEMO.delete(SEASON_MEMO.keys().next().value);
+  if (SEASON_MEMO.size > 96) SEASON_MEMO.delete(SEASON_MEMO.keys().next().value);
   return played;
 }
 // Final positions (the Cup's): the champion, the runner-up, the semi-finalists (by the table), then
-// the table; before the playoffs are over, the table as it stands.
-export function positions(sport, played) {
-  const reg = order(tableOf(played));
+// the table; before the playoffs are over, the table as it stands. A lower division: the top two,
+// then the promotion final's winner and loser, the semi-final losers, then the table.
+export function positions(sport, played, ids = DIST, div = 0) {
+  const reg = order(tableOf(played, ids), ids);
   const fin = played.find(m => m.stage === "final");
   if (!fin) return reg;
   const w = winnerOf(fin), l = loserOf(fin);
   const semiLosers = played.filter(m => m.stage === "semi").map(loserOf).sort((a, b) => reg.indexOf(a) - reg.indexOf(b));
-  const top = [w, l, ...semiLosers];
+  const top = div > 0 ? [reg[0], reg[1], w, l, ...semiLosers] : [w, l, ...semiLosers];
   return [...top, ...reg.filter(id => !top.includes(id))];
 }
-// The Cup's points for a league as it stands: by position (POS_PTS), the playoffs deciding the top
-// once played; teams level on points, difference and scored share the better position's points;
-// nothing before a ball is kicked. -> {district: pts}
-export function positionPoints(sport, played) {
-  const out = Object.fromEntries(DIST.map(id => [id, 0]));
+// The Cup's points for a league as it stands: by position (POS_PTS; a lower division its own table,
+// DIV_PTS_LOWER), the playoffs deciding the top once played; teams level on points, difference and
+// scored share the better position's points; nothing before a ball is kicked. -> {club: pts}
+export function positionPoints(sport, played, ids = DIST, div = 0) {
+  const out = Object.fromEntries(ids.map(id => [id, 0]));
   if (!played.length) return out;
-  const t = tableOf(played), pos = positions(sport, played), fin = played.find(m => m.stage === "final");
-  const fixed = fin ? new Set(pos.slice(0, SPORT[sport].finalOnly ? 2 : 4)) : new Set();
+  const PTS = div > 0 ? DIV_PTS_LOWER[Math.min(div - 1, DIV_PTS_LOWER.length - 1)] : POS_PTS;
+  const t = tableOf(played, ids), pos = positions(sport, played, ids, div), fin = played.find(m => m.stage === "final");
+  const fixed = fin ? new Set(pos.slice(0, SPORT[sport].finalOnly && div === 0 ? 2 : 4)) : new Set();
   const sameAs = (a, b) => t[a].pts === t[b].pts && t[a].f - t[a].a === t[b].f - t[b].a && t[a].f === t[b].f;
   pos.forEach((id, i) => {
     let k = i;
     if (!fixed.has(id)) while (k > 0 && !fixed.has(pos[k - 1]) && sameAs(pos[k - 1], id)) k--;
-    out[id] = POS_PTS[k] || 0;
+    out[id] = PTS[k] || 0;
   });
   return out;
 }
-// The end of a sport's season from its rosters: {table (the regular table's order), champion, positions}
-export function sportEnd(sport, season, rosters) {
-  const rating = Object.fromEntries(DIST.map(id => [id, teamRating(rosters[id])]));
-  const all = sportSeason(sport, season, seasonStart(season + 1), rating);
+// The end of a sport's season from its rosters: {table (the regular table's order), champion,
+// positions}; a lower division adds up (the two automatic places and the playoff winner, in that
+// order) and down (the table's last three) for the pyramid's exchange (docs/design/PYRAMID.md 4).
+export function sportEnd(sport, season, rosters, ids = DIST, div = 0) {
+  const rating = Object.fromEntries(ids.map(id => [id, teamRating(rosters[id])]));
+  const all = sportSeason(sport, season, seasonStart(season + 1), rating, ids, div);
   const fin = all.find(m => m.stage === "final");
-  return { table: order(tableOf(all)), champion: fin ? winnerOf(fin) : null, positions: positions(sport, all) };
+  const table = order(tableOf(all, ids), ids);
+  const out = { table, champion: div > 0 ? table[0] : fin ? winnerOf(fin) : null, positions: positions(sport, all, ids, div) };
+  if (div > 0) out.up = [table[0], table[1], fin ? winnerOf(fin) : table[2]];
+  out.down = table.slice(-UP_N);
+  return out;
 }
 // A team's last five (regular and playoff), W / D / L.
 export function formOf(played, id) {
@@ -608,12 +821,14 @@ export const pitDistricts = (people) => Object.fromEntries(FIGHTERS.map(([k]) =>
 // ---- THE DEPARTMENTAL CUP --------------------------------------------------------------------------
 // pos: {sport: [district in position order]}; ladder: [keys top first]; pit: [keys top first];
 // dist: key -> district. -> [{id, pts, by: {baseball, basketball, football, soccer, tennis, pit}}]
-export function cupTable(pos, ladder, pit, dist) {
-  const rows = Object.fromEntries(DIST.map(id => [id, { id, pts: 0, by: { baseball: 0, basketball: 0, football: 0, soccer: 0, tennis: 0, pit: 0 } }]));
-  for (const sp of SPORTS) for (const [id, p] of Object.entries(pos[sp] || {})) if (rows[id]) { rows[id].by[sp] += p; rows[id].pts += p; }
+// ids: the districts in the Cup (the Loop's ten before the pyramid; every district with a club from
+// it). pos may name clubs (reserves): a club's points go to its district.
+export function cupTable(pos, ladder, pit, dist, ids = DIST) {
+  const rows = Object.fromEntries(ids.map(id => [id, { id, pts: 0, by: { baseball: 0, basketball: 0, football: 0, soccer: 0, tennis: 0, pit: 0 } }]));
+  for (const sp of SPORTS) for (const [c, p] of Object.entries(pos[sp] || {})) { const id = rows[c] ? c : clubDistrict(c); if (rows[id]) { rows[id].by[sp] += p; rows[id].pts += p; } }
   for (const [kind, list] of [["tennis", ladder], ["pit", pit]]) (list || []).slice(0, IND_PTS.length).forEach((k, i) => { const d = dist[k]; if (d && rows[d]) { rows[d].by[kind] += IND_PTS[i]; rows[d].pts += IND_PTS[i]; } });
   const bySport = (id) => SPORTS.reduce((n, sp) => n + rows[id].by[sp], 0);
-  return Object.values(rows).sort((a, b) => b.pts - a.pts || bySport(b.id) - bySport(a.id) || DIST.indexOf(a.id) - DIST.indexOf(b.id));
+  return Object.values(rows).sort((a, b) => b.pts - a.pts || bySport(b.id) - bySport(a.id) || ids.indexOf(a.id) - ids.indexOf(b.id));
 }
 
 // ---- BOX SCORES -------------------------------------------------------------------------------------
@@ -642,7 +857,7 @@ export function boxScore(m, rosters) {
   return { sides };
 }
 function lines(m, side, roster) {
-  const P = m.score[side], seed = `box|${m.sport}|${m.day}|${m.from}|${m.j}|${side}`;
+  const P = m.score[side], seed = `box|${m.sport}${divTag(m)}|${m.day}|${m.from}|${m.j}|${side}`;
   const L = byRating(roster).map(([key, name, r]) => ({ key, name, r }));
   if (!L.length) return [];
   const H = (s) => h01(`${seed}|${s}`);

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Frame } from "../../ui/index.js";
 import { readPad, GLYPHS } from "../../city/gamepad.js";
-import { TEAM_IDS, teamName, teamShort, teamUnits } from "./roster.js";
+import { TEAM_IDS, teamName, teamShort, teamUnits, allClubs, divisionsOf, divisionOf, difficultyOf } from "./roster.js";
 import { drawCrest } from "./crest.js";
 import { QLENS } from "./sim.js";
 import { CAM_NAMES } from "./render.js";
@@ -83,7 +83,7 @@ export function Crest({ id, size = 32, scale = 3, className = "" }) {
 const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "TH" : ["TH", "ST", "ND", "RD"][n % 10] || "TH"}`;
 export function FrontEnd({ league, pair, setup, mine, me, records, onQuick, onSetup, onHow, onTapes }) {
   const rows = [
-    { id: "quick", label: "QUICK PLAY", hint: `${teamShort(pair[0])} V ${teamShort(pair[1])} // ${setup.qlen}-MINUTE QUARTERS // ${DIFFS.find(d => d[0] === setup.diff)?.[1] || "PRO"}`, go: onQuick },
+    { id: "quick", label: "QUICK PLAY", hint: `${teamShort(pair[0])} V ${teamShort(pair[1])} // ${divisionsOf(league).length > 1 ? `${difficultyOf(league, divisionOf(league, pair[0])).short} // ` : ""}${setup.qlen}-MINUTE QUARTERS // ${DIFFS.find(d => d[0] === setup.diff)?.[1] || "PRO"}`, go: onQuick },
     { id: "setup", label: "EXHIBITION SETUP", hint: "TEAMS, RATINGS, HOME OR AWAY, DIFFICULTY, QUARTERS, CAMERA", go: onSetup },
     { id: "how", label: "HOW TO PLAY", hint: "THE CONTROLS AND THE RULES", go: onHow },
     records.length ? { id: "tapes", label: `THE TAPES (${records.length})`, hint: "WATCH A GAME THIS BROWSER KEPT", go: onTapes } : null,
@@ -158,12 +158,17 @@ function TeamCard({ id, league, side, you, focused, onPrev, onNext, onFocus }) {
 }
 const cycle = (list, v, d) => list[(list.indexOf(v) + d + list.length) % list.length];
 export function Setup({ league, setup, setSetup, mine, onStart, onBack }) {
-  const other = (id, d, not) => { let v = id; do v = cycle(TEAM_IDS, v, d); while (v === not); return v; };
+  // every club in the league (the pyramid's divisions, from season 24; the Loop's ten before it)
+  const ids = allClubs(league).length ? allClubs(league) : TEAM_IDS, divs = divisionsOf(league);
+  const other = (id, d, not) => { let v = id; do v = cycle(ids, v, d); while (v === not); return v; };
+  const tag = (id) => (divs.length > 1 ? ` (${difficultyOf(league, divisionOf(league, id)).short})` : "");
+  const yours = setup.side === "away" ? setup.away : setup.home, k = divisionOf(league, yours);
   const rows = [
-    { id: "away", label: "AWAY TEAM", value: teamName(setup.away), turn: (d) => setSetup(s => ({ ...s, away: other(s.away, d, s.home) })) },
-    { id: "home", label: "HOME TEAM", value: teamName(setup.home), turn: (d) => setSetup(s => ({ ...s, home: other(s.home, d, s.away) })) },
+    { id: "away", label: "AWAY TEAM", value: `${teamName(setup.away)}${tag(setup.away)}`, turn: (d) => setSetup(s => ({ ...s, away: other(s.away, d, s.home) })) },
+    { id: "home", label: "HOME TEAM", value: `${teamName(setup.home)}${tag(setup.home)}`, turn: (d) => setSetup(s => ({ ...s, home: other(s.home, d, s.away) })) },
     { id: "side", label: "YOU PLAY AS", value: setup.side === "home" ? `HOME // ${teamShort(setup.home)}` : `AWAY // ${teamShort(setup.away)}`, turn: () => setSetup(s => ({ ...s, side: s.side === "home" ? "away" : "home" })) },
-    { id: "diff", label: "DIFFICULTY", value: DIFFS.find(d => d[0] === setup.diff)?.[1] || "PRO", turn: (d) => setSetup(s => ({ ...s, diff: cycle(DIFF_IDS, s.diff, d) })), note: DIFFS.find(d => d[0] === setup.diff)?.[2] },
+    // the pyramid: a pick is remembered for the division of the side you play; the division sets the default
+    { id: "diff", label: "DIFFICULTY", value: DIFFS.find(d => d[0] === setup.diff)?.[1] || "PRO", turn: (d) => setSetup(s => { const diff = cycle(DIFF_IDS, s.diff, d), kk = divisionOf(league, s.side === "away" ? s.away : s.home); return { ...s, diff, diffBy: { ...(s.diffBy || {}), [kk]: diff } }; }), note: `${DIFFS.find(d => d[0] === setup.diff)?.[2] || ""}${divs.length > 1 ? ` YOU PLAY IN ${difficultyOf(league, k).name}${k === 0 ? ", THE TOP FLIGHT: ALL-PRO BY DEFAULT" : k === divs.length - 1 ? ", THE BOTTOM DIVISION: ROOKIE BY DEFAULT" : ""}. A PICK IS REMEMBERED FOR THIS DIVISION.` : ""}` },
     { id: "qlen", label: "QUARTERS", value: `${setup.qlen} MINUTES`, turn: (d) => setSetup(s => ({ ...s, qlen: cycle(QLENS, s.qlen, d) })) },
     { id: "cam", label: "CAMERA", value: CAM_NAMES[setup.cam] || "BROADCAST", turn: (d) => setSetup(s => ({ ...s, cam: cycle(CAM_IDS, s.cam, d) })) },
     { id: "start", label: "START THE GAME", go: () => onStart(setup), primary: true },

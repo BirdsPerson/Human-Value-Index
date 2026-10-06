@@ -100,7 +100,9 @@ export async function freezeSeason(store, season, now = Date.now()) {
   for (const e of recs) {
     if (seen.has(e.key)) continue;
     seen.add(e.key);
-    entries.push({ key: e.key, sports: e.sports, r: Object.fromEntries(e.sports.map(sp => [sp, e.r?.[sp]])), record: entryRecord(e) });
+    // since: the entry's age, for the pyramid's oldest-first places and its standings (leagues.js
+    // entrantsByBand; a re-filed entry starts over). Snapshots frozen before it carry none.
+    entries.push({ key: e.key, sports: e.sports, r: Object.fromEntries(e.sports.map(sp => [sp, e.r?.[sp]])), record: entryRecord(e), ...(typeof e.since === "string" ? { since: e.since } : {}) });
   }
   entries.sort((a, b) => (a.key < b.key ? -1 : 1));
   const snap = { season: season + 1, closeAt: new Date(closeMs(season)).toISOString(), frozenAt: new Date(now).toISOString(), entries };

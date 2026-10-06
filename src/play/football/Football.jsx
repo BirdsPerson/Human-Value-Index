@@ -5,7 +5,7 @@ import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC } from "../../avatar.js";
 import GameMenu from "../GameMenu.jsx";
 import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, CALL_SHIFT, CODE, QLENS, PLAYS, DEFS, OFF_BOOK, DEF_BOOK, lineup, contextOf, iconsOf, coordinatorPick, legalOffence, downText, spotText, goalToGo, toGoal, OS, ICONS, DS_NAMES } from "./sim.js";
-import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortEleven, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS } from "./roster.js";
+import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortEleven, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS, divisionsOf, divisionOf, defaultLevelIndex, allClubs } from "./roster.js";
 import { draw, camInit, camFollow, headOf, skinOf, shade, W, H, PS_GLYPH, CAMS } from "./render.js";
 import { drawOffArt, drawDefArt, ART_W, ART_H } from "./playart.js";
 import { FrontEnd, Setup, Sheet, Tapes, DIFF_IDS } from "./menus.jsx";
@@ -51,17 +51,27 @@ function loadSetup(pre, mine, league) {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(SETUP_KEY) || "null"); } catch { s = null; }
   const [h0, a0] = playNowPair(league, mine);
+  const has = (id) => Boolean(league.teams[id]?.length);
   const o = {
-    home: TEAM_IDS.includes(s?.home) ? s.home : h0, away: TEAM_IDS.includes(s?.away) ? s.away : a0,
+    home: has(s?.home) ? s.home : h0, away: has(s?.away) ? s.away : a0,
     side: s?.side === "away" ? "away" : "home", diff: DIFF_IDS.includes(s?.diff) ? s.diff : readFlag(ASSIST_KEY, loadRecords().length === 0) ? "rookie" : "pro",
     qlen: QLENS.includes(s?.qlen) ? s.qlen : 3, cam: CAMS[s?.cam] ? s.cam : CAMS[readStr(CAM_KEY, "")] ? readStr(CAM_KEY, "") : "broadcast",
+    diffBy: s?.diffBy && typeof s.diffBy === "object" ? s.diffBy : {},   // THE PYRAMID: a difficulty picked per division (docs/design/PYRAMID.md 7)
   };
-  if (o.home === o.away) o.away = a0 !== o.home ? a0 : TEAM_IDS.find(id => id !== o.home);
+  if (o.home === o.away) o.away = a0 !== o.home ? a0 : allClubs(league).find(id => id !== o.home) || TEAM_IDS.find(id => id !== o.home);
   if (pre.home) { o.home = pre.home; o.side = "home"; if (o.away === o.home) o.away = playNowPair(league, o.home)[1]; }
   if (pre.vs && pre.vs !== o.home) o.away = pre.vs;
   if (pre.qlen) o.qlen = pre.qlen;
   if (pre.cam) o.cam = pre.cam;
-  return o;
+  return withDivisionDiff(o, league);
+}
+// With the pyramid, the division of the side you play sets the difficulty: your pick for that
+// division when you made one, else the division's default (the top flight ALL-PRO, the bottom ROOKIE).
+function withDivisionDiff(o, league) {
+  if (divisionsOf(league).length <= 1) return o;
+  const k = divisionOf(league, o.side === "away" ? o.away : o.home);
+  const diff = DIFF_IDS.includes(o.diffBy?.[k]) ? o.diffBy[k] : DIFF_IDS[defaultLevelIndex(league, k, DIFF_IDS.length)];
+  return diff === o.diff ? o : { ...o, diff };
 }
 function saveSetup(s) { try { localStorage.setItem(SETUP_KEY, JSON.stringify(s)); localStorage.setItem(CAM_KEY, s.cam); writeFlag(ASSIST_KEY, s.diff === "rookie"); } catch { /* the tab remembers */ } }
 
@@ -85,9 +95,11 @@ export default function Football({ route }) {
   const mine = teamOfCase(league, me.caseId);
   const [setup, setSetupS] = useState(() => loadSetup(opts, mine, league));
   const setupRef = useRef(setup); setupRef.current = setup;
-  const setSetup = (f) => setSetupS(s => { const n = typeof f === "function" ? f(s) : f; saveSetup(n); return n; });
+  const setSetup = (f) => setSetupS(s => { const n = withDivisionDiff(typeof f === "function" ? f(s) : f, league); saveSetup(n); return n; });
   // the live league may put you on a team after the first paint: QUICK PLAY's pairing follows
-  useEffect(() => { if (!opts.home && mine && setupRef.current.home !== mine && setupRef.current.away !== mine) setSetupS(s => ({ ...s, home: mine, side: "home", away: playNowPair(league, mine)[1] })); }, [mine]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!opts.home && mine && setupRef.current.home !== mine && setupRef.current.away !== mine) setSetupS(s => withDivisionDiff({ ...s, home: mine, side: "home", away: playNowPair(league, mine)[1] }, league)); }, [mine]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // the live league arriving brings the pyramid: the difficulty follows the division you play in
+  useEffect(() => { setSetupS(s => withDivisionDiff(s, league)); }, [league]);
   const [screen, setScreen] = useState("front");
   const [game, setGame] = useState(null);
   const [done, setDone] = useState(null);
@@ -97,7 +109,7 @@ export default function Football({ route }) {
   const start = (s) => {
     SFX.unlock();
     const user = s.side === "away" ? s.away : s.home, opp = s.side === "away" ? s.home : s.away;
-    const cfg = { qlen: s.qlen, assist: s.diff === "rookie", hard: s.diff === "allpro", home: elevenOf(league, user, me), away: elevenOf(league, opp, me), coach: [coachOf(user), coachOf(opp)] };
+    const cfg = { qlen: s.qlen, assist: s.diff === "rookie", hard: s.diff === "allpro", home: elevenOf(league, user, me), away: elevenOf(league, opp, me), coach: [coachOf(user), coachOf(opp)], div: divisionOf(league, user) };   // div: the pyramid's division, data the sim carries
     setDone(null); setTape(null);
     setGame({ seed: seedNow(), n: Date.now(), home: user, away: opp, side: s.side, cfg, cam: s.cam });
   };

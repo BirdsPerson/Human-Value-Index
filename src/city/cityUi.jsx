@@ -40,6 +40,7 @@ const css = `
   .hvi-city-in > .ui-disc { margin: 0; }
   /* THE LEAGUES hub (LeagueHub.jsx): tabs, leaders, sortable stat tables, box scores */
   .hvi-lg-tabs { margin: 0 0 var(--s3); }
+  .hvi-lg-divs { margin: 0 0 var(--s2); }   /* the pyramid's division strip (PREMIER / CHAMPIONSHIP / ...) */
   .hvi-lg .ui-disc { margin: var(--s2) 0 0; }
   .hvi-lg-leaders { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 30ch), 1fr)); gap: var(--s2) var(--s4); margin: 0 0 var(--s3); font-size: var(--t-xs); }
   .hvi-lg-lead .t { color: var(--accent); letter-spacing: 0.06em; margin: 0 0 2px; }

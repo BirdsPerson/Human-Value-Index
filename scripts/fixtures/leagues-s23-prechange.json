@@ -1,0 +1,365 @@
+{
+ "note": "season 23 folds before the pyramid (origin/main 1189674), synthRoster(430) seed 42; chained from day 616",
+ "days": {
+  "616": {
+   "roster": 430,
+   "seed": 42,
+   "plan": "5ded55cbe049a416a29f52caae39d3b0ec4bd38be4a1ae3550b6c7e3df647d50",
+   "block": "d20c5621d9019f7654cf1bf1e8a88e522a3182144f8ecaad523621c8c67aecac",
+   "leagues": "b1e5f9b7ee9a4b6b57ecab9ae0ad1686e302beb8195e32f74483160e5b2a7c36",
+   "teams": "1205c538f96662288104151b1cfecfdf420fc156d8be10208d98c1b5599a1a32",
+   "alone": "d20c5621d9019f7654cf1bf1e8a88e522a3182144f8ecaad523621c8c67aecac",
+   "aloneLeagues": "b1e5f9b7ee9a4b6b57ecab9ae0ad1686e302beb8195e32f74483160e5b2a7c36",
+   "chained": false,
+   "season": 22,
+   "sample": {
+    "season": 22,
+    "day": 28,
+    "soccerTable": [
+     "works",
+     "arena",
+     "finance"
+    ],
+    "soccerDraft": [
+     "finance",
+     "campus",
+     "strip"
+    ],
+    "cup": [
+     [
+      "arena",
+      31
+     ],
+     [
+      "works",
+      30
+     ],
+     [
+      "finance",
+      23
+     ]
+    ]
+   }
+  },
+  "617": {
+   "roster": 430,
+   "seed": 42,
+   "plan": "e79a968a0acd203908827af25c6166648c9232df23f00575435bef0858ea2eff",
+   "block": "2cfadfb33d16f964011adadffe71dce6089e6e63f0d7e9cf7da3e16575abdeb4",
+   "leagues": "d4bf62f869b2d25e915cf78228938e11bf3ee29080057bd8c664e45abdb23ceb",
+   "teams": "330e2f24b2eae3fc8b95e2e10f8cb4a0c6e63f36010c0ac9279502ba7fdc3544",
+   "alone": "bc2bc0bb70b3ec9b4b3e9a4ed8a165104d0093434d07c4813a889716a84183b6",
+   "aloneLeagues": "d4bf62f869b2d25e915cf78228938e11bf3ee29080057bd8c664e45abdb23ceb",
+   "chained": true,
+   "season": 23,
+   "sample": {
+    "season": 23,
+    "day": 1,
+    "soccerTable": [
+     "arts",
+     "campus",
+     "finance"
+    ],
+    "soccerDraft": [
+     "sprawl",
+     "commons",
+     "campus"
+    ],
+    "cup": [
+     [
+      "arena",
+      11
+     ],
+     [
+      "arts",
+      0
+     ],
+     [
+      "campus",
+      0
+     ]
+    ]
+   }
+  },
+  "618": {
+   "roster": 430,
+   "seed": 42,
+   "plan": "2b21c0eba8d89f9e1cfd297c278b88bee2484adb65f223a21a3ec49104c72977",
+   "block": "f1e65db5777c2a39fed0da233870a1deebfff6026be8b577dc2375d319e430af",
+   "leagues": "49c2ae46370ec422a3fda2f0187c8706a4eb90bbfbc5c39b967e6d8d6b0526d5",
+   "teams": "735bac0c9714b2ec18378656e6f5bb9ec2b5fbfa5660aa8ada7dd3749f88218c",
+   "alone": "ae005aeeabf65820e57a0db58053d2481f10d00b02aa230f88d4a92c1a895e4a",
+   "aloneLeagues": "49c2ae46370ec422a3fda2f0187c8706a4eb90bbfbc5c39b967e6d8d6b0526d5",
+   "chained": true,
+   "season": 23,
+   "sample": {
+    "season": 23,
+    "day": 2,
+    "soccerTable": [
+     "arts",
+     "campus",
+     "finance"
+    ],
+    "soccerDraft": [
+     "sprawl",
+     "commons",
+     "campus"
+    ],
+    "cup": [
+     [
+      "arena",
+      15
+     ],
+     [
+      "sprawl",
+      10
+     ],
+     [
+      "archive",
+      8
+     ]
+    ]
+   }
+  },
+  "619": {
+   "roster": 430,
+   "seed": 42,
+   "plan": "188877cb3dff8d2b34f8e51510f377e12335cf2959d292c26340eae2c84a7616",
+   "block": "275f3cacb01e72f31d02f4a31b50ccc51e8137c795a145b790d17f30a9f1fe72",
+   "leagues": "2e5460e967ceca810c8341ca592474b5a80034a561ca6030f99633167f0042ae",
+   "teams": "f2f3b9d5561b7f408aa6746ffe47e91361fb135fb73fb5d5ef551e8aa4047701",
+   "alone": "cf89b2f04aa4b12b8c86a2d3b3786846bf092cc8f6667e51ca272af8bd11bb9d",
+   "aloneLeagues": "2e5460e967ceca810c8341ca592474b5a80034a561ca6030f99633167f0042ae",
+   "chained": true,
+   "season": 23,
+   "sample": {
+    "season": 23,
+    "day": 3,
+    "soccerTable": [
+     "arts",
+     "campus",
+     "finance"
+    ],
+    "soccerDraft": [
+     "sprawl",
+     "commons",
+     "campus"
+    ],
+    "cup": [
+     [
+      "arena",
+      19
+     ],
+     [
+      "archive",
+      14
+     ],
+     [
+      "sprawl",
+      11
+     ]
+    ]
+   }
+  },
+  "620": {
+   "roster": 430,
+   "seed": 42,
+   "plan": "a9a0db02574ff18d2b41fca24c7198adfc305e46848726cd7a492ce913c3aaa4",
+   "block": "539be152e696dd6765a4255d597a750efd477c0cc026367f11c119c251298a2d",
+   "leagues": "b8682d81e079a881d34c4d36ce50abd2f696fc5490716f32b207bb4261ab90e9",
+   "teams": "7d80d8e7fdca5404d73d59d7de370ab4231f36b5b86c20635470382bf4b90a35",
+   "alone": "7f442a40897ddffaf1dce4da6d0d441ca8a77eb417bfdacd1143fc49c0f4e6c9",
+   "aloneLeagues": "b8682d81e079a881d34c4d36ce50abd2f696fc5490716f32b207bb4261ab90e9",
+   "chained": true,
+   "season": 23,
+   "sample": {
+    "season": 23,
+    "day": 4,
+    "soccerTable": [
+     "sprawl",
+     "arts",
+     "finance"
+    ],
+    "soccerDraft": [
+     "sprawl",
+     "commons",
+     "campus"
+    ],
+    "cup": [
+     [
+      "sprawl",
+      21
+     ],
+     [
+      "arena",
+      20
+     ],
+     [
+      "arts",
+      16
+     ]
+    ]
+   }
+  },
+  "621": {
+   "roster": 430,
+   "seed": 42,
+   "plan": "ad5f2df1469e1df4c94b3a69e2b597a79b5587c513ff61d4514ce88c755feca7",
+   "block": "92d131abc37ed742d047d97d52ac84f48f52fc7df16b30527233c42883fd854b",
+   "leagues": "415d21adc6a4b541fe1c5102a41546819f40771baa924ef3e2a3a8f6cf398e69",
+   "teams": "73960f47254c6e86a6705f9ca6b316f45078b87665da21bdb2bb2d6eaddc036b",
+   "alone": "769d6b532330e6be3ef980f2845e8fe5109783dfdae8aaca8e847b0d17968f64",
+   "aloneLeagues": "415d21adc6a4b541fe1c5102a41546819f40771baa924ef3e2a3a8f6cf398e69",
+   "chained": true,
+   "season": 23,
+   "sample": {
+    "season": 23,
+    "day": 5,
+    "soccerTable": [
+     "sprawl",
+     "arts",
+     "finance"
+    ],
+    "soccerDraft": [
+     "sprawl",
+     "commons",
+     "campus"
+    ],
+    "cup": [
+     [
+      "arena",
+      22
+     ],
+     [
+      "arts",
+      21
+     ],
+     [
+      "hq",
+      16
+     ]
+    ]
+   }
+  },
+  "1200": {
+   "roster": 430,
+   "seed": 42,
+   "plan": "3373336c03d44a930051fdc8e7355e64f70e0def82e54db92c7d1c65404173ff",
+   "block": "7e1f59e243fcc69879da9414615e712d7ab163b78fd9dd3867655baab6cf1803",
+   "leagues": "d75ff37330f0eeac7964a26443473310d41fa9fea3180c747f0a5425e1d4da3c",
+   "teams": "2228490bd052f88dc6d223918e4e1042ec2a24bac03e252e8e45bfc82f2afeb3",
+   "alone": "7e1f59e243fcc69879da9414615e712d7ab163b78fd9dd3867655baab6cf1803",
+   "aloneLeagues": "d75ff37330f0eeac7964a26443473310d41fa9fea3180c747f0a5425e1d4da3c",
+   "chained": false,
+   "season": 23,
+   "sample": {
+    "season": 23,
+    "day": 584,
+    "soccerTable": [
+     "sprawl",
+     "campus",
+     "arts"
+    ],
+    "soccerDraft": [
+     "sprawl",
+     "commons",
+     "campus"
+    ],
+    "cup": [
+     [
+      "sprawl",
+      30
+     ],
+     [
+      "arena",
+      24
+     ],
+     [
+      "campus",
+      20
+     ]
+    ]
+   }
+  },
+  "2415": {
+   "roster": 430,
+   "seed": 42,
+   "plan": "2c5c2e5494881e32e242cf1687e25e2e75666e88a2edaf7fb74ae52aefd44435",
+   "block": "e59f7768d289f998ae91995fcddcfb9f4ab8124008745fbeaef967538ae194b1",
+   "leagues": "424e77c39be194a466926d3a57673f8026972446788ee3706df858f23c00f4a5",
+   "teams": "9b3a165d18fa874ffbd75d222bf2f01643caa55e5263fc8c5487659092f60e2a",
+   "alone": "e59f7768d289f998ae91995fcddcfb9f4ab8124008745fbeaef967538ae194b1",
+   "aloneLeagues": "424e77c39be194a466926d3a57673f8026972446788ee3706df858f23c00f4a5",
+   "chained": false,
+   "season": 23,
+   "sample": {
+    "season": 23,
+    "day": 1799,
+    "soccerTable": [
+     "campus",
+     "arts",
+     "sprawl"
+    ],
+    "soccerDraft": [
+     "sprawl",
+     "commons",
+     "campus"
+    ],
+    "cup": [
+     [
+      "sprawl",
+      30
+     ],
+     [
+      "arena",
+      26
+     ],
+     [
+      "strip",
+      23
+     ]
+    ]
+   }
+  },
+  "2416": {
+   "roster": 430,
+   "seed": 42,
+   "plan": "867d95e8ae37db8eeefbf1d401fb3d55628464404d16a9f516fb86aaf673769e",
+   "block": "0b54b9195471f6cc9fab9d18b78f9c46c3716cd005304448bf6508538f2429eb",
+   "leagues": "da4c8df51530acdb6c1e9ca426c5fabaa8fe12599c35a57006e92eab3a686908",
+   "teams": "dd5705137e84ff51c3fa5e477cbd9394ad7abf734d192b6492b0c8ff0b52aab9",
+   "alone": "5964782b068413c0714d7996561d9f6fc2745753266d5c0c37995516c04b0e35",
+   "aloneLeagues": "da4c8df51530acdb6c1e9ca426c5fabaa8fe12599c35a57006e92eab3a686908",
+   "chained": true,
+   "season": 23,
+   "sample": {
+    "season": 23,
+    "day": 1800,
+    "soccerTable": [
+     "campus",
+     "arts",
+     "sprawl"
+    ],
+    "soccerDraft": [
+     "sprawl",
+     "commons",
+     "campus"
+    ],
+    "cup": [
+     [
+      "sprawl",
+      32
+     ],
+     [
+      "arena",
+      26
+     ],
+     [
+      "hq",
+      23
+     ]
+    ]
+   }
+  }
+ }
+}

@@ -313,12 +313,17 @@ function Sports({ s }) {
     <div className="pp-cols">
       {s.leagues.map(lg => (
         <div className="pp-story" key={lg.sport}>
-          <h3 className="sub"><a href={lg.href}>{lg.name}</a> <span className="pp-meta">AT {lg.ground}{lg.champion ? `, CHAMPIONS: ${lg.champion}` : ""}</span></h3>
+          <h3 className="sub"><a href={lg.href}>{lg.name}</a> <span className="pp-meta">{lg.division ? `${lg.division} ` : ""}AT {lg.ground}{lg.champion ? `, CHAMPIONS: ${lg.champion}` : ""}</span></h3>
           {lg.results.length ? <ul className="pp-list">{lg.results.map((r, i) => <li key={i}>{r}</li>)}</ul> : <p>NO RESULTS YET THIS SEASON.</p>}
           {lg.star && <p>STAR OF THE DAY: {lg.star.name}, {lg.star.team}: {lg.star.stat}.</p>}
           <Table rows={lg.table.slice(0, 10)} cols={[["pos", "#"], ["team", "TEAM"], ["p", "P"], ["w", "W"], ["l", "L"], ["pts", "PTS"]]} />
           {lg.leaders.map(c => <p key={c.label} className="pp-meta">{c.label}: {c.rows.map(r => `${r.name} (${r.team}) ${r.value}`).join("; ")}.</p>)}
           {lg.next.length ? <p>NEXT: {lg.next.map(n => `DAY ${n.day} ${String(Math.floor(n.at)).padStart(2, "0")}:${String(Math.round((n.at % 1) * 60)).padStart(2, "0")}, ${n.text}`).join(" // ")}</p> : null}
+          {/* THE PYRAMID: the lower divisions, a line each (docs/design/PYRAMID.md) */}
+          {(lg.divisions || []).map(d => (
+            <p key={d.k} className="pp-meta"><a href={d.href}>{d.name}</a>, AT {d.ground}: {d.leader ? `${d.leader.team} LEAD ON ${d.leader.pts} FROM ${d.leader.p}. ` : "NOT YET STARTED. "}{d.promotion.length ? `GOING UP AS IT STANDS: ${d.promotion.join(", ")}; THE PLAYOFF: ${d.playoff.join(", ")}. ` : ""}{d.drop.length ? `THE DROP: ${d.drop.join(", ")}.` : ""}{d.results.length ? ` ${d.results.join(" ")}` : ""}</p>
+          ))}
+          {lg.pyramid && lg.pyramid.divs > 1 ? <p className="pp-meta">{lg.pyramid.divs} DIVISIONS, TEN CLUBS EACH; {lg.pyramid.up} UP, {lg.pyramid.up} DOWN AT THE SEASON'S END.</p> : null}
         </div>
       ))}
       {s.cup && (

@@ -3,7 +3,7 @@
 // edition went to press. Pure given the day's civic block (the published summary's .civic) and
 // the press time in machine hours; every line is the sim's own result, no invented play.
 import * as L from "../../src/city/leagues.js";
-import { decidedAt, sportTableAt, cupTableAt, leaguesView } from "../../src/city/civic.js";
+import { decidedAt, sportTableAt, cupTableAt, leaguesView, divClubs } from "../../src/city/civic.js";
 import { cardFor, resultLine as pitLine, billLine } from "../../src/city/pit.js";
 import { standings as raceStandings, racerName, lastRace, nextRace, resultLine as raceLine, fmt as raceFmt } from "../../src/city/race.js";
 
@@ -67,9 +67,29 @@ export function sportsSection(block, T, T0) {
           next.push({ day: d, at: s.from, stage: L.STAGE_NAME[stage], text: pairs.length ? pairs.map(([a, b]) => `${L.sportTeamName(a, sp)} V ${L.sportTeamName(b, sp)}`).join("; ") : `${L.STAGE_NAME[stage]} AT ${L.SPORT[sp].ground}` });
         }
       }
+      // THE PYRAMID (docs/design/PYRAMID.md): each lower division in a line, and the boundary's moves
+      const py = lg.pyramid, divisions = [];
+      if (py) {
+        divClubs(block, sp).forEach((ids, k) => {
+          if (k === 0) return;
+          const dn = decidedAt(block, sp, h, k), fr = dn.filter(m => (m.day - 1) * 24 + m.to > T0);
+          const tb = sportTableAt(block, sp, h, k);
+          divisions.push({
+            k, name: L.divName(k), ground: L.divGround(sp, k), href: `${LEAGUE_HREF(sp)}?div=${k}`,
+            leader: tb[0] ? { team: L.sportTeamName(tb[0].id, sp), pts: tb[0].pts || 0, p: tb[0].p || 0 } : null,
+            promotion: tb.slice(0, 2).map(r => L.sportTeamName(r.id, sp)), playoff: tb.slice(2, L.SPORT[sp].finalOnly ? 4 : 6).map(r => L.sportTeamName(r.id, sp)), drop: tb.slice(-L.UP_N).map(r => L.sportTeamName(r.id, sp)),
+            results: (fr.length ? fr : dn).slice(-2).reverse().map(resultText),
+          });
+        });
+        const mv = py.moves?.[sp];
+        if (lg.day <= 2 && mv && (mv.up.length || mv.down.length)) {
+          out.headlines.push({ kind: "pyramid", sport: L.SPORT[sp].name, weight: 85, href: LEAGUE_HREF(sp), text: `${L.SPORT[sp].name}: ${mv.up.length ? `PROMOTED, ${mv.up.map(c => L.sportTeamName(c, sp)).join(", ")}` : ""}${mv.up.length && mv.down.length ? "; " : ""}${mv.down.length ? `RELEGATED, ${mv.down.map(c => L.sportTeamName(c, sp)).join(", ")}` : ""}` });
+        }
+      }
       out.leagues.push({
         sport: sp, name: L.SPORT[sp].name, ground: L.SPORT[sp].ground, href: LEAGUE_HREF(sp), stage: sl.stage || null,
         champion: sl.champion ? L.sportTeamName(sl.champion, sp) : null,
+        ...(py ? { division: L.divName(0), divisions, pyramid: { divs: py.divs, up: L.UP_N } } : {}),
         results: latest.map(resultText),
         table: table.map(r => ({ pos: r.pos, team: L.sportTeamName(r.id, sp), p: r.p || 0, w: r.w || 0, d: r.d || 0, l: r.l || 0, pts: r.pts || 0, form: r.form || "" })),
         leaders, star, next,
@@ -82,7 +102,7 @@ export function sportsSection(block, T, T0) {
       }
     }
     const cup = cupTableAt(block, h);
-    out.cup = { href: "#city/league/cup", rows: cup.slice(0, 10).map((r, i) => ({ pos: i + 1, team: L.teamName(r.id), pts: r.pts })), last: lg.cup?.last ? { season: lg.cup.last.season, champion: L.teamName(lg.cup.last.champion) } : null };
+    out.cup = { href: "#city/league/cup", rows: cup.map((r, i) => ({ pos: i + 1, team: L.teamName(r.id), pts: r.pts })), last: lg.cup?.last ? { season: lg.cup.last.season, champion: L.teamName(lg.cup.last.champion) } : null };
     const run = L.ladderRun(V.tennis, V.season, T);
     const tm = run.matches.filter(m => (m.day - 1) * 24 + m.to > T0).slice(-3).reverse();
     const nm = (k) => String(run.info.get(k)?.name || k).toUpperCase();

@@ -4,12 +4,12 @@
 // CUP. Everything is recomputed from the day's civic block (civic.js leaguesView) by the code the
 // fold ran, so the summary carries only rosters, drafts and tables. Before the leagues open the
 // page is the mixed league (CivicPanel.jsx LeaguePanel) with the date the leagues take over.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Frame, Disclosure, Chip, ChipStrip } from "../ui/index.js";
 import { pad, padL } from "../term.jsx";
 import { useCivic, LeaguePanel } from "./CivicPanel.jsx";
 import * as L from "./leagues.js";
-import { leaguesView, decidedAt, sportTableAt, cupTableAt, LEAGUES_FROM, teamShort, teamName } from "./civic.js";
+import { leaguesView, decidedAt, sportTableAt, cupTableAt, LEAGUES_FROM, teamShort, teamName, divClubs, divCount, clubRoster } from "./civic.js";
 import { CITY_EPOCH, DEFAULT_SCALE } from "./sim.js";
 import { resultLine } from "./pit.js";
 import TournamentList from "../tournament/TournamentList.jsx";
@@ -35,25 +35,30 @@ export function fmt(key, v) {
   return String(v);
 }
 
-// Season stats per sport for a block at hour h, memoised on what has been decided.
+// Season stats per sport (per division k) for a block at hour h, memoised on what has been decided.
 const STATS = new Map();
-export function statsFor(block, sport, h) {
+export function statsFor(block, sport, h, k = 0) {
   const V = leaguesView(block);
   if (!V) return null;
-  const done = decidedAt(block, sport, h);
-  const key = `${block.day}|${sport}|${done.length}`;
+  const done = decidedAt(block, sport, h, k);
+  const key = `${block.day}|${sport}|${k}|${done.length}`;
   if (!STATS.has(key)) {
-    STATS.set(key, L.seasonStats(sport, done, V.rosters[sport]));
+    STATS.set(key, L.seasonStats(sport, done, V.div(sport, k).rosters));
     if (STATS.size > 24) STATS.delete(STATS.keys().next().value);
   }
   return STATS.get(key);
 }
+// The division asked for in the hash (#city/league/<sport>?div=k), 0 when none.
+const divInHash = () => { try { const q = window.location.hash.split("?")[1]; const v = Number(new URLSearchParams(q || "").get("div")); return Number.isInteger(v) && v >= 0 ? v : 0; } catch { return 0; } };
 
 export function LeagueHub({ tab }) {
   const { block, h } = useCivic();
   const lg = block?.leagues;
   const t = TABS.some(([k]) => k === tab) ? tab : "cup";
   const go = (k) => { const q = window.location.hash.split("?")[1]; window.location.hash = `#city/league/${k}${q ? "?" + q : ""}`; };
+  const [div, setDiv] = useState(divInHash);
+  useEffect(() => { const on = () => setDiv(divInHash()); on(); window.addEventListener("hashchange", on); return () => window.removeEventListener("hashchange", on); }, [tab]);   // #city/league/<sport>?div=k follows the hash
+  const goDiv = (k) => { setDiv(k); try { const q = new URLSearchParams(window.location.hash.split("?")[1] || ""); if (k) q.set("div", String(k)); else q.delete("div"); const s = q.toString(); window.location.hash = `#city/league/${t}${s ? "?" + s : ""}`; } catch { /* the state carries it */ } };
   if (!lg) {
     return (
       <>
@@ -72,7 +77,7 @@ export function LeagueHub({ tab }) {
       <ChipStrip label="Leagues" className="hvi-lg-tabs">
         {TABS.map(([k, l]) => <Chip key={k} pressed={t === k} onClick={() => go(k)}>{l}</Chip>)}
       </ChipStrip>
-      {L.SPORTS.includes(t) && <SportTab block={block} h={h} sport={t} />}
+      {L.SPORTS.includes(t) && <SportTab block={block} h={h} sport={t} div={Math.min(div, divCount(block, t) - 1)} goDiv={goDiv} />}
       {t === "tennis" && <TennisTab block={block} h={h} />}
       {t === "pit" && <PitTab block={block} h={h} />}
       {t === "cup" && <CupTab block={block} h={h} go={go} />}
@@ -93,8 +98,8 @@ const TEAM_COLS = {
 };
 function matchText(m, h, block) {
   const over = m.day < block.day || h >= m.to, on = m.day === block.day && h >= m.from && !over;
-  const st = m.stage !== "regular" ? `${L.STAGE_NAME[m.stage]}: ` : "";
-  const where = m.kind === "hoops" ? `GAME ${m.j + 1}` : m.featured ? "ON THE BOARD" : "CLOSED DOORS";
+  const st = m.stage !== "regular" ? `${L.stageLabel(m.stage, m.div || 0)}: ` : "";
+  const where = m.kind === "hoops" && !m.div ? `GAME ${m.j + 1}` : m.featured ? "ON THE BOARD" : "CLOSED DOORS";
   const score = over ? `${m.score[0]}-${m.score[1]}` : "V";
   const tail = over ? (m.tiebreak ? ` (${teamShort(m.tiebreak)} ON THE TIEBREAK)` : "") : on ? " // IN PLAY" : " // LATER";
   return { over, text: `${hhmm(m.from)} ${pad(where, 13)}${st}${teamShort(m.sides[0])} ${score} ${teamShort(m.sides[1])}${tail}` };
@@ -118,12 +123,22 @@ function BoxScore({ m, rosters }) {
     </div>
   );
 }
-function SportTab({ block, h, sport }) {
-  const V = leaguesView(block), S = L.SPORT[sport], lg = block.leagues.sports[sport];
-  const all = V.all[sport];
-  const done = decidedAt(block, sport, h);
-  const table = sportTableAt(block, sport, h);
-  const stats = statsFor(block, sport, h);
+// The pyramid's markers beside a position: the top flight's playoff places, the promotion places
+// (automatic, then the playoff) and the relegation zone when a division sits below.
+function markOf(pos, k, K, finalOnly) {
+  if (k > 0 && pos <= 2) return "P";
+  if (k > 0 && pos <= (finalOnly ? 4 : 6)) return "PO";
+  if (k === 0 && K > 1 && pos <= (finalOnly ? 2 : 4)) return "PO";
+  if (k < K - 1 && pos > L.DIV_N - L.UP_N) return "R";
+  return "";
+}
+function SportTab({ block, h, sport, div: k = 0, goDiv }) {
+  const V = leaguesView(block), S = L.SPORT[sport], LG = block.leagues, py = LG.pyramid, K = divCount(block, sport);
+  const lg = py ? LG.sports[sport].divs[k] : LG.sports[sport];
+  const D = V.div(sport, k), all = D.all, ids = D.ids;
+  const done = decidedAt(block, sport, h, k);
+  const table = sportTableAt(block, sport, h, k);
+  const stats = statsFor(block, sport, h, k);
   const [sort, setSort] = useState(null);
   const [open, setOpen] = useState(null);
   const today = all.filter(m => m.day === block.day);
@@ -134,27 +149,37 @@ function SportTab({ block, h, sport }) {
   const key = sort || L.LEADERS[sport][0][0];
   const asc = L.LEADERS[sport].find(c => c[0] === key)?.[4];
   const players = stats ? Object.values(stats.players).sort((a, b) => ((asc ? a[key] - b[key] : (b[key] ?? -1) - (a[key] ?? -1))) || b.r - a.r) : [];
-  const pts = L.positionPoints(sport, done);
-  const md = L.slotsOn(sport, block.day)[0], season = block.leagues.season - 1, R = L.roundsOf(sport, season), long = L.isLong(season);
-  const board = L.draftBoard(lg.draft, V.rosters[sport], S.n);
-  const draftLine = (p) => `${pad(`${p.round}.${String(p.pick).padStart(2, "0")}`, 6)}${pad(teamShort(p.team), 11)}${pad(up(p.player[1]).slice(0, 22), 23)}${padL(p.player[2], 3)}${p.holder !== p.team ? `  TO ${teamShort(p.holder)}` : ""}\n`;
+  const pts = L.positionPoints(sport, done, ids, k);
+  const md = L.slotsOn(sport, block.day, k)[0], season = LG.season - 1, R = L.roundsOf(sport, season, k), long = L.isLong(season);
+  const board = L.draftBoard(lg.draft, D.rosters, S.n);
+  const draftLine = (p) => `${pad(`${p.round}.${String(p.pick).padStart(2, "0")}`, 6)}${pad(teamShort(p.team), 13)}${pad(up(p.player[1]).slice(0, 22), 23)}${padL(p.player[2], 3)}${p.holder !== p.team ? `  TO ${teamShort(p.holder)}` : ""}\n`;
   const results = done.filter(m => m.day < block.day || m.to <= h).slice(-10).reverse();
+  const ground = L.divGround(sport, k);
+  const moves = py?.moves?.[sport];
+  const heading = fin ? (k === 0 ? `CHAMPIONS: ${L.sportTeamName(L.winnerOf(fin), sport)}` : `PROMOTED: ${[table[0]?.id, table[1]?.id, L.winnerOf(fin)].filter(Boolean).map(id => teamShort(id)).join(", ")}`)
+    : lg.stage === "off" ? "THE SEASON IS DECIDED" : L.stageLabel(lg.stage, k) === "LEAGUE" ? "THE REGULAR SEASON" : L.stageLabel(lg.stage, k);
   return (
     <>
-      <div className="hvi-city-room-h">{S.name} AT {S.ground} // {fin ? `CHAMPIONS: ${L.sportTeamName(L.winnerOf(fin), sport)}` : lg.stage === "off" ? "THE SEASON IS DECIDED" : `${L.STAGE_NAME[lg.stage] === "LEAGUE" ? "THE REGULAR SEASON" : L.STAGE_NAME[lg.stage]}`}</div>
-      <pre className="hvi-civic-table" aria-label={`${S.name} standings`}>
-        {`${pad("POS", 4)}${pad("TEAM", 13)}${padL("P", 3)}${padL("W-D-L", 8)}${padL("PTS", 5)}${padL("CUP", 5)}  FORM\n`}
-        {table.map(r => `${pad(String(r.pos), 4)}${pad(teamShort(r.id), 13)}${padL(r.p, 3)}${padL(`${r.w}-${r.d}-${r.l}`, 8)}${padL(r.pts, 5)}${padL(pts[r.id], 5)}  ${r.form || "-"}\n`).join("")}
+      {py && (
+        <ChipStrip label="Division" className="hvi-lg-divs">
+          {Array.from({ length: K }, (_, i) => <Chip key={i} pressed={i === k} onClick={() => goDiv(i)}>{L.divShort(i)}</Chip>)}
+        </ChipStrip>
+      )}
+      <div className="hvi-city-room-h">{S.name}{py ? ` // ${L.divName(k)}` : ""} AT {ground} // {heading}</div>
+      <pre className="hvi-civic-table" aria-label={`${S.name} ${py ? L.divName(k) : ""} standings`}>
+        {`${pad("POS", 4)}${pad("TEAM", 15)}${padL("P", 3)}${padL("W-D-L", 8)}${padL("PTS", 5)}${padL("CUP", 5)}  FORM${py ? "   " : ""}\n`}
+        {table.map(r => `${pad(String(r.pos), 4)}${pad(teamShort(r.id), 15)}${padL(r.p, 3)}${padL(`${r.w}-${r.d}-${r.l}`, 8)}${padL(r.pts, 5)}${padL(pts[r.id], 5)}  ${pad(r.form || "-", 6)}${py ? markOf(r.pos, k, K, S.finalOnly) : ""}\n`).join("")}
       </pre>
-      <div className="hvi-civic-line">{mvp ? <>{fin ? "MVP" : "MVP RACE"}: <b>{up(mvp.name)}</b> ({teamShort(mvp.team)}). </> : null}{S.finalOnly ? `${R} ROUNDS, THEN THE TOP TWO MEET IN THE BOWL GAME.` : `${R} ROUNDS${R % 9 ? " OF THE CIRCLE" : R === 9 ? " (EVERY PAIR ONCE)" : R === 18 ? " (EVERY PAIR TWICE)" : ` (EVERY PAIR ${R / 9} TIMES)`}, THEN 1ST V 4TH AND 2ND V 3RD, THEN THE FINAL.`} WIN 3, DRAW 1.{long ? ` THE SEASON RUNS ONE REAL MONTH (${L.LONG_SEASON_DAYS} MACHINE DAYS); EXHIBITIONS FILL THE SLOTS BETWEEN MATCHDAYS. THE PLAYOFFS TAKE THE LAST ${S.finalOnly ? "SLOT" : "TWO SLOTS"} OF THE SEASON.` : ""}</div>
+      {py && <div className="hvi-civic-line">{K * L.DIV_N} CLUBS IN {K} DIVISIONS. {K > 1 ? `${L.UP_N} UP (TWO AUTOMATIC, ONE THROUGH THE PROMOTION PLAYOFF), ${L.UP_N} DOWN, EVERY SEASON. P: PROMOTION PLACE. PO: THE PLAYOFF. R: THE RELEGATION ZONE.` : "ONE DIVISION UNTIL THE CENSUS FILLS ANOTHER."}{moves && (moves.up.length || moves.down.length) ? ` AT THE LAST BOUNDARY: UP ${moves.up.map(teamShort).join(", ") || "NOBODY"}; DOWN ${moves.down.map(teamShort).join(", ") || "NOBODY"}.` : ""}{k > 0 ? " BEHIND CLOSED DOORS: NO BOARD, FEWER ROUNDS, THE SAME DICE." : ""}</div>}
+      <div className="hvi-civic-line">{mvp ? <>{fin ? "MVP" : "MVP RACE"}: <b>{up(mvp.name)}</b> ({teamShort(mvp.team)}). </> : null}{S.finalOnly ? `${R} ROUNDS, THEN ${k > 0 ? "3RD V 4TH FOR THE LAST PLACE UP" : "THE TOP TWO MEET IN THE BOWL GAME"}.` : `${R} ROUNDS${R % 9 ? " OF THE CIRCLE" : R === 9 ? " (EVERY PAIR ONCE)" : R === 18 ? " (EVERY PAIR TWICE)" : ` (EVERY PAIR ${R / 9} TIMES)`}, THEN ${k > 0 ? "3RD V 6TH AND 4TH V 5TH, THEN THE PROMOTION FINAL" : "1ST V 4TH AND 2ND V 3RD, THEN THE FINAL"}.`} WIN 3, DRAW 1.{long ? ` THE SEASON RUNS ONE REAL MONTH (${L.LONG_SEASON_DAYS} MACHINE DAYS); EXHIBITIONS FILL THE SLOTS BETWEEN MATCHDAYS. THE PLAYOFFS TAKE THE LAST ${S.finalOnly ? "SLOT" : "TWO SLOTS"} OF THE SEASON.` : ""}</div>
 
-      <div className="hvi-city-room-h">TODAY{md ? ` // MATCHDAY ${md.md + 1} OF ${L.matchdays(sport, season)}` : ""}</div>
-      {today.length ? today.map(m => { const x = matchText(m, h, block); return <MatchRow key={`${m.k}.${m.j}`} m={m} x={x} rosters={V.rosters[sport]} open={open} setOpen={setOpen} />; })
-        : <div className="hvi-city-note">NO {S.name} TODAY. {S.ground} IS OPEN FOR SUPERVISED FUN.</div>}
-      {S.kind !== "hoops" && today.length > 1 && <div className="hvi-city-note">ONE TIE IS PLAYED ON THE BOARD AT {S.ground}. THE REST ARE PLAYED BEHIND CLOSED DOORS AT A DEPARTMENT FACILITY; RESULTS ARE RELEASED AT THE WHISTLE.</div>}
+      <div className="hvi-city-room-h">TODAY{md ? ` // MATCHDAY ${md.md + 1} OF ${L.matchdays(sport, season, k)}` : ""}</div>
+      {today.length ? today.map(m => { const x = matchText(m, h, block); return <MatchRow key={`${m.k}.${m.j}`} m={m} x={x} rosters={D.rosters} open={open} setOpen={setOpen} />; })
+        : <div className="hvi-city-note">NO {S.name}{py ? ` IN ${L.divName(k)}` : ""} TODAY. {ground} IS OPEN FOR SUPERVISED FUN.</div>}
+      {k === 0 && S.kind !== "hoops" && today.length > 1 && <div className="hvi-city-note">ONE TIE IS PLAYED ON THE BOARD AT {S.ground}. THE REST ARE PLAYED BEHIND CLOSED DOORS AT A DEPARTMENT FACILITY; RESULTS ARE RELEASED AT THE WHISTLE.</div>}
 
       <div className="hvi-city-room-h">RESULTS</div>
-      {results.length ? results.map(m => { const x = matchText(m, h, block); return <MatchRow key={`${m.k}.${m.j}`} m={m} x={{ ...x, text: `DAY ${m.day} ${x.text}` }} rosters={V.rosters[sport]} open={open} setOpen={setOpen} />; })
+      {results.length ? results.map(m => { const x = matchText(m, h, block); return <MatchRow key={`${m.k}.${m.j}`} m={m} x={{ ...x, text: `DAY ${m.day} ${x.text}` }} rosters={D.rosters} open={open} setOpen={setOpen} />; })
         : <div className="hvi-city-note">NO RESULTS YET THIS SEASON. OPTIMISM IS NOT RECORDED.</div>}
 
       <div className="hvi-city-room-h">LEAGUE LEADERS</div>
@@ -180,15 +205,15 @@ function SportTab({ block, h, sport }) {
         <div className="hvi-lg-scroll">
           <table className="hvi-lg-stats">
             <thead><tr><th className="n">TEAM</th><th>G</th>{TEAM_COLS[sport].map(([k, l]) => <th key={k}>{l}</th>)}</tr></thead>
-            <tbody>{L.DIST.map(id => { const x = stats?.teams[id] || {}; return <tr key={id}><td className="n">{teamShort(id)}</td><td>{x.g || 0}</td>{TEAM_COLS[sport].map(([k]) => <td key={k}>{fmt(k, x[k] ?? 0)}</td>)}</tr>; })}</tbody>
+            <tbody>{ids.map(id => { const x = stats?.teams[id] || {}; return <tr key={id}><td className="n">{teamShort(id)}</td><td>{x.g || 0}</td>{TEAM_COLS[sport].map(([k]) => <td key={k}>{fmt(k, x[k] ?? 0)}</td>)}</tr>; })}</tbody>
           </table>
         </div>
       </Disclosure>
       <Disclosure className="hvi-city-disc" title="ROSTERS" meta={`${S.n} A SIDE // RATING`}>
-        {L.DIST.map(id => <div key={id} className="hvi-civic-line"><b>{L.sportTeamName(id, sport)}</b> ({block.districts[id].teams[sport].rating}): {V.rosters[sport][id].map(p => `${p[1]} ${p[2]}`).join(", ") || "NOBODY. THE DEPARTMENT FIELDS A CONE."}</div>)}
+        {ids.map(id => <div key={id} className="hvi-civic-line"><b>{L.sportTeamName(id, sport)}</b> ({D.rating[id]}): {D.rosters[id].map(p => `${p[1]} ${p[2]}`).join(", ") || "NOBODY. THE DEPARTMENT FIELDS A CONE."}</div>)}
       </Disclosure>
       <Disclosure className="hvi-city-disc" title="THE DRAFT BOARD" meta={`SEASON ${lg.draft.season} // ${board.length} PICKS`}>
-        <div className="hvi-civic-line">ORDER: {lg.draft.order.map((id, i) => `${i + 1}. ${teamShort(id)}`).join(" ")}. THE REVERSE OF LAST SEASON'S {lg.draft.season === LEAGUES_FROM + 1 ? "MIXED LEAGUE" : `${S.name} TABLE`}; THE CHAMPION PICKS LAST; THE ORDER SNAKES BACK EACH ROUND. THE POOL: {S.name} PLAYERS ON FILE FIRST, THEN ATHLETES, THEN THE REGULARS AT {S.ground}, THEN EVERYONE ELSE. CITIZENS ENTERED FROM MY FILE JOIN AMONG THE ATHLETES, AT THEIR OWN RATING. NOBODY ON FILE PLAYS TWO SPORTS.</div>
+        <div className="hvi-civic-line">ORDER: {lg.draft.order.map((id, i) => `${i + 1}. ${teamShort(id)}`).join(" ")}. {py && (k > 0 || (moves && (moves.up.length || moves.down.length))) ? "THE PROMOTED PICK FIRST, THE RELEGATED LAST, THE REST IN THE REVERSE OF THEIR FINISH" : `THE REVERSE OF LAST SEASON'S ${lg.draft.season === LEAGUES_FROM + 1 ? "MIXED LEAGUE" : `${S.name} TABLE`}; THE CHAMPION PICKS LAST`}; THE ORDER SNAKES BACK EACH ROUND. THE POOL: {py ? `${L.divName(k)}'S BAND OF THE CITY'S ${S.name} POOL (${S.name} PLAYERS ON FILE FIRST, THEN ATHLETES, THEN THE REGULARS AT ${S.ground}, THEN EVERYONE ELSE, BY RATING; BAND ${k + 1} OF ${K})` : `${S.name} PLAYERS ON FILE FIRST, THEN ATHLETES, THEN THE REGULARS AT ${S.ground}, THEN EVERYONE ELSE`}. CITIZENS ENTERED FROM MY FILE JOIN AMONG THE ATHLETES, AT THEIR OWN RATING{py ? ", IN THE DIVISION OF THEIR STANDING (A FIRST ENTRY: ONE BELOW WHERE THE RATING SITS, NEVER THE TOP FLIGHT)" : ""}. NOBODY ON FILE PLAYS TWO SPORTS.</div>
         <pre className="hvi-civic-table" aria-label="Draft board">{board.map(draftLine).join("")}</pre>
         <div className="hvi-civic-line">{lg.draft.trades?.length ? `THE COMMISSIONER'S CAP ORDERED ${lg.draft.trades.length} TRADE${lg.draft.trades.length === 1 ? "" : "S"}: ${lg.draft.trades.map(([r, a, b]) => `ROUND ${r + 1}, ${teamShort(a)} TO ${teamShort(b)}`).join("; ")}.` : "THE COMMISSIONER'S CAP ORDERED NO TRADES. THE SNAKE WAS FAIR ENOUGH."}</div>
       </Disclosure>
@@ -262,7 +287,13 @@ function CupTab({ block, h, go }) {
         {`${pad("POS", 4)}${pad("DISTRICT", 12)}${BY.map(([, l]) => padL(l, 4)).join("")}${padL("PTS", 5)}\n`}
         {cup.map((r, i) => `${pad(String(i + 1), 4)}${pad(teamShort(r.id), 12)}${BY.map(([k]) => padL(r.by[k], 4)).join("")}${padL(r.pts, 5)}\n`).join("")}
       </pre>
-      <div className="hvi-civic-line">EACH LEAGUE PAYS BY POSITION: 10, 8, 6, 5, 4, 3, 2, 1, 0, 0 (THE PLAYOFFS DECIDE THE TOP; TEAMS LEVEL ON EVERYTHING SHARE). THE TENNIS LADDER AND THE PIT PAY 3, 2, 1 TO THEIR TOP THREE'S DISTRICTS. THE CUP IS DECIDED WHEN THE LAST FINAL WHISTLE GOES. THE CUP'S FORM MOVES EVERY DISTRICT'S MOOD.{lg.cup.last ? ` LAST SEASON'S CUP: ${teamName(lg.cup.last.champion)} (SEASON ${lg.cup.last.season}).` : ""}</div>
+      <div className="hvi-civic-line">EACH LEAGUE PAYS BY POSITION: 10, 8, 6, 5, 4, 3, 2, 1, 0, 0 (THE PLAYOFFS DECIDE THE TOP; TEAMS LEVEL ON EVERYTHING SHARE).{lg.pyramid ? ` THE CHAMPIONSHIP PAYS 5, 4, 3, 3, 2, 2, 1, 1, 0, 0; LEAGUE ONE 3, 2, 2, 1, 1, 1, 1, 0, 0, 0; BELOW THAT 2, 1, 1, 1. A DISTRICT'S CLUBS IN EVERY DIVISION COUNT FOR IT.` : ""} THE TENNIS LADDER AND THE PIT PAY 3, 2, 1 TO THEIR TOP THREE'S DISTRICTS. THE CUP IS DECIDED WHEN THE LAST FINAL WHISTLE GOES. THE CUP'S FORM MOVES EVERY DISTRICT'S MOOD.{lg.cup.last ? ` LAST SEASON'S CUP: ${teamName(lg.cup.last.champion)} (SEASON ${lg.cup.last.season}).` : ""}</div>
+      {lg.pyramid && (
+        <>
+          <div className="hvi-city-room-h">THE PYRAMID</div>
+          {L.SPORTS.map(sp => <div key={sp} className="hvi-civic-line"><b>{L.SPORT[sp].name}</b>: {lg.pyramid.clubs[sp].map((ids, k) => <span key={k}><a href={`#city/league/${sp}${k ? `?div=${k}` : ""}`} onClick={(e) => { e.preventDefault(); window.location.hash = `#city/league/${sp}${k ? `?div=${k}` : ""}`; }} className="hvi-lg-link">{L.divShort(k)}</a> {ids.map(teamShort).join(", ")}{k < lg.pyramid.clubs[sp].length - 1 ? " // " : ""}</span>)}</div>)}
+        </>
+      )}
       <div className="hvi-city-room-h">TODAY ACROSS THE LEAGUES</div>
       {today.length ? today.map(m => { const x = matchText(m, h, block); return <div key={`${m.sport}.${m.k}.${m.j}`} className="hvi-civic-fx">{pad(L.SPORT[m.sport].name, 11)}{x.text}</div>; })
         : <div className="hvi-city-note">NO FIXTURES TODAY. THE GROUNDS ARE OPEN FOR SUPERVISED FUN.</div>}
@@ -280,12 +311,12 @@ export function SeasonLine({ subject }) {
   const key = subject.slug || null;
   if (!key) return null;
   const out = [];
-  for (const sp of L.SPORTS) for (const id of L.DIST) {
-    const r = block.districts[id]?.teams?.[sp]?.roster;
+  for (const sp of L.SPORTS) for (const [k, ids] of divClubs(block, sp).entries()) for (const id of ids) {
+    const r = clubRoster(block, id, sp);
     if (!r?.some(p => p[0] === key)) continue;
-    const x = statsFor(block, sp, h)?.players[key];
-    const cols = L.STAT_COLS[sp].filter(([k]) => x && x[k] != null && (x[k] !== 0 || k === "g"));
-    out.push(`${L.sportTeamName(id, sp)} (${L.SPORT[sp].name}): ${x ? cols.map(([k, l]) => `${l} ${fmt(k, x[k])}`).join(", ") : "NO GAMES YET"}`);
+    const x = statsFor(block, sp, h, k)?.players[key];
+    const cols = L.STAT_COLS[sp].filter(([c]) => x && x[c] != null && (x[c] !== 0 || c === "g"));
+    out.push(`${L.sportTeamName(id, sp)} (${L.SPORT[sp].name}${lg.pyramid ? `, ${L.divName(k)}` : ""}): ${x ? cols.map(([c, l]) => `${l} ${fmt(c, x[c])}`).join(", ") : "NO GAMES YET"}`);
   }
   const rung = lg.tennis.ladder.indexOf(key);
   if (rung >= 0) out.push(`THE TENNIS LADDER: RUNG ${rung + 1}`);

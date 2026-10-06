@@ -5,7 +5,7 @@ import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
 import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, FORMATS, dirOf, LEVELS, LEVEL_ORDER } from "./sim.js";
-import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortFive, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS } from "./roster.js";
+import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortFive, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS, divisionsOf, divisionOf, difficultyOf, defaultLevelIndex, allClubs } from "./roster.js";
 import { draw, camFollow, camStart, CAMS, CAM_ORDER, headOf, skinOf, shade, W, H } from "./render.js";
 import GameMenu from "../GameMenu.jsx";
 import { sheetHints } from "../heads.js";
@@ -31,9 +31,15 @@ const parseRoute = (route) => {
   return { home: id("home"), vs: id("vs"), fmt: q.get("fmt") === "to21" ? "to21" : "quarters", shot: q.get("shot") === "14" ? 14 : 24 };
 };
 const KEEP = "hvi-hoops-exhibitions", KEEP_N = 5, LEVEL_KEY = "hvi-hoops-level", TIPS_KEY = "hvi-hoops-tips-done", LEGEND_KEY = "hvi-hoops-legend", CAM_KEY = "hvi-hoops-cam";
-// The difficulty: ROOKIE for a new player, then whatever was picked last.
-const readLevel = () => { try { const v = localStorage.getItem(LEVEL_KEY); return LEVELS[v] ? v : "rookie"; } catch { return "rookie"; } };
-const writeLevel = (v) => { try { localStorage.setItem(LEVEL_KEY, v); } catch { /* the tab remembers */ } };
+// The difficulty: ROOKIE for a new player, then whatever was picked last; with the pyramid
+// (docs/design/PYRAMID.md section 7) a pick is remembered per division and the division sets the
+// default (the top flight HALL OF FAME, the bottom division ROOKIE).
+const levelKey = (k) => (k ? `${LEVEL_KEY}:d${k}` : LEVEL_KEY);
+const readLevel = (league = null, k = 0) => {
+  try { const v = localStorage.getItem(levelKey(k)); if (LEVELS[v]) return v; } catch { /* no store: the default */ }
+  return divisionsOf(league).length > 1 ? LEVEL_ORDER[defaultLevelIndex(league, k, LEVEL_ORDER.length)] : "rookie";
+};
+const writeLevel = (v, k = 0) => { try { localStorage.setItem(levelKey(k), v); } catch { /* the tab remembers */ } };
 const LEVEL_NOTES = {
   rookie: "START HERE. A WIDER GREEN WINDOW, TEAMMATES WHO CUT AND GUARD TIGHT, YOUR MAN GUARDS FOR YOU WHEN YOU LET GO, FEW STEALS AND BLOCKS AGAINST YOU.",
   pro: "A FAIR GAME. A LITTLE HELP ON THE METER AND ON DEFENCE; THE CPU STILL GAMBLES LESS THAN IT COULD.",
@@ -70,8 +76,9 @@ export default function Hoops({ route }) {
   useEffect(() => { let off = false; loadLeague().then(lg => { if (lg && !off) setLeague(lg); }).catch(() => {}); return () => { off = true; }; }, []);
   const [fmt, setFmt] = useState(opts.fmt);
   const [shot, setShot] = useState(opts.shot);
-  const [level, setLevelS] = useState(readLevel);
-  const setLevel = (v) => { writeLevel(v); setLevelS(v); };
+  const [level, setLevelS] = useState(() => readLevel());
+  const setLevel = (v, k = 0) => { writeLevel(v, k); setLevelS(v); };
+  const levelFor = (k) => setLevelS(readLevel(league, k));   // the division's remembered or default level
   const [game, setGame] = useState(null);   // {seed, n, home, away, cfg}
   const [done, setDone] = useState(null);
   const [tape, setTape] = useState(null);
@@ -81,7 +88,7 @@ export default function Hoops({ route }) {
   const mine = teamOfCase(league, me.caseId);
   const start = (home, away, f = fmt, s = shot) => {
     SFX.unlock();
-    const cfg = { fmt: f, shot: s, level, home: fiveOf(league, home, me), away: fiveOf(league, away, me) };
+    const cfg = { fmt: f, shot: s, level, home: fiveOf(league, home, me), away: fiveOf(league, away, me), div: divisionOf(league, home) };   // div: the pyramid's division, data the sim carries
     setDone(null); setTape(null);
     setGame({ seed: seedNow(), n: Date.now(), home, away, cfg, tips: !readFlag(TIPS_KEY, false) });
   };
@@ -92,7 +99,7 @@ export default function Hoops({ route }) {
   if (tape) body = <Match key={`tape${tape.rec.at}`} game={tape.game} me={me} tape={tape.rec} camId={camId} setCamId={setCamId} onDone={() => setTape(null)} onQuit={() => setTape(null)} />;
   else if (game && !done) body = <Match key={game.n} game={game} me={me} camId={camId} setCamId={setCamId} onDone={setDone} onQuit={() => setGame(null)} onRestart={again} />;
   else if (done) body = <Done done={done} game={game} onAgain={again} onNew={nextOpponent} onSettings={settings} onTape={() => setTape({ rec: done.rec, game })} />;
-  else body = <Picker league={league} me={me} mine={mine} pre={opts} fmt={fmt} setFmt={setFmt} shot={shot} setShot={setShot} level={level} setLevel={setLevel} onStart={start} camId={camId} setCamId={setCamId} moreOpen={moreOpen} />;
+  else body = <Picker league={league} me={me} mine={mine} pre={opts} fmt={fmt} setFmt={setFmt} shot={shot} setShot={setShot} level={level} setLevel={setLevel} levelFor={levelFor} onStart={start} camId={camId} setCamId={setCamId} moreOpen={moreOpen} />;
   return (
     <div className="hp">
       <ScreenHead title="THE COURTS" meta="BASKETBALL // EXHIBITION // FIVE ON FIVE. PICKUP PERMITTED. EVERYTHING IS RECORDED." />
@@ -102,11 +109,15 @@ export default function Hoops({ route }) {
 }
 
 // ---- choosing ------------------------------------------------------------------------------------
-function Picker({ league, me, mine, pre, fmt, setFmt, shot, setShot, level, setLevel, onStart, camId, setCamId, moreOpen }) {
+function Picker({ league, me, mine, pre, fmt, setFmt, shot, setShot, level, setLevel, levelFor, onStart, camId, setCamId, moreOpen }) {
   const [home0, away0] = playNowPair(league, mine);
   const [home, setHome] = useState(pre.home || home0);
   useEffect(() => { if (!pre.home) setHome(mine || home0); }, [mine, home0]);   // eslint-disable-line react-hooks/exhaustive-deps
   const away = pre.vs && pre.vs !== home ? pre.vs : playNowPair(league, home)[1];
+  // THE PYRAMID: the division you play in sets the difficulty's default (a pick is remembered per division)
+  const divs = divisionsOf(league), k = divisionOf(league, home), diff = difficultyOf(league, k), dflt = LEVEL_ORDER[defaultLevelIndex(league, k, LEVEL_ORDER.length)];
+  useEffect(() => { levelFor(k); }, [k, league.day]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const clubs = allClubs(league);
   const playRef = useRef(null);
   const quick = () => onStart(home, away);
   useEffect(() => { playRef.current?.focus({ preventScroll: true }); }, []);
@@ -122,14 +133,14 @@ function Picker({ league, me, mine, pre, fmt, setFmt, shot, setShot, level, setL
       <p className="pg-lede">BASKETBALL, FIVE ON FIVE, WITH THE CITY'S OWN LEAGUE TEAMS. YOU STEER THE MAN WITH THE BALL, AND ON DEFENCE THE MAN NEAREST IT. A CONTROLLER PLAYS LIKE 2K: X SHOOTS (LET GO AT THE TOP), A PASSES, THE RIGHT STICK DRIBBLES. KEYS: ARROWS, Z SHOOTS, X PASSES, SHIFT SPRINTS. PHONES GET A PAD.</p>
       <div className="pg-start">
         <Button variant="primary" ref={playRef} onClick={quick}>PLAY NOW</Button>
-        <span className="pg-sub">{teamName(home)}{home === mine ? " (YOUR TEAM)" : ""} V {teamName(away)}. {len}, {shot}-SECOND CLOCK, {LEVELS[level].name}.</span>
+        <span className="pg-sub">{teamName(home)}{home === mine ? " (YOUR TEAM)" : ""} V {teamName(away)}. {len}, {shot}-SECOND CLOCK, {divs.length > 1 ? `${diff.name}, ` : ""}{LEVELS[level].name}.</span>
       </div>
       <div className="hp-level">
         <p className="hp-small">DIFFICULTY</p>
         <div className="hp-chips" role="radiogroup" aria-label="Difficulty">
-          {LEVEL_ORDER.map(id => <button key={id} type="button" role="radio" aria-checked={level === id} className={`hp-chip${level === id ? " on" : ""}`} onClick={() => setLevel(id)}>{LEVELS[id].name}</button>)}
+          {LEVEL_ORDER.map(id => <button key={id} type="button" role="radio" aria-checked={level === id} className={`hp-chip${level === id ? " on" : ""}`} onClick={() => setLevel(id, k)}>{LEVELS[id].name}</button>)}
         </div>
-        <p className="hp-small hp-level-note">{LEVEL_NOTES[level]}</p>
+        <p className="hp-small hp-level-note">{LEVEL_NOTES[level]}{divs.length > 1 ? ` ${diff.name} DEFAULTS TO ${LEVELS[dflt].name}${k === 0 ? ": THE TOP FLIGHT IS THE HARDEST" : k === divs.length - 1 ? ": THE BOTTOM DIVISION IS THE EASIEST" : ""}. A PICK IS REMEMBERED FOR THIS DIVISION.` : ""}</p>
       </div>
       {mine ? <p className="hp-you">YOU ARE ON THE {teamName(mine)} THIS SEASON. YOU PLAY AS YOURSELF, AT YOUR RATING.</p>
         : me.caseId ? <p className="hp-you hp-dim">YOUR FILE IS NOT ON A BASKETBALL ROSTER THIS SEASON. ENTRIES ARE MADE FROM <a href="#file">MY FILE</a>.</p> : null}
@@ -145,19 +156,24 @@ function Picker({ league, me, mine, pre, fmt, setFmt, shot, setShot, level, setL
           <div className="hp-chips" role="radiogroup" aria-label="Shot clock">
             {[24, 14].map(s => <button key={s} type="button" role="radio" aria-checked={shot === s} className={`hp-chip${shot === s ? " on" : ""}`} onClick={() => setShot(s)}>{s}-SECOND SHOT CLOCK</button>)}
           </div>
-          <p className="hp-small">YOUR TEAM:</p>
-          <div className="hp-chips" role="radiogroup" aria-label="Your team">
-            {TEAM_IDS.map(id => <button key={id} type="button" role="radio" aria-checked={home === id} className={`hp-chip${home === id ? " on" : ""}`} onClick={() => setHome(id)}>{teamShort(id)}{id === mine ? " (YOURS)" : ""}</button>)}
-          </div>
+          <p className="hp-small">YOUR TEAM{divs.length > 1 ? " (ANY DIVISION; THE DIVISION SETS THE DEFAULT DIFFICULTY)" : ""}:</p>
+          {(divs.length > 1 ? divs : [clubs]).map((ids, i) => (
+            <div key={i}>
+              {divs.length > 1 && <p className="hp-small">{difficultyOf(league, i).name}:</p>}
+              <div className="hp-chips" role="radiogroup" aria-label={divs.length > 1 ? `Your team, ${difficultyOf(league, i).name}` : "Your team"}>
+                {ids.filter(id => league.teams[id]?.length).map(id => <button key={id} type="button" role="radio" aria-checked={home === id} className={`hp-chip${home === id ? " on" : ""}`} onClick={() => setHome(id)}>{teamShort(id)}{id === mine ? " (YOURS)" : ""}</button>)}
+              </div>
+            </div>
+          ))}
           <p className="hp-small">THEN PICK WHO TO PLAY; THE GAME STARTS AT ONCE. SPEED, TOUCH AND DEFENCE FOLLOW EACH PLAYER'S LEAGUE RATING.</p>
           <ul className="hp-teams">
-            {TEAM_IDS.filter(id => id !== home).map(id => {
-              const five = sortFive(league.teams[id]);
+            {clubs.filter(id => id !== home).map(id => {
+              const five = sortFive(league.teams[id]), kd = divisionOf(league, id);
               return (
                 <li key={id}>
                   <button type="button" className="hp-team" onClick={() => onStart(home, id)} aria-label={`Play ${teamName(id)}, rated ${teamRating(five)}`}>
                     <i className="sw" style={{ background: kitsFor(home, id)[1][0], borderColor: kitsFor(home, id)[1][1] }} aria-hidden="true" />
-                    <span className="nm">{teamName(id)}<span className="tag">{five.slice(0, 3).map(r => shownName(r[1])).join(", ")}{league.pos[id] ? ` // ${ordinal(league.pos[id])} IN THE LEAGUE` : ""}</span></span>
+                    <span className="nm">{teamName(id)}<span className="tag">{five.slice(0, 3).map(r => shownName(r[1])).join(", ")}{league.pos[id] ? ` // ${ordinal(league.pos[id])} IN ${divs.length > 1 ? difficultyOf(league, kd).short : "THE LEAGUE"}` : ""}</span></span>
                     <span className="rt">{teamRating(five)}</span>
                   </button>
                 </li>

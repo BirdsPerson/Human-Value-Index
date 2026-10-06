@@ -1567,6 +1567,26 @@ the PA), `simApi.js` (boards and PA). Check: `scripts/check-civic.mjs` section 3
   Courts, one closed-doors line a matchday, the Cup's leader and the champions. Before day 337 the
   hub shows the mixed league and the date. Dev: `window.__HVI_CIVIC_PREVIEW__` (a civic block) is
   read in place of the summary under `vite` only.
+- **THE PYRAMID (from season 24, machine day 2417, 2026-11-05; Scott 2026-10-06: "different levels of
+  leagues... some teams might get relegated... distribute the high difficulty to the top").** Design
+  and rules: `docs/design/PYRAMID.md`; check: `scripts/check-pyramid.mjs`. Each sport becomes a ladder of
+  divisions of ten clubs, `D = clamp(floor(eligible figures / 360), 1, 5)` (two today), band k of the
+  rating-ordered pool drafted by division k (`leagues.js pyramidPools`, `nextDivisions`; `civic.js
+  pyramidDraft`). Season 24: the Loop's ten are THE PREMIER DIVISION, the ten expansion districts'
+  clubs (THE LIFEGUARDED, THE DESCENDED, THE DECLARED, THE PRESERVED, THE ADMITTED, THE AMPLIFIED, THE
+  MEASURED, THE SCREENED, THE HARVESTED, THE COMPUTED; `EXPANSION_CLUBS`, founding order
+  `PYRAMID_CLUBS`) are founded as THE CHAMPIONSHIP; from season 24's end three go down and three come
+  up (the top two and the promotion playoff's winner) between every adjacent pair. Lower divisions play
+  half the rounds a tier (`roundsOf(sport, season, div)`), every tie behind closed doors from its own
+  seeds. Entrants start one division below the band of their rating (never the top flight) with a
+  STANDING in the block (`leagues.pyramid.standing`) that rises with a promoted club or a top-three MVP
+  season and falls with a relegated one. The Cup counts every division (`DIV_PTS_LOWER`) over every
+  district with a club. Block: `leagues.pyramid {v, divs, clubs, standing, moves, waiting}`,
+  `sports[sp].divs[k] {table, champion, draft, stage}`, `districts[d].teams[sp].div / .club`,
+  `leagues.reserves` (reserve sides only); readers `divClubs`, `clubRoster`, `decidedAt(..., k)`,
+  `sportTableAt(..., k)`. The playable games read the division and default EASY below the top flight
+  (`roster.js difficultyOf`, `defaultLevelIndex`). Nothing before season 24 changes: `check-pyramid`
+  holds season 23's folds to `scripts/fixtures/leagues-s23-prechange.json`.
 
 
 ## Park chess (2026-09-30)

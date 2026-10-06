@@ -31,7 +31,8 @@ export function marketTerms(plan, people, summary, sat) {
   const sport = {};
   const add = (k, x) => { sport[k] = (sport[k] || 0) + x; };
   const civ = summary?.civic;
-  for (const d of Object.values(civ?.districts || {})) {
+  // every district's teams, and the pyramid's reserve sides (civic.leagues.reserves, from season 24)
+  for (const d of [...Object.values(civ?.districts || {}), ...Object.values(civ?.leagues?.reserves || {})]) {
     const teams = d.teams ? Object.values(d.teams) : d.team ? [d.team] : [];
     for (const t of teams) {
       const form = String(t.form || ""), w = [...form].filter(c => c === "W").length;

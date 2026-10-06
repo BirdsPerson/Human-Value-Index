@@ -658,7 +658,9 @@ for (const d of DAYS) { prev = C.civicFold(plans.get(d), people, prev); chain.se
   me = await LE.myEntry(io, "HVI-TESTJK22", close1 - 1e6);
   eq([me.body.record, me.body.entry.r, me.body.preview], [{ level: "standout", played: ["baseball", "basketball", "soccer"], track: true }, { basketball: 70, soccer: 70 }, { baseball: 69, basketball: 70, football: 67, soccer: 70, tennis: 66 }], "the record set on the case: shown, and the standing entry re-rated");
   const snapR = await LE.freezeSeason(store, S1, close1 + 1000);
-  eq(snapR.entries.find(e => e.key === "citizen-jk22"), { key: "citizen-jk22", sports: ["basketball", "soccer"], r: { basketball: 70, soccer: 70 }, record: { level: "standout", played: ["baseball", "basketball", "soccer"], track: true } }, "the snapshot carries the record and the ratings it drew");
+  { const { since, ...jk } = snapR.entries.find(e => e.key === "citizen-jk22");
+    eq(jk, { key: "citizen-jk22", sports: ["basketball", "soccer"], r: { basketball: 70, soccer: 70 }, record: { level: "standout", played: ["baseball", "basketball", "soccer"], track: true } }, "the snapshot carries the record and the ratings it drew");
+    ok(typeof since === "string" && !Number.isNaN(Date.parse(since)), "and the entry's age (since), for the pyramid's places and standings"); }
   cases.set("HVI-TESTJK22", { ...cases.get("HVI-TESTJK22"), athleticRecord: { level: "varsity", played: [], track: false } });
   await LE.myEntry(io, "HVI-TESTJK22", close1 + 2000);
   eq((await store.get(LE.KEYS.snap(S1 + 1), { type: "json" })).entries.find(e => e.key === "citizen-jk22").r, { basketball: 70, soccer: 70 }, "a record changed after the close: the frozen snapshot keeps its ratings");

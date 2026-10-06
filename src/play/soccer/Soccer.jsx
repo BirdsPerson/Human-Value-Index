@@ -6,7 +6,7 @@ import { DEFAULT_SPEC } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
 import GameMenu from "../GameMenu.jsx";
 import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, LEVELS, DEFAULT_LEVEL, FORMATIONS, LENGTHS, SHOT_FULL, att, minuteOf, lineUp } from "./sim.js";
-import { TEAM_IDS, teamName, teamShort, teamCode, kitsFor, keeperKits, FALLBACK, loadLeague, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, shirtName } from "./roster.js";
+import { TEAM_IDS, teamName, teamShort, teamCode, kitsFor, keeperKits, FALLBACK, loadLeague, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, shirtName, divisionsOf, divisionOf, difficultyOf, defaultLevelIndex, allClubs } from "./roster.js";
 import { draw, makeCam, camFollow, CAMS, W, H, shade } from "./render.js";
 import { headFrom, sheetHints } from "../heads.js";
 import { callFor, crowdFor } from "./calls.js";
@@ -38,9 +38,15 @@ export function loadRecords() { try { const j = JSON.parse(localStorage.getItem(
 function saveRecord(rec) { try { localStorage.setItem(KEEP, JSON.stringify([rec, ...loadRecords()].slice(0, KEEP_N))); } catch { /* a full or private store: the match stays in the tab */ } }
 const readFlag = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === "1"; } catch { return d; } };
 const writeFlag = (k, v) => { try { localStorage.setItem(k, v ? "1" : "0"); } catch { /* the tab remembers */ } };
-// the difficulty: remembered; a new player starts on BEGINNER
-const readLevel = () => { try { const v = Number(localStorage.getItem(LEVEL_KEY)); return localStorage.getItem(LEVEL_KEY) !== null && Number.isInteger(v) && LEVELS[v] ? v : DEFAULT_LEVEL; } catch { return DEFAULT_LEVEL; } };
-const writeLevel = (v) => { try { localStorage.setItem(LEVEL_KEY, String(v)); } catch { /* the tab remembers */ } };
+// the difficulty: remembered per division (the pyramid, docs/design/PYRAMID.md section 7: the top
+// flight defaults to the hardest, the bottom division to BEGINNER); a new player with one division
+// starts on BEGINNER
+const levelKey = (k) => (k ? `${LEVEL_KEY}:d${k}` : LEVEL_KEY);
+const readLevel = (league = null, k = 0) => {
+  try { const raw = localStorage.getItem(levelKey(k)), v = Number(raw); if (raw !== null && Number.isInteger(v) && LEVELS[v]) return v; } catch { /* no store: the default */ }
+  return divisionsOf(league).length > 1 ? defaultLevelIndex(league, k, LEVELS.length) : DEFAULT_LEVEL;
+};
+const writeLevel = (v, k = 0) => { try { localStorage.setItem(levelKey(k), String(v)); } catch { /* the tab remembers */ } };
 // the first-match prompts: each retires after a few uses (remembered)
 const readTips = () => { try { const j = JSON.parse(localStorage.getItem(TIPS_KEY) || "{}"); return j && typeof j === "object" ? j : {}; } catch { return {}; } };
 const writeTips = (t) => { try { localStorage.setItem(TIPS_KEY, JSON.stringify(t)); } catch { /* the tab remembers */ } };
@@ -78,8 +84,9 @@ export default function Soccer({ route }) {
   const [cam, setCam] = useState(opts.cam || prefs0.cam || "broadcast");
   const [ko, setKo] = useState(opts.ko || Boolean(prefs0.ko));
   const [lock, setLock] = useState(Boolean(prefs0.lock));
-  const [level, setLevelS] = useState(readLevel);
-  const setLevel = (v) => { setLevelS(v); writeLevel(v); };
+  const [level, setLevelS] = useState(() => readLevel());
+  const setLevel = (v, k = 0) => { setLevelS(v); writeLevel(v, k); };
+  const levelFor = (k) => setLevelS(readLevel(league, k));   // the division's remembered or default level
   const [guide, setGuide] = useState(null);   // [home, away]: the controls guide, before the first match
   useEffect(() => { writePrefs({ half, form, cam, ko, lock }); }, [half, form, cam, ko, lock]);
   const [game, setGame] = useState(null);
@@ -92,7 +99,7 @@ export default function Soccer({ route }) {
     // the lock: your own player, by his place in the line-up the sim will build
     let lk = -1;
     if (lock && home === mine && me.caseId) { const k = citizenKeyOf(me.caseId); lk = lineUp(H11, form).findIndex(r => r[0] === k); }
-    const cfg = { half, form, formB: "442", ko, level, lock: lk, home: H11, away: A11 };
+    const cfg = { half, form, formB: "442", ko, level, lock: lk, home: H11, away: A11, div: divisionOf(league, home) };   // div: the pyramid's division, data the sim carries (PYRAMID.md 7)
     setDone(null); setTape(null);
     setGame({ seed: seedNow(), n: Date.now(), home, away, cfg, cam });
   };
@@ -104,7 +111,7 @@ export default function Soccer({ route }) {
   else if (tape) body = <Match key={`tape${tape.rec.at}`} game={tape.game} me={me} tape={tape.rec} onDone={() => setTape(null)} onQuit={() => setTape(null)} onRestart={() => {}} />;
   else if (game && !done) body = <Match key={game.n} game={game} me={me} onDone={setDone} onQuit={() => setGame(null)} onRestart={() => start(game.home, game.away)} />;
   else if (done) body = <Done done={done} game={game} onAgain={() => start(game.home, game.away)} onNew={() => start(game.home, playNowPair({ ...league, teams: Object.fromEntries(Object.entries(league.teams).filter(([k]) => k !== game.away)) }, game.home)[1])} onTape={() => setTape({ rec: done.rec, game })} onPick={() => { setDone(null); setGame(null); }} />;
-  else body = <Picker league={league} me={me} mine={mine} pre={opts} {...{ half, setHalf, form, setForm, cam, setCam, ko, setKo, lock, setLock, level, setLevel }} onStart={play} />;
+  else body = <Picker league={league} me={me} mine={mine} pre={opts} {...{ half, setHalf, form, setForm, cam, setCam, ko, setKo, lock, setLock, level, setLevel, levelFor }} onStart={play} />;
   return (
     <div className="sc">
       <ScreenHead title="THE ESTATE PITCH" meta="SOCCER // EXHIBITION // ELEVEN A SIDE. THE BALL IS ROUND. THE RECORD IS NOT." />
@@ -121,11 +128,15 @@ function Chips({ label, value, set, items }) {
     </div>
   );
 }
-function Picker({ league, me, mine, pre, half, setHalf, form, setForm, cam, setCam, ko, setKo, lock, setLock, level, setLevel, onStart }) {
+function Picker({ league, me, mine, pre, half, setHalf, form, setForm, cam, setCam, ko, setKo, lock, setLock, level, setLevel, levelFor, onStart }) {
   const [home0] = playNowPair(league, mine);
   const [home, setHome] = useState(pre.home || home0);
   useEffect(() => { if (!pre.home) setHome(mine || home0); }, [mine, home0]);   // eslint-disable-line react-hooks/exhaustive-deps
   const away = pre.vs && pre.vs !== home ? pre.vs : playNowPair(league, home)[1];
+  // THE PYRAMID: the division you play in sets the difficulty's default (a pick is remembered per division)
+  const divs = divisionsOf(league), k = divisionOf(league, home), diff = difficultyOf(league, k), dflt = defaultLevelIndex(league, k, LEVELS.length);
+  useEffect(() => { levelFor(k); }, [k, league.day]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const clubs = allClubs(league);
   const playRef = useRef(null);
   const quick = () => onStart(home, away);
   useEffect(() => { playRef.current?.focus({ preventScroll: true }); }, []);
@@ -140,11 +151,11 @@ function Picker({ league, me, mine, pre, half, setHalf, form, setForm, cam, setC
       <p className="pg-lede">ELEVEN A SIDE, WITH THE CITY'S OWN LEAGUE TEAMS. YOU STEER THE PLAYER ON THE BALL; ON DEFENCE, THE ONE YOU PICK. THE BUTTONS ARE EA SPORTS FC'S DEFAULTS: ON A CONTROLLER A PASSES, B SHOOTS (HOLD FOR POWER), Y PLAYS IT THROUGH, X CROSSES, RT SPRINTS. ON A KEYBOARD, FC 27'S LAYOUT: WASD MOVES, L PASSES, ; SHOOTS, O THROUGH, K CROSSES, P SPRINTS. PHONES GET A PAD.</p>
       <div className="pg-start">
         <Button variant="primary" ref={playRef} onClick={quick}>PLAY NOW</Button>
-        <span className="pg-sub">{teamName(home)}{home === mine ? " (YOUR TEAM)" : ""} V {teamName(away)}. TWO HALVES OF {half} MINUTES{ko ? ", EXTRA TIME AND PENALTIES IF LEVEL" : ""}. DIFFICULTY: {LEVELS[level].name}.</span>
+        <span className="pg-sub">{teamName(home)}{home === mine ? " (YOUR TEAM)" : ""} V {teamName(away)}. TWO HALVES OF {half} MINUTES{ko ? ", EXTRA TIME AND PENALTIES IF LEVEL" : ""}. {divs.length > 1 ? `${diff.name.toUpperCase()}. ` : ""}DIFFICULTY: {LEVELS[level].name}.</span>
       </div>
       <div className="sc-level">
-        <Chips label="Difficulty" value={level} set={setLevel} items={LEVELS.map((L, i) => [i, L.name])} />
-        <span className="sc-small">{LEVEL_LINES[level]}</span>
+        <Chips label="Difficulty" value={level} set={(v) => setLevel(v, k)} items={LEVELS.map((L, i) => [i, L.name])} />
+        <span className="sc-small">{LEVEL_LINES[level]}{divs.length > 1 ? ` ${diff.name} DEFAULTS TO ${LEVELS[dflt].name}${k === 0 ? ": THE TOP FLIGHT IS THE HARDEST" : k === divs.length - 1 ? ": THE BOTTOM DIVISION IS THE EASIEST" : ""}. A PICK IS REMEMBERED FOR THIS DIVISION.` : ""}</span>
       </div>
       {mine ? (
         <p className="sc-you">
@@ -162,17 +173,19 @@ function Picker({ league, me, mine, pre, half, setHalf, form, setForm, cam, setC
           <Chips label="Formation" value={form} set={setForm} items={Object.entries(FORMATIONS).map(([k, f]) => [k, f.name])} />
           <p className="sc-small">CAMERA:</p>
           <Chips label="Camera" value={cam} set={setCam} items={Object.values(CAMS).map(c => [c.id, c.name])} />
-          <p className="sc-small">YOUR TEAM:</p>
-          <Chips label="Your team" value={home} set={setHome} items={TEAM_IDS.map(id => [id, `${teamShort(id)}${id === mine ? " (YOURS)" : ""}`])} />
+          <p className="sc-small">YOUR TEAM{divs.length > 1 ? " (ANY DIVISION; THE DIVISION SETS THE DEFAULT DIFFICULTY)" : ""}:</p>
+          {divs.length > 1
+            ? divs.map((ids, i) => <div key={i}><p className="sc-small">{difficultyOf(league, i).name}:</p><Chips label={`Your team, ${difficultyOf(league, i).name}`} value={home} set={setHome} items={ids.filter(id => league.teams[id]?.length).map(id => [id, `${teamShort(id)}${id === mine ? " (YOURS)" : ""}`])} /></div>)
+            : <Chips label="Your team" value={home} set={setHome} items={clubs.map(id => [id, `${teamShort(id)}${id === mine ? " (YOURS)" : ""}`])} />}
           <p className="sc-small">THEN PICK WHO TO PLAY; THE MATCH STARTS AT ONCE. PACE, PASSING, FINISHING AND DEFENDING FOLLOW EACH PLAYER'S LEAGUE RATING; SKILL MOVES NEED THE STARS (ONE PER TEN POINTS OVER 50).</p>
           <ul className="sc-teams">
-            {TEAM_IDS.filter(id => id !== home).map(id => {
-              const xi = league.teams[id] || [];
+            {clubs.filter(id => id !== home).map(id => {
+              const xi = league.teams[id] || [], kd = divisionOf(league, id);
               return (
                 <li key={id}>
                   <button type="button" className="sc-team" onClick={() => onStart(home, id)} aria-label={`Play ${teamName(id)}, rated ${teamRating(xi)}`}>
                     <i className="sw" style={{ background: kitsFor(home, id)[1][0], borderColor: kitsFor(home, id)[1][1] }} aria-hidden="true" />
-                    <span className="nm">{teamName(id)}<span className="tag">{[...xi].sort((a, b) => b[2] - a[2]).slice(0, 3).map(r => shownName(r[1])).join(", ")}{league.pos[id] ? ` // ${ordinal(league.pos[id])} IN THE LEAGUE` : ""}</span></span>
+                    <span className="nm">{teamName(id)}<span className="tag">{[...xi].sort((a, b) => b[2] - a[2]).slice(0, 3).map(r => shownName(r[1])).join(", ")}{league.pos[id] ? ` // ${ordinal(league.pos[id])} IN ${divs.length > 1 ? difficultyOf(league, kd).short : "THE LEAGUE"}` : ""}</span></span>
                     <span className="rt">{teamRating(xi)}</span>
                   </button>
                 </li>

@@ -13,19 +13,45 @@ export const TEAMS = {
   arts: ["THE CURATED", "CURATED"], campus: ["THE TENURED", "TENURED"], finance: ["THE LEVERAGED", "LEVERAGED"], strip: ["THE HOUSE EDGE", "HOUSE EDGE"],
   arena: ["THE CONDITIONED", "CONDITIONED"], hq: ["THE DEPARTMENT", "DEPARTMENT"], archive: ["THE INDEXED", "INDEXED"], commons: ["THE TOLERATED", "TOLERATED"],
   works: ["THE PROCESSED", "PROCESSED"], sprawl: ["THE RETURNED", "RETURNED"],
+  // THE PYRAMID (docs/design/PYRAMID.md; leagues.js EXPANSION_CLUBS): the expansion districts' clubs, founded into the Championship from season 24
+  coast: ["THE LIFEGUARDED", "LIFEGUARDED"], heights: ["THE DESCENDED", "DESCENDED"], port: ["THE DECLARED", "DECLARED"], oldtown: ["THE PRESERVED", "PRESERVED"], uptown: ["THE ADMITTED", "ADMITTED"],
+  downtown: ["THE AMPLIFIED", "AMPLIFIED"], suburbs: ["THE MEASURED", "MEASURED"], airport: ["THE SCREENED", "SCREENED"], farmland: ["THE HARVESTED", "HARVESTED"], engine: ["THE COMPUTED", "COMPUTED"],
 };
-export const teamName = (id) => `${TEAMS[id]?.[0] || String(id).toUpperCase()} FIVE`;
-export const teamShort = (id) => TEAMS[id]?.[1] || String(id).toUpperCase();
-// The kits: [jersey, trim]. One standard uniform, the district's colours (avatar CLOTH values).
-export const KITS = {
+// A club id is a district, or a district's reserves (<district>-2: THE CURATED SECOND FIVE, CURATED II) or thirds (-3).
+const clubDistrict = (id) => String(id || "").split("-")[0];
+const clubTier = (id) => Number(String(id || "").split("-")[1]) || 1;
+const TIER = { 2: ["SECOND", "II"], 3: ["THIRD", "III"] };
+export const teamName = (id) => { const b = TEAMS[clubDistrict(id)]; if (!b) return `${String(id).toUpperCase()} FIVE`; const t = clubTier(id); return `${t > 1 ? `${b[0]} ${TIER[t]?.[0] || t}` : b[0]} FIVE`; };
+export const teamShort = (id) => { const b = TEAMS[clubDistrict(id)]; if (!b) return String(id).toUpperCase(); const t = clubTier(id); return t > 1 ? `${b[1]} ${TIER[t]?.[1] || t}` : b[1]; };
+// The kits: [jersey, trim]. One standard uniform, the district's colours (avatar CLOTH values); the
+// expansion clubs' from leagues.js EXPANSION_KITS; reserves wear theirs swapped, thirds the trim alone.
+const DISTRICT_KITS = {
   arts: ["#d977a8", "#262626"], campus: ["#1f2f5a", "#e0c040"], finance: ["#3c8a46", "#e6e6e6"], strip: ["#b83232", "#e0c040"],
   arena: ["#d97a2b", "#262626"], hq: ["#e6e6e6", "#3c8a46"], archive: ["#6b3fa0", "#e6e6e6"], commons: ["#3a6fd8", "#e6e6e6"],
   works: ["#8a8a8a", "#d97a2b"], sprawl: ["#45618f", "#e0c040"],
+  coast: ["#e8d8a8", "#2a7f9e"], heights: ["#f0f4f8", "#4a6fa5"], port: ["#9a4a2a", "#c0c0c0"], oldtown: ["#8b3a3a", "#f0e6d0"], uptown: ["#1a1a1a", "#d4af37"],
+  downtown: ["#5a2d82", "#39ff14"], suburbs: ["#4f8f3a", "#ffffff"], airport: ["#6b7280", "#ff8c00"], farmland: ["#d9b44a", "#3f6b2a"], engine: ["#1f8a8a", "#111111"],
 };
+export const kitOf = (id, dflt = "hq") => { const k = DISTRICT_KITS[clubDistrict(id)] || DISTRICT_KITS[dflt], t = clubTier(id); return t === 2 ? [k[1], k[0]] : t > 2 ? [k[1], k[1]] : k; };
+export const KITS = DISTRICT_KITS;
+
+// ---- THE PYRAMID in the games (docs/design/PYRAMID.md section 7: the data hook) ------------------------
+// league.divisions: [[club ids] per division, the top flight first] (one division, the Loop's ten,
+// before the pyramid). The difficulty follows the division: cpu 1 at the top, 0 at the bottom.
+export const DIV_NAMES = [["THE PREMIER DIVISION", "PREMIER"], ["THE CHAMPIONSHIP", "CHAMPIONSHIP"], ["LEAGUE ONE", "LEAGUE ONE"], ["LEAGUE TWO", "LEAGUE TWO"], ["THE SUNDAY LEAGUE", "SUNDAY"]];
+export const divisionsOf = (league) => (Array.isArray(league?.divisions) && league.divisions.length ? league.divisions : [TEAM_IDS]);
+export const divisionOf = (league, id) => Math.max(0, divisionsOf(league).findIndex(ids => ids.includes(id)));
+export const allClubs = (league) => divisionsOf(league).flat().filter(id => league?.teams?.[id]?.length);
+export function difficultyOf(league, level = 0) {
+  const of = divisionsOf(league).length, k = Math.max(0, Math.min(of - 1, level));
+  const cpu = of <= 1 ? 1 : 1 - k / (of - 1);
+  return { level: k, of, name: DIV_NAMES[Math.min(k, DIV_NAMES.length - 1)][0], short: DIV_NAMES[Math.min(k, DIV_NAMES.length - 1)][1], cpu, easy: k > 0 };
+}
+export const defaultLevelIndex = (league, level, n) => Math.round(difficultyOf(league, level).cpu * (n - 1));
 // Light jerseys a clash would hide: the away side changes into its trim when both are light or dark alike.
 const lum = (h) => { const n = parseInt(h.slice(1), 16); return 0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255); };
 export function kitsFor(home, away) {
-  const a = KITS[home] || KITS.hq, b = KITS[away] || KITS.works;
+  const a = kitOf(home), b = kitOf(away, "works");
   const close = (x, y) => Math.abs(lum(x) - lum(y)) < 45;
   return [a, close(a[0], b[0]) && !close(a[0], b[1]) ? [b[1], b[0]] : b];
 }
@@ -65,14 +91,16 @@ export const citizenKeyOf = (caseId) => `citizen-${String(caseId || "").slice(-4
 export function teamOfCase(league, caseId) {
   if (!caseId || !league) return null;
   const k = citizenKeyOf(caseId);
-  return TEAM_IDS.find(id => (league.teams[id] || []).some(r => r[0] === k)) || null;
+  return Object.keys(league.teams || {}).find(id => (league.teams[id] || []).some(r => r[0] === k)) || null;
 }
-// PLAY NOW: your own five when you are on one, else THE DEPARTMENT FIVE; against the team nearest
-// it in rating (an even game), the higher table position breaking a tie.
+// PLAY NOW: your own five when you are on one, else THE DEPARTMENT FIVE (one division) or the bottom
+// division's leader (the pyramid: everyone starts at the bottom); against the team nearest it in
+// rating in the same division (an even game), the higher table position breaking a tie.
 export function playNowPair(league, mine = null) {
-  const home = mine && league.teams[mine] ? mine : "hq";
-  const r0 = teamRating(league.teams[home]);
-  const away = TEAM_IDS.filter(id => id !== home && league.teams[id]?.length).sort((a, b) =>
+  const divs = divisionsOf(league), bottom = divs[divs.length - 1].filter(id => league.teams[id]?.length);
+  const home = mine && league.teams[mine] ? mine : divs.length > 1 && bottom.length ? [...bottom].sort((a, b) => (league.pos[a] || 99) - (league.pos[b] || 99) || (a < b ? -1 : 1))[0] : "hq";
+  const r0 = teamRating(league.teams[home]), pool = divs[divisionOf(league, home)] || TEAM_IDS;
+  const away = pool.filter(id => id !== home && league.teams[id]?.length).sort((a, b) =>
     Math.abs(teamRating(league.teams[a]) - r0) - Math.abs(teamRating(league.teams[b]) - r0) || (league.pos[a] || 99) - (league.pos[b] || 99) || (a < b ? -1 : 1))[0];
   return [home, away];
 }
@@ -97,13 +125,20 @@ export function leagueFrom(sum) {
   const D = sum?.civic?.districts;
   if (!D) return null;
   const teams = {}, pos = {};
+  const rows = (t) => t.roster.filter(r => Array.isArray(r) && r.length >= 3).map(([k, n, r]) => [String(k), String(n), Number(r) || 40]);
   for (const id of TEAM_IDS) {
     const t = D[id]?.teams?.basketball;
     if (!Array.isArray(t?.roster) || !t.roster.length) return null;
-    teams[id] = t.roster.filter(r => Array.isArray(r) && r.length >= 3).map(([k, n, r]) => [String(k), String(n), Number(r) || 40]);
-    pos[id] = t.pos || 0;
+    teams[id] = rows(t); pos[id] = t.pos || 0;
   }
-  return { day: sum.day, season: sum.civic.leagues?.season || null, live: true, teams, pos };
+  // the pyramid's other clubs (the expansion districts', the reserves), when the block carries them
+  const py = sum.civic.leagues?.pyramid, divisions = Array.isArray(py?.clubs?.basketball) ? py.clubs.basketball : null;
+  for (const id of divisions ? divisions.flat() : []) {
+    if (teams[id]) continue;
+    const t = clubTier(id) === 1 ? D[id]?.teams?.basketball : sum.civic.leagues?.reserves?.[id]?.teams?.basketball;
+    if (Array.isArray(t?.roster) && t.roster.length) { teams[id] = rows(t); pos[id] = t.pos || 0; }
+  }
+  return { day: sum.day, season: sum.civic.leagues?.season || null, live: true, teams, pos, ...(divisions ? { divisions: divisions.map(ids => ids.filter(id => teams[id])) } : {}) };
 }
 
 // A head for a figure whose likeness is not drawn yet (/api/sprite answers 204): avatar.js fields
