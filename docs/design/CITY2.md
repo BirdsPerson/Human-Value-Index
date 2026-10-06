@@ -590,3 +590,12 @@ its pure `phase()`, the measured ceilings (C1 confirmed independently), the slic
 | `iso.depthOrder` over everything | legacy group + per-chunk orders |
 | `plans.js buildPlans` (one process) | ALLOC / ROWS / SPLIT, Mac or Lambda |
 | ECONOMY_PROPERTY rings by district | RING by district (legacy) or chunk distance (generated) |
+
+## Decisions (Scott, 2026-10-06)
+
+1. Keep the hand-built core frozen; growth happens around it.
+2. Construction runs on the machine clock (shop fit-out 26 MIN, 9-storey tower ~3 H 06).
+3. New chunks inside an existing borough are added automatically once its homes pass 90% full; new boroughs still go to an Assembly vote.
+4. Players may spend CYCLES on a bigger crew, capped at 2x speed, CYCLES only.
+5. R2 vs Netlify credits: decide when the 10k-player trigger hits (default R2).
+Build order: slice 1 (construction you can watch) after the current integration pass; the plan-builder lock renewal fix lands before any Mac builder runs.
