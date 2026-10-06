@@ -10,6 +10,8 @@
 //               (now.json read by FunnelHost), a dish on the roof, the mast with its beacons
 import { GAMES, cabColors, ebtvLive } from "./funnels.js";
 import { ebtvFrame, drawFrame, tvBox } from "./ebtvFrame.js";
+import { faceBrand, drawBrand, brandReady, brandFits } from "./brand.js";   // the real marks: EB, EB Shop (public/brand)
+import { STOREY } from "./iso.js";
 
 export const FUNNEL_MAT = { arcadewall: "#2a1f3d" };
 export const FUNNEL_ROOF = { arcadewall: "#1c1428" };
@@ -59,6 +61,8 @@ export function funnelDeco(X) {
       } else {
         windowGrid(K, f, { ...p, h0: 1.7 }, { bay: 1.1, w: 0.4, y0: 0.15, y1: 0.7, glass: "#231a36", warm: false });
         K.flush();
+        // the house game's logotype painted high on the side wall, lit at night
+        if (f.len > 3 && K.lod !== "far") faceBrand(K, f, 0.5, 2.08, "jetsam", 0.3, { d: 0.02, neon: K.night, span: [0.1, 0.9] });
       }
       // a neon rule under the cornice, chasing round the building
       if (K.lod !== "far") {
@@ -126,8 +130,13 @@ export function funnelDeco(X) {
       door(K, f, 0.5, 0.55, 0.95, "#2a1a10", { lit: true });
       // the sign board and its neon
       K.G.poly(f.q(0.08, 0.92, 1.1, 1.5, 0.06), "#140a12", "rgba(0,0,0,0.6)");
-      const on = neonOn(K, 53, 0.05);
-      faceText(K, f, 0.4, 1.3, "EB SHOP", 0.26, K.night ? `rgba(244,114,182,${on})` : "#c05a8a", { d: 0.07, glow: K.night ? `rgba(244,114,182,${0.5 * on})` : null });
+      // the storefront's own logo (shop.electricbasement.tv's header): cart and EBShop, lit
+      // steady at night (a shop sign does not strobe), else the lettered neon it replaced
+      if (!faceBrand(K, f, 0.38, 1.3, "ebshop", 0.3, { d: 0.07, neon: K.night, span: [0.1, 0.66] })) {
+        const on = neonOn(K, 53, 0.05);
+        faceText(K, f, 0.4, 1.3, "EB SHOP", 0.26, K.night ? `rgba(244,114,182,${on})` : "#c05a8a", { d: 0.07, glow: K.night ? `rgba(244,114,182,${0.5 * on})` : null });
+      }
+      if (K.night) { const c = f.F(0.38, 1.3, 0.1); glow(K, c[0], c[1], K.z * 2.2, "rgba(81,237,220,0.14)"); }
       faceText(K, f, 0.76, 1.33, "RECORDS", 0.08, K.night ? "#67e8f9" : "#9fd8e2", { d: 0.07 });
       faceText(K, f, 0.76, 1.22, "TAPES · ODDITIES", 0.07, K.night ? "#67e8f9" : "#9fd8e2", { d: 0.07 });
       faceText(K, f, 0.5, 2.0, "THE UNION LOUNGE", 0.09, K.night ? "#fde68a" : "#f5f0e0", { stroke: "#2a1a10", d: 0.02 });
@@ -141,7 +150,11 @@ export function funnelDeco(X) {
       const front = f.s === "s";
       if (K.lod !== "far") { ctx.strokeStyle = "rgba(0,0,0,0.18)"; ctx.lineWidth = 1; ctx.beginPath(); const n = Math.floor(f.len * 4); for (let k = 1; k < n; k++) { const A = f.F(k / n, 0), B = f.F(k / n, p.h1); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); } ctx.stroke(); }
       if (!front) {
-        if (f.len > 3 && K.lod !== "far") { faceText(K, f, 0.5, 1.1, "EBTV", 0.55, K.night ? "#f472b6" : "#e5e7eb", { stroke: "#1a1a1e", glow: K.night ? "rgba(244,114,182,0.35)" : null }); stationScreen(K, f); }
+        if (f.len > 3 && K.lod !== "far") {
+          // the Electric Basement sign over the big screen (neon, steady at night); too small for it: the letters
+          if (!faceBrand(K, f, 0.5, 1.4, "eb-logo", 1.0, { neon: K.night, span: [0.1, 0.9] })) faceText(K, f, 0.5, 1.1, "EBTV", 0.55, K.night ? "#f472b6" : "#e5e7eb", { stroke: "#1a1a1e", glow: K.night ? "rgba(244,114,182,0.35)" : null });
+          stationScreen(K, f);
+        }
         continue;
       }
       // the roller door, ON AIR over it, the name down the front
@@ -151,8 +164,18 @@ export function funnelDeco(X) {
       K.G.poly(f.q(0.13, 0.25, 1.52, 1.84, 0.04), live ? "#b91c1c" : "#3a1414", "rgba(0,0,0,0.6)");
       faceText(K, f, 0.19, 1.68, "ON AIR", 0.13, live ? "#fee2e2" : "#6a3a3a", { d: 0.05, glow: live ? "rgba(239,68,68,0.7)" : null });
       if (live && K.night) { const c = f.F(0.19, 1.68, 0.1); glow(K, c[0], c[1], K.z * 2.2, "rgba(239,68,68,0.35)"); }
-      faceText(K, f, 0.66, 1.45, "ELECTRIC BASEMENT", 0.17, K.night ? "#f9a8d4" : "#f1f5f9", { d: 0.02, stroke: "#1a1a1e", glow: K.night ? "rgba(244,114,182,0.35)" : null });
-      faceText(K, f, 0.66, 1.08, "TELEVISION // EBSN", 0.1, K.night ? "#67e8f9" : "#cbd5e1", { d: 0.02, stroke: "#1a1a1e" });
+      // the Electric Basement sign itself (the ebtv player's eb-logo-bolt): on a black backer
+      // board by day, the neon lit (steady) at night; TELEVISION // EBSN under it
+      const sp0 = f.F(0.47, 1.38, 0.02), sp1 = f.F(0.73, 1.38, 0.02);
+      if (brandReady() && brandFits("eb-logo", 0.95 * STOREY * K.z, Math.hypot(sp1[0] - sp0[0], sp1[1] - sp0[1]))) {
+        K.G.poly(f.q(0.46, 0.74, 0.86, 1.9, 0.015), shade("#0b0d12", K.night ? 1 : 0.9), "rgba(0,0,0,0.5)");
+        faceBrand(K, f, 0.6, 1.38, "eb-logo", 0.95, { d: 0.02, neon: K.night, span: [0.47, 0.73] });
+        if (K.night) { const c = f.F(0.6, 1.38, 0.2); glow(K, c[0], c[1], K.z * 3, "rgba(43,198,222,0.12)"); }
+        faceText(K, f, 0.6, 0.72, "TELEVISION // EBSN", 0.1, K.night ? "#67e8f9" : "#cbd5e1", { d: 0.02, stroke: "#1a1a1e" });
+      } else {
+        faceText(K, f, 0.66, 1.45, "ELECTRIC BASEMENT", 0.17, K.night ? "#f9a8d4" : "#f1f5f9", { d: 0.02, stroke: "#1a1a1e", glow: K.night ? "rgba(244,114,182,0.35)" : null });
+        faceText(K, f, 0.66, 1.08, "TELEVISION // EBSN", 0.1, K.night ? "#67e8f9" : "#cbd5e1", { d: 0.02, stroke: "#1a1a1e" });
+      }
       door(K, f, 0.9, 0.4, 0.8, "#1a1a1e", { lit: true });
     }
   }
@@ -220,7 +243,9 @@ export function drawFunnelYard(K, p, env, X) {
         if (f.s === "s" && !far) {
           G.poly(f.q(0.1, 0.9, 0.08, 0.5, 0.005), "#1c2420");
           const [sx, sy] = f.F(0.5, 0.3, 0.01), fpx = Math.max(0, K.z * 0.22);
-          if (fpx >= 4) { ctx.font = `bold ${Math.round(fpx)}px 'Fira Mono', monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#f1f5f9"; ctx.fillText(p.text || "OPEN", sx, sy); }
+          const mark = { "EB SHOP": "ebshop-cart", "JETSAM!": "jetsam-j" }[p.text];   // the board is narrow: the square marks
+          if (mark && drawBrand(ctx, mark, sx, sy, fpx * 0.95)) { /* the board carries the real logo */ }
+          else if (fpx >= 4) { ctx.font = `bold ${Math.round(fpx)}px 'Fira Mono', monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#f1f5f9"; ctx.fillText(p.text || "OPEN", sx, sy); }
         }
       }
       break;
@@ -250,6 +275,13 @@ export function drawFunnelYard(K, p, env, X) {
         ctx.stroke();
         const [dx, dy] = Q(p.x + 0.25, p.y + 0.2, 4.2);
         ctx.fillStyle = shade("#e5e7eb", nf); ctx.beginPath(); ctx.ellipse(dx, dy, K.z * 0.35, K.z * 0.5, -0.3, 0, Math.PI * 2); ctx.fill();
+        // the station's bolt on a panel high on the mast, seen across the Arts quarter
+        const [mx, my] = Q(p.x, p.y, H * 0.8), mpx = 0.62 * STOREY * K.z;
+        if (brandFits("eb-bolt", mpx) && brandReady()) {
+          ctx.fillStyle = "#0b0d12"; ctx.fillRect(Math.round(mx - mpx * 0.85), Math.round(my - mpx * 0.65), Math.round(mpx * 1.7), Math.round(mpx * 1.3));
+          drawBrand(ctx, "eb-bolt", mx, my, mpx, { neon: env.night });
+          if (env.night) glow(K, mx, my, K.z * 1.6, "rgba(255,170,45,0.16)");
+        }
       }
       K.line(Q(p.x, p.y, H), Q(p.x, p.y, H + 1.2), col2, Math.max(1, K.z * 0.05));
       const blink = Math.floor((K.t || 0) * 1.2) % 2 === 0;

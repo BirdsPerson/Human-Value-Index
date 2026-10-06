@@ -11,7 +11,8 @@
 // bars and the diner get a TV showing what EBTV is playing (funnels.js ebtvNow).
 import { GAMES, GAME, PLAYABLE, OWN_GAMES, NEIGHBOURS, HOUSE, cabColors, highScore, marqueeScore, ebtvNow, ebtvLive, CAMPAIGN_OF_PLACE, campaignFor } from "./funnels.js";
 import { HOUSE_PLACES, HOUSE_PLACE_TYPES, houseFor, houseScreen, houseExtras, loadVerified } from "./houseGames.js";
-import { ebtvFrame, drawFrame, tvBox } from "./ebtvFrame.js";
+import { ebtvFrame, drawFrame, drawBug, tvBox } from "./ebtvFrame.js";
+import { drawBrand } from "./brand.js";
 import { machineClock } from "./sim.js";
 import { shopState, wallOpen, loadShop, shopSlots, thumb, shopFocus } from "./shopStock.js";
 import { HOSTS as CAST, shiftAt, chatterAt, pitching } from "./hostsLive.js";
@@ -114,6 +115,9 @@ export function cabinetBox(it, rowY, p, side) {
   return [x0, rowY - CAB_H * p, Math.max(x0 + 4 * p, Math.min(x1, x0 + 16 * p)), rowY];
 }
 
+// The marquees with a real logo (public/brand/atlas.json): JETSAM!'s cabinet art, ANAMNESIS's
+// phosphor A on the terminal's black.
+const MARQUEE = { jetsam: { logo: "jetsam", bg: "#0f1c22" }, anamnesis: { logo: "anamnesis", bg: "#030806" } };
 function cabinet(slug, side) {
   const g = GAME[slug] || { slug, title: slug.toUpperCase(), status: "dev" };
   const [c1, c2] = cabColors(slug);
@@ -126,13 +130,22 @@ function cabinet(slug, side) {
       if (!dark) { c.fillStyle = `${c1}22`; c.fillRect(Math.round(bx0 - 4 * p), Math.round(top - 2 * p), Math.round(w + 8 * p), Math.round(26 * p)); }
       R(c, "#16121e", bx0, top, w, CAB_H * p);                       // the body
       R(c, dark ? "#2a2a2e" : c2, bx0, top + 8 * p, 2 * p, 30 * p);   // side art
-      R(c, dark ? "#3a3a3a" : c1, bx0, top, w, 6 * p);                // the marquee
-      if (g.house) loadVerified();
-      const hs = g.neighbour ? null : g.house ? marqueeScore(slug, g.slug, today()) : highScore(slug, g.slug, today());
-      // a house cabinet's marquee: its title and the day's high score taking turns (a player's in white)
-      const showTitle = g.house && Math.floor(t / 3 + (a?.i || 0) * 0.5) % 2 === 0;
-      if (hs?.player) R(c, "#0b0b0f", bx0, top, w, 6 * p);
-      if (p >= 1.4) text(c, dark ? "OUT OF ORDER" : showTitle ? g.title : hs ? `${hs.initials} ${hs.score}` : g.title, bx0 + w / 2, top + 1.2 * p, 3.4 * p, dark ? "#9ca3af" : hs?.player && !showTitle ? "#fef3c7" : "#0b0b0f", "center");
+      // the marquee: a game with a real logo wears it, backlit on its own dark glass (JETSAM!'s
+      // is the cabinet's: white Anton, the cyan offset); the rest keep the lettered board
+      const mark = !dark && !g.house && MARQUEE[slug];
+      R(c, dark ? "#3a3a3a" : mark ? mark.bg : c1, bx0, top, w, 6 * p);                // the marquee
+      if (mark) {
+        R(c, c1, bx0, top + 6 * p - Math.max(1, p * 0.5), w, Math.max(1, p * 0.5));   // the trim under the glass
+        const r = drawBrand(c, mark.logo, bx0 + w / 2, top + 3 * p, 5 * p, { maxW: w - 2 * p });
+        if (!r && p >= 1.4) text(c, g.title, bx0 + w / 2, top + 1.2 * p, 3.4 * p, "#e5e7eb", "center");
+      } else {
+        if (g.house) loadVerified();
+        const hs = g.neighbour ? null : g.house ? marqueeScore(slug, g.slug, today()) : highScore(slug, g.slug, today());
+        // a house cabinet's marquee: its title and the day's high score taking turns (a player's in white)
+        const showTitle = g.house && Math.floor(t / 3 + (a?.i || 0) * 0.5) % 2 === 0;
+        if (hs?.player) R(c, "#0b0b0f", bx0, top, w, 6 * p);
+        if (p >= 1.4) text(c, dark ? "OUT OF ORDER" : showTitle ? g.title : hs ? `${hs.initials} ${hs.score}` : g.title, bx0 + w / 2, top + 1.2 * p, 3.4 * p, dark ? "#9ca3af" : hs?.player && !showTitle ? "#fef3c7" : "#0b0b0f", "center");
+      }
       // the screen
       const sx = bx0 + 2 * p, sy = top + 9 * p, sw = w - 4 * p, sh = 12 * p;
       R(c, "#050608", sx, sy, sw, sh);
@@ -168,6 +181,8 @@ function cabinet(slug, side) {
       R(c, "#0d0b12", bx0 + w / 2 - 3 * p, top + 32 * p, 6 * p, 6 * p);
       R(c, dark ? "#444" : "#fbbf24", bx0 + w / 2 - p, top + 34 * p, 2 * p, 2 * p);
       if (g.house) houseExtras(c, slug, bx0, top, w, p, t);
+      // the kick plate: AN IRIDESCENT PRODUCTION, the studio's four squares (its own games only)
+      if (!g.neighbour && !g.house && !dark) drawBrand(c, "iridescent", bx0 + w / 2, top + 41 * p, 3 * p);
     },
   };
 }
@@ -381,6 +396,13 @@ export function funnelPropDrawers({ SIDE }) {
       R(c, "#7a4a2a", x0, Y - 17 * p, x1 - x0, 2 * p);
       // the till and the turntable, its record turning
       R(c, "#374151", x1 - 9 * p, Y - 22 * p, 7 * p, 5 * p);
+      // two EB Shop bags waiting by the till: white kraft, the cart printed in the shop's teal
+      for (const [bx, bh] of [[x1 - 17 * p, 7], [x1 - 13 * p, 6]]) {
+        R(c, "#e8e6e0", bx, Y - (17 + bh) * p, 5 * p, bh * p);
+        R(c, "#b8b4aa", bx + 4 * p, Y - (17 + bh) * p, p, bh * p);
+        R(c, "#8a8478", bx + 1.5 * p, Y - (18.2 + bh) * p, 2 * p, 1.2 * p);   // the handle
+        drawBrand(c, "ebshop-cart", bx + 2 * p, Y - (17 + bh / 2) * p, 2.4 * p, { max: Math.floor(3 * p) });
+      }
       const cx = x0 + 7 * p, cy = Y - 18 * p;
       R(c, "#1f1f1f", cx - 6 * p, cy - p, 12 * p, 2 * p);
       c.fillStyle = "#0a0a0a"; c.beginPath(); c.ellipse(cx, cy - p, 5 * p, 1.6 * p, 0, 0, Math.PI * 2); c.fill();
@@ -400,7 +422,9 @@ export function funnelPropDrawers({ SIDE }) {
       R(c, "#8a5a32", x0, Y - 17 * p, x1 - x0, 3 * p);
       R(c, "#5a3a22", x0, Y - 14 * p, x1 - x0, 14 * p);
       R(c, "#0e7490", x0 + (x1 - x0) * 0.35, Y - 12 * p, (x1 - x0) * 0.3, 7 * p);
-      if (p >= 1.2) text(c, "EBSN", x0 + (x1 - x0) * 0.5, Y - 11.5 * p, 5 * p, "#f472b6", "center");
+      // EBSN's on-screen ID: the EB bolt beside the letters (eb-command-center SHOWRUNNER.md)
+      const bolt = drawBrand(c, "eb-bolt", x0 + (x1 - x0) * 0.37, Y - 8.5 * p, 5 * p, { align: "left" });
+      if (p >= 1.2) text(c, "EBSN", bolt ? bolt.x + bolt.w + p : x0 + (x1 - x0) * 0.5, Y - 11.5 * p, 5 * p, "#f472b6", bolt ? "left" : "center");
       R(c, "#1a1a1a", x0 + 6 * p, Y - 24 * p, p, 7 * p); R(c, "#6b7280", x0 + 5 * p, Y - 25 * p, 3 * p, 2 * p);   // a mic
     },
   };
@@ -420,10 +444,11 @@ export function ebtvTv(c, x, y, u, t, wide = 26) {
   tvBox(x - u, y - u, x + w + u, y + h + u);
   const f = ebtvFrame();
   if (f) {
-    drawFrame(c, f, x, y, w, h);
+    drawFrame(c, f, x, y, w, h, false);
     R(c, "rgba(0,0,0,0.12)", x, y + ((t * 20) % h), w, u);   // the roll bar
+    // the bug top left (the crawl has the bottom): the real logo, else the old lettering
+    if (!drawBug(c, x, y, w, h, "tl") && u >= 2) text(c, "EBTV", x + u, y + u, 3.2 * u, "#f9a8d4");
     if (u >= 2) {
-      text(c, "EBTV", x + u, y + u, 3.2 * u, "#f9a8d4");
       const title = f.title || ebtvNow()?.title, s = title ? `NOW: ${title}` : "ELECTRIC BASEMENT TV";
       R(c, "rgba(0,0,0,0.55)", x, y + h - 5.5 * u, w, 4.5 * u);
       c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
@@ -490,7 +515,7 @@ export function funnelRooms() {
       const rb = shopSlots(w, h, u, wallOpen(st) ? st.items.length : 12).reduce((m, q) => Math.max(m, q.y + q.s + 2 * u), 0);
       if (rb + 6 * u <= h * 0.46) R(c, "#3a2414", x + 4 * u, y + h * 0.46, w - 8 * u, u);
       if (rb + 6 * u <= h * 0.46) for (let k = 0, sx = x + 6 * u; sx < x + w - 6 * u; k++, sx += 1.6 * u) R(c, cols[(k * 3 + (k >> 2)) % 8], sx, y + h * 0.46 - 4 * u - (k % 3 === 0 ? u : 0), u, 4 * u + (k % 3 === 0 ? u : 0));
-      text(c, "EB SHOP", x + w - 4 * u, y + 3 * u, 2.8 * u, "#f472b6", "right");
+      if (!drawBrand(c, "ebshop", x + w - 4 * u, y + 2.6 * u, 3.4 * u, { align: "right", valign: "top" })) text(c, "EB SHOP", x + w - 4 * u, y + 3 * u, 2.8 * u, "#f472b6", "right");
       text(c, "SHOP.ELECTRICBASEMENT.TV", x + w - 4 * u, y + 6.6 * u, 1.8 * u, "#67e8f9", "right");
     },
     union(c, x, y, w, h, u) {
@@ -501,8 +526,12 @@ export function funnelRooms() {
     ebtv(c, x, y, w, h, u, { t }) {
       // the teal set wall, the EBSN logo, the monitor wall with the channel on it
       R(c, "#1f6f73", x + w * 0.05, y + 3 * u, w * 0.5, h * 0.6);
-      text(c, "EBSN", x + w * 0.07, y + 5 * u, 5 * u, "#fef3c7");
-      text(c, "AFTER DARK", x + w * 0.07, y + 11 * u, 2.6 * u, "#f9a8d4");
+      // the set's sign: the real Electric Basement neon, lit, EBSN AFTER DARK beside it
+      R(c, "#0b0d12", x + w * 0.07, y + 4.5 * u, 17 * u, 17 * u);
+      const logo = drawBrand(c, "eb-logo", x + w * 0.07 + 8.5 * u, y + 13 * u, 15 * u, { neon: true });
+      const tx = logo ? x + w * 0.07 + 19 * u : x + w * 0.07;
+      text(c, "EBSN", tx, y + 5 * u, 5 * u, "#fef3c7");
+      text(c, "AFTER DARK", tx, y + 11 * u, 2.6 * u, "#f9a8d4");
       ebtvTv(c, x + w * 0.66, y + 5 * u, u, t, 22);
       const live = ebtvLive();
       const on = live == null ? true : live;

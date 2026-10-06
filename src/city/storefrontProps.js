@@ -9,6 +9,7 @@
 //                 the stage corner (the band on music nights; the crowd cheers)
 import { UNIT_SET } from "./storefrontSim.js";
 import { unitView } from "./enterpriseClient.js";
+import { drawBrand } from "./brand.js";   // Goodnight Irene's real lockup over the bar
 
 export const STORE_ROOM_TYPE = {
   ...Object.fromEntries([...UNIT_SET].map(id => [id, "shopfront"])),
@@ -182,6 +183,11 @@ export function storeRoomDrawers() {
     for (let k = 0; k < 3; k++) R(c, "#f7f5ec88", x + w * 0.08, y + h * 0.12 + k * 4 * u, w * 0.1 * (1 - k * 0.2), u);
     for (let k = 0, sx = x; sx < x + w; sx += 8 * u, k++) R(c, "#fde68a", sx, y + h * 0.04 + (k % 2) * u, u, u);   // the string lights
     R(c, "#8c1622", x + w * 0.78, y + h * 0.86, w * 0.2, 2 * u);   // the stage's rug
+    // over the bar: the pub's own sign (the specials sheets' lockup), on a cream board in a dark frame
+    const sh = Math.min(h * 0.22, 26 * u), sx = x + w * 0.5, sy = y + h * 0.1 + sh / 2;
+    R(c, "#3a2414", sx - sh * 1.2 - u, sy - sh / 2 - u, sh * 2.4 + 2 * u, sh + 2 * u);
+    R(c, "#f7f5ec", sx - sh * 1.2, sy - sh / 2, sh * 2.4, sh);
+    if (!drawBrand(c, "irenes", sx, sy, sh * 0.9)) text(c, "GOODNIGHT IRENE'S", sx, sy - 2 * u, 4 * u, "#8c1622");
   };
   return DRAW;
 }

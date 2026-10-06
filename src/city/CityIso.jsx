@@ -23,6 +23,7 @@ import { CIVIC_LOTS, CIVIC_PLACES } from "./civicGeo.js";
 import { drawCivicLot, civicLabel, civicLine } from "./civicDraw.js";
 import { isoItems, towerItems } from "./archGeo.js";
 import { drawBody, drawYardProp, drawArchGround, doorAt } from "./archDraw.js";
+import { billboardItems, drawBillboard } from "./billboardDraw.js";   // THE BILLBOARDS: the reserved sites, in Scott's real brands
 import { findTarget, findLine } from "./find.js";
 // DRIVE YOURSELF (controlIso.js, ControlLayer.jsx): the viewer's own citizen, steered
 import { makeIsoControl } from "./controlIso.js";
@@ -196,6 +197,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       // movers of its slot (the trains run through the portal beneath it)
       const topSlots = new Map();
       for (const it of towerItems(r)) { const k = slotForBox(it, it.top, items, order); (topSlots.get(k) || topSlots.set(k, []).get(k)).push(it); }
+      // the billboards: drawn with the tops, a rooftop one after its own building
+      for (const it of billboardItems(r)) {
+        let k = slotForBox(it, it.top, items, order);
+        if (it.host) { const hk = order.findIndex(i => items[i].id === it.host); if (hk > k) k = hk; }
+        (topSlots.get(k) || topSlots.set(k, []).get(k)).push(it);
+      }
       return { r, items, order, districts, lateSlots, topSlots, mtn: lp.filter(it => it.mtn) };
     }
 
@@ -1366,7 +1373,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       };
       const late = V.geo.lateSlots;
       const tops = V.geo.topSlots;
-      const drawTower = (it) => { const hour = ((mt % 24) + 24) % 24; drawBody(archG(), it.b, it.m, { lod, night: nightAt(hour), hour, t: V.reduced ? 0 : performance.now() / 1000, lit: 0.45, bid: bidOf(it.b.id), name: it.b.name, style: it.m.style }, new Set(["tower"])); };
+      const drawTower = (it) => { if (it.kind === "bb") { const hour = ((mt % 24) + 24) % 24; drawBillboard(archG(), it, { lod, night: nightAt(hour), hour }); return; } const hour = ((mt % 24) + 24) % 24; drawBody(archG(), it.b, it.m, { lod, night: nightAt(hour), hour, t: V.reduced ? 0 : performance.now() / 1000, lit: 0.45, bid: bidOf(it.b.id), name: it.b.name, style: it.m.style }, new Set(["tower"])); };
       for (const it of late.get(-1) || []) drawItem(it, -1);
       for (const m of slots.get(-1) || []) drawMover(m, lod);
       for (const it of tops.get(-1) || []) drawTower(it);

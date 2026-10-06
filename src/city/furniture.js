@@ -17,6 +17,10 @@
 const h01 = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 const pick = (list, str) => list[Math.min(list.length - 1, Math.floor(h01(str) * list.length))];
 
+// The brand marks (JETSAM! cabinet, EBTV set, Irene's tap) come from brand.js, which only loads
+// its atlas in a browser; in node it answers "not ready" and the lettered fallback is drawn.
+import { drawBrand } from "./brand.js";
+
 // ---- drawing ---------------------------------------------------------------------------------
 // rects: [dx, up, w, h, colour]; colour "$a".."$c" is the piece's tint, [off, on] lights up.
 function paint(c, rects, cx, fy, s, o) {
@@ -88,8 +92,9 @@ const ITEMS = [
   { id: "pots", name: "HANGING POTS", rooms: ["kitchen"], tiers: [0, 1, 2], wall: true, fw: 10,
     rects: [[-5, 27, 10, 0.8, "#6a6a6a"], [-4, 22, 3, 3, "#b87333"], [-0.5, 23, 2.5, 2.5, "#8a8a8a"], [2.5, 21.5, 2, 4, "#b87333"]] },
   { id: "beer-tap", name: "GOODNIGHT IRENE'S BEER TAP", rooms: ["kitchen", "living"], tiers: [0], fw: 12,
-    rects: [[-6, 0, 12, 10, "#3a2418"], [-6, 10, 12, 1.2, "#c89a5a"], [-3, 11, 1, 5, "#c0c0c0"], [-0.5, 11, 1, 5, "#c0c0c0"], [2, 11, 1, 5, "#c0c0c0"], [-4, 15, 8, 1.5, "#8a6a3a"], [-6, 19, 12, 5, ["#3a1a2a", "#ff6fae"]]],
-    after: (c, cx, fy, s, o) => word(c, "IRENE'S", cx, fy, 21.5, s, o.on ? "#2a0a1a" : "#ff8fc0", 2.4) },
+    rects: [[-6, 0, 12, 10, "#3a2418"], [-6, 10, 12, 1.2, "#c89a5a"], [-3, 11, 1, 5, "#c0c0c0"], [-0.5, 11, 1, 5, "#c0c0c0"], [2, 11, 1, 5, "#c0c0c0"], [-4, 15, 8, 1.5, "#8a6a3a"], [-6, 19, 12, 5, ["#d8d2c0", "#f7f5ec"]]],
+    // the lightbox over the taps: Irene's oven arch and flame (brand.js), on the pub's cream
+    after: (c, cx, fy, s, o) => { if (!drawBrand(c, "irenes-arch", cx, fy - 21.5 * s, 4.2 * s, { alpha: o.on ? 1 : 0.7 })) word(c, "IRENE'S", cx, fy, 21.5, s, "#8c1622", 2.4); } },
   // ---- living room
   { id: "tv", name: "TELEVISION", rooms: ["living"], tiers: [0, 1, 2], role: "tv", fw: 10,
     rects: [[-3, 0, 6, 5, "#2e2e2e"], [-5, 7, 10, 7, W("#7fe0b0")], [-0.5, 5, 1, 2, "#2e2e2e"]] },
@@ -103,7 +108,7 @@ const ITEMS = [
     after: (c, cx, fy, s, o) => {
       const x = Math.round(cx - 5.5 * s), y = Math.round(fy - 14.5 * s), w = Math.round(11 * s), h = Math.round(8 * s);
       if (o.on && o.screen && o.screen(c, x, y, w, h)) return;
-      word(c, "EBTV", cx - 0.5 * s, fy, 10.5, s, o.on ? "#ffffff" : "#5a7a9a", 3);
+      if (!drawBrand(c, "eb-bolt", cx - 0.5 * s, fy - 10.5 * s, 5 * s, { alpha: o.on ? 1 : 0.45 })) word(c, "EBTV", cx - 0.5 * s, fy, 10.5, s, o.on ? "#ffffff" : "#5a7a9a", 3);
     } },
   { id: "sofa", name: "SOFA", rooms: ["living"], tiers: [0, 1, 2], role: "sofa", fw: 18, tints: [["#7a3b3b", "#6a3030"], ["#3b5a7a", "#30506a"], ["#5a6a3b", "#4a5a30"], ["#8a7a5a", "#7a6a4a"], ["#5a3b6a", "#4a305a"]],
     rects: [[-8, 0, 16, 5, "$a"], [-8, 5, 16, 4, "$b"], [-9, 0, 2, 7, "$b"], [7, 0, 2, 7, "$b"]] },
@@ -152,8 +157,9 @@ const ITEMS = [
   { id: "pc", name: "COMPUTER DESK", rooms: ["study", "living", "bedroom"], tiers: [0, 1, 2], role: "desk", fw: 14,
     rects: [[-7, 9, 14, 1.5, "#3a3a40"], [-6, 0, 1, 9, "#2a2a30"], [5, 0, 1, 9, "#2a2a30"], [-5, 10.5, 7, 5, "#111"], [-4.5, 11, 6, 4, W("#40e0a0")], [3, 10.5, 2, 6, "#2a2a30"], [3.5, 15, 1, 0.6, ["#1a3a1a", "#40ff40"]]] },
   { id: "arcade", name: "JETSAM ARCADE CABINET", rooms: ["living", "bedroom", "study"], tiers: [0, 1, 2], fw: 9, glow: true, tints: [["#2a1a4a", "#ff40c0"], ["#1a2a4a", "#40e0ff"], ["#4a1a1a", "#ffd040"]],
-    rects: [[-4.5, 0, 9, 24, "$a"], [-4.5, 22, 9, 4, "$b"], [-3.5, 12, 7, 8, ["#203040", "#3ad0ff"]], [-3.5, 9, 7, 2, "#1a1a1a"], [-2, 10.5, 1, 1.5, "#ff3030"], [1, 10.5, 1, 1, "#30ff30"], [-3, 3, 6, 4, "#1a1a1a"]],
-    after: (c, cx, fy, s) => word(c, "JETSAM!", cx, fy, 24, s, "#120820", 2.3) },
+    rects: [[-4.5, 0, 9, 24, "$a"], [-4.5, 22, 9, 4, "#0f1c22"], [-4.5, 21.6, 9, 0.5, "$b"], [-3.5, 12, 7, 8, ["#203040", "#3ad0ff"]], [-3.5, 9, 7, 2, "#1a1a1a"], [-2, 10.5, 1, 1.5, "#ff3030"], [1, 10.5, 1, 1, "#30ff30"], [-3, 3, 6, 4, "#1a1a1a"]],
+    // the marquee: the game's own logotype (brand.js), backlit on the cabinet's dark glass
+    after: (c, cx, fy, s) => { if (!drawBrand(c, "jetsam", cx, fy - 24 * s, 3.2 * s)) word(c, "JETSAM!", cx, fy, 24, s, "#e5f6f6", 2.3); } },
   // ---- the upgrade tiers (src/economy/shops.js UPGRADES): never placed by dressUnit, only by a
   // resident who bought the tier below and upgraded it. whole: the piece takes the whole room.
   { id: "golf-cabinet", name: "BAR-TOP GOLF CABINET", rooms: ["living", "bedroom", "study"], tiers: [0, 1, 2], fw: 10, glow: true, tints: [["#0e3a1e", "#e8c040"]],
@@ -169,7 +175,7 @@ const ITEMS = [
     after: (c, cx, fy, s, o) => {
       const x = Math.round(cx - 8.5 * s), y = Math.round(fy - 17.5 * s), w = Math.round(17 * s), h = Math.round(11 * s);
       if (o.on && o.screen && o.screen(c, x, y, w, h)) return;
-      word(c, "EBTV", cx, fy, 12, s, o.on ? "#ffffff" : "#5a7a9a", 3.4);
+      if (!drawBrand(c, "eb-logo", cx, fy - 12 * s, 7 * s, { neon: o.on, alpha: o.on ? 1 : 0.45 })) word(c, "EBTV", cx, fy, 12, s, o.on ? "#ffffff" : "#5a7a9a", 3.4);
     } },
   { id: "home-theater", name: "HOME THEATER", rooms: ["living", "study"], tiers: [0, 1, 2], role: "tv", fw: 26, whole: true, tints: [["#6a1a22", "#4a1018"]],
     rects: [[-12.5, 13.5, 25, 15, "#0a0a0a"], [-12, 14, 24, 14, ["#14202a", "#1d6fe0"]], [-1.5, 39, 3, 2, "#2a2a2a"], [-0.5, 38, 1, 1, ["#333", "#fff7c0"]],
@@ -177,11 +183,12 @@ const ITEMS = [
     after: (c, cx, fy, s, o) => {
       const x = Math.round(cx - 12 * s), y = Math.round(fy - 28 * s), w = Math.round(24 * s), h = Math.round(14 * s);
       if (o.on && o.screen && o.screen(c, x, y, w, h)) return;
-      word(c, "EBTV", cx, fy, 21, s, o.on ? "#ffffff" : "#5a7a9a", 4);
+      if (!drawBrand(c, "eb-logo", cx, fy - 21 * s, 10 * s, { neon: o.on, alpha: o.on ? 1 : 0.45 })) word(c, "EBTV", cx, fy, 21, s, o.on ? "#ffffff" : "#5a7a9a", 4);
     } },
   { id: "kegerator", name: "IRENE'S KEGERATOR", rooms: ["kitchen", "living"], tiers: [0, 1, 2], fw: 10,
     rects: [[-5, 0, 10, 14, "#8c1622"], [-5, 14, 10, 1.2, "#c0c0c0"], [-0.5, 15.2, 1, 4, "#c0c0c0"], [-2.5, 18.4, 5, 1, "#c0c0c0"], [-2.5, 17.4, 1, 1, "#a3a028"], [1.5, 17.4, 1, 1, "#a3a028"], [-4, 2, 8, 0.6, "#5a0a12"], [3, 5, 1, 4, "#c0c0c0"]],
-    after: (c, cx, fy, s) => word(c, "IRENE'S", cx, fy, 9, s, "#f7f5ec", 2) },
+    // the door wears the pub's arch and flame, cream on the brick red
+    after: (c, cx, fy, s) => { if (!drawBrand(c, "irenes-arch", cx, fy - 9 * s, 3.4 * s, { alpha: 0.95 })) word(c, "IRENE'S", cx, fy, 9, s, "#f7f5ec", 2); } },
   { id: "brewery", name: "HOME BREWERY", rooms: ["kitchen"], tiers: [0, 1, 2], fw: 18, glow: true,
     rects: [[-8, 0, 7, 12, "#b87333"], [-7.5, 12, 6, 2, "#d08a48"], [-5, 14, 1, 4, "#b87333"], [1, 0, 7, 17, "#c8ccd0"], [2, 17, 5, 2, "#a8acb0"], [-1, 7, 2, 1, "#b87333"], [-1, 9, 2, 1, "#8a8a8a"], [3, 6, 3, 2, ["#3a3a3a", "#4ade80"]], [-9, 0, 18, 0.6, "#3a2a1a"]],
     after: (c, cx, fy, s) => word(c, "HOME BREW", cx, fy, 22, s, "#f8d890", 2.2) },

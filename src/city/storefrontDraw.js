@@ -17,6 +17,8 @@ import { TRAM } from "./storefrontSim.js";
 import { STORE_FIXTURES, UNIT_SET } from "./storefrontSim.js";
 import { weekdayOf } from "./sim.js";
 import { clockAt } from "./simApi.js";
+import { faceBrand, brandReady, brandFits } from "./brand.js";   // Irene's real lockup (public/brand)
+import { STOREY } from "./iso.js";
 
 export const STORE_MAT = { shopfront: "#7a6a58", pizzawall: "#e8e0d0", brewbrick: "#6a2a2a" };
 export const STORE_ROOF = { shopfront: "#4a4440", pizzawall: "#8a3030", brewbrick: "#3a2424" };
@@ -211,9 +213,19 @@ export function storeDeco(X) {
       K.flush();
       if (!front) { if (f.len > 2 && K.lod !== "far") faceText(K, f, 0.5, 0.75, "BREWPUB", 0.22, IRENE.cream, { stroke: IRENE.ink }); continue; }
       // the fascia between the floors: GOODNIGHT IRENE'S in neon
-      K.G.poly(f.q(0.02, 0.98, 1.06, 1.36, 0.03), shade(IRENE.ink, K.nf), "rgba(0,0,0,0.5)");
-      const on = neonOn(K, 1955, 0.03);
-      faceText(K, f, 0.5, 1.22, "GOODNIGHT IRENE'S", 0.2, K.night ? `rgba(248,113,113,${on})` : IRENE.cream, { d: 0.04, glow: K.night ? "rgba(140,22,34,0.8)" : null });
+      // the pub's own lockup (the specials sheets': oven arch, flame, Goodnight in olive, IRENE'S
+      // in black) on a cream board, as the pub prints it; lit from the front at night, steady
+      const sp0 = f.F(0.32, 1.23, 0.04), sp1 = f.F(0.68, 1.23, 0.04);
+      if (brandReady() && brandFits("irenes", 0.47 * STOREY * K.z, Math.hypot(sp1[0] - sp0[0], sp1[1] - sp0[1]))) {
+        K.G.poly(f.q(0.3, 0.7, 0.96, 1.5, 0.03), shade(IRENE.ink, K.nf), "rgba(0,0,0,0.5)");
+        K.G.poly(f.q(0.31, 0.69, 0.98, 1.48, 0.035), K.night ? "#fff4dc" : shade(IRENE.cream, f.sh));
+        faceBrand(K, f, 0.5, 1.23, "irenes", 0.47, { d: 0.04, span: [0.32, 0.68] });
+        if (K.night) { const c = f.F(0.5, 1.23, 0.2); glow(K, c[0], c[1], K.z * 2.6, "rgba(255,236,190,0.2)"); }
+      } else {
+        K.G.poly(f.q(0.02, 0.98, 1.06, 1.36, 0.03), shade(IRENE.ink, K.nf), "rgba(0,0,0,0.5)");
+        const on = neonOn(K, 1955, 0.03);
+        faceText(K, f, 0.5, 1.22, "GOODNIGHT IRENE'S", 0.2, K.night ? `rgba(248,113,113,${on})` : IRENE.cream, { d: 0.04, glow: K.night ? "rgba(140,22,34,0.8)" : null });
+      }
       // downstairs: warm glass, the long bar inside, the taps
       K.G.poly(f.q(0.04, 0.72, 0.08, 0.98, 0.01), K.night || openNow ? (K.night ? "#f6c46a" : shade("#c9a46a", f.sh)) : shade("#58707a", f.sh));
       if (K.lod !== "far") {

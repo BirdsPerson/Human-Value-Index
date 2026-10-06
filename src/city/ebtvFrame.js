@@ -8,6 +8,7 @@
 //   - a tap on a TV: the real channel in a new tab (CityIso takes the boxes drawn this frame)
 // The pure parts (frameFresh, fetchDue) are what scripts/check-ebtv-frame.mjs checks.
 import { utm } from "./funnels.js";
+import { drawBrand } from "./brand.js";
 
 export const FRAME_URL = "/api/ebtv-frame";
 export const WATCH_URL = "https://electricbasement.tv/watch";
@@ -46,8 +47,25 @@ const BOXES = [];
 export function tvBox(x0, y0, x1, y1) { if (BOXES.length < 32) BOXES.push([x0, y0, x1, y1]); }
 export function takeTvBoxes() { return BOXES.splice(0); }
 
-// Draw the frame into (x, y, w, h), cropped to fill (the 16:9 frame's sides go first). -> true if drawn
-export function drawFrame(c, f, x, y, w, h) {
+// The channel bug: the Electric Basement neon logo over the picture, as the real player wears it
+// (ebtv web player eb.css .eb-tv__bug: bottom right, at 60%; screen-blended so only the neon
+// shows). A screen too small for the lockup gets the bolt emblem; under 8 px, none.
+// corner: "br" (the player's) or "tl" (where a TV with a crawl keeps it).
+export function drawBug(c, x, y, w, h, corner = "br") {
+  const px = Math.round(Math.min(h * 0.3, w * 0.22));
+  if (px < 8) return null;
+  const mark = px >= 16 ? "eb-logo" : "eb-bolt", m = Math.max(1, Math.round(h * 0.04));
+  const op = c.globalCompositeOperation;
+  c.globalCompositeOperation = "screen";
+  const r = corner === "tl" ? drawBrand(c, mark, x + m, y + m, px, { align: "left", valign: "top", alpha: 0.75 })
+    : drawBrand(c, mark, x + w - m, y + h - m, px, { align: "right", valign: "bottom", alpha: 0.75 });
+  c.globalCompositeOperation = op;
+  return r;
+}
+
+// Draw the frame into (x, y, w, h), cropped to fill (the 16:9 frame's sides go first), the bug
+// in its corner (bug: false leaves it to the caller). -> true if drawn
+export function drawFrame(c, f, x, y, w, h, bug = "br") {
   const iw = f.img.naturalWidth || f.img.width, ih = f.img.naturalHeight || f.img.height;
   let sw = iw, sh = ih;
   if (iw / ih > w / h) sw = ih * (w / h); else sh = iw / (w / h);
@@ -55,5 +73,6 @@ export function drawFrame(c, f, x, y, w, h) {
   c.imageSmoothingEnabled = false;
   c.drawImage(f.img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
   c.imageSmoothingEnabled = smooth;
+  if (bug) drawBug(c, x, y, w, h, bug);
   return true;
 }
