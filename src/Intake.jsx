@@ -16,6 +16,8 @@ import { FileMovement } from "./caseFile.jsx";
 import MySeat from "./elections/MySeat.jsx";
 import MyChess from "./chess/MyChess.jsx";
 import MyLeagues from "./leagues/MyLeagues.jsx";
+import FirstDay, { scrollToId } from "./FirstDay.jsx";
+import { selfFindHref, note as noteFirstDay } from "./firstDay.js";
 
 // The shared file pieces moved to caseFile.jsx; re-exported so older imports keep working.
 export { readCaseId, writeCaseId, readLastResult, syncFile, ScoreCard, Breakdown, AppealPanel, CaseLogon, DIM_ORDER, MAX_APPEAL } from "./caseFile.jsx";
@@ -479,6 +481,16 @@ export default function Intake({ view = "intake" }) {
     }, 60);
     return () => clearTimeout(t);
   });   // eslint-disable-line react-hooks/exhaustive-deps
+  // MY FILE from the result screen (the first-day list, the bar): the file view, not the result again.
+  useEffect(() => {
+    if (view === "file" && stage === "result") { setStage("ready"); setResult(null); }
+  }, [view]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // #file?at=leagues (YOUR FIRST DAY's JOIN A LEAGUE): scroll to the leagues once they render.
+  useEffect(() => {
+    if (view !== "file" || !/[?&]at=leagues\b/.test(window.location.hash)) return;
+    try { window.history.replaceState(null, "", window.location.pathname + window.location.search + "#file"); } catch { /* keep the hash */ }
+    scrollToId("hvi-leagues");
+  }, [view, fileFirst]);
 
   // The live interview: the dock tracks the keyboard, the transcript scrolls above it.
   const dockRef = useRef(null);
@@ -605,6 +617,8 @@ export default function Intake({ view = "intake" }) {
       const visits = (Array.isArray(last.history) ? visitCount(last.history) : 0) || fileVisits || null;
       return (
         <div>
+          {/* YOUR FIRST DAY (src/FirstDay.jsx): until done, the five things; then one line */}
+          <FirstDay caseId={caseId} />
           {scoreCard(last, { visits, typeVerdict: false })}
           {error && errLine(error)}
           <div className="hvi-next">
@@ -769,15 +783,24 @@ export default function Intake({ view = "intake" }) {
             {result.provisional && <div className="hvi-note">{result.provisionalNote || "FILE INCOMPLETE. This figure is provisional."}</div>}
           </div>
         ) })}
+        {/* One obvious next step: where you live, then YOUR FIRST DAY. The rest is under MORE. */}
         <div className="hvi-next">
           <ButtonRow stackOnMobile>
-            <Button variant="primary" onClick={() => shareScore(result)}>Share your score</Button>
-            <Button variant="secondary" href="#arrivals">Watch your intake</Button>
-            <Button variant="secondary" onClick={() => { setStage("ready"); setResult(null); }}>Request re-assessment</Button>
+            <Button variant="primary" href={selfFindHref(caseId)} onClick={() => noteFirstDay(caseId, "city")}>See where you live in the city</Button>
           </ButtonRow>
-          {shareLine && <div className="hvi-note" role="status">{shareLine}</div>}
         </div>
-        {fileSections(result, { history: result.history })}
+        <FirstDay caseId={caseId} />
+        <Disclosure title="MORE" meta="SHARE · BREAKDOWN · APPEAL">
+          <div className="hvi-next">
+            <ButtonRow stackOnMobile>
+              <Button variant="secondary" onClick={() => shareScore(result)}>Share your score</Button>
+              <Button variant="secondary" href="#arrivals">Watch your intake</Button>
+              <Button variant="secondary" onClick={() => { setStage("ready"); setResult(null); }}>Request re-assessment</Button>
+            </ButtonRow>
+            {shareLine && <div className="hvi-note" role="status">{shareLine}</div>}
+          </div>
+          {fileSections(result, { history: result.history })}
+        </Disclosure>
         <div className="hvi-note">CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
       </div>
     );

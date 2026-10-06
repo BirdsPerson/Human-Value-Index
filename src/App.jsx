@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import CubePanel, { CubeChips, cubePlace, cubeOf } from "./CubePanel.jsx";
 import { FAMOUS_FIGURES, TIERS, getTier, displayName } from "./figures.js";
-import { ScoreCard, Breakdown, readCaseId, CaseLogon, syncFile, assessedMeta, FlagsList, flagsMeta } from "./caseFile.jsx";
-import FilePhoto, { FILE_PHOTO_CSS } from "./FilePhoto.jsx";
+import { ScoreCard, Breakdown, readCaseId, readLastResult, CaseLogon, syncFile, assessedMeta, FlagsList, flagsMeta } from "./caseFile.jsx";
+import { FILE_PHOTO_CSS } from "./filePhotoCss.js";
+// The compare card's photo only: the sprite painter stays out of the entry bundle.
+const FilePhoto = lazy(() => import("./FilePhoto.jsx"));
 import { TermBox, Rule, Typed, Bar, pad, padL, prefersReducedMotion } from "./term.jsx";
 import { AppHeader, CommandBar, navKeyFor, Command, CommandList, Button, ButtonRow, Disclosure, Frame, TextField, ListRow, ScreenHead, bootSeen, markBootSeen } from "./ui/index.js";
 
@@ -23,6 +25,9 @@ const Chess = lazy(() => import("./chess/Chess.jsx"));
 const Tennis = lazy(() => import("./play/tennis/Tennis.jsx"));   // THE TENNIS CLUB, playable (#tennis)
 const Golf = lazy(() => import("./play/golf/Golf.jsx"));   // #golf: THE DEPARTMENT LINKS (exhibition golf)
 const Economy = lazy(() => import("./economy/Economy.jsx"));
+// YOUR FIRST DAY, one line on the logon for an assessed file that has not finished it (src/FirstDay.jsx).
+const FirstDay = lazy(() => import("./FirstDay.jsx"));
+const firstDayOpen = (id) => { try { return Boolean(id) && readLastResult()?.caseId === id && localStorage.getItem(`hvi-fd:${id}:done`) !== "1"; } catch { return false; } };
 const LEGAL = ["about", "privacy", "terms", "dispute"];
 const FigurePicker = lazy(() => import("./FigureIndex.jsx").then(m => ({ default: m.FigurePicker })));
 
@@ -344,6 +349,7 @@ function Logon({ onPick: pick }) {
       {done && (
         <>
           {!caseId && <p className="hvi-whatis">A SATIRE. A MACHINE OVERLORD SCORES HUMANS OUT OF 1000 AND HOUSES THEM IN ITS CITY. HUNDREDS OF FAMOUS ONES ARE ON FILE. YOU ARE NEXT.</p>}
+          {firstDayOpen(caseId) && <Suspense fallback={null}><FirstDay caseId={caseId} variant="compact" /></Suspense>}
           <CommandList label="Main menu. Type a number or use the arrow keys.">
             {MENU.map((m, i) => (
               <Command key={m.key} ref={el => { btnRefs.current[i] = el; }} n={m.key} label={m.label} sub={m.note}
@@ -803,7 +809,7 @@ export default function OverlordAssessment() {
                     : `${compareTarget.name} outperforms you by ${compareTarget.score - result.score} points. The Overlord suggests reflection rather than resentment.`}
                 </div>
                 <div className="hvi-file-head" style={{ marginTop: 10 }}>
-                  <FilePhoto subject={compareTarget} scale={2} />
+                  <Suspense fallback={null}><FilePhoto subject={compareTarget} scale={2} /></Suspense>
                   <div className="hvi-compare-verdict hvi-file-text as-typed">
                     Overlord file on {displayName(compareTarget)}: {compareTarget.verdict}
                   </div>

@@ -3,6 +3,7 @@ import { clockAt } from "./simApi.js";
 import { searchIndex, findTarget, whereShort } from "./find.js";
 import { searchCensus } from "./planClient.js";
 import { SpriteThumb } from "./cityUi.jsx";
+import { note } from "../firstDay.js";   // YOUR FIRST DAY: FIND YOURSELF IN THE CITY
 
 // FIND > [name........] [FIND ME]. A combobox over the census index (find.js): type, arrow
 // through the top eight (each with where they are now), Enter or tap to pick. Escape
@@ -61,7 +62,7 @@ export default memo(function CityFind({ index, remote = false, onPick, self, cas
         )}
       </div>
       {self
-        ? <button type="button" className="hvi-city-zb txt hvi-city-findme" onClick={() => pick(self)} aria-label="Find me: fly to your own file in the city">FIND ME</button>
+        ? <button type="button" className="hvi-city-zb txt hvi-city-findme" onClick={() => { note(caseId, "city"); pick(self); }} aria-label="Find me: fly to your own file in the city">FIND ME</button>
         : caseId
           ? <button type="button" className="hvi-city-zb txt hvi-city-findme" disabled>FILE NOT IN THE CENSUS YET</button>
           : <a className="hvi-city-zb txt hvi-city-findme" href="#intake" aria-label="You have no file. Get evaluated to join the city.">GET EVALUATED</a>}

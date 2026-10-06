@@ -55,7 +55,7 @@ export default function MyLeagues({ caseId }) {
   const f = d.file || {};
   const recList = d.record ? [...(d.record.played || []).map(sp => LABEL[sp]), ...(d.record.track ? ["TRACK"] : [])] : [];
   return (
-    <Frame title="THE LEAGUES" meta={entered.length ? `ENTERED // SEASON ${d.season}` : "JOIN THE LEAGUES"} className="hvi-myleagues">
+    <Frame id="hvi-leagues" title="THE LEAGUES" meta={entered.length ? `ENTERED // SEASON ${d.season}` : "JOIN THE LEAGUES"} className="hvi-myleagues">
       {d.lines?.length > 0 && (
         <ul style={{ listStyle: "none", margin: "0 0 var(--s2)", padding: 0, display: "grid", gap: 2 }}>
           {d.lines.map(l => <li key={l.sport} className="hvi-note" style={{ margin: 0 }}>{l.text}</li>)}
