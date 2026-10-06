@@ -21,17 +21,28 @@ export function sheetFor(s) {
   if (s.crowd) return sheetRaw(s.look || (s.look = lookOf(s)), "~");
   return sashed(s, sheetRaw(s));
 }
+// THE SHOPS: a file photo wearing a new outfit repaints (a procedural likeness only); the player's
+// own change shows at once ("hvi-outfit", src/shops/client.js), before the census catches up.
+const WORN = new Map();   // citizen slug -> avatar
+if (typeof window !== "undefined") window.addEventListener("hvi-outfit", (e) => {
+  const id = String(e.detail?.caseId || ""), av = e.detail?.avatar;
+  if (id && av?.kind === "procedural") WORN.set(`citizen-${id.slice(-4).toLowerCase()}`, av);
+});
+const SIGS = new WeakMap();
+const specSig = (av) => { if (av?.kind !== "procedural") return ""; let k = SIGS.get(av); if (k == null) { k = JSON.stringify(av.spec); SIGS.set(av, k); } return k; };
 function sheetRaw(s, pre = "") {
   let e = bank.get(pre + s.name);
   const slug = s.slug || slugify(s.name);
+  const av = (!pre && WORN.get(slug)) || s.avatar;
+  if (e && !e.real && av?.kind === "procedural" && e.sig !== specSig(av)) { e.img = paintAvatar(av.spec, 2); e.sig = specSig(av); e.mini = null; e.v++; }
   if (e) {
     // A likeness drawn since we first looked (referrals get theirs within minutes).
     const src = srcOf(s);
     if (src && src !== e.src && !e.real) { e.src = src; attach(s, e, slug); }
     return e;
   }
-  const img = s.avatar?.kind === "procedural" ? paintAvatar(s.avatar.spec, 2) : paintPlaceholder(slug, getTier(s.score).color, 2);
-  e = { img, frames: 2, real: false, mini: null, v: 0, src: srcOf(s) };
+  const img = av?.kind === "procedural" ? paintAvatar(av.spec, 2) : paintPlaceholder(slug, getTier(s.score).color, 2);
+  e = { img, frames: 2, real: false, mini: null, v: 0, src: srcOf(s), sig: specSig(av) };
   bank.set(pre + s.name, e);
   attach(s, e, slug);
   return e;

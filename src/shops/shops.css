@@ -44,7 +44,11 @@
 
 /* the closet */
 .sh-closet { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s3); align-items: start; }
-@media (max-width: 520px) { .sh-closet { grid-template-columns: 1fr; } .sh-closet .sh-mirror { justify-self: center; } }
+@media (max-width: 520px) {
+  .sh-closet { grid-template-columns: 1fr; }
+  /* the mirror stays in view while the rails scroll under it */
+  .sh-closet > div:first-child { position: sticky; top: 0; z-index: 2; background: var(--bg); display: flex; gap: var(--s3); align-items: flex-end; padding: var(--s1) 0; }
+}
 .sh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
 .sh-cell { font: inherit; background: #141c18; border: 2px solid var(--line); color: var(--fg-dim); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; min-height: 76px; padding: 4px 2px; }
 .sh-cell[aria-pressed="true"] { border-color: var(--accent); color: var(--fg); background: #1a2a20; }

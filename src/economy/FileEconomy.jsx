@@ -1,8 +1,11 @@
 // MY FILE's two Treasury sections: THE WALLET (balance, the TRAY and COLLECT, positions and P/L)
 // and MY APARTMENT (the citizen's assigned home). The wallet opens itself when money is waiting.
+import { lazy, Suspense } from "react";
 import { Disclosure, Button, ButtonRow } from "../ui/index.js";
 import { useEconomy, ApartmentCard, WalletCard, LegalFine } from "./Panels.jsx";
 import { fmt } from "./rules.js";
+// THE SHOPS' one section here (the closet and the furniture): its own chunk, loaded when opened
+const FileShops = lazy(() => import("../shops/FileShops.jsx"));
 
 export function FileEconomy({ caseId }) {
   const { st, err, gate, busy, last, act } = useEconomy(caseId);
@@ -20,6 +23,11 @@ export function FileEconomy({ caseId }) {
       <Disclosure title="MY APARTMENT" meta={st.apartment ? st.apartment.buildingName : ""}>
         <ApartmentCard apt={st.apartment} />
       </Disclosure>
+      {st.open && (
+        <Disclosure id="hvi-wardrobe" title="WARDROBE AND HOME" meta="THE CLOSET // YOUR FURNITURE">
+          <Suspense fallback={<p className="ec-p ec-dim">OPENING THE CLOSET…</p>}><FileShops caseId={caseId} /></Suspense>
+        </Disclosure>
+      )}
     </>
   );
 }

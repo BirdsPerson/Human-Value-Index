@@ -142,6 +142,7 @@ function LedgerLine({ t }) {
   else if (t.kind === "oplace") what = `ORDER: ${String(m.slug || "").toUpperCase()}`;
   else if (t.kind === "ofill") what = `${m.side === "sell" ? "SOLD" : "BOUGHT"} ${m.units || 0} ${String(m.slug || "").toUpperCase()}${m.side === "buy" && m.units ? "" : m.side === "buy" ? " (REFUNDED)" : ""}`;
   else if (t.kind === "levy") what = "CONCENTRATION LEVY";
+  else if (t.kind === "shop") what = `${m.upgrade ? "" : "BOUGHT "}${String(m.name || "AN ITEM").toUpperCase()} (BURNED)`;
   else what = t.kind.toUpperCase();
   const amt = t.kind === "return" ? t.inv : t.cash;
   return (

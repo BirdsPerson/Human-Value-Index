@@ -4,7 +4,7 @@
 // themselves. Skin and hair colours are read off that head. The body is everyone's: one
 // standardized golf outfit (polo, trousers, cap, one white glove), recoloured from the figure's kit.
 import { paintAvatar, loadSprite } from "../../sprites.js";
-import { DEFAULT_SPEC, AVATAR_ENUMS, CLOTH } from "../../avatar.js";
+import { DEFAULT_SPEC, AVATAR_ENUMS, CLOTH, hasOutfit } from "../../avatar.js";
 import { headFrom, sheetHints } from "../heads.js";
 
 const hex = (r, g, b) => `#${[r, g, b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("")}`;
@@ -50,7 +50,9 @@ export async function lookFor({ url = null, spec = null, hint = null, shirt, pan
   shirt = shirt || (spec && CLOTH[spec.top_color]) || "#3cbcfc";
   pants = pants || (spec && CLOTH[spec.bottom_color]) || "#7c7c7c";
   const dark = rgb(pants).reduce((a, v) => a + v, 0) < 300;
-  return { head, skin, hair, shirt, pants, cap: dark ? "#fcfcfc" : pants, glove: "#fcfcfc", generic };
+  // off the course (the 19th hole) a golfer wears their own clothes: the outfit bought at THE SHOPS
+  const street = spec && hasOutfit(spec) ? paintAvatar(spec, 1) : null;
+  return { head, skin, hair, shirt, pants, cap: dark ? "#fcfcfc" : pants, glove: "#fcfcfc", generic, street };
 }
 
 // The same golfer from the front, 32x48 (a file photo's size): their head on the standard outfit.

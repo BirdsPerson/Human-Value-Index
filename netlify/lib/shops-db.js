@@ -24,7 +24,7 @@ export function shopsMemory(db, { nowMs, clone }) {
       if (p.kind === "furn" && mine.length >= (p.max_each ?? 3)) return { ok: false, error: "too-many" };
       if (db.accounts.get(cashId).balance < amt) return { ok: false, error: "insufficient" };
       const id = ++db.seq;
-      db.txns.push({ id, idem_key: p.idem, kind: "shop", case_hash: h, day: null, memo: { sku: p.sku, price: amt }, created_at: new Date(nowMs()).toISOString() });
+      db.txns.push({ id, idem_key: p.idem, kind: "shop", case_hash: h, day: null, memo: { sku: p.sku, name: p.name ?? null, price: amt }, created_at: new Date(nowMs()).toISOString() });
       db.entries.push({ id: ++db.eseq, txn_id: id, account: cashId, amount: -amt }, { id: ++db.eseq, txn_id: id, account: "dept:burned", amount: amt });
       db.accounts.get(cashId).balance -= amt; db.accounts.get("dept:burned").balance += amt;
       const item = { id: ++db.iseq, case_hash: h, sku: p.sku, kind: p.kind, price: amt, txn_id: id, bought_at: new Date(nowMs()).toISOString() };
@@ -44,7 +44,7 @@ export function shopsMemory(db, { nowMs, clone }) {
       if (db.accounts.get(cashId).balance < amt) return { ok: false, error: "insufficient" };
       if (p.place && [...db.placements.values()].some(x => x.room === p.place.room && x.spot === p.place.spot && x.item_id !== old.id)) return { ok: false, error: "taken" };
       const id = ++db.seq;
-      db.txns.push({ id, idem_key: p.idem, kind: "shop", case_hash: h, day: null, memo: { sku: p.to_sku, from: p.from_sku, price: amt, upgrade: true }, created_at: new Date(nowMs()).toISOString() });
+      db.txns.push({ id, idem_key: p.idem, kind: "shop", case_hash: h, day: null, memo: { sku: p.to_sku, name: p.name ?? null, from: p.from_sku, price: amt, upgrade: true }, created_at: new Date(nowMs()).toISOString() });
       db.entries.push({ id: ++db.eseq, txn_id: id, account: cashId, amount: -amt }, { id: ++db.eseq, txn_id: id, account: "dept:burned", amount: amt });
       db.accounts.get(cashId).balance -= amt; db.accounts.get("dept:burned").balance += amt;
       db.items = db.items.filter(i => i.id !== old.id);

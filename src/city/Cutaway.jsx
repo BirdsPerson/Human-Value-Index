@@ -22,6 +22,10 @@ import { ebtvFrame, drawFrame, tvBox, takeTvBoxes, watchHref, ebtvLabel } from "
 import { openFunnel } from "./FunnelOverlay.jsx";
 import { SPRITE_W as FW, SPRITE_H as FH } from "../sprites.js";
 import { displayName } from "../figures.js";
+import { readCaseId } from "../caseFile.jsx";
+import { loadRooms, loadShops, lastView, onView } from "../shops/client.js";
+import { useShops, Closet, Furnish, playAtHome, injectShopStyles } from "../shops/parts.jsx";
+import { furnishLook, PLAY_AT_HOME, TOP_TIER } from "../economy/shops.js";
 
 const ROOF_H = 40, STREET_H = 16, FOUND_H = 12;
 const H0 = 52, H1 = 124, PH_H = 68;   // a storey; the focused storey; the penthouse, double height
@@ -65,13 +69,19 @@ const PURPOSE_TINT = { kitchen: "rgba(200,220,200,0.05)", bath: "rgba(160,220,23
 
 // ---- the dressing (furniture.js): each flat its own, from its id and who lives there -------------
 const LOOKS = new Map();
+// THE SHOPS: what residents have placed in this building ({unitId: [{room, spot, item}]}), laid over
+// the dressing (shops.js furnishLook). Module state: the cutaway on screen is the only reader.
+let PLACED = { building: null, byUnit: new Map() };
+const placedIn = (u) => PLACED.byUnit.get(u.id) || null;
 function lookOf(plan, st, u, tags = "") {
   if (u.kind !== "flat" && u.kind !== "suite") return null;
-  const k = `${u.id}|${tags}`;
+  const pl = PLACED.building === plan.id ? placedIn(u) : null;
+  const k = `${u.id}|${tags}|${pl ? pl.map(x => `${x.room}${x.spot}${x.item}`).join(",") : ""}`;
   let L = LOOKS.get(k);
   if (!L) {
     if (LOOKS.size > 4000) LOOKS.clear();
     L = dressUnit(u, { band: u.kind === "suite" ? 1 : plan.band, penthouse: st.code === "PH", tags: tags ? tags.split(",") : [] });
+    if (pl) L = furnishLook(L, pl);
     LOOKS.set(k, L);
   }
   return L;
@@ -212,8 +222,11 @@ function drawRoom(c, room, x, y, w, h, d) {
     if (!it) continue;
     const role = it.role;
     // an EBTV set in the open flat is always on: the Department never turns the channel off
-    const on = it.glow || (lit && (role === "lamp" || p.item === "chandelier" || p.item === "beer-tap")) || (role === "tv" && watching) || (p.item === "ebtv" && d.sheet) || ((role === "desk") && working);
-    it.draw(c, x + p.x * w, ffy, s, { on, tint: p.tint, flip: p.flip, screen: p.item === "ebtv" ? ebtvScreen : null });
+    const ebtvSet = p.item === "ebtv" || p.item === "ebtv-big" || p.item === "home-theater";
+    const on = it.glow || (lit && (role === "lamp" || p.item === "chandelier" || p.item === "beer-tap")) || (role === "tv" && watching) || (ebtvSet && d.sheet) || ((role === "desk") && working);
+    it.draw(c, x + p.x * w, ffy, s, { on, tint: p.tint, flip: p.flip, screen: ebtvSet ? ebtvScreen : null });
+    // your own flat's playable pieces take a tap (shops.js PLAY_AT_HOME)
+    if (d.play && p.placed && PLAY_AT_HOME[p.item]) { const fw = it.footprint.w * s / 2; d.play.push([x + p.x * w - fw, ffy - it.footprint.h * s, x + p.x * w + fw, ffy, p.item]); }
   }
   // people
   const bed = furniture.find(f => (f.role || f.item) === "bed");
@@ -249,6 +262,14 @@ function drawRoom(c, room, x, y, w, h, d) {
       }
     } catch { /* not decoded yet */ }
   });
+  // THE SHOPS: at night the city's figures gather round the top of a chain (render only, never the sim)
+  if (d.guests && d.night) {
+    const top = furniture.find(f => f.placed && TOP_TIER.has(f.item));
+    if (top) d.guests.forEach((g, i) => {
+      const gx = x + Math.max(0.08, Math.min(0.92, top.x + (i % 2 ? 0.16 : -0.16) * (1 + Math.floor(i / 2) * 0.6))) * w;
+      try { const sh = sheetFor(g), ph = Math.min(h * 0.55, Math.max(16, w * 1)), pw = ph * FW / FH; c.drawImage(sh.img, 0, 0, FW, FH, Math.round(gx - pw / 2), Math.round(ffy - ph), Math.round(pw), Math.round(ph)); } catch { /* not decoded */ }
+    });
+  }
   // the light: warm where someone is up after dark, dim blue where nobody is (or all asleep)
   if (d.night && !lit) { c.fillStyle = d.sheet ? "rgba(8,14,40,0.42)" : "rgba(8,14,40,0.62)"; c.fillRect(x, y, w, h); }
   else if (lit) { c.fillStyle = "rgba(255,196,110,0.10)"; c.fillRect(x, y, w, h); }
@@ -318,6 +339,26 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
   const wrapRef = useRef(null), canRef = useRef(null);
   const V = useRef({ W: 360, lw: 0, dpr: 1, lay: null, place: null, seenV: -1, sig: "", reduced: false, sel, cur }).current;
   V.sel = sel; V.cur = cur;
+  // THE SHOPS: the pieces residents placed here, and which flat is yours (the server's MY APARTMENT)
+  const [mine, setMine] = useState(null);
+  const [, setPv] = useState(0);
+  V.mine = mine;
+  useEffect(() => {
+    let off = false;
+    const apply = (rows) => {
+      if (off) return;
+      const byUnit = new Map();
+      for (const r of rows || []) { const unit = r.room.split(":").slice(0, -1).join(":"); (byUnit.get(unit) || byUnit.set(unit, []).get(unit)).push(r); }
+      PLACED = { building: plan.id, byUnit };
+      setPv(n => n + 1);
+    };
+    loadRooms(plan.id).then(apply);
+    const pick = (v) => (v?.apartment?.building === plan.id ? v.apartment.flat?.id || null : null);
+    const id = readCaseId();
+    if (id) { const lv = lastView(id); if (lv) setMine(pick(lv)); else loadShops(id).then(v => { if (!off) setMine(pick(v)); }).catch(() => {}); }
+    const un = onView(L => { if (L.caseId === readCaseId()) { setMine(pick(L.view)); loadRooms(plan.id, { fresh: true }).then(apply); } });
+    return () => { off = true; un(); };
+  }, [plan]);
 
   // the route's floor (sim floor index) <-> the focused storey
   useEffect(() => {
@@ -472,9 +513,10 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
         fitText(c, `${st.code} // ${st.name} // HELD BY ${st.owner.name}`, x0 + 3, iy + 3, x1 - x0 - 6);
         c.font = `9px ${FONT}`;
         rects.forEach(({ u, x, w }) => {
-          const label = u.kind === "flat" ? `${u.label} ${nameplate(u, P?.residents || new Map())}` : u.kind === "suite" ? u.label : nameplate(u, P?.residents || new Map());
-          c.fillStyle = "rgba(10,15,10,0.7)"; c.fillRect(Math.round(x), iy + 16, Math.round(w), 12);
-          c.fillStyle = u.kind === "flat" && !(P?.residents.get(u.id) || []).length ? "#4d8a62" : "#c8f5d8";
+          const yours = u.id === V.mine;
+          const label = yours ? `${u.label} YOUR FLAT` : u.kind === "flat" ? `${u.label} ${nameplate(u, P?.residents || new Map())}` : u.kind === "suite" ? u.label : nameplate(u, P?.residents || new Map());
+          c.fillStyle = yours ? "rgba(60,46,8,0.9)" : "rgba(10,15,10,0.7)"; c.fillRect(Math.round(x), iy + 16, Math.round(w), 12);
+          c.fillStyle = yours ? "#fbbf24" : u.kind === "flat" && !(P?.residents.get(u.id) || []).length ? "#4d8a62" : "#c8f5d8";
           fitText(c, label, x + 2, iy + 18, w - 4);
         });
         c.textBaseline = "alphabetic";
@@ -585,7 +627,7 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
   const whoIn = (u) => u.rooms.flatMap(rm => (P?.rooms.get(rm.id) || []).map(p => ({ ...p, room: rm })));
   const st = sel != null ? plan.storeys[sel] : null;
   const curUnit = st ? st.units[Math.min(cur, st.units.length - 1)] : null;
-  const unitWord = (u) => (u.kind === "flat" ? `FLAT ${u.label}` : u.kind === "suite" ? u.label : u.kind === "lobby" ? "THE LOBBY" : nameplate(u, res));
+  const unitWord = (u) => (u.kind === "flat" ? `${u.id === mine ? "YOUR FLAT, " : "FLAT "}${u.label}` : u.kind === "suite" ? u.label : u.kind === "lobby" ? "THE LOBBY" : nameplate(u, res));
   const line = st
     ? <><b>{st.code}</b> // {st.name}. {st.units.filter(u => u.kind === "flat").length ? "TAP A FLAT." : "TAP A ROOM."}{V.kbd && curUnit ? ` ${unitWord(curUnit)}: ${whoIn(curUnit).length} PRESENT.` : ""}</>
     : <>A CROSS-SECTION OF {b.name}. TAP A FLOOR.</>;
@@ -619,7 +661,7 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
         ))}
       </ul>
       {/* on the body: over the command bar, outside the frame's stacking context */}
-      {openU && createPortal(<UnitSheet u={openU} plan={plan} P={P} res={res} onClose={closeSheet} onOpen={onOpen} censusRef={censusRef} unitWord={unitWord} />, document.body)}
+      {openU && createPortal(<UnitSheet u={openU} plan={plan} P={P} res={res} onClose={closeSheet} onOpen={onOpen} censusRef={censusRef} unitWord={unitWord} mine={openU.id === mine} />, document.body)}
     </div>
   );
 }
@@ -635,8 +677,17 @@ function fitText(c, text, x, y, w) {
 
 // ---- one unit, large: its rooms side by side (two rows when there are more than three), who is
 // home in each, and who lives here but is out.
-function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord }) {
+function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord, mine = false }) {
   const ref = useRef(null), closeRef = useRef(null);
+  const playRef = useRef([]);
+  // the guests round a top-tier piece at night: three figures on the census, the same all evening
+  const guests = useMemo(() => {
+    const list = (censusRef.current?.list || []).map(e => e.s).filter(x => x && !x.crowd && x.kind !== "citizen");
+    if (!list.length) return [];
+    const day = Math.floor((clockAt(Date.now()).mt) / 24), out = [];
+    for (let i = 0; i < 3; i++) out.push(list[Math.floor(h01(`${u.id}|guest|${day}|${i}`) * list.length)]);
+    return out;
+  }, [u.id, censusRef]);
   useEffect(() => { closeRef.current?.focus(); }, [u.id]);
   useEffect(() => {
     const onEsc = (e) => { if (e.key === "Escape") { e.preventDefault(); onClose(); } };
@@ -649,6 +700,8 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord }) {
   // a tap on the EBTV set: the real channel, as every TV in the city
   const onTap = (e) => {
     const r = ref.current.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    const hitPlay = playRef.current.find(([a, b, c2, d2]) => x >= a - 4 && x <= c2 + 4 && y >= b - 4 && y <= d2 + 4);
+    if (hitPlay) { playAtHome(PLAY_AT_HOME[hitPlay[4]]); return; }
     if (tvRef.current.some(([a, b, c2, d2]) => x >= a - 4 && x <= c2 + 4 && y >= b - 4 && y <= d2 + 4)) openFunnel({ href: watchHref(), campaign: "ebtv-tv" });
   };
   const hasEbtv = useMemo(() => { const st = plan.storeys.find(s => s.units.includes(u)); const L = lookOf(plan, st, u, tagsOf(res.get(u.id))); return !!L && Object.values(L.rooms).some(r => r.furniture.some(f => f.item === "ebtv")); }, [plan, u, res]);
@@ -669,21 +722,23 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord }) {
       const mt = censusRef.current.mt ?? clockAt(Date.now()).mt, hour = ((mt % 24) + 24) % 24, night = isDark(hour);
       const st = plan.storeys.find(s => s.units.includes(u));
       const rw = (W - (cols - 1) * 3) / cols;
+      const play = mine ? [] : null;
       u.rooms.forEach((rm, j) => {
         const cx = (j % cols) * (rw + 3), cy = Math.floor(j / cols) * (RH + LBL);
         c.fillStyle = wallOf(plan, st); c.fillRect(cx, cy, rw, RH);
         c.fillStyle = floorStyle(st.id, st.code === "PH").corridor; c.fillRect(cx, cy + RH - 4, rw, 4);
         const lamp = night && !Pref.current?.units?.get(u.id) ? lampRoom(u, mt, (Pref.current?.residents.get(u.id) || []).length > 0) : null;
-        drawRoom(c, rm, cx, cy, rw, RH - 4, { night, lamp: lamp === rm.id, sprite: true, sheet: true, t: reduced ? 0 : now / 1000, reduced, people: Pref.current?.rooms.get(rm.id) || [], look: lookOf(plan, st, u, tagsOf(Pref.current?.residents.get(u.id))) });
+        drawRoom(c, rm, cx, cy, rw, RH - 4, { night, lamp: lamp === rm.id, sprite: true, sheet: true, t: reduced ? 0 : now / 1000, reduced, people: Pref.current?.rooms.get(rm.id) || [], look: lookOf(plan, st, u, tagsOf(Pref.current?.residents.get(u.id))), play, guests });
         c.font = `9px ${FONT}`; c.fillStyle = "#4d8a62"; c.textBaseline = "top";
         fitText(c, `${PURPOSE_NAME[rm.purpose]}`, cx + 2, cy + RH + 3, rw - 4);
         c.textBaseline = "alphabetic";
       });
       tvRef.current = takeTvBoxes();
+      playRef.current = play || [];
     };
     raf = requestAnimationFrame(draw);
     return () => { alive = false; cancelAnimationFrame(raf); };
-  }, [u, plan, cols, rowsN, censusRef]);
+  }, [u, plan, cols, rowsN, censusRef, mine, guests]);
   const here = u.rooms.flatMap(rm => (P?.rooms.get(rm.id) || []).map(p => ({ ...p, room: rm })));
   const hereKeys = new Set(here.map(p => p.key));
   const out = (res.get(u.id) || []).filter(s => !hereKeys.has(keyOf(s)));
@@ -693,10 +748,11 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord }) {
     <div className="hvi-tw-sheet" role="dialog" aria-modal="false" aria-label={`${title}, ${plan.name}`}>
       <div className="hvi-tw-sheet-in">
         <div className="hvi-tw-sheet-h">
-          <div><b>{title}</b> // {plan.name}<br />{u.kind === "flat" ? `${nameplate(u, res)} // ` : ""}HELD BY {u.owner.name}</div>
+          <div><b>{title}</b> // {plan.name}<br />{u.kind === "flat" && !mine ? `${nameplate(u, res)} // ` : ""}HELD BY {u.owner.name}{mine ? " // ASSIGNED TO YOU" : ""}</div>
           <button ref={closeRef} type="button" onClick={onClose} aria-label="Close and return to the floors">[ X ]</button>
         </div>
         <canvas ref={ref} aria-hidden="true" onClick={onTap} style={{ height: rowsN * (RH + LBL) }} />
+        {mine && <YourFlat u={u} plan={plan} />}
         {hasEbtv && <a className="sr-only" href={watchHref()} target="_blank" rel="noopener" aria-label={ebtvLabel()}>Electric Basement TV, live</a>}
         <div className="hvi-tw-sub">{here.length ? `PRESENT // ${here.length}` : "NOBODY PRESENT. THE ROOMS ARE BEING MONITORED ANYWAY."}</div>
         {here.map(p => <Occupant key={p.key} s={p.s} onOpen={onOpen} note={`${PURPOSE_NAME[p.room.purpose]}${p.act === "sleep" ? ", ASLEEP" : ""}`} />)}
@@ -704,8 +760,32 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord }) {
           <div className="hvi-tw-sub">RESIDENT, ELSEWHERE // {out.length}</div>
           {out.map(s => <Occupant key={s.name} s={s} onOpen={onOpen} note={activityLine(s, mt).replace(/\.$/, "")} />)}
         </>}
-        {u.kind === "flat" && !(res.get(u.id) || []).length && <div className="hvi-tw-sub">VACANT. ASSIGNED TO NOBODY. THE DEPARTMENT KEEPS THE KEY. THE LIGHTS ARE ON A TIMER.</div>}
+        {u.kind === "flat" && !mine && !(res.get(u.id) || []).length && <div className="hvi-tw-sub">VACANT. ASSIGNED TO NOBODY. THE DEPARTMENT KEEPS THE KEY. THE LIGHTS ARE ON A TIMER.</div>}
       </div>
+    </div>
+  );
+}
+
+// ---- your flat (THE SHOPS): the playable pieces, the closet in the bedroom, the furniture -------------
+function YourFlat({ u, plan }) {
+  const caseId = readCaseId();
+  const S = useShops(caseId);
+  const [panel, setPanel] = useState(null);   // closet | furnish
+  useEffect(() => { injectShopStyles(); }, []);
+  const look = lookOf(plan, plan.storeys.find(s => s.units.includes(u)), u, "");
+  const playable = look ? Object.values(look.rooms).flatMap(r => r.furniture).filter(f => f.placed && PLAY_AT_HOME[f.item]) : [];
+  const btn = { font: "inherit", fontSize: "var(--t-xs)", minHeight: 44, minWidth: 44, background: "none", color: "var(--accent)", border: "var(--bw) solid var(--accent)", cursor: "pointer", padding: "0 10px" };
+  return (
+    <div style={{ margin: "var(--s2) 0" }}>
+      <div className="hvi-tw-sub">YOUR FLAT // TAP A CABINET OR A SCREEN TO PLAY</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {playable.map((f, i) => <button key={`${f.item}${i}`} type="button" style={btn} onClick={() => playAtHome(PLAY_AT_HOME[f.item])}>{PLAY_AT_HOME[f.item].label}</button>)}
+        <button type="button" style={btn} aria-expanded={panel === "closet"} onClick={() => setPanel(p => (p === "closet" ? null : "closet"))}>THE BEDROOM CLOSET</button>
+        <button type="button" style={btn} aria-expanded={panel === "furnish"} onClick={() => setPanel(p => (p === "furnish" ? null : "furnish"))}>FURNISH</button>
+        <a style={{ ...btn, display: "inline-flex", alignItems: "center", textDecoration: "none" }} href="#shop">THE SHOPS</a>
+      </div>
+      {panel === "closet" && <div style={{ marginTop: "var(--s3)" }}><Closet caseId={caseId} S={S} /></div>}
+      {panel === "furnish" && <div style={{ marginTop: "var(--s3)" }}><Furnish S={S} /></div>}
     </div>
   );
 }

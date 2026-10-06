@@ -2702,6 +2702,15 @@ opens as a SimTower cross-section.
   as a pattern of lit and dark rooms; the facade edge glows beside a lit end room; corridor lights
   on every floor. No new labels: names and words on pieces appear only at sheet scale.
 
+
+- **THE SHOPS in the cutaway** (2026-10-05; docs/design/ECONOMY_PROPERTY.md "The shops"): the
+  pieces residents placed (`GET /api/shops?building=`) are laid over each flat's dressing
+  (`shops.js furnishLook`; a whole-room piece clears the room's floor), so visitors see them. Your
+  own flat (the server's MY APARTMENT, `residentFlat`) is marked YOUR FLAT in gold; its sheet holds
+  the playable pieces (tap one: the cabinet's game, `#golf?preset=`, the live EBTV), THE BEDROOM
+  CLOSET and FURNISH. At night three figures on the census gather round the top of an upgrade chain
+  (render only; the sim never reads furniture until EFFECTS_FROM_DAY). New catalog pieces (the
+  upgrade tiers) are never placed by `dressUnit`, so every flat's own dressing is unchanged.
 ## THE ATTRITION: the river from the mountain to the sea (layout 7, 2026-10-06)
 
 Scott: "an endless river from the mountain to the sea." The move, why there and what it cost:

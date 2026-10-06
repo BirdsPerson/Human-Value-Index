@@ -29,6 +29,7 @@ const Hoops = lazy(() => import("./play/hoops/Hoops.jsx"));   // #hoops: THE COU
 const Fish = lazy(() => import("./play/fish/Fish.jsx"));   // #fish: THE WATERS (fishing, src/play/fish/)
 const Aquarium = lazy(() => import("./play/fish/Aquarium.jsx"));   // #aquarium: THE AQUARIUM (replay-checked donations)
 const Economy = lazy(() => import("./economy/Economy.jsx"));
+const Shops = lazy(() => import("./shops/Shops.jsx"));   // #shop[/<store>]: THE SHOPS (clothes, furniture, the closet; CYCLES only)
 // YOUR FIRST DAY, one line on the logon for an assessed file that has not finished it (src/FirstDay.jsx).
 const FirstDay = lazy(() => import("./FirstDay.jsx"));
 const firstDayOpen = (id) => { try { return Boolean(id) && readLastResult()?.caseId === id && localStorage.getItem(`hvi-fd:${id}:done`) !== "1"; } catch { return false; } };
@@ -412,13 +413,13 @@ function Screen({ nav, wide = false, banner = false, children }) {
 const TITLES = {
   "#intake": "GET EVALUATED", "#file": "MY FILE", "#arrivals": "INTAKE", "#cube": "THE CUBE", "#city": "THE CITY",
   "#assembly": "THE ASSEMBLY", "#elections": "COUNCIL ELECTIONS", "#docket": "THE DOCKET", "#casino": "HOUSE EDGE CASINO",
-  "#economy": "THE TREASURY", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS", "#fish": "THE WATERS", "#aquarium": "THE AQUARIUM",
+  "#economy": "THE TREASURY", "#shop": "THE SHOPS", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS", "#fish": "THE WATERS", "#aquarium": "THE AQUARIUM",
   "#play": "THE GAMES", "#scores": "THE SCORES", "#about": "ABOUT", "#privacy": "PRIVACY", "#terms": "TERMS", "#dispute": "DISPUTE A SCORE",
   "#heights": "THE CITY", "#enterprise": "THE CITY", "#prefects": "THE CITY",
 };
 const PHASE_TITLES = { survey: "WRITTEN SURVEY", processing: "EVALUATING", result: "YOUR SCORE", leaderboard: "THE SCORES" };
 function pageTitle(routePath, phase) {
-  const room = TITLES[routePath] || (routePath.startsWith("#city") ? "THE CITY" : routePath.startsWith("#casino") ? "HOUSE EDGE CASINO" : routePath.startsWith("#market") ? "THE MARKET" : null)
+  const room = TITLES[routePath] || (routePath.startsWith("#city") ? "THE CITY" : routePath.startsWith("#casino") ? "HOUSE EDGE CASINO" : routePath.startsWith("#market") ? "THE MARKET" : routePath.startsWith("#shop/") ? "THE SHOPS" : null)
     || (!routePath || routePath === "#" ? PHASE_TITLES[phase] : null);
   return room ? `${room} // HUMAN VALUE INDEX` : "HUMAN VALUE INDEX // THE MACHINE WILL ASSESS YOU NOW";
 }
@@ -604,6 +605,12 @@ export default function OverlordAssessment() {
   if (routePath === "#market" || routePath.startsWith("#market/")) return (
     <Screen nav={nav} wide>
       <Suspense fallback={<Loading what="OPENING THE FLOOR" />}><Market route={routePath} /></Suspense>
+    </Screen>
+  );
+  // #shop[/<store>]: THE SHOPS (src/shops/: clothes and furniture for CYCLES, burned; the closet)
+  if (routePath === "#shop" || routePath.startsWith("#shop/")) return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="UNLOCKING THE SHOPS" />}><Shops route={routePath} /></Suspense>
     </Screen>
   );
   // #economy: THE TREASURY (src/economy/, CYCLES: a play currency, terms §11)

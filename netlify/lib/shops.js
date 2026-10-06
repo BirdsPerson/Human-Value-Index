@@ -49,7 +49,7 @@ export async function buy(caseId, { sku, nonce }, nowMs = Date.now()) {
   if (it.upgradeOnly) return { ok: false, status: 409, error: `THE ${it.name} IS NOT SOLD OUTRIGHT. BUY THE TIER BELOW AND UPGRADE IT.`, code: "upgrade-only" };
   if (!onSale(sku, machineDayNow(nowMs))) return { ok: false, status: 409, error: SHOP_LINES.offSeason };
   const h = caseHash(caseId);
-  const r = await ledger().rpc("econ_shop_buy", { idem: `shop:${h}:${nonceOf(nonce)}`, case_hash: h, sku, kind: it.kind, price: it.price, max_each: MAX_FURN_EACH });
+  const r = await ledger().rpc("econ_shop_buy", { idem: `shop:${h}:${nonceOf(nonce)}`, case_hash: h, sku, name: it.way ? `${it.name} (${it.way.toUpperCase()})` : it.name, kind: it.kind, price: it.price, max_each: MAX_FURN_EACH });
   if (r.dup) return { ok: true, dup: true, line: SHOP_LINES.dup };
   if (!r.ok) {
     const map = { "no-wallet": [403, SHOP_LINES.noWallet], owned: [409, SHOP_LINES.owned], "too-many": [409, SHOP_LINES.tooMany], insufficient: [402, SHOP_LINES.poor] };
@@ -139,7 +139,7 @@ export async function upgrade(caseId, rec, { itemId, nonce }) {
     const fits = apt?.flat && at.flat === apt.flat.id && placeable(next, at.room, apt.flat.id) && spotsFor(next).some(s => s.id === spot) && !roomRule(next, at.room, others) && !others.some(o => o.room === at.room && o.spot === spot);
     if (fits) keep = { flat: at.flat, room: at.room, spot };
   }
-  const r = await L.rpc("econ_shop_upgrade", { idem, case_hash: h, item_id: id, from_sku: own.sku, to_sku: next.sku, price: up.price, max_each: MAX_FURN_EACH, place: keep });
+  const r = await L.rpc("econ_shop_upgrade", { idem, case_hash: h, item_id: id, from_sku: own.sku, to_sku: next.sku, name: `${it.name} UPGRADED TO ${next.name}`, price: up.price, max_each: MAX_FURN_EACH, place: keep });
   if (r.dup) return { ok: true, dup: true, line: SHOP_LINES.dup };
   if (!r.ok) {
     const map = { "not-owned": [409, "NO SUCH ITEM IN YOUR INVENTORY."], "too-many": [409, SHOP_LINES.tooMany], insufficient: [402, SHOP_LINES.poor], taken: [409, SHOP_LINES.taken] };

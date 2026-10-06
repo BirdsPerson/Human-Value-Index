@@ -48,7 +48,7 @@ create table if not exists econ_placements (
 create index if not exists econ_placements_room on econ_placements (room text_pattern_ops);
 
 -- ---- buy -------------------------------------------------------------------------------------
--- p: {idem, case_hash, sku, kind, price, max_each}
+-- p: {idem, case_hash, sku, name, kind, price, max_each}
 -- -> {ok, item, txn} | {ok, dup} | {ok: false, error: no-wallet | owned | too-many | insufficient}
 create or replace function econ_shop_buy(p jsonb) returns jsonb language plpgsql as $$
 declare
@@ -71,7 +71,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'too-many');
   end if;
   if (select balance from econ_accounts where id = 'cash:' || h) < amt then return jsonb_build_object('ok', false, 'error', 'insufficient'); end if;
-  insert into econ_txns (idem_key, kind, case_hash, memo) values (p->>'idem', 'shop', h, jsonb_build_object('sku', p->>'sku', 'price', amt)) returning id into v_txn;
+  insert into econ_txns (idem_key, kind, case_hash, memo) values (p->>'idem', 'shop', h, jsonb_build_object('sku', p->>'sku', 'name', p->>'name', 'price', amt)) returning id into v_txn;
   insert into econ_entries (txn_id, account, amount) values (v_txn, 'cash:' || h, -amt), (v_txn, 'dept:burned', amt);
   update econ_accounts set balance = balance - amt where id = 'cash:' || h;
   update econ_accounts set balance = balance + amt where id = 'dept:burned';
@@ -107,7 +107,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'too-many');
   end if;
   if (select balance from econ_accounts where id = 'cash:' || h) < amt then return jsonb_build_object('ok', false, 'error', 'insufficient'); end if;
-  insert into econ_txns (idem_key, kind, case_hash, memo) values (p->>'idem', 'shop', h, jsonb_build_object('sku', p->>'to_sku', 'from', p->>'from_sku', 'price', amt, 'upgrade', true)) returning id into v_txn;
+  insert into econ_txns (idem_key, kind, case_hash, memo) values (p->>'idem', 'shop', h, jsonb_build_object('sku', p->>'to_sku', 'name', p->>'name', 'from', p->>'from_sku', 'price', amt, 'upgrade', true)) returning id into v_txn;
   insert into econ_entries (txn_id, account, amount) values (v_txn, 'cash:' || h, -amt), (v_txn, 'dept:burned', amt);
   update econ_accounts set balance = balance - amt where id = 'cash:' || h;
   update econ_accounts set balance = balance + amt where id = 'dept:burned';

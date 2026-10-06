@@ -196,7 +196,7 @@ function bar(ctx, K, st, f, looks, kind) {
   const sip = (f % 180) < 40 && f % 360 < 180;
   const eatT = f % 360 >= 180 && kind !== "goose" ? ((f % 360) - 180) : -1;
   const goneDog = kind === "goose" && f > 160;
-  patron(ctx, K, me, 120, 96, {
+  patron(ctx, K, me?.street ? { ...me, card: me.street } : me, 120, 96, {   // the 19th hole: out of the uniform, into your own clothes (THE SHOPS)
     arm: sip ? { x: 40, y: 30 } : eatT >= 0 && eatT % 60 < 30 ? { x: 38, y: 32 } : kind === "goose" && f > 165 && f < 260 ? { x: 70, y: 18 } : { x: 54, y: 56 },
     held: (hx, hy) => { if (sip) mug(ctx, hx, hy + 6, 0.7); else if (eatT >= 0) hotdog(ctx, hx, hy, Math.min(2, Math.floor(eatT / 60))); },
   });

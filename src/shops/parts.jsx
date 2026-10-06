@@ -3,7 +3,10 @@
 // FURNISH (place a piece in a room of your flat). The server decides every price and every rule.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, ButtonRow, PaLine } from "../ui/index.js";
-import { loadShops, shopAct, onView, lastView, forgetRooms } from "./client.js";
+import { loadShops, shopAct, onView, lastView, forgetRooms, newNonce } from "./client.js";
+import { openFunnel } from "../city/FunnelOverlay.jsx";
+import { GAME, utm } from "../city/funnels.js";
+import { watchHref } from "../city/ebtvFrame.js";
 import { garmentSprite, pieceSprite, wearingSpec, avatarSheet, blitScaled } from "./pixels.js";
 import { itemOf, SLOT_NAME, OUTFIT_SLOTS, spotsFor, fmtC, SHOP_LINES, EFFECTS_FROM_DAY } from "../economy/shops.js";
 import { WEAR_SLOTS } from "../wear.js";
@@ -93,7 +96,7 @@ export function Closet({ caseId, S }) {
   return (
     <div className="sh-closet">
       <div>
-        <Mirror base={v.spec} outfit={cur} label={`Your file photo wearing ${outfitWords(cur)}`} />
+        <Mirror base={v.spec} outfit={cur} scale={3} label={`Your file photo wearing ${outfitWords(cur)}`} />
         <p className="sh-fine" style={{ maxWidth: 136 }}>{trial && !same(trial, worn) ? "TRYING ON. NOT YET WORN." : "AS THE CITY SEES YOU."}</p>
       </div>
       <div>
@@ -142,10 +145,19 @@ export function Closet({ caseId, S }) {
   );
 }
 
+// ---- PLAYABLE AT HOME (shops.js PLAY_AT_HOME): the cabinet's game, the golf presets, the channel -------
+export function playAtHome(play) {
+  if (!play) return;
+  if (play.game && GAME[play.game]?.play) openFunnel({ href: utm(GAME[play.game].play, "home-cabinet"), campaign: "home-cabinet" });
+  else if (play.go) window.location.hash = play.go;
+  else if (play.ebtv) openFunnel({ href: watchHref("home-tv"), campaign: "home-tv" });
+}
+
 // ---- FURNISH: your furniture into the rooms of your flat -----------------------------------------------
 export function Furnish({ S, onPlaced }) {
   const { v, busy, act, err, last } = S;
   const [pick, setPick] = useState({});   // itemId -> {room, spot}
+  const [ask, setAsk] = useState(null);   // {id, nonce}: the upgrade awaiting its second tap
   if (!v) return null;
   const furn = (v.items || []).filter(i => i.kind === "furn");
   const flat = v.apartment?.flat;
@@ -190,6 +202,14 @@ export function Furnish({ S, onPlaced }) {
                   </ButtonRow>
                 </>
               )}
+              <ButtonRow>
+                {it.play && it.placed && <Button variant="primary" onClick={() => playAtHome(it.play)}>{it.play.label}</Button>}
+                {it.upgrade && (ask?.id === it.id
+                  ? <><Button variant="primary" onClick={async () => { const r = await act("upgrade", { itemId: it.id, nonce: ask.nonce }); if (r.ok) { setAsk(null); forgetRooms(v.apartment?.building); onPlaced?.(); } }} disabled={busy || v.balance < it.upgrade.price}>CONFIRM: {fmtC(it.upgrade.price)} CYCLES</Button>
+                      <Button variant="secondary" onClick={() => setAsk(null)} disabled={busy}>NOT NOW</Button></>
+                  : <Button variant="secondary" onClick={() => setAsk({ id: it.id, nonce: newNonce() })} disabled={busy} aria-label={`Upgrade the ${it.name} to the ${it.upgrade.name} for ${fmtC(it.upgrade.price)} CYCLES`}>UPGRADE: {it.upgrade.name} // {fmtC(it.upgrade.price)}</Button>)}
+              </ButtonRow>
+              {ask?.id === it.id && <div className="sh-fine">THE {it.name} IS TAKEN AWAY. YOU PAY THE DIFFERENCE AND A 5% FEE. {itemOf(`f:${it.upgrade.to}`)?.whole ? "IT NEEDS A WHOLE ROOM: THE STUDY, OR A LIVING ROOM GIVEN OVER TO IT." : ""}</div>}
               {it.effect && <div className="sh-fine">{it.effect.line} {EFFECTS_FROM_DAY == null ? "(IN THE CITY'S RECORD FROM A LATER DAY. FOR NOW, IT LOOKS THE PART.)" : ""}</div>}
             </div>
           </div>

@@ -56,6 +56,11 @@ export default function Economy() {
         </Frame>
       )}
 
+      <Frame title="THE SHOPS" meta="CLOTHES // FURNITURE">
+        <p className="ec-p">SPEND CYCLES ON CLOTHES FOR YOUR FILE PHOTO AND FURNITURE FOR YOUR FLAT. THE SHOPS DESTROY WHAT YOU SPEND.</p>
+        <ButtonRow><Button variant="secondary" href="#shop">THE SHOPS</Button></ButtonRow>
+      </Frame>
+
       <Frame title="THE MARKET" meta="SHARES IN HUMANS">
         <p className="ec-p">PUT YOUR DAILY CYCLES TO WORK. PRICES MOVE WITH WHAT HAPPENS IN THE CITY.</p>
         <ButtonRow><Button variant="primary" href="#market">OPEN THE MARKET</Button></ButtonRow>

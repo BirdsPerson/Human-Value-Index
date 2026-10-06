@@ -1,6 +1,6 @@
 # ECONOMY + PROPERTY — design for review (2026-10-05)
 
-Status: **SLICE 1 BUILT (2026-10-05)**, see "As built: slice 1" at the end. Slices 2-4 are design. **Scott's ladder decisions (2026-10-05)** and the first build of slice 2 (the cutaways) are in "Slice 2: the floor tier and the cutaways" at the end. ROADMAP items 5 (Economy v1), b1c
+Status: **SLICE 1 BUILT (2026-10-05)**; THE SHOPS built ("The shops", near the end), see "As built: slice 1" at the end. Slices 2-4 are design. **Scott's ladder decisions (2026-10-05)** and the first build of slice 2 (the cutaways) are in "Slice 2: the floor tier and the cutaways" at the end. ROADMAP items 5 (Economy v1), b1c
 (THE MALL), b5 (civic machine), e (economy -> unrest). Inspired by Internet City (one shared city, a
 plot per player, centre dear and edge free, build and dress your building, the storefront carries
 your brand and links, idle harvest, leaderboards, rivals, a market), moved into the Substrate.
@@ -552,6 +552,135 @@ the dispute form."
   against the allowance and the dividend.
 - No player-to-player transfer of items, except through THE MARKET's rules if that is ever
   built (formula-priced, the Department as counterparty).
+
+## The shops: clothes, furniture, the closet (as built, slice 1, 2026-10-05)
+
+Scott: "clothing stores, so you can buy extra clothes for yourself and have a wardrobe in your
+closet you can go through"; "buy a JETSAM arcade cabinet for my room, however many cycles"; "buy
+an arcade machine cabinet, then upgrade it to the Golden Tee machine with the cool screen, then
+upgrade that to the golf simulator". Built on THE FURNITURE & OBJECTS SHOP design above.
+
+- **The stores** stand in rooms the city already has: no new place, no plan change, nothing for a
+  published day to differ on. SECOND FILE THRIFT (MARKET ROW, the Old Town), EASTGATE DEPARTMENT
+  STORE (EASTGATE MALL's concourse, the suburbs; its HOUSE BRANDS rail), EASTGATE HOME (the mall's
+  upper floor: the furniture), MAISON MERIDIAN (THE MERIDIAN's lobby arcade, Finance). Reached from
+  the district and building pages (one row each), the Treasury, MY FILE and `#shop`; each store is
+  `#shop/<id>`. No new nav.
+- **Buying** (`/api/shops`, `netlify/lib/shops.js`): the server prices, stocks and checks; the
+  browser names a SKU (`w:<garment>.<colourway>`, `f:<piece>`) and a nonce. One balanced txn on the
+  buyer's own accounts, `cash:<h>` -> `dept:burned` (the sink), idempotent per nonce; a wallet
+  (one COLLECT) first, so the enrolment caps (IP, device, email) stand in front of the shops too.
+  One of each garment; three of a piece. 60 purchases a case a day, 20 writes a minute.
+  Nothing is given, resold or transferred; there is no counter for it.
+- **Clothes** (`src/wear.js`): tops, bottoms, shoes, outerwear, headwear, accessories as pixel
+  layers with colourways. The avatar draws in separable layers (body, hair, clothes, accessories:
+  `avatarLayers`); a spec with nothing worn renders byte for byte as before. A worn outfit is
+  `wear_<slot>` keys on the file photo's spec (the case and its pen card), so it shows wherever the
+  photo is drawn: the city, the cutaway, MY FILE, the golf's 19th hole. Sports keep their uniforms.
+  A hand-drawn likeness keeps what it was drawn in (the wardrobe is kept all the same).
+- **The season**: the stock turns with the city's calendar (`seasons.js`; a long season is a real
+  month), SPRING, SUMMER, AUTUMN, WINTER; season 23 (2026-10-06) is AUTUMN.
+- **The closet**: your flat's bedroom (the cutaway sheet: THE BEDROOM CLOSET) and MY FILE (WARDROBE
+  AND HOME): every owned piece, tap to try on (the mirror), WEAR THIS, three hooks of saved outfits.
+- **Furniture**: furniture.js's catalog, priced; placed from your flat's sheet (FURNISH: room, then
+  one of five floor spots or three on the wall). MY APARTMENT now names the cutaway's own flat
+  (`residentFlat`), so the file and the tower name the same door. A spot holds one piece, whoever's
+  (flatmates share rooms). Everyone sees what a flat holds (`GET /api/shops?building=`, no case).
+  A home that is not a tower (a house, a chalet) has no cutaway flat yet: furniture waits.
+- **Upgrades** (`UPGRADES`): pay the difference in value plus a 5% fee (at least 100), the old
+  piece is consumed, the CYCLES burned; it keeps its spot if the room still takes it, else it waits
+  in the inventory. `whole` tiers take a whole room (nothing else on its floor; the walls stay
+  free): the golf simulator converts the study (top-band flats) or a living room given over to it.
+  Chains: JETSAM! cabinet -> BAR-TOP GOLF CABINET -> HOME GOLF SIMULATOR; TV / EBTV set / wall TV
+  -> EBTV BIG SCREEN -> HOME THEATER; Irene's tap -> IRENE'S KEGERATOR -> HOME BREWERY. Next, when
+  their games exist: dartboard -> electronic darts; a hunting cabinet -> the home hunting simulator;
+  a home bowling lane (the penthouse only). Upper tiers are never sold outright.
+- **Playable at home** (`PLAY_AT_HOME`): tap the piece in your own flat (or its button): the
+  cabinet plays JETSAM! (its live build, utm `home-cabinet`); the golf tiers open `#golf?preset=
+  cabinet|sim` (the same game, framed; the cabinet is the drag / trackball swing; no analog-stick
+  swing exists yet, so the simulator is a frame, not a new control); every TV tier shows the live
+  EBTV frame and opens the channel. At night the city's figures gather round the top of a chain
+  (render only).
+- **In-sim effects** (`FURNITURE_EFFECTS`: the cabinet draws visitors, a piano lifts a room) are
+  data only until `EFFECTS_FROM_DAY` is set to an absolute machine day past the newest published
+  plan + its lookahead (the market's rule). Cosmetic in slice 1. The hook: the close publishes an
+  `econ` block of placements per flat; the plan builder adds a visit pull and a mood term, capped.
+- **Ledger**: migration `20261006010000_shops_slice1.sql`: `econ_items`, `econ_outfits`,
+  `econ_placements`, `econ_shop_buy / _upgrade / _view / _outfit / _place / _rooms`, `dept:burned`,
+  txn kind `shop`. RLS on, service role only; the purge takes the wardrobe, the closet and the
+  furniture with the file (they hang off `econ_citizens`). Memory twin `netlify/lib/shops-db.js`.
+- **Checks**: `scripts/check-shops.mjs` (and `HVI_ECON_PG=1` against Postgres with the migrations).
+
+### Prices (CYCLES; UBI 1,000 a day, ~700 saved; an OUTER flat 9,000)
+
+| Garment | Store | Price | Season |
+|---|---|---|---|
+| PLAIN TEE | SECOND FILE THRIFT | 150 | all year |
+| FLANNEL SHIRT | SECOND FILE THRIFT | 280 | AUTUMN, WINTER, SPRING |
+| SECOND-HAND SWEATER | SECOND FILE THRIFT | 320 | AUTUMN, WINTER |
+| FADED JEANS | SECOND FILE THRIFT | 220 | all year |
+| CORDUROYS | SECOND FILE THRIFT | 260 | AUTUMN, WINTER |
+| CUT-OFF SHORTS | SECOND FILE THRIFT | 120 | SPRING, SUMMER |
+| CANVAS SNEAKERS | SECOND FILE THRIFT | 180 | all year |
+| WORK BOOTS (BROKEN IN) | SECOND FILE THRIFT | 350 | AUTUMN, WINTER |
+| DENIM JACKET | SECOND FILE THRIFT | 400 | SPRING, AUTUMN |
+| BEANIE | SECOND FILE THRIFT | 90 | AUTUMN, WINTER |
+| BUCKET HAT | SECOND FILE THRIFT | 110 | SPRING, SUMMER |
+| KNIT SCARF | SECOND FILE THRIFT | 100 | WINTER, AUTUMN |
+| POLO SHIRT | EASTGATE DEPARTMENT STORE | 600 | SPRING, SUMMER, AUTUMN |
+| OXFORD SHIRT | EASTGATE DEPARTMENT STORE | 750 | all year |
+| PULLOVER HOODIE | EASTGATE DEPARTMENT STORE | 900 | all year |
+| CHINOS | EASTGATE DEPARTMENT STORE | 800 | all year |
+| JOGGERS | EASTGATE DEPARTMENT STORE | 650 | all year |
+| A-LINE SKIRT | EASTGATE DEPARTMENT STORE | 700 | all year |
+| RUNNING SHOES | EASTGATE DEPARTMENT STORE | 1,100 | all year |
+| HIGH-TOPS | EASTGATE DEPARTMENT STORE | 1,300 | all year |
+| BOMBER JACKET | EASTGATE DEPARTMENT STORE | 2,200 | AUTUMN, WINTER, SPRING |
+| RAINCOAT | EASTGATE DEPARTMENT STORE | 1,800 | SPRING, AUTUMN |
+| BASEBALL CAP | EASTGATE DEPARTMENT STORE | 400 | SPRING, SUMMER, AUTUMN |
+| WRISTWATCH | EASTGATE DEPARTMENT STORE | 1,500 | all year |
+| CANVAS TOTE | EASTGATE DEPARTMENT STORE | 350 | all year |
+| EB SHOP TEE | EASTGATE DEPARTMENT STORE | 500 | all year |
+| EBTV CREW JACKET | EASTGATE DEPARTMENT STORE | 3,500 | all year |
+| JETSAM! HOODIE | EASTGATE DEPARTMENT STORE | 1,200 | all year |
+| GOODNIGHT IRENE'S STAFF SHIRT | EASTGATE DEPARTMENT STORE | 900 | all year |
+| SAM'S PIZZA CAP | EASTGATE DEPARTMENT STORE | 450 | all year |
+| SILK SHIRT | MAISON MERIDIAN | 3,000 | all year |
+| LINEN SHIRT | MAISON MERIDIAN | 2,800 | SPRING, SUMMER |
+| CASHMERE KNIT | MAISON MERIDIAN | 4,500 | AUTUMN, WINTER |
+| TAILORED TROUSERS | MAISON MERIDIAN | 3,800 | all year |
+| PLEATED SKIRT | MAISON MERIDIAN | 3,500 | all year |
+| LEATHER LOAFERS | MAISON MERIDIAN | 4,000 | all year |
+| CHELSEA BOOTS | MAISON MERIDIAN | 4,800 | AUTUMN, WINTER, SPRING |
+| UNSTRUCTURED BLAZER | MAISON MERIDIAN | 5,000 | all year |
+| TRENCH COAT | MAISON MERIDIAN | 7,500 | SPRING, AUTUMN |
+| CAMEL OVERCOAT | MAISON MERIDIAN | 8,500 | AUTUMN, WINTER |
+| FELT FEDORA | MAISON MERIDIAN | 2,500 | AUTUMN, WINTER |
+| GOLD CHAIN | MAISON MERIDIAN | 6,000 | all year |
+| DESIGNER SHADES | MAISON MERIDIAN | 3,000 | SPRING, SUMMER |
+
+| Furniture (EASTGATE HOME) | Prices |
+|---|---|
+| BEDROOM | single bed 600, futon 450, bunk bed 500, double bed 1,500, four-poster bed 6,000, wardrobe 800, chest of drawers 700, nightstand and lamp 250 |
+| LIVING ROOM | sofa 1,600, loveseat 1,100, sectional sofa 5,500, armchair 700, beanbag 200, rug 400, crt television 300, television 1,200, wall television 2,800, ebtv television 2,500, record player 900, bookshelf 600, book stacks 150 |
+| KITCHEN | fridge 900, retro fridge 1,400, steel fridge 3,500, stove 700, range cooker 4,500, counter and cupboards 900, kitchen island 5,000, kitchen table 500, round table 800, dinette 650, hanging pots 250, goodnight irene's beer tap 6,500 |
+| STUDY | desk 700, computer desk 2,000, drafting table 1,800, filing cabinet 250, globe 300 |
+| BATHROOM | sink and mirror 400, toilet 300, shower stall 900, bathtub 1,500, clawfoot tub 4,500, towel rail 80 |
+| LIGHTS, WALLS AND PLANTS | floor lamp 200, chandelier 8,000, band poster 120, framed painting 1,200, cactus 60, pot plant 100, fiddle-leaf fig 350, aquarium 2,200 |
+| PASTIMES | jetsam arcade cabinet 4,000, upright piano 6,000, grand piano 20,000, easel 400, weight bench 750, trophy shelf 500 |
+
+| Upgrade | Value | Upgrade price (difference + 5% fee) |
+|---|---|---|
+| JETSAM! cabinet -> BAR-TOP GOLF CABINET | 4,000 -> 10,000 | 6,300 |
+| BAR-TOP GOLF CABINET -> HOME GOLF SIMULATOR | 10,000 -> 35,000 | 26,250 |
+| TV (1,200) / wall TV (2,800) / EBTV set (2,500) -> EBTV BIG SCREEN | -> 4,500 | 3,465 / 1,800 / 2,100 |
+| EBTV BIG SCREEN -> HOME THEATER | 4,500 -> 18,000 | 14,175 |
+| Irene's tap -> IRENE'S KEGERATOR | 6,500 -> 9,000 | 2,625 |
+| IRENE'S KEGERATOR -> HOME BREWERY | 9,000 -> 16,000 | 7,350 |
+
+The ladder, checked: every thrift piece under every boutique piece; no garment as dear as an OUTER
+flat; a thrift tee a morning's saving; the grand piano (20,000) and nothing else sold outright past
+two OUTER flats; the simulator, the top of a chain, under four.
 
 ## Selling fish to the restaurants (design only, 2026-10-05; not built)
 

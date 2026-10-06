@@ -43,6 +43,7 @@ import { useSocial, ensureSocial } from "./socialClient.js";
 // THE MASTER PLAN (docs/planning/MASTER_PLAN.md): the Pit's card, the club's fixture, the Dept of Planning
 import PitPanel from "./PitPanel.jsx";
 import ExchangeRow from "../market/ExchangeRow.jsx";   // THE MARKET's door in Finance
+import ShopRow from "../shops/ShopRow.jsx";   // THE SHOPS' doors (the stores in this district / building)
 import { pitEvents, boutAt, billLine, resultLine } from "./pit.js";
 import { tennisAt, tennisEvents } from "./tennis.js";
 import { planningLines } from "./planning.js";
@@ -447,6 +448,7 @@ export default function City({ route }) {
       {(!d || d.id === "commons") && <AssemblyRow asm={asm} />}
       {!b && <PitPanel districtId={d?.id || null} />}
       {d?.id === "finance" && <ExchangeRow />}
+      {d && <ShopRow districtId={d.id} buildingId={b?.id || null} />}
       {!d && !b && <SocialPanel />}
       {!iso && <div className="hvi-city-help">
         {b
