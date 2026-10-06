@@ -18,6 +18,8 @@ import { roomIn, activityLine, clockAt } from "./simApi.js";
 import { sheetFor } from "./spriteBank.js";
 import { familyOf, FAMILY_COLOR } from "./cityKit.js";
 import { FONT, Occupant } from "./cityUi.jsx";
+import { ebtvFrame, drawFrame, tvBox, takeTvBoxes, watchHref, ebtvLabel } from "./ebtvFrame.js";
+import { openFunnel } from "./FunnelOverlay.jsx";
 import { SPRITE_W as FW, SPRITE_H as FH } from "../sprites.js";
 import { displayName } from "../figures.js";
 
@@ -123,6 +125,15 @@ function paperPattern(c, kind, ink, s) {
 }
 
 const LIT = "#f5d27a";
+// An EBTV set that is on shows what is really airing (ebtvFrame.js, the same frame as every TV in
+// the city), or nothing new when the frame is stale (the set's own EBTV card); its box is the tap.
+function ebtvScreen(c, x, y, w, h) {
+  const f = w >= 8 ? ebtvFrame() : null;
+  if (!f) return false;
+  drawFrame(c, f, x, y, w, h);
+  tvBox(x, y, x + w, y + h);
+  return true;
+}
 // A light on with nobody up: a flat whose residents are out leaves a lamp on some evenings, and
 // the Department runs the vacant ones on timers (occupancy is simulated, for the look of the
 // street). One room a flat, a stretch of the evening, hashed by flat and day. Nobody home only.
@@ -200,8 +211,9 @@ function drawRoom(c, room, x, y, w, h, d) {
     const it = CATALOG[p.item];
     if (!it) continue;
     const role = it.role;
-    const on = it.glow || (lit && (role === "lamp" || p.item === "chandelier" || p.item === "beer-tap")) || (role === "tv" && watching) || ((role === "desk") && working);
-    it.draw(c, x + p.x * w, ffy, s, { on, tint: p.tint, flip: p.flip });
+    // an EBTV set in the open flat is always on: the Department never turns the channel off
+    const on = it.glow || (lit && (role === "lamp" || p.item === "chandelier" || p.item === "beer-tap")) || (role === "tv" && watching) || (p.item === "ebtv" && d.sheet) || ((role === "desk") && working);
+    it.draw(c, x + p.x * w, ffy, s, { on, tint: p.tint, flip: p.flip, screen: p.item === "ebtv" ? ebtvScreen : null });
   }
   // people
   const bed = furniture.find(f => (f.role || f.item) === "bed");
@@ -379,6 +391,7 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       c.imageSmoothingEnabled = false;
       c.clearRect(0, v0, W, v1 - v0);
+      takeTvBoxes();   // not ours
       const t = V.reduced ? 0 : now / 1000;
       const mt = censusRef.current.mt ?? clockAt(Date.now()).mt;
       const hour = ((mt % 24) + 24) % 24, night = isDark(hour);
@@ -388,6 +401,7 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
         drawRow(c, row, { W, x0, x1, night, t, hour, mt });
       }
       drawShafts(c, L, { W, t, v0, v1 });
+      takeTvBoxes();   // the tower's sets are too small to tap: the open flat takes them
     }
     function drawRow(c, row, o) {
       const { W, x0, x1, night } = o;
@@ -631,6 +645,13 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord }) {
   }, [onClose]);
   const n = u.rooms.length, cols = n > 3 ? Math.ceil(n / 2) : n, rowsN = Math.ceil(n / cols), RH = 118, LBL = 16;
   const Pref = useRef(P); Pref.current = P;
+  const tvRef = useRef([]);
+  // a tap on the EBTV set: the real channel, as every TV in the city
+  const onTap = (e) => {
+    const r = ref.current.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    if (tvRef.current.some(([a, b, c2, d2]) => x >= a - 4 && x <= c2 + 4 && y >= b - 4 && y <= d2 + 4)) openFunnel({ href: watchHref(), campaign: "ebtv-tv" });
+  };
+  const hasEbtv = useMemo(() => { const st = plan.storeys.find(s => s.units.includes(u)); const L = lookOf(plan, st, u, tagsOf(res.get(u.id))); return !!L && Object.values(L.rooms).some(r => r.furniture.some(f => f.item === "ebtv")); }, [plan, u, res]);
   useEffect(() => {
     const cv = ref.current;
     if (!cv) return undefined;
@@ -644,6 +665,7 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord }) {
       const c = cv.getContext("2d");
       c.setTransform(dpr, 0, 0, dpr, 0, 0); c.imageSmoothingEnabled = false;
       c.clearRect(0, 0, W, H);
+      takeTvBoxes();
       const mt = censusRef.current.mt ?? clockAt(Date.now()).mt, hour = ((mt % 24) + 24) % 24, night = isDark(hour);
       const st = plan.storeys.find(s => s.units.includes(u));
       const rw = (W - (cols - 1) * 3) / cols;
@@ -657,6 +679,7 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord }) {
         fitText(c, `${PURPOSE_NAME[rm.purpose]}`, cx + 2, cy + RH + 3, rw - 4);
         c.textBaseline = "alphabetic";
       });
+      tvRef.current = takeTvBoxes();
     };
     raf = requestAnimationFrame(draw);
     return () => { alive = false; cancelAnimationFrame(raf); };
@@ -673,7 +696,8 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord }) {
           <div><b>{title}</b> // {plan.name}<br />{u.kind === "flat" ? `${nameplate(u, res)} // ` : ""}HELD BY {u.owner.name}</div>
           <button ref={closeRef} type="button" onClick={onClose} aria-label="Close and return to the floors">[ X ]</button>
         </div>
-        <canvas ref={ref} aria-hidden="true" style={{ height: rowsN * (RH + LBL) }} />
+        <canvas ref={ref} aria-hidden="true" onClick={onTap} style={{ height: rowsN * (RH + LBL) }} />
+        {hasEbtv && <a className="sr-only" href={watchHref()} target="_blank" rel="noopener" aria-label={ebtvLabel()}>Electric Basement TV, live</a>}
         <div className="hvi-tw-sub">{here.length ? `PRESENT // ${here.length}` : "NOBODY PRESENT. THE ROOMS ARE BEING MONITORED ANYWAY."}</div>
         {here.map(p => <Occupant key={p.key} s={p.s} onOpen={onOpen} note={`${PURPOSE_NAME[p.room.purpose]}${p.act === "sleep" ? ", ASLEEP" : ""}`} />)}
         {u.kind === "flat" && out.length > 0 && <>

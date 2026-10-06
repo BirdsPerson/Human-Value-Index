@@ -99,7 +99,12 @@ const ITEMS = [
     rects: [[-7, 0, 14, 4, "#2a2a30"], [-7, 10, 14, 8, "#111"], [-6.5, 10.5, 13, 7, W("#6ab0ff")]] },
   { id: "ebtv", name: "EBTV TELEVISION", rooms: ["living", "bedroom"], tiers: [0, 1, 2], role: "tv", fw: 12,
     rects: [[-4, 0, 8, 5, "#2a2a2a"], [-6, 6, 12, 9, "#1a1a1a"], [-5.5, 6.5, 11, 8, ["#14202a", "#1d6fe0"]], [3, 12, 2, 2, ["#5a1a1a", "#ff4040"]]],
-    after: (c, cx, fy, s, o) => word(c, "EBTV", cx - 0.5 * s, fy, 10.5, s, o.on ? "#ffffff" : "#5a7a9a", 3) },
+    // o.screen(c, x, y, w, h): the view puts what is really airing there (ebtvFrame.js) and takes the tap
+    after: (c, cx, fy, s, o) => {
+      const x = Math.round(cx - 5.5 * s), y = Math.round(fy - 14.5 * s), w = Math.round(11 * s), h = Math.round(8 * s);
+      if (o.on && o.screen && o.screen(c, x, y, w, h)) return;
+      word(c, "EBTV", cx - 0.5 * s, fy, 10.5, s, o.on ? "#ffffff" : "#5a7a9a", 3);
+    } },
   { id: "sofa", name: "SOFA", rooms: ["living"], tiers: [0, 1, 2], role: "sofa", fw: 18, tints: [["#7a3b3b", "#6a3030"], ["#3b5a7a", "#30506a"], ["#5a6a3b", "#4a5a30"], ["#8a7a5a", "#7a6a4a"], ["#5a3b6a", "#4a305a"]],
     rects: [[-8, 0, 16, 5, "$a"], [-8, 5, 16, 4, "$b"], [-9, 0, 2, 7, "$b"], [7, 0, 2, 7, "$b"]] },
   { id: "sectional", name: "SECTIONAL SOFA", rooms: ["living"], tiers: [0], role: "sofa", fw: 24, tints: [["#d8d0c0", "#c0b8a8"], ["#3a3a44", "#2a2a34"], ["#6a7a8a", "#5a6a7a"]],

@@ -2259,7 +2259,9 @@ opens as a SimTower cross-section.
   brick, stains), floor (wood, carpet, lino, marble), curtains. The residents' files add one piece
   each: their job's prop (easel, piano, books, weights and trophies, EBTV for broadcasters, a
   computer, pots) and a JETSAM cabinet for the charm corner (about one flat in fifteen otherwise);
-  a Goodnight Irene's tap in a fifth of the top tier's kitchens. The penthouse: double height,
+  a Goodnight Irene's tap in a fifth of the top tier's kitchens. An EBTV set that is on (someone watching; always in the
+  open flat) shows the live frame (`ebtvFrame.js`, as every TV in the city); tapping it in the open
+  flat opens the channel, with an sr-only link for keyboards and screen readers. The penthouse: double height,
   marble, chandelier, grand piano, gold trim. Each floor its own corridor carpet (the floor slab)
   and plaque colour. **Light**: by day, sky in the panes; after dark a room is warm where someone is
   up, dim blue with the curtains drawn where nobody is or all are asleep; a flat whose residents
