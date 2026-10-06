@@ -24,17 +24,19 @@ export const CAMS = {
 export const CAM_NAMES = { broadcast: "BROADCAST", high: "HIGH AND WIDE" };
 // The shots (multipliers on the preset): set, drop (the pass developing), air (the ball on its way,
 // closing on the catch), run (the carrier), kick.
+// lat: how much of the play's lateral offset the camera follows (the tight shots follow nearly all
+// of it, so the man with the ball stays in frame and the room round him reads).
 const SHOTS = {
-  set: { F: 1, h: 1, pitch: 0, back: 1 },
-  drop: { F: 0.9, h: 1.22, pitch: 0.07, back: 1.05 },
-  air: { F: 1.18, h: 1.05, pitch: 0.02, back: 0.95 },
-  run: { F: 1.42, h: 0.92, pitch: -0.02, back: 0.78 },
-  kick: { F: 0.82, h: 1.35, pitch: 0.1, back: 1.1 },
+  set: { F: 1, h: 1, pitch: 0, back: 1, lat: null },
+  drop: { F: 0.9, h: 1.22, pitch: 0.07, back: 1.05, lat: null },
+  air: { F: 1.18, h: 1.05, pitch: 0.02, back: 0.95, lat: 0.75 },
+  run: { F: 1.42, h: 0.92, pitch: -0.02, back: 0.78, lat: 0.9 },
+  kick: { F: 0.82, h: 1.35, pitch: 0.1, back: 1.1, lat: null },
 };
 // cam: {mode, x, y, F, h, pitch, s, c, Y0} (eased by camFollow)
 export function camInit(st, mode = "broadcast") {
   const K = CAMS[mode] || CAMS.broadcast;
-  const c = { mode, F: K.F, h: K.h, pitch: K.pitch, s: Math.sin(K.pitch), c: Math.cos(K.pitch), Y0: K.Y0, x: 0, y: CY };
+  const c = { mode, F: K.F, h: K.h, pitch: K.pitch, s: Math.sin(K.pitch), c: Math.cos(K.pitch), Y0: K.Y0, lat: K.lat, x: 0, y: CY };
   const [fx, fy, back] = focusOf(st, K, "set");
   c.x = fx - back; c.y = CY + (fy - CY) * K.lat;
   return c;
@@ -77,9 +79,10 @@ export function camFollow(cam, st) {
   const K = CAMS[cam.mode] || CAMS.broadcast, shot = shotOf(st), S = SHOTS[shot], d = K.dyn;
   const [fx, fy, back0] = focusOf(st, K, shot);
   const back = back0 * (1 + (S.back - 1) * d);
-  const tx = fx - back, ty = CY + (fy - CY) * K.lat, k = st.phase === "pre" || st.phase === "call" ? 0.2 : shot === "run" ? 0.11 : 0.09;
-  cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
   const e = 0.07;
+  cam.lat = (cam.lat ?? K.lat) + ((S.lat == null ? K.lat : K.lat + (S.lat - K.lat) * d) - (cam.lat ?? K.lat)) * e;
+  const tx = fx - back, ty = CY + (fy - CY) * cam.lat, k = st.phase === "pre" || st.phase === "call" ? 0.2 : shot === "run" ? 0.11 : 0.09;
+  cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
   cam.F += (K.F * (1 + (S.F - 1) * d) - cam.F) * e;
   cam.h += (K.h * (1 + (S.h - 1) * d) - cam.h) * e;
   cam.pitch += (K.pitch + S.pitch * d - cam.pitch) * e;
