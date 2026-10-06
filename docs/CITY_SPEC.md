@@ -2308,6 +2308,102 @@ or any score.
 - **Not yet**: fouls and free throws, backcourt and three-second rules, changing ends, a server
   replay check, counting results anywhere.
 
+### Fishing: THE WATERS (`#fish`, 2026-10-05)
+
+- **Where**: `#fish[?spot=pier|break|estuary|river|lake]` (`src/play/fish/Fish.jsx`, lazy chunk). Ways in:
+  `#fish`, one line on `#play`, E at the seaward half of THE PIER's deck in DRIVE YOURSELF
+  (`controlIso.js`, kind `fish`), and the door line in THE PIER's and THE BREAK's building view
+  (`BuildingView.jsx` `WATERS_DOOR`). River spots join the same two hooks when `src/city/river.js` lands.
+- **The spots** (`data.js` `SPOTS`, shape `{id, name, water: ocean | river | lake | estuary}`, the river
+  layout's export shape): THE PIER (ocean, 22 ft, coast place `pier`), THE BREAK (ocean surf casting,
+  place `surf`), and THE RIVER MOUTH (estuary), THE FOOTHILLS REACH (river), THE RESERVOIR (lake) as
+  data until river.js exports its spots (then its list replaces these, same ids where it names the
+  same water).
+- **The clock**: the city's machine clock (`CITY_EPOCH`, one real minute = one machine hour, so one
+  real second of fishing is one machine minute). The light: dawn 05-08, day, dusk 17-20, night. The
+  water year: 112 machine days, four seasons of 28 (spring, summer, autumn, winter; every season comes
+  round twice a real week). The weather: one per machine day (`fishwx|<day>`): clear, overcast, rain,
+  fog, wind. Overcast and rain feed the fish; wind shortens the cast; fog shortens their sight.
+- **The species** (`data.js` `SPECIES`, 19): ocean striped bass, bluefish, summer flounder, black sea
+  bass; river rainbow trout, smallmouth, channel catfish, bluegill, eel; lake yellow perch, northern
+  pike, largemouth, trout, smallmouth, bluegill, catfish; estuary blue crab, American eel, white perch,
+  striped bass, flounder, catfish. One legend per spot, rare and only in its hours: THE SILVER STRIPER
+  (pier), THE OLD BULL RED (break), THE ATLANTIC STURGEON (river mouth; protected, always released),
+  OLD MOSSBACK (river), THE WARDEN (reservoir). Each: weight range (skewed small), length by the
+  anglers' weight-length rule (`k * lb^(1/3)`, an arithmetic Newton cube root), depth band, taste per
+  lure, appetite by season, light and weather, pull, stamina, wariness, jumps.
+- **The trip** (`sim.js`, pure, 60 Hz, seeded mulberry32 in the state, no DOM, no clock, and no
+  transcendental Math so every engine and node agree to the bit): a pool of 4-5 fish spawned by the
+  hour's appetites, each with its weight fixed at spawn. LEFT/RIGHT picks the lure (worm, minnow,
+  spoon, popper); A, A casts on a swinging power meter; in the water hold A to reel (the lure swims
+  and rises), let go to sink (a popper floats); B jerks (a twitch, a pop). A fish that sees the lure
+  comes to it (bait wants stillness, a spoon wants swimming, a popper wants pops and only surface
+  feeders), nibbles 0-3 times, then takes it: B inside its window (12-30 ticks, shorter for wary
+  fish) sets the hook; B on a nibble scares it off; a missed take steals the bait. The fight: tension
+  follows the reel and the fish's pull (runs, jumps, stamina): red for 18 ticks snaps the line,
+  slack (under 0.12) for 100 ticks (40 for a crab, 45 in a jump) throws the hook, a fish that still
+  has strength at the net runs again. Landed: species, weight (hundredths of a pound), length (tenths
+  of an inch), lure, machine day and hour; then KEEP (A) or RELEASE (B). A trip ends at two real hours.
+- **Replay**: `{cfg: {seed, spot, at}, inputLog}`, run-length bits like golf. `replay`, `verifyCatch`.
+- **Screen**: 256x224, integer scale, smoothing off, the golf page's 5x7 font. The angler on the left
+  (on the pier's deck, the sand, or the bank), the water in cross-section with the fish visible (dimmer
+  at night and in fog), the far side by water (the sea and the lighthouse, the reservoir's trees, the
+  river's hills, the marsh and the city), sky by the light, sun and moon by the hour, rain, fog, wind
+  caps. The rod bends with the bite and the tension; the line sags when slack and flashes red when
+  too tight. The catch card overlays the frame. Fish are drawn from data (`art.js`), no image files.
+  Reduced motion stills the water, the tails and the weather. WebAudio blips, mute kept.
+- **Background anglers**: at dawn and dusk two figures fish along the rail or the shore behind you,
+  render-side only. They never speak. (The city's pier already seats anglers with rods on its 14 rod
+  anchors, `coastGeo.js pierAnchors`; a dawn-and-dusk crowd there is a hook left for the river
+  layout's version, not a sim change.)
+- **Input**: keys (arrows, Z/Space reel and cast, X jerk, Enter/Esc pause), `gamepad.js` (d-pad or
+  bumpers lure, A/cross reel, B/circle jerk, Start), touch (lure, JERK, II, REEL, 56 px). The legend
+  under the frame follows the hands in use with the pad's glyphs. Screen reader: each line of the
+  Department's commentary is announced; the catch card is real buttons (KEEP, RELEASE, DONATE).
+- **Your records**: this browser keeps the tackle box (kept fish), personal bests per species (every
+  landed fish) and the last three permitted trips' logs (`box.js`). MY FILE shows the aquarium's
+  donations and the city records the file holds (`MyFish.jsx`). THE RECORD BOARD on `#fish` reads the
+  aquarium's tanks.
+- **Mounted fish**: `furniture.js` CATALOG `mounted-fish` (wall, data only; the furniture shop sells
+  it; the owner's catch is drawn on it by `art.js` when the cutaway is given one).
+- Check: `scripts/check-fish.mjs`.
+
+### THE AQUARIUM (`#aquarium`, `/api/aquarium`, 2026-10-05)
+
+Scott: Animal Crossing's museum for the city's fish. The first place the city checks a game by
+replaying it on the server.
+
+- **The building**: the AQUARIUM WING of the MUSEUM OF THE CITY (Old Town, `city-museum`); no layout
+  change. Its building view carries the door line; `#aquarium` is the page (one line on `#play` via
+  THE WATERS' entry, and from the catch card).
+- **The tanks**: one per species (19). A donated species swims in a pixel tank over its plaque: the
+  city record (weight, length), CAUGHT BY <SUBJECT XXXX> AT <SPOT>, DAY <n>, PREVIOUS RECORDS, FIRST
+  DONORS. An empty tank holds the species' silhouette: NOT YET DONATED, and where it lives (a legend:
+  ONLY AT <SPOT>). The count of filled tanks is the collecting drive.
+- **The permit (why the server issues the seed)**: a trip that may be donated starts with `POST
+  {action: "trip", spot}`; the server picks the seed and stamps the start time (`at`), which also fixes
+  the clock, the season, the light and the weather. Binding the seed to (case, machine day, spot)
+  instead would let anyone replay the same day's water offline as often as they liked and submit the
+  best; a server seed is new each trip, kept on the file (last 12), void after six hours, and the
+  file gets 30 an hour. A log may not hold more ticks than real time has passed since the permit
+  (plus ten seconds), so a trip cannot be fast-forwarded. Without a case file (or offline) you still
+  fish, with a local seed, and the catches stay in the browser.
+- **The donation**: `POST {action: "donate", tripId, n, claim: {sp, cw, tl}, inputLog}` re-runs
+  `src/play/fish/sim.js` in node on the permit's `{seed, spot, at}` and the log, and files catch n only
+  if it comes out exactly as claimed and was not released. One donation per fish (the permit records
+  it before the plaque moves). Cost: a two-hour trip (432,000 ticks) replays in well under a second in
+  node (check-fish prints it: about 65 ms for the full two hours, half a millisecond per real minute of fishing).
+- **The plaque's rule** (`aquarium-store.js fileDonation`, pure): the heavier fish takes the plaque, a
+  tie keeps the holder; the old holder moves to PREVIOUS RECORDS (newest first, 10 kept); the donor
+  list keeps each subject's first donation of the species, in order (100). Names are `SUBJECT <last
+  four>`; the case number is stored only as a hash. A purge deletes the file's record and renames its
+  plaques A PURGED FILE.
+- **Limits**: 300 requests an hour per address, 30 permits and 30 donations an hour per file, 40
+  donations an hour per device, 30 wrong case numbers an hour; a log of at most 200,000 numbers. No
+  money: no chips, no CYCLES, no Treasury (selling fish is design only, ECONOMY_PROPERTY.md).
+- **What replay does not prove**: that a human played. A bot that reads the sim can fish perfectly; the
+  permit and the clock bound how often and how fast. The plaque says CHECKED, not HONEST.
+
 ## The unbuilt Substrate, and a quiet map (2026-10-05)
 
 - **Endless grid.** The faint street grid (every 4 cells, `rgba(74,222,128,0.05)`, 1 px) no longer

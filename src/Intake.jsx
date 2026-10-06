@@ -15,6 +15,7 @@ import { visitCount, causeOf, DEPARTMENT_CAUSES } from "./movement.js";
 import { FileMovement } from "./caseFile.jsx";
 import MySeat from "./elections/MySeat.jsx";
 import MyChess from "./chess/MyChess.jsx";
+import MyFish from "./play/fish/MyFish.jsx";
 import MyLeagues from "./leagues/MyLeagues.jsx";
 import FirstDay, { scrollToId } from "./FirstDay.jsx";
 import { selfFindHref, note as noteFirstDay } from "./firstDay.js";
@@ -634,6 +635,8 @@ export default function Intake({ view = "intake" }) {
           <MySeat caseId={caseId} />
           {/* games against the figures at the stone tables (src/chess/MyChess.jsx) */}
           <MyChess caseId={caseId} />
+          {/* the waters: aquarium donations, city records, personal bests (src/play/fish/MyFish.jsx) */}
+          <MyFish caseId={caseId} />
           {/* JOIN THE LEAGUES: enter the citizen in the drafts, its season lines (src/leagues/MyLeagues.jsx) */}
           <MyLeagues caseId={caseId} />
           {fileSections(last, { history: last.history })}

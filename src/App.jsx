@@ -25,6 +25,8 @@ const Chess = lazy(() => import("./chess/Chess.jsx"));
 const Tennis = lazy(() => import("./play/tennis/Tennis.jsx"));   // THE TENNIS CLUB, playable (#tennis)
 const Golf = lazy(() => import("./play/golf/Golf.jsx"));   // #golf: THE DEPARTMENT LINKS (exhibition golf)
 const Hoops = lazy(() => import("./play/hoops/Hoops.jsx"));   // #hoops: THE COURTS (exhibition basketball)
+const Fish = lazy(() => import("./play/fish/Fish.jsx"));   // #fish: THE WATERS (fishing, src/play/fish/)
+const Aquarium = lazy(() => import("./play/fish/Aquarium.jsx"));   // #aquarium: THE AQUARIUM (replay-checked donations)
 const Economy = lazy(() => import("./economy/Economy.jsx"));
 // YOUR FIRST DAY, one line on the logon for an assessed file that has not finished it (src/FirstDay.jsx).
 const FirstDay = lazy(() => import("./FirstDay.jsx"));
@@ -277,7 +279,7 @@ const BOOT_LINES = [
 const MENU = [
   { key: "1", label: "GET EVALUATED", note: "AN AI INTERVIEWS YOU. SPEAK OR TYPE. 5 MIN", go: "#intake" },
   { key: "2", label: "VISIT THE CITY", note: "EVERY HUMAN ON FILE, HOUSED BY SCORE", go: "#city" },
-  { key: "3", label: "PLAY A GAME", note: "TENNIS, GOLF, CHESS, THE CASINO", go: "#play" },
+  { key: "3", label: "PLAY A GAME", note: "TENNIS, GOLF, FISHING, CHESS, THE CASINO", go: "#play" },
   { key: "4", label: "THE ASSEMBLY", note: "VOTE ON WHAT THE MACHINE DOES NEXT", go: "#assembly" },
   { key: "5", label: "SEE THE SCORES", note: "THE FAMOUS, RANKED", go: "#scores" },
 ];
@@ -420,6 +422,7 @@ const GAMES = [
   { href: "#tennis", label: "THE TENNIS CLUB", sub: "EXHIBITIONS AGAINST THE FAMOUS. KEYS, TOUCH OR PAD" },
   { href: "#golf", label: "THE DEPARTMENT LINKS", sub: "NINE HOLES. THE COURSE THE ASSEMBLY DECLINED" },
   { href: "#hoops", label: "THE COURTS", sub: "BASKETBALL, FIVE ON FIVE, WITH THE LEAGUE'S OWN TEAMS" },
+  { href: "#fish", label: "THE WATERS", sub: "FISH THE PIER AND THE RIVER. DONATE TO THE AQUARIUM (#aquarium)" },
   { href: "#chess", label: "PARK CHESS", sub: "SIT AT A STONE TABLE OPPOSITE A FIGURE ON FILE" },
   { href: "#casino", label: "HOUSE EDGE CASINO", sub: "PLAY CHIPS ONLY. THE HOUSE IS THE MACHINE" },
   { href: "#market", label: "THE MARKET", sub: "SHARES IN HUMANS. PRICES MOVE WITH WHAT THEY DO IN THE CITY" },
@@ -430,7 +433,7 @@ const GAMES = [
 const TITLES = {
   "#intake": "GET EVALUATED", "#file": "MY FILE", "#arrivals": "INTAKE", "#cube": "THE CUBE", "#city": "THE CITY",
   "#assembly": "THE ASSEMBLY", "#elections": "COUNCIL ELECTIONS", "#docket": "THE DOCKET", "#casino": "HOUSE EDGE CASINO",
-  "#economy": "THE TREASURY", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS",
+  "#economy": "THE TREASURY", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS", "#fish": "THE WATERS", "#aquarium": "THE AQUARIUM",
   "#play": "THE GAMES", "#scores": "THE SCORES", "#about": "ABOUT", "#privacy": "PRIVACY", "#terms": "TERMS", "#dispute": "DISPUTE A SCORE",
   "#heights": "THE CITY", "#enterprise": "THE CITY", "#prefects": "THE CITY",
 };
@@ -656,6 +659,18 @@ export default function OverlordAssessment() {
   if (routePath === "#hoops" || routePath === "#basketball") return (
     <Screen nav={nav} wide>
       <Suspense fallback={<Loading what="SWEEPING THE FLOOR" />}><Hoops route={route} /></Suspense>
+    </Screen>
+  );
+
+  // #fish[?spot=<id>]: THE WATERS, fishing (src/play/fish/); #aquarium: its tanks, donations checked by replay
+  if (routePath === "#fish") return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="BAITING THE HOOKS" />}><Fish route={route} /></Suspense>
+    </Screen>
+  );
+  if (routePath === "#aquarium") return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="FILLING THE TANKS" />}><Aquarium /></Suspense>
     </Screen>
   );
 

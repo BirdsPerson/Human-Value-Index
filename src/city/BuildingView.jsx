@@ -18,6 +18,13 @@ const Cutaway = lazy(() => import("./Cutaway.jsx"));
 // scrolls into view and its occupants are listed with their assignments.
 // DEPT HQ is the Holding Pen's building, which runs its own simulation.
 
+// THE WATERS (src/play/fish/): the pier and the break fish; the museum's wing is THE AQUARIUM.
+// River spots join here when src/city/river.js names their buildings.
+const WATERS_DOOR = {
+  "the-pier": ["FISHING BY PERMIT", "#fish?spot=pier", "FISH OFF THE PIER"],
+  "the-break": ["SURF CASTING, SUPERVISED", "#fish?spot=break", "CAST INTO THE BREAK"],
+  "city-museum": ["THE AQUARIUM WING: ONE TANK PER SPECIES, EVERY FISH CHECKED BY REPLAY", "#aquarium", "SEE THE TANKS"],
+};
 const SHAFT = 46;   // CSS px: the lift shaft and the floor codes, left of the rooms
 
 const cellId = (floor, placeId) => `${floor}:${placeId}`;
@@ -118,6 +125,7 @@ function Floors({ b, floor, censusRef, onOpen, onFloor }) {
       {funnelButtons(b.id).length > 0 && <FunnelBar id={b.id} />}
       {b.id === "casino" && <CasinoDoor />}
       {b.id === "eb-shop" && <ShopWallLinks />}
+      {WATERS_DOOR[b.id] && <div className="hvi-city-note hvi-city-in">{WATERS_DOOR[b.id][0]} // <a href={WATERS_DOOR[b.id][1]}>{WATERS_DOOR[b.id][2]}</a></div>}
       <RoomStage key={b.id} cells={cells} layout={layout} assign={assign} censusRef={censusRef} onOpen={onOpen} onPresent={setPresent} onCell={onCell} focusId={focusCell} focusScroll={focusScroll}
         ariaLabel={`${b.name}, in cross-section: ${b.floors.length} floors, ${total} subjects present. The floor directory below lists everyone by floor.`} />
       <div className="hvi-city-floors hvi-city-in" role="list" aria-label="Floor directory">

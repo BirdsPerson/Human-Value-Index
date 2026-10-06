@@ -144,6 +144,11 @@ const ITEMS = [
     rects: [[-6, 4, 11, 2, "#2a2a2a"], [-5, 0, 1, 4, "#555"], [3, 0, 1, 4, "#555"], [4, 0, 1, 13, "#888"], [-1, 12, 10, 0.8, "#c0c0c0"], [-2, 10.5, 1.5, 4, "#2a2a2a"], [8, 10.5, 1.5, 4, "#2a2a2a"]] },
   { id: "trophies", name: "TROPHY SHELF", rooms: ["living", "bedroom", "study"], tiers: [0, 1, 2], wall: true, fw: 12,
     rects: [[-6, 18, 12, 1, "#5a4632"], [-5, 19, 2, 3, "#c9a34a"], [-4.5, 22, 1, 1, "#c9a34a"], [-1, 19, 2.5, 4.5, "#d8d8d8"], [3, 19, 2, 3, "#b87333"]] },
+  // THE WATERS (src/play/fish/): a trophy fish on a plaque. Data only: the furniture shop sells the
+  // mount; the fish on it is the owner's own catch (species and weight from the tackle box, drawn by
+  // src/play/fish/art.js drawFish when the cutaway passes o.fish). Not placed by dressUnit.
+  { id: "mounted-fish", name: "MOUNTED FISH", rooms: ["living", "study", "bedroom"], tiers: [0, 1, 2], wall: true, fw: 14, trophy: true, tints: [["#5a4632"], ["#3a2a1a"], ["#7a6a5a"]],
+    rects: [[-7, 20, 14, 7, "$a"], [-6, 22, 9, 3, "#7c8c94"], [-6, 21.5, 7, 1, "#5c6c74"], [-6, 24.5, 8, 0.8, "#e4e4e4"], [3, 21.5, 2.5, 4, "#7c8c94"], [-5, 23.3, 0.8, 0.8, "#111"], [-1, 18.5, 2, 1.5, "#c9a34a"]] },
   { id: "pc", name: "COMPUTER DESK", rooms: ["study", "living", "bedroom"], tiers: [0, 1, 2], role: "desk", fw: 14,
     rects: [[-7, 9, 14, 1.5, "#3a3a40"], [-6, 0, 1, 9, "#2a2a30"], [5, 0, 1, 9, "#2a2a30"], [-5, 10.5, 7, 5, "#111"], [-4.5, 11, 6, 4, W("#40e0a0")], [3, 10.5, 2, 6, "#2a2a30"], [3.5, 15, 1, 0.6, ["#1a3a1a", "#40ff40"]]] },
   { id: "arcade", name: "JETSAM ARCADE CABINET", rooms: ["living", "bedroom", "study"], tiers: [0, 1, 2], fw: 9, glow: true, tints: [["#2a1a4a", "#ff40c0"], ["#1a2a4a", "#40e0ff"], ["#4a1a1a", "#ffd040"]],

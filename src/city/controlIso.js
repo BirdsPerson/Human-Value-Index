@@ -20,6 +20,7 @@ import { rot, STOREY, DECK, LOD_NEAR } from "./iso.js";
 import { readPad, pressedSince } from "./gamepad.js";
 import { tableNear, tableGo } from "../chess/park.js";   // PARK CHESS: E at a stone table
 import { TENNIS } from "./venueGeo.js";   // THE TENNIS CLUB, playable: E on the courts
+import { PIER } from "./coastGeo.js";   // THE WATERS, playable: E at the pier's rail (src/play/fish/)
 import {
   CTL, publishUi, keysVector, screenToMapDir, stepStreet, stepInside, stateFromTarget, loadControl, saveControl,
   doorOf, doorNear, groundAt, isClassified, benchNear, stationNear, stairFoot, platformPoint, platformStep, stationGeoOf,
@@ -118,7 +119,7 @@ export function makeIsoControl(K) {
     if (n.kind === "person") { K.onOpen(n.s); return; }
     if (n.kind === "door" || n.kind === "ground") { enter(n.b); return; }
     if (n.kind === "station") { climb(n.id); return; }
-    if (n.kind === "chess" || n.kind === "tennis" || n.kind === "hoops") { window.location.hash = n.go; return; }
+    if (n.kind === "chess" || n.kind === "tennis" || n.kind === "hoops" || n.kind === "fish") { window.location.hash = n.go; return; }
     if (n.kind === "bench") { Object.assign(st, { mode: "bench", bench: n.bench, x: n.bench.x, y: n.bench.y }); return; }
     if (n.kind === "stand-bench") { const [x, y] = freeSpot(st.x, st.y + 0.5); Object.assign(st, { mode: "street", bench: null, x, y }); return; }
     if (n.kind === "sit") { st.seat = { placeId: n.placeId, i: n.i }; return; }
@@ -234,6 +235,8 @@ export function makeIsoControl(K) {
       if (ct) { const tg = tableGo(ct, mt); near = { kind: "chess", go: tg.go, label: tg.vs ? `PLAY CHESS: SIT ACROSS ${tg.vs.name}` : "PLAY CHESS AT THE TABLE" }; return; }
       const fz = TENNIS.fence;
       if (st.x > fz.x0 && st.x < fz.x1 && st.y > fz.y0 && st.y < fz.y1) { near = { kind: "tennis", go: "#tennis", label: "PLAY TENNIS: AN EXHIBITION" }; return; }
+      const pd = PIER.deck;   // the seaward deck: fish off it (the landward end still steps onto THE PIER)
+      if (st.x > pd.x0 - 0.4 && st.x < pd.x1 + 0.4 && st.y > pd.y0 + 2 && st.y < pd.y1 + 0.4) { near = { kind: "fish", go: "#fish?spot=pier", label: "FISH OFF THE PIER" }; return; }
       const g = groundAt(st.x, st.y);
       // THE COURTS, playable: E in the middle of the hardcourt (its edge still steps in)
       if (g?.id === "the-courts" && Math.abs(st.x - (g.rect.x + g.rect.w / 2)) < g.rect.w * 0.25 && Math.abs(st.y - (g.rect.y + g.rect.h / 2)) < g.rect.h * 0.25) { near = { kind: "hoops", go: "#hoops", label: "PLAY BASKETBALL: AN EXHIBITION" }; return; }

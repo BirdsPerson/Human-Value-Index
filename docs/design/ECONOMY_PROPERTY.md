@@ -552,3 +552,25 @@ the dispute form."
   against the allowance and the dividend.
 - No player-to-player transfer of items, except through THE MARKET's rules if that is ever
   built (formula-priced, the Department as counterparty).
+
+## Selling fish to the restaurants (design only, 2026-10-05; not built)
+
+THE WATERS (`#fish`) lands fish with a species, a weight and a length; THE AQUARIUM takes donations for
+plaques. Selling a catch to the city's restaurants for CYCLES is the next step, and it is not built,
+because CYCLES may only follow a catch the server has re-played.
+
+- **The sale**: from the tackle box, SELL TO <restaurant> for a price per pound by species, set by the
+  restaurant's menu (a seafood place buys striped bass, flounder, sea bass and crab; a diner buys
+  catfish and perch; nobody buys a bluegill; nobody may buy the protected sturgeon). Prices move with
+  the season (a summer glut of bluefish is cheap) and a daily cap per restaurant (its walk-in holds
+  so much). Legends are not for sale: they go to the aquarium or the wall (MOUNTED FISH).
+- **Verification first**: the same check the aquarium makes. A sale is `{tripId, n, claim, inputLog}`
+  against a server-issued permit (seed and start time from the server; a log no longer than the time
+  since the permit); the server re-plays `src/play/fish/sim.js` in node and credits only a catch that
+  comes out exactly as claimed and was kept. One sale or one donation per fish (the permit's `donated`
+  list becomes `spent`). The credit is a Treasury ledger row like the market's, never a client number.
+- **Bounds**: a file sells at most N pounds a machine day; a restaurant buys at most M; permits are
+  already 30 an hour. A perfect bot still earns only the day's cap, so the cap is the real control.
+- **Open questions**: which restaurants exist as buildings to buy (the nightlife quarters and the mall
+  have food places); whether the price is posted or haggled; whether a legend's mount costs CYCLES at
+  the furniture shop.

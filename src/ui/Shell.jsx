@@ -19,7 +19,7 @@ export const NAV = [
 export function navKeyFor(route = "") {
   const path = route.split("?")[0];
   if (path === "#city" || path.startsWith("#city/") || path === "#heights" || path === "#enterprise" || path === "#prefects") return "city";
-  if (path === "#play" || path === "#tennis" || path === "#golf" || path === "#hoops" || path === "#basketball" || path === "#chess" || path === "#casino" || path.startsWith("#casino/")) return "play";
+  if (path === "#play" || path === "#tennis" || path === "#golf" || path === "#hoops" || path === "#basketball" || path === "#fish" || path === "#aquarium" || path === "#chess" || path === "#casino" || path.startsWith("#casino/")) return "play";
   if (path === "#file" || path === "#intake") return "file";
   if (path === "#pen" || path === "#arrivals") return null;
   return "menu";
