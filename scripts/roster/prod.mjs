@@ -77,3 +77,20 @@ async function createCardOnce(card) {
   await FI.writeEntries(indexIo(), [{ slug: card.slug, entry: figureIndexEntry(card) }]);
   return true;
 }
+
+// The site-wide Anthropic counter (netlify/lib/http.js chargeGlobal, key "<UTC day>:global-anthropic"
+// in hvi-limits). The Mac jobs read it to leave live visitors their share, and charge it so
+// HVI_ANTHROPIC_DAILY_CAP stays the one ceiling on a day's calls.
+const GLOBAL_KEY = () => `${new Date().toISOString().slice(0, 10)}:global-anthropic`;
+export const peekGlobal = async () => (await retry(() => store("hvi-limits").get(GLOBAL_KEY(), { type: "json" })))?.count || 0;
+export async function chargeGlobal(amount, max) {
+  const limits = store("hvi-limits"), k = GLOBAL_KEY();
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const cur = await retry(() => limits.getWithMetadata(k, { type: "json" }));
+    const count = (cur?.data?.count || 0) + amount;
+    if (count > max) return { ok: false, count: count - amount };
+    const res = await retry(() => limits.setJSON(k, { count }, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true }));
+    if (res.modified) return { ok: true, count };
+  }
+  return { ok: false, count: max };
+}

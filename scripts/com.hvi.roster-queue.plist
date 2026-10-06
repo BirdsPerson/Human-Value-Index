@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.hvi.roster-queue</string>
+  <!-- One slice a day of the curated list (docs/roster/diversity-2026-10.md): at most 80
+       people (5 sprite grids), and at most 40% of what is left today of the site-wide
+       Anthropic cap. The grep guard keeps an older checkout (no queue mode) from starting
+       an ordinary weekly run instead. Once every figure is filed it logs that and exits. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-c</string>
+    <string>grep -q -- '"--queue"' scripts/roster-grow.mjs &amp;&amp; [ -f docs/roster/diversity-2026-10.json ] &amp;&amp; exec node scripts/roster-grow.mjs --queue docs/roster/diversity-2026-10.json --n 80 --max-wait-min 360 || echo "$(date -u +%FT%T) roster-queue: checkout has no queue mode or no list yet; skipped"</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/birdsperson/projects/human-value-index</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/Users/birdsperson/.nvm/versions/node/v24.15.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key><string>/Users/birdsperson</string>
+  </dict>
+  <!-- 18:30 local = late in the UTC day the counter resets on, so visitors have had most
+       of their day before the 40% share is measured. -->
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer></dict>
+  <key>StandardOutPath</key><string>/Users/birdsperson/Library/Logs/hvi-roster-grow.log</string>
+  <key>StandardErrorPath</key><string>/Users/birdsperson/Library/Logs/hvi-roster-grow.log</string>
+</dict>
+</plist>

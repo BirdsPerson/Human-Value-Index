@@ -6,7 +6,8 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { freshRows, planSlots, MIX, eraOf } from "./roster/candidates.mjs";
-import { fitDollars, estimateRunDollars, planCredits, loadState, saveState, GRID_CREDITS, SINGLE_CREDITS } from "./roster-grow.mjs";
+import { fitDollars, estimateRunDollars, planCredits, loadState, saveState, GRID_CREDITS, SINGLE_CREDITS, queueSlice, CALLS_PER_FIGURE } from "./roster-grow.mjs";
+import { readFileSync } from "node:fs";
 import { estimateDollars, actualDollars } from "./roster/batch.mjs";
 
 // dedupe by Wikidata id: on-file ids and repeats within a batch are dropped; namesakes stay
@@ -42,6 +43,17 @@ assert.equal(planCredits(48, 0, GRID_CREDITS * 3 - 1), null, "3 grids over budge
 const p = planCredits(48, 10, GRID_CREDITS * 3 + SINGLE_CREDITS * 2);
 assert.deepEqual(p, { grids: 3, redraws: 2 });
 assert.deepEqual(planCredits(16, 0, 20), { grids: 1, redraws: 0 });
+
+// queue runs: at most 40% of what's left of the site-wide cap today, never negative
+assert.equal(CALLS_PER_FIGURE, 4);
+assert.equal(queueSlice(80, 1, 1000), 80, "a quiet day: the requested slice");
+assert.equal(queueSlice(80, 600, 1000), 40, "a busy day: 40% of the 400 left, 4 calls each");
+assert.equal(queueSlice(80, 1000, 1000), 0, "cap met: nothing");
+assert.equal(queueSlice(80, 1200, 1000), 0, "over the cap: nothing");
+// the curated queue on file: unique Wikidata ids, each with a region
+const queue = JSON.parse(readFileSync(new URL("../docs/roster/diversity-2026-10.json", import.meta.url), "utf8"));
+assert.equal(new Set(queue.figures.map(f => f.wikidata)).size, queue.figures.length, "queue ids unique");
+assert.ok(queue.figures.every(f => /^Q\d+$/.test(f.wikidata) && f.region), "queue rows carry a Wikidata id and region");
 
 // resumable state
 const dir = mkdtempSync(`${tmpdir()}/roster-check-`);

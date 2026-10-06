@@ -2,6 +2,14 @@
 //
 //   node scripts/roster-grow.mjs [--n 48] [--max-wait-min 360] [--dry-run]
 //   node scripts/roster-grow.mjs --status
+//   node scripts/roster-grow.mjs --queue docs/roster/diversity-2026-10.json [--n 80]
+//
+// --queue files a hand-curated list (JSON { id, figures: [{ wikidata, field, region }] })
+// instead of drawing from Pantheon/Wikidata: at most one queue run a day (launchd
+// com.hvi.roster-queue), each the next unfiled slice of the list, sized to use at most
+// HVI_ROSTER_QUEUE_SHARE (0.4) of what is left today of the site-wide Anthropic cap and
+// charged to that same counter, so live visitors keep the rest. Weekly runs ignore queue
+// runs for their cadence. Same scoring, fact-check, harm review and sprites as any run.
 //
 // One run is a small state machine, persisted after every step in
 // ~/.cache/hvi-roster/state.json, so a batch that outlives the process is picked up on the
@@ -32,9 +40,9 @@ import { normalizeAssessment, computeScore, getTier, cube, medianSeverity, harmG
 import { FACT_CHECK_SYSTEM, SOURCE_MAX, summarizeFactCheck, factCheckUser } from "../netlify/lib/factCheck.js";
 import { fetchArticleText, placeReferral, resolveCandidates, needsChoice, qualifierFrom, isHeadOfStateOrGov, originsOf, staturesOf } from "../netlify/lib/refer.js";
 import { medianBreakdown, distance, dispersion, RUNS } from "./rescore-lib.mjs";
-import { buildCohort } from "./roster/candidates.mjs";
+import { buildCohort, resolveQid, skipByPolicy, eraOf } from "./roster/candidates.mjs";
 import { createBatch, getBatch, batchResults, resultText, resultUsage, estimateDollars, actualDollars, approxTokens } from "./roster/batch.mjs";
-import { prodQids, getCard, createCard, figureIndex } from "./roster/prod.mjs";
+import { prodQids, getCard, createCard, figureIndex, peekGlobal, chargeGlobal } from "./roster/prod.mjs";
 import { regionWeights } from "../src/origin.js";
 import { FAMOUS_FIGURES } from "../src/figures.js";
 
@@ -54,6 +62,13 @@ export const GRID_CREDITS = Number(process.env.HVI_GRID_CREDITS || 4);
 export const SINGLE_CREDITS = 2;
 export const MAX_DOLLARS = Number(process.env.HVI_ROSTER_MAX_DOLLARS || 3);
 export const MAX_CREDITS = Number(process.env.HVI_ROSTER_MAX_CREDITS || 20);
+
+// Queue runs: share of today's remaining site-wide Anthropic calls one run may take, and
+// the calls one figure costs (three scoring reads plus one fact-check).
+export const QUEUE_SHARE = Number(process.env.HVI_ROSTER_QUEUE_SHARE || 0.4);
+export const CALLS_PER_FIGURE = RUNS + 1;
+export const queueSlice = (n, used, cap, share = QUEUE_SHARE) =>
+  Math.max(0, Math.min(n, Math.floor((share * Math.max(0, cap - used)) / CALLS_PER_FIGURE)));
 
 const args = process.argv.slice(2);
 const arg = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
@@ -101,12 +116,50 @@ async function steering() {
   return w;
 }
 
-async function stageCandidates(run) {
+const readQueue = path => JSON.parse(readFileSync(path.startsWith("/") ? path : `${ROOT}${path}`, "utf8"));
+
+// Wikidata ids of a queue that are not on file and were not put to an earlier run (a
+// figure the scoring declined is not retried).
+async function queueLeft(path) {
+  const q = readQueue(path);
   const taken = await prodQids();
-  const raw = await buildCohort(run.n, taken, { log, regions: await steering() });
+  for (const r of state.runs) for (const c of r.cohort || []) taken.add(c.wikidata);
+  return { q, left: q.figures.filter(f => f.wikidata && !taken.has(f.wikidata)) };
+}
+
+// The next run.n people of the queue, resolved exactly as a drawn candidate is.
+async function queueCohort(run) {
+  const { q, left } = await queueLeft(run.queue);
+  const out = [];
+  for (const f of left) {
+    if (out.length >= run.n) break;
+    if (await skipByPolicy(f.wikidata)) { log(`skip ${f.wikidata} (${f.name}): excluded by policy`); continue; }
+    let wiki;
+    for (let k = 0; k < 5; k++) {   // Wikidata answers a burst with 429s
+      wiki = await resolveQid(f.wikidata).catch(e => ({ ok: false, reason: e.message }));
+      if (!/429/.test(wiki.reason || "")) break;
+      await new Promise(r => setTimeout(r, 5000 * (k + 1)));
+    }
+    if (!wiki.ok) { log(`skip ${f.wikidata} (${f.name}): ${wiki.reason}`); continue; }
+    const born = Number(/^(-?\d+)/.exec(String(wiki.born || ""))?.[1] ?? NaN);
+    out.push({ ...wiki, stratum: { pool: "curated", source: `queue:${q.id}`, era: eraOf(born, wiki.living), domain: f.field || null, region: f.region || null } });
+    await new Promise(r => setTimeout(r, 700));
+  }
+  return out;
+}
+
+async function stageCandidates(run) {
+  const raw = run.queue ? await queueCohort(run) : await buildCohort(run.n, await prodQids(), { log, regions: await steering() });
   const cohort = fitDollars(raw);
   if (cohort.length < raw.length) log(`budget: cohort trimmed ${raw.length} -> ${cohort.length} to stay under $${MAX_DOLLARS}`);
   if (!cohort.length) throw new Error("budget allows no one this run");
+  if (run.queue && !run.charged) {
+    const calls = cohort.length * CALLS_PER_FIGURE;
+    const res = await chargeGlobal(calls, run.cap);
+    if (!res.ok) throw new Error(`site-wide Anthropic cap: ${calls} calls would pass ${run.cap} (used ${res.count}); retried next run`);
+    run.charged = calls;
+    log(`charged ${calls} calls to today's site-wide Anthropic counter (now ${res.count}/${run.cap})`);
+  }
   run.cohort = cohort.map((c, i) => ({ ...c, cid: `p${i}` }));
   run.estDollars = Number(estimateRunDollars(run.cohort).toFixed(3));
   run.stage = "scoring";
@@ -202,6 +255,14 @@ async function stageFactcheck(run) {
   return true;
 }
 
+// Same rule as scripts/gemini_image.py backend(): explicit env wins, else Gemini once the
+// Keychain item exists.
+function spriteBackend() {
+  const b = String(process.env.HVI_SPRITE_BACKEND || "").trim().toLowerCase();
+  if (b === "gemini" || b === "higgsfield") return b;
+  try { execFileSync("security", ["find-generic-password", "-a", process.env.USER || "", "-s", "hvi-gemini"], { stdio: "ignore", timeout: 20000 }); return "gemini"; } catch { return "higgsfield"; }
+}
+
 function higgsCredits() {
   try {
     const out = execFileSync("higgsfield", ["account", "status"], { encoding: "utf8", timeout: 60000 });
@@ -224,6 +285,16 @@ async function stageSprites(run) {
   const drawable = keep.filter(c => run.scored[c.cid].slug && run.scored[c.cid].look);
   const plan = planCredits(drawable.length);
   if (!plan) { log(`budget: sprites skipped (grids need more than ${MAX_CREDITS} credits); cards stay pending`); run.sprites = { skipped: true }; run.stage = "store"; return true; }
+  // A Higgsfield account without the credits for the grids would fail every cell, and a
+  // failed cell with no redraw budget marks its card "failed". Leave them pending instead:
+  // the sprite job draws them once a backend can pay.
+  if (spriteBackend() === "higgsfield") {
+    const have = higgsCredits();
+    if (have != null && have < plan.grids * GRID_CREDITS) {
+      log(`sprites skipped: Higgsfield has ${have} credits, the grids need ${plan.grids * GRID_CREDITS}, and no Gemini key (Keychain hvi-gemini); cards stay pending`);
+      run.sprites = { skipped: true, reason: "no sprite backend credit" }; run.stage = "store"; return true;
+    }
+  }
   run.sprites = run.sprites || { grids: [] };
   if (run.sprites.creditsBefore == null) run.sprites.creditsBefore = higgsCredits();
   for (let g = 0; g * GRID < drawable.length; g++) {
@@ -301,7 +372,8 @@ function stageUpload(run) {
   return true;
 }
 
-function stageReport(run) {
+async function stageReport(run) {
+  if (run.queue) run.queueLeft = (await queueLeft(run.queue).catch(() => ({ left: [] }))).left.length;
   const kept = run.stored?.length || 0;
   const score = actualDollars(SCORE_MODEL, run.usage?.score || []), check = actualDollars(CHECK_MODEL, run.usage?.check || []);
   const credits = run.sprites?.creditsBefore != null && run.sprites?.creditsAfter != null ? run.sprites.creditsBefore - run.sprites.creditsAfter : null;
@@ -309,7 +381,8 @@ function stageReport(run) {
   const perFig = kept ? { dollars: (run.cost.dollars / kept).toFixed(3), credits: credits == null ? "?" : (credits / kept).toFixed(2) } : null;
   const byPool = {};
   for (const c of run.cohort) if (run.stored?.includes(run.scored[c.cid]?.slug)) byPool[c.stratum.pool] = (byPool[c.stratum.pool] || 0) + 1;
-  const line = `- **${run.id}:** ${kept} new figures (${Object.entries(byPool).map(([k, v]) => `${v} ${k}`).join(", ")}). Cost $${run.cost.dollars} + ${credits ?? "?"} Higgsfield credits${perFig ? ` (~$${perFig.dollars} and ${perFig.credits} credits each)` : ""}. The Sunday calibration picks them up.`;
+  const queued = run.queue ? ` From the curated list ${run.queue}; ${run.queueLeft ?? "?"} still to file, one slice a day.` : "";
+  const line = `- **${run.id}:** ${kept} new figures (${Object.entries(byPool).map(([k, v]) => `${v} ${k}`).join(", ")}). Cost $${run.cost.dollars} + ${credits ?? "?"} Higgsfield credits${perFig ? ` (~$${perFig.dollars} and ${perFig.credits} credits each)` : ""}.${run.sprites?.skipped ? " Sprites wait in the pending queue (no backend credit)." : ""}${queued} The Sunday calibration picks them up.`;
   const mr = `${ROOT}MORNING_REPORT.md`;
   let text = existsSync(mr) ? readFileSync(mr, "utf8") : "# Human Value Index\n";
   if (text.includes("\n## Roster engine\n")) text = text.replace("\n## Roster engine\n", `\n## Roster engine\n\n${line}\n`);
@@ -319,6 +392,13 @@ function stageReport(run) {
   log(line);
   run.stage = "done";
   return true;
+}
+
+// The site's HVI_ANTHROPIC_DAILY_CAP: this shell's env, else production's, else the code default.
+async function dailyCap() {
+  let v = process.env.HVI_ANTHROPIC_DAILY_CAP;
+  if (!v) { try { v = execFileSync("netlify", ["env:get", "HVI_ANTHROPIC_DAILY_CAP", "--context", "production"], { cwd: ROOT, encoding: "utf8", timeout: 60000 }).trim(); } catch { v = ""; } }
+  return /^\d+$/.test(v) ? Number(v) : 1000;
 }
 
 const STAGES = { candidates: stageCandidates, scoring: stageScoring, factcheck: stageFactcheck, sprites: stageSprites, store: stageStore, upload: stageUpload, report: stageReport };
@@ -352,10 +432,23 @@ async function main() {
   process.on("exit", () => { try { if (readFileSync(lock, "utf8") === String(process.pid)) unlinkSync(lock); } catch { /* gone */ } });
 
   let run = activeRun(state);
+  const queue = arg("--queue", null);
   // Weekly cadence: a new run starts at most every 6 days unless --force, so a manual
   // kickstart doesn't double the week's spend. It still proves the job can reach production.
-  const last = state.runs.at(-1);
-  if (!run && last && Date.now() - Date.parse(last.created) < 6 * 864e5 && !args.includes("--force")) {
+  // Queue runs don't count toward it; they have their own one-a-day rule.
+  const last = state.runs.filter(r => !r.queue).at(-1);
+  if (!run && queue) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (state.runs.some(r => r.queue === queue && r.created.slice(0, 10) === today) && !args.includes("--force")) { log(`queue ${queue}: today's slice already ran. Nothing to do.`); return; }
+    const { left } = await queueLeft(queue);
+    if (!left.length) { log(`queue ${queue}: every figure is filed. Nothing to do.`); return; }
+    const cap = await dailyCap(), used = await peekGlobal();
+    const n = queueSlice(Number(arg("--n", 80)), used, cap);
+    if (n < 1) { log(`queue ${queue}: site-wide Anthropic counter at ${used}/${cap}; no room today without crowding visitors.`); return; }
+    run = { id: `Q${today}-${state.runs.length + 1}`, n, queue, cap, globalUsedAtStart: used, stage: "candidates", created: new Date().toISOString() };
+    state.runs.push(run);
+    log(`new queue run ${run.id}: ${n} of ${left.length} left (counter ${used}/${cap}, share ${QUEUE_SHARE})`);
+  } else if (!run && last && Date.now() - Date.parse(last.created) < 6 * 864e5 && !args.includes("--force")) {
     log(`cadence: last run ${last.id} started ${last.created.slice(0, 16)}; next due ${new Date(Date.parse(last.created) + 6 * 864e5).toISOString().slice(0, 10)}. production has ${(await prodQids()).size} referred/engine figures on file. Nothing to do.`);
     return;
   }
