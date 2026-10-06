@@ -7,6 +7,8 @@
 //                goal; a foul in the area is a penalty from the spot, outside it a free kick where it
 //                happened; two yellows are a red and the side plays a man short; a professional foul on
 //                a man through on goal can be a red; the shootout ends by the usual arithmetic
+//   FC buttons   the mapping table (EA SPORTS FC defaults by position, both pad families, FC 27 keys)
+//   difficulty   a simulated casual human: his share of the points on BEGINNER, SEMI-PRO, LEGENDARY
 //   controls     the human's player: a power-bar shot goes toward goal (more power, more pace), a pass
 //                goes to the teammate the stick points at and takes control with it, a trick above a
 //                player's stars is a stumble
@@ -233,6 +235,56 @@ for (const [label, setup, expect] of [
   ok("skill moves gated by stars");
 }
 
+// ---- EA SPORTS FC's default buttons ---------------------------------------------------------------------------
+// The mapping table (docs/CITY_SPEC.md Soccer "Controls"): by standard-gamepad position, FC's
+// "Classic" default on Xbox and PlayStation (help.ea.com and the in-game Button Help; fifplay's FC 27
+// table), the Switch family's labels at those positions, and FC 27's default WASD keyboard layout
+// (help.ea.com, "EA SPORTS FC 27 mouse and keyboard controls on PC").
+{
+  const I = await import("../src/play/soccer/input.js");
+  assert.deepEqual(I.PAD_INDEX, { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7 }, "standard mapping positions");
+  const want = {
+    xbox: { A: "A", B: "B", X: "X", Y: "Y", LB: "LB", RB: "RB", LT: "LT", RT: "RT" },
+    playstation: { A: "✕", B: "○", X: "□", Y: "△", LB: "L1", RB: "R1", LT: "L2", RT: "R2" },
+    switch: { A: "B", B: "A", X: "Y", Y: "X", LB: "L", RB: "R", LT: "ZL", RT: "ZR" },   // the labels at the Xbox positions
+  };
+  for (const [fam, g] of Object.entries(want)) for (const [k, v] of Object.entries(g)) assert.equal(I.PAD_GLYPHS[fam][k], v, `${fam} ${k}`);
+  const keys = { KeyW: "UP", KeyA: "LEFT", KeyS: "DOWN", KeyD: "RIGHT", KeyL: "A", Semicolon: "B", KeyK: "X", KeyO: "Y", KeyP: "RT", Slash: "LT", KeyI: "LB", Comma: "RB", ArrowUp: "RU", ArrowDown: "RD", ArrowLeft: "RL", ArrowRight: "RR" };
+  assert.deepEqual(Object.fromEntries(Object.entries(I.KEYMAP).map(([k, b]) => [k, Object.keys(BTN).find(n => BTN[n] === b)])), keys, "FC 27's WASD keyboard layout");
+  for (const [k, n] of Object.entries(keys)) if (I.KEY_GLYPHS[n]) assert.equal(I.KEY_GLYPHS[n], { Semicolon: ";", Slash: "/", Comma: "," }[k] || k.replace("Key", ""), `key glyph ${n}`);
+  // what the buttons do, in the sim (v2)
+  const carry = (mask, hold = 1, pre = 0) => {
+    const st = fresh({ auto: false, seed: 3 }), a = S.att(st, 0); clearOut(st);
+    const P = st.p[9]; T.place(P, a * 30, 34); st.ball.x = P.x; st.ball.y = P.y; T.own(st, P); st.ctl = 9;
+    if (pre) S.step(st, pre);
+    for (let f = 0; f < hold; f++) S.step(st, mask);
+    S.step(st, pre & BTN.LB ? BTN.LB : 0);
+    return st;
+  };
+  assert.equal(carry(BTN.B, 20).ball.kind, "shot", "B: shoot");
+  assert.equal(carry(BTN.B | BTN.RB, 20).ball.kind, "shot");
+  { const st = carry(BTN.B | BTN.LB, 20, BTN.LB); assert.equal(st.ball.kind, "shot", "LB + B: a shot (the chip)"); }
+  { const st = fresh({ auto: false, seed: 3 }), a = S.att(st, 0); clearOut(st); const P = st.p[9]; T.place(P, a * 30, 34); st.ball.x = P.x; st.ball.y = P.y; T.own(st, P); st.ctl = 9;
+    S.step(st, BTN.LB); S.step(st, 0); assert.ok(st.p.some(Q => Q.t === 0 && Q.run), "LB tapped alone: a teammate runs"); }
+  // defence: A contain, B standing tackle, X slide, RB teammate contain, Y rush the keeper
+  const defend = (mask, d = 1.0) => {
+    const st = fresh({ auto: false, seed: 5 }), a = S.att(st, 0); clearOut(st);
+    const V = st.p[20], P = st.p[4]; T.place(V, 0, 34); T.place(P, -a * d, 34); P.fx = a; P.fy = 0;
+    st.ball.x = V.x; st.ball.y = V.y; T.own(st, V); st.ctl = 4;
+    S.step(st, mask); return { st, P };
+  };
+  assert.equal(defend(BTN.B).P.act?.kind, "tackle", "B: standing tackle");
+  assert.equal(defend(BTN.X).P.act?.kind, "slide", "X: slide tackle");
+  { const c = defend(BTN.A, 3); assert.ok(c.st.held.A === 1 && c.P.act?.kind !== "slide" && c.P.manual, "A: contain (held, he shadows the carrier)"); }
+  assert.equal(defend(BTN.RB).st.press2, true, "RB: teammate contain");
+  assert.equal(defend(BTN.Y).st.rushGK, true, "Y: rush the keeper out");
+  // version 1 kept its own: A tackled, B slid
+  { const st = S.newGame(5, { home: EVEN_A, away: EVEN_B }, 1); st.phase = "live"; st.rs = null; const a = S.att(st, 0); clearOut(st);
+    const V = st.p[20], P = st.p[4]; T.place(V, 0, 34); T.place(P, -a, 34); st.ball.x = V.x; st.ball.y = V.y; T.own(st, V); st.ctl = 4;
+    S.step(st, BTN.A); assert.equal(P.act?.kind, "tackle", "v1: A tackled"); }
+  ok("FC default buttons: pad positions, both pad families, FC 27 keys, what they do");
+}
+
 // ---- determinism and the record --------------------------------------------------------------------------------------
 // A bot on the human's side, pressing everything a person would: steering at goal, shooting with the
 // bar, passing, crosses and through balls, tricks, tackles, slides and switches, the set pieces.
@@ -265,10 +317,10 @@ function humanBot(st) {
   }
   return m;
 }
-function playRecorded(seed, cfg) {
-  const st = S.newGame(seed, cfg), masks = [];
+function playRecorded(seed, cfg, version = S.VERSION) {
+  const st = S.newGame(seed, cfg, version), masks = [];
   while (st.phase !== "over" && masks.length < 400000) { const m = humanBot(st); masks.push(m); S.step(st, m); }
-  return { st, rec: { version: S.VERSION, seed, cfg, inputLog: S.rleEncode(masks), result: S.resultOf(st) } };
+  return { st, rec: { version, seed, cfg, inputLog: S.rleEncode(masks), result: S.resultOf(st) } };
 }
 {
   const cfg = { half: 3, form: "433", easy: false, home: EVEN_A, away: EVEN_B };
@@ -287,9 +339,18 @@ function playRecorded(seed, cfg) {
   for (let i = 3000; i < masks.length && changed < 40; i += 97) { masks[i] = masks[i] ^ (BTN.B | BTN.RIGHT); changed++; }
   assert.notDeepEqual(S.replay({ ...rec, inputLog: S.rleEncode(masks) }), r, "a doctored log does not reproduce the result");
   assert.throws(() => S.replay({ ...rec, version: S.VERSION + 1 }), /another version/);
-  // easy mode and player lock are part of the record too
-  const e = playRecorded(77, { ...cfg, half: 3, easy: true, lock: 9 });
-  assert.deepEqual(S.replay(e.rec), e.rec.result, "easy + player lock replays");
+  // the difficulty and player lock are part of the record too
+  const e = playRecorded(77, { ...cfg, half: 3, level: 0, lock: 9 });
+  assert.deepEqual(S.replay(e.rec), e.rec.result, "BEGINNER + player lock replays");
+  assert.equal(e.st.cfg.level, 0); assert.equal(S.newGame(1, { level: 9 }).cfg.level, S.DEFAULT_LEVEL, "an unknown level is the default");
+  // version 1 records (the first release's buttons, EASY MODE) replay on version 1's rules, and the
+  // same input means something else on version 2 (FC's defence): the rules follow the record
+  const v1 = playRecorded(1234, { ...cfg, easy: true }, 1);
+  assert.equal(v1.st.v, 1); assert.equal(v1.st.cfg.easy, true);
+  assert.deepEqual(S.replay(v1.rec), v1.rec.result, "a v1 record replays on v1");
+  assert.deepEqual(S.replay(JSON.parse(JSON.stringify(v1.rec))), v1.rec.result, "and through JSON");
+  assert.notDeepEqual(S.replay({ ...v1.rec, version: 2 }), v1.rec.result, "the same log under v2 plays differently");
+  assert.throws(() => S.replay({ ...rec, version: 0 }), /another version/);
   ok("determinism and the record");
 }
 
@@ -326,6 +387,127 @@ function playRecorded(seed, cfg) {
   for (const [k, [lo, hi]] of Object.entries(bands)) assert.ok(agg[k] >= lo && agg[k] <= hi, `calibration: ${k} ${agg[k].toFixed(2)} per match, wanted ${lo}-${hi}`);
   if (process.env.VERBOSE) console.log("calibration", Object.entries(agg).map(([k, v]) => `${k} ${v.toFixed(2)}`).join("  "));
   ok("calibration");
+}
+
+// ---- difficulty: a casual human ---------------------------------------------------------------------------------------
+// Scott, 2026-10-06: "I'm getting crushed in virtually every soccer game I play." The yardstick is a
+// simulated casual player on your side: he sees the ball a quarter-second late on defence, his
+// timing is off by about 100 ms (sd), his stick wobbles about 20 degrees, he passes to whoever looks
+// open (and misses one marker in four), shoots when close, hardly tries a trick. Against an equal
+// eleven, at the default length, his share of the points (a win 1, a draw a half) on each of
+// EA SPORTS FC's levels lands near: BEGINNER 65-75%, AMATEUR and SEMI-PRO about half, LEGENDARY
+// 15-20% (measured over 40 matches a level when the levels were set; asserted here on fewer, with
+// room for the noise). CPU v CPU (calibration above) plays as rated and is not touched by them.
+function casualBot(seed, hz = 60) {
+  const ms = (t) => Math.max(1, Math.round(t * hz / 1000));
+  let s = seed >>> 0;
+  const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const g = () => (rnd() + rnd() + rnd() + rnd() - 2) * 1.732;
+  const hist = [];
+  let plan = null, wait = 0;
+  let wob = 0, wobAt = -99;
+  // the stick: where he means, off by a wobble that changes a few times a second (a thumb, not a dice)
+  const stick = (dx, dy, noise, now = -1) => {
+    if (now < 0 || now - wobAt > 20) { wob = g(); if (now >= 0) wobAt = now; }
+    const a = Math.atan2(dy, dx) + wob * noise; let m = 0;
+    const cx = Math.cos(a), cy = Math.sin(a);
+    if (cx > 0.38) m |= BTN.RIGHT; else if (cx < -0.38) m |= BTN.LEFT;
+    if (cy > 0.38) m |= BTN.UP; else if (cy < -0.38) m |= BTN.DOWN;
+    return m;
+  };
+  return (st) => {
+    const b = st.ball, P = st.p[st.ctl], a = S.att(st, 0);
+    hist.push({ x: b.x, y: b.y, own: b.own }); if (hist.length > ms(250)) hist.shift();
+    const late = hist[0];
+    if (st.phase === "kickoff") return st.t % 40 === 20 ? BTN.A : 0;
+    if (st.phase === "dead") {
+      if (st.rs?.team !== 0 || !st.rs) return 0;
+      const rs = st.rs;
+      if (rs.type === "pen" || (rs.type === "fk" && st.aim)) {
+        if (!plan || plan.k !== "set") plan = { k: "set", hold: Math.round(26 + g() * ms(100)), f: 0, up: rnd() < 0.5 };
+        plan.f++;
+        if (plan.f < 30) return plan.f % 3 === 0 ? (plan.up ? BTN.UP : BTN.DOWN) : 0;
+        if (plan.f < 30 + plan.hold) return BTN.B;
+        return 0;
+      }
+      return st.t % 50 === 35 ? BTN.A : 0;
+    }
+    if (!P) return 0;
+    if (b.own === P.g) {
+      if (P.role === "GK") return st.frame % 40 === 0 ? BTN.A : 0;
+      if (!plan || plan.k === "set" || plan.g !== P.g || plan.at !== st.frame - 1) { plan = { k: "carry", g: P.g, t: 0, react: ms(150 + rnd() * 300) }; }
+      plan.t++; plan.at = st.frame;
+      const u = a * P.x;
+      let m = stick(a, (34 - P.y) * 0.04, 0.35, st.frame);
+      if (plan.shoot) {
+        plan.shoot.f++;
+        if (plan.shoot.f <= plan.shoot.hold) return m | BTN.B | (plan.shoot.aim);
+        return m | plan.shoot.aim;
+      }
+      if (plan.pass) {
+        plan.pass.f++;
+        if (plan.pass.f <= plan.pass.hold) return plan.pass.m;
+        plan.pass = null;   // still on the ball: the pass did not go (mid-trick); think again
+      }
+      if (rnd() < 0.5) m |= BTN.RT;
+      if (plan.t < plan.react) return m;
+      const dGoal = Math.hypot(a * 52.5 - P.x, 34 - P.y);
+      if ((dGoal < 26 && rnd() < 0.05) || dGoal < 13) { plan.shoot = { f: 0, hold: Math.max(4, Math.round(18 + dGoal * 0.4 + g() * ms(100))), aim: rnd() < 0.5 ? BTN.UP : rnd() < 0.5 ? BTN.DOWN : 0 }; return m; }
+      let close = 99, cz = null; for (const Q of st.p) if (Q.t === 1 && !Q.off) { const dd = Math.hypot(Q.x - P.x, Q.y - P.y); if (dd < close) { close = dd; cz = Q; } }
+      // a lane the eye calls open: nobody within 1.5 m of the line (a casual eye misses one in four)
+      const open = (Q) => { for (const Z of st.p) if (Z.t === 1 && !Z.off) { const lx = Q.x - P.x, ly = Q.y - P.y, L = lx * lx + ly * ly, t = Math.max(0, Math.min(1, ((Z.x - P.x) * lx + (Z.y - P.y) * ly) / L)); if (Math.hypot(P.x + lx * t - Z.x, P.y + ly * t - Z.y) < 1.5 && rnd() < 0.75) return false; } return true; };
+      const pressed = close < 4;
+      if ((pressed && rnd() < 0.12) || rnd() < 0.01 || plan.t > 200) {
+        let best = null, bs = -1e9;
+        for (const Q of st.p) if (Q.t === 0 && Q !== P && Q.role !== "GK" && !Q.off) {
+          const d = Math.hypot(Q.x - P.x, Q.y - P.y); if (d > 35 || d < 5 || !open(Q) || (!pressed && a * (Q.x - P.x) < -3)) continue;
+          const sc = a * (Q.x - P.x) * 0.5 + rnd() * 4; if (sc > bs) { bs = sc; best = Q; }
+        }
+        if (best) { const kind = rnd() < 0.8 ? BTN.A : rnd() < 0.5 ? BTN.Y : BTN.X; plan.pass = { f: 0, hold: ms(60 + rnd() * 120), m: stick(best.x - P.x, best.y - P.y, 0.35) | kind }; return plan.pass.m; }
+      }
+      // dribble: at goal, bending away from the nearest man in front
+      if (cz && close < 6 && a * (cz.x - P.x) > 0) m = stick(a, (P.y > cz.y ? 1 : -1) * 0.8, 0.3, st.frame) | (m & BTN.RT);
+      if (rnd() < 0.002) return m | (a > 0 ? BTN.RR : BTN.RL);
+      return m;
+    }
+    plan = null;
+    // off the ball: chase where the ball was a quarter-second ago
+    const C = late.own >= 0 ? st.p[late.own] : null;
+    if ((C && C.t === 0) || b.recv === P.g) return 0;   // ours, or on its way to him: he waits for it
+    const dx = late.x - P.x, dy = late.y - P.y, d = Math.hypot(dx, dy);
+    let m = d > 0.6 ? stick(dx, dy, 0.25, st.frame) : 0;
+    if (d > 6 && rnd() < 0.7) m |= BTN.RT;
+    if (d > 14 && st.frame % 45 === 0) m |= BTN.LB;
+    if (C && d < 4 && rnd() < 0.5) m |= BTN.A;
+    if (C && d < 1.6 && rnd() < 0.05) m |= BTN.B;
+    if (C && d < 2.2 && rnd() < 0.004) m |= BTN.X;
+    return m;
+  };
+}
+function casualShare(level, N, seed0 = 1) {
+  let pts = 0, w = 0;
+  for (let i = 0; i < N; i++) {
+    const seed = (seed0 + i) * 7919 + level, st = S.newGame(seed, { half: 4, level, home: EVEN_A, away: EVEN_B }), bot = casualBot(seed * 31 + 7, S.LEVELS[level].hz);
+    while (st.phase !== "over" && st.frame < 400000) S.step(st, bot(st));
+    const r = S.resultOf(st); pts += r.winner === 0 ? 1 : r.winner < 0 ? 0.5 : 0; w += r.winner === 0 ? 1 : 0;
+  }
+  return { share: pts / N, wins: w / N };
+}
+{
+  assert.deepEqual(S.LEVELS.map(L => L.name), ["BEGINNER", "AMATEUR", "SEMI-PRO", "PROFESSIONAL", "WORLD CLASS", "LEGENDARY"], "FC's six levels, in order");
+  assert.equal(S.DEFAULT_LEVEL, 0, "a new player starts on BEGINNER");
+  for (let i = 1; i < S.LEVELS.length; i++) assert.ok(S.LEVELS[i].e < S.LEVELS[i - 1].e, `each level is harder than the one before (${S.LEVELS[i].name})`);
+  assert.deepEqual(S.leversAt(0.5), S.leversAt(0.5), "a division can ask for the levers at any ease");
+  const N = process.env.QUICK ? 4 : 16, pct = (x) => `${Math.round(x * 100)}%`;
+  const beg = casualShare(0, N), semi = process.env.QUICK ? null : casualShare(2, N), leg = casualShare(5, N);
+  if (process.env.VERBOSE) console.log("casual human, share of points (wins):", `BEGINNER ${pct(beg.share)} (${pct(beg.wins)})`, semi ? `SEMI-PRO ${pct(semi.share)} (${pct(semi.wins)})` : "", `LEGENDARY ${pct(leg.share)} (${pct(leg.wins)})`);
+  assert.ok(beg.share > leg.share + 0.25, `BEGINNER (${pct(beg.share)}) is far kinder than LEGENDARY (${pct(leg.share)})`);
+  if (!process.env.QUICK) {
+    assert.ok(beg.share >= 0.55 && beg.share <= 0.9, `a casual human on BEGINNER takes ${pct(beg.share)} of the points, wanted about 65-75%`);
+    assert.ok(semi.share >= 0.33 && semi.share <= 0.7, `on SEMI-PRO ${pct(semi.share)}, wanted about half`);
+    assert.ok(leg.share >= 0.03 && leg.share <= 0.33, `on LEGENDARY ${pct(leg.share)}, wanted about 15-20%`);
+  }
+  ok("difficulty: a casual human");
 }
 
 // ---- roster --------------------------------------------------------------------------------------------------------------

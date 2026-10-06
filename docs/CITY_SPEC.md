@@ -2875,9 +2875,24 @@ mechanics and conventions of the FC games; none of their names, marks, kits, clu
   own side when this browser's case is rostered (`citizen-<last four>`), else DEPARTMENT F.C., against the
   side nearest in rating. **PLAYER LOCK** (rostered only): control stays on you; A calls for the ball, Y for
   it in behind. Options behind "+": length, knockout (extra time and penalties), formation (4-4-2, 4-3-3,
-  3-5-2), camera, your side, the opponent (starts at once). EASY MODE (on for a first visit): the same match
-  stepped at 48 Hz instead of 60 (slower), assisted passing (wider cone, half the error), assisted shooting
-  (60% of the error), a softer CPU.
+  3-5-2), camera, your side, the opponent (starts at once). **DIFFICULTY** (2026-10-06; Scott: "I'm getting
+  crushed in virtually every soccer game I play"): EA SPORTS FC's six levels, BEGINNER (the default for a
+  new player, remembered in `hvi-soccer-level`), AMATEUR, SEMI-PRO, PROFESSIONAL, WORLD CLASS, LEGENDARY.
+  Data, not branches (`sim.js` `LEVELS`, `leversAt(e)`): each level is a point e between the sim as rated
+  (e = 0; CPU v CPU always plays there) and a kindest end, every lever straight between: your passing,
+  lofted, shooting, penalty and free-kick error; the pass cone and an assisted pass that prefers the open
+  man near the stick; your first touch; the CPU keeper's reaction to your shots and yours to theirs; the
+  CPU's tackling appetite, decision time, pass and shot error, and its ratings (up to 26 points lower);
+  your tackles winning more, theirs less, and your defender going in by himself in reach; a teammate who
+  keeps his place and goes to a loose ball (help 1) or also presses with you (help 2, FC's teammate
+  contain held for you); and the speed (BEGINNER 48 Hz, AMATEUR 54, the rest 60). A league pyramid can map
+  a division to an e (`leversAt`) later. The yardstick (`check-soccer`, "difficulty: a casual human"): a
+  simulated casual player on your side (a quarter-second late on defence, ~100 ms timing noise, a stick
+  ~20 degrees loose, passes to whoever looks open, hardly a trick) against an equal eleven, share of the
+  points (a draw a half; outright wins in brackets) over 40 matches a level when set: BEGINNER 75% (58%),
+  AMATEUR 57% (30%), SEMI-PRO 53% (28%), PROFESSIONAL 43% (13%), WORLD CLASS 34% (3%), LEGENDARY 19% (3%);
+  about half his matches are draws (he scores about once a match). Version 1 records keep the old EASY MODE
+  switch.
 - **Why eleven a side**: measured: the sim costs ~0.03 ms a frame and the picture ~1.4 ms on a desktop
   (22 players, the stand, the radar), so a phone at a fifth of the speed still draws inside a frame; the
   league drafts elevens, so every rostered player appears.
@@ -2886,19 +2901,43 @@ mechanics and conventions of the FC games; none of their names, marks, kits, clu
   clock in match minutes, running through stoppages (the FC habit), added time shown at 45 and 90 (1-5, from
   the stoppages). Knockout: two 15-minute halves of extra time (a third of the length each), then a shootout
   (five each, then sudden death, at one goal).
-- **Controls** (FC Xbox layout): attacking: left stick moves; A pass (to the teammate the stick points at,
-  control goes with it); Y through ball (hold: further; LT + Y lobbed); X lob, or from wide in the last third
-  a cross (up / down: far / near post); B shoot (hold: the power bar under the player, its red end goes over;
-  let go; up / down aims at that post, neither the far corner); RB + B finesse (curled), LT + B chip; B then A
-  at once: fake shot; RT sprint (the ball runs further ahead); LT close control; LB sends a forward on a run;
-  right stick: skill moves (toward goal: step-over, twice: heel flick; away: roulette; across: ball roll).
-  Stars = 1 + one per ten rating points over 50; a move above them is a stumble (sometimes losing it).
-  Defending: A standing tackle (hold: contain), B slide (from behind: a foul, maybe a card), X a teammate
-  presses too (close in: a shoulder), LT jockey, LB the man nearest the ball, right stick the man that way.
-  Keys: WASD / arrows, J A, K B, L X, I Y, Shift RT, Space LT, Q LB, E RB, R + direction the right stick,
-  Enter / Esc pause. Pads by button position (`input.js`; gamepad.js for the family and stick). Touch: the
-  round pad, PASS / THRU / CROSS / SHOOT, SPRINT, RUN / SWITCH, START; a swipe on the picture is a skill move.
-  The legend under the picture names the buttons in the hands in use, attacking or defending.
+- **Controls** (rules version 2, 2026-10-06; Scott: "the SAME AS THE DEFAULT CONTROLS of FIFA / EA SPORTS
+  FC"): EA SPORTS FC's default ("Classic") layout, by standard-gamepad position (`input.js` `PAD_INDEX`;
+  `gamepad.js` names the family; a Switch pad's labels at those positions differ, `PAD_GLYPHS`). Sources:
+  EA's in-game Button Help (Practice Arena, pause: Button Help; help.ea.com "how to shoot" / "how to pass"
+  point there), FIFPlay's FC 27 controls table and FIFA Game News' FC 26 Xbox list for the button rows,
+  help.ea.com "EA SPORTS FC 27 mouse and keyboard controls on PC" (the default WASD layout image) for keys.
+
+  | | Xbox | PlayStation | Keys (FC 27 WASD) | Attacking | Defending |
+  |---|---|---|---|---|---|
+  | left stick | LS | L | W A S D | move | move |
+  | bottom | A | ✕ | L | short pass (to the mate the stick points at) | contain (hold) |
+  | right | B | ○ | ; | shoot (hold: power; up / down a post) | standing tackle (close behind him: push) |
+  | left | X | □ | K | lob / cross | slide tackle |
+  | top | Y | △ | O | through ball (hold: further) | rush the keeper out (hold) |
+  | RT | RT | R2 | P | sprint | sprint |
+  | LT | LT | L2 | / | protect the ball / close control | jockey |
+  | RB | RB | R1 | , | finesse modifier (RB + B) | teammate contain (hold) |
+  | LB | LB | L1 | I | chip (LB + B), lobbed through (LB + Y), tap alone: trigger a run | change player |
+  | right stick | RS | R | arrows | skill moves | switch to the man that way |
+  | start | MENU | OPTIONS | Esc / Enter | pause | pause |
+
+  Also B then A at once: fake shot. Set pieces: the stick aims; A short (pass, throw, short corner); X long
+  (cross, long throw); hold B to shoot a free kick or penalty; free kicks in range: right stick left / right
+  curl, up / down height (FC's reticle). The keeper with the ball: A throws, X or B drop-kicks. Facing a
+  penalty: the stick held as it is struck. Stars = 1 + one per ten rating points over 50; a move above them
+  is a stumble. Version 1 (the first release: defence A tackle / hold contain, B slide, X teammate press; LT
+  the chip and lobbed modifier; LB a run on the press; free-kick curl on LB / RB; keys J K L I, Shift,
+  Space, Q, E, R + direction) replays its own records. Touch: the round pad; the four buttons sit where a
+  pad's do (attacking PASS / SHOOT / CROSS / THRU, defending CONTAIN / TACKLE / SLIDE / KEEPER), SPRINT,
+  RUN / SWITCH, START; a swipe on the picture is the right stick.
+  **The controls guide** (`Guide.jsx`, after the tennis one): our own drawn pad, labelled with the
+  connected pad's glyphs (or the keys), tabs ATTACK / DEFEND / SET PIECES, plain words; shown before the
+  first match (skippable, remembered in `hvi-soccer-guide-seen`) and under pause, CONTROLS. In the first
+  matches a prompt names the button for what you are doing ("B: SHOOT (HOLD FOR POWER)", "Y: THROUGH
+  BALL", "B: TACKLE", "HOLD A: CONTAIN", "LB: CHANGE PLAYER"); each retires after three uses
+  (`hvi-soccer-tips`). The legend under the picture names the buttons in the hands in use, attacking or
+  defending.
 - **The CPU** (both sides, from each player's rating, with per-player variety): a formation shape that moves
   with the ball and with possession; the back line holds a line (dropping when the ball carrier is free),
   the forwards play on the last man's shoulder and read the line only now and then (a line that steps up
@@ -2916,7 +2955,8 @@ mechanics and conventions of the FC games; none of their names, marks, kits, clu
   through a crowd is usually given as a corner); the woodwork; fouls from mistimed and from-behind tackles,
   slides and shoulders (a booked man is more careful); yellow, second yellow and red (serious foul play;
   denying an obvious chance outside the area); a sent-off man leaves; free kicks with a wall of 3-5 at 9.15
-  m (in range: aim with the stick, R + up / down height, LB / RB curl, hold B; the curl bends the flight);
+  m (in range: aim with the stick, right stick up / down height and left / right curl, hold B; the curl bends
+  the flight);
   penalties (stick for a side, B for power; the CPU keeper guesses, the human's dives the way the stick is
   held as it is struck).
 - **Calibration** (CPU v CPU, the default 2 x 4 minutes, 80 matches): 2.98 goals, 27.9 shots, 10.3 on target
@@ -2933,15 +2973,17 @@ mechanics and conventions of the FC games; none of their names, marks, kits, clu
   CO-OP (high and wide); changeable mid-match.
 - **Faces**: heads cut from each file photo by `src/play/heads.js`, on the kit; painted from the default
   spec when no likeness exists.
-- **The record**: `{version, seed, cfg (length, formations, knockout, easy, lock, both elevens), inputLog,
+- **The record**: `{version (2; 1 still replays on its own rules), seed, cfg (length, formations, knockout,
+  level (v1: easy), lock, both elevens), inputLog,
   result}`, the human's 16-bit mask a frame (UP 1, DOWN 2, LEFT 4, RIGHT 8, A 16, B 32, X 64, Y 128, RT 256,
   LT 512, LB 1024, RB 2048, right stick 4096-32768), run-length encoded. Re-run at the whistle; the last five
   kept in `localStorage["hvi-soccer-exhibitions"]`; WATCH THE REPLAY plays the tape at 2x.
 - **Check**: `scripts/check-soccer.mjs` (purity; offside beyond / level / from a throw-in / through a save;
   throw-in, goal kick, corner, goal, the post; penalty; yellow, second yellow, straight red, ten men; extra
   time and the shootout's arithmetic; the power bar, the assisted pass, the stars; a bot pressing every
-  button replays exactly, another seed differs, a doctored log fails, another version is refused, easy and
-  lock replay; strength; calibration bands; the rosters and clock equal the league's and the city's; the
+  button replays exactly, another seed differs, a doctored log fails, an unknown version is refused, a v1
+  record replays on v1, level and lock replay; the FC mapping table for both pad families and the keys, and
+  what each button does; the casual human's share of the points by level; strength; calibration bands; the rosters and clock equal the league's and the city's; the
   calls quote nobody).
 - **Not yet**: advantage, substitutions, injuries, stamina, the human controlling the keeper in open play,
   manual (unassisted) passing, set-piece routines, counting results anywhere, a server replay check.

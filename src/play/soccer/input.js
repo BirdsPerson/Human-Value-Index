@@ -1,33 +1,38 @@
 // THE ESTATE PITCH, playable: the hands. Keys, a controller and the touch pad, folded into the sim's
 // one 16-bit mask a frame (sim.js BTN), plus START (pause) on its own, which never reaches the sim or
-// the record.
-//   keys   WASD / arrows move; J or Z: A (pass, tackle); K or X: B (shoot, slide); L or C: X (lob /
-//          cross, press); I or V: Y (through ball); Shift: RT (sprint); Space: LT (close control,
-//          jockey); Q: LB (switch, call a run); E or O: RB (finesse); R + a direction: the right stick
-//          (skill moves; on defence, switch that way); Enter or Esc: START
+// the record. Both follow EA SPORTS FC's defaults (docs/CITY_SPEC.md, Soccer, "Controls"):
+//   keys   FC 27's default WASD keyboard layout (help.ea.com, "mouse and keyboard controls on PC"):
+//          WASD move; the four keys L ; K O sit like the pad's face buttons: L = A (pass; defending:
+//          contain), ; = B (shoot; tackle), K = X (lob / cross; slide), O = Y (through ball; rush the
+//          keeper); P = RT (sprint); / = LT (shield, jockey); I = LB (chip / lobbed modifier, trigger
+//          a run; defending: change player); , = RB (finesse; teammate contain); the arrow keys are
+//          the right stick (skill moves, held with Right Shift in FC; switching on defence);
+//          Enter or Esc: START
 //   pad    the standard mapping (city/gamepad.js names the family and reads the left stick); the face
-//          buttons, bumpers, triggers and right stick are read here by position, the FC Xbox layout
-//          (A pass, B shoot, X lob, Y through). A Switch pad's A/B and X/Y are swapped by label, as
-//          gamepad.js does.
+//          buttons, bumpers, triggers and right stick are read here by POSITION, FC's default layout
+//          (bottom pass, right shoot, left lob, top through). A Switch pad's labels at those
+//          positions differ (PAD_GLYPHS names them), as gamepad.js does.
 //   touch  the page's buttons set held bits (setTouch); a swipe on the picture is a right-stick flick
 import { readPad, familyOf } from "../../city/gamepad.js";
 import { BTN } from "./sim.js";
 
-const KEYMAP = {
-  ArrowUp: BTN.UP, KeyW: BTN.UP, ArrowDown: BTN.DOWN, KeyS: BTN.DOWN, ArrowLeft: BTN.LEFT, KeyA: BTN.LEFT, ArrowRight: BTN.RIGHT, KeyD: BTN.RIGHT,
-  KeyJ: BTN.A, KeyZ: BTN.A, KeyK: BTN.B, KeyX: BTN.B, KeyL: BTN.X, KeyC: BTN.X, KeyI: BTN.Y, KeyV: BTN.Y,
-  ShiftLeft: BTN.RT, ShiftRight: BTN.RT, Space: BTN.LT, KeyQ: BTN.LB, KeyE: BTN.RB, KeyO: BTN.RB,
+export const KEYMAP = {
+  KeyW: BTN.UP, KeyS: BTN.DOWN, KeyA: BTN.LEFT, KeyD: BTN.RIGHT,
+  KeyL: BTN.A, Semicolon: BTN.B, KeyK: BTN.X, KeyO: BTN.Y,
+  KeyP: BTN.RT, Slash: BTN.LT, KeyI: BTN.LB, Comma: BTN.RB,
+  ArrowUp: BTN.RU, ArrowDown: BTN.RD, ArrowLeft: BTN.RL, ArrowRight: BTN.RR,
 };
-const MOVE = BTN.UP | BTN.DOWN | BTN.LEFT | BTN.RIGHT;
-// The right stick's bits from the left stick's (R held on a keyboard).
-const toRS = (m) => ((m & BTN.UP) ? BTN.RU : 0) | ((m & BTN.DOWN) ? BTN.RD : 0) | ((m & BTN.LEFT) ? BTN.RL : 0) | ((m & BTN.RIGHT) ? BTN.RR : 0);
+// The keys as the legend and the guide name them, by the pad button they stand for.
+export const KEY_GLYPHS = { A: "L", B: ";", X: "K", Y: "O", LB: "I", RB: ",", LT: "/", RT: "P", RS: "ARROWS", LS: "WASD", start: "ESC" };
+// The pad buttons by standard-mapping index (the FC default by position).
+export const PAD_INDEX = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7 };
 
 // Pad glyphs for the buttons gamepad.js GLYPHS does not name.
 export const PAD_GLYPHS = {
-  xbox: { A: "A", B: "B", X: "X", Y: "Y", LB: "LB", RB: "RB", LT: "LT", RT: "RT", RS: "RIGHT STICK", start: "MENU" },
-  playstation: { A: "✕", B: "○", X: "□", Y: "△", LB: "L1", RB: "R1", LT: "L2", RT: "R2", RS: "RIGHT STICK", start: "OPTIONS" },
-  switch: { A: "B", B: "A", X: "Y", Y: "X", LB: "L", RB: "R", LT: "ZL", RT: "ZR", RS: "RIGHT STICK", start: "+" },
-  generic: { A: "A", B: "B", X: "X", Y: "Y", LB: "LB", RB: "RB", LT: "LT", RT: "RT", RS: "RIGHT STICK", start: "START" },
+  xbox: { A: "A", B: "B", X: "X", Y: "Y", LB: "LB", RB: "RB", LT: "LT", RT: "RT", RS: "RIGHT STICK", LS: "LEFT STICK", start: "MENU" },
+  playstation: { A: "✕", B: "○", X: "□", Y: "△", LB: "L1", RB: "R1", LT: "L2", RT: "R2", RS: "RIGHT STICK", LS: "LEFT STICK", start: "OPTIONS" },
+  switch: { A: "B", B: "A", X: "Y", Y: "X", LB: "L", RB: "R", LT: "ZL", RT: "ZR", RS: "RIGHT STICK", LS: "LEFT STICK", start: "+" },
+  generic: { A: "A", B: "B", X: "X", Y: "Y", LB: "LB", RB: "RB", LT: "LT", RT: "RT", RS: "RIGHT STICK", LS: "LEFT STICK", start: "START" },
 };
 // The FC layout is by position (pass on the bottom button): on a Switch pad the bottom button is
 // labelled B, so the glyphs above name the labels at those positions.
@@ -35,17 +40,16 @@ export const PAD_GLYPHS = {
 const down = (pad, i) => { const b = pad?.buttons?.[i]; return Boolean(b && (typeof b === "object" ? b.pressed || b.value > 0.5 : b > 0.5)); };
 
 export function createInput() {
-  let keys = 0, touch = 0, startQ = 0, padStart = false, family = null, tapped = 0, rHeld = false, swipe = 0, swipeT = 0;
+  let keys = 0, touch = 0, startQ = 0, padStart = false, family = null, tapped = 0, swipe = 0, swipeT = 0;
   const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); };
   const kd = (e) => {
     if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.code === "Enter" || e.code === "Escape") { if (!e.repeat) startQ++; e.preventDefault(); return; }
-    if (e.code === "KeyR") { rHeld = true; e.preventDefault(); return; }
     const b = KEYMAP[e.code];
     if (b) { keys |= b; tapped |= b; e.preventDefault(); }
   };
-  const ku = (e) => { if (e.code === "KeyR") rHeld = false; const b = KEYMAP[e.code]; if (b) keys &= ~b; };
-  const blur = () => { keys = 0; touch = 0; rHeld = false; };
+  const ku = (e) => { const b = KEYMAP[e.code]; if (b) keys &= ~b; };
+  const blur = () => { keys = 0; touch = 0; };
   window.addEventListener("keydown", kd);
   window.addEventListener("keyup", ku);
   window.addEventListener("blur", blur);
@@ -54,7 +58,6 @@ export function createInput() {
     sample() {
       let mask = keys | touch | tapped;
       tapped = 0;
-      if (rHeld) { const mv = mask & MOVE; mask = (mask & ~MOVE) | toRS(mv); }
       if (swipeT > 0) { mask |= swipe; swipeT--; }
       const p = readPad();
       if (p.connected) {
@@ -64,15 +67,8 @@ export function createInput() {
         const t = 0.35;
         if (p.x > t) mask |= BTN.RIGHT; else if (p.x < -t) mask |= BTN.LEFT;
         if (p.y > t) mask |= BTN.DOWN; else if (p.y < -t) mask |= BTN.UP;
-        // by position: bottom A, right B, left X, top Y (the FC Xbox layout)
-        if (down(raw, 0)) mask |= BTN.A;
-        if (down(raw, 1)) mask |= BTN.B;
-        if (down(raw, 2)) mask |= BTN.X;
-        if (down(raw, 3)) mask |= BTN.Y;
-        if (down(raw, 4)) mask |= BTN.LB;
-        if (down(raw, 5)) mask |= BTN.RB;
-        if (down(raw, 6)) mask |= BTN.LT;
-        if (down(raw, 7)) mask |= BTN.RT;
+        // by position: bottom A, right B, left X, top Y, the bumpers and the triggers (FC's default)
+        for (const [k, i] of Object.entries(PAD_INDEX)) if (down(raw, i)) mask |= BTN[k];
         const rx = raw?.axes?.[2] || 0, ry = raw?.axes?.[3] || 0;
         if (rx > 0.6) mask |= BTN.RR; else if (rx < -0.6) mask |= BTN.RL;
         if (ry > 0.6) mask |= BTN.RD; else if (ry < -0.6) mask |= BTN.RU;

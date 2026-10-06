@@ -11,15 +11,22 @@
 // Control is the FC convention: the human steers one player of team 0 (st.ctl), the ball carrier when
 // team 0 has it (a pass switches to its receiver), on defence the player chosen by LB / the right
 // stick (or the nearest when the ball is lost). Input: one 16-bit mask a frame (BTN):
+// the buttons by position, EA SPORTS FC's default ("Classic") layout from version 2:
 //   attack   A pass (to the mate the stick points at)  B shoot (hold: power; release)  X lob / cross
-//            Y through ball (hold: further)  RT sprint  LT close control  RB+B finesse  LT+B chip
-//            LT+Y lobbed through  LB call a run  right stick: skill moves  B then A: fake shot
-//   defence  A tackle (hold: contain)  B slide  X teammate press (close: shoulder)  RT sprint
-//            LT jockey  LB / right stick switch
+//            Y through ball (hold: further)  RT sprint  LT protect / close control  RB+B finesse
+//            LB+B chip  LB+Y lobbed through  LB tapped alone: trigger a run  right stick: skill moves
+//            B then A: fake shot
+//   defence  A contain (hold)  B tackle (chasing, close: push / pull)  X slide  RB teammate contain
+//            (hold)  Y rush the keeper out (hold)  RT sprint  LT jockey  LB / right stick switch
+//   keeper   A throw  X or B drop kick      free kick: right stick left / right curl, up / down height
+// Version 1 (the first release): defence A tackle (hold: contain), B slide, X teammate press; LT the
+// chip / lobbed-through modifier; LB the run on the press; free kick curl on LB / RB. Its records
+// replay on its own rules.
 // Everyone else, both sides, is the CPU, from the league rating: formation shape, pressing, marking,
 // off-ball runs, the offside line, a goalkeeper who positions, dives, catches, parries and distributes.
 
-export const VERSION = 1;
+export const VERSION = 2;   // 2: EA SPORTS FC's default buttons on defence and the LB modifiers; the six levels
+export const VERSIONS = [1, 2];
 export const HZ = 60;
 const DT = 1 / HZ, G = 9.81;
 export const PITCH = { hx: 52.5, w: 68, cy: 34, gw: 3.66, bar: 2.44, boxD: 16.5, boxW: 20.16, sixD: 5.5, sixW: 9.16, spot: 11, circle: 9.15 };
@@ -102,22 +109,76 @@ export function lineUp(rows, form) {
 // cfg: {half (real minutes a half: 3 | 4 | 6 | 8), form: "442" | "433" | "352" (yours), formB (theirs),
 // ko (extra time and penalties if level), easy, lock (your player index to lock control to, or -1),
 // home: [[key, name, r] x 11], away: [...], auto (team 0 played by the CPU too: checks, attract)}.
-export function newGame(seed = 1, cfg = {}) {
+// Difficulty: EA SPORTS FC's six levels, as data (a league division can map to a default level).
+// Every lever is a number the sim reads; on version 1 records the old EASY MODE switch picks the old
+// pair (easy / not) and the levels do not exist. A CPU-v-CPU match (auto) plays neutral, as rated.
+//   hz      the speed the page runs the match at (the sim is per frame; fewer frames a second is slower)
+//   pass lob shot pen fk   the error on your side's passes, lofted balls, shots, penalties, free kicks (x)
+//   cone    how wide your pass looks for a teammate around the stick (cos; lower is more forgiving)
+//   heavy   less chance of your side's heavy first touch (subtracted)
+//   gkCpu   frames later the CPU keeper reacts to your shots; gkMine: frames sooner yours reacts to theirs
+//   eager   the CPU's appetite for a tackle (x); think: frames the CPU carrier waits longer to decide
+//   cpuErr  the error on the CPU's passes and shots (x)
+//   help    0: you defend alone; 1: your man keeps his place when you let go, and goes to a loose ball;
+//           2: and a teammate presses with you all the time (FC's teammate contain, held for you)
+//   keep    less chance a CPU standing tackle takes the ball off your side (subtracted)
+//   win     more chance your side's standing tackle wins it (added)
+//   lane    your pass picks the open man near the stick over the one exactly on it (FC's assisted passing)
+//   rate    the CPU side plays as if its league ratings were this much higher (FC's CPU ability)
+//   auto    your defender's own tackle, a chance a frame when in reach and you have not (FC's legacy help)
+// A level is a point e (0..1) between the sim as rated (e = 0: no help, the CPU at its ratings; what
+// CPU v CPU plays) and EASE_END (e = 1), each lever straight between the two. The yardstick is a
+// casual human (scripts/check-soccer.mjs plays one): he wins about seven in ten on BEGINNER, half on
+// AMATEUR and SEMI-PRO, one in six on LEGENDARY. The sim as rated is harder than LEGENDARY for him.
+const NEUTRAL = { pass: 1, lob: 1, shot: 1, pen: 1, fk: 1, cone: 0.45, heavy: 0, gkCpu: 0, gkMine: 0, eager: 1, think: 0, cpuErr: 1, help: 0, keep: 0, win: 0, auto: 0, lane: 0, rate: 0 };
+const EASE_END = { pass: 0.4, lob: 0.45, shot: 0.35, pen: 0.5, fk: 0.55, cone: 0.1, heavy: 0.06, gkCpu: 7, gkMine: 4, eager: 0.4, think: 14, cpuErr: 2.2, keep: 0.25, win: 0.15, auto: 0.15, lane: 1.2, rate: -26 };
+const INT = new Set(["gkCpu", "gkMine", "think", "rate"]);
+// The levers at ease e: for a league pyramid's divisions, or a level of its own.
+export function leversAt(e, hz = 60) {
+  e = clamp(e, 0, 1);
+  const L = { e, hz, help: e >= 0.75 ? 2 : e > 0.2 ? 1 : 0 };
+  for (const k of Object.keys(EASE_END)) {
+    const v = NEUTRAL[k] + e * (EASE_END[k] - NEUTRAL[k]);
+    L[k] = INT.has(k) ? Math.round(v) : Math.round(v * 1000) / 1000;
+  }
+  return L;
+}
+export const LEVELS = [
+  { id: "beginner", name: "BEGINNER", ...leversAt(0.77, 48) },
+  { id: "amateur", name: "AMATEUR", ...leversAt(0.56, 54) },
+  { id: "semipro", name: "SEMI-PRO", ...leversAt(0.47) },
+  { id: "pro", name: "PROFESSIONAL", ...leversAt(0.38) },
+  { id: "worldclass", name: "WORLD CLASS", ...leversAt(0.27) },
+  { id: "legendary", name: "LEGENDARY", ...leversAt(0.1) },
+];
+export const DEFAULT_LEVEL = 0;
+const EASY_V1 = { pass: 0.5, lob: 0.55, shot: 0.6, pen: 0.6, fk: 0.65, cone: 0.2, heavy: 0.04, gkCpu: 2, gkMine: 2, eager: 0.7, think: 6, cpuErr: 1, help: 1, keep: 0, win: 0, auto: 0, lane: 0, rate: 0 };
+export const levelOf = (cfg) => (Number.isInteger(cfg?.level) && cfg.level >= 0 && cfg.level < LEVELS.length ? cfg.level : DEFAULT_LEVEL);
+function leversOf(v, cfg) {
+  if (v < 2) return cfg.easy ? EASY_V1 : NEUTRAL;
+  return cfg.auto ? NEUTRAL : LEVELS[cfg.level];
+}
+
+// v: the rules version (a record replays on its own; 1 is the first release's buttons and EASY MODE).
+export function newGame(seed = 1, cfg = {}, v = VERSION) {
+  if (!VERSIONS.includes(v)) throw new Error("soccer: a record of another version");
   const half = LENGTHS.includes(cfg.half) ? cfg.half : 4;
   const form = FORMATIONS[cfg.form] ? cfg.form : "442", formB = FORMATIONS[cfg.formB] ? cfg.formB : "442";
   const rows = (r) => { const a = (Array.isArray(r) ? r : []).slice(0, 11); while (a.length < 11) a.push([`stand-in-${a.length}`, "A STAND-IN", 40]); return a; };
-  const A = lineUp(rows(cfg.home), form), B = lineUp(rows(cfg.away), formB);
+  const D = leversOf(v, { easy: cfg.easy, auto: cfg.auto, level: levelOf(cfg) });
+  const A = lineUp(rows(cfg.home), form), B = lineUp(rows(cfg.away), formB).map(([k, n, r]) => [k, n, D.rate ? clamp((r | 0) + D.rate, 1, 99) : r]);
   const st = {
-    v: VERSION, seed: seed >>> 0, rng: seed | 0, frame: 0,
-    cfg: { half, form, formB, ko: Boolean(cfg.ko), easy: Boolean(cfg.easy), auto: Boolean(cfg.auto), lock: Number.isInteger(cfg.lock) && cfg.lock >= 0 && cfg.lock < 11 ? cfg.lock : -1 },
+    v, seed: seed >>> 0, rng: seed | 0, frame: 0,
+    cfg: { half, form, formB, ko: Boolean(cfg.ko), ...(v < 2 ? { easy: Boolean(cfg.easy) } : { level: levelOf(cfg) }), auto: Boolean(cfg.auto), lock: Number.isInteger(cfg.lock) && cfg.lock >= 0 && cfg.lock < 11 ? cfg.lock : -1 },
     p: [...A.map((r, i) => mkPlayer(0, i, r, FORMATIONS[form].slots[i])), ...B.map((r, i) => mkPlayer(1, i, r, FORMATIONS[formB].slots[i]))],
     ball: { x: 0, y: 34, z: 0, vx: 0, vy: 0, vz: 0, spin: 0, own: -1, by: -1, kind: "", recv: -1, id: 0, at: 0, lastT: -1, lastG: -1, tx: 0, ty: 0, rolled: 0 },
     phase: "kickoff", t: 0, half: 1, clock: 0, halfLen: half * 3600, added: -1, stops: 0, firstKick: 0, kickTeam: 0,
     score: [0, 0], pens: null, goals: [],
     stats: { shots: [0, 0], on: [0, 0], poss: [0, 0], fouls: [0, 0], yel: [0, 0], red: [0, 0], off: [0, 0], corners: [0, 0], saves: [0, 0], passes: [0, 0], passOk: [0, 0] },
-    ctl: 0, mask: 0, prev: 0, held: { A: 0, B: 0, X: 0, Y: 0 }, rsLast: 0, rsAt: -99, bAt: -99,
+    ctl: 0, mask: 0, prev: 0, held: { A: 0, B: 0, X: 0, Y: 0 }, rsLast: 0, rsAt: -99, bAt: -99, lbUse: 0, rushGK: false,
     ev: [], note: null, rs: null, ofs: null, plan: null, path: [], pathAt: 0, so: null, poss: -1, possT: -1, aim: null, celebrate: null,
   };
+  st.D = D;
   st.firstKick = rnd(st) < 0.5 ? 0 : 1;
   setKickoff(st, st.firstKick);
   return st;
@@ -339,7 +400,7 @@ function keeperPlan(st, T) {
   const gl = crossing(st, T);
   if (!onTarget(gl)) { st.plan = { k: K.g, miss: true, id: b.id, f: gl ? st.frame + gl.f : st.frame + 60, y: gl?.y ?? 34, z: gl?.z ?? 1 }; return; }
   const kc = crossing(st, T, K.x) || gl;
-  const sp = len(b.vx, b.vy), react = Math.round(3 + (1 - K.gk) * 5 + (st.cfg.easy && T === 0 && !st.cfg.auto ? 2 : 0) - (st.cfg.easy && T === 1 ? 2 : 0));
+  const sp = len(b.vx, b.vy), react = Math.round(3 + (1 - K.gk) * 5 + (T === 0 && !st.cfg.auto ? st.D.gkCpu : 0) - (T === 1 ? st.D.gkMine : 0));
   const dy = Math.abs(kc.y - K.y), dz = kc.z > 1.7 ? (kc.z - 1.7) * 1.1 : 0, need = dy + dz;
   const ta = Math.max(0, (kc.f - react) / HZ), reach = Math.min(3.1 + 0.5 * K.gk, 1.75 + (4.5 + 2 * K.gk) * ta);
   let save = false, hold = false;
@@ -430,7 +491,7 @@ function standingTackle(st, O) {
   const d = len(b.x - O.x, b.y - O.y), dv = len(V.x - O.x, V.y - O.y);
   if (d > 1.45 && dv > 1.3) return;
   const beh = behindness(O, V), shield = V.act?.kind === "roulette" ? 0.4 : 1, tight = V.close ? -0.12 : 0, loose = V.sprint ? 0.12 : 0;
-  const p = clamp((0.5 + 0.42 * O.def - 0.55 * V.drib + loose + tight - (beh > 0.4 ? 0.25 : 0) + (O.jockeyF > 20 ? 0.1 : 0) + (d < 0.9 ? 0.1 : 0)) * shield, 0.05, 0.9);
+  const p = clamp((0.5 + 0.42 * O.def - 0.55 * V.drib + loose + tight - (beh > 0.4 ? 0.25 : 0) + (O.jockeyF > 20 ? 0.1 : 0) + (d < 0.9 ? 0.1 : 0)) * shield - (V.t === 0 && !st.cfg.auto ? st.D.keep : 0) + (O.t === 0 && !st.cfg.auto ? st.D.win : 0), 0.05, 0.9);
   const r = rnd(st);
   O.act.done = true;
   if (r < p) {
@@ -524,7 +585,7 @@ function mateToward(st, P, dx, dy, opts = {}) {
     if (d < 2.5 || d > (opts.max || 50)) continue;
     const c = (ox * dx + oy * dy) / d;
     if (c < (opts.cone ?? 0.45)) continue;
-    const s = c * 3 - d / (opts.far ? 40 : 18) + (opts.fwd ? uOf(st, P.t, Q.x) / 40 : 0) - (opts.runner && !Q.run ? 0.3 : 0);
+    const s = c * 3 - d / (opts.far ? 40 : 18) + (opts.fwd ? uOf(st, P.t, Q.x) / 40 : 0) - (opts.runner && !Q.run ? 0.3 : 0) + (opts.lane ? opts.lane * clamp(laneMargin(st, 1 - P.t, P.x, P.y, Q.x, Q.y, 12), -3, 2) : 0);
     if (s > bs) { bs = s; best = Q; }
   }
   return best;
@@ -533,7 +594,7 @@ function mateToward(st, P, dx, dy, opts = {}) {
 function passTo(st, P, tx, ty, Q, kind = "pass", power = 0) {
   const d = len(tx - P.x, ty - P.y) || 1, ux = (tx - P.x) / d, uy = (ty - P.y) / d;
   const pr = pressureOn(st, P), shape = clamp(-(ux * P.fx + uy * P.fy), 0, 1);
-  const easy = st.cfg.easy && P.t === 0 && !st.cfg.auto ? 0.5 : 1;
+  const easy = P.t === 0 && !st.cfg.auto ? st.D.pass : st.D.cpuErr;
   const err = (0.02 + 0.12 * (1 - P.pass)) * (1 + 0.9 * pr + 0.7 * shape) * easy;
   const e = gauss(st) * err, ex = ux - uy * e, ey = uy + ux * e, el = len(ex, ey);
   const sp = clamp(passSpeed(d, kind === "through" ? 5.5 : 7.5) * (1 + gauss(st) * 0.05 * (1 - P.pass)) + power * 3, 6, 30);
@@ -555,7 +616,7 @@ function lobTo(st, P, tx, ty, Q, kind = "lob", hi = 1) {
     }
   }
   const d = len(tx - P.x, ty - P.y) || 1;
-  const pr = pressureOn(st, P), easy = st.cfg.easy && P.t === 0 && !st.cfg.auto ? 0.55 : 1;
+  const pr = pressureOn(st, P), easy = P.t === 0 && !st.cfg.auto ? st.D.lob : st.D.cpuErr;
   const err = (0.4 + 1.6 * (1 - P.pass)) * (1 + pr) * (0.5 + d / 40) * easy;
   const ex = tx + gauss(st) * err, ey = ty + gauss(st) * err;
   const T = Math.round(clamp((0.75 + d / 24) * hi, 0.7, 2.4) * HZ);
@@ -571,7 +632,7 @@ function shoot(st, P, power, aimY = null, kind = "drive", aimZ = null) {
   if (aimY === null) aimY = 34 + (P.y < 34 ? 1 : -1) * 2.6;   // across the keeper, to the far post
   const pr = pressureOn(st, P), ux = dx / d, uy = dy / d;
   const shape = clamp(1 - (ux * P.fx + uy * P.fy), 0, 1.6);   // shooting across or behind the body
-  const easy = st.cfg.easy && P.t === 0 && !st.cfg.auto ? 0.6 : 1;
+  const easy = P.t === 0 && !st.cfg.auto ? st.D.shot : st.D.cpuErr;
   const over = power > 0.82 ? 1 + (power - 0.82) * 6 : 1, weak = power < 0.25 ? 1.2 : 1;
   let err = d * (1 + d / 30) * (0.058 + 0.108 * (1 - P.shoot)) * (1 + 1.9 * pr) * (1 + 0.45 * shape) * over * weak * easy;
   if (kind === "finesse") err *= 0.75;
@@ -604,7 +665,12 @@ export function pressureOn(st, P) {
 function humanPlay(st, P, pressed) {
   const m = st.mask, b = st.ball, has = b.own === P.g, a = att(st, P.t);
   const dir = dirIn(m), rs = rsIn(m), rsNew = rs && !rsIn(st.prev);
-  const released = st.prev & ~m;
+  const released = st.prev & ~m, v2 = st.v >= 2;
+  // v2 (FC): LB is the chip and lobbed-through modifier, and a tap of it on its own triggers a run;
+  // v1: LT was the modifier and LB the run on the press.
+  const MOD = v2 ? BTN.LB : BTN.LT;
+  if (v2) st.rushGK = false;
+  if (v2) { if (pressed & BTN.LB) st.lbUse = 0; if (m & BTN.LB && pressed & (BTN.A | BTN.B | BTN.X | BTN.Y)) st.lbUse = 1; }
   // the held buttons: power bars
   for (const k of ["B", "X", "Y"]) st.held[k] = m & BTN[k] ? st.held[k] + 1 : 0;
   P.sprint = Boolean(m & BTN.RT); P.close = Boolean(m & BTN.LT) && has; P.jockey = Boolean(m & BTN.LT) && !has;
@@ -615,11 +681,11 @@ function humanPlay(st, P, pressed) {
   if (has) {
     if (released & BTN.B && st.shotArm) {
       const pw = Math.min(1, st.shotArm.f / SHOT_FULL), aimY = dir && Math.abs(dir[1]) > 0.3 ? 34 + (dir[1] > 0 ? 1 : -1) * 2.9 : null;
-      const kind = m & BTN.RB || st.shotArm.rb ? "finesse" : m & BTN.LT || st.shotArm.lt ? "chip" : "drive";
+      const kind = m & BTN.RB || st.shotArm.rb ? "finesse" : m & MOD || st.shotArm.lt ? "chip" : "drive";
       st.shotArm = null; shoot(st, P, pw, aimY, kind); return;
     }
     if (m & BTN.B) {
-      if (!st.shotArm) st.shotArm = { f: 0, rb: Boolean(m & BTN.RB), lt: Boolean(m & BTN.LT), at: st.frame };
+      if (!st.shotArm) st.shotArm = { f: 0, rb: Boolean(m & BTN.RB), lt: Boolean(m & MOD), at: st.frame };
       st.shotArm.f++;
       if (pressed & BTN.A && st.shotArm.f < 10) { st.shotArm = null; skill(st, P, "fakeshot", 0, 0); return; }
       P.wantX *= 0.6; P.wantY *= 0.6;
@@ -627,7 +693,7 @@ function humanPlay(st, P, pressed) {
     }
     st.shotArm = null;
     if (pressed & BTN.A) {
-      const d = dir || [P.fx, P.fy], Q = mateToward(st, P, d[0], d[1], { cone: st.cfg.easy ? 0.2 : 0.45 }) || mateToward(st, P, d[0], d[1], { cone: -0.3 });
+      const d = dir || [P.fx, P.fy], Q = mateToward(st, P, d[0], d[1], { cone: st.D.cone, lane: st.D.lane }) || mateToward(st, P, d[0], d[1], { cone: -0.3 });
       if (Q) passTo(st, P, Q.x + Q.vx * 0.3, Q.y + Q.vy * 0.3, Q); else passTo(st, P, P.x + d[0] * 15, P.y + d[1] * 15, null);
       return;
     }
@@ -639,11 +705,11 @@ function humanPlay(st, P, pressed) {
         let tx = Q.x + (rx / rl) * lead, ty = Q.y + (ry / rl) * lead;
         tx = clamp(tx, -P_.hx + 2, P_.hx - 2); ty = clamp(ty, 2, P_.w - 2);
         Q.run = { ...(Q.run || { f: 12, n: 80 }), tx, ty };
-        if (m & BTN.LT || st.ltOnY) lobTo(st, P, tx, ty, Q, "through-lob"); else passTo(st, P, tx, ty, Q, "through", pw * 0.6);
+        if (m & MOD || st.ltOnY) lobTo(st, P, tx, ty, Q, "through-lob"); else passTo(st, P, tx, ty, Q, "through", pw * 0.6);
       } else passTo(st, P, P.x + d[0] * 18, P.y + d[1] * 18, null, "through");
       return;
     }
-    if (m & BTN.Y) { st.yHeld = st.held.Y; st.ltOnY = Boolean(m & BTN.LT); }
+    if (m & BTN.Y) { st.yHeld = st.held.Y; st.ltOnY = Boolean(m & MOD); }
     if (released & BTN.X) {
       const pw = Math.min(1, (st.xHeld || 0) / LOB_FULL), u = uOf(st, P.t, P.x), wide = Math.abs(P.y - 34) > 13;
       if (u > 22 && wide) {
@@ -664,7 +730,7 @@ function humanPlay(st, P, pressed) {
       else { skill(st, P, "ballroll", 0, rs[1] > 0 ? 1 : -1); st.rsKind = "side"; }
       st.rsAt = st.frame;
     }
-    if (pressed & BTN.LB) callRun(st, P.t, P);
+    if (v2 ? released & BTN.LB && !st.lbUse : pressed & BTN.LB) callRun(st, P.t, P);
     return;
   }
   st.shotArm = null;
@@ -678,6 +744,25 @@ function humanPlay(st, P, pressed) {
   if (pressed & BTN.LB && st.cfg.lock < 0) { switchTo(st, nearestToBall(st, 0, P)); return; }
   if (rsNew && st.cfg.lock < 0) { const Q = mateToward(st, P, rs[0], rs[1], { cone: 0.3, max: 60 }); if (Q) switchTo(st, Q); return; }
   const V = b.own >= 0 ? st.p[b.own] : null;
+  if (v2) {
+    // FC: B tackles (chasing him, close: a push or pull), X slides, A holds contain, RB holds a
+    // teammate on him too, Y holds the keeper rushing out
+    st.rushGK = Boolean(m & BTN.Y);
+    if (pressed & BTN.B && !P.act) {
+      const chasing = V && len(V.x - P.x, V.y - P.y) < 1.4 && (V.x - P.x) * V.vx + (V.y - P.y) * V.vy > 0;
+      P.act = chasing ? { kind: "shoulder", f: 0, n: 12 } : { kind: "tackle", f: 0, n: 16 };
+      return;
+    }
+    if (pressed & BTN.X && !P.act) { slideStart(st, P, dir); return; }
+    if (m & BTN.A && V) contain(st, P, V);
+    // the lower levels' assisted defending: in reach of the carrier, your man goes in by himself
+    if (st.D.auto && V && !P.act && !P.stun && len(V.x - P.x, V.y - P.y) < 1.5 && rnd(st) < st.D.auto) { P.act = { kind: "tackle", f: 0, n: 16 }; return; }
+    st.held.A = m & BTN.A ? st.held.A + 1 : 0;
+    st.press2 = Boolean(m & BTN.RB) || st.D.help >= 2;
+    if (P.jockey && V) { const k = 0.62; contain(st, P, V); P.wantX *= k / 0.9; P.wantY *= k / 0.9; P.jockeyF = (P.jockeyF || 0) + 1; } else P.jockeyF = 0;
+    if (!dir && st.D.help && !(m & BTN.A) && !P.jockey) P.manual = false;
+    return;
+  }
   if (pressed & BTN.A && !P.act) { P.act = { kind: "tackle", f: 0, n: 16 }; return; }
   if (pressed & BTN.B && !P.act) { slideStart(st, P, dir); return; }
   if (m & BTN.A && st.held.A > 10 && V) contain(st, P, V);
@@ -685,7 +770,7 @@ function humanPlay(st, P, pressed) {
   if (pressed & BTN.X && V && len(V.x - P.x, V.y - P.y) < 1.4 && !P.act) { P.act = { kind: "shoulder", f: 0, n: 12 }; return; }
   st.press2 = Boolean(m & BTN.X);
   if (P.jockey && V) { const k = 0.62; contain(st, P, V); P.wantX *= k / 0.9; P.wantY *= k / 0.9; P.jockeyF = (P.jockeyF || 0) + 1; } else P.jockeyF = 0;
-  if (!dir && st.cfg.easy && !(m & BTN.A) && !P.jockey) P.manual = false;   // easy: your man keeps his place when you let go
+  if (!dir && st.D.help && !(m & BTN.A) && !P.jockey) P.manual = false;   // easy: your man keeps his place when you let go
 }
 // FC's contain: shadow the carrier goal-side at a step's distance.
 function contain(st, P, V) {
@@ -833,7 +918,7 @@ function aiMove(st, P) {
       // the challenge: when in reach, by his defending, and patience
       if (!P.act && !P.stun && close < 1.5 && P.think <= 0) {
         const facing = behindness(P, carrier);
-        const eager = (0.15 + 0.22 * P.def) * (facing > 0.4 ? (P.yc ? 0.25 : 0.8) : 1) * (st.cfg.easy && t === 1 ? 0.7 : 1);
+        const eager = (0.15 + 0.22 * P.def) * (facing > 0.4 ? (P.yc ? 0.25 : 0.8) : 1) * (t === 1 ? st.D.eager : 1);
         const box = inOwnBox(st, P) ? 0.8 : 1;   // in his own area a defender is careful
         if (rnd(st) < eager * box) P.act = { kind: "tackle", f: 0, n: 16 };
         else if (facing > -0.2 && rnd(st) < (dogsoOf(st, carrier) ? 0.06 : 0.05 * (1.2 - P.def)) * box * box) slideStart(st, P, null);
@@ -929,6 +1014,11 @@ function gkMove(st, K) {
   if (K.act?.kind === "dive" || K.act?.kind === "hold") return;
   if (st.phase === "dead" && st.rs?.type === "goal" && st.rs.team === K.t) return;
   if (st.chase[K.t] === K.g && b.own < 0 && st.phase === "live") { const [x, y] = K.icpt || [b.x, b.y]; return setTarget(K, x, y, true, 0.2); }
+  // FC's Y held on defence: your keeper rushes out at the ball (to the edge of his area)
+  if (st.rushGK && K.t === 0 && st.phase === "live" && !st.cfg.auto) {
+    const u = clamp(uOf(st, 0, b.x), -P_.hx, -P_.hx + P_.boxD), y = clamp(b.y, 34 - P_.boxW, 34 + P_.boxW);
+    return setTarget(K, xOf(st, 0, u), y, true, 0.2);
+  }
   const bx = b.x, by = b.y, dx = bx - gx, dy = by - 34, d = len(dx, dy) || 1;
   let out = clamp(d * 0.09, 0.6, 4.2);
   const C = b.own >= 0 ? st.p[b.own] : null;
@@ -976,7 +1066,7 @@ function carrierThink(st, P) {
   P.think--;
   const pr = pressureOn(st, P);
   if (P.think > 0 && !(pr > 0.75 && P.think > 4)) return steer(st, P);
-  P.think = Math.round(7 + (1 - P.k) * 10 + rnd(st) * 6) - (st.cfg.easy && t === 1 ? -6 : 0);
+  P.think = Math.round(7 + (1 - P.k) * 10 + rnd(st) * 6) + (t === 1 ? st.D.think : 0);
   const u = uOf(st, t, P.x), xg = xgOf(st, P), noise = () => (rnd(st) - 0.5) * (0.12 + 0.2 * (1 - P.k));
   let best = { s: -1e9 };
   let lab = "";
@@ -1061,9 +1151,10 @@ function gkDistribute(st, K) {
   K.hold = (K.hold || 0) + 1;
   if (human(st, K)) {
     const m = st.mask, pressed = m & ~st.prev, dir = dirIn(m);
-    if (pressed & BTN.A || pressed & BTN.X) {
-      const d = dir || [att(st, K.t), 0], Q = mateToward(st, K, d[0], d[1], { cone: 0, far: pressed & BTN.X });
-      if (Q) { if (pressed & BTN.X) lobTo(st, K, Q.x, Q.y, Q, "gk"); else throwTo(st, K, Q); }
+    const kickB = pressed & BTN.X || (st.v >= 2 && pressed & BTN.B);   // FC: A throws, X or B drop-kicks
+    if (pressed & BTN.A || kickB) {
+      const d = dir || [att(st, K.t), 0], Q = mateToward(st, K, d[0], d[1], { cone: 0, far: kickB });
+      if (Q) { if (kickB) lobTo(st, K, Q.x, Q.y, Q, "gk"); else throwTo(st, K, Q); }
       return;
     }
     if (K.hold < 240) return;
@@ -1152,7 +1243,7 @@ function contacts(st) {
   }
   // the first touch: control by his touch, against its pace
   if (touch(st, C)) return;
-  const heavy = clamp(0.015 + Math.max(0, sp - 8) * 0.018 * (1.25 - C.drib) + (intended ? 0 : 0.05) + (C.sprint ? 0.04 : 0) - (st.cfg.easy && C.t === 0 && !st.cfg.auto ? 0.04 : 0), 0, 0.6);
+  const heavy = clamp(0.015 + Math.max(0, sp - 8) * 0.018 * (1.25 - C.drib) + (intended ? 0 : 0.05) + (C.sprint ? 0.04 : 0) - (C.t === 0 && !st.cfg.auto ? st.D.heavy : 0), 0, 0.6);
   if (rnd(st) < heavy) {
     const fx = b.vx * 0.3 + C.fx * 2.5 + (rnd(st) - 0.5) * 5, fy = b.vy * 0.3 + C.fy * 2.5 + (rnd(st) - 0.5) * 5;
     loose_(st, C, fx, fy, 0.2); b.rolled = 2 ** C.g; C.cool = 8;
@@ -1346,7 +1437,8 @@ function humanRestart(st, P, pressed) {
       aim.y = clamp(aim.y + dir[1] * 0.09, 34 - P_.gw - 1.2, 34 + P_.gw + 1.2);
       if (rs.type === "fk") aim.z = clamp(aim.z + (dir[0] * a) * -0.0, 0.2, 2.8);
     }
-    if (rs.type === "fk") { if (pressed & BTN.LB) aim.curl = clamp(aim.curl - 1, -3, 3); if (pressed & BTN.RB) aim.curl = clamp(aim.curl + 1, -3, 3); if (m & BTN.RU) aim.z = clamp(aim.z + 0.03, 0.2, 2.8); if (m & BTN.RD) aim.z = clamp(aim.z - 0.03, 0.2, 2.8); }
+    if (rs.type === "fk" && st.v >= 2) { const s = att(st, rs.team) > 0 ? 1 : -1; if (m & BTN.RL) aim.curl = clamp(aim.curl - 0.05 * s, -3, 3); if (m & BTN.RR) aim.curl = clamp(aim.curl + 0.05 * s, -3, 3); if (m & BTN.RU) aim.z = clamp(aim.z + 0.03, 0.2, 2.8); if (m & BTN.RD) aim.z = clamp(aim.z - 0.03, 0.2, 2.8); }
+    else if (rs.type === "fk") { if (pressed & BTN.LB) aim.curl = clamp(aim.curl - 1, -3, 3); if (pressed & BTN.RB) aim.curl = clamp(aim.curl + 1, -3, 3); if (m & BTN.RU) aim.z = clamp(aim.z + 0.03, 0.2, 2.8); if (m & BTN.RD) aim.z = clamp(aim.z - 0.03, 0.2, 2.8); }
     if (m & BTN.B) { st.held.B++; return; }
     if (released & BTN.B && st.held.B > 0) {
       const pw = Math.min(1, st.held.B / SHOT_FULL); st.held.B = 0;
@@ -1414,7 +1506,7 @@ function throwIn(st, P, Q, long) {
 }
 export function penaltyKick(st, P, aimY, power) {
   const a = att(st, P.t), b = st.ball, K = gkOf(st, 1 - P.t);
-  const easy = st.cfg.easy && P.t === 0 && !st.cfg.auto ? 0.6 : 1;
+  const easy = P.t === 0 && !st.cfg.auto ? st.D.pen : 1;
   const err = (0.35 + 0.9 * (1 - P.shoot)) * easy * (power > 0.8 ? 1 + (power - 0.8) * 4 : 1);
   const ty = aimY + gauss(st) * err, tz = clamp(0.15 + power * 1.9 + Math.abs(gauss(st)) * 0.25 + (power > 0.9 ? (power - 0.9) * 8 : 0), 0.1, 5);
   const gx = a * P_.hx, speed = 17 + power * 13, dx = gx - b.x, dy = ty - b.y, d = len(dx, dy), T = d / speed;
@@ -1439,7 +1531,7 @@ export function penaltyKick(st, P, aimY, power) {
 }
 function freeKickShot(st, P, aimY, aimZ, curl, power) {
   const a = att(st, P.t), b = st.ball, gx = a * P_.hx;
-  const easy = st.cfg.easy && P.t === 0 && !st.cfg.auto ? 0.65 : 1;
+  const easy = P.t === 0 && !st.cfg.auto ? st.D.fk : 1;
   const d0 = len(gx - b.x, aimY - b.y);
   const err = d0 * (0.014 + 0.04 * (1 - P.shoot)) * easy * (power > 0.85 ? 1 + (power - 0.85) * 6 : 1);
   const ty = aimY + gauss(st) * err, tz = aimZ + gauss(st) * err * 0.6 + (power > 0.9 ? (power - 0.9) * 10 : 0) - (power < 0.4 ? (0.4 - power) * 3 : 0);
@@ -1508,8 +1600,8 @@ function live(st, pressed) {
       humanPlay(st, P, pressed);
       if (!P.manual && !P.act) {
         // nobody on the stick: a receiver still goes to meet the ball; on easy, your man keeps his place
-        if (b.recv === P.g || (b.own < 0 && st.chase[0] === P.g && st.cfg.easy)) { const [x, y] = P.icpt || intercept(st, P); setTarget(P, x, y, true, 0.15); }
-        else if (st.cfg.easy && ballTeam(st) !== 0) aiMove(st, P);
+        if (b.recv === P.g || (b.own < 0 && st.chase[0] === P.g && st.D.help)) { const [x, y] = P.icpt || intercept(st, P); setTarget(P, x, y, true, 0.15); }
+        else if (st.D.help && ballTeam(st) !== 0) aiMove(st, P);
         else if (st.cfg.lock >= 0 && b.own !== P.g) aiMove(st, P);
       }
     } else if (b.own === P.g) carrierThink(st, P);
@@ -1664,10 +1756,11 @@ export function rleDecode(log) {
   for (let i = 0; i + 1 < log.length; i += 2) for (let k = 0; k < log[i + 1]; k++) out.push(log[i]);
   return out;
 }
-// {version, seed, cfg, inputLog} -> the result, replayed frame by frame; a wrong version is refused.
+// {version, seed, cfg, inputLog} -> the result, replayed frame by frame on its own version's rules;
+// a version this sim does not know is refused.
 export function replay(rec) {
-  if (!rec || rec.version !== VERSION) throw new Error("soccer: a record of another version");
-  const st = newGame(rec.seed, rec.cfg), masks = rleDecode(rec.inputLog);
+  if (!rec || !VERSIONS.includes(rec.version)) throw new Error("soccer: a record of another version");
+  const st = newGame(rec.seed, rec.cfg, rec.version), masks = rleDecode(rec.inputLog);
   let i = 0;
   while (st.phase !== "over" && i < masks.length) step(st, masks[i++]);
   while (st.phase !== "over" && i < masks.length + 400000) { step(st, 0); i++; }
