@@ -15,12 +15,15 @@
 .fi-catch { margin: var(--s2) 0; padding: var(--s2) var(--s3); border: var(--bw) solid var(--accent); }
 .fi-catch > span { display: block; margin: 0 0 var(--s2); color: var(--fg); letter-spacing: 0.04em; }
 .fi-catch .fi-p { margin: var(--s2) 0 0; }
+.fi-catch > .fi-quip { color: var(--fg-dim); font-size: var(--t-xs); }
+.fi-expert-note { align-self: center; margin: 0; }
 
 .fi-touch { display: none; }
 @media (pointer: coarse), (max-width: 700px) {
   .fi-touch { display: grid; grid-template-columns: 1fr 1fr 1.3fr 1fr 1.6fr; gap: var(--s2); margin: 0 0 var(--s3); user-select: none; -webkit-user-select: none; }
   .fi-tb { min-height: 56px; font: inherit; font-weight: 700; letter-spacing: 0.04em; color: var(--fg); background: var(--panel); border: var(--bw) solid var(--line-hi); touch-action: none; -webkit-tap-highlight-color: transparent; }
   .fi-tb:active { background: var(--accent); color: var(--accent-ink); }
+  .fi-touch.simple { grid-template-columns: 1fr 1fr 1fr 3fr; }
   .fi-tb.reel { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 }
 

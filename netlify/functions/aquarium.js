@@ -5,9 +5,10 @@
 //                                a fishing permit: {tripId, seed, at}. The seed and the start time (the
 //                                machine clock, the season, the light, the weather) come from here, so
 //                                nobody fishes a thousand seeds offline for a lucky one.
-//   POST {caseId, action: "donate", tripId, n, claim: {sp, cw, tl}, inputLog, device?}
-//                                re-plays the trip in node (src/play/fish/sim.js, the same pure sim the
-//                                page runs) and files catch n only when it comes out exactly as claimed
+//   POST {caseId, action: "donate", tripId, n, claim: {sp, cw, tl}, inputLog, v?, device?}
+//                                re-plays the trip in node on the sim it was played on (v 2, one button,
+//                                src/play/fish/sim.js; v 1 or none, the frozen EXPERT sim in
+//                                src/play/fish/v1/sim.js; replay.js picks), the same pure sim the page runs, and files catch n only when it comes out exactly as claimed
 //                                (species, hundredths of a pound, tenths of an inch) and was not released.
 // Holding the case number is the credential (as with /api/chess). Anyone can fish without one; donating
 // needs a file. No money, no CYCLES: a plaque.
@@ -18,7 +19,8 @@ import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMI
 import { deviceHash } from "../lib/assembly.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { getRecord, updateRecord, readTanks, updateTanks, fileDonation, publicTanks, recordsHeld, holderKey, holderName, Busy, TRIP_TTL_MS, KEEP_TRIPS, KEEP_DONATIONS } from "../lib/aquarium-store.js";
-import { verifyCatch, logTicks, VERSION, HZ, TRIP_TICKS } from "../../src/play/fish/sim.js";
+import { logTicks, VERSION, HZ, TRIP_TICKS } from "../../src/play/fish/sim.js";
+import { verifyCatchV, versionOf, VERSIONS } from "../../src/play/fish/replay.js";
 import { SPOT, SPECIES_BY } from "../../src/play/fish/data.js";
 
 export const ACTIONS = ["trip", "donate"];
@@ -66,7 +68,7 @@ export default async (req, context) => {
       if (!SPOT[spot]) return json(404, { error: "No such water on file." });
       const trip = { id: randomUUID().replace(/-/g, "").slice(0, 20), seed: randomInt(1, 2 ** 31 - 1), spot, at: Date.now(), donated: [] };
       await updateRecord(caseId, (r) => { r.trips = [trip, ...(r.trips || [])].slice(0, KEEP_TRIPS); return { data: r }; });
-      return json(200, { tripId: trip.id, seed: trip.seed, spot, at: trip.at, v: VERSION }, noStore);
+      return json(200, { tripId: trip.id, seed: trip.seed, spot, at: trip.at, v: VERSION, versions: VERSIONS }, noStore);
     }
 
     // donate
@@ -75,6 +77,8 @@ export default async (req, context) => {
     if (!Number.isInteger(n) || n < 0 || n > 500) return json(400, { error: "Which fish? The catch number is not legible." });
     if (!claim || typeof claim.sp !== "string" || !SPECIES_BY[claim.sp] || !Number.isInteger(claim.cw) || !Number.isInteger(claim.tl)) return json(400, { error: "The claim is not legible: species, weight, length." });
     if (!Array.isArray(log) || log.length > MAX_LOG) return json(413, { error: "The log is longer than any trip." });
+    const simV = versionOf({ v: body.v });   // no v: a v1 client (everything before the one-button sim)
+    if (!simV) return json(400, { error: "The aquarium knows no such way of fishing." });
     const mine = await getRecord(caseId);
     const trip = (mine?.trips || []).find(t => t.id === tripId);
     if (!trip) return json(404, { error: "No such permit on your file. It may have expired." });
@@ -84,7 +88,7 @@ export default async (req, context) => {
     // the log cannot hold more play than the clock allows since the permit was issued
     const ticks = logTicks(log);
     if (ticks > ((now - trip.at) / 1000) * HZ + CLOCK_SLACK_TICKS) return json(422, { error: "THAT TRIP IS LONGER THAN THE TIME SINCE THE PERMIT. THE DEPARTMENT KEEPS THE CLOCK." }, noStore);
-    const v = verifyCatch({ seed: trip.seed, spot: trip.spot, at: trip.at }, log, n, claim, { maxTicks: TRIP_TICKS });
+    const v = verifyCatchV(simV, { seed: trip.seed, spot: trip.spot, at: trip.at }, log, n, claim, { maxTicks: TRIP_TICKS });
     if (!v.ok) return json(422, { error: v.error }, noStore);
     const c = v.catch;
     // the permit's catch is spoken for before the plaque moves (one donation per fish, whatever follows)

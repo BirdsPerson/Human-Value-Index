@@ -21,4 +21,5 @@ async function call(method, body, q = "") {
 }
 export const loadAquarium = (caseId) => call("GET", null, caseId ? `?caseId=${encodeURIComponent(caseId)}` : "");
 export const startTrip = (caseId, spot) => call("POST", { caseId, action: "trip", spot });
-export const donateCatch = (caseId, tripId, n, claim, inputLog) => call("POST", { caseId, action: "donate", tripId, n, claim, inputLog });
+// v: the sim the trip was played on (2, one button; 1, EXPERT). A donation without one is v1.
+export const donateCatch = (caseId, tripId, n, claim, inputLog, v = 2) => call("POST", { caseId, action: "donate", tripId, n, claim, inputLog, v });

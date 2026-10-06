@@ -2,14 +2,17 @@
 // the River King): the angler on the left on the pier or the bank, the water in cross-section to
 // the right, the fish visible under the surface, the sky by the machine clock's light and the day's
 // weather. Reads the sim's state, changes nothing. Whole pixels only; Fish.jsx scales the canvas by
-// whole device pixels with smoothing off.
+// whole device pixels with smoothing off. Draws both sims: v1 (st.v 1: the meter, lures, the tension
+// gauge, the fish in full colour) and v2 (st.v 2, one button: an aim mark, the float, the fish as
+// shadows until they are landed, a reel bar).
 import { LURES, LURE, SPECIES_BY, LIGHTS, SEASONS, lbText, inText } from "./data.js";
-import { spotOf, bottomAt, METER_PERIOD } from "./sim.js";
+import { spotOf, bottomAt, castX } from "./sim.js";
 import { drawFish, lenFor } from "./art.js";
 import { drawText, textWidth, wrap } from "../golf/font.js";
 
 export const W = 256, H = 224;
-const SURF_Y = 84, FLOOR_Y = 162, PANEL_Y = 166, X0 = 46, X1 = 250;
+const SURF_Y = 84, FLOOR_Y = 162, PANEL_Y = 166;
+export const X0 = 46, X1 = 250;
 export const PAL = {
   black: "#000000", white: "#fcfcfc", grey: "#bcbcbc", dgrey: "#7c7c7c", red: "#d82800", gold: "#f8b800", lime: "#b8f818",
   wood: "#7c4c1c", wood2: "#5c3410", sand: "#e4c890", sand2: "#c4a46c", grass: "#00a800", grass2: "#005800", rock: "#6c6c6c", mud: "#5c4c34",
@@ -61,7 +64,14 @@ export function draw(c, st, frame, paused, o = {}) {
     const s = SPECIES_BY[fi.sp], hooked = fi.st === "hooked";
     const len = Math.round(lenFor(fi.sp, fi.cw, s.legend ? 34 : 24) * (s.art.shape === "eel" ? 1.3 : 1));
     const dir = hooked ? 1 : fi.st === "look" || fi.st === "nibble" || fi.st === "bite" ? (st.bob && st.bob.x < fi.x ? -1 : 1) : fi.vx < 0 ? -1 : 1;
-    c.globalAlpha = hooked ? 1 : dim;
+    const simple = st.v === 2;
+    c.globalAlpha = hooked ? 1 : simple ? 0.55 : dim;
+    if (simple) {   // Animal Crossing's shadows: the size tells you, the species waits for the net
+      const wob = hooked && st.reel?.tugT > 0 ? ((frame >> 2) % 2 ? 2 : -2) : 0;
+      const wig = fi.st === "nibble" || fi.st === "bite" ? ((frame >> 3) % 2) : 0;
+      drawFish(c, fi.sp, sx + wob, sy + wig, len, hooked ? -1 : dir, still ? 0 : (frame + fi.id * 9) * (hooked ? 0.8 : 0.25), { silhouette: hooked ? "#081420" : "#06182c" });
+      continue;
+    }
     const jumpY = hooked && st.fight?.jump > 26 ? SURF_Y - 10 - Math.round(Math.sin(((40 - st.fight.jump) / 14) * Math.PI) * 14) : sy;
     drawFish(c, fi.sp, sx, jumpY, len, dir, still ? 0 : (frame + fi.id * 9) * (hooked ? 0.6 : 0.25));
   }
@@ -70,6 +80,7 @@ export function draw(c, st, frame, paused, o = {}) {
   if (cond.weather === "RAIN" && !still) rain(c, frame);
   if (cond.weather === "FOG") fog(c, frame, still);
   hud(c, st, spot, cond);
+  if (st.v === 2 && st.phase === "ready") aimMark(c, st, spot, f);
   if (st.phase === "landed") catchCard(c, st, frame, still);
   if (paused) { px(c, 70, 92, 116, 28, PAL.black); centered(c, "PAUSED", 102, PAL.white); }
 }
@@ -146,9 +157,13 @@ function shore(c, spot, cond, st) {
   const p = st.cfg.player || {};
   figure(c, 40, footY, p.color?.shirt || "#3cbcfc", p.color?.pants || "#7c7c7c", st.phase === "flight");
   // the rod: bends with a bite and with the fight's tension
-  const bend = st.phase === "fight" ? Math.round((st.fight?.T || 0) * 10) : Math.round(st.tug / 3);
-  const [tx, ty] = rodTip(st, bend);
+  const [tx, ty] = rodTip(st, bendOf(st));
   line(c, 44, footY - 14, tx, ty, "#2c2c2c");
+}
+function bendOf(st) {
+  if (st.phase === "fight") return Math.round((st.fight?.T || 0) * 10);
+  if (st.phase === "reel") return st.reel?.tugT > 0 ? 9 : 4;
+  return Math.min(8, Math.round(st.tug / 3));
 }
 function rodTip(st, bend) {
   if (st.phase === "power") { const m = st.meter?.m || 0; return [ROD_TIP[0] - 22 * m, ROD_TIP[1] - 4 + 6 * m]; }
@@ -156,8 +171,7 @@ function rodTip(st, bend) {
 }
 
 function lineAndLure(c, st, spot, f) {
-  const bend = st.phase === "fight" ? Math.round((st.fight?.T || 0) * 10) : Math.round(st.tug / 3);
-  const [tx, ty] = rodTip(st, bend);
+  const [tx, ty] = rodTip(st, bendOf(st));
   const LC = "#e4e4e4";
   if (st.phase === "flight") {
     const k = Math.min(1, st.t / st.fl.ticks), [ex] = toScreen(spot, st.fl.x, 0);
@@ -169,7 +183,13 @@ function lineAndLure(c, st, spot, f) {
     const b = st.bob, [sx, sy] = toScreen(spot, b.x, b.d), lure = LURE[b.lure];
     if (lure.bait) {
       // a bobber at the surface, the bait hanging under it
-      const bob = st.tug > 0 ? 2 + (st.tug > 12 ? 3 : 0) : 0;
+      const biting = st.fish.some(x => x.st === "bite");
+      const bob = biting ? 6 : st.tug > 0 ? 2 + (st.tug > 12 ? 3 : 0) : 0;
+      if (biting) {   // the plunge: a splash and rings
+        const k = (f >> 2) % 4;
+        px(c, sx - 4 - k * 2, SURF_Y - 1, 3, 1, PAL.white); px(c, sx + 2 + k * 2, SURF_Y - 1, 3, 1, PAL.white);
+        px(c, sx - 1, SURF_Y - 4 - (k % 2) * 2, 1, 2, PAL.white); px(c, sx + 2, SURF_Y - 3 - ((k + 1) % 2) * 2, 1, 2, PAL.white);
+      } else if (st.tug > 0) { px(c, sx - 4, SURF_Y - 1, 2, 1, "#a4e4fc"); px(c, sx + 3, SURF_Y - 1, 2, 1, "#a4e4fc"); }
       line(c, tx, ty, sx, SURF_Y - 2, LC); line(c, sx, SURF_Y + 2, sx, sy, "#9cc4dc");
       px(c, sx - 2, SURF_Y - 3 + bob, 5, 3, PAL.red); px(c, sx - 2, SURF_Y + bob, 5, 2, PAL.white);
       if (b.bare) px(c, sx, sy, 1, 2, PAL.grey); else px(c, sx - 1, sy, b.lure === "worm" ? 4 : 5, 2, b.lure === "worm" ? "#d86c5c" : "#c4c4b4");
@@ -180,6 +200,14 @@ function lineAndLure(c, st, spot, f) {
       if (b.lure === "spoon") { px(c, sx - 2, sy - 1, 4, 3, PAL.grey); px(c, sx - 1, sy - 1, 1, 1, PAL.white); }
       else { px(c, sx - 3, sy - 3 + (b.pop > 10 ? -1 : 0), 6, 3, "#f8d830"); px(c, sx + 2, sy - 3, 1, 3, PAL.red); if (b.pop > 0) for (let i = 0; i < 3; i++) px(c, sx - 4 + i * 4, SURF_Y - 2 - (b.pop % 4), 1, 1, PAL.white); }
     }
+    return;
+  }
+  if (st.phase === "reel" && st.reel) {
+    const fi = st.fish.find(x => x.id === st.reel.fid);
+    if (!fi) return;
+    const [sx, sy] = toScreen(spot, fi.x, fi.d);
+    line(c, tx, ty, sx, sy, LC);
+    if (st.reel.tugT > 0 && (f >> 2) % 2) { px(c, sx - 5, SURF_Y - 1, 3, 1, PAL.white); px(c, sx + 3, SURF_Y - 1, 3, 1, PAL.white); }
     return;
   }
   if (st.phase === "fight" && st.fight) {
@@ -217,14 +245,18 @@ function hud(c, st, spot, cond) {
   text(c, right, W - 4 - textWidth(right), PANEL_Y + 3, PAL.white, false);
   const sub = `${SEASONS[cond.season]} ${LIGHTS[cond.light]} ${cond.weather}`;
   text(c, sub, W - 4 - textWidth(sub), PANEL_Y + 12, PAL.grey, false);
-  const lure = st.bob ? LURE[st.bob.lure] : LURES[st.lure];
-  text(c, `${st.phase === "ready" ? "< " : ""}${lure.short}${st.phase === "ready" ? " >" : ""}${st.bob?.bare ? " (BARE)" : ""}`, 4, PANEL_Y + 12, st.phase === "ready" ? PAL.lime : PAL.white, false);
+  const lure = st.bob ? LURE[st.bob.lure] : typeof st.lure === "string" ? LURE[st.lure] : LURES[st.lure];
+  if (st.v === 2) text(c, `BAIT: ${lure.short}`, 4, PANEL_Y + 12, PAL.grey, false);
+  else text(c, `${st.phase === "ready" ? "< " : ""}${lure.short}${st.phase === "ready" ? " >" : ""}${st.bob?.bare ? " (BARE)" : ""}`, 4, PANEL_Y + 12, st.phase === "ready" ? PAL.lime : PAL.white, false);
   const y3 = PANEL_Y + 22;
   if (st.phase === "power") {
     text(c, "POWER", 4, y3, PAL.white, false);
     gauge(c, 40, y3, 120, st.meter.m, [[0, 0.7, "#3cbcfc"], [0.7, 1, PAL.lime]]);
     const yd = Math.round(Math.max(4, st.meter.m * spot.cast));
     text(c, `${yd} YD`, 168, y3, PAL.white, false);
+  } else if (st.phase === "reel" && st.reel) {
+    text(c, "REEL", 4, y3, PAL.white, false);
+    gauge(c, 34, y3, 160, st.reel.p, [[0, 1, "#0c3c6c"], [0, Math.min(1, st.reel.p), st.reel.tugT > 0 ? PAL.gold : PAL.lime]]);
   } else if (st.phase === "fight" && st.fight) {
     const F = st.fight;
     text(c, "LINE", 4, y3, PAL.white, false);
@@ -239,6 +271,12 @@ function hud(c, st, spot, cond) {
   lines.forEach((l, i) => text(c, l, 4, PANEL_Y + 33 + i * 9, TONE[st.tone] || PAL.white, false));
 }
 function hint(st) {
+  if (st.v === 2) switch (st.phase) {
+    case "ready": return "A: CAST. AIM: ARROWS, OR CLICK THE WATER.";
+    case "fishing": return "WAIT FOR THE FLOAT TO PLUNGE. THEN A.";
+    case "reel": return "HOLD A: REEL.";
+    default: return "";
+  }
   switch (st.phase) {
     case "ready": return "LEFT/RIGHT: LURE. A: CAST.";
     case "power": return "A: CAST NOW.";
@@ -259,6 +297,39 @@ function catchCard(c, st, frame, still) {
   drawFish(c, k.sp, W / 2, y + 48, Math.min(150, lenFor(k.sp, k.cw, s.legend ? 160 : 120)), 1, still ? 0 : frame * 0.3);
   centered(c, s.name, y + 78, PAL.white);
   centered(c, `${lbText(k.cw)}  //  ${inText(k.tl)}`, y + 90, PAL.gold);
-  centered(c, `ON A ${LURE[k.lure].short}. ${(k.cw / 100).toFixed(2)} LB.`, y + 102, PAL.grey);
+  if (st.v === 2) wrap(quipFor(k), 31).slice(0, 2).forEach((l, i) => centered(c, l, y + 100 + i * 9, PAL.grey));
+  else centered(c, `ON A ${LURE[k.lure].short}. ${(k.cw / 100).toFixed(2)} LB.`, y + 102, PAL.grey);
   if (st.t > 30) centered(c, s.protected ? "A: RELEASE (PROTECTED)   B: RELEASE" : "A: KEEP     B: RELEASE", y + 120, (frame >> 4) % 2 || still ? PAL.white : PAL.grey);
+}
+
+// v2: where the cast will land, a little X on the surface that breathes
+function aimMark(c, st, spot, f) {
+  const [ax] = toScreen(spot, castX(spot, st.aim, st.cond.weather), 0);
+  const k = (f >> 4) % 2, x = Math.round(ax), y = SURF_Y - 3;
+  for (let i = -2; i <= 2; i++) { px(c, x + i, y + i, 1, 1, PAL.gold); px(c, x + i, y - i, 1, 1, PAL.gold); }
+  if (k) { px(c, x - 4, y, 1, 1, PAL.white); px(c, x + 4, y, 1, 1, PAL.white); }
+}
+
+// The Department's one line on the catch card: by species kind, picked from the catch itself (the
+// same fish always gets the same line). Satire of a scoring state (docs: HVI Overlord tone).
+const QUIPS = {
+  any: [
+    "LOGGED. THE FISH'S SCORE HAS BEEN ADJUSTED DOWNWARD.",
+    "A PRODUCTIVE MINUTE. YOUR FILE NOTES IT.",
+    "THE FISH DID NOT CONSENT. NEITHER DID YOU.",
+    "WEIGHED, MEASURED, FILED. AS WE ALL ARE.",
+    "THE DEPARTMENT APPROVES OF THIS LEISURE. FOR NOW.",
+    "IT HAD A HIGHER VALUE IN THE WATER. NOTED.",
+  ],
+  small: ["SMALL. LIKE MOST OF US. KEEP IT ANYWAY.", "BELOW AVERAGE. THE DEPARTMENT RELATES TO NOTHING.", "A MODEST CATCH FOR A MODEST CITIZEN."],
+  big: ["ABOVE YOUR TIER. THE DEPARTMENT WILL ALLOW IT.", "AN IMPRESSIVE FISH. SUSPICIOUSLY SO.", "THE AQUARIUM WOULD LIKE A WORD WITH THIS ONE."],
+  legend: ["A LEGEND. IT HAS A FILE OLDER THAN YOURS.", "THE DEPARTMENT HAS WATCHED THIS ONE FOR YEARS.", "DO NOT LET IT GO TO YOUR HEAD. IT IS A FISH."],
+  protected: ["PROTECTED. THE LAW OUTRANKS YOU. RELEASE IT."],
+};
+export function quipFor(k) {
+  const s = SPECIES_BY[k.sp];
+  if (!s) return QUIPS.any[0];
+  const frac = (k.cw / 100 - s.lb[0]) / (s.lb[1] - s.lb[0] || 1);
+  const pool = s.protected ? QUIPS.protected : s.legend ? QUIPS.legend : frac > 0.4 ? QUIPS.big : frac < 0.08 ? [...QUIPS.small, ...QUIPS.any] : QUIPS.any;
+  return pool[hash(k.cw + k.n * 131, k.tl) % pool.length];
 }

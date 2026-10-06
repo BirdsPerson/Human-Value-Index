@@ -4,8 +4,9 @@ import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { CLOTH } from "../../avatar.js";
 import { readPad, GLYPHS } from "../../city/gamepad.js";
 import { SPOTS, SPOT, SPECIES, SPECIES_BY, LURES, speciesAt, appetite, conditionsAt, SEASONS, LIGHTS, lbText, inText } from "./data.js";
-import { newTrip, step, logPush, botBits, BTN, HZ } from "./sim.js";
-import { draw, W, H } from "./render.js";
+import * as V2 from "./sim.js";
+import * as V1 from "./v1/sim.js";
+import { draw, W, H, X0, X1, quipFor } from "./render.js";
 import { loadBox, loadBests, recordCatch, markDonated, saveTrip } from "./box.js";
 import { startTrip, donateCatch, loadAquarium } from "./api.js";
 import * as sfx from "./audio.js";
@@ -14,8 +15,13 @@ import "./fish.css";
 import "../pages.css";
 
 // #fish[?spot=pier|break|estuary|river|lake]: THE WATERS (docs/CITY_SPEC.md "PLAYABLE SPORTS / Fishing").
-// Cast, wait, set the hook, fight the fish on the tension gauge, keep or release, and donate the good
-// ones to THE AQUARIUM (#aquarium), which re-plays the trip on its server before the plaque moves.
+// One button (sim v2): cast where you aim, wait out the nibbles, A on the bite, hold A to reel; keep,
+// release, or donate the good ones to THE AQUARIUM (#aquarium), which re-plays the trip on its server
+// before the plaque moves. EXPERT (under the spot's "+") plays the v1 sim: the power meter, the lures,
+// the tension gauge.
+const { BTN, HZ } = V2;
+const EXPERT_KEY = "hvi-fish-expert";
+const readExpert = () => { try { return localStorage.getItem(EXPERT_KEY) === "1"; } catch { return false; } };
 
 const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); const s = q.get("spot"); return { spot: SPOT[s] ? s : null }; };
 const REDUCED = () => { try { return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches); } catch { return false; } };
@@ -38,6 +44,8 @@ export default function Fish({ route }) {
   const [bests, setBests] = useState(loadBests);
   const [tanks, setTanks] = useState(null);
   const [now, setNow] = useState(() => conditionsAt(Date.now()));
+  const [expert, setExpert] = useState(readExpert);
+  const toggleExpert = () => { const e = !expert; setExpert(e); try { localStorage.setItem(EXPERT_KEY, e ? "1" : "0"); } catch { /* the tab remembers */ } };
   const playRef = useRef(null);
   useEffect(() => { if (spot0) setSpot(spot0); }, [spot0]);
   useEffect(() => { const t = setInterval(() => setNow(conditionsAt(Date.now())), 15000); return () => clearInterval(t); }, []);
@@ -58,7 +66,7 @@ export default function Fish({ route }) {
       setBusy(false);
     } else if (!demo) line = "NO CASE FILE IN THIS BROWSER: FISH FREELY. DONATING TO THE AQUARIUM NEEDS A FILE.";
     setNote(line);
-    setGame({ key: cfg.seed ^ cfg.at, cfg, demo, tripId, caseId: p.caseId });
+    setGame({ key: cfg.seed ^ cfg.at, cfg, demo, tripId, caseId: p.caseId, v: expert ? 1 : 2 });
   };
   const refresh = () => { setBox(loadBox()); setBests(loadBests()); };
   const toggleMute = () => { sfx.setMuted(!muted); setMuted(!muted); };
@@ -79,9 +87,9 @@ export default function Fish({ route }) {
         </>
       ) : (
         <>
-          <p className="pg-lede">FISH THE CITY'S WATERS. CAST, WAIT FOR THE TAKE, SET THE HOOK, THEN KEEP THE LINE TIGHT WITHOUT SNAPPING IT. THE BEST CATCHES GO TO THE AQUARIUM, WHICH CHECKS YOUR TRIP BEFORE IT HANGS A PLAQUE.</p>
+          <p className="pg-lede">FISH THE CITY'S WATERS WITH ONE BUTTON. CAST, WATCH THE FLOAT, AND PRESS WHEN IT PLUNGES (A NIBBLE IS NOT A BITE). HOLD TO REEL. THE BEST CATCHES GO TO THE AQUARIUM, WHICH CHECKS YOUR TRIP BEFORE IT HANGS A PLAQUE.</p>
           <div className="pg-start">
-            <Button variant="primary" ref={playRef} disabled={busy} onClick={() => begin(false)}>{busy ? "ISSUING A PERMIT..." : `PLAY NOW: ${here.name}`}</Button>
+            <Button variant="primary" ref={playRef} disabled={busy} onClick={() => begin(false)}>{busy ? "ISSUING A PERMIT..." : `PLAY NOW: ${here.name}${expert ? " (EXPERT)" : ""}`}</Button>
             <span className="pg-sub">{condLine(now)}</span>
           </div>
           <details className="pg-more" open={Boolean(spot0)}>
@@ -89,6 +97,10 @@ export default function Fish({ route }) {
             <div className="pg-more-body">
               <div className="fi-opts" role="group" aria-label="Where to fish">
                 {SPOTS.map(s => <button key={s.id} type="button" className="fi-opt" aria-pressed={spot === s.id} onClick={() => setSpot(s.id)}>{s.name}</button>)}
+              </div>
+              <div className="fi-opts" role="group" aria-label="Expert angling">
+                <button type="button" className="fi-opt" aria-pressed={expert} onClick={toggleExpert}>EXPERT: {expert ? "ON" : "OFF"}</button>
+                <span className="fi-p dim fi-expert-note">{expert ? "THE POWER METER, FOUR LURES, THE TENSION GAUGE. THE LINE CAN SNAP." : "ON: THE OLD GAME. A POWER METER, A LURE PICKER, A TENSION GAUGE THAT SNAPS."}</span>
               </div>
               <p className="fi-p">{here.name} // {here.water.toUpperCase()} // {here.depth} FT // {here.note}{here.place ? "" : " (ON THE RIVER, MOUNTAIN TO SEA: OPENING IN THE CITY SOON.)"}</p>
               <p className="fi-p dim">BITING AT THIS HOUR: {biting.length ? biting.map(([s, a]) => `${s.name}${a > 1.2 ? " (HUNGRY)" : a < 0.4 ? " (SLOW)" : ""}`).join(", ") : "NOTHING. THE WATER IS RESTING."}. THE LIGHT, THE SEASON AND THE WEATHER FOLLOW THE CITY'S CLOCK: ONE REAL SECOND IS ONE MACHINE MINUTE.</p>
@@ -110,7 +122,7 @@ export default function Fish({ route }) {
       )}
       <details className="pg-more">
         <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><Controls /></div>
+        <div className="pg-more-body"><Controls expert={game ? game.v === 1 : expert} /></div>
       </details>
     </div>
   );
@@ -151,8 +163,17 @@ function Box({ box, bests }) {
 }
 
 const MODE_NAME = { keys: "KEYBOARD", touch: "TOUCH" };
-export function legendRows(mode, family) {
+export function legendRows(mode, family, expert = false) {
   const g = GLYPHS[family] || GLYPHS.generic;
+  if (!expert) {
+    const A = mode === "pad" ? g.act : mode === "touch" ? "TAP / HOLD" : "Z / SPACE", B = mode === "pad" ? g.back : mode === "touch" ? "RELEASE" : "X";
+    return [
+      [mode === "pad" ? `${g.act}` : "A", `${A}: CAST / HOOK / REEL`, mode === "touch" ? "TAP THE WATER TO CAST THERE, TAP ON THE BITE, HOLD TO REEL." : mode === "pad" ? "" : "MOUSE: CLICK TO CAST, CLICK ON THE BITE, HOLD TO REEL."],
+      ["AIM", mode === "pad" ? "D-PAD ← →" : mode === "touch" ? "◀ ▶" : "← →", ""],
+      ["RELEASE", B, "ON THE CATCH CARD."],
+      ["PAUSE", mode === "pad" ? g.start : mode === "touch" ? "II" : "ENTER / ESC", ""],
+    ];
+  }
   const A = mode === "pad" ? g.act : mode === "touch" ? "REEL" : "Z / SPACE", B = mode === "pad" ? g.back : mode === "touch" ? "JERK" : "X";
   const LR = mode === "pad" ? "D-PAD ← →" : mode === "touch" ? "◀ ▶" : "← →";
   return [
@@ -165,10 +186,10 @@ export function legendRows(mode, family) {
     ["PAUSE", mode === "pad" ? g.start : mode === "touch" ? "II" : "ENTER / ESC", ""],
   ];
 }
-function Controls({ mode = "keys", family = null }) {
+function Controls({ mode = "keys", family = null, expert = false }) {
   return (
     <dl className="fi-keys" aria-label={`Controls, ${mode === "pad" ? "controller" : MODE_NAME[mode] || "keyboard"}`}>
-      {legendRows(mode, family).flatMap(([k, v, why]) => [<dt key={k}>{k}</dt>, <dd key={k + "d"}><b>{v}</b>{why ? ` ${why}` : ""}</dd>])}
+      {legendRows(mode, family, expert).flatMap(([k, v, why]) => [<dt key={k}>{k}</dt>, <dd key={k + "d"}><b>{v}</b>{why ? ` ${why}` : ""}</dd>])}
     </dl>
   );
 }
@@ -179,6 +200,8 @@ const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" |
 
 function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
   const { cfg, demo, tripId, caseId } = game;
+  const S = game.v === 1 ? V1 : V2, simple = game.v !== 1;
+  const aimRef = useRef(0);
   const canvas = useRef(null), wrap = useRef(null);
   const touch = useRef(0), latch = useRef(0);
   const [paused, setPaused] = useState(false);
@@ -217,7 +240,7 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
   }, []);
 
   useEffect(() => {
-    const st = stRef.current = newTrip(cfg), log = logRef.current = [];
+    const st = stRef.current = S.newTrip(cfg), log = logRef.current = [];
     const keys = new Set();
     let raf = 0, last = performance.now(), acc = 0, frame = 0, prevStart = false, said = "", seen = 0, saveAt = 0, carded = -1;
     const ctx = canvas.current.getContext("2d");
@@ -233,8 +256,8 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
     window.addEventListener("blur", blur);
     let padFamily = null;
     const input = () => {
-      let b = touch.current | latch.current;
-      latch.current = 0;
+      let b = touch.current | latch.current | aimRef.current;
+      latch.current = 0; aimRef.current = 0;
       for (const k of keys) b |= KEYMAP[k];
       const p = readPad();
       if (p.connected) {
@@ -249,16 +272,16 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
       } else if (padFamily) { padFamily = null; setPad(null); }
       return b;
     };
-    const keep = () => { if (tripId && !demo) saveTrip(tripId, { seed: cfg.seed, spot: cfg.spot, at: cfg.at }, log.slice()); };
+    const keep = () => { if (tripId && !demo) saveTrip(tripId, { seed: cfg.seed, spot: cfg.spot, at: cfg.at, v: game.v }, log.slice()); };
     const loop = (now) => {
       acc = Math.min(acc + (now - last) / 1000, 5 / HZ);
       last = now;
       while (acc >= 1 / HZ) {
         acc -= 1 / HZ;
-        const b = demo ? (input(), botBits(st)) : input();
+        const b = demo ? (input(), S.botBits(st)) : input();
         if (pausedRef.current || endedRef.current || st.phase === "done") continue;
-        logPush(log, b);
-        step(st, b);
+        S.logPush(log, b);
+        S.step(st, b);
         for (const e of st.ev) sfx.play(e);
         st.ev.length = 0;
       }
@@ -282,7 +305,7 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    setSay(`${SPOT[cfg.spot].name}. ${condLine(st.cond)}. CHOOSE A LURE WITH LEFT AND RIGHT, CAST WITH A.`);
+    setSay(`${SPOT[cfg.spot].name}. ${condLine(st.cond)}. ${simple ? "AIM WITH LEFT AND RIGHT OR CLICK THE WATER; A CASTS." : "CHOOSE A LURE WITH LEFT AND RIGHT, CAST WITH A."}`);
     return () => { cancelAnimationFrame(raf); keep(); window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); window.removeEventListener("blur", blur); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cfg]);
@@ -294,11 +317,30 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
     onContextMenu: (e) => e.preventDefault(),
   });
   const press = (bit) => { latch.current |= bit; };
+  // simple mode: the frame is the button. A press on the water while ready aims the cast there
+  // (the aim rides in the log); held, it reels; on the catch card the real buttons decide.
+  const stage = simple && !demo ? {
+    onPointerDown: (e) => {
+      const st = stRef.current;
+      if (!st || st.phase === "landed" || pausedRef.current) return;
+      e.preventDefault(); sfx.unlock(); if (e.pointerType !== "mouse") setMode("touch");
+      if (st.phase === "ready") {
+        const r = e.currentTarget.getBoundingClientRect(), sx = ((e.clientX - r.left) / r.width) * W, sp = SPOT[cfg.spot];
+        const yd = ((sx - X0) / (X1 - X0)) * sp.cast * 1.1, reach = V2.castX(sp, 1, st.cond.weather);
+        if (sx >= X0 - 4) aimRef.current = V2.aimBits((yd - 4) / (reach - 4));
+      }
+      touch.current |= BTN.A; latch.current |= BTN.A;
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* old browser */ }
+    },
+    onPointerUp: () => { touch.current &= ~BTN.A; },
+    onPointerCancel: () => { touch.current &= ~BTN.A; },
+    onContextMenu: (e) => e.preventDefault(),
+  } : {};
   const donate = async () => {
     if (!landed || !tripId || !caseId) return;
     setGift({ busy: true });
     try {
-      const k = landed.k, j = await donateCatch(caseId, tripId, landed.n, { sp: k.sp, cw: k.cw, tl: k.tl }, logRef.current.slice());
+      const k = landed.k, j = await donateCatch(caseId, tripId, landed.n, { sp: k.sp, cw: k.cw, tl: k.tl }, logRef.current.slice(), game.v);
       donated.current.add(landed.n);
       const f = j.filed;
       setGift({ ok: true, line: f.record ? `DONATED. A CITY RECORD: ${f.name}, ${(f.cw / 100).toFixed(2)} LB, CAUGHT BY ${f.holder}.${f.beat ? ` ${f.beat.holder}'S ${(f.beat.cw / 100).toFixed(2)} LB MOVES TO PREVIOUS RECORDS.` : ""}` : `DONATED. ${f.name} IS IN THE TANK. THE RECORD STANDS AT ${(j.tank.record.cw / 100).toFixed(2)} LB.` });
@@ -312,12 +354,13 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
   return (
     <div className="fi-play" ref={wrap}>
       <div className="fi-stage">
-        <canvas ref={canvas} width={W} height={H} style={{ width: scale.css, height: (scale.css * H) / W }}
-          aria-label="Fishing: the angler on the left, the water in cross-section with the fish under the surface, the line and the lure, the tension gauge along the bottom." role="img" />
+        <canvas ref={canvas} width={W} height={H} style={{ width: scale.css, height: (scale.css * H) / W, touchAction: simple ? "none" : undefined, cursor: simple && !demo ? "pointer" : undefined }} {...stage}
+          aria-label={simple ? "Fishing: the angler on the left, the water in cross-section with fish shadows under the surface, the float, the reel bar along the bottom. Click or tap the water to cast there, again on the bite, hold to reel." : "Fishing: the angler on the left, the water in cross-section with the fish under the surface, the line and the lure, the tension gauge along the bottom."} role="img" />
       </div>
       {landed && !demo && (
         <div className="fi-catch" role="group" aria-label="The catch">
           <span>{SPECIES_BY[landed.k.sp].name} // {lbText(landed.k.cw)} // {inText(landed.k.tl)}</span>
+          <span className="fi-quip">{quipFor(landed.k)}</span>
           <ButtonRow>
             <Button variant="primary" onClick={() => press(BTN.A)} disabled={gift?.busy}>{SPECIES_BY[landed.k.sp].protected ? "RELEASE (PROTECTED)" : "KEEP"}</Button>
             <Button variant="secondary" onClick={() => press(BTN.B)} disabled={gift?.busy}>RELEASE</Button>
@@ -343,14 +386,22 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
         <GameMenu key="pause" kind="pause" title="PAUSED. THE FISH WAIT." summary={`${here.name} // ${stRef.current?.catches.length || 0} LANDED SO FAR.`} onBack={resume}
           options={{
             resume, restart: { label: "NEW TRIP, SAME SPOT", onSelect: onRestart },
-            controls: <Controls mode={legendMode} family={pad} />,
+            controls: <Controls mode={legendMode} family={pad} expert={!simple} />,
             sound: { on: !muted, onSelect: onMute },
             end: { label: "END THE TRIP", onSelect: endTrip },
             quit: true,
           }} />
       )}
-      <div className="fi-status">{pad ? `CONTROLLER: ${pad.toUpperCase()}` : mode === "touch" ? "◀ ▶ LURE // REEL (HOLD) // JERK // II PAUSES" : "KEYS: ← → LURE // Z REELS AND CASTS // X JERKS // ENTER PAUSES"}{muted ? " // MUTED" : ""}{demo ? " // THE WARDEN IS FISHING" : tripId ? " // PERMITTED TRIP" : ""}</div>
+      <div className="fi-status">{simple ? (pad ? `CONTROLLER: ${pad.toUpperCase()} // ${(GLYPHS[pad] || GLYPHS.generic).act}: CAST / HOOK / REEL` : mode === "touch" ? "TAP: CAST / HOOK // HOLD: REEL" : "A (Z / SPACE): CAST / HOOK / REEL // OR CLICK THE WATER") : pad ? `CONTROLLER: ${pad.toUpperCase()}` : mode === "touch" ? "◀ ▶ LURE // REEL (HOLD) // JERK // II PAUSES" : "KEYS: ← → LURE // Z REELS AND CASTS // X JERKS // ENTER PAUSES"}{muted ? " // MUTED" : ""}{demo ? " // THE WARDEN IS FISHING" : tripId ? " // PERMITTED TRIP" : ""}</div>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{say}</p>
+      {simple ? (
+      <div className="fi-touch simple" aria-label="Touch controls">
+        <button type="button" className="fi-tb" aria-label="Aim nearer" {...hold(BTN.L)}>&#9664;</button>
+        <button type="button" className="fi-tb" aria-label="Aim further" {...hold(BTN.R)}>&#9654;</button>
+        <button type="button" className="fi-tb" aria-label={paused ? "Resume" : "Pause"} onClick={togglePause}>{paused ? "GO" : "II"}</button>
+        <button type="button" className="fi-tb reel" aria-label="Cast, hook, and hold to reel" {...hold(BTN.A)}>CAST / HOOK / REEL</button>
+      </div>
+      ) : (
       <div className="fi-touch" aria-label="Touch controls">
         <button type="button" className="fi-tb" aria-label="Previous lure" {...hold(BTN.L)}>&#9664;</button>
         <button type="button" className="fi-tb" aria-label="Next lure" {...hold(BTN.R)}>&#9654;</button>
@@ -358,9 +409,10 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
         <button type="button" className="fi-tb" aria-label={paused ? "Resume" : "Pause"} onClick={togglePause}>{paused ? "GO" : "II"}</button>
         <button type="button" className="fi-tb reel" aria-label="Cast, and hold to reel" {...hold(BTN.A)}>REEL</button>
       </div>
+      )}
       <details className="pg-more">
         <summary>CONTROLS: {legendMode === "pad" ? `CONTROLLER (${(pad || "").toUpperCase()})` : MODE_NAME[legendMode]}</summary>
-        <div className="pg-more-body"><Controls mode={legendMode} family={pad} /></div>
+        <div className="pg-more-body"><Controls mode={legendMode} family={pad} expert={!simple} /></div>
       </details>
     </div>
   );

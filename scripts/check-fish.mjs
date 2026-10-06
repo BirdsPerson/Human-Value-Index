@@ -6,12 +6,19 @@
 //                season and hour (catfish and eels at night, no bluefish in winter, legends keep hours);
 //                a night trip on the river hooks more catfish and eels than a midday one
 //   determinism  a scripted trip played twice gives the same log and catches; the log alone replays it
-//   tension      reeling flat out through a big fish's runs snaps the line; never reeling a small fish
-//                lets it throw the hook; the bot, minding the gauge, lands fish on every water
+//   simple (v2)  one button: a click's aim rides in the log; A with nothing on reels in; a nibble is
+//                not a bite (A on one scares that fish off, the float stays); the bite's window is
+//                generous (48 ticks) and A inside it hooks; reel time grows with size (a bluegill in
+//                ~2.5 s, a 38 lb striper longer, a legend longest); nothing snaps, letting go only
+//                slows it; v2's water spawns exactly v1's fish (odds and sizes comparable)
+//   expert (v1)  the frozen v1 sim: reeling flat out through a big fish's runs snaps the line; never
+//                reeling a small fish lets it throw the hook; the bot, minding the gauge, lands fish;
+//                every trip in scripts/fixtures/fish-v1-trips.json (recorded on v1) replays through
+//                replay.js to the same catches, tick count and rng state, and its catches verify as v1
 //   verification a genuine catch verifies; a doctored log, a changed claim, another seed, a released fish
-//                do not; the cost of replaying a whole two-hour trip in node is printed
-//   aquarium     /api/aquarium on in-memory Blobs: a permit, a donation filed only after replay, too fast
-//                refused, one donation per fish, the plaque's rule (heavier takes it, the old holder to
+//                do not; a v2 log claimed as v1 does not; the cost of a two-hour replay is printed
+//   aquarium     /api/aquarium on in-memory Blobs: a permit, a donation filed only after replay (v2, and
+//                v1 sent with no version or v 1; an unknown version refused), too fast refused, one donation per fish, the plaque's rule (heavier takes it, the old holder to
 //                PREVIOUS RECORDS, first donors kept), the case gate, the rate limit, the purge
 //   city         THE PIER (E at the rail, the building's door), the museum's wing, the #play line, the
 //                mounted fish in the furniture catalog, the docs
@@ -45,8 +52,10 @@ const __err = console.error; console.error = console.warn = (...a) => { if (proc
 
 const D = await import("../src/play/fish/data.js");
 const S = await import("../src/play/fish/sim.js");
+const V1 = await import("../src/play/fish/v1/sim.js");
+const R = await import("../src/play/fish/replay.js");
 let n = 0;
-const ok = (c, m) => { assert.ok(c, m); n++; };
+const ok = (c, m) => { assert.ok(c, m); n++; if (process.env.VERBOSE) console.log("  ok", m); };
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 
 // ==== data ===============================================================================================
@@ -74,7 +83,7 @@ for (const sp of D.SPOTS) {
 }
 ok(!D.speciesAt("pier").some(s => s.id === "rainbow-trout" || s.id === "pike") && D.speciesAt("river").some(s => s.id === "catfish") && D.speciesAt("estuary").some(s => s.id === "blue-crab"), "trout and pike stay out of the sea; catfish in the river; crabs at the river mouth");
 ok(Math.abs(D.cbrt(27) - 3) < 1e-12 && Math.abs(D.cbrt(0.125) - 0.5) < 1e-12, "the cube root is arithmetic and exact enough");
-const simSrc = read("../src/play/fish/sim.js") + read("../src/play/fish/data.js");
+const simSrc = read("../src/play/fish/sim.js") + read("../src/play/fish/v1/sim.js") + read("../src/play/fish/replay.js") + read("../src/play/fish/data.js");
 ok(!/Math\.(random|sin|cos|tan|exp|log|pow|cbrt|atan|hypot)\b|Date\.now|performance\.now|\*\*/.test(simSrc.replace(/\/\/.*$/gm, "")), "the sim uses no random, no clock and no transcendental Math: every engine agrees");
 
 // ==== variation by the machine clock =======================================================================
@@ -127,41 +136,131 @@ for (const k of a.st.catches) {
   ok(k.cw >= Math.round(s.lb[0] * 100) && k.cw <= Math.round(s.lb[1] * 100) && k.tl === D.lengthOf(s, k.cw), `catch ${k.n}: ${s.name} ${k.cw / 100} lb, ${k.tl / 10} in, inside its species`);
 }
 
-// ==== the tension rules =====================================================================================
+// ==== simple (v2): one button ===============================================================================
+{
+  ok(S.VERSION === 2 && V1.VERSION === 1 && R.simOf(2) === S && R.simOf(1) === V1 && R.versionOf({}) === 1 && R.versionOf({ v: 2 }) === 2 && R.versionOf({ v: 3 }) === null, "two sims by version: v2 one button, v1 frozen; no version reads as v1");
+  // the same water: v2 spawns v1's fish, draw for draw
+  for (const spot of D.SPOTS.map(x => x.id)) for (const seed of [1, 99, 4242]) {
+    const c = { seed, spot, at: AT };
+    ok(JSON.stringify(S.newTrip(c).fish) === JSON.stringify(V1.newTrip(c).fish), `${spot} seed ${seed}: v2's water holds v1's fish (species, weights)`);
+  }
+  // casting: one press, where you aim; a click's aim rides in the log
+  const cast = (input) => { const st = S.newTrip({ seed: 3, spot: "pier", at: AT }); for (let i = 0; i < 10; i++) S.step(st, 0); S.step(st, input); return st; };
+  let st = cast(S.BTN.A);
+  ok(st.phase === "flight" && Math.abs(st.fl.x - S.castX(D.SPOT.pier, 0.6, st.cond.weather)) < 1e-9, "A casts at once, to the aim (no meter)");
+  const near = cast(S.BTN.A | S.aimBits(0)), far = cast(S.BTN.A | S.aimBits(1));
+  ok(near.fl.x === 4 && far.fl.x > near.fl.x + 30 && far.aim === 1, `a click's aim in the log: near ${near.fl.x} yd, far ${far.fl.x.toFixed(1)} yd`);
+  st = S.newTrip({ seed: 3, spot: "pier", at: AT }); for (let i = 0; i < 20; i++) S.step(st, S.BTN.R);
+  ok(Math.abs(st.aim - (0.6 + 20 * S.AIM_RATE)) < 1e-9 && st.phase === "ready", "RIGHT held walks the aim out");
+  const fishing = (sp, cw, fst = "roam", extra = {}) => {
+    const st = S.newTrip({ seed: 5, spot: sp === "bluegill" || sp === "warden" ? "lake" : "pier", at: AT });
+    st.phase = "fishing"; st.t = 0; st.prev = 0;
+    st.bob = { x: 20, d: 3, motion: 0, pop: 0, bare: false, lure: "minnow", wait: 0 };
+    st.fish = [{ id: 999, sp, cw, x: 20, d: 3, vx: 0, st: fst, t: 0, nib: 0, next: 30, life: 9999, ...extra }];
+    return st;
+  };
+  // A with nothing on: reel in, cast again
+  st = fishing("bluegill", 40, "roam", { x: 60 });
+  S.step(st, S.BTN.A);
+  ok(st.phase === "ready" && !st.bob, "A with nothing on the line reels in");
+  // a nibble is not a bite
+  st = fishing("bluegill", 40, "nibble", { nib: 2, next: 99 });
+  S.step(st, 0); S.step(st, S.BTN.A);
+  ok(st.phase === "fishing" && st.bob && st.fish[0].st === "flee", "A on a nibble: that fish is scared off, the float stays in");
+  // the bite's window
+  st = fishing("bluegill", 40, "nibble", { nib: 0, next: 1 });
+  let evs = [];
+  for (let i = 0; i < 3 && !st.fish.some(f => f.st === "bite"); i++) { S.step(st, 0); evs.push(...st.ev); st.ev.length = 0; }
+  ok(st.fish[0].st === "bite" && evs.includes("bite") && evs.includes("splash"), "the bite: the float plunges, a splash and a sound");
+  for (let i = 0; i < S.BITE_WINDOW - 4; i++) S.step(st, 0);
+  S.step(st, S.BTN.A);
+  ok(st.phase === "reel", `A late in the bite's window (${S.BITE_WINDOW} ticks) still hooks`);
+  st = fishing("bluegill", 40, "bite", { next: S.BITE_WINDOW });
+  for (let i = 0; i < S.BITE_WINDOW + 4; i++) S.step(st, 0);
+  ok(st.phase === "fishing" && st.fish[0].st === "flee", "a bite left past the window: it leaves (no stolen bait, cast again)");
+  // nibbles come first, a few, before the bite; the waiting draws a far fish in
+  st = fishing("bluegill", 40, "roam", { x: 38 });
+  let nib = 0, bit = false;
+  for (let i = 0; i < 60 * 90 && !bit; i++) { S.step(st, 0); nib += st.ev.filter(e => e === "nibble").length; bit = st.ev.includes("bite"); st.ev.length = 0; }
+  ok(bit && nib >= 1, `a fish 18 yards off comes in while you wait: ${nib} nibble(s), then the bite`);
+  // the reel: time grows with size; nothing snaps; letting go only slows it
+  const reelTime = (sp, cw, hold = () => true) => {
+    const st = fishing(sp, cw, "bite", { next: 99 }); S.step(st, S.BTN.A);
+    let t = 0; while (st.phase === "reel" && t < 60 * 120) { S.step(st, hold(t) ? S.BTN.A : 0); st.ev.length = 0; t++; }
+    return { t, st };
+  };
+  const small = reelTime("bluegill", 40), mid = reelTime("striped-bass", 800), big = reelTime("striped-bass", 3800), leg = reelTime("warden", 5000);
+  ok(small.st.phase === "landed" && big.st.phase === "landed" && leg.st.phase === "landed", "held A lands every fish: no tension bar, no snap");
+  ok(small.t < 4 * 60 && small.t < mid.t && mid.t < big.t && big.t < leg.t && leg.t < 16 * 60, `reel time by size: bluegill ${(small.t / 60).toFixed(1)} s, 8 lb striper ${(mid.t / 60).toFixed(1)} s, 38 lb ${(big.t / 60).toFixed(1)} s, THE WARDEN ${(leg.t / 60).toFixed(1)} s`);
+  const mash = reelTime("striped-bass", 3800, t => t % 12 < 3);
+  ok(mash.st.phase === "landed" && mash.t < big.t * 1.2, `mashing works as well as holding (${(mash.t / 60).toFixed(1)} s)`);
+  const idle = reelTime("striped-bass", 3800, () => false);
+  ok(idle.st.phase === "reel" && idle.st.fish.some(f => f.st === "hooked"), "never reeling: it waits on the line, never lost");
+  ok(big.st.catches[0].sp === "striped-bass" && big.st.catches[0].cw === 3800 && big.st.catches[0].tl === D.lengthOf(B["striped-bass"], 3800), "the catch: species, the weight fixed at spawn, the length by the rule");
+  let tugs = 0; { const st = fishing("striped-bass", 3800, "bite", { next: 99 }); S.step(st, S.BTN.A); for (let i = 0; i < 3000 && st.phase === "reel"; i++) { S.step(st, S.BTN.A); tugs += st.ev.filter(e => e === "run").length; st.ev.length = 0; } }
+  ok(tugs >= 1 && !reelTimeTugs("bluegill"), `a big fish tugs on the way in (${tugs}); a bluegill does not`);
+  function reelTimeTugs(sp) { const st = fishing(sp, 40, "bite", { next: 99 }); S.step(st, S.BTN.A); let n = 0; for (let i = 0; i < 3000 && st.phase === "reel"; i++) { S.step(st, S.BTN.A); n += st.ev.filter(e => e === "run").length; st.ev.length = 0; } return n; }
+  // keep / release, as in v1
+  st = big.st; for (let i = 0; i < 40; i++) S.step(st, i === 35 ? S.BTN.B : 0);
+  ok(st.catches[0].fate === "release" && st.phase === "ready", "B on the card releases");
+  const fx = read("../src/play/fish/Fish.jsx");
+  ok(/CAST \/ HOOK \/ REEL/.test(fx) && /aimBits/.test(fx) && /EXPERT/.test(fx), "the page: one line of controls (CAST / HOOK / REEL), click-to-aim, the EXPERT toggle");
+  ok(/quipFor/.test(fx) && /quipFor/.test(read("../src/play/fish/render.js")), "the catch card carries the Department's one line");
+}
+
+// ==== expert (v1): fixtures recorded on v1 replay unchanged ===============================================
+{
+  const FIX = JSON.parse(read("./fixtures/fish-v1-trips.json"));
+  ok(FIX.trips.length >= 5, `${FIX.trips.length} v1 fixture trips`);
+  for (const t of FIX.trips) {
+    const st = R.replayTrip(R.versionOf(t), t.cfg, t.inputLog);
+    ok(R.versionOf(t) === 1 && JSON.stringify(st.catches) === JSON.stringify(t.catches) && st.tick === t.ticks && st.rng === t.rng, `v1 fixture ${t.cfg.spot}: ${t.catches.length} catches, ${t.ticks} ticks, the same to the rng`);
+    const k = t.catches.find(c => c.fate === "keep");
+    if (k) {
+      ok(R.verifyCatchV(1, t.cfg, t.inputLog, k.n, { sp: k.sp, cw: k.cw, tl: k.tl }).ok, `v1 fixture ${t.cfg.spot}: catch ${k.n} verifies as v1`);
+      ok(!R.verifyCatchV(2, t.cfg, t.inputLog, k.n, { sp: k.sp, cw: k.cw, tl: k.tl }).ok, `v1 fixture ${t.cfg.spot}: the same claim on v2 is refused`);
+    }
+  }
+}
+
+// ==== expert (v1): the tension rules, on the frozen sim =====================================================================================
 // a fish put on the lure and hooked, then held to one input
 function hooked(sp, cw, x = 20) {
-  const st = S.newTrip({ seed: 5, spot: sp === "bluegill" ? "lake" : "pier", at: AT });
+  const st = V1.newTrip({ seed: 5, spot: sp === "bluegill" ? "lake" : "pier", at: AT });
   st.phase = "fishing"; st.t = 0;
   st.bob = { x, d: 3, motion: 0, pop: 0, bare: false, lure: "minnow" };
   st.fish = [{ id: 999, sp, cw, x, d: 3, vx: 0, st: "bite", t: 0, nib: 0, next: 30, life: 9999 }];
-  S.step(st, S.BTN.B); st.ev.length = 0;
+  V1.step(st, V1.BTN.B); st.ev.length = 0;
   return st;
 }
 {
   let st = hooked("striped-bass", 3800);
   ok(st.phase === "fight", "B on a bite sets the hook");
-  for (let i = 0; i < 6000 && st.phase === "fight"; i++) { S.step(st, S.BTN.A); st.ev.length = 0; }
+  for (let i = 0; i < 6000 && st.phase === "fight"; i++) { V1.step(st, V1.BTN.A); st.ev.length = 0; }
   ok(st.phase === "lost" && st.last.lost === "snap", "reeling a 38 lb striper flat out snaps the line");
   st = hooked("bluegill", 40);
-  for (let i = 0; i < 6000 && st.phase === "fight"; i++) { S.step(st, 0); st.ev.length = 0; }
+  for (let i = 0; i < 6000 && st.phase === "fight"; i++) { V1.step(st, 0); st.ev.length = 0; }
   ok(st.phase === "lost" && st.last.lost === "escape", "never reeling a bluegill: slack, and it throws the hook");
   st = hooked("striped-bass", 3800);
-  for (let i = 0; i < 30000 && st.phase === "fight"; i++) { const bb = S.botBits(st); S.step(st, bb); st.ev.length = 0; }
+  for (let i = 0; i < 30000 && st.phase === "fight"; i++) { const bb = V1.botBits(st); V1.step(st, bb); st.ev.length = 0; }
   ok(st.phase === "landed" && st.catches[0]?.sp === "striped-bass" && st.catches[0].cw === 3800, "minding the gauge lands the 38 lb striper");
   // too early: B on a nibble scares it off
   st = hooked("bluegill", 40); st.phase = "fishing"; st.fight = null; st.fish = [{ id: 1, sp: "bluegill", cw: 40, x: 20, d: 3, vx: 0, st: "nibble", t: 0, nib: 2, next: 99, life: 999 }];
-  S.step(st, 0); S.step(st, S.BTN.B);
+  V1.step(st, 0); V1.step(st, V1.BTN.B);
   ok(st.phase === "fishing" && st.fish[0].st === "flee", "setting the hook on a nibble: too early, it leaves");
   // a bite left too long steals the bait
   st = hooked("bluegill", 40); st.phase = "fishing"; st.fight = null; st.bob.lure = "worm"; st.fish = [{ id: 1, sp: "bluegill", cw: 40, x: 20, d: 3, vx: 0, st: "bite", t: 0, nib: 0, next: 20, life: 999 }];
-  for (let i = 0; i < 40; i++) S.step(st, 0);
+  for (let i = 0; i < 40; i++) V1.step(st, 0);
   ok(st.bob.bare && st.fish[0]?.st === "flee", "a bite left too long: the bait is gone");
   // the protected sturgeon is never kept
   st = hooked("sturgeon", 9000);
-  for (let i = 0; i < 60000 && st.phase === "fight"; i++) { S.step(st, S.botBits(st)); st.ev.length = 0; }
-  if (st.phase === "landed") { for (let i = 0; i < 40; i++) S.step(st, i === 35 ? S.BTN.A : 0); ok(st.catches[0].fate === "release", "THE ATLANTIC STURGEON: A on the card still releases it (protected)"); }
+  for (let i = 0; i < 60000 && st.phase === "fight"; i++) { V1.step(st, V1.botBits(st)); st.ev.length = 0; }
+  if (st.phase === "landed") { for (let i = 0; i < 40; i++) V1.step(st, i === 35 ? V1.BTN.A : 0); ok(st.catches[0].fate === "release", "THE ATLANTIC STURGEON: A on the card still releases it (protected)"); }
   else ok(true, "the sturgeon got away from the bot (allowed)");
 }
+
+// the log entry whose press set the first hook (v2)
+function hookIndex(c, log) { const st = S.newTrip(c); for (let i = 0; i < log.length; i += 2) { let hooked = false; for (let r = 0; r < log[i + 1]; r++) { S.step(st, log[i]); if (st.ev.includes("hook")) hooked = true; st.ev.length = 0; } if (hooked) return i; } return -1; }
 
 // ==== verification =========================================================================================
 {
@@ -175,11 +274,12 @@ function hooked(sp, cw, x = 20) {
   ok(!S.verifyCatch({ ...vcfg, at: vcfg.at + 12 * 60000 }, a.log, k.n, claim).ok, "the same log at another hour: refused");
   // doctored: the hook set on the first catch moved later by a few ticks
   const doc = a.log.slice();
-  const firstB = doc.findIndex((v, i) => i % 2 === 0 && v === S.BTN.B);
-  doc[firstB - 1] += 25;
+  const hookAt = hookIndex(vcfg, doc);
+  doc[hookAt - 1] += 60;
   const dv = S.verifyCatch(vcfg, doc, k.n, claim);
-  ok(!dv.ok, `a doctored log (the strike moved 25 ticks): refused (${dv.error})`);
-  ok(!S.verifyCatch(vcfg, [16, 1, 99, 2], 0, claim).ok && !S.verifyCatch(vcfg, [16], 0, claim).ok && !S.verifyCatch(vcfg, [16, 0], 0, claim).ok, "an illegible log: refused");
+  ok(hookAt > 0 && !dv.ok, `a doctored log (the strike moved a second late, past the window): refused (${dv.error})`);
+  ok(!R.verifyCatchV(1, vcfg, a.log, k.n, claim).ok, "a v2 log claimed as v1: refused");
+  ok(!S.verifyCatch(vcfg, [16, 1, S.MAX_BITS + 1, 2], 0, claim).ok && !V1.verifyCatch(vcfg, [16, 1, 99, 2], 0, claim).ok && !S.verifyCatch(vcfg, [16], 0, claim).ok && !S.verifyCatch(vcfg, [16, 0], 0, claim).ok, "an illegible log: refused");
   // a released fish cannot be donated
   const rel = (() => { const st = S.newTrip(cfg), log = []; while (st.tick < 15 * 60 * 60 && !st.catches.length || (st.catches.length && !st.catches[0].fate)) { const bb = st.phase === "landed" ? (st.t > 32 && !(st.prev & S.BTN.B) ? S.BTN.B : 0) : S.botBits(st); S.logPush(log, bb); S.step(st, bb); st.ev.length = 0; } return { st, log }; })();
   const rk = rel.st.catches[0];
@@ -221,30 +321,47 @@ function hooked(sp, cw, x = 20) {
   const play = (c, want) => { const st = S.newTrip(c), log = []; while (st.tick < S.TRIP_TICKS && st.catches.filter(k => k.fate).length < want) { const bb = S.botBits(st); S.logPush(log, bb); S.step(st, bb); st.ev.length = 0; } return { st, log }; };
   let g = play(tcfg, 2);
   const k0 = g.st.catches[0], claim0 = { sp: k0.sp, cw: k0.cw, tl: k0.tl };
-  let res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 0, claim: claim0, inputLog: g.log });
+  let res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 0, claim: claim0, inputLog: g.log, v: 2 });
   ok(res.status === 422 && /CLOCK/.test(res.body.error), "a log longer than the time since the permit: refused (no fast-forwarding)");
   const at = backdate(A, 60);
   g = play({ ...tcfg, at }, 2);   // the trip as it was really played (the permit's start moved with the backdate)
   const k1 = g.st.catches[0], c1 = { sp: k1.sp, cw: k1.cw, tl: k1.tl };
-  res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 0, claim: { ...c1, cw: c1.cw + 50 }, inputLog: g.log });
+  res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 0, claim: { ...c1, cw: c1.cw + 50 }, inputLog: g.log, v: 2 });
   ok(res.status === 422 && /DOES NOT MATCH/.test(res.body.error), "a claim heavier than the replay: refused");
-  const doc = g.log.slice(); const fb = doc.findIndex((v, i) => i % 2 === 0 && v === S.BTN.B); doc[fb] = 0;   // the strike edited out
-  res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 0, claim: c1, inputLog: doc });
+  const doc = g.log.slice(), fb = hookIndex({ ...tcfg, at }, doc); doc[fb] = 0;   // the strike edited out
+  res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 0, claim: c1, inputLog: doc, v: 2 });
   ok(res.status === 422, "a doctored log: refused");
-  res = await call("POST", { caseId: Bc, action: "donate", tripId: t.body.tripId, n: 0, claim: c1, inputLog: g.log });
+  res = await call("POST", { caseId: Bc, action: "donate", tripId: t.body.tripId, n: 0, claim: c1, inputLog: g.log, v: 2 });
   ok(res.status === 404, "another file's permit cannot be used");
-  res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 0, claim: c1, inputLog: g.log });
+  res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 0, claim: c1, inputLog: g.log, v: 2 });
   ok(res.status === 200 && res.body.filed.record === true && res.body.filed.holder === "SUBJECT AAAA" && res.body.tank.record.cw === c1.cw, `a genuine catch filed: ${res.body.filed?.name} ${c1.cw / 100} LB, the first record`);
   ok(res.body.mine.n === 1 && res.body.mine.records.includes(c1.sp) && !JSON.stringify(res.body).includes(A), "the file's donation and record; the case number is never served");
-  res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 0, claim: c1, inputLog: g.log });
+  res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 0, claim: c1, inputLog: g.log, v: 2 });
   ok(res.status === 409, "one donation per fish");
   const k2 = g.st.catches[1];
-  res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 1, claim: { sp: k2.sp, cw: k2.cw, tl: k2.tl }, inputLog: g.log });
+  res = await call("POST", { caseId: A, action: "donate", tripId: t.body.tripId, n: 1, claim: { sp: k2.sp, cw: k2.cw, tl: k2.tl }, inputLog: g.log, v: 2 });
   ok(res.status === 200, "the trip's second fish donated too");
+  // v1 (EXPERT, and every client before v2): no version, or v 1, replays on the frozen sim
+  {
+    const t1 = await call("POST", { caseId: A, action: "trip", spot: "lake" });
+    const at1 = backdate(A, 60);
+    const play1 = (c, want) => { const st = V1.newTrip(c), log = []; while (st.tick < V1.TRIP_TICKS && st.catches.filter(k => k.fate === "keep").length < want) { const bb = V1.botBits(st); V1.logPush(log, bb); V1.step(st, bb); st.ev.length = 0; } return { st, log }; };
+    const g1 = play1({ seed: t1.body.seed, spot: "lake", at: at1 }, 2), ks = g1.st.catches.filter(k => k.fate === "keep");
+    const cl = (k) => ({ sp: k.sp, cw: k.cw, tl: k.tl });
+    res = await call("POST", { caseId: A, action: "donate", tripId: t1.body.tripId, n: ks[0].n, claim: cl(ks[0]), inputLog: g1.log, v: 2 });
+    ok(res.status === 422, "a v1 trip sent as v2: refused");
+    res = await call("POST", { caseId: A, action: "donate", tripId: t1.body.tripId, n: ks[0].n, claim: cl(ks[0]), inputLog: g1.log, v: 9 });
+    ok(res.status === 400, "an unknown sim version: refused");
+    res = await call("POST", { caseId: A, action: "donate", tripId: t1.body.tripId, n: ks[0].n, claim: cl(ks[0]), inputLog: g1.log });
+    ok(res.status === 200, "a v1 trip with no version (an old client): verified on the frozen sim, filed");
+    res = await call("POST", { caseId: A, action: "donate", tripId: t1.body.tripId, n: ks[1].n, claim: cl(ks[1]), inputLog: g1.log, v: 1 });
+    ok(res.status === 200, "a v1 trip sent as v 1 (EXPERT): filed");
+    ok(t1.body.v === 2 && t1.body.versions.join() === "1,2", "the permit names both sims");
+  }
   const pub = await call("GET", null);
   ok(pub.status === 200 && pub.body.tanks[c1.sp].record.holder === "SUBJECT AAAA" && !JSON.stringify(pub.body).includes('"k"'), "the tanks, public: names on plaques, no keys");
   const mine = await call("GET", null, { q: `?caseId=${A}` });
-  ok(mine.status === 200 && mine.body.mine.n === 2, "MY FILE reads the file's donations");
+  ok(mine.status === 200 && mine.body.mine.n === 4, "MY FILE reads the file's donations");
   // the plaque's rule, pure
   let tanks = {};
   const e = (k, holder, cw) => ({ k, holder, sp: "bluefish", cw, tl: 300, spot: "pier", day: 9, at: "x" });

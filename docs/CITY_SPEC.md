@@ -2828,7 +2828,33 @@ mechanics and conventions of the FC games; none of their names, marks, kits, clu
   slack (under 0.12) for 100 ticks (40 for a crab, 45 in a jump) throws the hook, a fish that still
   has strength at the net runs again. Landed: species, weight (hundredths of a pound), length (tenths
   of an inch), lure, machine day and hour; then KEEP (A) or RELEASE (B). A trip ends at two real hours.
-- **Replay**: `{cfg: {seed, spot, at}, inputLog}`, run-length bits like golf. `replay`, `verifyCatch`.
+  This is the v1 sim, frozen in `src/play/fish/v1/sim.js` and played as **EXPERT** (below).
+- **Simple by default (sim v2, 2026-10-06)**. Scott: "The fishing is okay. It's a little bit too
+  complicated. We want it to be fairly simple." `src/play/fish/sim.js` is now Animal Crossing's one
+  button. **Cast**: A casts at once where the gold X sits (LEFT/RIGHT walk it, ~1.2 s a sweep; a click
+  or tap on the water puts it there: the aim rides in the log as `bits | code << 6`, code 1..33, so a
+  mouse trip replays like a key trip). No meter. **Bait**: chosen by the spot (minnow on salt and
+  brackish water, worm on the river and the reservoir), no menu; the fish treat it as their favourite.
+  **Wait**: the float sits; fish show as shadows (the species waits for the net); one fish at a time
+  comes to it, the float's reach growing a yard a second, nibbles 1-4 times (small dips, a blip),
+  then **bites** (the float plunges: splash, rings, a two-note sound). A inside the 48-tick window
+  (0.8 s; v1 gave 12-30) hooks it; A on a nibble scares that fish off and the float stays in (the one
+  bit of skill); A with nothing on reels in; a bite left past its window leaves (no stolen bait).
+  **Reel**: hold A, or mash it (a press reels for a fifth of a second): a bar fills in `2.5 + 4.5 *
+  power * (0.4 + 0.6 * size) (+3 for a legend)` seconds (bluegill ~3 s, a 38 lb striper ~7.5 s, THE
+  WARDEN ~14 s); a big fish tugs now and then (the rod bends, reeling slows to a third). Nothing
+  snaps, nothing throws the hook; letting go only lets it drift back a little. **Landed**: the catch
+  card (species, weight, length, and the Department's one line, `render.js quipFor`), KEEP / RELEASE
+  / DONATE TO THE AQUARIUM, unchanged. **The water is v1's**: the same seeding and the same spawn draw
+  for draw, so species odds and sizes on the record board compare across versions (check-fish proves
+  v2's water holds v1's fish for every spot). What changes is only which fish takes: in v1 the lure
+  decided, in v2 the bait suits everyone.
+- **EXPERT** (the spot's "+" panel, kept per browser): the v1 game above, unchanged: the power meter,
+  the lure picker, the tension gauge that snaps. The page plays `v1/sim.js` and donates with `v: 1`.
+- **Replay**: `{v, cfg: {seed, spot, at}, inputLog}`, run-length bits like golf. Both sims export
+  `replay`, `verifyCatch`; `src/play/fish/replay.js` picks by version (`simOf`, `verifyCatchV`; no
+  version reads as v1, as golf's `replay.js` does). `scripts/fixtures/fish-v1-trips.json` holds five
+  trips recorded on v1 before v2 landed; check-fish replays them to the same catches, tick and rng.
 - **Screen**: 256x224, integer scale, smoothing off, the golf page's 5x7 font. The angler on the left
   (on the pier's deck, the sand, or the bank), the water in cross-section with the fish visible (dimmer
   at night and in fog), the far side by water (the sea and the lighthouse, the reservoir's trees, the
@@ -2840,9 +2866,11 @@ mechanics and conventions of the FC games; none of their names, marks, kits, clu
   render-side only. They never speak. (The city's pier already seats anglers with rods on its 14 rod
   anchors, `coastGeo.js pierAnchors`; a dawn-and-dusk crowd there is a hook left for the river
   layout's version, not a sim change.)
-- **Input**: keys (arrows, Z/Space reel and cast, X jerk, Enter/Esc pause), `gamepad.js` (d-pad or
-  bumpers lure, A/cross reel, B/circle jerk, Start), touch (lure, JERK, II, REEL, 56 px). The legend
-  under the frame follows the hands in use with the pad's glyphs. Screen reader: each line of the
+- **Input** (simple): one line, "A: CAST / HOOK / REEL": Z/Space or the pad's A; arrows or the d-pad
+  aim; X/B releases on the card; Enter/Esc/Start pause. Mouse and touch: the frame is the button
+  (click the water to cast there, click on the bite, hold to reel); touch adds ◀ ▶ aim, II and a wide
+  CAST / HOOK / REEL button (56 px). (EXPERT keeps v1's: arrows lure, Z/Space reel and cast, X jerk;
+  touch lure, JERK, II, REEL.) The legend under the frame follows the hands in use with the pad's glyphs. Screen reader: each line of the
   Department's commentary is announced; the catch card is real buttons (KEEP, RELEASE, DONATE).
 - **Your records**: this browser keeps the tackle box (kept fish), personal bests per species (every
   landed fish) and the last three permitted trips' logs (`box.js`). MY FILE shows the aquarium's
@@ -2872,8 +2900,10 @@ replaying it on the server.
   file gets 30 an hour. A log may not hold more ticks than real time has passed since the permit
   (plus ten seconds), so a trip cannot be fast-forwarded. Without a case file (or offline) you still
   fish, with a local seed, and the catches stay in the browser.
-- **The donation**: `POST {action: "donate", tripId, n, claim: {sp, cw, tl}, inputLog}` re-runs
-  `src/play/fish/sim.js` in node on the permit's `{seed, spot, at}` and the log, and files catch n only
+- **The donation**: `POST {action: "donate", tripId, n, claim: {sp, cw, tl}, inputLog, v}` re-runs the
+  sim the trip was played on (`replay.js`: `v: 2` the one-button `sim.js`; `v: 1` or no `v`, every
+  client before 2026-10-06 and EXPERT, the frozen `v1/sim.js`; any other `v` is a 400) in node on the
+  permit's `{seed, spot, at}` and the log, and files catch n only
   if it comes out exactly as claimed and was not released. One donation per fish (the permit records
   it before the plaque moves). Cost: a two-hour trip (432,000 ticks) replays in well under a second in
   node (check-fish prints it: about 65 ms for the full two hours, half a millisecond per real minute of fishing).
