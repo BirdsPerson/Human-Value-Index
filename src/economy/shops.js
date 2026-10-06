@@ -18,7 +18,7 @@ import { seasonOf } from "../city/seasons.js";
 export const SHOP_V = 1;
 export const MAX_FURN_EACH = 3;       // copies of one furniture piece a file may own
 export const OUTFIT_SLOTS = 3;        // saved outfits in the closet
-export const PRICE_MIN = 50, PRICE_MAX = 25_000;
+export const PRICE_MIN = 50, PRICE_MAX = 40_000;
 
 // ---- the stores ------------------------------------------------------------------------------
 export const STORES = [
@@ -100,7 +100,46 @@ export const FURNITURE_PRICES = {
   easel: 400, piano: 6_000, "grand-piano": 20_000, books: 150, weights: 750, trophies: 500,
   pc: 2_000, arcade: 4_000, globe: 300, filing: 250, drafting: 1_800, desk: 700,
   tub: 1_500, clawfoot: 4_500, shower: 900, sink: 400, toilet: 300, towels: 80,
+  // the upgrade tiers: never sold outright, reached only by UPGRADE (their value on the ladder)
+  "golf-cabinet": 10_000, "golf-sim": 35_000, "ebtv-big": 4_500, "home-theater": 18_000, kegerator: 9_000, brewery: 16_000,
 };
+
+// ---- UPGRADES (Scott, 2026-10-05: "buy an arcade machine cabinet, then upgrade it to the Golden
+// Tee machine with the cool screen, then upgrade that to the golf simulator"). A piece upgrades to
+// the next tier for the difference in value plus a fee (5%, at least 100); the old piece is
+// consumed, the CYCLES burned. A tier may need more room: `whole` pieces take a whole room (the
+// golf simulator converts the study, the spare room only the top and middle flats have).
+// Next, when their games exist: dartboard -> electronic darts; a hunting cabinet -> the home
+// hunting simulator; a home bowling lane (ultra-luxury, the penthouse only).
+export const UPGRADES = {
+  arcade: "golf-cabinet", "golf-cabinet": "golf-sim",
+  tv: "ebtv-big", ebtv: "ebtv-big", "tv-flat": "ebtv-big", "ebtv-big": "home-theater",
+  "beer-tap": "kegerator", kegerator: "brewery",
+};
+export const UPGRADE_ONLY = new Set(Object.values(UPGRADES));
+export const UPGRADE_FEE = (diff) => Math.max(100, Math.round(diff * 0.05));
+// -> {from, to, price, item} | null: what upgrading this piece costs now
+export function upgradeOf(id) {
+  const to = UPGRADES[id];
+  if (!to || !FURNITURE_PRICES[id] || !FURNITURE_PRICES[to]) return null;
+  const diff = Math.max(0, FURNITURE_PRICES[to] - FURNITURE_PRICES[id]);
+  return { from: id, to, price: diff + UPGRADE_FEE(diff), name: CATALOG[to].name };
+}
+// The chain a piece starts: [id, next, next...]
+export function chainOf(id) { const out = [id]; let k = id; while (UPGRADES[k] && out.length < 6) { k = UPGRADES[k]; out.push(k); } return out; }
+
+// ---- PLAYABLE AT HOME: a tap on the piece in your own flat ----------------------------------------
+// {game: an arcade.json slug} opens the cabinet's game; {go: a route} opens a page; {ebtv: true}
+// opens the live channel (the set shows the live frame, ebtvFrame.js). check-shops resolves each.
+export const PLAY_AT_HOME = {
+  arcade: { game: "jetsam", label: "PLAY JETSAM!" },
+  "golf-cabinet": { go: "#golf?preset=cabinet", label: "PLAY BAR-TOP GOLF (TRACKBALL: DRAG TO SWING)" },
+  "golf-sim": { go: "#golf?preset=sim", label: "TEE OFF ON THE SIMULATOR" },
+  tv: { ebtv: true, label: "WATCH EBTV" }, "tv-crt": { ebtv: true, label: "WATCH EBTV" }, "tv-flat": { ebtv: true, label: "WATCH EBTV" },
+  ebtv: { ebtv: true, label: "WATCH EBTV" }, "ebtv-big": { ebtv: true, label: "WATCH EBTV, BIG" }, "home-theater": { ebtv: true, label: "EBTV IN THE HOME THEATER" },
+};
+// The top of each chain: at night, the city's figures gather round it (render-side, the cutaway).
+export const TOP_TIER = new Set(["golf-sim", "home-theater", "brewery"]);
 export const FURN_SECTIONS = [
   ["BEDROOM", ["bed-single", "bed-futon", "bed-bunk", "bed-double", "bed-canopy", "wardrobe", "dresser", "nightstand"]],
   ["LIVING ROOM", ["sofa", "loveseat", "sectional", "armchair", "beanbag", "rug", "tv-crt", "tv", "tv-flat", "ebtv", "record-player", "bookshelf", "books"]],
@@ -146,7 +185,8 @@ export function itemOf(sku) {
   if (sku.startsWith("f:")) {
     const id = sku.slice(2), it = CATALOG[id], price = FURNITURE_PRICES[id];
     if (!it || !price) return null;
-    return { sku, kind: "furn", id, name: it.name, store: "eastgate-home", price, rooms: it.rooms, wall: it.wall, floor: it.floor, effect: FURNITURE_EFFECTS[id] || null };
+    return { sku, kind: "furn", id, name: it.name, store: "eastgate-home", price, rooms: it.rooms, wall: it.wall, floor: it.floor, whole: it.whole, effect: FURNITURE_EFFECTS[id] || null,
+      upgrade: upgradeOf(id), upgradeOnly: UPGRADE_ONLY.has(id), play: PLAY_AT_HOME[id] || null, top: TOP_TIER.has(id) };
   }
   return null;
 }
@@ -173,7 +213,7 @@ export function stockOf(storeId, machineDay) {
 export function onSale(sku, machineDay) {
   const it = itemOf(sku);
   if (!it) return false;
-  if (it.kind === "furn") return true;
+  if (it.kind === "furn") return !it.upgradeOnly;
   return inSeason(it, collectionOf(machineDay));
 }
 
@@ -197,7 +237,16 @@ export function outfitKeys(outfit, owned = null) {
 // ---- furniture in a flat: each room has five floor spots and three on the wall ------------------
 export const FLOOR_SPOTS = [0.1, 0.3, 0.5, 0.7, 0.9];
 export const WALL_SPOTS = [0.25, 0.5, 0.75];
-export const spotsFor = (item) => (item?.wall ? WALL_SPOTS.map((x, i) => ({ id: `w${i}`, x })) : FLOOR_SPOTS.map((x, i) => ({ id: `f${i}`, x })));
+export const spotsFor = (item) => (item?.wall ? WALL_SPOTS.map((x, i) => ({ id: `w${i}`, x })) : item?.whole ? [{ id: "f2", x: 0.5 }] : FLOOR_SPOTS.map((x, i) => ({ id: `f${i}`, x })));
+// The whole-room rule: a `whole` piece needs a room with nothing else on its floor; a room given
+// over to one takes no other floor piece (the walls stay free). others: [{room, spot, item}] already
+// placed (anyone's), not counting this piece. -> null if fine, else the reason.
+export function roomRule(item, roomId, others) {
+  const floor = others.filter(o => o.room === roomId && o.spot[0] === "f");
+  if (item.whole && floor.length) return "needs-room";
+  if (!item.wall && floor.some(o => CATALOG[o.item]?.whole)) return "room-given";
+  return null;
+}
 export const spotX = (spot) => { const m = /^([fw])(\d)$/.exec(String(spot || "")); if (!m) return null; const L = m[1] === "w" ? WALL_SPOTS : FLOOR_SPOTS; return L[+m[2]] ?? null; };
 // May this furniture stand in this room of this flat? room: a tower.js room id "<flat>:<purpose>[n]".
 export function placeable(item, roomId, flatId) {
@@ -215,7 +264,8 @@ export function furnishLook(look, placements) {
   for (const p of placements) {
     const r = rooms[p.room], it = CATALOG[p.item], x = spotX(p.spot);
     if (!r || !it || x == null) continue;
-    if (!it.wall) r.furniture = r.furniture.filter(f => CATALOG[f.item]?.wall || CATALOG[f.item]?.floor || Math.abs(f.x - x) > 0.13);
+    if (it.whole) r.furniture = r.furniture.filter(f => CATALOG[f.item]?.wall || f.placed);
+    else if (!it.wall) r.furniture = r.furniture.filter(f => CATALOG[f.item]?.wall || CATALOG[f.item]?.floor || Math.abs(f.x - x) > 0.13);
     else r.furniture = r.furniture.filter(f => !CATALOG[f.item]?.wall || Math.abs(f.x - x) > 0.13);
     r.furniture.push({ item: p.item, x, role: it.role, tint: it.tints ? it.tints[0] : null, flip: false, placed: true });
   }
@@ -238,6 +288,11 @@ export const SHOP_LINES = {
   removed: "RETURNED TO YOUR INVENTORY. THE ROOM REMEMBERS.",
   taken: "THAT SPOT IS TAKEN. A FLATMATE GOT THERE FIRST, OR YOU DID.",
   noFlat: "YOUR ASSIGNED HOME HAS NO CUTAWAY YET. YOUR FURNITURE WAITS IN YOUR INVENTORY.",
+  upgraded: "UPGRADED. THE OLD ONE WAS TAKEN AWAY. THE DIFFERENCE WAS DESTROYED, WITH A FEE FOR THE TROUBLE.",
+  upgradedStored: "UPGRADED. IT NO LONGER FITS WHERE THE OLD ONE STOOD: IT WAITS IN YOUR INVENTORY.",
+  noUpgrade: "THAT IS AS GOOD AS IT GETS. THE DEPARTMENT HAS NOTHING BETTER. YET.",
+  needsRoom: "IT NEEDS THE WHOLE ROOM. CLEAR THE FLOOR FIRST.",
+  roomGiven: "THAT ROOM IS GIVEN OVER TO SOMETHING BIGGER. THE WALLS ARE FREE.",
   drawn: "YOUR LIKENESS WAS DRAWN BY HAND. IT WEARS WHAT IT WAS DRAWN IN. YOUR WARDROBE IS KEPT ALL THE SAME.",
   score: "WHAT YOU WEAR NEVER RAISES YOUR SCORE. CONDUCT DOES.",
 };

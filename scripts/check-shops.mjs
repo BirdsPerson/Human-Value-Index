@@ -87,7 +87,37 @@ const OUTER_FLAT = 9_000, SAVE_DAY = 700;
   }
   for (const id of ["mailboxes", "reception", "cooler", "rack", "till", "bar", "stool", "safe", "mounted-fish"]) ok(!SH.FURNITURE_PRICES[id], `${id} is not for sale`);
   const sections = SH.FURN_SECTIONS.flatMap(([, ids]) => ids);
-  eq([...sections].sort(), Object.keys(SH.FURNITURE_PRICES).sort(), "EASTGATE HOME shows every piece once");
+  eq([...sections].sort(), Object.keys(SH.FURNITURE_PRICES).filter(id => !SH.UPGRADE_ONLY.has(id)).sort(), "EASTGATE HOME shows every piece sold outright, once");
+  // the upgrade chains: each tier dearer than the last, the price the difference plus the fee, the tops whole rooms or corners
+  for (const [from, to] of Object.entries(SH.UPGRADES)) {
+    ok(FURN.CATALOG[from] && FURN.CATALOG[to] && SH.FURNITURE_PRICES[to] > SH.FURNITURE_PRICES[from], `${from} -> ${to}: a dearer tier`);
+    const u = SH.upgradeOf(from), diff = SH.FURNITURE_PRICES[to] - SH.FURNITURE_PRICES[from];
+    eq(u.price, diff + Math.max(100, Math.round(diff * 0.05)), `${from} -> ${to}: the difference and the fee`);
+    ok(!SH.onSale(`f:${to}`, 617), `${to} is reached only by upgrade`);
+  }
+  eq(SH.chainOf("arcade"), ["arcade", "golf-cabinet", "golf-sim"], "the cabinet -> the bar-top golf cabinet -> the simulator");
+  eq(SH.chainOf("tv"), ["tv", "ebtv-big", "home-theater"], "the TV -> the EBTV big screen -> the home theater");
+  eq(SH.chainOf("beer-tap"), ["beer-tap", "kegerator", "brewery"], "the tap -> Irene's kegerator -> the home brewery");
+  eq(SH.upgradeOf("arcade").price, 6_300, "cabinet -> golf cabinet: +6,000 and the fee");
+  eq(SH.upgradeOf("golf-cabinet").price, 26_250, "golf cabinet -> simulator: +25,000 and the fee");
+  ok(FURN.CATALOG["golf-sim"].whole && FURN.CATALOG["golf-sim"].rooms.join() === "study,living", "the simulator takes a whole room: the study, or a living room given over to it");
+  ok(FURN.CATALOG["home-theater"].whole, "the home theater takes a whole room");
+  eq(SH.spotsFor(SH.itemOf("f:golf-sim")).map(s => s.id), ["f2"], "a whole-room piece stands in the middle");
+  eq(SH.roomRule(SH.itemOf("f:golf-sim"), "x:L1:A:study", [{ room: "x:L1:A:study", spot: "f0", item: "plant" }]), "needs-room", "a whole-room piece needs an empty floor");
+  eq(SH.roomRule(SH.itemOf("f:plant"), "x:L1:A:study", [{ room: "x:L1:A:study", spot: "f2", item: "golf-sim" }]), "room-given", "a room given over takes no other floor piece");
+  eq(SH.roomRule(SH.itemOf("f:painting"), "x:L1:A:study", [{ room: "x:L1:A:study", spot: "f2", item: "golf-sim" }]), null, "the walls stay free");
+  // playable at home: every target resolves (a game on the arcade's list, a route the app serves, the channel)
+  const GAMES = JSON.parse(readFileSync(new URL("../src/city/arcade.json", import.meta.url), "utf8"));
+  const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  for (const [id, p] of Object.entries(SH.PLAY_AT_HOME)) {
+    ok(FURN.CATALOG[id] && p.label, `${id}: playable, labelled`);
+    if (p.game) ok(GAMES.some(g => g.slug === p.game && g.status === "live" && g.play), `${id}: ${p.game} is a live game`);
+    if (p.go) ok(app.includes(`"${p.go.split("?")[0]}"`), `${id}: ${p.go} is a route the app serves`);
+    ok(p.game || p.go || p.ebtv, `${id}: resolves to something`);
+  }
+  ok(SH.PLAY_AT_HOME.arcade.game === "jetsam" && SH.PLAY_AT_HOME["golf-cabinet"].go.includes("preset=cabinet") && SH.PLAY_AT_HOME["golf-sim"].go.includes("preset=sim"), "the cabinet plays JETSAM!, the golf tiers their presets");
+  const golf = readFileSync(new URL("../src/play/golf/Golf.jsx", import.meta.url), "utf8");
+  ok(/preset/.test(golf), "#golf reads the home preset");
   eq(new Set(sections).size, sections.length, "no piece on two shelves");
   // the ladder: thrift < department < boutique; the examples Scott named
   const by = (tier) => Object.values(SH.CLOTHES).filter(c => SH.storeOf(c[1]).tier === tier).map(c => c[2]);
@@ -98,7 +128,8 @@ const OUTER_FLAT = 9_000, SAVE_DAY = 700;
   ok(SH.FURNITURE_PRICES.arcade >= 3_000 && SH.FURNITURE_PRICES.arcade <= 5_000, "the JETSAM! cabinet ~4,000");
   eq(SH.FURNITURE_PRICES["grand-piano"], 20_000, "the grand piano 20,000");
   ok(SH.CLOTHES["b-blazer"][2] === 5_000, "the boutique jacket 5,000");
-  ok(Object.values(SH.FURNITURE_PRICES).filter(p => p > OUTER_FLAT).length <= 2, "at most two pieces cost more than an OUTER flat");
+  ok(Object.entries(SH.FURNITURE_PRICES).filter(([id, p]) => !SH.UPGRADE_ONLY.has(id) && p > OUTER_FLAT).length <= 2, "at most two pieces sold outright cost more than an OUTER flat");
+  ok(SH.FURNITURE_PRICES["golf-sim"] <= 4 * 9_000, "the simulator, the top of a chain, under four OUTER flats");
   // every store stocked in every season; every garment on sale in some season
   for (const st of SH.STORES) for (let k = 0; k < 4; k++) {
     const md = 617 + k * 1800, col = SH.COLLECTIONS[(22 + k) % 4];
@@ -169,9 +200,10 @@ const md = SIM.machineClock(fake).day;
 eq(SH.collectionOf(md), "AUTUMN", "the test runs in AUTUMN");
 
 // test files only, made up here; two that share a flat (for the flatmate's spot)
-const hist = [{ at: "2026-09-01T10:00:00Z", score: 512, tier: "MONITORED CIVILIAN" }];
+const hist = [{ at: "2026-09-01T10:00:00Z", score: 850, tier: "ESSENTIAL" }];   // a top-band flat: five rooms, a study
 const A32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-const flatOfId = (id) => E.apartmentOf(id, { history: hist })?.flat?.id || null;
+// a flat with a study (the spare room the simulator needs)
+const flatOfId = (id) => { const f = E.apartmentOf(id, { history: hist })?.flat; return f && f.rooms.some(r => r.purpose === "study") ? f.id : null; };
 let T = null, M = null;
 const seen = new Map();
 for (let i = 0; i < 40000 && !M; i++) {
@@ -206,6 +238,14 @@ const inv = (label) => {
 const H = DB.caseHash;
 const cash = (id) => L.db.accounts.get(`cash:${H(id)}`)?.balance ?? 0;
 const burned = () => L.db.accounts.get("dept:burned").balance;
+// a test grant from the treasury, balanced (the treasury mints), on the test file only
+let grants = 0;
+const grant = (id, n) => {
+  const t = L.db.seq + 1; L.db.seq = t; grants++;
+  L.db.txns.push({ id: t, idem_key: `test-grant-${grants}`, kind: "ubi", case_hash: H(id), day: null, memo: { test: true }, created_at: new Date().toISOString() });
+  L.db.entries.push({ id: ++L.db.eseq, txn_id: t, account: `cash:${H(id)}`, amount: n }, { id: ++L.db.eseq, txn_id: t, account: "dept:treasury", amount: -n });
+  L.db.accounts.get(`cash:${H(id)}`).balance += n; L.db.accounts.get("dept:treasury").balance -= n;
+};
 
 // closed with no ledger
 {
@@ -236,7 +276,7 @@ ok(t0 > 9000, `T has two weeks' allowance (${t0})`);
   eq(r.status, 200, "GET wardrobe"); eq(r.body.balance, t0, "the balance"); eq(r.body.items, [], "nothing owned yet");
   eq(r.body.collection, "AUTUMN", "the season's collection"); ok(r.body.apartment?.flat?.id, "the flat is a cutaway flat");
   eq(r.body.apartment.unit, r.body.apartment.flat.label, "MY APARTMENT's unit is the cutaway's flat label");
-  const s = { slug: `citizen-${T.slice(-4).toLowerCase()}`, name: `Subject ${T.slice(-4)}`, score: 512, tier: "MONITORED CIVILIAN", kind: "citizen" };
+  const s = { slug: `citizen-${T.slice(-4).toLowerCase()}`, name: `Subject ${T.slice(-4)}`, score: hist[0].score, tier: hist[0].tier, kind: "citizen" };
   const b = SIM.BUILDING[r.body.apartment.building];
   eq(residentFlat(towerPlan(b), s).id, r.body.apartment.flat.id, "MY APARTMENT names the door the tower draws");
   eq((await shop("GET", null, { q: `?caseId=${U}` })).status, 403, "an unassessed file does not shop");
@@ -352,10 +392,67 @@ ok(t0 > 9000, `T has two weeks' allowance (${t0})`);
   eq(r.status, 200, "back to the inventory"); ok(!r.body.items.find(i => i.id === plant.id).placed, "unplaced");
   inv("after placing");
 }
+// UPGRADE: the difference, once; the old piece consumed; the room rules
+{
+  clearLimits();
+  let v = (await shop("GET", null, { q: `?caseId=${T}` })).body;
+  const flat = v.apartment.flat, living = flat.rooms.find(r => r.purpose === "living"), study = flat.rooms.find(r => r.purpose === "study");
+  const cab = v.items.find(i => i.sku === "f:arcade");
+  ok(cab.placed && cab.upgrade?.to === "golf-cabinet", "the cabinet is placed and upgradable");
+  eq((await shop("POST", { caseId: T, action: "buy", sku: "f:golf-cabinet", nonce: "nonce-gc-direct" })).body.code, "upgrade-only", "the golf cabinet is not sold outright");
+  grant(T, 8_000);
+  const c0 = cash(T), b0 = burned(), n0 = L.db.items.filter(i => i.case_hash === H(T)).length;
+  let r = await shop("POST", { caseId: T, action: "upgrade", itemId: cab.id, nonce: "nonce-up-00001" });
+  eq(r.status, 200, "upgrade the cabinet to the bar-top golf cabinet");
+  eq(cash(T), c0 - 6_300, "debited exactly the difference and the fee"); eq(burned(), b0 + 6_300, "burned");
+  r = await shop("POST", { caseId: T, action: "upgrade", itemId: cab.id, nonce: "nonce-up-00001" });
+  eq(r.body.last?.dup, true, "the same nonce again: a duplicate"); eq(cash(T), c0 - 6_300, "debited once");
+  eq(L.db.items.filter(i => i.case_hash === H(T)).length, n0, "the old piece consumed, the new one in its place");
+  ok(!L.db.items.some(i => i.id === cab.id), "the cabinet is gone");
+  const gc = r.body.items.find(i => i.sku === "f:golf-cabinet");
+  ok(gc && gc.placed?.room === living.id && gc.placed.spot === cab.placed.spot, "the golf cabinet stands where the cabinet stood");
+  eq(gc.price, 4_000 + 6_300, "its value on the ledger: what was paid");
+  eq((await shop("POST", { caseId: T, action: "upgrade", itemId: cab.id, nonce: "nonce-up-00002" })).status, 409, "the consumed piece cannot be upgraded again");
+  // the simulator does not go in the living room: it waits in the inventory (or, with no study, cannot stand at all)
+  const poorBefore = cash(T);
+  const up2 = SH.upgradeOf("golf-cabinet").price;
+  if (poorBefore < up2) {
+    r = await shop("POST", { caseId: T, action: "upgrade", itemId: gc.id, nonce: "nonce-up-00003" });
+    eq(r.status, 402, "the simulator is dearer than the wallet: refused"); eq(cash(T), poorBefore, "nothing moved");
+    grant(T, 30_000);
+  }
+  const c2 = cash(T);
+  r = await shop("POST", { caseId: T, action: "upgrade", itemId: gc.id, nonce: "nonce-up-00004" });
+  eq(r.status, 200, "upgrade to the home golf simulator"); eq(cash(T), c2 - up2, "debited the difference and the fee");
+  ok(/INVENTORY/.test(r.body.last.line), "it no longer fits the living room: it waits in the inventory");
+  const sim = r.body.items.find(i => i.sku === "f:golf-sim");
+  ok(sim && !sim.placed, "the simulator is unplaced");
+  eq((await shop("POST", { caseId: T, action: "place", itemId: sim.id, room: living.id, spot: "f2" })).body.code, "needs-room", "the simulator needs the whole living room (the flatmate's cactus is in it)");
+  eq((await shop("POST", { caseId: T, action: "place", itemId: sim.id, room: flat.rooms.find(r => r.purpose === "kitchen").id, spot: "f2" })).status, 400, "the simulator does not go in the kitchen");
+  ok(study, "the test flat has a study");
+  {
+    const pl = r.body.items.find(i => i.sku === "f:plant" && !i.placed);
+    eq((await shop("POST", { caseId: T, action: "place", itemId: pl.id, room: study.id, spot: "f0" })).status, 200, "a plant in the study");
+    r = await shop("POST", { caseId: T, action: "place", itemId: sim.id, room: study.id, spot: "f2" });
+    eq(r.status, 409, "the simulator needs the whole study"); eq(r.body.code, "needs-room", "needs the room");
+    await shop("POST", { caseId: T, action: "unplace", itemId: pl.id });
+    eq((await shop("POST", { caseId: T, action: "place", itemId: sim.id, room: study.id, spot: "f0" })).status, 400, "a whole-room piece stands in the middle only");
+    eq((await shop("POST", { caseId: T, action: "place", itemId: sim.id, room: study.id, spot: "f2" })).status, 200, "the simulator takes the study");
+    r = await shop("POST", { caseId: T, action: "place", itemId: pl.id, room: study.id, spot: "f4" });
+    eq(r.status, 409, "the study is given over"); eq(r.body.code, "room-given", "given over");
+    const plan = towerPlan(SIM.BUILDING[v.apartment.building]);
+    const u = plan.storeys.flatMap(s => s.units).find(x => x.id === flat.id);
+    const rooms = (await shop("GET", null, { q: `?building=${v.apartment.building}` })).body.rooms;
+    const look = SH.furnishLook(FURN.dressUnit(u, { band: plan.band }), rooms);
+    eq(look.rooms[study.id].furniture.filter(f => !FURN.CATALOG[f.item].wall).map(f => f.item), ["golf-sim"], "the study's dressing cleared for the simulator");
+  }
+  eq((await shop("POST", { caseId: T, action: "upgrade", itemId: sim.id, nonce: "nonce-up-00005" })).body.error, SH.SHOP_LINES.noUpgrade, "the top of the chain");
+  inv("after upgrades");
+}
 // nothing here gives, sells on or transfers
 {
   clearLimits();
-  eq(F.SHOP_ACTIONS, ["buy", "wear", "save", "place", "unplace"], "the counters, and no others");
+  eq(F.SHOP_ACTIONS, ["buy", "upgrade", "wear", "save", "place", "unplace"], "the counters, and no others");
   // the rate limit: writes per case per minute
   let last = null;
   for (let k = 0; k <= F.SHOP_WRITES_PER_MINUTE; k++) last = await shop("POST", { caseId: T, action: "save", slot: 1, outfit: {} });
@@ -445,6 +542,18 @@ if (process.env.HVI_ECON_PG === "1") {
   eq((await shop("POST", { caseId: M, action: "place", itemId: mc.id, room: living.id, spot: "f1" })).status, 409, "pg: a spot holds one piece");
   eq((await shop("GET", null, { q: `?building=${v.apartment.building}` })).body.rooms.length, 1, "pg: the building's rooms");
   await assert.rejects(async () => psql(`insert into econ_placements (item_id, case_hash, flat, room, spot) values (${cab.id}, '${H(T)}', 'a:L1:A', 'b:L1:A:living', 'f0')`), /violates/); checks++;
+  // the upgrade on Postgres: refused when poor, then exactly once, the old piece consumed, the spot kept
+  const cu0 = Number(psql(`select balance from econ_accounts where id = 'cash:${H(T)}'`));
+  if (cu0 < 6_300) {
+    eq((await shop("POST", { caseId: T, action: "upgrade", itemId: cab.id, nonce: "pg-nonce-up-0" })).status, 402, "pg: an upgrade the wallet cannot cover");
+    await pg.rpc("econ_post", { idem: "pg-test-grant", kind: "ubi", case_hash: H(T), legs: [{ account: "dept:treasury", amount: -10_000 }, { account: `cash:${H(T)}`, kind: "cash", amount: 10_000 }] });
+  }
+  const cu1 = Number(psql(`select balance from econ_accounts where id = 'cash:${H(T)}'`));
+  eq((await shop("POST", { caseId: T, action: "upgrade", itemId: cab.id, nonce: "pg-nonce-up-1" })).status, 200, "pg: upgrade the cabinet");
+  eq((await shop("POST", { caseId: T, action: "upgrade", itemId: cab.id, nonce: "pg-nonce-up-1" })).body.last?.dup, true, "pg: the repeat is a duplicate");
+  eq(Number(psql(`select balance from econ_accounts where id = 'cash:${H(T)}'`)), cu1 - 6_300, "pg: debited the difference and the fee, once");
+  eq(psql(`select count(*) from econ_items where id = ${cab.id}`), "0", "pg: the cabinet consumed");
+  eq(psql(`select i.sku || '|' || p.room || '|' || p.spot from econ_placements p join econ_items i on i.id = p.item_id where p.case_hash = '${H(T)}'`), `f:golf-cabinet|${living.id}|f1`, "pg: the golf cabinet stands where the cabinet stood");
   pgInv("after shopping");
   eq((await DB.purgeLedger(T)).ok, true, "pg: purge");
   eq(psql(`select (select count(*) from econ_items where case_hash = '${H(T)}') + (select count(*) from econ_outfits where case_hash = '${H(T)}') + (select count(*) from econ_placements where case_hash = '${H(T)}')`), "0", "pg: the purge takes the wardrobe, the closet and the furniture");

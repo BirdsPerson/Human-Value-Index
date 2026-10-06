@@ -82,6 +82,46 @@ exception
   when unique_violation then return jsonb_build_object('ok', true, 'dup', true);
 end $$;
 
+-- ---- upgrade: a piece becomes the next tier ------------------------------------------------------
+-- p: {idem, case_hash, item_id, from_sku, to_sku, price, max_each, place: {flat, room, spot} | null}
+-- The difference and the fee are burned (cash -> dept:burned); the old piece is consumed (its row
+-- goes, its purchase stays on the ledger); the new piece stands where the old one stood when the
+-- server says it fits (place), else it waits in the inventory.
+-- -> {ok, item, txn} | {ok, dup} | {ok: false, error: not-owned | too-many | insufficient | taken}
+create or replace function econ_shop_upgrade(p jsonb) returns jsonb language plpgsql as $$
+declare
+  h text := p->>'case_hash';
+  amt bigint := (p->>'price')::bigint;
+  old econ_items;
+  v_txn bigint;
+  v_item bigint;
+begin
+  if h is null or h = '' then raise exception 'econ: an upgrade names its case'; end if;
+  if amt is null or amt <= 0 then raise exception 'econ: an upgrade has a price'; end if;
+  if exists (select 1 from econ_txns where idem_key = p->>'idem') then return jsonb_build_object('ok', true, 'dup', true); end if;
+  insert into econ_accounts (id, case_hash, kind) values ('cash:' || h, h, 'cash') on conflict (id) do nothing;
+  perform 1 from econ_accounts where id in ('cash:' || h, 'dept:burned') order by id for update;
+  select * into old from econ_items where id = (p->>'item_id')::bigint and case_hash = h and kind = 'furn' and sku = p->>'from_sku' for update;
+  if not found then return jsonb_build_object('ok', false, 'error', 'not-owned'); end if;
+  if (select count(*) from econ_items where case_hash = h and sku = p->>'to_sku') >= coalesce((p->>'max_each')::int, 3) then
+    return jsonb_build_object('ok', false, 'error', 'too-many');
+  end if;
+  if (select balance from econ_accounts where id = 'cash:' || h) < amt then return jsonb_build_object('ok', false, 'error', 'insufficient'); end if;
+  insert into econ_txns (idem_key, kind, case_hash, memo) values (p->>'idem', 'shop', h, jsonb_build_object('sku', p->>'to_sku', 'from', p->>'from_sku', 'price', amt, 'upgrade', true)) returning id into v_txn;
+  insert into econ_entries (txn_id, account, amount) values (v_txn, 'cash:' || h, -amt), (v_txn, 'dept:burned', amt);
+  update econ_accounts set balance = balance - amt where id = 'cash:' || h;
+  update econ_accounts set balance = balance + amt where id = 'dept:burned';
+  delete from econ_items where id = old.id;   -- consumed (its placement with it)
+  insert into econ_items (case_hash, sku, kind, price, txn_id) values (h, p->>'to_sku', 'furn', old.price + amt, v_txn) returning id into v_item;
+  if jsonb_typeof(p->'place') = 'object' then
+    insert into econ_placements (item_id, case_hash, flat, room, spot) values (v_item, h, p->'place'->>'flat', p->'place'->>'room', p->'place'->>'spot');
+  end if;
+  return jsonb_build_object('ok', true, 'dup', false, 'item', v_item, 'txn', v_txn);
+exception
+  when check_violation then return jsonb_build_object('ok', false, 'error', 'insufficient');
+  when unique_violation then return jsonb_build_object('ok', false, 'error', 'taken');
+end $$;
+
 -- ---- the file's things -----------------------------------------------------------------------------
 create or replace function econ_shop_view(p jsonb) returns jsonb language sql stable as $$
   select jsonb_build_object(
@@ -150,7 +190,7 @@ $$;
 alter table econ_items enable row level security;
 alter table econ_outfits enable row level security;
 alter table econ_placements enable row level security;
-revoke execute on function econ_shop_buy(jsonb), econ_shop_view(jsonb), econ_shop_outfit(jsonb), econ_shop_place(jsonb), econ_shop_rooms(jsonb) from public;
+revoke execute on function econ_shop_buy(jsonb), econ_shop_upgrade(jsonb), econ_shop_view(jsonb), econ_shop_outfit(jsonb), econ_shop_place(jsonb), econ_shop_rooms(jsonb) from public;
 do $$
 declare r text;
 begin
@@ -158,11 +198,11 @@ begin
     if exists (select 1 from pg_roles where rolname = r) then
       execute format('revoke all on econ_items, econ_outfits, econ_placements from %I', r);
       execute format('revoke all on sequence econ_items_id_seq from %I', r);
-      execute format('revoke execute on function econ_shop_buy(jsonb), econ_shop_view(jsonb), econ_shop_outfit(jsonb), econ_shop_place(jsonb), econ_shop_rooms(jsonb) from %I', r);
+      execute format('revoke execute on function econ_shop_buy(jsonb), econ_shop_upgrade(jsonb), econ_shop_view(jsonb), econ_shop_outfit(jsonb), econ_shop_place(jsonb), econ_shop_rooms(jsonb) from %I', r);
     end if;
   end loop;
   if exists (select 1 from pg_roles where rolname = 'service_role') then
-    grant execute on function econ_shop_buy(jsonb), econ_shop_view(jsonb), econ_shop_outfit(jsonb), econ_shop_place(jsonb), econ_shop_rooms(jsonb) to service_role;
+    grant execute on function econ_shop_buy(jsonb), econ_shop_upgrade(jsonb), econ_shop_view(jsonb), econ_shop_outfit(jsonb), econ_shop_place(jsonb), econ_shop_rooms(jsonb) to service_role;
     grant all on econ_items, econ_outfits, econ_placements to service_role;
     grant usage on sequence econ_items_id_seq to service_role;
   end if;

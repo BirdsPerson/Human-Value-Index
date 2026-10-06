@@ -154,6 +154,37 @@ const ITEMS = [
   { id: "arcade", name: "JETSAM ARCADE CABINET", rooms: ["living", "bedroom", "study"], tiers: [0, 1, 2], fw: 9, glow: true, tints: [["#2a1a4a", "#ff40c0"], ["#1a2a4a", "#40e0ff"], ["#4a1a1a", "#ffd040"]],
     rects: [[-4.5, 0, 9, 24, "$a"], [-4.5, 22, 9, 4, "$b"], [-3.5, 12, 7, 8, ["#203040", "#3ad0ff"]], [-3.5, 9, 7, 2, "#1a1a1a"], [-2, 10.5, 1, 1.5, "#ff3030"], [1, 10.5, 1, 1, "#30ff30"], [-3, 3, 6, 4, "#1a1a1a"]],
     after: (c, cx, fy, s) => word(c, "JETSAM!", cx, fy, 24, s, "#120820", 2.3) },
+  // ---- the upgrade tiers (src/economy/shops.js UPGRADES): never placed by dressUnit, only by a
+  // resident who bought the tier below and upgraded it. whole: the piece takes the whole room.
+  { id: "golf-cabinet", name: "BAR-TOP GOLF CABINET", rooms: ["living", "bedroom", "study"], tiers: [0, 1, 2], fw: 10, glow: true, tints: [["#0e3a1e", "#e8c040"]],
+    rects: [[-5, 0, 10, 24, "$a"], [-5, 24, 10, 4, "$b"], [-4, 13, 8, 8, ["#103018", "#5ad870"]], [-3.5, 15, 7, 2, ["#16401e", "#8af0a0"]], [-5, 10, 10, 2.4, "#1a1a1a"], [-1, 11.4, 2, 1.6, "#e8e8e8"], [-3.5, 11, 1, 1, "#e03030"], [2.5, 11, 1, 1, "#3070e0"], [-3, 3, 6, 4, "#151515"]],
+    after: (c, cx, fy, s) => word(c, "GOLF", cx, fy, 26, s, "#0e3a1e", 2.4) },
+  { id: "golf-sim", name: "HOME GOLF SIMULATOR", rooms: ["study", "living"], tiers: [0, 1, 2], fw: 26, glow: true, whole: true,
+    rects: [[-13, 0, 1, 30, "#7a7f7a"], [12, 0, 1, 30, "#7a7f7a"], [-13, 30, 26, 1, "#7a7f7a"], [-12, 5, 24, 24, "rgba(200,210,200,0.10)"],
+      [-11, 9, 22, 17, ["#203040", "#7fc8ff"]], [-11, 9, 22, 6, ["#1e3a20", "#4aa84a"]], [-11, 9, 22, 2, ["#1a3020", "#3a8a3a"]], [4, 14, 0.6, 6, "#eeeeee"], [4.6, 18.4, 2.4, 1.6, "#e03030"],
+      [-8, 0, 16, 0.9, "#2e7a2e"], [-0.4, 0.9, 0.8, 0.8, "#ffffff"], [-2, 38, 4, 2, "#2a2a2a"], [-0.5, 37, 1, 1, ["#3a3a3a", "#c8f0ff"]]],
+    after: (c, cx, fy, s) => word(c, "PAR 4 // 412 YDS", cx, fy, 24, s, "#e8f8ff", 2) },
+  { id: "ebtv-big", name: "EBTV BIG SCREEN", rooms: ["living", "bedroom"], tiers: [0, 1, 2], role: "tv", fw: 18,
+    rects: [[-6, 0, 12, 4, "#2a2a2a"], [-1, 4, 2, 2, "#2a2a2a"], [-9, 6, 18, 12, "#101010"], [-8.5, 6.5, 17, 11, ["#14202a", "#1d6fe0"]], [6.5, 15.5, 1.5, 1.5, ["#5a1a1a", "#ff4040"]]],
+    after: (c, cx, fy, s, o) => {
+      const x = Math.round(cx - 8.5 * s), y = Math.round(fy - 17.5 * s), w = Math.round(17 * s), h = Math.round(11 * s);
+      if (o.on && o.screen && o.screen(c, x, y, w, h)) return;
+      word(c, "EBTV", cx, fy, 12, s, o.on ? "#ffffff" : "#5a7a9a", 3.4);
+    } },
+  { id: "home-theater", name: "HOME THEATER", rooms: ["living", "study"], tiers: [0, 1, 2], role: "tv", fw: 26, whole: true, tints: [["#6a1a22", "#4a1018"]],
+    rects: [[-12.5, 13.5, 25, 15, "#0a0a0a"], [-12, 14, 24, 14, ["#14202a", "#1d6fe0"]], [-1.5, 39, 3, 2, "#2a2a2a"], [-0.5, 38, 1, 1, ["#333", "#fff7c0"]],
+      [-11, 0, 6, 4, "$a"], [-11, 4, 6, 4, "$b"], [-3, 0, 6, 4, "$a"], [-3, 4, 6, 4, "$b"], [5, 0, 6, 4, "$a"], [5, 4, 6, 4, "$b"], [-12, 0, 1, 6, "#2a1a10"], [11, 0, 1, 6, "#2a1a10"]],
+    after: (c, cx, fy, s, o) => {
+      const x = Math.round(cx - 12 * s), y = Math.round(fy - 28 * s), w = Math.round(24 * s), h = Math.round(14 * s);
+      if (o.on && o.screen && o.screen(c, x, y, w, h)) return;
+      word(c, "EBTV", cx, fy, 21, s, o.on ? "#ffffff" : "#5a7a9a", 4);
+    } },
+  { id: "kegerator", name: "IRENE'S KEGERATOR", rooms: ["kitchen", "living"], tiers: [0, 1, 2], fw: 10,
+    rects: [[-5, 0, 10, 14, "#8c1622"], [-5, 14, 10, 1.2, "#c0c0c0"], [-0.5, 15.2, 1, 4, "#c0c0c0"], [-2.5, 18.4, 5, 1, "#c0c0c0"], [-2.5, 17.4, 1, 1, "#a3a028"], [1.5, 17.4, 1, 1, "#a3a028"], [-4, 2, 8, 0.6, "#5a0a12"], [3, 5, 1, 4, "#c0c0c0"]],
+    after: (c, cx, fy, s) => word(c, "IRENE'S", cx, fy, 9, s, "#f7f5ec", 2) },
+  { id: "brewery", name: "HOME BREWERY", rooms: ["kitchen"], tiers: [0, 1, 2], fw: 18, glow: true,
+    rects: [[-8, 0, 7, 12, "#b87333"], [-7.5, 12, 6, 2, "#d08a48"], [-5, 14, 1, 4, "#b87333"], [1, 0, 7, 17, "#c8ccd0"], [2, 17, 5, 2, "#a8acb0"], [-1, 7, 2, 1, "#b87333"], [-1, 9, 2, 1, "#8a8a8a"], [3, 6, 3, 2, ["#3a3a3a", "#4ade80"]], [-9, 0, 18, 0.6, "#3a2a1a"]],
+    after: (c, cx, fy, s) => word(c, "HOME BREW", cx, fy, 22, s, "#f8d890", 2.2) },
   { id: "globe", name: "GLOBE", rooms: ["study"], tiers: [0, 1], fw: 6,
     rects: [[-2, 0, 4, 1, "#5a4632"], [-0.5, 1, 1, 6, "#5a4632"], [-3, 7, 6, 6, "#3d6b8f"], [-1.5, 9, 2, 2, "#4a8a4a"], [0.5, 8, 1.5, 3, "#4a8a4a"]] },
   { id: "filing", name: "FILING CABINET", rooms: ["study"], tiers: [0, 1, 2], fw: 7,
@@ -200,7 +231,7 @@ const footprintOf = (rects) => {
 };
 export const CATALOG = Object.freeze(Object.fromEntries(ITEMS.map(it => [it.id, Object.freeze({
   id: it.id, name: it.name, rooms: it.rooms, tiers: it.tiers, role: it.role || it.id,
-  footprint: { w: it.fw, h: footprintOf(it.rects) }, wall: !!it.wall, floor: !!it.floor, glow: !!it.glow,
+  footprint: { w: it.fw, h: footprintOf(it.rects) }, wall: !!it.wall, floor: !!it.floor, glow: !!it.glow, whole: !!it.whole,
   tints: it.tints || null,
   draw(c, cx, fy, s, o = {}) { paint(c, it.rects, cx, fy, s, o); it.after?.(c, cx, fy, s, o); },
 })])));

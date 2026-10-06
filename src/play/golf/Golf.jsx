@@ -35,7 +35,13 @@ function saveRound(rec) {
   MEMORY.unshift(rec);
   try { localStorage.setItem(KEEP, JSON.stringify([rec, ...loadRounds()].slice(0, 8))); } catch { /* private window: the tab keeps it */ }
 }
-const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); return { vs: q.get("vs") || null, course: ["open", "links"].includes(q.get("course")) ? q.get("course") : null }; };
+const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); return { vs: q.get("vs") || null, course: ["open", "links"].includes(q.get("course")) ? q.get("course") : null, preset: ["cabinet", "sim"].includes(q.get("preset")) ? q.get("preset") : null }; };
+// ?preset=: played at home on a piece from THE SHOPS (src/economy/shops.js PLAY_AT_HOME). The same
+// game, framed: the bar-top cabinet is the mouse / trackball drag swing, the simulator the big screen.
+const PRESET = {
+  cabinet: { title: "YOUR BAR-TOP GOLF CABINET", line: "TRACKBALL RULES: DRAG DOWN, PUSH UP TO SWING. THE MARQUEE GLOWS FOR NOBODY BUT YOU.", frame: "6px solid #0e3a1e" },
+  sim: { title: "YOUR HOME GOLF SIMULATOR", line: "THE STUDY, CONVERTED. THE PROJECTOR HUMS. DRAG THE SWING, OR USE THE PAD.", frame: "10px solid #2a2a2a" },
+};
 
 // You: your file's photo (a drawn sprite or the procedural one) and its kit, else a SUBJECT.
 function me() {
@@ -76,7 +82,8 @@ function GolfCard({ g }) {
 }
 
 export default function Golf({ route }) {
-  const { vs, course: course0 } = useMemo(() => parseRoute(route), [route]);
+  const { vs, course: course0, preset } = useMemo(() => parseRoute(route), [route]);
+  const home = preset ? PRESET[preset] : null;
   const [course, setCourse] = useState(course0 || "open");
   const [count, setCount] = useState(9);
   const [start, setStart] = useState(0);
@@ -104,8 +111,9 @@ export default function Golf({ route }) {
   const toggleMute = () => { sfx.setMuted(!muted); setMuted(!muted); };
 
   return (
-    <div className="gf">
-      <ScreenHead title={COURSE_NAME[game?.cfg.course || course]} meta="EXHIBITION // COUNTS IN NO STANDINGS. THE DEPARTMENT COUNTS IT ANYWAY." />
+    <div className="gf" style={home ? { border: home.frame, padding: 6 } : undefined}>
+      <ScreenHead title={home ? home.title : COURSE_NAME[game?.cfg.course || course]} meta={home ? `${COURSE_NAME[game?.cfg.course || course]} // AT HOME` : "EXHIBITION // COUNTS IN NO STANDINGS. THE DEPARTMENT COUNTS IT ANYWAY."} />
+      {home && <p className="pg-lede">{home.line}</p>}
       {game ? (
         <>
           <Play key={game.key} cfg={game.cfg} demo={game.demo} lookP={game.looks} onDone={game.demo ? () => {} : done} muted={muted} onMute={toggleMute}

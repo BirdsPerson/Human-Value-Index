@@ -1,0 +1,64 @@
+/* THE SHOPS. The terminal's tokens: gold (--warn) means CYCLES, as everywhere; a store's own wall
+   and accent colour only inside its interior. Pixel canvases are never smoothed. */
+.sh-px { image-rendering: pixelated; display: block; }
+.sh-p { margin: 0 0 var(--s3); }
+.sh-dim { color: var(--fg-mute); }
+.sh-err { color: var(--harm); margin: var(--s2) 0; }
+.sh-ok { color: var(--accent); margin: var(--s2) 0; }
+.sh-fine { font-size: var(--t-xs); color: var(--fg-mute); margin: var(--s3) 0 0; }
+.sh-cyc { color: var(--warn); font-weight: 700; letter-spacing: 0.02em; }
+.sh-h { font-size: var(--t-xs); color: var(--fg-mute); letter-spacing: 0.06em; margin: var(--s3) 0 var(--s2); }
+
+/* the interior: the store's wall, its sign, the rails */
+.sh-in { --wall: #22302a; --acc: var(--accent); background: var(--wall); border: var(--bw) solid var(--line); padding: var(--s3); margin: 0 0 var(--s3); position: relative; }
+.sh-sign { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: var(--s2); border: 2px solid var(--acc); color: var(--acc); padding: var(--s2) var(--s3); margin: 0 0 var(--s3); background: rgba(0,0,0,0.35); }
+.sh-sign b { font-size: var(--t-lg, 1.15rem); letter-spacing: 0.08em; }
+.sh-sign span { font-size: var(--t-xs); letter-spacing: 0.06em; }
+.sh-rail { margin: 0 0 var(--s4); }
+.sh-rail-h { font-size: var(--t-xs); color: var(--acc); letter-spacing: 0.08em; margin: 0 0 2px; }
+.sh-bar { height: 4px; background: #8a8f88; box-shadow: 0 2px 0 rgba(0,0,0,0.45); }
+.sh-hang { display: flex; flex-wrap: wrap; gap: 6px 4px; padding-top: 0; }
+.sh-hang.shelf { border-bottom: 4px solid #5a4632; padding-bottom: 2px; }
+.sh-tag { font: inherit; background: none; border: var(--bw) solid transparent; color: var(--fg); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0 2px 4px; min-width: 64px; min-height: 44px; }
+.sh-tag:hover, .sh-tag:focus-visible { border-color: var(--acc); outline: none; background: rgba(0,0,0,0.25); }
+.sh-tag[aria-pressed="true"] { border-color: var(--acc); background: rgba(0,0,0,0.35); }
+.sh-hook { width: 2px; height: 8px; background: #8a8f88; }
+.sh-tag .p { font-size: var(--t-xs); color: var(--warn); }
+.sh-tag .o { font-size: var(--t-xs); color: var(--accent); }
+.sh-tag .n { font-size: 10px; color: var(--fg-dim); max-width: 84px; text-align: center; line-height: 1.15; }
+.sh-floor { height: 10px; margin: var(--s3) calc(-1 * var(--s3)) calc(-1 * var(--s3)); background: repeating-linear-gradient(90deg, rgba(0,0,0,0.35) 0 12px, rgba(255,255,255,0.03) 12px 24px); }
+
+/* the item card: a sheet from the bottom, as the cutaway's */
+.sh-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 80; max-height: 82vh; overflow-y: auto; background: var(--bg); border-top: var(--bw) solid var(--warn); padding: var(--s3) var(--s3) calc(var(--safe-b, 0px) + var(--s3)); box-shadow: 0 -8px 24px rgba(0,0,0,0.6); }
+.sh-sheet-in { max-width: 760px; margin: 0 auto; }
+.sh-sheet-h { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3); }
+.sh-sheet-h b { color: var(--fg); }
+.sh-x { font: inherit; font-size: var(--t-xs); min-width: 44px; min-height: 44px; background: none; color: var(--accent); border: var(--bw) solid var(--accent); cursor: pointer; flex: none; }
+.sh-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s3); align-items: start; margin-top: var(--s2); }
+@media (max-width: 460px) { .sh-card { grid-template-columns: 1fr; justify-items: center; } .sh-card > div { justify-self: stretch; } }
+.sh-mirror { background: #101814; border: 4px solid #6a5a3a; box-shadow: inset 0 0 0 2px #2a2418; }
+.sh-ways { display: flex; flex-wrap: wrap; gap: 6px; margin: var(--s2) 0; }
+.sh-way { font: inherit; font-size: var(--t-xs); min-width: 44px; min-height: 44px; border: 2px solid var(--line); background: var(--bg); color: var(--fg-dim); cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 0 8px; }
+.sh-way i { width: 14px; height: 14px; display: inline-block; border: 1px solid #000; }
+.sh-way[aria-pressed="true"] { border-color: var(--warn); color: var(--fg); }
+
+/* the closet */
+.sh-closet { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s3); align-items: start; }
+@media (max-width: 520px) { .sh-closet { grid-template-columns: 1fr; } .sh-closet .sh-mirror { justify-self: center; } }
+.sh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+.sh-cell { font: inherit; background: #141c18; border: 2px solid var(--line); color: var(--fg-dim); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 2px; min-height: 76px; padding: 4px 2px; }
+.sh-cell[aria-pressed="true"] { border-color: var(--accent); color: var(--fg); background: #1a2a20; }
+.sh-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sh-cell .n { font-size: 10px; line-height: 1.15; text-align: center; }
+.sh-hooks { display: flex; flex-wrap: wrap; gap: 6px; }
+.sh-hookbtn { font: inherit; font-size: var(--t-xs); background: none; border: var(--bw) dashed var(--line); color: var(--fg-dim); cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px 2px; min-height: 44px; }
+.sh-hookbtn:focus-visible { outline: 2px solid var(--accent); }
+
+/* furnishing */
+.sh-furn { border-top: var(--bw) dashed var(--line); padding: var(--s2) 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s3); align-items: center; }
+.sh-furn select { font: inherit; background: var(--bg); color: var(--fg); border: var(--bw) solid var(--line); min-height: 44px; padding: 0 var(--s2); }
+.sh-spots { display: flex; flex-wrap: wrap; gap: 4px; margin: var(--s1) 0; }
+.sh-spot { font: inherit; font-size: var(--t-xs); min-width: 44px; min-height: 44px; border: var(--bw) solid var(--line); background: none; color: var(--fg-dim); cursor: pointer; }
+.sh-spot[aria-pressed="true"] { border-color: var(--warn); color: var(--warn); }
+.sh-spot:disabled { opacity: 0.4; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .sh-sheet { transition: none; } }

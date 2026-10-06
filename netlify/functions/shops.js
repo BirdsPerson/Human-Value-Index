@@ -5,6 +5,8 @@
 //   POST {caseId, action, ...}
 //     buy     {sku, nonce}                  a garment ("w:<id>.<colourway>") or a piece ("f:<id>"),
 //                                           priced and stocked here; the CYCLES are burned
+//     upgrade {itemId, nonce}               a piece to its next tier (the difference + a fee burned, the
+//                                           old piece consumed; it stays placed if the room still takes it)
 //     wear    {outfit}                      onto the file photo (every piece your own)
 //     save    {slot 1..3, outfit}           into the closet
 //     place   {itemId, room, spot}          a piece into a room of your assigned flat
@@ -18,7 +20,7 @@ import { getCase, hitLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { ledger, LedgerDown } from "../lib/economy-db.js";
-import { SHOP_ACTIONS, shopsView, buy, setOutfit, place, buildingRooms, machineDayNow } from "../lib/shops.js";
+import { SHOP_ACTIONS, shopsView, buy, upgrade, setOutfit, place, buildingRooms, machineDayNow } from "../lib/shops.js";
 import { CLOSED_LINE } from "../../src/economy/rules.js";
 import { collectionOf } from "../../src/economy/shops.js";
 
@@ -58,7 +60,7 @@ export default async (req, context) => {
       if (!(await hitLimit(`shop-ip:${ip}`, SHOP_IP_PER_HOUR, "hour")).ok) return json(429, { error: "The shops have seen enough of your location for one hour." }, { "Retry-After": "3600" });
       if (!(await hitLimit(`shop-case:${caseId}`, SHOP_CASE_PER_MINUTE, "minute")).ok) return json(429, { error: "Slow down. The shop assistant is pretending to be busy." }, { "Retry-After": "60" });
       if (req.method === "POST" && !(await hitLimit(`shop-write:${caseId}`, SHOP_WRITES_PER_MINUTE, "minute")).ok) return json(429, { error: "Too many trips to the till this minute." }, { "Retry-After": "60" });
-      if (body.action === "buy" && !(await hitLimit(`shop-buy:${caseId}`, SHOP_BUYS_PER_DAY, "day")).ok) return json(429, { error: "Sixty purchases in a day. The Department has flagged your enthusiasm. Return tomorrow." }, { "Retry-After": "3600" });
+      if ((body.action === "buy" || body.action === "upgrade") && !(await hitLimit(`shop-buy:${caseId}`, SHOP_BUYS_PER_DAY, "day")).ok) return json(429, { error: "Sixty purchases in a day. The Department has flagged your enthusiasm. Return tomorrow." }, { "Retry-After": "3600" });
     } catch {
       return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
     }
@@ -74,6 +76,7 @@ export default async (req, context) => {
 
     let out;
     if (body.action === "buy") out = await buy(caseId, body);
+    else if (body.action === "upgrade") out = await upgrade(caseId, rec, { itemId: body.itemId, nonce: body.nonce });
     else if (body.action === "wear") out = await setOutfit(caseId, rec, { outfit: body.outfit, slot: 0 });
     else if (body.action === "save") out = await setOutfit(caseId, rec, { outfit: body.outfit, slot: Number(body.slot) });
     else if (body.action === "place") out = await place(caseId, rec, { itemId: body.itemId, room: body.room, spot: body.spot });

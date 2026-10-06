@@ -31,6 +31,29 @@ export function shopsMemory(db, { nowMs, clone }) {
       db.items.push(item);
       return { ok: true, dup: false, item: item.id, txn: id };
     },
+    econ_shop_upgrade(p) {
+      const h = p.case_hash, amt = Number(p.price);
+      if (!h) throw new Error("econ: an upgrade names its case");
+      if (!(amt > 0)) throw new Error("econ: an upgrade has a price");
+      if (db.txns.some(t => t.idem_key === p.idem)) return { ok: true, dup: true };
+      const cashId = `cash:${h}`;
+      if (!db.accounts.has(cashId)) db.accounts.set(cashId, { id: cashId, case_hash: h, kind: "cash", industry: null, balance: 0 });
+      const old = db.items.find(i => i.id === Number(p.item_id) && i.case_hash === h && i.kind === "furn" && i.sku === p.from_sku);
+      if (!old) return { ok: false, error: "not-owned" };
+      if (db.items.filter(i => i.case_hash === h && i.sku === p.to_sku).length >= (p.max_each ?? 3)) return { ok: false, error: "too-many" };
+      if (db.accounts.get(cashId).balance < amt) return { ok: false, error: "insufficient" };
+      if (p.place && [...db.placements.values()].some(x => x.room === p.place.room && x.spot === p.place.spot && x.item_id !== old.id)) return { ok: false, error: "taken" };
+      const id = ++db.seq;
+      db.txns.push({ id, idem_key: p.idem, kind: "shop", case_hash: h, day: null, memo: { sku: p.to_sku, from: p.from_sku, price: amt, upgrade: true }, created_at: new Date(nowMs()).toISOString() });
+      db.entries.push({ id: ++db.eseq, txn_id: id, account: cashId, amount: -amt }, { id: ++db.eseq, txn_id: id, account: "dept:burned", amount: amt });
+      db.accounts.get(cashId).balance -= amt; db.accounts.get("dept:burned").balance += amt;
+      db.items = db.items.filter(i => i.id !== old.id);
+      db.placements.delete(old.id);
+      const item = { id: ++db.iseq, case_hash: h, sku: p.to_sku, kind: "furn", price: old.price + amt, txn_id: id, bought_at: new Date(nowMs()).toISOString() };
+      db.items.push(item);
+      if (p.place) db.placements.set(item.id, { item_id: item.id, case_hash: h, flat: p.place.flat, room: p.place.room, spot: p.place.spot });
+      return { ok: true, dup: false, item: item.id, txn: id };
+    },
     econ_shop_view(p) {
       const h = p.case_hash;
       return clone({
