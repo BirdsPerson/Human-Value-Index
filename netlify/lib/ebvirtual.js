@@ -4,7 +4,7 @@
 // person in it: handles, titles, photos, SKUs). A listing that leaves the shop or goes out of stock
 // stays in the catalog, marked sold: the virtual copy is sold on regardless.
 //
-// The look: each new listing's photo is fetched once, 32 px, as PNG (Shopify's CDN converts), decoded
+// The look: each new listing's photo is fetched once, 64 px, as PNG (Shopify's CDN converts), decoded
 // here (node:zlib, no dependency), and its two strongest colours away from the background become
 // the copy's colours; a jersey also gets its number (the title, a "number:NN" tag, OVERRIDES).
 import { inflateSync } from "node:zlib";
@@ -84,11 +84,15 @@ export function dominantColours({ w, h, rgb }) {
     B.set(k, e);
   }
   const list = [...B.values()].sort((a, b) => b.n - a.n).map(e => ({ n: e.n, c: e.s.map(v => v / e.n) }));
+  const sat = (c) => { const mx = Math.max(...c), mn = Math.min(...c); return mx ? (mx - mn) / mx : 0; };
+  // product photos are dim: a dark, coloured main is lifted so it reads as its colour, not as black
+  const lift = (c, to) => { const mx = Math.max(...c); return mx > 20 && mx < to && sat(c) > 0.35 ? c.map(v => v * Math.min(1.6, to / mx)) : c; };
   const main = list[0]?.c || bg;
-  const second = list.find(e => e.n >= 3 && dist(e.c, main) > 90);
+  // the second colour: a trim or a print, so a vivid one beats a commoner grey or white
+  const second = list.filter(e => e.n >= 3 && dist(e.c, main) > 90).sort((a, b) => b.n * (sat(b.c) + 0.05) ** 2 - a.n * (sat(a.c) + 0.05) ** 2)[0];
   const lum = 0.3 * main[0] + 0.59 * main[1] + 0.11 * main[2];
   const detail = second ? second.c : main.map(v => (lum > 128 ? v * 0.55 : v + (255 - v) * 0.6));
-  return { main: hex(main), detail: hex(detail) };
+  return { main: hex(lift(main, 125)), detail: hex(lift(detail, 160)) };
 }
 
 // A product photo's colours: fetched small, as PNG, decoded. -> {main, detail} | null
@@ -97,7 +101,7 @@ export async function lookOfImage(url, fetchFn = fetch) {
   let u;
   try { u = new URL(url); } catch { return null; }
   if (u.protocol !== "https:") return null;
-  u.searchParams.set("width", "32"); u.searchParams.set("format", "png");
+  u.searchParams.set("width", "64"); u.searchParams.set("format", "png");
   try {
     const r = await fetchFn(u.toString(), { signal: AbortSignal.timeout(4000) });
     if (!r.ok) return null;

@@ -53,6 +53,8 @@ function useCaseId() {
   return [caseId, setCaseId];
 }
 export const IrlBadge = () => <span className="ebv-irl" title="This file bought the real one at the EB Shop">{EBV_LINES.irl}</span>;
+// a photo as the city draws it: a few dozen pixels
+const small = (url, w) => { try { const u = new URL(url); u.searchParams.set("width", String(w)); return u.toString(); } catch { return url; } };
 const kindWords = (c) => (c.cat === "wear" ? `TO WEAR // ${SLOT_NAME[wearOf(c.sku.slice(2))?.slot] || "CLOTHES"}` : `FOR YOUR FLAT // ${FORM_NAME[c.form]}`);
 function RealLink({ copy, campaign }) {
   if (!copy.live) return <span className="ebv-sold">{EBV_LINES.sold}</span>;
@@ -81,8 +83,11 @@ function CopyCard({ copy, campaign, withReal }) {
   return (
     <div className="ebv-copy" aria-label={`The virtual ${copy.title}`}>
       <div>
-        {w ? <Mirror base={S.v?.spec} outfit={{ ...(S.v?.worn || {}), [w.slot]: copy.sku.slice(2) }} scale={3} label={`Your file photo wearing the virtual ${copy.title}`} />
-          : <PiecePx id={copy.sku.slice(2)} s={5} box={112} />}
+        {w ? <Mirror base={S.v?.spec} outfit={{ ...(S.v?.worn || {}), [w.slot]: copy.sku.slice(2) }} scale={4} label={`Your file photo wearing the virtual ${copy.title}`} />
+          : <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              <img src={small(copy.image, 20)} alt="" width={96} height={96} style={{ imageRendering: "pixelated", objectFit: "cover", border: "3px solid #c9a34a", background: "#111" }} />
+              <PiecePx id={copy.sku.slice(2)} s={3} box={72} />
+            </div>}
       </div>
       <div>
         <div className="ebv-h">THE VIRTUAL ONE // {kindWords(copy)}</div>
@@ -152,7 +157,7 @@ export default function CopyRoom({ campaign = "eb-shop", back, start = null }) {
       <div className="ebv-grid">
         {list.map(c => (
           <button key={c.handle} type="button" className="ebv-cell" onClick={() => setPick(c.handle)} aria-label={`${c.title}. The virtual one, ${fmtC(c.price)} CYCLES.${c.live ? "" : " The real one has sold."}`}>
-            {c.cat === "wear" ? <span style={{ display: "flex", justifyContent: "center", background: "#111" }}><Mirror base={null} outfit={{ [wearOf(c.sku.slice(2))?.slot]: c.sku.slice(2) }} scale={2} /></span> : <img src={c.image} alt="" loading="lazy" />}
+            {c.cat === "wear" ? <span style={{ display: "flex", justifyContent: "center", background: "#111" }}><Mirror base={null} outfit={{ [wearOf(c.sku.slice(2))?.slot]: c.sku.slice(2) }} scale={2} /></span> : <img src={small(c.image, 32)} alt="" loading="lazy" />}
             <span className="t">{c.title}</span>
             <span className="p"><span>{fmtC(c.price)} CYCLES</span>{!c.live && <span className="ebv-sold">SOLD</span>}</span>
           </button>

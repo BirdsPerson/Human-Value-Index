@@ -89,7 +89,7 @@ globalThis.fetch = async (url, opts = {}) => {
   const J = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   if (u.startsWith(`${SHOP}/products.json`)) return J(200, { products: new URL(u).searchParams.get("page") === "1" ? PRODUCTS : [] });
   if (u.startsWith("https://cdn.shopify.com/")) {
-    ok(/format=png/.test(u) && /width=32/.test(u), "the photo is read small, as PNG");
+    ok(/format=png/.test(u) && /width=64/.test(u), "the photo is read small, as PNG");
     return new Response(/jersey|hat|shirt/.test(u) ? jerseyPng : dvdPng, { status: 200, headers: { "content-type": "image/png" } });
   }
   if (/^https:\/\/eb-test\.myshopify\.com\/admin\/oauth\/access_token$/.test(u)) return J(200, { access_token: "shpat_from_client_credentials", scope: "read_orders,read_products", expires_in: 86399 });

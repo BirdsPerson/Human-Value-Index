@@ -694,7 +694,7 @@ Scott: EB Shop items (the real Shopify store, shop.electricbasement.tv) show up 
   layer (shape from the title: jersey, tee, hoodie, cap...); films, games, records, books, card and
   board games -> a media shelf with the cover face out; autographs, framed photos, posters, helmets ->
   a framed piece for the wall; anything else -> an object on a stand. Colours: the product photo,
-  read once server side (32 px PNG from Shopify's CDN, decoded with node:zlib), its two strongest
+  read once server side (64 px PNG from Shopify's CDN, decoded with node:zlib), its two strongest
   colours off the background. A jersey also wears its number (title "#33", a `number:33` Shopify
   tag, a named player, or `OVERRIDES` in `netlify/lib/ebvirtual.js`: the Pistons jersey is Grant
   Hill's 33). The SKU carries the look (`w:v-<h8>.jersey-1d428a-c8102e-33`, `f:v-<h8>.shelf-..`), frozen
