@@ -123,7 +123,7 @@ export function makeIsoControl(K) {
     if (n.kind === "door" || n.kind === "ground") { enter(n.b); return; }
     if (n.kind === "station") { climb(n.id); return; }
     if (n.kind === "chess" || n.kind === "tennis" || n.kind === "hoops" || n.kind === "football" || n.kind === "soccer" || n.kind === "fish" || n.kind === "bowl") { window.location.hash = n.go; return; }
-    if (n.kind === "ski") { window.location.hash = n.go; return; }   // THE MOUNTAIN, skiable
+    if (n.kind === "ski" || n.kind === "skate") { window.location.hash = n.go; return; }   // THE MOUNTAIN, THE PARK   // THE MOUNTAIN, skiable
     if (n.kind === "bench") { Object.assign(st, { mode: "bench", bench: n.bench, x: n.bench.x, y: n.bench.y }); return; }
     if (n.kind === "stand-bench") { const [x, y] = freeSpot(st.x, st.y + 0.5); Object.assign(st, { mode: "street", bench: null, x, y }); return; }
     if (n.kind === "sit") { st.seat = { placeId: n.placeId, i: n.i }; return; }
@@ -257,6 +257,9 @@ export function makeIsoControl(K) {
       if (g?.id === "the-bowl" && Math.abs(st.x - (g.rect.x + g.rect.w / 2)) < g.rect.w * 0.25 && Math.abs(st.y - (g.rect.y + g.rect.h / 2)) < g.rect.h * 0.25) { near = { kind: "football", go: "#football", label: "PLAY FOOTBALL: AN EXHIBITION" }; return; }
       // THE ESTATE PITCH, playable: E in the middle of the pitch
       if (g?.id === "the-pitch" && Math.abs(st.x - (g.rect.x + g.rect.w / 2)) < g.rect.w * 0.25 && Math.abs(st.y - (g.rect.y + g.rect.h / 2)) < g.rect.h * 0.25) { near = { kind: "soccer", go: "#soccer", label: "PLAY SOCCER: AN EXHIBITION" }; return; }
+      // THE PARK, skateable: E on the Recreation Ground's paths skates the park; E in the Plaza's middle, the Plaza
+      if (g?.id === "rec-ground" && Math.abs(st.x - (g.rect.x + g.rect.w / 2)) < g.rect.w * 0.25 && Math.abs(st.y - (g.rect.y + g.rect.h / 2)) < g.rect.h * 0.25) { near = { kind: "skate", go: "#skate?lvl=park", label: "SKATE THE PARK" }; return; }
+      if (g?.id === "the-plaza" && Math.abs(st.x - (g.rect.x + g.rect.w / 2)) < g.rect.w * 0.2 && Math.abs(st.y - (g.rect.y + g.rect.h / 2)) < g.rect.h * 0.3) { near = { kind: "skate", go: "#skate?lvl=street", label: "SKATE THE PLAZA" }; return; }
       if (g) { near = { kind: "ground", b: g, label: `STEP INTO ${g.name}` }; return; }
       const sid = stationNear(st.x, st.y);
       if (sid) { near = { kind: "station", id: sid, label: `CLIMB TO ${stationName(sid)}` }; return; }

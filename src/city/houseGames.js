@@ -34,7 +34,7 @@ export const HOUSE_PLACES = {
   "bar-lodge": ["house-hunt", "house-ski"],              // the summit lodge's bar
   brewpub: ["house-golf", "house-hunt"],                 // GOODNIGHT IRENE'S
   casino: ["house-golf"],                                // a corner of the casino's slot floor
-  boardwalk: ["house-hoops", "house-fish"],              // among the boardwalk's stalls
+  boardwalk: ["house-hoops", "house-fish", "house-skate"],              // among the boardwalk's stalls
   diner: ["house-fish"],                                 // the all-night diner
   union: ["house-bowling", "house-football"],            // THE UNION LOUNGE
 };
@@ -50,7 +50,7 @@ export const isHouse = (slug) => HOUSE_ALL.some(g => g.slug === slug);
 export const HOUSE_COLORS = {
   "house-golf": ["#4ade80", "#166534"], "house-hunt": ["#f97316", "#3f2a14"], "house-bowling": ["#e879f9", "#1e1b4b"],
   "house-tennis": ["#d9f99d", "#1e3a8a"], "house-hoops": ["#fb923c", "#7c2d12"], "house-football": ["#fde047", "#14532d"],
-  "house-soccer": ["#f8fafc", "#065f46"], "house-fish": ["#38bdf8", "#0c4a6e"], "house-ski": ["#e0f2fe", "#1d4ed8"],
+  "house-soccer": ["#f8fafc", "#065f46"], "house-fish": ["#38bdf8", "#0c4a6e"], "house-ski": ["#e0f2fe", "#1d4ed8"], "house-skate": ["#fb923c", "#312e81"],
 };
 function R(c, col, x, y, w, h) { c.fillStyle = col; c.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h))); }
 // The little screen, sx..sx+sw by sy..sy+sh, at one cabinet pixel p, at time t (s).
@@ -103,6 +103,14 @@ export function houseScreen(c, slug, sx, sy, sw, sh, p, t, i = 0) {
       R(c, "#bfdbfe", sx, sy, sw, sh); R(c, "#f8fafc", sx, sy + sh * 0.4, sw, sh * 0.6);
       for (let k = 0; k < 3; k++) R(c, "#166534", sx + sw * (0.15 + k * 0.32), sy + sh * (0.45 + (k % 2) * 0.2), p * 1.2, p * 2);
       const q = (t * 0.5 + i * 0.3) % 1; R(c, "#ef4444", sx + sw * (0.5 + 0.3 * ((f % 8) < 4 ? q : 1 - q) - 0.15), sy + sh * (0.4 + 0.5 * q), p, p * 1.6);
+      break;
+    }
+    case "house-skate": {   // a quarter pipe, a skater going up it and into the air
+      R(c, "#312e81", sx, sy, sw, sh); R(c, "#9ca3af", sx, sy + sh * 0.8, sw, sh * 0.2);
+      for (let k = 0; k < 5; k++) R(c, "#d9a066", sx + sw * (0.62 + k * 0.07), sy + sh * (0.8 - k * k * 0.035), sw * 0.08, sh * (0.2 + k * k * 0.035));
+      const q = (t * 0.7 + i * 0.3) % 1, y = q < 0.5 ? q * 2 : 2 - q * 2;
+      R(c, "#fb923c", sx + sw * (0.25 + 0.5 * Math.min(1, q * 1.6)), sy + sh * (0.7 - 0.55 * y), p, p * 1.6);
+      R(c, "#fde047", sx + sw * (0.22 + 0.5 * Math.min(1, q * 1.6)), sy + sh * (0.7 - 0.55 * y) + p * 1.6, p * 2, p * 0.5);
       break;
     }
     default: R(c, "#111", sx, sy, sw, sh);

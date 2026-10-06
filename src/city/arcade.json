@@ -244,5 +244,23 @@
       "lo": 620,
       "hi": 980
     }
+  },
+  {
+    "slug": "house-skate",
+    "title": "KICKFLIP",
+    "status": "live",
+    "role": "Skateboarding",
+    "year": "",
+    "line": "TWO MINUTES. S-K-A-T-E. LAND IT.",
+    "play": null,
+    "itch": null,
+    "house": true,
+    "route": "#skate",
+    "campaign": "house-skate",
+    "hs": {
+      "fmt": "pts",
+      "lo": 18000,
+      "hi": 96000
+    }
   }
 ]
