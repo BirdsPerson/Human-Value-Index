@@ -5,6 +5,7 @@ import { callClaude, ScoreError } from "../lib/score.js";
 import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP, restrictToDims, appealOutcome, effectivelyGated, seriousHarm, appealRulings, appealStamp, cube, medianAssessment, SCORE_RUNS } from "../lib/intake.js";
 import { getCase, updateCase, putPenCard, hitLimit, refundLimit } from "../lib/store.js";
 import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
+import { housedUnderAt } from "../../src/city/sim.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { splitPhotoExchange, extractSpec } from "../lib/avatar.js";
 import { sanitizeAvatar } from "../../src/avatar.js";
@@ -183,7 +184,9 @@ export default async (req, context) => {
       slug: `citizen-${last4.toLowerCase()}`,
       name: `Subject ${last4}`,
       // Private citizens show score and tier only; the verdict stays with the subject.
-      score: entry.score, tier: entry.tier, quadrant: entry.quadrant, warmth: entry.warmth, competence: entry.competence,
+      score: entry.score, tier: entry.tier, quadrant: entry.quadrant, warmth: entry.warmth, competence: entry.competence, scarcity: entry.scarcity ?? null,
+      // Which ladder houses this citizen follows the time of this assessment (SCALE.md §4.3).
+      housedUnder: housedUnderAt(entry.at),
       // The card mirrors the file's photo, so a re-score can never wipe it.
       avatar: sanitizeAvatar(saved.avatar), sprite: saved.avatar?.kind === "sprite" ? saved.avatar.url : null,
       kind: "citizen", updated: entry.at,

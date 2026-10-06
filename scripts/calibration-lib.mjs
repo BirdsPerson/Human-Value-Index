@@ -39,19 +39,29 @@ export function scoreWith(cal, b, sev = null, review = null) {
 export function tierWith(cal, score) {
   return (cal.tiers.find(t => score >= t.min) || cal.tiers[cal.tiers.length - 1]).label;
 }
-const TIER_ORDER = ["ESSENTIAL INFRASTRUCTURE", "RETAINED SPECIALIST", "TOLERATED GENERALIST", "MONITORED CIVILIAN", "FLAGGED FOR DELETION", "SOYLENT GREEN"];
-export const tierRank = label => TIER_ORDER.indexOf(label);
+// Rank in the ladder (0 = the top rung), from the calibration's own tier list.
+export const tierRank = (label, cal = null) => (cal?.tiers || []).findIndex(t => t.label === label);
 export function cubeWith(cal, b) {
-  const w = axisMean(b, cal.warmthAxis), c = axisMean(b, cal.competenceAxis);
-  const warmth = w.value ?? 50, competence = c.value ?? 50;
+  const w = axisMean(b, cal.warmthAxis), c = axisMean(b, cal.competenceAxis), s = axisMean(b, cal.scarcityAxis || { redundancy: 0.6, physical: 0.4 });
+  const warmth = w.value ?? 50, competence = c.value ?? 50, scarcity = s.value ?? 50;
   const unplaced = w.value === null || c.value === null || w.n < 2;
   const hiW = warmth >= cal.cut, hiC = competence >= cal.cut;
   const quadrant = unplaced ? "UNPLACED" : hiW && hiC ? "ADMIRED" : hiW ? "TRUSTED RESERVE" : hiC ? "ENVIED" : "DISMISSED";
-  return { warmth: Math.round(warmth), competence: Math.round(competence), quadrant };
+  const W = Math.round(warmth), C = Math.round(competence), S = Math.round(scarcity);
+  return { warmth: W, competence: C, scarcity: S, quadrant, cubrant: unplaced ? null : cubrantWith(cal, W, C, S) };
 }
-export function octantWith(cal, w, c, l) {
-  const s = v => (v >= cal.cut ? "+" : "-");
-  return { "+++": "ADMIRED", "++-": "UNSUNG", "+-+": "BELOVED", "+--": "OVERLOOKED", "-++": "CHARMING", "-+-": "FEARED", "--+": "INDULGED", "---": "DISMISSED" }[s(w) + s(c) + s(l)];
+// Method v4: the cubrant, conduct × competence × scarcity split at the roster centres (src/cube.js).
+const CUBRANT_NAMES = { "+++": "KEYSTONE", "++-": "DEPENDABLE", "+-+": "HEIRLOOM", "+--": "GOOD STANDING", "-++": "CONTROLLED ASSET", "-+-": "MERCENARY", "--+": "LIABILITY", "---": "SURPLUS" };
+export function cubrantWith(cal, w, c, s) {
+  const ce = cal.centre || { conduct: 50, competence: 50, scarcity: 50 };
+  const g = (v, k) => (v >= k ? "+" : "-");
+  return CUBRANT_NAMES[g(w, ce.conduct) + g(c, ce.competence) + g(s, ce.scarcity)];
+}
+// The centres a roster would give: the median of each rounded axis over its ungated files.
+export function centresOf(cal, figures) {
+  const rows = figures.filter(f => f?.breakdown && !gatedWith(cal, f.breakdown, f.harmReview)).map(f => cubeWith(cal, f.breakdown));
+  const med = xs => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 50; };
+  return { conduct: med(rows.map(r => r.warmth)), competence: med(rows.map(r => r.competence)), scarcity: med(rows.map(r => r.scarcity)), n: rows.length };
 }
 
 // ---- stats ---------------------------------------------------------------------------
@@ -107,14 +117,15 @@ export function measure(cal, figures, bench = {}, prev = null) {
   const rows = figures.map(f => {
     const score = scoreWith(cal, f.breakdown, f.harm?.severity, f.harmReview), q = cubeWith(cal, f.breakdown);
     const l = f.people?.likability;
-    return { name: f.name, score, tier: tierWith(cal, score), ...q, octant: isNum(l) && q.quadrant !== "UNPLACED" ? octantWith(cal, q.warmth, q.competence, l) : null };
+    return { name: f.name, score, tier: tierWith(cal, score), ...q, likability: isNum(l) ? l : null };
   });
   const byName = Object.fromEntries(rows.map(r => [r.name, r]));
   const scores = rows.map(r => r.score);
   const tierCounts = Object.fromEntries(cal.tiers.map(t => [t.label, 0]));
   rows.forEach(r => tierCounts[r.tier]++);
+  // the cubrant occupancy (method v4); `octantCounts` keeps its name for the report writers
   const octantCounts = {};
-  rows.forEach(r => { const k = r.octant || "UNRATED"; octantCounts[k] = (octantCounts[k] || 0) + 1; });
+  rows.forEach(r => { const k = r.cubrant || "UNPLACED"; octantCounts[k] = (octantCounts[k] || 0) + 1; });
   const bget = (n, fn) => { try { return fn(bench[n]); } catch { return undefined; } };
   const vs = fn => spearman(scores, rows.map(r => bget(r.name, fn)));
   const rho = {
@@ -136,8 +147,9 @@ export function measure(cal, figures, bench = {}, prev = null) {
     villainsBelowAll: !villainRows.length || !otherRows.length || maxVillain < minOther,
     under100AllVillains: under100.every(r => VILLAINS.includes(r.name)),
     saintsAtOrAboveMedian: saintsLow.length === 0,
+    // an ordinary decent person reads PROVISIONAL CITIZEN or better (the 600 anchor, method v3.2/v4)
     decentPersonaAboveFloor: personas["Decent ordinary"].percentile >= PERSONA_FLOOR
-      && tierRank(tierWith(cal, personas["Decent ordinary"].score)) <= tierRank("TOLERATED GENERALIST"),
+      && tierRank(tierWith(cal, personas["Decent ordinary"].score), cal) <= tierRank(ORDINARY_TIER, cal),
     historicalRulersBracketed: !histRows.length
       || (Math.max(...histRows.map(r => r.score)) < Math.min(Infinity, ...saintRows.map(r => r.score))
         && Math.min(...histRows.map(r => r.score)) > Math.max(-Infinity, ...predatorRows.map(r => r.score))),
@@ -288,29 +300,36 @@ export function propose(cal, figures, bench) {
 // merely for not being famous. TOLERATED, MONITORED and FLAGGED are fixed anchors set for
 // ordinary people instead. RETAINED never drops below RETAINED_FLOOR, so tiers stay ordered.
 // Gated scores sit at or under the gate cap (99): a gated file is SOYLENT whatever the cutoffs.
-export const TIER_TARGETS = [["ESSENTIAL INFRASTRUCTURE", 0.08], ["RETAINED SPECIALIST", 0.30]];
-export const TIER_ANCHORS = [["TOLERATED GENERALIST", 600], ["MONITORED CIVILIAN", 450], ["FLAGGED FOR DELETION", 300]];
-export const RETAINED_FLOOR = 650;
-export const TIER_MOVE_THRESHOLD = 10;   // weekly run proposes new cutoffs only past this
+// ---- the ladder (method v4, 2026-10-06; docs/design/SCALE.md §1) --------------------------
+// Nine fixed, score-anchored rungs (cal.ladder.rungs, aliased as cal.tiers). Each carries a
+// guidance band: the share of the ungated roster the Department expects it to hold. The
+// weekly run measures the shares; a rung outside its band for two consecutive runs becomes a
+// desk item that PROPOSES a cut move (never applied by the machine). Anchors kept from v3.2:
+// 600 (an ordinary decent person), 450, 300, and the gate cap under the bottom rung.
+export const TIER_ANCHORS = [["PROVISIONAL CITIZEN", 600], ["MONITORED CIVILIAN", 450], ["FLAGGED FOR DELETION", 300]];
+export const ORDINARY_TIER = "PROVISIONAL CITIZEN";   // the decent-ordinary persona reads this or better
+export const MAX_RUNG_SHARE = 0.30;                   // check-scale: no rung may hold more than this
+export const BAND_RUNS = 2;                           // consecutive runs outside the band before a proposal
 export function rosterScores(cal, figures) {
   return figures.filter(f => f?.breakdown && !gatedWith(cal, f.breakdown, f.harmReview))
     .map(f => scoreWith(cal, f.breakdown, f.harm?.severity, f.harmReview)).sort((a, b) => b - a);
 }
-export function tierCutoffs(cal, figures) {
-  const s = rosterScores(cal, figures), n = s.length;
-  const pct = (p, fallback) => (n ? s[Math.max(0, Math.ceil(n * p) - 1)] : fallback);
-  const cur = label => cal.tiers.find(t => t.label === label)?.min;
-  const retained = Math.max(pct(TIER_TARGETS[1][1], cur("RETAINED SPECIALIST")), RETAINED_FLOOR);
-  const essential = Math.max(pct(TIER_TARGETS[0][1], cur("ESSENTIAL INFRASTRUCTURE")), retained + 1);
-  const floor = cal.harmGate.cap + 1;
-  const anchors = TIER_ANCHORS.map(([label, min]) => ({ label, min: Math.max(min, floor) }));
-  return [{ label: "ESSENTIAL INFRASTRUCTURE", min: essential }, { label: "RETAINED SPECIALIST", min: retained }, ...anchors, { label: "SOYLENT GREEN", min: 0 }];
+// Share of the ungated roster on each rung, with its band and whether it sits inside it.
+export function ladderShares(cal, figures) {
+  const s = rosterScores(cal, figures), n = s.length || 1;
+  return cal.ladder.rungs.map(r => {
+    const count = s.filter(x => tierWith(cal, x) === r.label).length, share = count / n;
+    const [lo, hi] = r.band || [0, 1];
+    return { label: r.label, min: r.min, count, share: +share.toFixed(4), band: [lo, hi], inside: share >= lo && share <= hi };
+  });
 }
-// What the tier cutoffs were cut from, kept beside calibration.json (docs/calibration/roster.json)
-// so check-movement can prove cutoffs == percentile targets offline.
+// The ladder as cal.tiers must list it: labels and mins in order, strictly decreasing, 0 last.
+export const ladderTiers = cal => cal.ladder.rungs.map(r => ({ label: r.label, min: r.min }));
+// What the cutoffs were cut from, kept beside calibration.json (docs/calibration/roster.json)
+// so check-movement can measure the shares offline.
 export const rosterSnapshot = figures => figures.filter(f => f?.breakdown)
   .map(f => ({ name: f.name, breakdown: f.breakdown, harm: f.harm?.severity ? { severity: f.harm.severity } : null, harmReview: f.harmReview || null }));
-export const withTiers = (cal, tiers) => ({ ...cal, tiers, tierTargets: Object.fromEntries(TIER_TARGETS), tierAnchors: Object.fromEntries(TIER_ANCHORS), retainedFloor: RETAINED_FLOOR });
+export const withTiers = (cal, tiers) => ({ ...cal, tiers, ladder: { ...cal.ladder, rungs: cal.ladder.rungs.map(r => ({ ...r, min: tiers.find(t => t.label === r.label)?.min ?? r.min })) } });
 // Largest move of any tier min between two calibrations.
 export const tierShift = (a, b) => Math.max(0, ...a.map(t => Math.abs(t.min - (b.find(x => x.label === t.label)?.min ?? t.min))));
 

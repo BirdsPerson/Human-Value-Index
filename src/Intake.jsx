@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import CubePanel, { CubeChips, cubePlace, cubeOf } from "./CubePanel.jsx";
-import { getTier } from "./figures.js";
+import { getTier, tierLine } from "./figures.js";
 import { AGENT_ID } from "./agentConfig.js";
 import { Typed, BigNumber } from "./term.jsx";
 import FilePhoto from "./FilePhoto.jsx";
@@ -628,7 +628,7 @@ export default function Intake({ view = "intake" }) {
             <Chip tone={tier.color} className="hvi-fw-tier">{r.tier || tier.label}</Chip>
             <CubeChips subject={r} />
           </Chips>
-          <div className="hvi-tier-desc">{tier.desc}</div>
+          <div className="hvi-tier-desc">{tier.desc}{(() => { const l = tierLine(r.score); return l ? ` ON THE LINE: ${l.points} POINT${l.points === 1 ? "" : "S"} ${l.dir === "up" ? "SHORT OF" : "ABOVE"} ${l.tier.label}.` : ""; })()}</div>
           <div className="hvi-fw-sec" aria-hidden="true">THE NINE SECTIONS // {assessedMeta(r.breakdown)}</div>
           <Breakdown breakdown={r.breakdown} confidence={r.confidence} framed={false} />
         </Frame>

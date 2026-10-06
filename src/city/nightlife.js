@@ -49,7 +49,7 @@ export function nightPa(mt, here = null) {
     if (hh < g.from) out.push(`TONIGHT AT ${NAME[g.venue]}: ${g.name}, ${g.word}, ${fmt(g.from)}. ATTENDANCE IS RECORDED. ENJOYMENT IS ESTIMATED.`);
     else if (hh < g.to) out.push(`NOW AT ${NAME[g.venue]}: ${g.name} ${g.word}. THE DEPARTMENT IS ON THE GUEST LIST.`);
   }
-  if ((!here || here === "uptown") && openAt("aurum", hh)) out.push("AURUM // THE ROPE IS UP. TOP TIERS, PROCEED. RETAINED SPECIALISTS, WAIT. EVERYONE ELSE: DOWNTOWN IS THAT WAY.");
+  if ((!here || here === "uptown") && openAt("aurum", hh)) out.push("AURUM // THE ROPE IS UP. TOP TIERS, PROCEED. THE MIDDLE, WAIT. EVERYONE ELSE: DOWNTOWN IS THAT WAY.");
   if ((!here || here === "downtown") && hh >= 27.5 && hh < 28.2) out.push("DOWNTOWN // CLOSING TIME. THE LIGHTS ARE COMING UP. SO IS THE BILL. GO HOME. THE DEPARTMENT KNOWS WHERE THAT IS.");
   if ((!here || here === "uptown") && hh >= 26.6 && hh < 27.3) out.push("UPTOWN // LAST CALL AT AURUM. THE MEZZANINE CLOSES WHEN THE MEZZANINE DECIDES.");
   if ((!here || here === "downtown") && hh >= 22 && hh < 27) out.push("THE COOP // OPEN 24 HOURS. THE CHICKEN IS LICENSED. THE WHITE SAUCE IS UNDER REVIEW.");

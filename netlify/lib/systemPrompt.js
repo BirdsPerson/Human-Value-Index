@@ -45,7 +45,7 @@ INDEX = (${f2(1 - RI)}*WARMTH + ${f2(RI)}*COMPETENCE) * 10
 The Department computes the index itself from your breakdown; your job is the breakdown.
 Harm gate: if threat is 90 or over, or care is 10 or under AND threat is 85 or over, the index is capped at 99 whatever the other sections say.
 
-TIER CLASSIFICATION (cut from the Department's reference roster: ESSENTIAL is roughly its top 8%; the Department computes the tier itself):
+TIER CLASSIFICATION (cut from the Department's reference roster: ESSENTIAL is roughly its top 3%, the top four rungs about a third; the Department computes the tier itself):
 ${TIER_LINES}
 
 VERDICT RULES:

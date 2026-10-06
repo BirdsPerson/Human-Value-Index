@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import TouchGate from "./ui/TouchGate.jsx";
-import { CORNERS, EDGES, AXES, MIDPLANES, OCTANT_ANCHORS, project, clampPitch, REST } from "./cube3d.js";
-import { OCTANT_LINES } from "./cube.js";
+import { CORNERS, EDGES, AXES, MIDPLANES, CELLS, CUBRANT_ANCHORS, project, clampPitch, REST, centreWorld } from "./cube3d.js";
+import { CUBRANT_LINES } from "./cube.js";
 import FilePhoto from "./FilePhoto.jsx";
 
-// The octant cube as a WarGames vector display: green phosphor wireframe, three
-// intersecting midplanes (the 50 lines on conduct, competence and likability), one point
-// per subject. One rAF loop that runs only while something moves; paused offscreen.
+// The cubrant cube as a WarGames vector display: green phosphor wireframe, the eight cells
+// shaded faintly on the cube's skin in their family colour, three intersecting midplanes (the
+// centre lines on conduct, competence and scarcity), one point per subject. One rAF loop that
+// runs only while something moves; paused offscreen.
 const SWING = 0.6;             // rad either side of the idle angle
 const SWING_RATE = 0.22;       // rad/s of swing phase
 const IDLE_AFTER = 3000;       // ms after the last interaction before auto-rotation resumes
@@ -23,6 +24,20 @@ function tokens() {
 }
 const familyColor = (T, fam) => (fam === "good" ? T.green : fam === "charm" ? T.amber : fam === "harm" ? T.red : T.muted);
 const PLANE_TINT = { x: "green", y: "green", z: "amber" };
+
+// The three outer faces of a cell: the patches of the cube's skin that belong to it.
+function cellPatches(cell) {
+  const { lo, hi } = cell;
+  const out = [];
+  for (let k = 0; k < 3; k++) {
+    const face = hi[k] === 1 ? 1 : -1;   // which face of the big cube this cell touches on axis k
+    const u = (k + 1) % 3, v = (k + 2) % 3;
+    const pt = (a, b) => { const p = [0, 0, 0]; p[k] = face; p[u] = a; p[v] = b; return p; };
+    out.push([pt(lo[u], lo[v]), pt(hi[u], lo[v]), pt(hi[u], hi[v]), pt(lo[u], hi[v])]);
+  }
+  return out;
+}
+const PATCHES = CELLS.flatMap(c => cellPatches(c).map(quad => ({ quad, family: c.family, name: c.name })));
 
 export default function Cube3D({ points, highlight = null, single = false, height = 360, label, onHover }) {
   const wrapRef = useRef(null), canvasRef = useRef(null), tipRef = useRef(null);
@@ -55,7 +70,14 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
     const labels = [];
     const label = (text, spots, color, { alpha = 1, prio = 0, must = false } = {}) => labels.push({ text, spots, color, alpha, prio, must });
 
-    // the three midplanes: translucent fill, quarter grid, outline. They visibly cross.
+    // the cells: each one's three patches of the cube's skin, far first, faint in its family colour
+    const patches = PATCHES.map(pa => ({ ...pa, depth: pa.quad.reduce((d, p) => d + P(p).depth / 4, 0) })).sort((a, b) => b.depth - a.depth);
+    for (const pa of patches) {
+      path(pa.quad); ctx.closePath();
+      ctx.globalAlpha = pa.depth > 0 ? 0.09 : 0.05; ctx.fillStyle = familyColor(T, pa.family); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // the three midplanes (the centre lines): translucent fill, quarter grid, outline. They visibly cross.
     for (const m of MIDPLANES) {
       const tint = T[PLANE_TINT[m.axis]];
       path(m.outline); ctx.closePath();
@@ -70,7 +92,7 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
     ctx.strokeStyle = T.muted; ctx.lineWidth = 1; ctx.beginPath();
     for (const [i, j] of EDGES) { const A = P(CORNERS[i]), B = P(CORNERS[j]); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); }
     ctx.stroke();
-    // the three axes through the centre, with labelled ends
+    // the three axes through the centre point, with labelled ends
     for (const ax of AXES) {
       const A = P(ax.a), B = P(ax.b);
       const col = ax.id === "z" ? T.amber : T.green;
@@ -87,43 +109,37 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
       label(`HIGH ${ax.label}`, endSpots(B, `HIGH ${ax.label}`), col, { prio: 2, must: true });
       label(`LOW ${ax.label}`, endSpots(A, `LOW ${ax.label}`), col, { prio: 1, alpha: 0.6 });
     }
-    const O = P([0, 0, 0]);
+    const O = P(centreWorld());
     ctx.fillStyle = T.text; ctx.beginPath(); ctx.arc(O.x, O.y, 2, 0, Math.PI * 2); ctx.fill();
-    // octant names, faint, in the full view; phones drop them (the legend and the chips name them)
+    // cubrant names, faint, in the full view; phones drop them (the legend and the chips name them)
     if (!single && !narrow) {
-      for (const [name, at] of Object.entries(OCTANT_ANCHORS)) {
+      for (const [name, at] of Object.entries(CUBRANT_ANCHORS)) {
         const q = P(at), wid = ctx.measureText(name).width;
-        label(name, [[q.x - wid / 2, q.y], [q.x - wid / 2, q.y + fs + 2], [q.x - wid / 2, q.y - fs - 2]], T.ghost,
-          { alpha: Math.max(0.35, Math.min(0.85, 0.95 - q.depth * 0.35)), prio: 0 });
+        label(name, [[q.x - wid / 2, q.y], [q.x - wid / 2, q.y + fs + 2], [q.x - wid / 2, q.y - fs - 2]], T.muted,
+          { alpha: Math.max(0.55, Math.min(0.95, 1.0 - q.depth * 0.3)), prio: 0 });
       }
     }
 
     // subjects, far first so near points paint over
     const pts = ptsRef.current || [];
     const hi = hiRef.current, hov = s.hover;
-    const screen = pts.map(g => ({ g, S: P(g.p), F: g.foot ? P(g.foot) : null }));
+    const screen = pts.map(g => ({ g, S: P(g.p) }));
     screen.sort((a, b) => b.S.depth - a.S.depth);
     const anyFocus = hi || hov;
     for (const it of screen) {
-      const { g, S, F } = it;
+      const { g, S } = it;
       const focused = (hi && g.name === hi) || (hov && hov === g);
       const col = familyColor(T, g.family);
       ctx.globalAlpha = anyFocus && !focused ? 0.25 : 1;
-      // drop line to the agreement plane (likability = conduct): the gap, drawn
-      if (F && (single || focused)) {
-        ctx.strokeStyle = focused || single ? T.amber : T.ghost; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
-        ctx.beginPath(); ctx.moveTo(S.x, S.y); ctx.lineTo(F.x, F.y); ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle = T.amber; ctx.beginPath(); ctx.arc(F.x, F.y, 1.6, 0, Math.PI * 2); ctx.fill();
-      }
       const r = (single ? 5 : focused ? 4.2 : 3) * S.f;
       ctx.beginPath(); ctx.arc(S.x, S.y, r, 0, Math.PI * 2);
-      if (g.rated) { ctx.fillStyle = focused ? T.text : col; ctx.fill(); }
+      if (g.placed) { ctx.fillStyle = focused ? T.text : col; ctx.fill(); }
       else { ctx.strokeStyle = focused ? T.text : T.muted; ctx.lineWidth = 1.3; ctx.stroke(); }
-      const tag = single ? (g.rated ? g.octant : "NOT YET RATED") : focused ? g.name.toUpperCase() : null;
+      const tag = single ? (g.placed ? g.cubrant : "CUBRANT PENDING") : focused ? g.name.toUpperCase() : null;
       if (tag) {
         const wid = ctx.measureText(tag).width;
         label(tag, [[S.x + 8, S.y - 6], [S.x - 8 - wid, S.y - 6], [S.x + 8, S.y + fs + 4], [S.x - 8 - wid, S.y + fs + 4]],
-          single ? (g.rated ? col : T.muted) : T.text, { prio: 3, must: true });
+          single ? (g.placed ? col : T.muted) : T.text, { prio: 3, must: true });
       }
     }
     ctx.globalAlpha = 1;
@@ -131,7 +147,7 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
     // place and draw the labels: highest priority first, each on a knocked-out ground
     const placed = [];
     const hit = (a) => placed.some(b => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h);
-    // the faint octant names also keep off the points, so they never hide a subject
+    // the faint cubrant names also keep off the points, so they never hide a subject
     const onPoint = (a) => screen.some(({ S }) => S.x > a.x - 4 && S.x < a.x + a.w + 4 && S.y > a.y - 4 && S.y < a.y + a.h + 4);
     labels.sort((a, b) => b.prio - a.prio);
     ctx.textAlign = "left";
@@ -260,11 +276,11 @@ export default function Cube3D({ points, highlight = null, single = false, heigh
         {hover && q && (<>
           {hover.photo && <div style={{ float: "left", marginRight: 8 }}><FilePhoto subject={hover.photo} scale={1} compact /></div>}
           <div className="t">{hover.name}</div>
-          <div>CONDUCT {q.warmth} · COMPETENCE {q.competence} · LIKABILITY {hover.rated ? q.people.likability : "UNRATED"}</div>
-          {hover.rated ? (<>
-            <div className="g">{hover.octant} · GAP {hover.gap > 0 ? "+" : ""}{hover.gap} · {hover.judge}</div>
-            <div>{OCTANT_LINES[hover.octant]}</div>
-          </>) : <div className="g">{q.quadrant} (LIKABILITY UNRATED)</div>}
+          <div>CONDUCT {q.warmth} · COMPETENCE {q.competence} · SCARCITY {hover.placed ? q.scarcity : "PENDING"}</div>
+          {hover.placed ? (<>
+            <div className="g">{hover.cubrant}{hover.rated ? ` · ${hover.judge} · GAP ${hover.gap > 0 ? "+" : ""}${hover.gap}` : ""}</div>
+            <div>{CUBRANT_LINES[hover.cubrant]}</div>
+          </>) : <div className="g">CUBRANT PENDING: THE THIRD AXIS IS READ AT THE NEXT ASSESSMENT.</div>}
         </>)}
       </div>
     </div>

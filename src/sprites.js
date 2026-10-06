@@ -123,8 +123,11 @@ export function paletteFor(tierColor, seed) {
 
 export const GAITS = {
   "ESSENTIAL INFRASTRUCTURE": { speed: 26, idleMin: 0.4, idleMax: 1.6, fps: 9, bob: 1, zone: "all", reach: 1.0, flip: 0.1 },
+  "PRIORITY ASSET":           { speed: 23, idleMin: 0.6, idleMax: 2.0, fps: 8, bob: 1, zone: "all", reach: 0.85, flip: 0.15 },
   "RETAINED SPECIALIST":      { speed: 19, idleMin: 0.8, idleMax: 2.6, fps: 8, bob: 1, zone: "all", reach: 0.7, flip: 0.2 },
+  "CERTIFIED CONTRIBUTOR":    { speed: 16, idleMin: 1.0, idleMax: 3.2, fps: 7, bob: 1, zone: "all", reach: 0.5, flip: 0.3 },
   "TOLERATED GENERALIST":     { speed: 13, idleMin: 1.2, idleMax: 4.0, fps: 6, bob: 1, zone: "all", reach: 0.35, flip: 0.4 },
+  "PROVISIONAL CITIZEN":      { speed: 11, idleMin: 1.3, idleMax: 4.2, fps: 6, bob: 1, zone: "all", reach: 0.3, flip: 0.6 },
   "MONITORED CIVILIAN":       { speed: 9,  idleMin: 1.5, idleMax: 4.5, fps: 5, bob: 1, zone: "all", reach: 0.25, flip: 0.9 },
   "FLAGGED FOR DELETION":     { speed: 6,  idleMin: 2.0, idleMax: 6.0, fps: 4, bob: 0, zone: "door", reach: 1.0, flip: 0.6 },
   "SOYLENT GREEN":            { speed: 3.5, idleMin: 2.5, idleMax: 7.0, fps: 3, bob: 0, zone: "door", reach: 1.0, flip: 0.3 },

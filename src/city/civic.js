@@ -232,7 +232,6 @@ export function order(table) {
 
 // ---- mood inputs from the day's plan ------------------------------------------------------------
 const NB = 48;   // half-hour buckets
-const TIER_N = SIM.TIER_ORDER.length;
 const GLASS = new Set(["penthouses"]), PROJECTS = new Set(["block-a", "block-b"]);
 // -> {district: {n (workers and residents), workers, residents, tier (mean index), glass, proj
 // (shares of n housed in the Meridian's glass / the projects), commute (a worker's hours),
@@ -244,8 +243,8 @@ export function dayStats(plan, people) {
   for (const [key, row] of Object.entries(plan.subjects || {})) {
     const s = people.get(key) || { slug: key, name: key };
     const home = P[row[0]], hd = SIM.PLACES[home]?.district;
-    const jd = SIM.assignJob(s).district;
-    const t = Math.max(0, SIM.TIER_ORDER.indexOf(SIM.tierOf(s)));
+    const jd = SIM.assignJob(s, SIM.SEED, plan.day).district;
+    const t = SIM.classOf(s, plan.day);   // housing class 0..5 under the ladder in force on the plan's day (SCALE_FROM)
     let commute = 0;
     for (const g of SIM.rowSegs(P, row)) {
       if (g.activity === "commute") { commute += g.to - g.from; continue; }

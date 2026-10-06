@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getTier } from "./figures.js";
+import { getTier, tierLine } from "./figures.js";
 import { Typed, BigNumber, prefersReducedMotion } from "./term.jsx";
 import { Frame, Chip, Chips, Meter, ListRow, TextField, Button } from "./ui/components.jsx";
 import "./coreScreens.css";
@@ -85,7 +85,7 @@ export function ScoreCard({ score, tierLabel, verdict, label = "YOUR VALUE INDEX
         <Chip tone={tier.color}>{tierLabel || tier.label}</Chip>
         {chips}
       </Chips>
-      <div className="hvi-tier-desc">{tier.desc}</div>
+      <div className="hvi-tier-desc">{tier.desc}{(() => { const l = tierLine(score); return l ? ` ON THE LINE: ${l.points} POINT${l.points === 1 ? "" : "S"} ${l.dir === "up" ? "SHORT OF" : "ABOVE"} ${l.tier.label}. A RE-READ COULD MOVE THE LABEL. THE NUMBER IS THE FINDING.` : ""; })()}</div>
       {children}
       {verdict && (
         <div className="hvi-verdict">

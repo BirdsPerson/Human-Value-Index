@@ -1,6 +1,6 @@
 {
-  "version": 4,
-  "date": "2026-09-29",
+  "version": 5,
+  "date": "2026-10-06",
   "rubric": 3,
   "note": "Every tunable scoring parameter. Changed only by an approved calibration proposal (scripts/calibrate.mjs --check-answers) or by hand with Scott's say-so.",
   "realityIndex": 0.6,
@@ -17,6 +17,10 @@
     "redundancy": 0.1,
     "physical": 0.02
   },
+  "scarcityAxis": {
+    "redundancy": 0.6,
+    "physical": 0.4
+  },
   "harmGate": {
     "care": 10,
     "threat": 85,
@@ -29,19 +33,37 @@
   "minConfidence": 35,
   "minAssessed": 3,
   "cut": 50,
+  "centre": {
+    "conduct": 62,
+    "competence": 70,
+    "scarcity": 57
+  },
+  "centreNote": "Method v4 (2026-10-06, docs/design/SCALE.md): the cubrant axes split at the roster medians measured on 838 files, frozen here; `cut` (50) stays the absolute SCM line the People's judge and the petition cohorts use. Re-centred only by an approved calibration proposal after a median has drifted >= 3 points for two weekly runs.",
   "likabilityShrink": 20,
   "gapThreshold": 20,
   "tiers": [
     {
       "label": "ESSENTIAL INFRASTRUCTURE",
-      "min": 787
+      "min": 810
+    },
+    {
+      "label": "PRIORITY ASSET",
+      "min": 770
     },
     {
       "label": "RETAINED SPECIALIST",
-      "min": 736
+      "min": 735
+    },
+    {
+      "label": "CERTIFIED CONTRIBUTOR",
+      "min": 700
     },
     {
       "label": "TOLERATED GENERALIST",
+      "min": 660
+    },
+    {
+      "label": "PROVISIONAL CITIZEN",
       "min": 600
     },
     {
@@ -110,18 +132,7 @@
     },
     "intentNote": "Method v3.3 (2026-09-29): intent over body count. A gated file is placed in a band by the dominant documented intent of its harm: extermination (killing civilians was the goal) and predation (personal murder or abuse for one's own ends) share the floor, 0-25, as does anyone who killed or abused with their own hands ('personal'). war_or_policy and incidental harm places 30-90, above every file on the floor. Inside a band the v3.2 points still order the files (directing below instrument, more below fewer), scaled to the band. Severities without an intent keep the v3.2 placement (cap - points)."
   },
-  "tierTargets": {
-    "ESSENTIAL INFRASTRUCTURE": 0.08,
-    "RETAINED SPECIALIST": 0.3
-  },
-  "method": "v3.3",
-  "tierAnchors": {
-    "TOLERATED GENERALIST": 600,
-    "MONITORED CIVILIAN": 450,
-    "FLAGGED FOR DELETION": 300
-  },
-  "retainedFloor": 650,
-  "tierNote": "Method v3.2 (2026-09-28): ESSENTIAL and RETAINED are tuned to the reference roster (top 8% / 30%, RETAINED never below 650). The roster is history's most notable people, so the middle of the scale is anchored to ordinary people instead: TOLERATED >= 600, MONITORED >= 450, FLAGGED >= 300. An ordinary decent person should not read as Monitored for not being famous.",
+  "method": "v4",
   "petition": {
     "note": "THE PEOPLE'S PETITION (docs/PETITION.md). Votes never move a score; they can only buy a machine re-examination. Thresholds are config, never desk items; the Sunday loop may propose changes and Scott approves.",
     "notedVoters": 25,
@@ -150,5 +161,118 @@
       "yougovWeight": 100,
       "minVoters": 25
     }
-  }
+  },
+  "ladder": {
+    "version": 2,
+    "since": "2026-10-06",
+    "note": "Method v4 (docs/design/SCALE.md). Nine score-anchored rungs; `band` is the share of the ungated roster each is expected to hold (quantile guidance, not a target the cuts chase). The weekly calibration run proposes a cut move to the desk when a rung has sat outside its band for two consecutive runs; it never moves a cut itself. Anchors kept from v3.2: 600 (an ordinary decent person), 450, 300, the gate cap under SOYLENT GREEN. `tiers` above is this ladder, for every reader that loops over it.",
+    "rungs": [
+      {
+        "label": "ESSENTIAL INFRASTRUCTURE",
+        "min": 810,
+        "band": [
+          0.015,
+          0.06
+        ]
+      },
+      {
+        "label": "PRIORITY ASSET",
+        "min": 770,
+        "band": [
+          0.03,
+          0.09
+        ]
+      },
+      {
+        "label": "RETAINED SPECIALIST",
+        "min": 735,
+        "band": [
+          0.07,
+          0.18
+        ]
+      },
+      {
+        "label": "CERTIFIED CONTRIBUTOR",
+        "min": 700,
+        "band": [
+          0.09,
+          0.24
+        ]
+      },
+      {
+        "label": "TOLERATED GENERALIST",
+        "min": 660,
+        "band": [
+          0.09,
+          0.27
+        ]
+      },
+      {
+        "label": "PROVISIONAL CITIZEN",
+        "min": 600,
+        "band": [
+          0.09,
+          0.3
+        ]
+      },
+      {
+        "label": "MONITORED CIVILIAN",
+        "min": 450,
+        "band": [
+          0.04,
+          0.22
+        ]
+      },
+      {
+        "label": "FLAGGED FOR DELETION",
+        "min": 300,
+        "band": [
+          0,
+          0.08
+        ]
+      },
+      {
+        "label": "SOYLENT GREEN",
+        "min": 0,
+        "band": [
+          0,
+          0.14
+        ]
+      }
+    ],
+    "lineTolerance": 12,
+    "legacy": {
+      "version": 1,
+      "until": "2026-10-06",
+      "rungs": [
+        {
+          "label": "ESSENTIAL INFRASTRUCTURE",
+          "min": 787
+        },
+        {
+          "label": "RETAINED SPECIALIST",
+          "min": 736
+        },
+        {
+          "label": "TOLERATED GENERALIST",
+          "min": 600
+        },
+        {
+          "label": "MONITORED CIVILIAN",
+          "min": 450
+        },
+        {
+          "label": "FLAGGED FOR DELETION",
+          "min": 300
+        },
+        {
+          "label": "SOYLENT GREEN",
+          "min": 0
+        }
+      ],
+      "note": "Method v3.3 cutoffs (ESSENTIAL/RETAINED roster-tuned at top 8%/30%, RETAINED floor 650; TOLERATED/MONITORED/FLAGGED anchored). The city reads this ladder for every machine day before SCALE_FROM (src/city/sim.js) so published days rebuild byte-identical."
+    },
+    "lineNote": "ON THE LINE: a file within lineTolerance points of a cut (twice the measured re-read drift, docs/calibration/state.json mad 6) is labelled with that caveat."
+  },
+  "tierNote": "Method v4: see `ladder`. `tiers` is the v2 ladder."
 }

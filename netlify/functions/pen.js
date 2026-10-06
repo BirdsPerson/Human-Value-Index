@@ -19,7 +19,7 @@ let cache = { at: 0, subjects: null };
 
 const FIELDS = {
   list: (s) => { const { breakdown: _b, stratum: _s, places: _p, ...rest } = s; return rest; },
-  cube: (s) => ({ slug: s.slug, name: s.name, baseName: s.baseName, qualifier: s.qualifier, score: s.score, tier: s.tier, kind: s.kind, referred: s.referred, engine: s.engine, sprite: s.sprite, avatar: s.avatar, warmth: s.warmth, competence: s.competence, quadrant: s.quadrant, judge: s.judge, realityIndex: s.realityIndex, people: s.people }),
+  cube: (s) => ({ slug: s.slug, name: s.name, baseName: s.baseName, qualifier: s.qualifier, score: s.score, tier: s.tier, kind: s.kind, referred: s.referred, engine: s.engine, sprite: s.sprite, avatar: s.avatar, warmth: s.warmth, competence: s.competence, scarcity: s.scarcity, cubrant: s.cubrant, quadrant: s.quadrant, judge: s.judge, realityIndex: s.realityIndex, people: s.people }),
 };
 
 const json = (status, body, extra = {}) =>

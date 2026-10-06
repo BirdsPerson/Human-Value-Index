@@ -73,7 +73,7 @@ for (const f of FAMOUS_FIGURES) {
   const pct = FAMOUS_FIGURES.filter(f => f.score < persona).length / FAMOUS_FIGURES.length * 100;
   assert.ok(pct >= 30, `decent persona at p${pct.toFixed(0)}`);
   const personaTier = tierLabel(persona);
-  assert.ok(["ESSENTIAL INFRASTRUCTURE", "RETAINED SPECIALIST", "TOLERATED GENERALIST"].includes(personaTier), `decent persona lands TOLERATED or better (${persona}, ${personaTier})`);
+  assert.ok(["ESSENTIAL INFRASTRUCTURE", "PRIORITY ASSET", "RETAINED SPECIALIST", "CERTIFIED CONTRIBUTOR", "TOLERATED GENERALIST", "PROVISIONAL CITIZEN"].includes(personaTier), `decent persona lands TOLERATED or better (${persona}, ${personaTier})`);
 }
 assert.equal(getTier(850).label, "ESSENTIAL INFRASTRUCTURE");
 assert.equal(getTier(99).label, "SOYLENT GREEN");

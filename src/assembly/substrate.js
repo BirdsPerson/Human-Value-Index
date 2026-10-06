@@ -48,7 +48,7 @@ function valuesOf(s) {
   const w = typeof s?.warmth === "number" ? s.warmth : 50, c = typeof s?.competence === "number" ? s.competence : 50;
   return { care: w, network: w * 0.92, alignment: w * 0.88, utility: c, adaptability: c * 0.95, legacy: (w + c) * 0.4, physical: 40, threat: 30 };
 }
-const bandOf = (s) => { const t = Math.max(0, SIM.TIER_ORDER.indexOf(SIM.tierOf(s))); return t <= 1 ? 0 : t <= 3 ? 1 : 2; };
+const bandOf = (s) => { const t = SIM.classOf(s); return t <= 1 ? 0 : t <= 3 ? 1 : 2; };   // housing class (0..5), under the ladder in force
 
 // One subject's advisory ballot on one motion.
 // ctx: {moods: {districtId: mood score} | null}

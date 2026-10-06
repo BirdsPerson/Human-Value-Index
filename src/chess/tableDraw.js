@@ -30,7 +30,7 @@ const REGS = new Map();
 function subjectOf(p, lookup) {
   if (p.kind === "regular") {
     let s = REGS.get(p.key);
-    if (!s) { const r = regular(p.key); s = { slug: p.key, name: r.name, kind: "citizen", score: 500, tier: "TOLERATED GENERALIST", avatar: { kind: "procedural", spec: r.spec }, regular: true }; REGS.set(p.key, s); }
+    if (!s) { const r = regular(p.key); s = { slug: p.key, name: r.name, kind: "citizen", score: 680, tier: "TOLERATED GENERALIST", avatar: { kind: "procedural", spec: r.spec }, regular: true }; REGS.set(p.key, s); }
     return s;
   }
   return projected(p.key, p.name, lookup);

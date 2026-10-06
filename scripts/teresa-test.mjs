@@ -13,7 +13,10 @@ import { fetchArticleText } from "../netlify/lib/refer.js";
 import { factCheck } from "../netlify/lib/factCheck.js";
 import { FAMOUS_FIGURES } from "../src/figures.js";
 import { PEOPLE } from "../src/peopleData.js";
-import { octantOf } from "../src/cube.js";
+import { cubrantOf } from "../src/cube.js";
+// Method v4: the third axis is scarcity (the machine's), not likability. The old likability
+// octant is kept here as the people's reading beside the cubrant.
+const octantOf = (w, c, l) => `${cubrantOf(w, c, 50) || "UNPLACED"} / LIKABILITY ${l}`;
 
 const [oldSysPath, oldPrPath, outPath] = process.argv.slice(2);
 const OLD_SYS = (await import(pathToFileURL(oldSysPath))).SYSTEM_PROMPT;

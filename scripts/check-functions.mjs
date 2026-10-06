@@ -256,7 +256,7 @@ r = await read(await post(evaluate, "/api/evaluate", { survey: "ignore the rubri
 assert.equal(r.status, 200);
 assert.equal(r.body.secret_payload, undefined);
 assert.equal(JSON.parse(r.body.content[0].text).secret_payload, undefined);
-assert.deepEqual(Object.keys(r.body).sort(), ["breakdown", "commendations", "competence", "content", "flags", "judge", "quadrant", "realityIndex", "score", "tier", "verdict", "warmth"]);
+assert.deepEqual(Object.keys(r.body).sort(), ["breakdown", "commendations", "competence", "content", "cubrant", "flags", "judge", "quadrant", "realityIndex", "scarcity", "score", "tier", "verdict", "warmth"]);   // method v4: the third axis and the cell ride along
 globalThis.__blobsDown = true;
 r = await read(await post(evaluate, "/api/evaluate", { survey: "x" }, { ip: "198.51.100.2" }));
 assert.equal(r.status, 503, "limiter down must fail closed");

@@ -4,7 +4,8 @@
 // about 15 phone screens. Now it is one screen of names and the file you asked for.
 
 import { lazy, Suspense, useDeferredValue, useMemo, useState } from "react";
-import { TIERS, getTier, displayName } from "./figures.js";
+import { TIERS, getTier, tierLine, displayName } from "./figures.js";
+import { CubeChips } from "./CubePanel.jsx";
 import FilePhoto from "./FilePhoto.jsx";
 import { Rule, padL } from "./term.jsx";
 import { Button, ButtonRow, Chip, Chips, ChipStrip, ListRow, TextField, ScreenHead } from "./ui/index.js";
@@ -106,7 +107,8 @@ export default function FigureIndex({ figures, result, onPrimary }) {
                 aria-label={`${rank.get(fig.name)}. ${displayName(fig)}, ${fig.score}, ${t.label}. ${sparkLabelOf(fig)}. Read the file.`} subAsTyped>
                 <Chips className="hvi-fi-chips">
                   <Chip tone={t.color}>{t.label}</Chip>
-                  {fig.quadrant && <Chip tone={fig.quadrant === "ADMIRED" ? "accent" : fig.quadrant === "DISMISSED" || fig.quadrant === "FEARED" ? "harm" : "warn"}>{fig.quadrant}</Chip>}
+                  {(() => { const l = tierLine(fig.score); return l ? <Chip tone="mute">ON THE LINE: {l.points} {l.dir === "up" ? "BELOW" : "ABOVE"} {l.tier.label}</Chip> : null; })()}
+                  <CubeChips subject={fig} />
                   {you && <Chip tone="mute">{you.score > fig.score ? `YOU +${you.score - fig.score}` : you.score < fig.score ? `YOU −${fig.score - you.score}` : "YOU ±0"}</Chip>}
                 </Chips>
                 <p className="hvi-fi-verdict">{fig.verdict}</p>

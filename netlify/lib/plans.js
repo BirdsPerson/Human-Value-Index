@@ -179,6 +179,9 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
         if (built.length && clock() - t0 >= budgetMs) break;
         if (day > today + 1 && !snaps[day]) { waiting = day; break; }   // later days wait too: they need this one's snapshot first
         const a = clock();
+        // The ladder in force on this day (SCALE_FROM, docs/design/SCALE.md §4): pinned before THE
+        // MALL and EMERGENCE read anyone's tier, so every module building this day reads one ladder.
+        SIM.setLadderDay(day);
         // THE MALL (src/city/enterprise.js): the day's businesses from yesterday's, before the day
         // is built (who works at a storefront, and the shops' pull on everyone's leisure)
         const { prevEnt, state: ent } = await enterpriseFor(io, day, { jsons, manifest, people, ledger });
@@ -189,6 +192,9 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
         const json = SIM.buildPlan(day);
         json.ent = ent;
         if (em) json.emerge = em;
+        // The day the ladder changed carries its because-line's number: who was rehoused (SCALE.md §4.4).
+        if (day === SIM.SCALE_FROM) json.scale = { v: 2, from: SIM.SCALE_FROM, rehoused: SIM.rehousedBetween(day - 1, day) };
+        SIM.setLadderDay(null);
         const ver = versionOf(json), key = dayKey(day, ver);
         const bytes = JSON.stringify(json).length;
         await io.putDay(key, json);   // the day's blob first ...

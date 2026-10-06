@@ -96,3 +96,41 @@ assert.ok(staticDomains >= FAMOUS_FIGURES.length - 3, `domains ${staticDomains}/
 assert.ok(FAMOUS_FIGURES.every(f => eraOf(f) !== null), "every figure on record has a birth year");
 
 console.log("ANALYTICS CHECKS PASS");
+
+// ---- THE NUMBERS, method v4 (docs/design/SCALE.md §3) ----------------------------------------
+const { dimHistograms, cubrantCounts, correlationMatrix, pearson, regionTierCrosstab, ladderShares } = await import("../src/analytics/aggregate.js");
+const { CUBRANT_ORDER } = await import("../src/cube.js");
+// nine small multiples: 20 bins of 5, counts sum to the assessed n, median inside the range
+const dh = dimHistograms(FAMOUS_FIGURES, 5);
+assert.equal(dh.length, DIMS.length);
+for (const h of dh) {
+  assert.equal(h.bins.length, 20);
+  assert.equal(h.bins.reduce((a, b) => a + b.count, 0), h.n, h.dim);
+  assert.ok(h.n === 0 || (h.median >= 0 && h.median <= 100), h.dim);
+}
+assert.equal(dimHistograms([{ breakdown: { care: 100 } }])[0].bins[19].count, 1, "100 lands in the last bin");
+// cubrants: every placed file in exactly one cell; pending counted apart
+const cc = cubrantCounts([...FAMOUS_FIGURES, { name: "P", warmth: 60, competence: 60, quadrant: "ADMIRED" }, {}]);
+assert.deepEqual(cc.rows.map(r => r.label), CUBRANT_ORDER);
+assert.equal(cc.rows.reduce((a, r) => a + r.count, 0) + cc.pending + cc.unplaced, cc.n);
+assert.equal(cc.pending, 1); assert.equal(cc.unplaced, 1);
+// correlations: 1 on the diagonal, symmetric, care-alignment strongly positive, care-threat negative
+const cm = correlationMatrix(FAMOUS_FIGURES);
+for (let i = 0; i < DIMS.length; i++) { assert.ok(Math.abs(cm.r[i][i] - 1) < 1e-9); for (let j = 0; j < DIMS.length; j++) assert.ok(Math.abs(cm.r[i][j] - cm.r[j][i]) < 1e-9); }
+assert.ok(cm.r[0][1] > 0.8, "care and alignment move together");
+assert.ok(cm.r[0][DIMS.indexOf("threat")] < -0.5, "care and threat move apart");
+assert.equal(pearson([1, 2], [1, 2]), null, "fewer than three points is no correlation");
+assert.ok(Math.abs(pearson([1, 2, 3, 4], [2, 4, 6, 8]) - 1) < 1e-9);
+// region × tier: rows sum to their n, columns to the totals, totals to n
+const xt = regionTierCrosstab(FAMOUS_FIGURES);
+assert.equal(xt.tiers.length, TIERS.length);
+for (const r of xt.rows) assert.equal(r.counts.reduce((a, b) => a + b, 0), r.n, r.region);
+assert.equal(xt.total.reduce((a, b) => a + b, 0), xt.n);
+assert.equal(xt.rows.reduce((a, r) => a + r.n, 0), xt.n);
+// ladder shares: ungated only, with the guidance band read from TIERS
+const ls = ladderShares([...FAMOUS_FIGURES, { name: "gated", score: 12 }]);
+assert.equal(ls.length, TIERS.length);
+assert.ok(Math.abs(ls.reduce((a, r) => a + r.share, 0) - 1) < 1e-9);
+assert.equal(ls.reduce((a, r) => a + r.count, 0), FAMOUS_FIGURES.filter(f => f.score >= 100).length, "the gated file is not counted");
+for (const r of ls) assert.ok(r.band === null || typeof r.inside === "boolean");
+console.log(`check-analytics: ok (+ the numbers: ${cc.rows.map(r => `${r.label.split(" ")[0]} ${r.count}`).join(", ")})`);

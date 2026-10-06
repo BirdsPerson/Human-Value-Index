@@ -1,16 +1,19 @@
-// Self-check for the score-change log (src/movement.js) and the roster-tuned tier cutoffs.
+// Self-check for the score-change log (src/movement.js) and the tier ladder (method v4).
 // Run: node scripts/check-movement.mjs
 //
 // A Department change (method / record / review) is shown on a file but is never a visit,
 // never capped, never an appeal. Every file's log is ordered with known causes. Every
-// figure carries its baseline plus the v3.1 method entry. The tier cutoffs are exactly the
-// percentile targets over the roster they were cut from (docs/calibration/roster.json), and
-// ESSENTIAL stays a small club: 3-12% of the ungated roster.
+// figure carries its baseline plus the v3.1 method entry; the 23 whose label changed under
+// the nine-rung ladder carry a v4 entry too, and the log ends at the label on file. The
+// ladder: cal.tiers IS cal.ladder.rungs, strictly decreasing, the anchors kept, the decent
+// ordinary persona reads PROVISIONAL CITIZEN or better, and ESSENTIAL stays a small club of
+// the reference roster (1.5-12%). The share bands themselves are checked on the live-like
+// fixture by scripts/check-scale.mjs.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import * as M from "../src/movement.js";
 import * as L from "./calibration-lib.mjs";
-import { FAMOUS_FIGURES } from "../src/figures.js";
+import { FAMOUS_FIGURES, getTier, TIERS } from "../src/figures.js";
 
 const read = p => fs.readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const cal = JSON.parse(read("netlify/lib/calibration.json"));
@@ -51,8 +54,9 @@ for (const c of ["visit", "appeal", "vouch", "method", "record", "review"]) asse
 const seeded = M.appendFigureHistory(null, { at: "2026-09-28", score: 700, tier: "T", cause: "method" }, { at: null, score: 690, tier: "T" });
 assert.deepEqual(seeded.map(h => h.cause), ["baseline", "method"], "an empty log is seeded with its baseline");
 
-// ---- every figure: baseline + the v3.1 method entry ---------------------------------------
+// ---- every figure: baseline + the v3.1 method entry; the label on file is the ladder's ----------
 assert.equal(FAMOUS_FIGURES.length, 62);
+let relabelled = 0;
 for (const f of FAMOUS_FIGURES) {
   const h = f.scoreHistory;
   assert.ok(Array.isArray(h) && h.length >= 2, `${f.name}: has a score log`);
@@ -61,21 +65,35 @@ for (const f of FAMOUS_FIGURES) {
   assert.ok(h.some(e => e.cause === "method" && e.method === "v3.1"), `${f.name}: carries the v3.1 method entry`);
   assert.equal(h.at(-1).score, f.score, `${f.name}: the log ends at the score on file`);
   assert.equal(h.at(-1).tier, f.tier, `${f.name}: and the tier`);
+  assert.equal(f.tier, getTier(f.score).label, `${f.name}: the label on file is what the ladder gives its score`);
+  const v4 = h.find(e => e.method === "v4");
+  if (v4) { relabelled++; assert.equal(v4.cause, "method"); assert.equal(v4.score, h[h.indexOf(v4) - 1].score, `${f.name}: the v4 relabel moved no score`); }
 }
+assert.ok(relabelled >= 20 && relabelled <= 30, `the nine-rung ladder relabelled about a third of the figures on file (${relabelled})`);
 
-// ---- tier cutoffs == percentile targets over the roster -----------------------------------
+// ---- the ladder: fixed cuts, anchors, order -----------------------------------------------------
+assert.equal(cal.method, "v4");
+assert.equal(cal.ladder.version, 2);
+assert.deepEqual(cal.tiers, L.ladderTiers(cal), "cal.tiers is the ladder's rungs (every reader loops over it)");
+assert.equal(cal.tiers.length, 9);
+for (let i = 1; i < cal.tiers.length; i++) assert.ok(cal.tiers[i].min < cal.tiers[i - 1].min, "cutoffs strictly decrease");
+assert.equal(cal.tiers.at(-1).min, 0);
+assert.ok(cal.tiers.at(-2).min > cal.harmGate.cap, "a gated file (<= the cap) is always the bottom rung");
+for (const [label, min] of L.TIER_ANCHORS) assert.equal(cal.tiers.find(t => t.label === label)?.min, min, `${label} anchored at ${min}`);
+for (const r of cal.ladder.rungs) assert.ok(Array.isArray(r.band) && r.band.length === 2 && r.band[0] >= 0 && r.band[1] <= 1 && r.band[0] < r.band[1], `${r.label}: a guidance band`);
+assert.deepEqual(cal.ladder.legacy.rungs.map(r => r.min), [787, 736, 600, 450, 300, 0], "the legacy ladder is method v3.3's, for the city's published days");
+assert.deepEqual(TIERS.map(t => t.label), cal.tiers.map(t => t.label));
+assert.equal(L.tierWith(cal, L.scoreWith(cal, L.PERSONAS["Decent ordinary"])), "PROVISIONAL CITIZEN", "decent ordinary persona lands PROVISIONAL CITIZEN (the 600 anchor, v4 cuts)");
+assert.ok(L.tierRank(L.tierWith(cal, L.scoreWith(cal, L.PERSONAS["Decent ordinary"])), cal) <= L.tierRank(L.ORDINARY_TIER, cal), "...and never below the ordinary anchor");
+// the reference roster: ESSENTIAL stays a small club
 const roster = JSON.parse(read("docs/calibration/roster.json"));
-assert.deepEqual(cal.tierTargets, Object.fromEntries(L.TIER_TARGETS), "targets recorded in calibration.json");
-assert.deepEqual(L.tierCutoffs(cal, roster), cal.tiers, "stored cutoffs are the percentile targets over the roster");
 const ungated = L.rosterScores(cal, roster);
 const essential = ungated.filter(s => L.tierWith(cal, s) === "ESSENTIAL INFRASTRUCTURE").length;
 const share = essential / ungated.length;
-assert.ok(share >= 0.03 && share <= 0.12, `ESSENTIAL is ${(share * 100).toFixed(1)}% of the roster (want 3-12%)`);
-for (let i = 1; i < cal.tiers.length; i++) assert.ok(cal.tiers[i].min < cal.tiers[i - 1].min, "cutoffs strictly decrease");
-// v3.2: the lower tiers are fixed anchors for ordinary people; only the top two follow the roster
-assert.deepEqual(cal.tierAnchors, Object.fromEntries(L.TIER_ANCHORS), "anchors recorded in calibration.json");
-for (const [label, min] of L.TIER_ANCHORS) assert.equal(cal.tiers.find(t => t.label === label).min, min, `${label} anchored at ${min}`);
-assert.ok(cal.tiers.find(t => t.label === "RETAINED SPECIALIST").min >= L.RETAINED_FLOOR, "RETAINED never below its floor");
-assert.equal(L.tierWith(cal, L.scoreWith(cal, L.PERSONAS["Decent ordinary"])), "TOLERATED GENERALIST", "decent ordinary persona lands TOLERATED");
+assert.ok(share >= 0.015 && share <= 0.12, `ESSENTIAL is ${(share * 100).toFixed(1)}% of the reference roster (want 1.5-12%)`);
+// the ladder's shares are measured, never chased: ladderShares reports inside/outside only
+const shares = L.ladderShares(cal, roster);
+assert.equal(shares.length, 9);
+assert.ok(Math.abs(shares.reduce((a, r) => a + r.share, 0) - 1) < 1e-3, "shares sum to one over the ungated roster (4-decimal shares)");
 
-console.log(`check-movement: ok (${FAMOUS_FIGURES.length} figure logs; ESSENTIAL ${essential}/${ungated.length} = ${(share * 100).toFixed(1)}%)`);
+console.log(`check-movement: ok (${FAMOUS_FIGURES.length} figure logs, ${relabelled} relabelled under v4; ESSENTIAL ${essential}/${ungated.length} = ${(share * 100).toFixed(1)}% of the reference roster)`);

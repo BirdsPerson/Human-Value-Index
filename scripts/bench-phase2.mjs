@@ -10,7 +10,7 @@ const DAY = +(process.env.DAY || 300);
 const sizes = process.argv.slice(2).map(Number).filter(Boolean);
 const homesCap = Object.values(SIM.PLACES).filter(p => p.kind === "home").reduce((n, p) => n + p.cap, 0);
 console.log(`homes capacity ${homesCap}; districts ${SIM.DISTRICTS.length}; lines in service ${SIM.linesOn().map(l => l.id).join(", ")}; NET ${SIM.NET}`);
-const bandOf = (s) => { const t = SIM.TIER_ORDER.indexOf(SIM.tierOf(s)); return t <= 0 ? 0 : t <= 2 ? 1 : 2; };
+const bandOf = (s) => { const t = SIM.classOf(s); return t <= 0 ? 0 : t <= 2 ? 1 : 2; };
 for (const N of sizes.length ? sizes : [725, 2000, 5000]) {
   const roster = synthRoster(N);
   SIM.clearPlans(); SIM.setMemoCap(1e8); SIM.setRoster(roster);

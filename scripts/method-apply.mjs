@@ -51,7 +51,7 @@ export async function applyToCards(prev, next, log, { dry = false } = {}) {
     const tier = L.tierWith(next, score);
     if (!log.always && score === card.score && tier === card.tier) continue;
     const upd = {
-      score, tier, warmth: q.warmth, competence: q.competence, quadrant: q.quadrant,
+      score, tier, warmth: q.warmth, competence: q.competence, scarcity: q.scarcity, quadrant: q.quadrant,
       scoreHistory: appendFigureHistory(card.scoreHistory, { at: log.at, score, tier, cause: log.cause, note: log.note, method: log.method },
         { at: card.at || null, score: card.score, tier: card.tier, note: "On file before the Department's revision.", method: log.fromMethod || null }).slice(-HIST_KEEP),
     };
@@ -83,7 +83,7 @@ export async function applyToCitizens(prev, next, log, { dry = false } = {}) {
       const q = L.cubeWith(next, b);
       const entry = {
         at: log.at, kind: "recalibration", cause: log.cause, note: log.note, method: log.method,
-        score, tier, delta: score - last.score, warmth: q.warmth, competence: q.competence, quadrant: q.quadrant,
+        score, tier, delta: score - last.score, warmth: q.warmth, competence: q.competence, scarcity: q.scarcity, quadrant: q.quadrant,
         breakdown: b, confidence: last.confidence ?? null, verdict: last.verdict, flags: last.flags || [], commendations: last.commendations || [],
         rubric: last.rubric, provisional: Boolean(last.provisional), provisionalNote: last.provisionalNote || null,
         ...(last.simulated ? { simulated: true } : {}), asked: [],
@@ -101,7 +101,7 @@ export async function applyToCitizens(prev, next, log, { dry = false } = {}) {
     out.push({ caseId: row.caseId, from: row.from, to: row.to, fromTier: row.fromTier, tier: row.tier });
     if (dry) continue;
     const penKey = `citizen:${key}`;
-    const upd = { score: row.to, tier: row.tier, warmth: row.q.warmth, competence: row.q.competence, quadrant: row.q.quadrant };
+    const upd = { score: row.to, tier: row.tier, warmth: row.q.warmth, competence: row.q.competence, scarcity: row.q.scarcity, quadrant: row.q.quadrant };
     await update(pen, penKey, c => ({ ...c, ...upd })).catch(() => null);
     await update(pen, "index", idx => ({ ...idx, cards: (idx.cards || []).map(c => (c.key === penKey ? { ...c, ...upd } : c)) })).catch(() => null);
   }

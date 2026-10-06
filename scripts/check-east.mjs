@@ -9,6 +9,7 @@ import { SUBURB_HOUSES, SUBURB_STARTERS } from "../src/city/eastSim.js";
 import { funnelButtons, FUNNEL_OF } from "../src/city/funnels.js";
 import { massingOf } from "../src/city/archGeo.js";
 import { TIERS } from "../src/figures.js";
+import { legacyTier } from "./synth-roster.mjs";
 
 let fails = 0, checks = 0;
 const ok = (c, msg) => { checks++; if (!c) { fails++; console.log("  FAIL", msg); } };
@@ -30,7 +31,7 @@ for (const id of homes("suburbs")) ok(Math.min(...parks.map(q => gap(P[id].rect,
 // family housing for tiers 1-3: houses for 1-2, starter homes for tier 3 alone
 {
   const seen = {};
-  for (let i = 0; i < 6000; i++) { const t = TIERS[i % TIERS.length].label, h = SIM.homeOf({ slug: `east-${i}`, tier: t }); if (homes("suburbs").includes(h)) (seen[h] ||= new Set()).add(SIM.TIER_ORDER.indexOf(t)); }
+  for (let i = 0; i < 6000; i++) { const sub = { slug: `east-${i}`, ...legacyTier(i) }, h = SIM.homeOf(sub); if (homes("suburbs").includes(h)) (seen[h] ||= new Set()).add(SIM.classOf(sub)); }
   ok(SUBURB_STARTERS.every(id => seen[id] && [...seen[id]].every(t => t === 3)), `the starter homes house tier 3 and nobody else (${SUBURB_STARTERS.map(id => `${id} ${[...(seen[id] || [])].join("")}`).join(", ")})`);
   ok(SUBURB_HOUSES.every(id => seen[id] && [...seen[id]].every(t => t === 1 || t === 2)), "the houses house tiers 1-2");
 }

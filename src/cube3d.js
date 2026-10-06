@@ -1,15 +1,16 @@
 import { displayName } from "./figures.js";
-// The octant cube as 3D geometry. Pure math, no DOM: the canvas component and
+// The cubrant cube as 3D geometry. Pure math, no DOM: the canvas component and
 // scripts/check-cube.mjs both use it.
 //
 // World space is a cube from -1 to 1 on every axis, 0..100 mapped to -1..1:
-//   x: WARMTH, the machine's read on conduct
-//   y: COMPETENCE, the machine's (up is positive)
-//   z: LIKABILITY, the people's regard (positive runs away from the viewer at yaw 0)
-// The three midplanes x=0, y=0, z=0 (the 50 lines) intersect at the centre, and the
-// three axes pass through it. Each subject is one point; its octant is the cell it sits in.
+//   x: CONDUCT, the machine's read on intent
+//   y: COMPETENCE, the machine's read on ability (up is positive)
+//   z: SCARCITY, how hard the unit is to replace (positive runs away from the viewer at yaw 0)
+// The three midplanes sit at the roster CENTRES (method v4; 62/70/57 today, not 50) and cross at
+// the centre point; the three axes pass through it. Each subject is one point; its cubrant is the
+// cell it sits in.
 import { cubeOf } from "./cubeData.js";
-import { OCTANT_ORDER, OCTANT_FAMILY } from "./cube.js";
+import { CENTRE, CUBRANT_ORDER, CUBRANT_SIGNS, CUBRANT_FAMILY } from "./cube.js";
 
 export const CAMERA = 6;          // distance from the centre; lower = stronger perspective. 6 keeps the near corner from ballooning
 export const PITCH_LIMIT = 1.1;   // radians, so the cube never flips over the top
@@ -18,6 +19,8 @@ export const AXIS_OVERSHOOT = 1.18;                 // the axes run a little pas
 
 const toUnit = v => (Math.max(0, Math.min(100, v)) / 100) * 2 - 1;
 export const worldPoint = (w, c, l) => [toUnit(w), toUnit(c), toUnit(l)];
+// The centre point in world space: where the midplanes cross.
+export const centreWorld = (centre = CENTRE) => worldPoint(centre.conduct, centre.competence, centre.scarcity);
 
 export const CORNERS = [
   [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
@@ -29,18 +32,23 @@ export const EDGES = [
   [0, 4], [1, 5], [2, 6], [3, 7],
 ];
 
-// The three axes through the centre, as [negative end, positive end]. Ends are labelled
+// The three axes through the centre point, as [negative end, positive end]. Ends are labelled
 // HIGH/LOW, not with arrows: an arrow glyph lies about direction once the cube turns.
-export const AXES = [
-  { id: "x", label: "CONDUCT", a: [-AXIS_OVERSHOOT, 0, 0], b: [AXIS_OVERSHOOT, 0, 0] },
-  { id: "y", label: "COMPETENCE", a: [0, -AXIS_OVERSHOOT, 0], b: [0, AXIS_OVERSHOOT, 0] },
-  { id: "z", label: "LIKABILITY", a: [0, 0, -AXIS_OVERSHOOT], b: [0, 0, AXIS_OVERSHOOT] },
-];
+export function axes(centre = CENTRE) {
+  const [cx, cy, cz] = centreWorld(centre);
+  return [
+    { id: "x", label: "CONDUCT", a: [-AXIS_OVERSHOOT, cy, cz], b: [AXIS_OVERSHOOT, cy, cz] },
+    { id: "y", label: "COMPETENCE", a: [cx, -AXIS_OVERSHOOT, cz], b: [cx, AXIS_OVERSHOOT, cz] },
+    { id: "z", label: "SCARCITY", a: [cx, cy, -AXIS_OVERSHOOT], b: [cx, cy, AXIS_OVERSHOOT] },
+  ];
+}
+export const AXES = axes();
 
-// A midplane as its outline (4 corners) plus a quarter grid (the 25 and 75 lines).
-// axis: which coordinate is held at 0.
-export function midplane(axis) {
-  const at = (u, v) => (axis === "x" ? [0, u, v] : axis === "y" ? [u, 0, v] : [u, v, 0]);
+// A midplane as its outline (4 corners) plus a grid at the 25 and 75 lines of the other two
+// axes. axis: which coordinate is held at the centre.
+export function midplane(axis, centre = CENTRE) {
+  const [cx, cy, cz] = centreWorld(centre);
+  const at = (u, v) => (axis === "x" ? [cx, u, v] : axis === "y" ? [u, cy, v] : [u, v, cz]);
   const outline = [at(-1, -1), at(1, -1), at(1, 1), at(-1, 1)];
   const grid = [];
   for (const t of [-0.5, 0.5]) {
@@ -49,13 +57,25 @@ export function midplane(axis) {
   }
   return { axis, outline, grid };
 }
-export const MIDPLANES = ["x", "y", "z"].map(midplane);
+export const MIDPLANES = ["x", "y", "z"].map(a => midplane(a));
 
-// Octant label anchors: the centre of each cell.
-export const OCTANT_ANCHORS = {
-  ADMIRED: [0.55, 0.55, 0.55], UNSUNG: [0.55, 0.55, -0.55], BELOVED: [0.55, -0.55, 0.55], OVERLOOKED: [0.55, -0.55, -0.55],
-  CHARMING: [-0.55, 0.55, 0.55], FEARED: [-0.55, 0.55, -0.55], INDULGED: [-0.55, -0.55, 0.55], DISMISSED: [-0.55, -0.55, -0.55],
-};
+// The eight cells as boxes: [min, max] corners in world space, from the centre point to the
+// cube's faces. Drawn faintly in their family colour behind the points.
+export function cells(centre = CENTRE) {
+  const c = centreWorld(centre);
+  return CUBRANT_ORDER.map(name => {
+    const s = CUBRANT_SIGNS[name];
+    const lo = [0, 1, 2].map(k => (s[k] === "+" ? c[k] : -1)), hi = [0, 1, 2].map(k => (s[k] === "+" ? 1 : c[k]));
+    const mid = [0, 1, 2].map(k => (lo[k] + hi[k]) / 2);
+    return { name, family: CUBRANT_FAMILY[name], lo, hi, mid, corners: boxCorners(lo, hi) };
+  });
+}
+function boxCorners(lo, hi) {
+  return CORNERS.map(([x, y, z]) => [x < 0 ? lo[0] : hi[0], y < 0 ? lo[1] : hi[1], z < 0 ? lo[2] : hi[2]]);
+}
+export const CELLS = cells();
+// Cubrant label anchors: the centre of each cell.
+export const CUBRANT_ANCHORS = Object.fromEntries(CELLS.map(c => [c.name, c.mid]));
 
 export function rotate([x, y, z], yaw, pitch) {
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
@@ -74,41 +94,32 @@ export function project(p, { yaw, pitch, scale, cx, cy }) {
 
 export const clampPitch = p => Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, p));
 
-// The foot of the perpendicular from a point to the plane x = z (where likability equals
-// conduct). The drop line from the point to its foot is the judges' gap made visible.
-export function footOnAgreement([x, y, z]) {
-  const m = (x + z) / 2;
-  return [m, y, m];
-}
-
-// A subject becomes one point. Unrated likability: placed on the z=0 midplane (50) and
-// drawn hollow, with only its 2D quadrant for an octant.
+// A subject becomes one point. A file without its third axis yet (CUBRANT PENDING) sits on the
+// scarcity midplane and draws hollow, with no cell.
 export function pointOf(subject) {
   const q = cubeOf(subject);
   if (!q || q.quadrant === "UNPLACED") return null;
-  const rated = !!q.people;
-  const l = rated ? q.people.likability : 50;
-  const p = worldPoint(q.warmth, q.competence, l);
-  const octant = q.octant || null;
+  const placed = typeof q.scarcity === "number";
+  const p = worldPoint(q.warmth, q.competence, placed ? q.scarcity : CENTRE.scarcity);
   return {
     name: displayName(subject) || "SUBJECT",
     // enough of the subject to draw its file photo in the tooltip
     photo: { name: subject.name, slug: subject.slug, score: subject.score, sprite: subject.sprite, avatar: subject.avatar, kind: subject.kind, you: subject.you },
     q,
     p,
-    rated,
-    octant,
-    family: octant ? OCTANT_FAMILY[octant] : "unrated",
-    foot: rated ? footOnAgreement(p) : null,
-    gap: rated ? q.people.gap : null,
+    placed,
+    cubrant: placed ? q.cubrant : null,
+    family: placed ? q.family : "pending",
+    rated: !!q.people,
+    gap: q.people ? q.people.gap : null,
     judge: q.judge,
   };
 }
 
-export const FILTERS = ["ALL", ...OCTANT_ORDER, "UNRATED"];
+export const FILTERS = ["ALL", ...CUBRANT_ORDER, "PENDING"];
 export function passes(pt, filter) {
   if (!pt) return false;
   if (!filter || filter === "ALL") return true;
-  if (filter === "UNRATED") return !pt.rated;
-  return pt.octant === filter;
+  if (filter === "PENDING") return !pt.placed;
+  return pt.cubrant === filter;
 }

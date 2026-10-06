@@ -19,16 +19,17 @@ export const STEP = 0.5, SAMPLES = 24 / STEP;             // summary samples: ev
 // src/fileDetail.js), plus the job the builder assigned (cj). The figures on file ship in
 // the bundle: their record is 0.
 const SIM_ONLY = new Set(["breakdown", "stratum", "places"]);
-export function recOf(s, onFile) {
+export function recOf(s, onFile, day) {
   if (onFile) return 0;
   const out = {};
   for (const [k, v] of Object.entries(s || {})) if (!SIM_ONLY.has(k) && v != null && v !== false) out[k] = v;
-  // defaults the readers restore themselves (tierOf, cubeOf, displayName)
-  if (out.tier != null) out.tier = SIM.tierOf(s);
+  // defaults the readers restore themselves (tierOf, cubeOf, displayName); the tier is the one
+  // the ladder in force on this day gives (SCALE_FROM)
+  if (out.tier != null) out.tier = SIM.tierOf(s, day);
   if (out.baseName === out.name) delete out.baseName;
   if (out.judge === "UNRATIFIED") delete out.judge;
   if (out.realityIndex === REALITY_INDEX) delete out.realityIndex;
-  const j = SIM.assignJob(s);
+  const j = SIM.assignJob(s, SIM.SEED, day);
   out.cj = [j.jobId, j.rank];
   return out;
 }
@@ -49,7 +50,7 @@ export function splitDay(plan, ver, people) {
   for (const [key, row] of Object.entries(plan.subjects)) {
     const s = people.get(key) || { slug: key, name: key };
     const onFile = isOnFile(s) && people.has(key);
-    const rec = recOf(s, onFile);
+    const rec = recOf(s, onFile, day);
     recs.set(key, rec);
     fam[familyOf(s).family] = (fam[familyOf(s).family] || 0) + 1;
     if (onFile) onFileRows[key] = row;
@@ -64,7 +65,7 @@ export function splitDay(plan, ver, people) {
     const name = rec ? displayName(rec) : displayName(s);
     find.subjects.push([key, name, s.baseName && s.baseName !== name ? s.baseName : 0, at.map(i => (i < 0 ? "-" : i.toString(36))).join(""), s.kind === "citizen" ? 1 : 0]);
   }
-  const summary = { ...base, kind: "summary", places, n: plan.n, roster: plan.roster, social: plan.social, step: STEP, samples: SAMPLES, fam, sectors: counts, onFile: onFileRows, ...occupancySamples(day, Object.keys(plan.subjects)) };
+  const summary = { ...base, kind: "summary", places, n: plan.n, roster: plan.roster, social: plan.social, step: STEP, samples: SAMPLES, fam, sectors: counts, onFile: onFileRows, ...(plan.scale ? { scale: plan.scale } : {}), ...occupancySamples(day, Object.keys(plan.subjects)) };
   return { windows, summary, find };
 }
 

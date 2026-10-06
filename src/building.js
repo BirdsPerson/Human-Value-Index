@@ -46,8 +46,11 @@ export function floorAt(y) {
 // get no floor of their own.
 const PREFS = {
   "ESSENTIAL INFRASTRUCTURE": [6, 3, 1, 0.5, 0, 0.05],
+  "PRIORITY ASSET": [5, 3.5, 1.2, 0.8, 0, 0.08],
   "RETAINED SPECIALIST": [4, 4, 1.5, 1, 0, 0.1],
+  "CERTIFIED CONTRIBUTOR": [2, 4, 1.8, 2.5, 0, 0.15],
   "TOLERATED GENERALIST": [0.8, 4, 2, 4, 0, 0.2],
+  "PROVISIONAL CITIZEN": [0.5, 3.5, 2, 4, 0, 0.3],
   "MONITORED CIVILIAN": [0.3, 3, 2, 4, 0, 0.5],
   "FLAGGED FOR DELETION": [0, 1.5, 0.5, 1, 0, 6],
   "SOYLENT GREEN": [0, 0.8, 0.3, 0.4, 0, 8],

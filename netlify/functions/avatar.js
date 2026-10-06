@@ -6,6 +6,7 @@ import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { descriptionError, extractSpec } from "../lib/avatar.js";
 import { sanitizeAvatar, outfitOf } from "../../src/avatar.js";
+import { housedUnderAt } from "../../src/city/sim.js";
 
 export const UPDATES_PER_CASE_DAILY = 5;
 export const UPDATES_PER_IP_DAILY = 20;
@@ -66,7 +67,9 @@ export default async (req, context) => {
     const last4 = caseId.slice(-4);
     await putPenCard(caseId, {
       slug: `citizen-${last4.toLowerCase()}`, name: `Subject ${last4}`,
-      score: last.score, tier: last.tier, quadrant: last.quadrant, warmth: last.warmth, competence: last.competence,
+      score: last.score, tier: last.tier, quadrant: last.quadrant, warmth: last.warmth, competence: last.competence, scarcity: last.scarcity ?? null,
+      // the housing ladder follows the latest ASSESSMENT, not this redraw (SCALE.md §4.3)
+      housedUnder: housedUnderAt(last.at),
       avatar, sprite: null, kind: "citizen", updated: new Date().toISOString(),
     });
     return json(200, { avatar, line: UPDATED_LINE });

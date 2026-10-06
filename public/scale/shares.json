@@ -1,0 +1,38 @@
+{
+ "note": "Share of the UNGATED file (score >= 100) on each rung at each weekly calibration run; scripts/calibrate.mjs appends a row. The first two rows are the same roster read under the retiring ladder (v3.3) and the new one (v4) on the day the ladder was cut.",
+ "runs": [
+  {
+   "date": "2026-10-06",
+   "method": "v3.3",
+   "ladder": 1,
+   "n": 778,
+   "total": 838,
+   "shares": {
+    "ESSENTIAL INFRASTRUCTURE": 0.0514,
+    "RETAINED SPECIALIST": 0.1478,
+    "TOLERATED GENERALIST": 0.6247,
+    "MONITORED CIVILIAN": 0.135,
+    "FLAGGED FOR DELETION": 0.0257,
+    "SOYLENT GREEN": 0.0154
+   }
+  },
+  {
+   "date": "2026-10-06",
+   "method": "v4",
+   "ladder": 2,
+   "n": 778,
+   "total": 838,
+   "shares": {
+    "ESSENTIAL INFRASTRUCTURE": 0.0308,
+    "PRIORITY ASSET": 0.0501,
+    "RETAINED SPECIALIST": 0.1234,
+    "CERTIFIED CONTRIBUTOR": 0.1697,
+    "TOLERATED GENERALIST": 0.2031,
+    "PROVISIONAL CITIZEN": 0.2468,
+    "MONITORED CIVILIAN": 0.135,
+    "FLAGGED FOR DELETION": 0.0257,
+    "SOYLENT GREEN": 0.0154
+   }
+  }
+ ]
+}

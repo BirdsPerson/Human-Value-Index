@@ -6,7 +6,7 @@
 // elevated train line on a clockwise rectangular ring through the gutters around the
 // middle row, one station per district. Every place is a room on a floor of a building.
 
-import { TIERS, getTier, slugify } from "../figures.js";
+import { TIERS, LEGACY_TIERS, getTier, slugify } from "../figures.js";
 import { FLOORS as HQ_FLOORS } from "../building.js";
 import { FUNNEL_PLACES, FUNNEL_BUILDINGS, FUNNEL_ARCH, FUNNEL_JOBS, FUNNEL_LEISURE_BAND, FUNNEL_LEISURE_FIELD, FUNNEL_FAMILY } from "./funnelSim.js";
 import { STORE_PLACES, STORE_BUILDINGS, STORE_ARCH, STORE_JOBS, STORE_LEISURE_BAND, STORE_LEISURE_FIELD, STORE_FAMILY, STORE_FIXTURES, UNIT_SET, SAMS_LOT, IRENES_LOT } from "./storefrontSim.js";   // THE MALL (enterprise.js)
@@ -27,6 +27,27 @@ export const SEED = "HVI-SUBSTRATE-01";
 // Day 1 of the Substrate. Machine days count from here.
 export const CITY_EPOCH = Date.UTC(2026, 8, 26, 0, 0, 0);
 export const DEFAULT_SCALE = 60;   // 1 real minute = 1 machine hour
+
+// ---- the ladder in force (method v4, docs/design/SCALE.md §4) -----------------------------
+// The tier ladder went from six rungs to nine on 2026-10-06. Published days are immutable, so
+// the city reads the LEGACY ladder for every machine day before SCALE_FROM, exactly as it always
+// did (a stored label if it is one of the six, else the v1 cuts), and the v2 ladder, always from
+// the score, from SCALE_FROM on. Chosen after the newest published plan + LOOKAHEAD + 1 when it
+// shipped (the EMERGE_FROM rule; scripts/check-scale.mjs). Never move it backwards.
+export const SCALE_FROM = 648;
+// The real moment SCALE_FROM begins (a machine day is 24 real minutes at DEFAULT_SCALE).
+export const SCALE_AT_MS = CITY_EPOCH + ((SCALE_FROM - 1) * 24 * 3600000) / DEFAULT_SCALE;
+// The builder pins the day it is building (netlify/lib/plans.js) so every module it calls reads
+// one ladder; a viewer reads the clock. HVI_LADDER_DAY pins a node check to one ladder.
+let LADDER_DAY = null;
+export function setLadderDay(day) { LADDER_DAY = typeof day === "number" ? day : null; }
+const ENV_LADDER_DAY = typeof process !== "undefined" && process.env?.HVI_LADDER_DAY ? Number(process.env.HVI_LADDER_DAY) : null;
+export const ladderDay = (day) => (typeof day === "number" ? day : LADDER_DAY ?? ENV_LADDER_DAY ?? machineClock().day);
+export const ladderOn = (day) => (ladderDay(day) >= SCALE_FROM ? 2 : 1);
+// Which ladder houses a citizen, from the time of their latest assessment (SCALE.md §4.3):
+// 1 before SCALE_FROM's real moment (they keep their flat), 2 from it. Written on the pen card
+// by intake-score and the avatar desk; MY APARTMENT derives the same from the case history.
+export const housedUnderAt = (iso) => { const t = Date.parse(iso || ""); return Number.isFinite(t) ? (t < SCALE_AT_MS ? 1 : 2) : undefined; };
 
 // ---- hashing ----------------------------------------------------------------------
 function fnv(str) {
@@ -722,22 +743,48 @@ export const LANES_JOB = Object.fromEntries(LANES_JOBS.map(a => { const j = J(..
 export const PLAZA_JOB = Object.fromEntries(PLAZA_JOBS.map(a => { const j = J(...a); JOB[j.id] = j; return [j.id, j]; }));
 
 // ---- subject reading --------------------------------------------------------------
-export const TIER_ORDER = TIERS.map(t => t.label);   // 0 = ESSENTIAL ... 5 = SOYLENT GREEN
-const LOW_TIERS = new Set(["FLAGGED FOR DELETION", "SOYLENT GREEN"]);
+export const TIER_ORDER = TIERS.map(t => t.label);                 // v2: 0 = ESSENTIAL ... 8 = SOYLENT GREEN
+export const LEGACY_TIER_ORDER = LEGACY_TIERS.map(t => t.label);   // v1: 0 = ESSENTIAL ... 5 = SOYLENT GREEN
+// The city was built on six housing CLASSES (0 = the glass tower ... 5 = the lowest grade);
+// HOUSING_TIERS, HOMES_BY_BAND, the job rungs and the leisure bands are all in class space.
+// Nine rungs sort into them: ESSENTIAL and PRIORITY ASSET share the top, RETAINED and
+// CERTIFIED the upper middle, TOLERATED and PROVISIONAL the lower middle (SCALE.md §4.2).
+export const CLASS_OF_RUNG = [0, 0, 1, 1, 2, 2, 3, 4, 5];
+const LOW_CLASS = 4;   // classes 4 and 5: FLAGGED FOR DELETION and SOYLENT GREEN
 
 export function keyOf(s) { return s?.slug || slugify(s?.baseName || s?.name || "unfiled"); }
-export function tierOf(s) {
+// The tier label under the ladder in force on `day` (the current machine day when omitted).
+export function tierOf(s, day) {
   const t = s?.tier;
   const label = typeof t === "string" ? t : t?.label;
+  if (ladderOn(day) === 1) {
+    // the legacy ladder, byte for byte what the published days were built with: a stored
+    // label (one of the six) beats the score
+    if (label && LEGACY_TIER_ORDER.includes(label)) return label;
+    return typeof s?.score === "number" ? getTier(s.score, LEGACY_TIERS).label : "MONITORED CIVILIAN";
+  }
+  // v2: the score is the truth; a label is read only when there is no score
+  if (typeof s?.score === "number") return getTier(s.score).label;
   if (label && TIER_ORDER.includes(label)) return label;
-  return typeof s?.score === "number" ? getTier(s.score).label : "MONITORED CIVILIAN";
+  if (label && LEGACY_TIER_ORDER.includes(label)) return TIER_ORDER[CLASS_OF_RUNG.indexOf(LEGACY_TIER_ORDER.indexOf(label))];
+  return "MONITORED CIVILIAN";
 }
-const tierIdx = (s) => TIER_ORDER.indexOf(tierOf(s));
+// The housing class (0..5) a subject's tier sorts into under the ladder in force on `day`.
+export function classOf(s, day) {
+  const label = tierOf(s, day);
+  if (ladderOn(day) === 1) return Math.max(0, LEGACY_TIER_ORDER.indexOf(label));
+  return CLASS_OF_RUNG[Math.max(0, TIER_ORDER.indexOf(label))];
+}
+// Players keep their flat (SCALE.md §4.3): a citizen whose latest assessment predates SCALE_FROM
+// (`housedUnder: 1`, set by the census and MY APARTMENT from the card's time) is housed by the
+// legacy ladder until they are assessed again. Jobs and leisure follow the ladder in force.
+const homeClass = (s, day) => (s?.kind === "citizen" && s?.housedUnder === 1 ? classOf(s, SCALE_FROM - 1) : classOf(s, day));
+const tierIdx = (s, day) => classOf(s, day);
 export const isDead = (s) => Boolean(s?.died);
 // Everyone is a ghost in the machine; the dead get no separate schedule. About one in
 // five subjects (living or dead) are night wanderers: late haunts, work rooms included.
 export const isOwl = (s, seed = SEED) => h01(`${seed}|owl|${keyOf(s)}`) < 0.2;
-export const isLowTier = (s) => LOW_TIERS.has(tierOf(s));
+export const isLowTier = (s, day) => classOf(s, day) >= LOW_CLASS;
 
 // Figures on file carry no qualifier; their fields are recorded here. A conviction on the
 // record is recorded as "crime", so Cell Block Labour follows the record, not the seed.
@@ -893,7 +940,8 @@ function printOf(s) {
   }
   return p;
 }
-const subjKey = (s, seed) => `${seed}|${keyOf(s)}|${tierOf(s)}|${s?.died ? "d" : "l"}|${printOf(s)}`;
+// The ladder in force is part of the key: the two ladders never share a cached answer.
+const subjKey = (s, seed, day) => `${seed}|${keyOf(s)}|L${ladderOn(day)}|${tierOf(s, day)}|${homeClass(s, day)}|${s?.died ? "d" : "l"}|${printOf(s)}`;
 
 // For subjects the record places (evidence >= 3); the rest are drafted (below).
 function scoreJob(job, fields, dims, key, seed, dead) {
@@ -935,16 +983,16 @@ function draft(pool, dims, dead, key, seed) {
 // job is scored from (breakdown, stratum, place tendencies: they stay on the server) and
 // carries the builder's own assignment instead: cj = [jobId, rank], from this function.
 const CJ = new WeakMap();
-export function assignJob(s, seed = SEED) {
+export function assignJob(s, seed = SEED, day) {
   if (seed === SEED && Array.isArray(s?.cj) && JOB[s.cj[0]]) {
     let j = CJ.get(s);
     if (!j) { const best = JOB[s.cj[0]], rank = s.cj[1] | 0; j = { jobId: best.id, rank, title: best.title, rankTitle: best.ladder[rank], place: best.place, district: best.district }; CJ.set(s, j); }
     return j;
   }
-  return remember("job|" + subjKey(s, seed), () => {
-    const key = keyOf(s), t = tierIdx(s), fields = fieldsOf(s), dims = topDims(s);
+  return remember("job|" + subjKey(s, seed, day), () => {
+    const key = keyOf(s), t = tierIdx(s, day), fields = fieldsOf(s), dims = topDims(s);
     const evidence = Math.max(0, ...Object.values(fields));
-    const low = LOW_TIERS.has(TIER_ORDER[t]);
+    const low = t >= LOW_CLASS;
     const pool = JOBS.filter(j => (low ? j.low : !j.low && (j.minTier == null || t <= j.minTier)));
     let best = pool[0], bestSc = -Infinity;
     if (evidence < 3) best = draft(low ? pool : pool.filter(j => j.fields.includes("*")), dims, isDead(s), key, seed);
@@ -956,7 +1004,7 @@ export function assignJob(s, seed = SEED) {
     return { jobId: best.id, rank, title: best.title, rankTitle: best.ladder[rank], place: best.place, district: best.district };
   });
 }
-export const jobOf = (s, seed = SEED) => assignJob(s, seed);
+export const jobOf = (s, seed = SEED, day) => assignJob(s, seed, day);
 
 // Home by tier (the building design pass): the top tier in the Meridian's glass tower, the
 // middle tiers in the brownstones (Hab C, D) and the Archive Lofts, the lower three in the
@@ -977,9 +1025,9 @@ export const HOMES_BY_BAND = [["penthouses", "surfside", "chalets", ...ENGINE_HO
 // listed here is offered only to these tiers; the band's other tiers draw over the rest of it.
 export const HOME_ONLY_TIERS = { ...Object.fromEntries(SUBURB_STARTERS.map(id => [id, [3]])), ...Object.fromEntries(FARM_HOMES[2].map(id => [id, [4, 5]])) };
 const bandHomes = (k, t) => HOMES_BY_BAND[k].filter(id => !HOME_ONLY_TIERS[id] || HOME_ONLY_TIERS[id].includes(t));
-const BAND_FOR = TIER_ORDER.map((_, t) => { const k = t === 0 ? 0 : t <= 2 ? 1 : 2, band = bandHomes(k, t); return { band, cap: band.reduce((n, id) => n + PLACES[id].cap, 0) }; });
-export function homeOf(s, seed = SEED) {
-  const t = Math.max(0, tierIdx(s));
+const BAND_FOR = LEGACY_TIER_ORDER.map((_, t) => { const k = t === 0 ? 0 : t <= 2 ? 1 : 2, band = bandHomes(k, t); return { band, cap: band.reduce((n, id) => n + PLACES[id].cap, 0) }; });   // by housing class 0..5
+export function homeOf(s, seed = SEED, day) {
+  const t = Math.max(0, homeClass(s, day));
   const { band, cap } = BAND_FOR[t];
   let r = h01(`${seed}|home|${keyOf(s)}`) * cap;
   for (const id of band) if ((r -= PLACES[id].cap) < 0) return id;
@@ -1350,7 +1398,7 @@ export function parcelOpen(placeId, day) {
 }
 // Pull on the lot by tier band (0 top, 1 middle, 2 low), times its base leisure weight.
 const LOT_PULL = { site: [0.2, 0.7, 1.6], golf: [3, 1, 0.3], farm: [0.5, 1.6, 1.6] };
-const bandOf = (s) => { const t = tierIdx(s); return t <= 1 ? 0 : t <= 3 ? 1 : 2; };
+const bandOf = (s, day) => { const t = tierIdx(s, day); return t <= 1 ? 0 : t <= 3 ? 1 : 2; };
 
 const SOCIAL = new Map();
 export function setSocialSnapshots(byDay) {
@@ -1389,7 +1437,7 @@ export function clearEnterprise() { if (ENT.size) { ENT.clear(); memo.clear(); }
 function workOf(s, day, seed) {
   const w = seed === SEED ? ENT.get(day)?.work?.get(keyOf(s)) : null;
   if (w) return w;
-  const job = JOB[assignJob(s, seed).jobId];
+  const job = JOB[assignJob(s, seed, day).jobId];
   // THE LANES (from LANES_DAY): some of the Strip's service staff and the Works' fabricators move upstairs
   if (day >= LANES_DAY && job) for (const st of LANES_STAFF) if (st.from.includes(job.id) && h01(`${seed}|lanes-staff|${keyOf(s)}`) < st.p) return LANES_JOB[st.job];
   // THE SHORE PLAZA (from PLAZA_DAY): Irene's brewery takes a head brewer, cellar hands and servers
@@ -1406,9 +1454,9 @@ export function baseLeisure(s, seed = SEED) { return leisureWeights(s, seed, nul
 function leisureWeights(s, seed, day = null) {
   const snap = day == null ? null : SOCIAL.get(day);
   const boost = snap?.boosts?.[keyOf(s)];
-  if (!boost) return baseLeisureWeights(s, seed);
-  return remember(`lwb|${subjKey(s, seed)}|${day}|${snap.ver}`, () => {
-    const { list } = baseLeisureWeights(s, seed);
+  if (!boost) return baseLeisureWeights(s, seed, day);
+  return remember(`lwb|${subjKey(s, seed, day)}|${day}|${snap.ver}`, () => {
+    const { list } = baseLeisureWeights(s, seed, day);
     const owl = isOwl(s, seed);
     const top = list.reduce((m, [, v]) => Math.max(m, v), 0) || 1;
     const w = new Map(list);
@@ -1423,9 +1471,9 @@ function leisureWeights(s, seed, day = null) {
   });
 }
 
-function baseLeisureWeights(s, seed) {
-  return remember("lw|" + subjKey(s, seed), () => {
-    const owl = isOwl(s, seed), t = tierIdx(s);
+function baseLeisureWeights(s, seed, day) {
+  return remember("lw|" + subjKey(s, seed, day), () => {
+    const owl = isOwl(s, seed), t = tierIdx(s, day);
     const w = {};
     const add = (id, v) => { const p = PLACES[id]; if (!p || p.kind === "home") return; if (p.kind === "work" && !owl) return; w[id] = (w[id] || 0) + v; };
     const band = t <= 1 ? 0 : t <= 3 ? 1 : 2;
@@ -1447,9 +1495,9 @@ function baseLeisureWeights(s, seed) {
 export const NIGHT_I = 7;
 const NIGHT_EARLY = 0.3;   // a train caught early lands this much before the stop's hour: still open then
 const NIGHT_OUT_SKIP = new Set(["liquor-24", "cut-rate", "the-coop", "the-cut", "hinoki"]);   // a night out is not an errand or a dinner
-export function ropeOf(s, day, seed = SEED) { return ropeCheck(bandOf(s), h01(`${seed}|rope|${keyOf(s)}|${day}`)); }
+export function ropeOf(s, day, seed = SEED) { return ropeCheck(bandOf(s, day), h01(`${seed}|rope|${keyOf(s)}|${day}`)); }
 function pickNight(s, day, seed, hour) {
-  const band = bandOf(s), f = fieldsOf(s), rope = ropeOf(s, day, seed);
+  const band = bandOf(s, day), f = fieldsOf(s), rope = ropeOf(s, day, seed);
   const list = [];
   for (const [id, v] of Object.entries(LEISURE_BY_BAND[band])) {
     if (!NIGHT_SET.has(id) || NIGHT_OUT_SKIP.has(id) || !nightOpenAt(id, hour) || !nightOpenAt(id, hour - NIGHT_EARLY)) continue;
@@ -1521,16 +1569,16 @@ function pickLeisure(s, day, i, seed, avoid, hour = null) {
   // THE COMMUNITY FARM: closed until its site opens, then the site's pull, then the farm's
   if (list.some(([id]) => id === "community-farm")) {
     const o = farmParcelOpenOn(day);
-    list = o ? list.map(([id, v]) => [id, id === "community-farm" ? v * LOT_PULL[o][bandOf(s)] : v]) : list.filter(([id]) => id !== "community-farm");
+    list = o ? list.map(([id, v]) => [id, id === "community-farm" ? v * LOT_PULL[o][bandOf(s, day)] : v]) : list.filter(([id]) => id !== "community-farm");
   }
-  if (list.some(([id]) => id === "dev-lot") && (!lot || LOT_PULL[lot][bandOf(s)] !== 1)) {
-    list = lot ? list.map(([id, v]) => [id, id === "dev-lot" ? v * LOT_PULL[lot][bandOf(s)] : v]) : list.filter(([id]) => id !== "dev-lot");
+  if (list.some(([id]) => id === "dev-lot") && (!lot || LOT_PULL[lot][bandOf(s, day)] !== 1)) {
+    list = lot ? list.map(([id, v]) => [id, id === "dev-lot" ? v * LOT_PULL[lot][bandOf(s, day)] : v]) : list.filter(([id]) => id !== "dev-lot");
     total = list.reduce((a, [, v]) => a + v, 0);
   }
   // The resort parcels (THE ASSEMBLY, session 002) take nobody until something is being built on
   // them; then the crew, then whoever the winning bid draws.
   if (list.some(([id]) => RESORT_PARCELS.has(id))) {
-    list = list.flatMap(([id, v]) => { if (!RESORT_PARCELS.has(id)) return [[id, v]]; const o = resortOpenOn(id, day); return o ? [[id, v * RESORT_PULL[o][bandOf(s)]]] : []; });
+    list = list.flatMap(([id, v]) => { if (!RESORT_PARCELS.has(id)) return [[id, v]]; const o = resortOpenOn(id, day); return o ? [[id, v * RESORT_PULL[o][bandOf(s, day)]]] : []; });
     total = list.reduce((a, [, v]) => a + v, 0);
   }
   // THE MALL: the businesses trading that day draw their customers (enterprise.js shopsFor)
@@ -1539,7 +1587,7 @@ function pickLeisure(s, day, i, seed, avoid, hour = null) {
   // THE LANES (from LANES_DAY): open noon to two; league nights pull harder
   if (day >= LANES_DAY && lanesHours(hour)) {
     const f = fieldsOf(s);
-    let v = LANES_PULL.band[bandOf(s)] + ((f.sport || 0) * LANES_PULL.sport + (f.hospitality || 0) * LANES_PULL.hospitality) / 10;
+    let v = LANES_PULL.band[bandOf(s, day)] + ((f.sport || 0) * LANES_PULL.sport + (f.hospitality || 0) * LANES_PULL.hospitality) / 10;
     if (hour != null && hour >= 19 && LEAGUE_DAYS.includes(weekdayOf(day))) v *= LANES_PULL.league;
     v *= Math.sqrt(PLACES[LANES_PLACE[0]].cap);
     list = [...list, [LANES_PLACE[0], v]]; total += v;
@@ -1599,7 +1647,7 @@ placedOn(PLAZA_DAY);
 export const OVERFLOW = overflowNow();
 const overflowOn = (day) => (plazaOn(day) ? OVERFLOW : OVERFLOW_PRE_PLAZA);
 
-let ROSTER_KEYS = null, ROSTER_ORDER = [], ROSTER_VER = "-";
+let ROSTER_KEYS = null, ROSTER_ORDER = [], ROSTER_VER = "-", ROSTER_VER2 = "-";
 export function setRoster(list) {
   const people = (list || []).filter(Boolean);
   const onFile = (s) => s.kind !== "citizen" && !s.referred && !s.engine;
@@ -1608,19 +1656,22 @@ export function setRoster(list) {
   for (const s of [...people.filter(onFile).sort(byHash), ...people.filter(s => !onFile(s)).sort(byHash)]) {
     const k = keyOf(s); if (seen.has(k)) continue; seen.add(k); order.push(s);
   }
-  const ver = String(fnv(order.map(s => `${keyOf(s)}:${tierOf(s)}:${printOf(s)}`).join(",")));
-  if (ver === ROSTER_VER) return false;
-  ROSTER_ORDER = order; ROSTER_KEYS = seen; ROSTER_VER = ver;
+  // ROSTER_VER is the legacy-ladder hash the published days carry (`plan.roster`), byte for byte;
+  // ROSTER_VER2 adds the v2 label, so a score move inside a legacy rung still invalidates the memo.
+  const ver = String(fnv(order.map(s => `${keyOf(s)}:${tierOf(s, SCALE_FROM - 1)}:${printOf(s)}`).join(",")));
+  const ver2 = String(fnv(order.map(s => `${keyOf(s)}:${tierOf(s, SCALE_FROM - 1)}:${tierOf(s, SCALE_FROM)}:${s?.housedUnder || 0}:${printOf(s)}`).join(",")));
+  if (ver2 === ROSTER_VER2) return false;
+  ROSTER_ORDER = order; ROSTER_KEYS = seen; ROSTER_VER = ver; ROSTER_VER2 = ver2;
   memo.clear();
   return true;
 }
-export function clearRoster() { if (ROSTER_KEYS) { ROSTER_KEYS = null; ROSTER_ORDER = []; ROSTER_VER = "-"; memo.clear(); } }
-export const rosterVersion = () => ROSTER_VER;
+export function clearRoster() { if (ROSTER_KEYS) { ROSTER_KEYS = null; ROSTER_ORDER = []; ROSTER_VER = "-"; ROSTER_VER2 = "-"; memo.clear(); } }
+export const rosterVersion = (day) => (ladderOn(day) === 2 ? ROSTER_VER2 : ROSTER_VER);
 
 const HB = 0.5, NB = 60;   // half-hour buckets across 0-30h of a planned day
 const bucket = (h) => Math.max(0, Math.min(NB, Math.round(h / HB)));
 function allocFor(day, seed) {
-  return remember(`alloc|${ROSTER_VER}|${seed}|${day}|${socialVer(day)}`, () => {
+  return remember(`alloc|${ROSTER_VER2}|${seed}|${day}|${socialVer(day)}`, () => {
     const load = new Map(), moved = new Map();
     const L = (p) => { let a = load.get(p); if (!a) { a = new Uint16Array(NB + 1); load.set(p, a); } return a; };
     const fits = (p, a, b) => { const x = L(p), cap = PLACES[p].cap; for (let k = a; k < b; k++) if (x[k] + 1 > cap) return false; return true; };
@@ -1642,7 +1693,7 @@ function allocFor(day, seed) {
             let p = st.placeId;
             if (!fits(p, a, b)) {
               // (a club is no overflow at noon; the rope and the mezzanine are not an overflow for whoever the door turns away)
-              const chain = (overflowOn(day)[p] || []).filter(q => parcelOpen(q, day) && nightOpenThrough(q, st.from - NIGHT_EARLY, st.to) && (!ROPE_PLACES.has(q) || (q === "aurum-vip" ? bandOf(s) === 0 : ropeOf(s, day, seed) !== "REFUSED")));
+              const chain = (overflowOn(day)[p] || []).filter(q => parcelOpen(q, day) && nightOpenThrough(q, st.from - NIGHT_EARLY, st.to) && (!ROPE_PLACES.has(q) || (q === "aurum-vip" ? bandOf(s, day) === 0 : ropeOf(s, day, seed) !== "REFUSED")));
               p = chain.find(q => fits(q, a, b)) || [p, ...chain].reduce((best, q) => (peakOf(q, a, b) < peakOf(best, a, b) ? q : best), p);
               if (p !== st.placeId) moved.set(`${key}|${st.i}`, p);
             }
@@ -2475,11 +2526,11 @@ function shiftOf(s, job, seed) {
 // pick(i, avoid, hour) chooses the i-th leisure place for a visit starting about then;
 // capacity allocation overrides it.
 function planStops(s, day, seed, pick) {
-  const key = keyOf(s), job = workOf(s, day, seed), home = homeOf(s, seed), owl = isOwl(s, seed);
+  const key = keyOf(s), job = workOf(s, day, seed), home = homeOf(s, seed, day), owl = isOwl(s, seed);
   const r = rng(`${seed}|day|${key}|${day}`);
   const me = h01(`${seed}|me|${key}`);   // personal rhythm: early birds and late risers
   const stops = [];
-  const low = isLowTier(s);
+  const low = isLowTier(s, day);
   const restDay = !low && ((day % 7) + 7) % 7 === fnv(`${seed}|rest|${key}`) % 7;
   if (restDay) {
     const a = 11 + me * 2 + r() * 1.2;
@@ -2578,18 +2629,18 @@ export function schedule(s, day, seed = SEED) {
     if (row) return remember(`psch|${plan.ver}|${key}`, () => planSegs(plan.places, row, 1, 0));
     const part = plan.parts.get(key);
     if (part) return part.segs;
-    if (s?.cj) return homeDay(s, seed);
-    return remember(`rsch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}`, () => simSchedule(s, day, seed, true));
+    if (s?.cj) return homeDay(s, seed, day);
+    return remember(`rsch|${subjKey(s, seed, day)}|${day}|${socialVer(day)}|${socialVer(day - 1)}`, () => simSchedule(s, day, seed, true));
   }
   // A subject read from a published plan is never simulated here (its record lacks the
   // sim's inputs): outside the hours this browser holds it is at home. The census only
   // reads it where covers() says the plan holds it.
-  if (s?.cj && seed === SEED) return homeDay(s, seed);
-  return remember(`sch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}|${ROSTER_VER}`, () => simSchedule(s, day, seed, false));
+  if (s?.cj && seed === SEED) return homeDay(s, seed, day);
+  return remember(`sch|${subjKey(s, seed, day)}|${day}|${socialVer(day)}|${socialVer(day - 1)}|${ROSTER_VER2}`, () => simSchedule(s, day, seed, false));
 }
-const homeDay = (s, seed) => [{ from: 0, to: 24, placeId: homeOf(s, seed), activity: "home" }];
+const homeDay = (s, seed, day) => [{ from: 0, to: 24, placeId: homeOf(s, seed, day), activity: "home" }];
 function simSchedule(s, day, seed, raw) {
-  const home = homeOf(s, seed);
+  const home = homeOf(s, seed, day);
   const raws = [
     ...planDay(s, day - 1, seed, raw).map(g => ({ ...g, from: g.from - 24, to: g.to - 24 })),
     ...planDay(s, day, seed, raw),
@@ -2692,17 +2743,30 @@ function planSegs(P, row, i0, t0) {
 
 // The builder's side: this roster's (setRoster) schedules for `day` in format 1, from the
 // sim itself (a plan already loaded for the day is not read). -> {format, day, ..., subjects}
+// How many of the roster change homes between two days' ladders (the because-line on day
+// SCALE_FROM: "N CITIZENS HAVE BEEN REHOUSED"). Zero unless the ladder changes between them.
+export function rehousedBetween(dayA, dayB, seed = SEED) {
+  if (ladderOn(dayA) === ladderOn(dayB)) return 0;
+  let n = 0;
+  for (const s of ROSTER_ORDER) if (homeOf(s, seed, dayA) !== homeOf(s, seed, dayB)) n++;
+  return n;
+}
 export function buildPlan(day, seed = SEED) {
+  // The day being built pins the ladder for every call made while building it (SCALE_FROM).
+  const pinned = LADDER_DAY; LADDER_DAY = day;
+  try { return buildPlanPinned(day, seed); } finally { LADDER_DAY = pinned; }
+}
+function buildPlanPinned(day, seed) {
   const places = PLACE_LIST.filter(p => !p.from || day >= p.from).map(p => p.id), idx = Object.fromEntries(places.map((id, i) => [id, i]));
   const subjects = {};
   for (const s of ROSTER_ORDER) {
     const key = keyOf(s);
-    const segs = remember(`sch|${subjKey(s, seed)}|${day}|${socialVer(day)}|${socialVer(day - 1)}|${ROSTER_VER}`, () => simSchedule(s, day, seed, false));
-    const row = [idx[homeOf(s, seed)]];
+    const segs = remember(`sch|${subjKey(s, seed, day)}|${day}|${socialVer(day)}|${socialVer(day - 1)}|${ROSTER_VER2}`, () => simSchedule(s, day, seed, false));
+    const row = [idx[homeOf(s, seed, day)]];
     let t = 0;
     for (const g of segs) {
       if (g.activity === "home") {
-        if (g.from !== t || g.placeId !== homeOf(s, seed)) throw new Error(`plan ${day}: ${key} home segment out of order`);
+        if (g.from !== t || g.placeId !== homeOf(s, seed, day)) throw new Error(`plan ${day}: ${key} home segment out of order`);
         row.push([g.to]); t = g.to; continue;
       }
       let fl = 0;
@@ -2722,7 +2786,7 @@ export function buildPlan(day, seed = SEED) {
     }
     subjects[key] = row;
   }
-  return { format: PLAN_FORMAT, day, seed, layout: layoutOn(day), roster: ROSTER_VER, social: { [day]: socialVer(day), [day - 1]: socialVer(day - 1) }, n: ROSTER_ORDER.length, places, subjects };
+  return { format: PLAN_FORMAT, day, seed, layout: layoutOn(day), roster: rosterVersion(day), social: { [day]: socialVer(day), [day - 1]: socialVer(day - 1) }, n: ROSTER_ORDER.length, places, subjects };
 }
 
 // ---- sector windows (scaling step 4: netlify/lib/plans.js, src/city/sectors.js) --------------

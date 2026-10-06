@@ -5,6 +5,7 @@
 // deterministically, where whereAt says they are (residents asleep in bed at night).
 import { BUILDINGS, PLACES, whereAt, homeOf, floorOf, keyOf, isOwl } from "../src/city/sim.js";
 import { FAMOUS_FIGURES, slugify, TIERS } from "../src/figures.js";
+import { legacyTier } from "./synth-roster.mjs";
 import { massingOf } from "../src/city/archGeo.js";
 import { roomIn } from "../src/city/simApi.js";
 import { CATALOG, dressUnit, lookSig, TAG_PROPS } from "../src/city/furniture.js";
@@ -66,7 +67,7 @@ for (const [bid, list] of Object.entries(GOLD)) for (const id of list) ok(ids.ha
 
 // 3. People: a production-shaped roster through whereAt at six hours.
 const pop = FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name) }))
-  .concat(Array.from({ length: 1200 }, (_, i) => ({ slug: `citizen-${i}`, name: `Citizen ${i}`, tier: TIERS[(i * 7) % TIERS.length].label, score: 500, kind: "citizen" })));
+  .concat(Array.from({ length: 1200 }, (_, i) => ({ slug: `citizen-${i}`, name: `Citizen ${i}`, ...legacyTier(i * 7), kind: "citizen" })));
 let placed = 0, asleep = 0, nights = 0, homeNow = 0, inOwnFlat = 0, atWork = 0, inOffice = 0;
 for (const hour of [3, 8, 12.5, 15, 19, 23.5]) {
   const mt = 24 * 5 + hour;

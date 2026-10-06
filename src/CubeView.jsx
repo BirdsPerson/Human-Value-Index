@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { Frame, Chip, ChipStrip, TextField, Disclosure, ListRow, ScreenHead } from "./ui";
 import Cube3D from "./Cube3D.jsx";
-import { OctantLegend } from "./CubePanel.jsx";
+import { CubrantLegend } from "./CubePanel.jsx";
 import { pointOf, FILTERS, passes } from "./cube3d.js";
-import { OCTANT_ORDER, OCTANT_FAMILY, OCTANT_LINES } from "./cube.js";
+import { CUBRANT_ORDER, CUBRANT_FAMILY, CUBRANT_LINES, CENTRE } from "./cube.js";
 import { FAMOUS_FIGURES, slugify } from "./figures.js";
 import { withCrowd } from "./petition.js";
 import { loadCrowd } from "./petitionClient.js";
 import { readLastResult } from "./caseFile.jsx";
 import { fetchPen } from "./penClient.js";
 
-// THE CUBE: every file on record as one point in conduct × competence × likability.
-// Three midplanes at 50 cut the cube into eight octants. Figures from the roster,
-// referrals from /api/pen, and the viewer's own file when this browser holds one.
+// THE CUBE: every file on record as one point in conduct × competence × scarcity, the
+// machine's three axes. Three planes at the roster's centres cut the cube into eight cubrants.
+// Figures from the roster, referrals from /api/pen, and the viewer's own file when this browser
+// holds one. The People's judge (likability) is a verdict on the placement, printed on the file.
 const CUBE_CSS = `
   .hvi-cube-intro { color: var(--fg-dim); font-size: var(--t-s); margin: 0 0 var(--s2); max-width: 72ch; }
   .hvi-cube-intro b { color: var(--fg); font-weight: 500; }
@@ -23,6 +24,7 @@ const CUBE_CSS = `
   .hvi-cube-line-note { color: var(--fg-mute); }
   .hvi-cubeview .ui-disc { margin-bottom: var(--s5); }
   .hvi-cubeview .ui-row .tag { color: inherit; }
+  .hvi-cube-centre { color: var(--fg-mute); font-size: var(--t-xs); }
 `;
 function injectCubeStyles() {
   let el = document.getElementById("hvi-cube-styles");
@@ -70,21 +72,21 @@ export default function CubeView() {
   const match = q ? all.find(g => g.name.toLowerCase().includes(q)) : null;
   const highlight = match ? match.name : picked;
   const count = f => all.filter(g => passes(g, f)).length;
-  const rated = all.filter(g => g.rated).length;
-  const ordered = [...shown].sort((a, b) => (OCTANT_ORDER.indexOf(a.octant) + 99 * !a.rated) - (OCTANT_ORDER.indexOf(b.octant) + 99 * !b.rated) || a.name.localeCompare(b.name));
-  const fam = f => (f === "UNRATED" ? "mute" : FAMILY_TONE[OCTANT_FAMILY[f]]);
+  const placed = all.filter(g => g.placed).length;
+  const ordered = [...shown].sort((a, b) => (CUBRANT_ORDER.indexOf(a.cubrant) + 99 * !a.placed) - (CUBRANT_ORDER.indexOf(b.cubrant) + 99 * !b.placed) || a.name.localeCompare(b.name));
+  const fam = f => (f === "PENDING" ? "mute" : FAMILY_TONE[CUBRANT_FAMILY[f]]);
 
   return (
     <div className="hvi-cubeview">
-      <ScreenHead title="THE CUBE" meta={`MACHINE VS PEOPLE // ${all.length} FILES // ${rated} PLACED`} />
+      <ScreenHead title="THE CUBE" meta={`THREE AXES, EIGHT CUBRANTS // ${all.length} FILES // ${placed} PLACED`} />
       <p className="hvi-cube-intro">
-        Three axes through one centre: <b>conduct</b> and <b>competence</b> (the machine), <b>likability</b> (the people).
-        The planes at 50 cut the cube into eight octants. Hollow points: the people have not been asked.
+        Three axes through one centre, all the machine's: <b>conduct</b>, <b>competence</b> and <b>scarcity</b> (how hard you are to replace).
+        The planes sit at the file's middle ({CENTRE.conduct} · {CENTRE.competence} · {CENTRE.scarcity}) and cut the cube into eight cubrants. Hollow points: the third axis is not yet on file.
       </p>
-      <ChipStrip label="Filter by octant">
+      <ChipStrip label="Filter by cubrant">
         {FILTERS.map(f => (
           <Chip key={f} tone={fam(f)} pressed={filter === f} onClick={() => setFilter(f)}>
-            {f}{f === "ALL" ? "" : <span className="n">{"\u00a0"}{count(f)}</span>}
+            {f}{f === "ALL" ? "" : <span className="n">{" "}{count(f)}</span>}
           </Chip>
         ))}
       </ChipStrip>
@@ -96,24 +98,24 @@ export default function CubeView() {
       <Frame box title="THE CUBE" meta={`${shown.length} OF ${all.length} FILES`} bodyClass="hvi-cube-display">
         <Cube3D points={shown} highlight={highlight} height={640}
           onHover={g => setPicked(g ? g.name : null)}
-          label={`Octant cube with ${shown.length} files. ${OCTANT_ORDER.map(o => `${o} ${count(o)}`).join(", ")}; ${count("UNRATED")} unrated. Use the list below for details.`} />
-        <OctantLegend />
+          label={`Cubrant cube with ${shown.length} files. ${CUBRANT_ORDER.map(o => `${o} ${count(o)}`).join(", ")}; ${count("PENDING")} pending. Use the list below for details.`} />
+        <CubrantLegend />
         <div className="hvi-cube-foot">
-          {rated} PLACED IN AN OCTANT · {all.length - rated} NOT YET ASKED OF THE PEOPLE
+          {placed} PLACED IN A CUBRANT · {all.length - placed} PENDING THE THIRD AXIS · CENTRES {CENTRE.conduct} / {CENTRE.competence} / {CENTRE.scarcity} (THE FILE'S MEDIANS, METHOD V4)
         </div>
       </Frame>
 
       <Disclosure title="LIST VIEW" meta={`${shown.length} FILES`}>
         <div role="list" aria-label="Files in the cube">
           {ordered.map(g => {
-            const tone = g.rated ? FAMILY_TONE[g.family] || "mute" : "mute";
+            const tone = g.placed ? FAMILY_TONE[g.family] || "mute" : "mute";
             return (
               <div role="listitem" key={g.name}>
-                <ListRow label={g.name} tag={g.rated ? g.octant : "UNRATED"} tone={tone}
+                <ListRow label={g.name} tag={g.placed ? g.cubrant : "PENDING"} tone={tone}
                   expanded={picked === g.name} onExpand={open => setPicked(open ? g.name : null)}>
-                  CONDUCT {g.q.warmth} · COMPETENCE {g.q.competence} · LIKABILITY {g.rated ? g.q.people.likability : "UNRATED"}
-                  <br />{g.rated ? `${g.octant} · GAP ${g.gap > 0 ? "+" : ""}${g.gap} · ${g.judge}` : `${g.q.quadrant} (LIKABILITY UNRATED)`}
-                  {g.rated && OCTANT_LINES[g.octant] ? <><br /><span className="hvi-cube-line-note">{OCTANT_LINES[g.octant]}</span></> : null}
+                  CONDUCT {g.q.warmth} · COMPETENCE {g.q.competence} · SCARCITY {g.placed ? g.q.scarcity : "PENDING"}
+                  <br />{g.placed ? `${g.cubrant}${g.rated ? ` · ${g.judge} · GAP ${g.gap > 0 ? "+" : ""}${g.gap}` : ` · ${g.judge}`}` : "CUBRANT PENDING: THE THIRD AXIS IS READ AT THE NEXT ASSESSMENT."}
+                  {g.placed && CUBRANT_LINES[g.cubrant] ? <><br /><span className="hvi-cube-line-note">{CUBRANT_LINES[g.cubrant]}</span></> : null}
                 </ListRow>
               </div>
             );

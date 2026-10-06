@@ -2,6 +2,7 @@
 //   node scripts/check-cityview.mjs
 import { PLACES, BUILDINGS, JOBS, whereAt } from "../src/city/sim.js";
 import { FAMOUS_FIGURES, slugify, TIERS } from "../src/figures.js";
+import { legacyTier } from "./synth-roster.mjs";
 import { poseOf, fitStature } from "../src/city/poses.js";
 import { rot, unrot, project, unproject, screenToMap, depthOrder, slotFor, lodFor, LOD_MID, LOD_NEAR, mod4 } from "../src/city/iso.js";
 import { ROOM_TYPE, DRAWN_TYPES, PLANNED_TYPES, PROP, anchorsFor, roomPlan, typeOf, assignAnchors, roleOf, actAt, isNight, LEISURE_ACTS } from "../src/city/props.js";
@@ -155,7 +156,7 @@ for (const b of BUILDINGS) if (b.id !== "hq" && b.id !== "the-surfside") for (co
 //    as the room has stations), visitors in seats, residents in bunks at night.
 {
   const pop = FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name) }))
-    .concat([...Array(160)].map((_, i) => ({ slug: `citizen-${i}`, name: `Citizen ${i}`, tier: TIERS[(i * 7) % TIERS.length].label, score: 500, warmth: (i * 37) % 100, competence: (i * 53) % 100, kind: "citizen" })));
+    .concat([...Array(160)].map((_, i) => ({ slug: `citizen-${i}`, name: `Citizen ${i}`, ...legacyTier(i * 7), warmth: (i * 37) % 100, competence: (i * 53) % 100, kind: "citizen" })));
   let placed = 0, staffAtStation = 0, staffTotal = 0, restNight = 0, restInBed = 0, seatedVisitors = 0, visitors = 0;
   for (const hour of [3, 10, 15, 21]) {
     const mt = 24 * 3 + hour + 0.25;
@@ -636,11 +637,11 @@ for (const b of BUILDINGS) if (b.id !== "hq" && b.id !== "the-surfside") for (co
   }
   // housing follows tier: everyone's home is in a housing style whose band holds their tier
   const pop = [...FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name) })),
-    ...Array.from({ length: 2400 }, (_, i) => ({ slug: `h-${i}`, name: `H ${i}`, tier: TIERS[i % TIERS.length].label, died: i % 3 === 0 ? "1900-01-01" : null }))];
+    ...Array.from({ length: 2400 }, (_, i) => ({ slug: `h-${i}`, name: `H ${i}`, ...legacyTier(i), died: i % 3 === 0 ? "1900-01-01" : null }))];
   let bad = "";
   const seen = {};
   for (const s of pop) {
-    const home = SIM.homeOf(s), b = SIM.BUILDING[SIM.PLACES[home].building], t = SIM.TIER_ORDER.indexOf(SIM.tierOf(s));
+    const home = SIM.homeOf(s), b = SIM.BUILDING[SIM.PLACES[home].building], t = SIM.classOf(s);
     const band = SIM.HOUSING_TIERS[b.arch];
     if (!band || !band.includes(t)) bad ||= `${s.slug} (${SIM.tierOf(s)}) lives in ${b.id} (${b.arch})`;
     (seen[b.arch] ||= new Set()).add(t);

@@ -7,6 +7,8 @@
 // (checked separately below), but the live city never receives them.
 import { UNIT_SET } from "../src/city/storefrontSim.js";   // THE MALL: a unit takes nobody until it is let
 import { FAMOUS_FIGURES, slugify, TIERS } from "../src/figures.js";
+import { LEGACY_LABELS, scoreFor } from "./synth-roster.mjs";
+import { LEGACY_TIERS } from "../src/figures.js";
 import {
   DISTRICTS, PLACES, JOBS, JOB, assignJob, homeOf, schedule, whereAt, machineClock, occupancy,
   statusLine, SEED, toHours, BUS, V_WALK, V_BUS, SHIFT_HOURS, fieldsOf,
@@ -35,7 +37,7 @@ const OCC = {
 const TEND = ["dive bar", "cafe", "park", "street", "market", "library", "university", "lab", "studio", "theatre", "concert hall", "stadium", "gym", "cathedral", "temple", "hospital", "school", "courthouse", "city hall", "parliament", "barracks", "bank", "office tower", "harbour", "museum", "casino", "prison", "farm", "workshop", "archive"];
 const DIMS = ["care", "alignment", "utility", "adaptability", "legacy", "network", "physical", "threat", "redundancy"];
 const tierW = [[0, 0.03], [1, 0.3], [2, 0.35], [3, 0.14], [4, 0.1], [5, 0.08]];
-function randTier() { let r = R(); for (const [i, w] of tierW) { if ((r -= w) <= 0) return TIERS[i].label; } return TIERS[2].label; }
+function randTier() { let r = R(); for (const [i, w] of tierW) { if ((r -= w) <= 0) return LEGACY_LABELS[i]; } return LEGACY_LABELS[2]; }   // legacy labels + matching scores (synth-roster.mjs): the same roster under both ladders
 
 const figures = FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name) }));
 const engine = [];
@@ -43,14 +45,14 @@ for (let i = 0; i < 300; i++) {
   const service = R() < 0.2, crime = !service && R() < 0.1;
   const domain = service ? "service" : crime ? "crime" : pick(Object.keys(OCC).filter(k => k !== "crime"));
   const occupation = service ? pick(["nurse", "missionary", "social worker"]) : pick(OCC[domain]);
-  const tier = crime ? pick([TIERS[4].label, TIERS[5].label]) : randTier();
+  const tier = crime ? pick([LEGACY_LABELS[4], LEGACY_LABELS[5]]) : randTier();
   const breakdown = Object.fromEntries(DIMS.map(d => [d, Math.round(R() * 100)]));
   const { warmth, competence, quadrant } = cube(breakdown);
   engine.push({
     slug: `engine-${i}`, name: `Engine Subject ${i}`, baseName: `Engine Subject ${i}`,
     // Only namesakes carry a qualifier (roster-grow.mjs), drawn from the article description.
     qualifier: R() < 0.12 ? occupation.toLowerCase() : null,
-    tier: TIERS.find(t => t.label === tier), score: 500,   // engine cards carry the tier object
+    tier: LEGACY_TIERS.find(t => t.label === tier), score: scoreFor(tier),   // engine cards carry the tier object
     warmth, competence, quadrant,
     breakdown: R() < 0.85 ? breakdown : null,   // withheld until the fact-check publishes it
     died: R() < 0.45 ? "1900-01-01" : null,
@@ -59,7 +61,7 @@ for (let i = 0; i < 300; i++) {
 }
 // The richer shape the sim can also read, kept for the unit checks on stratum/places.
 const withTendencies = { slug: "t", name: "Tendency Subject", tier: "TOLERATED GENERALIST", died: "1900-01-01", places: ["concert hall", "library"], stratum: { domain: "arts", occupation: "COMPOSER" } };
-const citizens = Array.from({ length: 60 }, (_, i) => ({ slug: `citizen-${i}`, name: `Citizen ${i}`, tier: randTier(), score: 500, warmth: Math.round(R() * 100), competence: Math.round(R() * 100), kind: "citizen" }));
+const citizens = Array.from({ length: 60 }, (_, i) => ({ slug: `citizen-${i}`, name: `Citizen ${i}`, ...(t => ({ tier: t, score: scoreFor(t) }))(randTier()), warmth: Math.round(R() * 100), competence: Math.round(R() * 100), kind: "citizen" }));
 const ALL = [...figures, ...engine, ...citizens];
 const HEAVY = new Set(["works", "port", "engine"]);   // and the Engine since PHASE 2 step 5: the data hall (CACHE FARM) moved there with its jobs   // PROCESSING: the Works, and the Port since the reclamation line moved there
 console.log(`population: ${figures.length} figures, ${engine.length} engine, ${citizens.length} citizens = ${ALL.length}`);

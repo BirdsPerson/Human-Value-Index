@@ -23,7 +23,7 @@ const PEOPLE = new Map();
 function standIn(key, fam, at) {
   let s = PEOPLE.get(key);
   if (!s || s.crowdFam !== fam) {
-    s = { slug: key, name: key, crowd: true, crowdFam: fam, kind: "citizen", score: 500, tier: "TOLERATED GENERALIST", at };
+    s = { slug: key, name: key, crowd: true, crowdFam: fam, kind: "citizen", score: 680, tier: "TOLERATED GENERALIST", at };
     PEOPLE.set(key, s);
     if (PEOPLE.size > 20000) PEOPLE.delete(PEOPLE.keys().next().value);
   }

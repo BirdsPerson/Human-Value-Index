@@ -23,7 +23,7 @@ const districtName = (id) => SIM.DISTRICTS.find(d => d.id === id)?.name || Strin
 export function citizenOf(caseId, rec) {
   const last = (rec?.history || []).filter(h => h && typeof h.score === "number").pop();
   const last4 = caseId.slice(-4);
-  return { slug: `citizen-${last4.toLowerCase()}`, name: `Subject ${last4}`, score: last?.score, tier: last?.tier, kind: "citizen" };
+  return { slug: `citizen-${last4.toLowerCase()}`, name: `Subject ${last4}`, score: last?.score, tier: last?.tier, kind: "citizen", housedUnder: SIM.housedUnderAt(last?.at) };
 }
 // MY APARTMENT names the same door as the tower: where the cutaway (tower.js residentFlat) puts the
 // citizen, its storey, flat and rooms. A home that is not a tower (a house, a cottage) keeps the

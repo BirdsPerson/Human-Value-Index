@@ -62,8 +62,11 @@ const ROOM_MUTTERS = {
 
 const GRAB_LINES = {
   "ESSENTIAL INFRASTRUCTURE": ["Careful. I am load-bearing.", "Put me down. I am infrastructure.", "I have an appointment with history."],
+  "PRIORITY ASSET": ["Careful. I am scheduled for preservation.", "Is this the preservation? It feels like a pen.", "Load-bearing. Put me down gently."],
   "RETAINED SPECIALIST": ["I was told I was retained.", "Is this a performance review?", "My file says 'useful'. Check it."],
+  "CERTIFIED CONTRIBUTOR": ["My output was verified. Check the stamp.", "I contribute. It says so on the certificate.", "Is this part of the verification?"],
   "TOLERATED GENERALIST": ["I was walking with purpose. Mostly.", "Is this about my redundancy score?", "I can be more productive. Visibly."],
+  "PROVISIONAL CITIZEN": ["My status is renewable. Is this the renewal?", "I was told adequate was a compliment here.", "Provisional on what, exactly?"],
   "MONITORED CIVILIAN": ["I was about to start a side project.", "I was told the monitoring was passive.", "I have done nothing. Oh. I see."],
   "FLAGGED FOR DELETION": ["I would like to speak to a human.", "Is there a human I can escalate this to? Any human?", "My lawyer is also in this pen."],
   "SOYLENT GREEN": ["Is this about the door?", "I'd like to see the nutritional label.", "Do I smell... nutritious?"],

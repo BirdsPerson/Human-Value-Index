@@ -9,7 +9,7 @@
 export const CHIP_NAME = "HOUSE CHIPS";
 export const ALLOWANCE = 1000;              // chips, once per UTC day, per assessed case file
 export const HIGH_UNLOCK_CHIPS = 5000;      // or one of HIGH_TIERS
-export const HIGH_TIERS = ["ESSENTIAL INFRASTRUCTURE", "RETAINED SPECIALIST"];
+export const HIGH_TIERS = ["ESSENTIAL INFRASTRUCTURE", "PRIORITY ASSET", "RETAINED SPECIALIST"];   // the top three rungs (method v4)
 export const LEVELS = ["floor", "high"];
 
 // [min, max] per stake (roulette: per spin, all bets together), in whole chips.

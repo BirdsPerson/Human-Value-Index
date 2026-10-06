@@ -7,6 +7,7 @@ import { REALITY_INDEX } from "./intake.js";
 import { sanitizeAvatar } from "../../src/avatar.js";
 import { getStore } from "@netlify/blobs";
 import { cube, judged } from "../../src/cube.js";
+import { housedUnderAt } from "../../src/city/sim.js";
 import { blendPeople } from "../../src/petition.js";
 import { STORE as PETITIONS, readSummary } from "./petition.js";
 
@@ -33,7 +34,9 @@ export async function censusSubjects({ strict = false, withTimes = false } = {})
       // Private citizens: score and tier only. Old cards may still carry a verdict
       // or breakdown; they are dropped here.
       slug: c.slug, name: c.name, score: c.score, tier: c.tier, sprite: c.sprite ?? null, avatar: sanitizeAvatar(c.avatar), kind: "citizen",
-      quadrant: c.quadrant ?? null, warmth: c.warmth ?? null, competence: c.competence ?? null, judge: "UNRATIFIED", realityIndex: REALITY_INDEX,
+      quadrant: c.quadrant ?? null, warmth: c.warmth ?? null, competence: c.competence ?? null, scarcity: c.scarcity ?? null, judge: "UNRATIFIED", realityIndex: REALITY_INDEX,
+      // Which ladder houses them (SCALE.md §4.3): the card's own flag, else the card's time (a card from before the flag).
+      housedUnder: c.housedUnder ?? housedUnderAt(c.updated),
       ...(withTimes ? { filedAt: c.updated ?? null } : {}),
     })),
     // Referred figures: breakdown once fact-checked (see publicFigure); the verdict and

@@ -77,7 +77,7 @@ ok(N.openThrough("aurum", 23, 26.5) && !N.openThrough("aurum", 23, 27.5) && !N.o
 const roster = synthRoster(725);
 SIM.setRoster(roster);
 const D0 = 302;   // machine day 302 (Monday) .. 308 (Sunday)
-const band = (s) => { const t = Math.max(0, SIM.TIER_ORDER.indexOf(SIM.tierOf(s))); return t <= 1 ? 0 : t <= 3 ? 1 : 2; };
+const band = (s) => { const t = SIM.classOf(s); return t <= 1 ? 0 : t <= 3 ? 1 : 2; };
 const segsOf = new Map();   // key -> [[day, segs]]
 const t0 = Date.now();
 const visits = [];   // {pid, b, from, to, day, key}

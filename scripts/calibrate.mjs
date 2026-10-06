@@ -120,8 +120,8 @@ function reportMd({ cal, p, learned, prodInfo }) {
   lines.push("## How the current scale performs", "");
   lines.push(`- Subjects measured: ${m.rows.length} (${prodInfo.referrals} production referrals included)`);
   lines.push(`- Fit to real-world liking (Spearman ρ vs YouGov liked share): ${fmtRho(m.rho.yougovLikedShare)}; vs % disliked: ${fmtRho(m.rho.yougovDisliked)}; vs Pantheon fame: ${fmtRho(m.rho.pantheonHpi)}`);
-  lines.push(`- Tier spread (1 = perfectly even over the 6 tiers): ${m.tierEvenness} — ${Object.entries(m.tierCounts).map(([k, v]) => `${k} ${v}`).join(", ")}`);
-  lines.push(`- Octants: ${Object.entries(m.octantCounts).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+  lines.push(`- Tier spread (1 = perfectly even over the ${cal.tiers.length} rungs): ${m.tierEvenness} — ${Object.entries(m.tierCounts).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+  lines.push(`- Cubrants: ${Object.entries(m.octantCounts).map(([k, v]) => `${k} ${v}`).join(", ")}`);
   lines.push(`- Personas: decent ordinary ${m.personas["Decent ordinary"].score} (p${m.personas["Decent ordinary"].percentile}); Scott-like ${m.personas["Scott-like"].score} (p${m.personas["Scott-like"].percentile})`);
   lines.push(`- Moral rules: ${Object.entries(m.invariants).map(([k, v]) => `${k} ${v ? "✓" : "✗"}`).join(" · ")}`);
   if (m.saintsLow.length) lines.push(`- **Finding:** below the roster median (${m.median}) despite being on the reference list of the admired: ${m.saintsLow.map(n => `${n} (${m.byName[n].score})`).join(", ")}. Either the breakdown under-reads them or the reference list is wrong. That's a human call; no weight nudge fixes it without moving others.`);
@@ -194,18 +194,33 @@ async function proposeMode() {
   const { all } = await roster(referrals);
   const last = readJSON(path.join(DIR, "last-run.json"), null);
   const p = L.propose(cal, all, bench);
-  // Tier cutoffs (method v3.2): only ESSENTIAL and RETAINED are re-derived from the roster each
-  // week; TOLERATED/MONITORED/FLAGGED are fixed anchors for ordinary people. PROPOSED (never
-  // auto-applied) when a tuned min would move more than TIER_MOVE_THRESHOLD points.
+  // The ladder (method v4, docs/design/SCALE.md §1): fixed cuts with guidance bands. Each run
+  // measures every rung's share of the ungated roster and keeps a streak of runs outside its
+  // band (state.ladderStreak); after BAND_RUNS in a row a cut move is PROPOSED to the desk, never
+  // applied here. The run also appends the shares to public/scale/shares.json (THE NUMBERS,
+  // OVER TIME) and records the cubrant centres the roster would give today.
   const baseCal = p.worth ? p.best.cal : cal;
-  const retuned = L.tierCutoffs(baseCal, all);
-  const tierMove = L.tierShift(cal.tiers, retuned);
-  const tierChange = tierMove > L.TIER_MOVE_THRESHOLD
-    ? `tier cutoffs re-derived from the roster (${retuned.filter(t => t.label !== "SOYLENT GREEN").map(t => `${t.label.split(" ")[0]} ≥${t.min}`).join(", ")}; largest move ${tierMove})`
+  const shares = L.ladderShares(baseCal, all);
+  const state0 = readJSON(STATE, { proposals: {} });
+  const streak = { ...(state0.ladderStreak || {}) };
+  for (const r of shares) streak[r.label] = r.inside ? 0 : (streak[r.label] || 0) + 1;
+  const due = shares.filter(r => streak[r.label] >= L.BAND_RUNS);
+  const tierChange = due.length
+    ? `rung shares outside their guidance band ${L.BAND_RUNS} runs running (${due.map(r => `${r.label.split(" ")[0]} ${(100 * r.share).toFixed(1)}% vs ${r.band.map(b => Math.round(100 * b)).join("-")}%`).join(", ")}): a cut move is proposed for Scott's review`
     : null;
+  const retuned = cal.tiers;   // the machine never moves a cut itself; the desk item names the rungs
   if (tierChange) {
     p.worth = true; p.decision = "change";
-    p.reason = `${p.best && p.gain >= L.MARGIN ? `${p.reason} ` : ""}The roster has shifted: ${tierChange}.`;
+    p.reason = `${p.best && p.gain >= L.MARGIN ? `${p.reason} ` : ""}The ladder has drifted: ${tierChange}.`;
+  }
+  const centres = L.centresOf(baseCal, all);
+  const centreDrift = Object.entries(cal.centre || {}).filter(([k, v]) => Math.abs((centres[k] ?? v) - v) >= 3).map(([k, v]) => `${k} ${v} -> ${centres[k]}`);
+  {
+    const shPath = P("public/scale/shares.json");
+    const sh = readJSON(shPath, { runs: [] });
+    sh.runs = (sh.runs || []).filter(r => !(r.date === today && r.method === cal.method));
+    sh.runs.push({ date: today, method: cal.method, ladder: cal.ladder?.version ?? 2, n: shares.reduce((a, r) => a + r.count, 0), total: all.length, shares: Object.fromEntries(shares.map(r => [r.label, r.share])), centres });
+    write(shPath, JSON.stringify(sh, null, 1) + "\n");
   }
   // drift vs the previous run is reported on the base measurement
   if (last?.rows) p.base.m.drift = L.measure(cal, all, bench, { rows: last.rows }).drift;
@@ -214,13 +229,15 @@ async function proposeMode() {
   write(path.join(DIR, `${today}.md`), md);
   const weightChange = p.best && p.gain >= L.MARGIN ? p.best.change : null;
   const change = [weightChange, tierChange].filter(Boolean).join("; ");
-  const proposal = p.worth ? { ...(tierChange ? L.withTiers(baseCal, retuned) : baseCal), version: cal.version + 1, date: today, proposedFrom: cal.version, change } : null;
+  const proposal = p.worth ? { ...baseCal, version: cal.version + 1, date: today, proposedFrom: cal.version, change, ...(tierChange ? { ladderNote: tierChange } : {}), ...(centreDrift.length ? { centreNote: `cubrant centres drifted: ${centreDrift.join(", ")}` } : {}) } : null;
   write(path.join(DIR, `proposal-${today}.json`), JSON.stringify({ date: today, decision: p.decision, reason: p.reason, gain: p.gain, change: p.best?.change || null, calibration: proposal, roster: L.rosterSnapshot(all) }, null, 2));
   write(path.join(DIR, "last-run.json"), JSON.stringify({ date: today, rows: p.base.m.rows.map(r => ({ name: r.name, score: r.score })) }));
   const state = readJSON(STATE, { proposals: {} });
   // a newer proposal supersedes any unanswered older one
   for (const [d, s] of Object.entries(state.proposals)) if (s.status === "open" && d !== today) s.status = "superseded";
   state.proposals[today] = { status: p.worth ? "open" : "no-change", change: proposal?.change || null, gain: p.gain };
+  state.ladderStreak = streak;   // runs outside the guidance band, per rung (method v4)
+  state.centres = { date: today, ...centres };
   write(STATE, JSON.stringify(state, null, 2));
 
   // roster drift (skipped on a dry run: it spends model calls)

@@ -2,7 +2,6 @@
 // World units are character cells; CELL_W x CELL_H world pixels each at zoom 1.
 
 import { cubeOf } from "../cubeData.js";
-import { OCTANT_FAMILY } from "../cube.js";
 import { SHIFT_HOURS } from "./sim.js";
 
 export const CELL_W = 8;
@@ -27,13 +26,14 @@ export function layoutDistricts(districts) {
 export const FAMILY_COLOR = { good: "#4ade80", charm: "#fbbf24", harm: "#f87171", dim: "#6b9a7c" };
 const QUADRANT_FAMILY = { ADMIRED: "good", "TRUSTED RESERVE": "dim", ENVIED: "charm", DISMISSED: "harm" };
 
-// Dot colour by octant family; files the people have not rated fall back to their
-// quadrant and draw hollow, as on the cube.
+// Dot colour by cubrant family (method v4, src/cube.js familyOfCubrant); a file whose third
+// axis is not yet on record falls back to its SCM quadrant and draws hollow, as on the cube.
+// `rated` keeps its name for the draw code: filled when placed.
 export function familyOf(subject) {
-  if (subject?.crowdFam) return { family: subject.crowdFam, rated: true, octant: null };   // a stand-in (crowd.js)
+  if (subject?.crowdFam) return { family: subject.crowdFam, rated: true, cubrant: null, octant: null };   // a stand-in (crowd.js)
   const c = cubeOf(subject);
-  if (c?.octant) return { family: OCTANT_FAMILY[c.octant] || "dim", rated: true, octant: c.octant };
-  return { family: QUADRANT_FAMILY[c?.quadrant] || "dim", rated: false, octant: null };
+  if (c?.cubrant) return { family: c.family || "dim", rated: true, cubrant: c.cubrant, octant: c.cubrant };
+  return { family: QUADRANT_FAMILY[c?.quadrant] || "dim", rated: false, cubrant: null, octant: null };
 }
 
 // ---- the clock and the PA ---------------------------------------------------------

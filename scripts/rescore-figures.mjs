@@ -15,7 +15,8 @@ import { execFileSync } from "node:child_process";
 import { getTier, cube } from "../netlify/lib/intake.js";
 import { FAMOUS_FIGURES } from "../src/figures.js";
 import { DIMENSIONS } from "../netlify/lib/questionPools.js";
-import { octantOf } from "../src/cube.js";
+// Method v4: the cube's third axis is scarcity (cube() returns the cubrant); likability is the People's judge.
+const octantOf = (w, c, like) => `likability ${like}`;
 import { rescoreOne, pool, RUNS } from "./rescore-lib.mjs";
 import { VILLAINS, SAINTS } from "./calibration-lib.mjs";
 import { appendFigureHistory } from "../src/movement.js";
@@ -104,7 +105,7 @@ const rows = results.map(({ kind, name, before, r }) => {
   const like = before.people?.likability ?? null;
   return {
     kind, name, before: before.score, after: r.score, delta: r.score - before.score, tier: getTier(r.score),
-    octant: like == null ? `${c.quadrant} (likability unrated)` : octantOf(c.warmth, c.competence, like),
+    octant: `${c.cubrant || c.quadrant}${like == null ? "" : ` (${octantOf(c.warmth, c.competence, like)})`}`,
     care: r.breakdown.care, careBefore: before.breakdown?.care ?? null, warmth: c.warmth, warmthBefore: cb.warmth, competence: c.competence,
     spread: r.spread, runScores: r.runScores, verdict: r.verdict,
   };
