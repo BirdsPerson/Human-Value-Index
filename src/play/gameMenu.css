@@ -1,0 +1,18 @@
+/* GameMenu (src/play/GameMenu.jsx): the end-of-round and pause menus. Green terminal, big rows. */
+.gm-scrim { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: var(--s3); background: rgba(0, 0, 0, 0.72); }
+.gm { width: min(100%, 28rem); max-height: calc(100vh - 2 * var(--s3)); overflow: auto; padding: var(--s4); background: var(--bg); border: var(--bw) solid var(--accent); box-shadow: 0 0 0 4px var(--bg), 0 0 0 5px var(--line); font-family: var(--mono); color: var(--fg); }
+.gm-title { margin: 0 0 var(--s2); font-size: var(--t-l); line-height: var(--lh-tight); letter-spacing: 0.06em; color: var(--accent); }
+.gm-sum { margin: 0 0 var(--s4); font-size: var(--t-s); line-height: var(--lh); color: var(--fg-dim); }
+.gm-list, .gm-legend { display: flex; flex-direction: column; gap: var(--s1); }
+.gm-row { display: flex; align-items: center; gap: var(--s2); min-height: max(44px, var(--hit)); padding: 0 var(--s3); font: inherit; font-size: var(--t-m); letter-spacing: 0.06em; text-align: left; text-decoration: none; color: var(--fg); background: none; border: var(--bw) solid var(--line); cursor: pointer; }
+.gm-row.on, .gm-row:hover { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.gm-row:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.gm-row[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+.gm-caret { width: 1ch; flex: none; }
+.gm-hint { margin-left: auto; font-size: var(--t-xs); opacity: 0.8; }
+.gm-legend .gm-row { margin-top: var(--s3); }
+.gm-keys { margin: var(--s3) 0 0; font-size: var(--t-xs); color: var(--fg-mute); letter-spacing: 0.04em; }
+@media (prefers-reduced-motion: no-preference) {
+  .gm { animation: gm-in 140ms steps(4, end); }
+  @keyframes gm-in { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+}

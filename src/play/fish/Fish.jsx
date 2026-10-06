@@ -9,6 +9,7 @@ import { draw, W, H } from "./render.js";
 import { loadBox, loadBests, recordCatch, markDonated, saveTrip } from "./box.js";
 import { startTrip, donateCatch, loadAquarium } from "./api.js";
 import * as sfx from "./audio.js";
+import GameMenu from "../GameMenu.jsx";
 import "./fish.css";
 import "../pages.css";
 
@@ -69,7 +70,8 @@ export default function Fish({ route }) {
       {game ? (
         <>
           {note && <p className="fi-p dim">{note}</p>}
-          <Play key={game.key} game={game} muted={muted} onChange={refresh} />
+          <Play key={game.key} game={game} muted={muted} onChange={refresh} onMute={toggleMute}
+            onRestart={() => begin(game.demo, game.cfg.spot)} onNewSpot={() => { setGame(null); refresh(); }} />
           <ButtonRow split stackOnMobile>
             <Button variant="back" onClick={() => { setGame(null); refresh(); }}>Leave the water</Button>
             <Button variant="secondary" onClick={toggleMute}>{muted ? "SOUND: OFF" : "SOUND: ON"}</Button>
@@ -175,7 +177,7 @@ function Controls({ mode = "keys", family = null }) {
 const KEYMAP = { ArrowLeft: BTN.L, ArrowRight: BTN.R, ArrowUp: BTN.U, ArrowDown: BTN.D, " ": BTN.A, z: BTN.A, Z: BTN.A, x: BTN.B, X: BTN.B };
 const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); };
 
-function Play({ game, muted, onChange }) {
+function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
   const { cfg, demo, tripId, caseId } = game;
   const canvas = useRef(null), wrap = useRef(null);
   const touch = useRef(0), latch = useRef(0);
@@ -191,6 +193,16 @@ function Play({ game, muted, onChange }) {
   const donated = useRef(new Set());
   const reduced = useMemo(REDUCED, []);
   const togglePause = () => { pausedRef.current = !pausedRef.current; setPaused(pausedRef.current); };
+  const resume = () => { pausedRef.current = false; setPaused(false); };
+  const [ended, setEnded] = useState(null);   // {n, kept, best} once the trip is over: the end menu
+  const endedRef = useRef(false), stRef = useRef(null);
+  const endTrip = () => {
+    if (endedRef.current) return;
+    endedRef.current = true;
+    const cs = stRef.current?.catches || [];
+    const best = cs.reduce((a, k) => (!a || k.cw > a.cw ? k : a), null);
+    setEnded({ n: cs.length, kept: cs.filter(k => k.fate === "keep").length, best });
+  };
   const onChangeRef = useRef(onChange); onChangeRef.current = onChange;
 
   useEffect(() => {
@@ -205,7 +217,7 @@ function Play({ game, muted, onChange }) {
   }, []);
 
   useEffect(() => {
-    const st = newTrip(cfg), log = logRef.current = [];
+    const st = stRef.current = newTrip(cfg), log = logRef.current = [];
     const keys = new Set();
     let raf = 0, last = performance.now(), acc = 0, frame = 0, prevStart = false, said = "", seen = 0, saveAt = 0, carded = -1;
     const ctx = canvas.current.getContext("2d");
@@ -244,7 +256,7 @@ function Play({ game, muted, onChange }) {
       while (acc >= 1 / HZ) {
         acc -= 1 / HZ;
         const b = demo ? (input(), botBits(st)) : input();
-        if (pausedRef.current || st.phase === "done") continue;
+        if (pausedRef.current || endedRef.current || st.phase === "done") continue;
         logPush(log, b);
         step(st, b);
         for (const e of st.ev) sfx.play(e);
@@ -264,6 +276,7 @@ function Play({ game, muted, onChange }) {
         }
         setLanded(null);
       }
+      if (st.phase === "done" && !endedRef.current) endTrip();
       if (now - saveAt > 10000) { saveAt = now; keep(); }
       draw(ctx, st, frame++, pausedRef.current, { reduced });
       raf = requestAnimationFrame(loop);
@@ -294,6 +307,7 @@ function Play({ game, muted, onChange }) {
     } catch (e) { setGift({ error: e.message }); }
   };
   const legendMode = pad ? "pad" : mode;
+  const here = SPOT[cfg.spot];
 
   return (
     <div className="fi-play" ref={wrap}>
@@ -315,6 +329,26 @@ function Play({ game, muted, onChange }) {
         </div>
       )}
       {gift?.ok && <p className="fi-p good fi-gift" role="status">{gift.line} <a href="#aquarium">SEE THE TANK</a></p>}
+      {ended ? (
+        <GameMenu key="end" kind="end" title={demo ? "THE WARDEN'S TRIP IS FILED." : "TRIP FILED."}
+          summary={ended.n ? `${ended.n} LANDED, ${ended.kept} KEPT. HEAVIEST: ${SPECIES_BY[ended.best.sp]?.name || ended.best.sp}, ${lbText(ended.best.cw)}.` : "NOTHING LANDED. THE FISH HAVE BEEN NOTIFIED."}
+          options={{
+            again: { label: demo ? "WATCH AGAIN" : "FISH AGAIN", onSelect: onRestart },
+            rematch: { label: "NEW SPOT", onSelect: onNewSpot },
+            aquarium: { label: "THE AQUARIUM", href: "#aquarium" },
+            play: true,
+            city: { label: `BACK TO ${here.name}`, href: "#city" },
+          }} />
+      ) : paused && (
+        <GameMenu key="pause" kind="pause" title="PAUSED. THE FISH WAIT." summary={`${here.name} // ${stRef.current?.catches.length || 0} LANDED SO FAR.`} onBack={resume}
+          options={{
+            resume, restart: { label: "NEW TRIP, SAME SPOT", onSelect: onRestart },
+            controls: <Controls mode={legendMode} family={pad} />,
+            sound: { on: !muted, onSelect: onMute },
+            end: { label: "END THE TRIP", onSelect: endTrip },
+            quit: true,
+          }} />
+      )}
       <div className="fi-status">{pad ? `CONTROLLER: ${pad.toUpperCase()}` : mode === "touch" ? "◀ ▶ LURE // REEL (HOLD) // JERK // II PAUSES" : "KEYS: ← → LURE // Z REELS AND CASTS // X JERKS // ENTER PAUSES"}{muted ? " // MUTED" : ""}{demo ? " // THE WARDEN IS FISHING" : tripId ? " // PERMITTED TRIP" : ""}</div>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{say}</p>
       <div className="fi-touch" aria-label="Touch controls">

@@ -8,6 +8,7 @@ import { figureCard, opponents, talkFor } from "./roster.js";
 import { standings, resultsToday, resultLine, gameAt, TABLE, shortName, LADDER_DAYS } from "./park.js";
 import { loadChess, chessAct, figureMove } from "./client.js";
 import { Piece, PIECE_NAME } from "./pieces.jsx";
+import GameMenu from "../play/GameMenu.jsx";
 import CSS from "./chess.css?inline";
 import "../play/pages.css";
 
@@ -112,6 +113,7 @@ function Game({ card, table, caseId, gate, setCaseId, onFiled }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [confirmResign, setConfirmResign] = useState(false);
+  const [menuShut, setMenuShut] = useState(null);   // the g.started whose end menu was closed to look at the board
   useEffect(() => { save(g); }, [g]);
 
   const { pos, sans } = useMemo(() => replay(g?.moves || []), [g?.moves]);
@@ -203,6 +205,7 @@ function Game({ card, table, caseId, gate, setCaseId, onFiled }) {
   const at = table && TABLE[table] ? TABLE[table] : null;
   const figName = card.name.toUpperCase();
   const result = over ? (g.resigned ? { res: "L", reason: "resigned" } : { res: st.result === "1/2-1/2" ? "D" : (st.result === "1-0") === (mySide === 1) ? "W" : "L", reason: st.reason }) : null;
+  const endLine = result ? `${result.res === "W" ? `YOU BEAT ${figName}` : result.res === "L" ? `${figName} WINS` : "DRAWN"} // ${REASON[result.reason] || result.reason}.` : "";
   const pairs = [];
   for (let i = 0; i < sans.length; i += 2) pairs.push([i / 2 + 1, sans[i], sans[i + 1] || ""]);
 
@@ -231,6 +234,18 @@ function Game({ card, table, caseId, gate, setCaseId, onFiled }) {
         {err && <p className="ch-err" role="alert">{err}</p>}
       </Frame>
 
+      {over && filed && menuShut !== g.started && (
+        <GameMenu kind="end" title={filed.local || filed.error ? "GAME OVER. NOT FILED." : "GAME FILED."}
+          summary={`${endLine}${!filed.local && !filed.error ? ` CITIZEN RATING ${filed.delta >= 0 ? "+" : ""}${filed.delta}.` : ""}`}
+          onBack={() => setMenuShut(g.started)}
+          options={{
+            again: { label: `REMATCH ${figName}`, onSelect: () => start(g.side), disabled: busy },
+            rematch: { label: "NEW OPPONENT", href: "#chess" },
+            look: { label: "LOOK AT THE BOARD", onSelect: () => setMenuShut(g.started) },
+            play: true,
+            city: { label: "BACK TO THE PARK", href: "#city" },
+          }} />
+      )}
       {g && (
           <div className="ch-play">
             <div className="ch-board-wrap">
