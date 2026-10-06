@@ -650,5 +650,23 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
   console.log(`  architecture: ${new Set(SIM.BUILDINGS.map(b => b.arch)).size} styles over ${SIM.BUILDINGS.length} buildings, ${SIM.BUILDINGS.reduce((n, b) => n + (A.massingOf(b)?.yard.length || 0), 0)} yard props`);
 }
 
+// The unbuilt Substrate (2026-10-05): the ground grid runs to the view's edge at every zoom and
+// turn, on the city's 4-cell lines; and a quiet map: names only for what is hovered or picked.
+{
+  const { gridStep, viewCells, screenToMap: s2m } = await import("../src/city/iso.js");
+  for (const z of [0.4, 0.81, 1.79, 3, 6, 20]) {
+    const st = gridStep(z);
+    ok(st % 4 === 0 && (st === 4 || st * z < 20) && st * z >= Math.min(10, 4 * z), `grid step ${st} at zoom ${z}: on the 4-cell lines, ~10 px or more apart`);
+    for (let r = 0; r < 4; r++) {
+      const cam = { z, ox: 517, oy: -233, r }, e = viewCells(cam, 1440, 900, st);
+      const inside = [[0, 0], [1440, 0], [0, 900], [1440, 900], [720, 450]].every(([sx, sy]) => { const [x, y] = s2m(sx, sy, cam); return x >= e.x0 && x <= e.x1 && y >= e.y0 && y <= e.y1; });
+      ok(inside && e.x0 % st === 0 && e.y1 % st === 0, `grid covers the whole view at zoom ${z}, turn ${r}`);
+    }
+  }
+  const iso = (await import("node:fs")).readFileSync(new URL("../src/city/CityIso.jsx", import.meta.url), "utf8");
+  ok(/allLabels: labelsOn\(\)/.test(iso) && /localStorage\.getItem\(LABELS_KEY\) === "1"/.test(iso), "labels are off unless the viewer turned LABELS on");
+  ok(/V\.allLabels \|\| L\.selected \|\| L\.landmark \|\| L\.id === V\.hover/.test(iso), "only the hovered or selected thing is named by default");
+}
+
 console.log(fails ? `check-cityview: ${fails} FAILED` : "check-cityview: ok");
 process.exit(fails ? 1 : 0);

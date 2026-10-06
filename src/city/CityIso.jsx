@@ -6,7 +6,7 @@ import { SPURS as SPURS_BY_ID, jobOf } from "./sim.js";
 import { FAMILY_COLOR, familyOf } from "./cityKit.js";
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { FONT } from "./cityUi.jsx";
-import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4, LOD_NEAR, LOD_MID, BOUNDS, hiddenByTerrain } from "./iso.js";
+import { rot, rotRect, project, screenToMap, cityExtent, depthOrder, slotForBox, boxHull, inPoly, lodFor, STOREY, DECK, mod4, LOD_NEAR, LOD_MID, BOUNDS, gridStep, viewCells, hiddenByTerrain } from "./iso.js";
 import { wantSectors, summaryOf } from "./planClient.js";
 import { patrolsAt } from "./prefects.js";   // THE PREFECTS: the Overlord's own, on patrol
 import { drawPrefectIso, drawPrefectTops, openPrefect } from "./prefectDraw.js";
@@ -110,12 +110,21 @@ const LANDMARKS = [
   ["heights", "THE MOUNTAIN", PEAKS[0].x, PEAKS[0].y, PEAKS[0].h + 3],
   ["strip", "THE STRIP", 102.25, 4.5, 6],
 ];
+// The unbuilt Substrate's grid: [cells past the city's bounds, total line alpha]. The last band is
+// the city itself, at the street grid's old 0.05; the first is everything else the view reaches.
+const GRID_BANDS = [[1e9, 0.02], [64, 0.032], [24, 0.042], [0, 0.05]];
 const HINT_KEY = "hvi-city-hint-seen";
+// LABELS: every name on the map, the old way. Off unless the viewer turned it on.
+const LABELS_KEY = "hvi-city-labels";
+function labelsOn() { try { return localStorage.getItem(LABELS_KEY) === "1"; } catch { return false; } }
 function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = null }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const apiRef = useRef({});
   const [sel, setSel] = useState(null);
+  const [peek, setPeek] = useState(null);   // { id, line }: tapped once on a touch screen
+  const [labels, setLabels] = useState(labelsOn);
+  const toggleLabels = () => { const on = !labels; setLabels(on); apiRef.current.labels?.(on); try { localStorage.setItem(LABELS_KEY, on ? "1" : "0"); } catch { /* private window: off next visit */ } };
   // FIND: { line, following } for the status strip; the camera work is in the loop (V.find).
   const [found, setFound] = useState(null);
   // First visit: one line on what this is and the one thing to do. Gone for good once read.
@@ -125,6 +134,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
   const onOpenRef = useRef(onOpen); onOpenRef.current = onOpen;
   const onEnterRef = useRef(onEnter); onEnterRef.current = onEnter;
   const setSelRef = useRef(setSel); setSelRef.current = setSel;
+  const setPeekRef = useRef(setPeek); setPeekRef.current = setPeek;
   const setFoundRef = useRef(setFound); setFoundRef.current = setFound;
   const onFindEndRef = useRef(onFindEnd); onFindEndRef.current = onFindEnd;
   const selfRef = useRef(self); selfRef.current = self;
@@ -138,6 +148,9 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       sel: null, shown: null, lift: 0, geo: null, censusV: -1, inside: new Map(), occ: {}, outdoors: [], hits: [], labels: [], panel: null,
       seats: new Map(), plans: new Map(), wheelHint: 0, riders: new Map(), park: new Map(), parkSeats: new Map(),
       find: null,
+      // LABELS: off by default, only what is hovered (hover: an id) or selected is named; peek: a
+      // building tapped once on a touch screen (outlined, named, its chip up; a second tap opens it)
+      hover: null, peek: null, allLabels: labelsOn(),
     };
 
     // ---- geometry for the current quarter turn ----------------------------------------
@@ -249,6 +262,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       V.need = true;
     }
     function select(id) {
+      if (V.peek) setPeekState(null);
       if (id === V.sel) return;
       const wasOpen = !!V.sel;
       V.sel = id;
@@ -261,6 +275,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         centreOn(b.pos.x, b.pos.y, Math.max(V.cam.z, V.fitZ * 1.6), true);
       }
       V.need = true;
+    }
+    // A touch screen's first tap on a building: outline it, name it, put its chip up.
+    function setPeekState(id) {
+      V.peek = id; V.need = true;
+      const b = id && BUILDING[id];
+      setPeekRef.current(b ? { id, line: `${b.name} // ${V.occ[id] || 0} INSIDE` } : null);
     }
     // ---- find: fly to a subject, mark them, follow them -----------------------------------
     // V.find = { s, who, follow, fly, bId, t (findTarget), pos: map {x, y, h}, room, box }.
@@ -289,6 +309,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       }
       // a new find starts from the open city: whatever cutaway was up closes (theirs reopens)
       if (V.sel) select(null);
+      if (V.peek) setPeekState(null);
       V.find = { s: f.s, who: who(f.s), follow: true, fly: true, bId: undefined, t: null, pos: null, room: null, box: null, line: "", shownFollow: null, lineAt: 0 };
       V.need = true;
     }
@@ -349,6 +370,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       takeControl: () => { if (ctl.start(selfRef.current || V.find?.s)) onFindEndRef.current?.(); }, release: () => ctl.release(),
       zoom: (f) => zoomAt(V.cssW / 2, V.cssH / 2, f), fit: () => { unfollow(); select(null); fit(); }, turn: (d) => turn(d), close: () => { unfollow(); select(null); },
       enter: () => { const b = V.sel && BUILDING[V.sel]; if (b) onEnterRef.current?.(b.district, b.id); },
+      open: () => { if (V.peek) { unfollow(); select(V.peek); } },
+      labels: (on) => { V.allLabels = on; V.need = true; },
       find: startFind, follow: refollow, endFind: () => onFindEndRef.current?.(),
     };
 
@@ -403,12 +426,48 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         if (!onScreen([P(R.x0, R.y0, 0), P(R.x1, R.y0, 0), P(R.x1, R.y1, 0), P(R.x0, R.y1, 0)])) continue;
         drawArchGround(archG(), it.m, env);
       }
-      // a faint street grid between the blocks
-      if (lodFor(V.cam.z) !== "far") {
-        ctx.strokeStyle = "rgba(74,222,128,0.05)"; ctx.lineWidth = 1;
-        const e = { x0: Math.floor(BOUNDS.x0 / 4) * 4, y0: Math.floor(BOUNDS.y0 / 4) * 4, x1: BOUNDS.x1, y1: BOUNDS.y1 };
-        for (let x = e.x0; x <= e.x1; x += 4) { const [u0, v0] = rot(x, e.y0, g.r), [u1, v1] = rot(x, e.y1, g.r); const a = P(u0, v0, 0), b = P(u1, v1, 0); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
-        for (let y = e.y0; y <= e.y1; y += 4) { const [u0, v0] = rot(e.x0, y, g.r), [u1, v1] = rot(e.x1, y, g.r); const a = P(u0, v0, 0), b = P(u1, v1, 0); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+      drawSubstrateGrid();
+    }
+    // THE UNBUILT SUBSTRATE: the faint street grid, every 4 cells on the city's own lines, out to
+    // the edge of the view in every direction, so the city sits on a plane it can still grow
+    // across. Only the lines the view crosses are drawn. Full strength over the city's bounds,
+    // stepping down through two bands to a floor further out, so it reads as going on, not as a
+    // frame: each band is one solid pass over the lines inside it, adding to the passes under it
+    // (a gradient stroke cost a 1440 px view a third of its frame).
+    // The lines only move with the camera: drawn once into a layer of their own and laid down
+    // whole on every frame the camera holds still (most of them: the city moves, the ground not).
+    let gridLayer = null, gridKey = "";
+    function drawSubstrateGrid() {
+      const key = `${V.cam.z}|${V.cam.ox}|${V.cam.oy}|${V.cam.r}|${V.cssW}|${V.cssH}|${V.dpr}`;
+      if (key !== gridKey) {
+        gridKey = key;
+        gridLayer ||= document.createElement("canvas");
+        const w = Math.round(V.cssW * V.dpr), h = Math.round(V.cssH * V.dpr);
+        if (gridLayer.width !== w || gridLayer.height !== h) { gridLayer.width = w; gridLayer.height = h; } else gridLayer.getContext("2d").clearRect(0, 0, w, h);
+        const g = gridLayer.getContext("2d");
+        g.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+        strokeGrid(g);
+      }
+      ctx.drawImage(gridLayer, 0, 0, V.cssW, V.cssH);
+    }
+    function strokeGrid(ctx) {
+      const step = gridStep(V.cam.z), e = viewCells(V.cam, V.cssW, V.cssH, step);
+      ctx.lineWidth = 1;
+      let below = 0;
+      for (const [pad, want] of GRID_BANDS) {
+        const x0 = Math.max(e.x0, Math.floor((BOUNDS.x0 - pad) / step) * step), x1 = Math.min(e.x1, Math.ceil((BOUNDS.x1 + pad) / step) * step);
+        const y0 = Math.max(e.y0, Math.floor((BOUNDS.y0 - pad) / step) * step), y1 = Math.min(e.y1, Math.ceil((BOUNDS.y1 + pad) / step) * step);
+        const add = 1 - (1 - want) / (1 - below);
+        below = want;
+        if (x0 > x1 || y0 > y1) continue;
+        ctx.strokeStyle = `rgba(74,222,128,${add.toFixed(4)})`;
+        // the two directions are stroked apart so a crossing is as bright as it always was
+        ctx.beginPath();
+        for (let x = x0; x <= x1; x += step) { const a = Q(x, y0, 0), b = Q(x, y1, 0); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+        ctx.stroke();
+        ctx.beginPath();
+        for (let y = y0; y <= y1; y += step) { const a = Q(x0, y, 0), b = Q(x1, y, 0); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+        ctx.stroke();
       }
     }
 
@@ -433,9 +492,9 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const hull = boxHull(R, h, V.cam);
       if (!onScreen(hull)) return;
       if (!top) V.hits.push({ kind: "b", id: b.id, hull });
-      const selected = V.sel === b.id;
+      const selected = V.sel === b.id || V.peek === b.id, named = selected || V.hover === b.id;
       const label = () => {
-        if (lod === "far" && !selected) return;
+        if ((lod === "far" || !V.allLabels) && !named) return;
         // a playing field keeps its label off the play: over its back corner
         const [x, y] = PARK_LOTS[b.id] ? P(R.x0 + 0.6, R.y0 + 0.6, 0.4) : P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, h + 0.5);
         // the grounds' labels carry the fixture: "THE DIAMOND // BOT 5 3-2", "THE BOWL // Q3 14-10"
@@ -453,7 +512,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         const G = { ...coastG(), hits: top ? [] : V.hits, extra: mountainExtras(b.id, lod), crowd: V.crowd, lookup: (slug) => V.bySlug?.get(slug) || null };
         V.parkSeats.set(pid, drawCoastLot(G, b.id, lod, V.mt, V.park.get(pid) || [], V.parkSeats.get(pid) || null));
         if (selected) poly([P(R.x0, R.y0, 0.02), P(R.x1, R.y0, 0.02), P(R.x1, R.y1, 0.02), P(R.x0, R.y1, 0.02)], null, "#4ade80");
-        if (lod !== "far" || selected) {
+        if ((lod !== "far" && V.allLabels) || named) {
           const la = LABEL_AT[b.id], tall = it.h > 2, [x, y] = la ? Q(la[0], la[1], la[2]) : tall ? P((R.x0 + R.x1) / 2, (R.y0 + R.y1) / 2, it.h * 0.9) : P(R.x0 + 0.6, R.y0 + 0.6, 0.6);
           const text = coastLabel(b.id, V.mt) || b.name;
           const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
@@ -468,7 +527,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         const res = drawVenueLot(G, b.id, lod, V.mt, V.park.get(pid) || [], V.parkSeats.get(pid) || null);
         V.parkSeats.set(pid, res.at);
         if (selected) poly([P(R.x0, R.y0, 0.02), P(R.x1, R.y0, 0.02), P(R.x1, R.y1, 0.02), P(R.x0, R.y1, 0.02)], null, "#4ade80");
-        if (lod !== "far" || selected) {
+        if ((lod !== "far" && V.allLabels) || named) {
           const [x, y] = P(R.x0 + 0.6, R.y0 + 0.6, 0.6), text = venueLabel(b.id, V.mt);
           const L = { id: b.id, text: text.length > 34 ? text.slice(0, 33) + "…" : text, x, y, selected, rank };
           if (top) drawLabel(L, 1); else V.labels.push(L);
@@ -708,7 +767,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       line(at(-HL + 0.6, PIN + 0.18), at(HL - 0.6, PIN + 0.18), CAN, lit ? (g.color ? accent : LOOP.cyanHi) : g.color ? accent : "rgba(34,211,238,0.6)", Math.max(1, V.cam.z * (lit ? 0.12 : 0.07)));
       // the name board over the roof: drawn in the label pass (legible, never overlapped). A
       // line's station has a platform per track: one board per station, on its outbound side.
-      if (lod !== "far" && (!g.line || st.dir === "out")) {
+      if (V.allLabels && lod !== "far" && (!g.line || st.dir === "out")) {
         const [x, y] = Q(...at(0, (PIN + POUT) / 2), CAN + 0.35);
         const sm = at(0, (PIN + POUT) / 2);
         if (!behindMountain(`st:${st.id}`, sm[0], sm[1], (g.z || 0) + CAN, V.cam.r)) V.labels.push({ id: `st:${st.id}`, station: true, lit, text: lit ? `${st.name} // TRAIN IN` : st.name, x, y, rank: 1e5 + rank });
@@ -1015,7 +1074,9 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     // They fade in over a zoom range instead of all switching on at once.
     // A landmark is the other way about: up at the overview, gone once the streets have names.
     function labelAlpha(L) {
-      if (L.landmark) return clampN((V.fitZ * 1.9 - V.cam.z) / (V.fitZ * 0.5), 0, 1);
+      // the landmarks only at the whole-city overview: gone as soon as a zoom starts
+      if (L.landmark) return clampN((V.fitZ * 1.3 - V.cam.z) / (V.fitZ * 0.25), 0, 1);
+      if (L.selected || L.id === V.hover) return 1;
       if (L.minor && !L.selected) return clampN((V.cam.z - 16) / 2, 0, 1);
       return L.selected || lodFor(V.cam.z) === "near" ? 1 : clampN((V.cam.z - 5.8) / 1.2, 0, 1);
     }
@@ -1036,7 +1097,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       ctx.globalAlpha = 1;
     }
     function drawLabels() {
-      const list = V.labels.filter(L => labelAlpha(L) > 0.02).sort((a, b) => (b.selected - a.selected) || b.rank - a.rank);
+      // a quiet map: only what is pointed at or picked is named, unless LABELS is on
+      const list = V.labels.filter(L => (V.allLabels || L.selected || L.landmark || L.id === V.hover) && labelAlpha(L) > 0.02).sort((a, b) => (b.selected - a.selected) || b.rank - a.rank);
       const placed = [];
       for (const L of list) {
         const bx = labelBox(L);
@@ -1265,9 +1327,14 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       }
       drawSky(archG(), lod, mt, nightAt(((mt % 24) + 24) % 24));   // THE AIRPORT's aircraft on finals and climbing out, over everything
       // the overview's landmarks: where to look first (they fade as the street labels come up)
-      if (V.cam.z < V.fitZ * 1.9 && !V.sel) for (const [id, text, x, y, h] of LANDMARKS) { const [lx, ly] = Q(x, y, h); V.labels.push({ id: `lm:${id}`, text, x: lx, y: ly, landmark: true, rank: 1e9 }); }
+      if (V.cam.z < V.fitZ * 1.3 && !V.sel) for (const [id, text, x, y, h] of LANDMARKS) { const [lx, ly] = Q(x, y, h); V.labels.push({ id: `lm:${id}`, text, x: lx, y: ly, landmark: true, rank: 1e9 }); }
+      if (V.hover?.startsWith("p:")) {
+        const h = V.hits.find(q => q.kind === "p" && `p:${who(q.s)}` === V.hover);
+        if (h) V.labels.push({ id: V.hover, text: String(h.s.name || h.s.slug || "").toUpperCase(), x: (h.box[0] + h.box[2]) / 2, y: h.box[1] - 2, rank: 1e8 });
+      }
       drawLabels();
-      drawPrefectTops(ctx, V.pfTops, FONT); V.pfTops = [];   // THE PREFECTS: designations over everything
+      // the prefects' designations: the hovered one's, or all of them with LABELS on
+      drawPrefectTops(ctx, V.allLabels ? V.pfTops : V.pfTops.filter(T => `pf:${T.id}` === V.hover), FONT); V.pfTops = [];   // THE PREFECTS: designations over everything
       ctl.overlay();   // DRIVE YOURSELF: YOU
       // compass
       ctx.font = `11px ${FONT}`; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillStyle = "rgba(107,154,124,0.8)";
@@ -1387,7 +1454,21 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         hands();
       }
     }
+    // A mouse over the city: what is under it is named (and only that).
+    function hoverAt(x, y) {
+      let id = null;
+      for (let i = V.hits.length - 1; i >= 0 && !id; i--) {
+        const h = V.hits[i];
+        if (h.panel) continue;
+        const inBox = h.box && x >= h.box[0] && x <= h.box[2] && y >= h.box[1] && y <= h.box[3];
+        if (h.kind === "p" && inBox) id = `p:${who(h.s)}`;
+        else if (h.kind === "prefect" && inBox) id = `pf:${h.id}`;
+        else if (h.kind === "b" && inPoly(x, y, h.hull)) id = h.id;
+      }
+      if (id !== V.hover) { V.hover = id; V.need = true; canvas.classList.toggle("point", !!id); }
+    }
     function onMove(e) {
+      if (e.pointerType === "mouse" && !pts.size) hoverAt(...local(e));
       if (!pts.has(e.pointerId)) return;
       pts.set(e.pointerId, local(e));
       if (pinch && pts.size >= 2) {
@@ -1415,12 +1496,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       const wasTap = drag && !drag.moved && pts.size === 1;
       pts.delete(e.pointerId);
       if (pts.size < 2) pinch = null;
-      if (wasTap) tap(...local(e));
+      if (wasTap) tap(...local(e), e.pointerType !== "mouse");
       if (!pts.size) drag = null;
     }
     // Front-most first, in the order things were painted: whatever covers a spot owns the
     // tap. Inside the open cutaway only the cutaway answers (its people, its close box).
-    function tap(x, y) {
+    function tap(x, y, touch = false) {
       const inBox = (h) => h.box && x >= h.box[0] && x <= h.box[2] && y >= h.box[1] && y <= h.box[3];
       if (V.panel && x >= V.panel.x0 && x <= V.panel.x0 + V.panel.w && y >= V.panel.y0 && y <= V.panel.y0 + V.panel.h) {
         for (let i = V.hits.length - 1; i >= 0; i--) {
@@ -1437,8 +1518,17 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         if (h.kind === "p" && inBox(h)) { onOpenRef.current?.(h.s); return; }
         if (h.kind === "prefect" && inBox(h)) { openPrefect(h.id); return; }
         if (h.kind === "chess" && inBox(h)) { window.location.hash = h.go; return; }   // PARK CHESS: sit at the table
-        if (h.kind === "b" && inPoly(x, y, h.hull)) { unfollow(); select(V.sel === h.id ? null : h.id); return; }
+        if (h.kind === "b" && inPoly(x, y, h.hull)) {
+          unfollow();
+          // touch: the first tap names it, the second opens it, a third goes inside
+          if (!touch) select(V.sel === h.id ? null : h.id);
+          else if (V.sel === h.id) apiRef.current.enter();
+          else if (V.peek === h.id) select(h.id);
+          else { if (V.sel) select(null); setPeekState(h.id); }
+          return;
+        }
       }
+      if (V.peek) setPeekState(null);
       if (V.sel) { unfollow(); select(null); }
     }
     // The wheel scrolls the page unless the city has been clicked (focused) or ctrl is held
@@ -1469,6 +1559,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       else if (e.key === "-") zoomAt(V.cssW / 2, V.cssH / 2, 1 / 1.3);
       else if (e.key === "Escape" && V.find) { e.preventDefault(); apiRef.current.endFind(); }
       else if (e.key === "Escape" && V.sel) select(null);
+      else if (e.key === "Escape" && V.peek) setPeekState(null);
       else if (e.key === "Enter" && V.sel) apiRef.current.enter();
       // [ and ]: the buildings one by one, nearest the middle of the view first, for anyone without a pointer
       else if (e.key === "[" || e.key === "]") {
@@ -1490,6 +1581,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     canvas.addEventListener("pointerdown", seen, { once: true });
     canvas.addEventListener("wheel", seen, { once: true, passive: true });
     canvas.addEventListener("pointermove", onMove);
+    const onLeave = () => { if (V.hover) { V.hover = null; V.need = true; canvas.classList.remove("point"); } };
+    canvas.addEventListener("pointerleave", onLeave);
     canvas.addEventListener("pointerup", onUp);
     canvas.addEventListener("pointercancel", onUp);
     canvas.addEventListener("wheel", onWheel, { passive: false });
@@ -1546,6 +1639,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       canvas.removeEventListener("pointerdown", seen);
       canvas.removeEventListener("wheel", seen);
       canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerleave", onLeave);
       canvas.removeEventListener("pointerup", onUp);
       canvas.removeEventListener("pointercancel", onUp);
       canvas.removeEventListener("wheel", onWheel);
@@ -1584,12 +1678,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         <canvas ref={canvasRef} tabIndex={0} className="hvi-city-canvas" role="img"
           aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag or use the arrow keys to move, pinch or plus and minus to zoom, Q and E to turn. Tap a building, or press ] and [ to step through the buildings in view, to open its cutaway: every floor and room, and who is in it; Enter goes inside. The list under the city says what is happening now, and the district directory lists every district." />
       </TouchGate>
-      <div className="hvi-city-zoom" role="toolbar" aria-label="City view controls">
+      <div className={`hvi-city-zoom${peek && !b ? " peeking" : ""}`} role="toolbar" aria-label="City view controls">
         {b && <span className="hint" title={b.name}>{b.name}</span>}
-        <button type="button" className="hvi-city-zb" aria-label="Turn left" onClick={() => apiRef.current.turn?.(-1)}><TurnIcon dir={-1} /></button>
-        <button type="button" className="hvi-city-zb" aria-label="Turn right" onClick={() => apiRef.current.turn?.(1)}><TurnIcon dir={1} /></button>
-        <button type="button" className="hvi-city-zb" aria-label="Zoom in" onClick={() => apiRef.current.zoom?.(1.4)}>+</button>
-        <button type="button" className="hvi-city-zb" aria-label="Zoom out" onClick={() => apiRef.current.zoom?.(1 / 1.4)}>−</button>
+        <button type="button" className="hvi-city-zb nav" aria-label="Turn left" onClick={() => apiRef.current.turn?.(-1)}><TurnIcon dir={-1} /></button>
+        <button type="button" className="hvi-city-zb nav" aria-label="Turn right" onClick={() => apiRef.current.turn?.(1)}><TurnIcon dir={1} /></button>
+        <button type="button" className="hvi-city-zb nav" aria-label="Zoom in" onClick={() => apiRef.current.zoom?.(1.4)}>+</button>
+        <button type="button" className="hvi-city-zb nav" aria-label="Zoom out" onClick={() => apiRef.current.zoom?.(1 / 1.4)}>−</button>
         {b
           ? <>
               {funnelButtons(b.id).map(f => <button key={f.label} type="button" className="hvi-city-zb txt" aria-label={f.aria} onClick={() => openFunnel(f.spec)}>{f.label}</button>)}
@@ -1597,7 +1691,15 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
               <button type="button" className="hvi-city-zb txt" onClick={() => apiRef.current.enter?.()}>ENTER</button>
               <button type="button" className="hvi-city-zb txt" aria-label="Close the cutaway" onClick={() => apiRef.current.close?.()}>CLOSE</button>
             </>
-          : <button type="button" className="hvi-city-zb txt" aria-label="Fit the whole city" onClick={() => apiRef.current.fit?.()}>FIT</button>}
+          : peek
+            ? <>
+                <span className="chip" role="status" title={peek.line}>{peek.line}</span>
+                <button type="button" className="hvi-city-zb txt" aria-label={`Open ${BUILDING[peek.id]?.name || "the building"}`} onClick={() => apiRef.current.open?.()}>OPEN</button>
+              </>
+            : <>
+                <button type="button" className="hvi-city-zb txt" aria-label="Fit the whole city" onClick={() => apiRef.current.fit?.()}>FIT</button>
+                <button type="button" className="hvi-city-zb txt" aria-pressed={labels} title="Name everything on the map" onClick={toggleLabels}>LABELS</button>
+              </>}
       </div>
       {b && <p className="sr-only" role="status">{`${b.name} open. ${b.floors.length} floor${b.floors.length === 1 ? "" : "s"}. ${b.floors.map(f => `${f.code} ${f.name}`).join(", ")}.`}</p>}
     </div>

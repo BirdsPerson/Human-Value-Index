@@ -146,13 +146,14 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       b.textBaseline = "top";
       b.font = `${fpx}px ${FONT}`;
 
-      // the substrate itself: a faint grid of solder points
+      // the substrate itself: a faint grid of solder points, out to the edge of the view (past the
+      // layout too: the unbuilt Substrate goes on), on the layout's own 4 x 2 pitch
       if (textLod) {
-        const c0 = Math.max(0, Math.floor(cam.x / CELL_W)), c1 = Math.min(layout.cols, Math.ceil((cam.x + V.cssW / z) / CELL_W));
-        const r0 = Math.max(0, Math.floor(cam.y / CELL_H)), r1 = Math.min(layout.rows, Math.ceil((cam.y + V.cssH / z) / CELL_H));
+        const c0 = Math.floor(cam.x / CELL_W), c1 = Math.ceil((cam.x + V.cssW / z) / CELL_W);
+        const r0 = Math.floor(cam.y / CELL_H), r1 = Math.ceil((cam.y + V.cssH / z) / CELL_H);
         b.fillStyle = "#0e1a11";
-        const line = "·   ".repeat(Math.ceil((c1 - c0) / 4) + 1);
-        for (let r = r0 - (r0 % 2); r < r1; r += 2) b.fillText(line, SX(c0 - (c0 % 4)), SY(r));
+        const cs = c0 - (((c0 % 4) + 4) % 4), line = "·   ".repeat(Math.ceil((c1 - cs) / 4) + 1);
+        for (let r = r0 - (((r0 % 2) + 2) % 2); r < r1; r += 2) b.fillText(line, SX(cs), SY(r));
       }
 
       // the Loop: two rails round the ring, sleepers when close, a platform at every

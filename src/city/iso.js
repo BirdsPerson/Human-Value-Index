@@ -160,3 +160,18 @@ export function hiddenByTerrain(x, y, h, r) {
   }
   return false;
 }
+
+// THE UNBUILT SUBSTRATE: the ground grid runs every `gridStep` map cells, out past the edge of the
+// view in every direction. gridStep: 4 cells (the city's street grid), doubled while its lines
+// would sit closer than ~10 px, so every coarser line is still one of the 4-cell lines.
+export function gridStep(z) { let s = 4; while (s * z < 10 && s < 4096) s *= 2; return s; }
+// The map cells the view's ground covers, snapped out to whole steps (quarter turns keep the
+// map's axes on the screen's diagonals, so the four corners bound it).
+export function viewCells(cam, w, h, step) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [sx, sy] of [[0, 0], [w, 0], [0, h], [w, h]]) {
+    const [x, y] = screenToMap(sx, sy, cam);
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  return { x0: Math.floor(x0 / step) * step, y0: Math.floor(y0 / step) * step, x1: Math.ceil(x1 / step) * step, y1: Math.ceil(y1 / step) * step };
+}

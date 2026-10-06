@@ -2177,3 +2177,21 @@ or any score.
   holes, par 72, names/credits/notes/sources, builds the same, the bot holes every hole on four
   seeds, a match replays tick for tick, a round naming no course is the links tick for tick).
 - **Not yet**: a server that verifies a submitted log; spectators; the course in the city map.
+
+## The unbuilt Substrate, and a quiet map (2026-10-05)
+
+- **Endless grid.** The faint street grid (every 4 cells, `rgba(74,222,128,0.05)`, 1 px) no longer
+  stops at the city's bounding rectangle: CITY draws it out to the edge of the view at every zoom
+  and turn (`iso.gridStep`, `iso.viewCells`: only the lines the view crosses; the step doubles
+  while lines would sit under ~10 px apart, so coarse lines are still 4-cell lines). Full strength
+  over the city's bounds, then two bands down to a 0.02 floor further out (`GRID_BANDS`), drawn
+  as solid passes into a layer redrawn only when the camera moves. MAP's solder points run past
+  the layout the same way. Render-only.
+- **Labels off by default.** Building, station, person and prefect names show only for what the
+  mouse is over or what is selected (tap, `[` `]`, a find). The four landmark tags show only at the
+  whole-city overview and fade as soon as a zoom starts. **LABELS** in the control row brings
+  every name back (remembered per viewer, `hvi-city-labels`).
+- **Touch: tap to name, tap to open.** On a touch screen the first tap on a building outlines and
+  names it and puts a one-line chip (name, head count, **OPEN**) in the control row; OPEN or a second
+  tap opens its cutaway; a tap on the open building goes inside; a tap on empty ground clears it.
+  A mouse click still opens the cutaway at once.

@@ -147,6 +147,11 @@ const css = `
     .hvi-city-zoom .hint { margin-right: auto; align-self: center; color: var(--fg-mute); font-size: var(--t-xs); flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   }
   @media (min-width: 721px) { .hvi-city-zoom .hint { display: none; } }
+  /* a touch screen's first tap on a building: its name and head count, one line, OPEN beside it */
+  .hvi-city-zoom .chip { align-self: center; min-width: 0; max-width: 42ch; flex: 0 1 auto; padding: 0 var(--s2); line-height: calc(var(--hit-min) - 2 * var(--bw)); border: var(--bw) solid var(--accent); background: var(--bg); color: var(--accent); font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* a phone gives the chip the row: the turn and zoom keys step aside (pinch still zooms) */
+  @media (max-width: 720px) { .hvi-city-zoom .chip { flex: 1 1 auto; max-width: none; } .hvi-city-zoom.peeking .nav { display: none; } }
+  .hvi-city-zb[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 
   .hvi-city-tip { position: absolute; left: 0; top: 0; z-index: 23; max-width: min(34ch, 86%); min-height: var(--hit-min); text-align: left; font: inherit; font-size: var(--t-xs); line-height: 1.4;
     background: var(--bg); color: var(--fg-dim); border: 0; border-radius: 0; padding: var(--s1) var(--s2); cursor: pointer; white-space: normal; pointer-events: auto; text-transform: uppercase;
