@@ -395,7 +395,8 @@ function buildFamous(n, d) {
     }
     else z.push({ k, a: hz.slice(1) });
   }
-  const fw = !O && d.fw ? { from: d.fw[0], w: d.fw[1], wob: fnv(`open|fw|${d.id}`) } : null;
+  // the fairway: OSM's, or (OSM has none mapped: St Andrews) the drawn band with wandering edges
+  const fw = (!O || !O.fairway.length) && d.fw ? { from: d.fw[0], w: d.fw[1], wob: fnv(`open|fw|${d.id}`) } : null;
   const corridor = (d.corridor || 50) + (O ? 8 : 0);
   const along = pts.map((p, i) => (i ? lineLength(pts.slice(0, i + 1)) : 0));
   const h = {
@@ -476,7 +477,7 @@ function famousSurface(h, x, y) {
   }
   for (const t of h.trees) if (Math.hypot(x - t.x, y - t.y) <= t.r) return "trees";
   if (inAny(h.tees, x, y)) return "tee";
-  if (h.osm) { if (inAny(h.fairways, x, y)) return "fairway"; }
+  if (h.fairways.length) { if (inAny(h.fairways, x, y)) return "fairway"; }
   else if (h.fw && a >= h.fw.from && a <= h.yards - h.green.r * 0.6 && Math.abs(l) <= fwEdge(h.fw, a, h.yards - h.green.r * 0.6)) return "fairway";
   return "rough";
 }

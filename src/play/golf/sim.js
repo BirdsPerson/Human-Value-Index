@@ -204,6 +204,10 @@ export function predict(h, P, club, aim, power, wind) {
 // flat green. (Closed form of the roll: v(t) = (v0 + c0/c1) e^(-c1 t) - c0/c1.)
 const GREEN = GROUND.green;
 const flatRoll = (v0) => { const q = GREEN.c0 / GREEN.c1, t = Math.log((v0 + q) / q) / GREEN.c1; return ((v0 + q) * (1 - Math.exp(-GREEN.c1 * t))) / GREEN.c1 - q * t; };
+// The putter's meter is finer at the short end: the marker's position m gives pace m^1.5 (a two-foot
+// putt is a dozen ticks up the meter, not three).
+export const puttPace = (m) => Math.pow(Math.max(0, m), 1.5);
+export const puttMark = (pace) => Math.pow(Math.max(0, pace), 1 / 1.5);
 export function puttSpeed(power) {
   const want = Math.max(0, power) * PUTT_MAX;
   let lo = 0, hi = 12;
@@ -251,8 +255,56 @@ function safeLayup(h, along, tx, ty) {
 }
 // The swing that puts the ball at rest nearest (tx, ty): -> {aim, power}. Reads the wind (`read`
 // of it: 1 all, 0 none) and, on the green, the break, by playing the shot out in its head.
+// A putt read by rolling it in the head: where the line passes the cup (how far left or right,
+// how fast) -> {aim, power} that drops it, dying a foot or so past.
+function puttPass(h, P, aim, power) {
+  const v0 = puttSpeed(power), [dx, dy] = dirOf(aim);
+  const b = { x: P.x, y: P.y, z: 0, vx: dx * v0, vy: dy * v0, vz: 0, s: 0, hops: 0, putt: true };
+  let best = Infinity, side = 0, speed = 0, past = false;
+  for (let k = 0; k < HZ * 30; k++) {
+    const r = groundStep(h, b);
+    if (r === "cup") return { cup: true, side, speed, best: 0, reached: true };
+    const ox = b.x - h.pin.x, oy = b.y - h.pin.y, d = Math.hypot(ox, oy);
+    // the side the line passes the cup on, across the ball's own heading there
+    const sp = Math.hypot(b.vx, b.vy) || 1;
+    if (d < best) { best = d; side = (ox * b.vy - oy * b.vx) / sp; speed = sp; past = false; }
+    else if (d > best + 0.05) past = true;
+    if (r && r !== "lip") break;
+  }
+  return { cup: false, side, speed, best, reached: past };
+}
+function solvePutt(h, P, tx, ty) {
+  const dist = Math.hypot(tx - P.x, ty - P.y);
+  let aim = Math.atan2(tx - P.x, ty - P.y), power = Math.max(0.02, Math.min(1, (dist + 0.4) / PUTT_MAX));
+  let best = { aim, power, err: Infinity };
+  for (let it = 0; it < 16; it++) {
+    const r = puttPass(h, P, aim, power);
+    // the pace: through the cup's spot at about half a yard a second (a foot past), never short;
+    // the line: dead centre (an edge that drops at one pace lips out at the next)
+    const err = Math.abs(r.side) * 3 + (r.reached ? Math.abs(r.speed - 0.55) * 0.1 : 1 + (r.best || 0)) - (r.cup ? 0.05 : 0);
+    if (err < best.err) best = { aim, power, err };
+    if (r.cup && Math.abs(r.side) < 0.012 && Math.abs(r.speed - 0.55) < 0.35) break;
+    aim += Math.atan2(-r.side, Math.max(0.5, dist)) * 0.9;
+    if (!r.reached) power = Math.min(1, power + Math.max(0.01, (r.best || 0.3) / PUTT_MAX));
+    else power = Math.max(0.005, power * Math.max(0.6, Math.min(1.5, Math.pow(0.55 / Math.max(0.05, r.speed), 0.7))));
+  }
+  return { aim: best.aim, power: best.power };
+}
+// The line for a putt struck at a pace already fixed (the meter's tick): aim only.
+export function lineFor(h, P, power, aim) {
+  let best = { aim, err: Infinity };
+  for (let it = 0; it < 10; it++) {
+    const r = puttPass(h, P, aim, power);
+    const err = Math.abs(r.side) - (r.cup ? 1 : 0);
+    if (err < best.err) best = { aim, err };
+    if (r.cup && Math.abs(r.side) < 0.01) break;
+    aim += Math.atan2(-r.side, Math.max(0.5, Math.hypot(h.pin.x - P.x, h.pin.y - P.y))) * 0.9;
+  }
+  return best.aim;
+}
 export function solveShot(h, P, club, tx, ty, wind, read = 1) {
   const c = CLUBS[club], w = { x: wind.x * read, y: wind.y * read };
+  if (c.putt && tx === h.pin.x && ty === h.pin.y) return solvePutt(h, P, tx, ty);
   const dist = Math.hypot(tx - P.x, ty - P.y);
   let aim = Math.atan2(tx - P.x, ty - P.y);
   const full = c.putt ? PUTT_MAX : c.carry * lieFactor(club, P.lie, P.plug) * (1 + c.roll);
@@ -328,7 +380,7 @@ function planCpu(st, h, P, plan) {
   else { p *= 1 + gauss(st) * (0.03 + 0.07 * k); aim += gauss(st) * (0.015 + 0.035 * k); }
   const a = c.putt ? 0 : gauss(st) * (0.2 + 0.6 * k);    // normalised accuracy error: 0 is the line
   const rise = c.putt ? RISE_PUTT : RISE;
-  const t1 = Math.max(2, Math.min(rise, Math.round(Math.max(0.02, Math.min(1, p)) * rise)));
+  const t1 = Math.max(2, Math.min(rise, Math.round((c.putt ? puttMark(Math.max(0.001, Math.min(1, p))) : Math.max(0.02, Math.min(1, p))) * rise)));
   const pw = t1 / rise;
   const t2 = c.putt ? 0 : t1 + Math.max(1, Math.round((pw + a * ACC_ZONE) * rise));
   return { aim, club: plan.club, t1, t2, wait: 30 + Math.floor(rand(st) * 30) };
@@ -344,7 +396,13 @@ function botPlan(st) {
   if (m && m.key === key) return m.sol;
   const h = holeOf(st), plan = planShot(h, P, st.wind);
   const tx = st.club === plan.club ? plan.tx : h.pin.x, ty = st.club === plan.club ? plan.ty : h.pin.y;
-  const sol = solveShot(h, P, st.club, tx, ty, st.wind, 1);
+  let sol = solveShot(h, P, st.club, tx, ty, st.wind, 1);
+  if (CLUBS[st.club].putt && tx === h.pin.x && ty === h.pin.y) {
+    // the meter only stops on ticks: take the tick's pace, then read the line for that pace
+    const rise = Math.round(RISE_PUTT * (st.cfg.easy && P.kind === "human" ? 1.5 : 1));
+    const k = Math.max(1, Math.round(puttMark(sol.power) * rise)), power = puttPace(k / rise);
+    sol = { aim: lineFor(h, P, power, sol.aim), power };
+  }
   BOT.set(st, { key, sol });
   return sol;
 }
@@ -365,7 +423,7 @@ export function botBits(st) {
     return BTN.A;
   }
   if (st.phase === "meter") {
-    const m = st.meter, p = botPlan(st).power;
+    const m = st.meter, p0 = botPlan(st).power, p = CLUBS[st.club].putt ? puttMark(p0) : p0;
     // the press lands on the next tick's marker: press on the tick that puts it nearest the mark
     if (m.stage === 1) return m.dir > 0 && (m.k + 1.5) / m.rise >= p ? BTN.A : 0;
     if (m.stage === 2) return m.m - 1.5 / m.rise <= 0 ? BTN.A : 0;
@@ -414,6 +472,7 @@ export function step(st, bits = 0) {
         else m.m = Math.max(0, 1 - (m.k - m.rise) / m.rise);
         if (press) {
           m.power = m.m; st.ev.push("tick");
+          if (putt) m.pace = puttPace(m.m);
           if (putt) { m.acc = 0; strike(st); }          // the putter: two taps, no accuracy press
           else m.stage = 2;
         } else if (m.k >= m.rise && m.dir > 0) {
@@ -466,7 +525,7 @@ function strike(st) {
   // what the gallery (render.js, audio) weighs the shot by, read-only
   st.shot = { from: Math.hypot(h.pin.x - P.x, h.pin.y - P.y), putt: Boolean(c.putt), shank: Math.abs(a) > 1, lie: P.lie, lip: false, splash: false };
   if (c.putt) {
-    const v0 = puttSpeed(m.power), [dx, dy] = dirOf(st.aim);
+    const v0 = puttSpeed(m.pace ?? puttPace(m.power)), [dx, dy] = dirOf(st.aim);
     st.fl = { ox: P.x, oy: P.y, putt: true, aim: st.aim, b: { x: P.x, y: P.y, z: 0, vx: dx * v0, vy: dy * v0, vz: 0, s: 0, hops: 0, putt: true } };
     P.plug = false;
     st.phase = "roll";

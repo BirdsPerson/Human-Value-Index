@@ -133,6 +133,21 @@ function simplify(pts, eps, max, ring = true) {
   for (let e = eps; ; e *= 1.35) { const out = dp(p, e); if (out.length <= max || e > 40) return out; }
 }
 const r1 = (v) => Math.round(v * 10) / 10;
+// Sutherland-Hodgman: a polygon cut to an axis-aligned box (a lake becomes the part of it by the hole)
+function clipBox(pts, [x0, y0, x1, y1]) {
+  let out = pts;
+  const edges = [[(p) => p[0] >= x0, (a, b) => [x0, a[1] + ((b[1] - a[1]) * (x0 - a[0])) / (b[0] - a[0])]], [(p) => p[0] <= x1, (a, b) => [x1, a[1] + ((b[1] - a[1]) * (x1 - a[0])) / (b[0] - a[0])]],
+    [(p) => p[1] >= y0, (a, b) => [a[0] + ((b[0] - a[0]) * (y0 - a[1])) / (b[1] - a[1]), y0]], [(p) => p[1] <= y1, (a, b) => [a[0] + ((b[0] - a[0]) * (y1 - a[1])) / (b[1] - a[1]), y1]]];
+  for (const [inside, cut] of edges) {
+    const src = out; out = [];
+    for (let i = 0; i < src.length; i++) {
+      const a = src[i], b = src[(i + 1) % src.length];
+      if (inside(b)) { if (!inside(a)) out.push(cut(a, b)); out.push(b); } else if (inside(a)) out.push(cut(a, b));
+    }
+    if (!out.length) return out;
+  }
+  return out;
+}
 
 // ---- one hole ------------------------------------------------------------------------------------
 function importHole(d, data, C) {
@@ -194,12 +209,14 @@ function importHole(d, data, C) {
       if (kind === "green") { greens.push(pts); continue; }
       if (kind === "water") {   // water is shared: any pond that reaches into the hole's box
         if (!pts.some(([x, y]) => inBox(x, y)) && !inPoly(pts, 0, len / 2)) continue;
-        out.water.push(simplify(pts, 1.2, 56).map(p => p.map(r1)));
+        const cut = clipBox(closed(pts) ? pts.slice(0, -1) : pts, [-200, -90, 200, len + 130]);
+        if (cut.length >= 3) out.water.push(simplify(cut, 1.2, 56).map(p => p.map(r1)));
         continue;
       }
       if (!inBox(cx, cy) || !mine(cx, cy)) continue;
       if (kind === "tee" && Math.hypot(cx, cy) > 70) continue;
       if (kind === "fairway" && lineDist(line, cx, cy) > 60) continue;
+      if (kind === "bunker" && lineDist(line, cx, cy) > 75) continue;   // far off the hole: never in play
       out[kind].push(simplify(pts, kind === "bunker" ? 0.6 : 1, kind === "bunker" ? 20 : kind === "rough" ? 40 : 36).map(p => p.map(r1)));
     }
   }
