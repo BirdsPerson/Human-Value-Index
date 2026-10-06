@@ -70,7 +70,7 @@ const pop = FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name) }))
   .concat(Array.from({ length: 1200 }, (_, i) => ({ slug: `citizen-${i}`, name: `Citizen ${i}`, ...legacyTier(i * 7), kind: "citizen" })));
 let placed = 0, asleep = 0, nights = 0, homeNow = 0, inOwnFlat = 0, atWork = 0, inOffice = 0;
 for (const hour of [3, 8, 12.5, 15, 19, 23.5]) {
-  const mt = 24 * 5 + hour;
+  const mt = 24 * 5 + hour, day = Math.floor(mt / 24);
   const entries = pop.map(s => { const w = whereAt(s, mt); return { s, w, r: roomIn(w, s) }; });
   const everywhere = new Map();
   for (const b of towers) {
@@ -92,8 +92,8 @@ for (const hour of [3, 8, 12.5, 15, 19, 23.5]) {
       if (!room) continue;
       if (w.activity === "home" && r.mode === "here") {
         homeNow++;
-        const f = residentFlat(p, s);
-        if (homeOf(s) === w.placeId && f && room.startsWith(`${f.id}:`)) inOwnFlat++;
+        const f = residentFlat(p, s, undefined, day);
+        if (homeOf(s, undefined, day) === w.placeId && f && room.startsWith(`${f.id}:`)) inOwnFlat++;
         if (hour === 3 && !isOwl(s)) { nights++; if (/:bedroom$/.test(room)) asleep++; }
       }
       if (w.activity === "work" && r.mode === "here") { atWork++; if (/:(office|vault|shop|lounge|pizzeria|booths|brewhouse|cellar|taproom|snug)\d*$/.test(room) || /^airport-hotel:/.test(room)) inOffice++; else console.log(`  worker ${k} in ${room}`); }

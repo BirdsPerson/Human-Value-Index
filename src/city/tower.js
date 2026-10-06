@@ -180,8 +180,8 @@ export function flatOf(plan, placeId, simFloor, key) {
   const st = pick(withFlats, `${key}|storey|${plan.id}`);
   return pick(st.units.filter(u => u.kind === "flat" && u.placeId === placeId), `${key}|flat|${plan.id}`);
 }
-export function residentFlat(plan, s, seed = SEED) {
-  const home = homeOf(s, seed);
+export function residentFlat(plan, s, seed = SEED, day) {
+  const home = homeOf(s, seed, day);   // the ladder in force on that day: whereAt houses people by it
   if (!plan.homePlaces.has(home)) return null;
   const key = keyOf(s);
   return flatOf(plan, home, floorOf(home, key, seed), key);
@@ -213,6 +213,7 @@ export function homeRoom(unit, key, mt, owl = false) {
 // at: Map(key -> roomId), residents: Map(unitId -> [s]), units: Map(unitId -> n present)}.
 export function placeAll(plan, entries, mt, seed = SEED) {
   const rooms = new Map(), at = new Map(), residents = new Map(), units = new Map();
+  const day = Math.floor(toHours(mt) / 24);
   const unitById = new Map(), lobby = plan.storeys.find(s => s.level === 0)?.units.find(u => u.kind === "lobby");
   for (const st of plan.storeys) for (const u of st.units) unitById.set(u.id, u);
   const put = (u, roomObj, s, key, act) => {
@@ -225,8 +226,8 @@ export function placeAll(plan, entries, mt, seed = SEED) {
     if (!s || s.crowd) continue;
     const key = keyOf(s);
     // the nameplates: everyone whose assigned home is a flat here
-    if (plan.homePlaces.has(homeOf(s, seed))) {
-      const f = residentFlat(plan, s, seed);
+    if (plan.homePlaces.has(homeOf(s, seed, day))) {
+      const f = residentFlat(plan, s, seed, day);
       if (f) (residents.get(f.id) || residents.set(f.id, []).get(f.id)).push(s);
     }
     if (!r || r.buildingId !== plan.id) continue;
