@@ -15,3 +15,6 @@ a.pgd-t:hover .pgd-ic, a.pgd-t:focus-visible .pgd-ic { display: none; }   /* the
 a.pgd-t:hover .pgd-l, a.pgd-t:focus-visible .pgd-l { color: var(--accent); }
 .pgd-t.off { opacity: 0.45; border-style: dashed; }
 .pgd-t.off .pgd-n { display: block; order: 1; color: var(--fg-mute); }
+/* a tournament is open for this game (src/tournament/calendar.js): a small inverse tag in the corner */
+.pgd-t { position: relative; }
+.pgd-ev { position: absolute; top: 0; right: 0; padding: 1px 0.6ch; font-size: var(--t-xs); letter-spacing: 0.08em; background: var(--accent); color: var(--accent-ink); }

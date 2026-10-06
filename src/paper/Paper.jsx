@@ -351,6 +351,17 @@ function Sports({ s }) {
           {s.race.next && <p className="pp-meta">NEXT: THE {s.race.next.name}, MACHINE DAY {s.race.next.day}.</p>}
         </div>
       )}
+      {s.tournaments?.length > 0 && s.tournaments.map(t => (
+        <div className="pp-story" key={t.href}>
+          <h3 className="sub"><a href={t.href}>{t.name}</a> <span className="pp-meta">{t.status === "FINAL" ? "FINAL" : "LIVE, AS AT PRESS TIME"} // {t.venue}</span></h3>
+          {t.divisions.length ? t.divisions.map(d => (
+            <div key={d.div}>
+              <p className="pp-meta">{d.div}{t.status === "FINAL" && d.rows[0] ? `: WON BY ${d.rows[0].holder}, ${d.rows[0].score}` : ""}</p>
+              <Table rows={d.rows} cols={[["pos", "#"], ["holder", "ENTRANT"], ["score", "SCORE"]]} />
+            </div>
+          )) : <p>NO CARDS FILED YET. <a href={t.href}>ENTER</a>; THE FIRST CARD LEADS.</p>}
+        </div>
+      ))}
       <div className="pp-story">
         <h3 className="sub"><a href="#aquarium">THE AQUARIUM'S PLAQUES</a></h3>
         {s.aquarium?.length ? <ul className="pp-list">{s.aquarium.map((r, i) => <li key={i}>{r.species}: {r.weight}, {r.length}, {r.holder}{r.fresh ? " (NEW)" : ""}.</li>)}</ul>

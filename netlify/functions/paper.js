@@ -11,6 +11,9 @@ import { paperDate, wireOf, DATE_RE } from "../lib/paper.js";
 import { tickSecret, TICK_HEADER, publicCached } from "../lib/social-store.js";
 import { readBoard } from "../lib/market.js";
 import { machineClock } from "../../src/city/sim.js";
+import { tourneyWire } from "../lib/paper.js";
+import { openAt } from "../../src/tournament/calendar.js";
+import { readBoard as readTourney, standings, publicStandings } from "../lib/tournament-store.js";
 
 const json = (status, body, cache = "no-store") => new Response(JSON.stringify(body), {
   status, headers: { "Content-Type": "application/json", "Cache-Control": cache },
@@ -23,9 +26,16 @@ async function wake(base) {
   if (!secret) return;
   await fetch(`${base}/.netlify/functions/paper-build-background`, { method: "POST", headers: { [TICK_HEADER]: secret }, signal: AbortSignal.timeout(8_000) }).catch(() => {});
 }
+// the open tournaments' leaders (src/tournament/): a board read per open event, at most three
+async function tourneyLines(now) {
+  const evs = openAt(now).sort((a, b) => b.major - a.major).slice(0, 3);
+  const boards = await Promise.all(evs.map(ev => readTourney(ev.id).then(b => ({ ev, board: publicStandings(standings(b, ev, now), 2) })).catch(() => null)));
+  return tourneyWire(boards.filter(Boolean));
+}
 async function wire() {
-  const [board, social] = await Promise.all([readBoard().catch(() => null), publicCached().catch(() => null)]);
-  return wireOf({ mt: machineClock(Date.now()).mt, board, social });
+  const now = Date.now();
+  const [board, social, tourney] = await Promise.all([readBoard().catch(() => null), publicCached().catch(() => null), tourneyLines(now).catch(() => [])]);
+  return wireOf({ mt: machineClock(now).mt, board, social, tourney });
 }
 
 export default async (req, context) => {

@@ -2,6 +2,7 @@
 // The note shows on hover or focus only. Arrow keys move between tiles.
 import { GAMES, isLive } from "./games.js";
 import { iconPaths } from "./gameIcons.js";
+import { liveGames } from "../tournament/calendar.js";
 import "./playgrid.css";
 
 function Icon({ k }) {
@@ -33,14 +34,19 @@ function onArrow(e) {
   if (tiles[j]) { e.preventDefault(); tiles[j].focus(); }
 }
 
+// A tile whose game has an open tournament (src/tournament/calendar.js) wears LIVE EVENT.
+const EVENT_GAME = { "#golf": "golf", "#bowling": "bowling", "#fish": "fish" };
 export default function PlayGrid() {
+  let live0 = new Set();
+  try { live0 = liveGames(Date.now()); } catch { /* no Intl time zones: no marker */ }
   const seen = new Set();
   const games = GAMES.filter(g => !seen.has(g.href) && seen.add(g.href));
   return (
     <ul className="pgd" aria-label="Games" onKeyDown={onArrow}>
       {games.map((g, i) => {
-        const live = isLive(g), id = `pgd-n${i}`;
+        const live = isLive(g), id = `pgd-n${i}`, ev = live && live0.has(EVENT_GAME[g.href]);
         const body = <>
+          {ev && <span className="pgd-ev">LIVE EVENT</span>}
           <Icon k={g.icon} />
           <span className="pgd-l">{g.title}</span>
           <span className="pgd-n" id={id}>{live ? g.note : "COMING SOON"}</span>
@@ -48,7 +54,7 @@ export default function PlayGrid() {
         return (
           <li key={g.href}>
             {live
-              ? <a className="pgd-t" href={g.href} aria-label={`Play ${g.name}`} aria-describedby={id}>{body}</a>
+              ? <a className="pgd-t" href={g.href} aria-label={`Play ${g.name}${ev ? ", a tournament is open" : ""}`} aria-describedby={id}>{body}</a>
               : <span className="pgd-t off" aria-label={`${g.name}: coming soon`} role="img">{body}</span>}
           </li>
         );

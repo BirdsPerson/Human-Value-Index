@@ -11,6 +11,8 @@ import { liveFlick, readFlick, throwOf, createStickSwing } from "./gesture.js";
 import { machineClock, cosmicHour, shapeOf, keepResult, readResults, resultLine } from "./results.js";
 import * as SFX from "./audio.js";
 import CSS from "./bowling.css?inline";
+import TournamentDesk, { fileLeg } from "../../tournament/TournamentDesk.jsx";
+import { bowlCfg, DIV_NAME } from "../../tournament/rules.js";
 import "../pages.css";
 
 // #bowling[?vs=<key>][&lane=<n>]: THE LANES (docs/CITY_SPEC.md "THE LANES"): ten-pin bowling, exhibition
@@ -25,7 +27,7 @@ function injectStyles() {
 const parseRoute = (route) => {
   const q = new URLSearchParams(String(route || "").split("?")[1] || "");
   const lane = Math.max(1, Math.min(24, Number(q.get("lane")) || 7));
-  return { vs: OPP_BY_KEY.has(q.get("vs")) ? q.get("vs") : null, lane, from: q.get("from") };
+  return { vs: OPP_BY_KEY.has(q.get("vs")) ? q.get("vs") : null, lane, from: q.get("from"), t: q.get("t") || null };
 };
 const KEEP_SETUP = "hvi-bowling-setup";
 const loadSetup = () => { try { const j = JSON.parse(localStorage.getItem(KEEP_SETUP) || "null"); return j && Array.isArray(j.players) ? j : null; } catch { return null; } };
@@ -61,12 +63,25 @@ export default function Bowling({ route }) {
   const [game, setGame] = useState(null);
   useEffect(() => saveSetup(setup), [setup]);
   const start = (s = setup) => { SFX.unlock(); setGame({ cfg: cfgOf(s, (Date.now() % 2147483647) >>> 0), id: Date.now() }); };
-  if (!game) return <Setup setup={setup} setSetup={setSetup} onBowl={start} lane={r.lane} />;
-  return <Lane key={game.id} cfg={game.cfg} setup={setup} lane={r.lane} onAgain={() => start()} onSettings={() => setGame(null)} />;
+  // THE TOURNAMENT (src/tournament/, #bowling?t=<event>): LEAGUE NIGHT's three games on the event's oil
+  // and racks, one bowler (your ball and hand; bumpers only in ASSISTED); each official game is filed
+  // (re-played by the server) as it ends, then the next.
+  const [tourRefresh, setTourRefresh] = useState(0);
+  const startTour = ({ ev, div, official, entry, legsFiled = 0 }, leg = legsFiled) => {
+    SFX.unlock();
+    const me = setup.players.find(p => p.kind === "human") || {};
+    const bowler = { name: meName(), weight: me.weight, hand: me.hand, bumpers: me.bumpers };
+    const T = { ev, div, official, entry, leg, bowler };
+    T.file = (rec) => fileLeg(ev, entry, leg, { inputLog: rec.inputLog, claim: { total: rec.result.players[0].total }, opts: bowler, v: rec.cfg.v }).then(line => { setTourRefresh(x => x + 1); return line; });
+    T.next = leg + 1 < ev.legs ? () => startTour({ ev, div, official, entry }, leg + 1) : null;
+    setGame({ cfg: bowlCfg(ev, leg, div, bowler, VERSION), id: Date.now(), tour: T });
+  };
+  if (!game) return <Setup setup={setup} setSetup={setSetup} onBowl={start} lane={r.lane} desk={<TournamentDesk game="bowling" id={r.t} onStart={startTour} refresh={tourRefresh} />} first={Boolean(r.t)} />;
+  return <Lane key={game.id} cfg={game.cfg} setup={setup} lane={game.tour ? game.tour.ev.cond.lane : r.lane} tour={game.tour || null} onAgain={() => start()} onSettings={() => setGame(null)} />;
 }
 
 // ---- the desk: who bowls, which ball, the house rules ---------------------------------------------------
-function Setup({ setup, setSetup, onBowl, lane }) {
+function Setup({ setup, setSetup, onBowl, lane, desk = null, first = false }) {
   const [picking, setPicking] = useState(false);
   const ck = machineClock();
   const P = setup.players;
@@ -76,6 +91,7 @@ function Setup({ setup, setSetup, onBowl, lane }) {
   const last = readResults()[0];
   return (
     <div className="bw">
+      {first && desk}
       <Frame box title="THE LANES" meta={`LANE ${lane} // EXHIBITION`}>
         <p className="bw-p">TEN PINS, TEN FRAMES, ONE TO FOUR BOWLERS IN TURN. THE HOUSE SUPPLIES THE SHOES. THE SHOES ARE LOGGED.</p>
         <h2 className="bw-h">BOWLERS</h2>
@@ -135,6 +151,7 @@ function Setup({ setup, setSetup, onBowl, lane }) {
         <Legend />
         <p className="bw-notice">{NOTICE}</p>
       </Frame>
+      {!first && desk}
     </div>
   );
 }
@@ -200,7 +217,7 @@ const CALLS = {
 };
 
 // ---- a game on the lane ------------------------------------------------------------------------------------
-function Lane({ cfg, setup, lane, onAgain, onSettings }) {
+function Lane({ cfg, setup, lane, onAgain, onSettings, tour = null }) {
   const canvasRef = useRef(null), wrapRef = useRef(null);
   const stRef = useRef(null), logRef = useRef(null), viewRef = useRef(makeView());
   const queue = useRef([]), keys = useRef(0), taps = useRef(0), pend = useRef(null);
@@ -236,8 +253,9 @@ function Lane({ cfg, setup, lane, onAgain, onSettings }) {
     const shape = shapeOf(rec, verified, { lane, cosmic: cosmicRef.current });
     if (verified && cfg.players.some(p => p.kind === "human")) keepResult(shape);
     SFX.verdict("over");
-    setDone({ shape, verified });
-  }, [cfg, lane]);
+    setDone({ shape, verified, tourLine: tour?.official ? "FILING THE GAME. THE DEPARTMENT IS RE-PLAYING IT." : tour ? "PRACTICE. NOTHING IS FILED." : null });
+    if (tour?.official) tour.file(rec).then(line => setDone(d => (d ? { ...d, tourLine: line } : d)));
+  }, [cfg, lane, tour]);
 
   const togglePause = useCallback(() => { if (!stRef.current.over) setPaused(p => !p); }, []);
 
@@ -409,15 +427,17 @@ function Lane({ cfg, setup, lane, onAgain, onSettings }) {
         <Button variant="back" onClick={onSettings}>Change bowlers</Button>
       </ButtonRow>
       <Legend pad={pad} />
-      <p className="bw-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{NOTICE}</p>
+      <p className="bw-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{tour ? `${tour.ev.name} // ${tour.official ? "OFFICIAL" : "PRACTICE"} // ${DIV_NAME[tour.div]} // ${tour.ev.cond.oil} // GAME ${tour.leg + 1} OF ${tour.ev.legs}` : NOTICE}</p>
       {paused && !done && (
         <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE PINSETTER WAITS. IT IS PAID TO." onBack={() => setPaused(false)}
           options={{ resume: () => setPaused(false), restart: onAgain, controls: <Legend pad={pad} />, sound: { on: !muted, onSelect: toggleMute }, quit: true }} />
       )}
       {done && !done.closed && (
-        <GameMenu key="end" kind="end" title="GAME FILED." summary={`${resultLine(done.shape)}. ${done.verified ? "RE-RUN FROM THE LOG: SAME SHEET." : "THE RE-RUN DISAGREED. NOT KEPT."}`}
+        <GameMenu key="end" kind="end" title={tour ? `${tour.ev.name.replace(/^LEAGUE NIGHT: /, "")}: GAME ${tour.leg + 1} OF ${tour.ev.legs}` : "GAME FILED."} summary={`${resultLine(done.shape)}. ${done.verified ? "RE-RUN FROM THE LOG: SAME SHEET." : "THE RE-RUN DISAGREED. NOT KEPT."}${done.tourLine ? ` ${done.tourLine}` : ""}`}
           onBack={() => setDone(d => ({ ...d, closed: true }))}
-          options={{ again: onAgain, settings: onSettings, replay: snapRef.current ? () => { setDone(null); instant(); } : false, play: true, city: { label: "BACK TO THE LANES", href: "#city/strip/the-arcade" } }} />
+          options={tour
+            ? { next: tour.next ? { label: `BOWL GAME ${tour.leg + 2} OF ${tour.ev.legs}`, onSelect: tour.next } : false, board: { label: "THE LEADERBOARD", onSelect: onSettings }, replay: snapRef.current ? () => { setDone(null); instant(); } : false, play: true }
+            : { again: onAgain, settings: onSettings, replay: snapRef.current ? () => { setDone(null); instant(); } : false, play: true, city: { label: "BACK TO THE LANES", href: "#city/strip/the-arcade" } }} />
       )}
     </div>
   );

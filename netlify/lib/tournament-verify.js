@@ -20,6 +20,7 @@ import { replayRecord } from "../../src/play/golf/replay.js";
 import * as BOWL from "../../src/play/bowling/sim.js";
 import { frames as bowlFrames } from "../../src/play/bowling/score.js";
 import * as FISH from "../../src/play/fish/sim.js";
+import { verifyCatchV, versionOf } from "../../src/play/fish/replay.js";
 import { SPECIES_BY } from "../../src/play/fish/data.js";
 import * as HUNT from "../../src/play/hunt/sim.js";
 import * as SKI from "../../src/play/ski/sim.js";
@@ -99,14 +100,16 @@ export const bowling = {
 // ---- fish: a derby is one catch, checked exactly as the aquarium checks a donation ----------------------
 export const fish = {
   game: "fish", lower: false, hz: FISH.HZ, logTicks: FISH.logTicks,
-  verify(ev, leg, div, { inputLog, claim, n }) {
+  verify(ev, leg, div, { inputLog, claim, n, v }) {
     if (leg !== 0) return no("A DERBY IS ONE FISH.");
+    const simV = versionOf({ v: v ?? FISH.VERSION });   // the one-button sim (2) or EXPERT (1): the same water either way
+    if (!simV) return no("THE DERBY KNOWS NO SUCH WAY OF FISHING.");
     if (!Number.isInteger(n) || n < 0 || n > 500) return no("WHICH FISH? THE CATCH NUMBER IS NOT LEGIBLE.");
     if (!claim || typeof claim.sp !== "string" || !SPECIES_BY[claim.sp] || !int(claim.cw) || !int(claim.tl)) return no("THE CLAIM IS NOT LEGIBLE: SPECIES, WEIGHT, LENGTH.");
     if (!Array.isArray(inputLog) || inputLog.length > MAX_LOG) return no("THE LOG IS LONGER THAN ANY TRIP.");
-    const v = FISH.verifyCatch(fishCfg(ev), inputLog, n, claim, { maxTicks: FISH.TRIP_TICKS });
-    if (!v.ok) return v;
-    return { ok: true, leg: { total: v.catch.cw, tb: [-v.catch.tl], detail: { sp: v.catch.sp, cw: v.catch.cw, tl: v.catch.tl }, ticks: v.ticks } };
+    const r = verifyCatchV(simV, fishCfg(ev), inputLog, n, claim, { maxTicks: FISH.TRIP_TICKS });
+    if (!r.ok) return r;
+    return { ok: true, leg: { total: r.catch.cw, tb: [-r.catch.tl], detail: { sp: r.catch.sp, cw: r.catch.cw, tl: r.catch.tl, v: simV }, ticks: r.ticks } };
   },
 };
 

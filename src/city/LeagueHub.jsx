@@ -12,6 +12,7 @@ import * as L from "./leagues.js";
 import { leaguesView, decidedAt, sportTableAt, cupTableAt, LEAGUES_FROM, teamShort, teamName } from "./civic.js";
 import { CITY_EPOCH, DEFAULT_SCALE } from "./sim.js";
 import { resultLine } from "./pit.js";
+import TournamentList from "../tournament/TournamentList.jsx";
 import { heldSubject } from "./planClient.js";
 import Sparkline from "../ui/Sparkline.jsx";
 
@@ -61,10 +62,12 @@ export function LeagueHub({ tab }) {
           <ChipStrip label="Leagues" className="hvi-lg-tabs">{TABS.map(([k, l]) => <Chip key={k} pressed={false} disabled>{l}</Chip>)}</ChipStrip>
         </Frame>
         <LeaguePanel full />
+        <TournamentList />
       </>
     );
   }
   return (
+    <>
     <Frame title="THE LEAGUES" meta={`SEASON ${lg.season} // DAY ${lg.day} OF ${lg.days}`} className="hvi-civic hvi-lg">
       <ChipStrip label="Leagues" className="hvi-lg-tabs">
         {TABS.map(([k, l]) => <Chip key={k} pressed={t === k} onClick={() => go(k)}>{l}</Chip>)}
@@ -75,6 +78,9 @@ export function LeagueHub({ tab }) {
       {t === "cup" && <CupTab block={block} h={h} go={go} />}
       <div className="hvi-city-note">EXHIBITIONS, PLAYED BY YOU, COUNTED NOWHERE: <a href="#golf">GOLF AT THE DEPARTMENT LINKS</a>, <a href="#hoops">BASKETBALL AT THE COURTS</a>, <a href="#football">FOOTBALL AT THE BOWL</a>, <a href="#soccer">SOCCER AT THE ESTATE PITCH</a>.</div>
     </Frame>
+    {/* the open tournaments (src/tournament/): golf, bowling and the derby, played by you, ranked */}
+    <TournamentList />
+    </>
   );
 }
 

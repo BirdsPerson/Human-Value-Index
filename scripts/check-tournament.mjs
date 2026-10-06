@@ -281,5 +281,24 @@ const call = async (method, body, q = "") => {
   ok(!JSON.stringify(globalThis.__blobs.get("hvi-tournaments")).includes(CASE[2]), "the case number is nowhere in the tournaments' store");
 }
 
+// ---- 7. the paper: CLASSIFIEDS lists the entries, SPORTS the boards and champions, the WIRE the leaders --------
+{
+  const { readFileSync } = await import("node:fs");
+  const P = await import("../netlify/lib/paper.js");
+  const { calendarView } = await import("../netlify/functions/tournament.js");
+  const input = JSON.parse(readFileSync(new URL("./fixtures/paper-input.json", import.meta.url), "utf8"));
+  NOW = evM.opens + 3 * 3600000;   // the major's Friday: the major and a daily open, last night's league night final
+  const events = await calendarView(NOW);
+  const ed = P.buildEdition({ ...input, nowMs: NOW, tournaments: (await P.gather({ get: async (path) => (path === "/api/tournament" ? { events } : null) }, NOW)).tournaments });
+  const ads = ed.classifieds.filter(c => /^ENTER /.test(c.title));
+  ok(ads.some(c => c.title === `ENTER ${evM.name}` && c.href === evM.href && c.act === "ENTER") && ads.every(c => P.validHref(c.href) && P.printable(c.text)), `CLASSIFIEDS: ENTER THE <TOURNAMENT>, one tap to the game in tournament mode (${ads.length} listings)`);
+  ok(ed.sports.tournaments.length > 0 && ed.sports.tournaments.every(t => P.validHref(t.href)), "SPORTS: the open events' boards, as they stood at press time");
+  const ed2 = P.buildEdition({ ...input, nowMs: evB.closes + 6 * 3600000, tournaments: (await calendarView(evB.closes + 6 * 3600000)) });
+  ok(ed2.sports.tournaments.some(t => t.name === evB.name && t.status === "FINAL" && t.divisions[0].rows[0].holder) && ed2.front.stories.concat(ed2.front.lead).some(h => h.kind === "tournament" && h.href === evB.href), "SPORTS: last night's final and its champion; the front page carries the win");
+  const w = P.tourneyWire([{ ev: evM, board: { entrants: 3, divisions: { open: [{ pos: 1, holder: "SUBJECT AAAA", total: 70, par: 72 }, { pos: 2, holder: "SUBJECT BBBB", total: 72, par: 72 }] } } }]);
+  const wire = P.wireOf({ mt: 500, board: null, social: null, tourney: w });
+  ok(wire.some(x => /LEADS AT -2 \(70\), SUBJECT BBBB NEXT AT E \(72\)/.test(x.text) && x.href === evM.href), "the WIRE: the open event's leader, live");
+}
+
 console.log(failed ? `check-tournament: ${failed} of ${n} FAILED` : `check-tournament: all ${n} pass`);
 process.exit(failed ? 1 : 0);

@@ -7,6 +7,8 @@ import { SPOTS, SPOT, SPECIES, SPECIES_BY, LURES, speciesAt, appetite, condition
 import * as V2 from "./sim.js";
 import * as V1 from "./v1/sim.js";
 import { draw, W, H, X0, X1, quipFor } from "./render.js";
+import TournamentDesk, { fileLeg } from "../../tournament/TournamentDesk.jsx";
+import { fishCfg } from "../../tournament/rules.js";
 import { loadBox, loadBests, recordCatch, markDonated, saveTrip } from "./box.js";
 import { startTrip, donateCatch, loadAquarium } from "./api.js";
 import * as sfx from "./audio.js";
@@ -23,7 +25,7 @@ const { BTN, HZ } = V2;
 const EXPERT_KEY = "hvi-fish-expert";
 const readExpert = () => { try { return localStorage.getItem(EXPERT_KEY) === "1"; } catch { return false; } };
 
-const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); const s = q.get("spot"); return { spot: SPOT[s] ? s : null }; };
+const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); const s = q.get("spot"); return { spot: SPOT[s] ? s : null, t: q.get("t") || null }; };
 const REDUCED = () => { try { return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches); } catch { return false; } };
 function me() {
   const id = readCaseId(), last = readLastResult();
@@ -34,7 +36,7 @@ function me() {
 const condLine = (c) => `DAY ${c.day} ${String(c.hour).padStart(2, "0")}:${String(c.minute).padStart(2, "0")} // ${LIGHTS[c.light]} // ${SEASONS[c.season]} // ${c.weather}`;
 
 export default function Fish({ route }) {
-  const { spot: spot0 } = useMemo(() => parseRoute(route), [route]);
+  const { spot: spot0, t: tourId } = useMemo(() => parseRoute(route), [route]);
   const [spot, setSpot] = useState(spot0 || "pier");
   const [game, setGame] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -68,6 +70,15 @@ export default function Fish({ route }) {
     setNote(line);
     setGame({ key: cfg.seed ^ cfg.at, cfg, demo, tripId, caseId: p.caseId, v: expert ? 1 : 2 });
   };
+  // THE SUNDAY DERBY (src/tournament/, #fish?t=<event>): everyone fishes the same water from the same
+  // clock and seed; an official trip may enter ONE fish, re-played by the server like a donation.
+  const [tourRefresh, setTourRefresh] = useState(0);
+  const beginDerby = ({ ev, official, entry }) => {
+    sfx.unlock();
+    const p = me();
+    setNote(official ? `${ev.name}: AN OFFICIAL TRIP. ENTER ONE FISH FROM THE CATCH CARD. THE HEAVIEST WINS.` : `${ev.name}: PRACTICE. NOTHING IS FILED.`);
+    setGame({ key: `${ev.id}|${Date.now()}`, cfg: { ...fishCfg(ev), player: { name: p.name, color: p.color } }, demo: false, tripId: null, caseId: p.caseId, v: expert ? 1 : 2, derby: { ev, official, entry, onFiled: () => setTourRefresh(x => x + 1) } });
+  };
   const refresh = () => { setBox(loadBox()); setBests(loadBests()); };
   const toggleMute = () => { sfx.setMuted(!muted); setMuted(!muted); };
   const here = SPOT[spot], biting = speciesAt(spot).map(s => [s, appetite(s, now)]).filter(([, a]) => a > 0).sort((a, b) => b[1] - a[1]);
@@ -87,6 +98,7 @@ export default function Fish({ route }) {
         </>
       ) : (
         <>
+          {tourId && <TournamentDesk game="fish" id={tourId} onStart={beginDerby} refresh={tourRefresh} />}
           <p className="pg-lede">FISH THE CITY'S WATERS WITH ONE BUTTON. CAST, WATCH THE FLOAT, AND PRESS WHEN IT PLUNGES (A NIBBLE IS NOT A BITE). HOLD TO REEL. THE BEST CATCHES GO TO THE AQUARIUM, WHICH CHECKS YOUR TRIP BEFORE IT HANGS A PLAQUE.</p>
           <div className="pg-start">
             <Button variant="primary" ref={playRef} disabled={busy} onClick={() => begin(false)}>{busy ? "ISSUING A PERMIT..." : `PLAY NOW: ${here.name}${expert ? " (EXPERT)" : ""}`}</Button>
@@ -110,6 +122,7 @@ export default function Fish({ route }) {
               </ButtonRow>
             </div>
           </details>
+          {!tourId && <TournamentDesk game="fish" onStart={beginDerby} refresh={tourRefresh} />}
           <details className="pg-more">
             <summary>THE RECORD BOARD ({tanks ? Object.values(tanks).filter(t => t.record).length : "-"} OF {SPECIES.length} SPECIES DONATED)</summary>
             <div className="pg-more-body"><Board tanks={tanks} bests={bests} /></div>
@@ -202,6 +215,8 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
   const { cfg, demo, tripId, caseId } = game;
   const S = game.v === 1 ? V1 : V2, simple = game.v !== 1;
   const aimRef = useRef(0);
+  const derby = game.derby || null;
+  const [entered, setEntered] = useState(null);   // the derby: {busy} | {line, ok}
   const canvas = useRef(null), wrap = useRef(null);
   const touch = useRef(0), latch = useRef(0);
   const [paused, setPaused] = useState(false);
@@ -348,6 +363,14 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
       press(BTN.A);   // the aquarium keeps it
     } catch (e) { setGift({ error: e.message }); }
   };
+  const enterDerby = async () => {
+    if (!landed || !derby?.official || entered?.ok) return;
+    setEntered({ busy: true });
+    const k = landed.k;
+    const line = await fileLeg(derby.ev, derby.entry, 0, { inputLog: logRef.current.slice(), claim: { sp: k.sp, cw: k.cw, tl: k.tl }, n: landed.n, v: game.v });
+    setEntered({ ok: /^FILED/.test(line), line });
+    derby.onFiled?.();
+  };
   const legendMode = pad ? "pad" : mode;
   const here = SPOT[cfg.spot];
 
@@ -368,9 +391,11 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
               ? <Button variant="secondary" onClick={donate} disabled={Boolean(gift?.busy || gift?.ok)}>{gift?.busy ? "THE AQUARIUM IS REPLAYING YOUR TRIP..." : "DONATE TO THE AQUARIUM"}</Button>
               : <span className="fi-p dim">{caseId ? "THIS TRIP HAS NO PERMIT: IT CANNOT BE DONATED." : "DONATING NEEDS A CASE FILE."}</span>}
           </ButtonRow>
+          {derby?.official && !entered?.ok && <ButtonRow><Button variant="primary" onClick={enterDerby} disabled={Boolean(entered?.busy)}>{entered?.busy ? "THE DERBY IS REPLAYING YOUR TRIP..." : `ENTER THIS FISH IN ${derby.ev.name}`}</Button></ButtonRow>}
           {gift?.error && <p className="fi-p harm" role="alert">{gift.error}</p>}
         </div>
       )}
+      {entered?.line && <p className={`fi-p ${entered.ok ? "good" : "harm"} fi-gift`} role="status">{entered.line}</p>}
       {gift?.ok && <p className="fi-p good fi-gift" role="status">{gift.line} <a href="#aquarium">SEE THE TANK</a></p>}
       {ended ? (
         <GameMenu key="end" kind="end" title={demo ? "THE WARDEN'S TRIP IS FILED." : "TRIP FILED."}

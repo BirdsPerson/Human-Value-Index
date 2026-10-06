@@ -35,6 +35,7 @@ import { tennisEvents } from "../../src/city/tennis.js";
 import { MOTIONS } from "../../src/assembly/content002.js";
 import arcade from "../../src/city/arcade.json" with { type: "json" };
 import { sportsSection, aquariumRecords } from "./paper-sports.js";
+import { scoreText, DIV_NAME } from "../../src/tournament/rules.js";
 import { comicFor, CAST } from "./paper-comic.js";
 import { paperDate, PAPER_TZ } from "./paper-notices.js";
 import { splitSentences } from "./factCheck.js";
@@ -56,7 +57,7 @@ export const ROUTES = ["#paper", "#city", "#city/league", "#city/league/baseball
   "#city/league/soccer", "#city/league/tennis", "#city/league/pit", "#city/league/cup", "#heights", "#prefects", "#enterprise",
   "#market", "#economy", "#assembly", "#docket", "#elections", "#arrivals", "#file", "#fish", "#aquarium", "#tennis", "#golf",
   "#hoops", "#chess", "#casino", "#play", "#shop", "#city/strip/the-arcade"];
-export const validHref = (h) => typeof h === "string" && (ROUTES.includes(h) || /^#market\/[a-z0-9-]+$/.test(h) || /^#paper\/\d{4}-\d{2}-\d{2}$/.test(h));
+export const validHref = (h) => typeof h === "string" && (ROUTES.includes(h) || /^#market\/[a-z0-9-]+$/.test(h) || /^#paper\/\d{4}-\d{2}-\d{2}$/.test(h) || /^#(golf|bowling|fish)\?t=[a-z0-9-]{6,32}$/.test(h));
 
 // check-no-death-labels' markers (scripts/check-no-death-labels.mjs), for printed text.
 export const DEATH_MARKERS = [/DECEASED/, /\bDIED\b/, /\bTHE DEAD\b/, /\bGHOSTS?\b/, /PAST TENSE/, /POSTHUMOUS/, /\b(OBITUARY|Obituary)\b/,
@@ -89,9 +90,10 @@ export function httpIo(base, fetchImpl = fetch) {
 // -> the edition's whole input, trimmed to what is printed (check-paper builds from fixtures of this).
 export async function gather(io, nowMs, prev = null) {
   const date = paperDate(nowMs), clock = SIM.machineClock(nowMs);
-  const [plan, market, assembly, elections, proposals, arrivals, social, aquarium, ebtv, notices] = await Promise.all([
+  const [plan, market, assembly, elections, proposals, arrivals, social, aquarium, ebtv, notices, tourney] = await Promise.all([
     io.get("/api/plan"), io.get("/api/market"), io.get("/api/assembly"), io.get("/api/elections"), io.get("/api/proposals"),
     io.get("/api/arrivals"), io.get("/api/social"), io.get("/api/aquarium"), io.get("/api/ebtv-frame"), io.get("/paper/notices.json"),
+    io.get("/api/tournament"),
   ]);
   // the newest split day at or before today (its summary carries the civic block and THE MALL)
   let summary = null, summaryDay = null;
@@ -121,7 +123,19 @@ export async function gather(io, nowMs, prev = null) {
     tanks: aquarium?.tanks || {},
     ebtv: ebtv ? { title: ebtv.title || null, upNext: ebtv.upNext || null, at: ebtv.at || null } : null,
     notices: { yesterday: notices?.days?.[yesterday] || [], today: notices?.days?.[date] || [] },
+    tournaments: (tourney?.events || []).map(e => ({ id: e.id, game: e.game, kind: e.kind, name: e.name, venue: e.venue, format: e.format, opens: e.opens, closes: e.closes, legs: e.legs,
+      status: e.status, href: e.href, major: Boolean(e.major), prizes: e.prizes, final: Boolean(e.final), entrants: e.entrants || 0,
+      leaders: e.leaders ? Object.fromEntries(Object.entries(e.leaders).map(([d, rows]) => [d, (rows || []).slice(0, 3)])) : null })),
   };
+}
+
+// ---- THE OPEN TOURNAMENTS (docs/TOURNAMENTS.md): the leaders and champions as /api/tournament had them at
+// press time (the edition never changes; the next one has the next standings). -> [{name, href, status, rows}]
+export function tourneySports(evs, nowMs) {
+  return (evs || []).filter(e => e.status === "open" || e.status === "closing" || (e.status === "closed" && nowMs - e.closes < 36 * 3600000 && e.entrants))
+    .sort((a, b) => (a.status === "closed") - (b.status === "closed") || b.major - a.major || a.closes - b.closes).slice(0, 6)
+    .map(e => ({ name: e.name, href: e.href, game: e.game, status: e.status === "closed" ? "FINAL" : "LIVE", venue: e.venue, entrants: e.entrants,
+      divisions: Object.entries(e.leaders || {}).filter(([, rows]) => rows.length).map(([d, rows]) => ({ div: DIV_NAME[d], rows: rows.map(r => ({ pos: r.pos, holder: r.holder, score: scoreText(e, r) })) })) }));
 }
 
 // ---- the edition (pure) ---------------------------------------------------------------------------
@@ -145,6 +159,11 @@ export function buildEdition(I) {
       heads.push(head("result", h.weight, `${short(h.winner)} ${verb} ${short(h.loser)} ${h.score}`, `${h.stage ? `${h.stage}, ` : ""}${h.sport} AT ${h.ground}.${h.tiebreak ? " DECIDED ON THE DEPARTMENT'S TIEBREAK." : ""} ${h.stage === "SEMI-FINAL" ? "THE WINNERS GO TO THE FINAL. THE LOSERS GO HOME, WHICH IS ASSIGNED." : "THE RESULT HAS BEEN ENTERED ON BOTH FILES."}`, h.href, { winner: h.winner, loser: h.loser, score: h.score, sport: h.sport }));
     }
     else heads.push(head(h.kind, h.weight, h.text, h.kind === "pit" ? "FRIDAY NIGHT AT THE PIT. THREE ROUNDS. THE CROWD WAS TOLD TO RISE AND ROSE." : h.kind === "race" ? "THE WEEKEND RACE ON THE MOUNTAIN. TWO RUNS, ONE CLOCK, NO APPEAL." : null, h.href));
+  }
+  sports.tournaments = tourneySports(I.tournaments, I.nowMs);
+  for (const e of (I.tournaments || []).filter(x => x.status === "closed" && x.final && I.nowMs - x.closes < 36 * 3600000)) {
+    const w = e.leaders?.open?.[0];
+    if (w) heads.push(head("tournament", e.major ? 58 : 34, `${w.holder} WINS ${e.name}`, `${scoreText(e, w)} AT ${e.venue}. EVERY CARD WAS RE-PLAYED BY THE DEPARTMENT. ${e.prizes?.trophies?.length ? "THE TROPHY HAS BEEN DELIVERED TO A FLAT." : "THE WIN HAS BEEN WRITTEN ON THE FILE."}`, e.href, { sport: e.game }));
   }
   for (const r of sports.aquarium.filter(x => x.fresh)) heads.push(head("record", 50, `RECORD ${r.species} ON THE PLAQUE`, `${r.weight}, LANDED BY ${r.holder}. THE CATCH WAS REPLAYED BY THE DEPARTMENT AND FOUND TRUE.`, "#aquarium"));
 
@@ -294,6 +313,10 @@ export function buildEdition(I) {
     { cat: "RECREATION", title: "THE AQUARIUM ACCEPTS DONATIONS", text: "EVERY CATCH IS REPLAYED BY THE DEPARTMENT BEFORE IT IS BELIEVED. RECORDS ARE PUBLIC. SO ARE FAILURES.", href: "#aquarium", act: "SEE THE TANKS" },
     sports.pit?.next?.length ? { cat: "TOURNAMENTS", title: `THE PIT, MACHINE DAY ${sports.pit.nextDay}`, text: `${sports.pit.next[sports.pit.next.length - 1]}. DOORS AT 20:00. THE CROWD MAY RISE. THE CROWD MAY NOT ENTER.`, href: "#city/league/pit", act: "SEE THE CARD" } : null,
     sports.race?.next ? { cat: "TOURNAMENTS", title: `THE WEEKEND RACE: ${sports.race.next.name}`, text: `MACHINE DAY ${sports.race.next.day} ON THE MOUNTAIN. CONDITIONS TODAY: ${mountainWeather(day)}. DESCENT IS MANDATORY.`, href: "#heights", act: "SEE THE MOUNTAIN" } : null,
+    ...(I.tournaments || []).filter(e => e.status === "open" || (e.status === "upcoming" && e.opens - I.nowMs < 36 * 3600000)).sort((a, b) => b.major - a.major || a.opens - b.opens).slice(0, 5).map(e => ({
+      cat: "TOURNAMENTS", title: `ENTER ${e.name}`,
+      text: `${e.venue}. ${e.format}. ${e.status === "open" ? `OPEN UNTIL ${realTime(e.closes)} ON ${realDay(e.closes)}` : `OPENS ${realTime(e.opens)} ON ${realDay(e.opens)}, CLOSES ${realTime(e.closes)} ON ${realDay(e.closes)}`}. THE SAME SETUP FOR EVERY ENTRANT; PLAY WHEN YOU LIKE. ${e.prizes?.trophies?.length ? "A TROPHY FOR YOUR FLAT." : "THE WIN GOES ON YOUR FILE."} EVERY CARD IS RE-PLAYED BY THE DEPARTMENT.`,
+      href: e.href, act: e.status === "open" ? "ENTER" : "SEE THE EVENT" })),
     { cat: "TOURNAMENTS", title: "EXHIBITIONS, OPEN TO ALL", text: "TENNIS AT THE CLUB, GOLF ON THE DEPARTMENT LINKS, FIVE ON FIVE AT THE COURTS. YOUR RECORD IS KEPT. SO IS YOUR FORM.", href: "#play", act: "PLAY" },
   ].filter(Boolean).filter(c => printable(c.text) && printable(c.title));
 
@@ -436,8 +459,10 @@ export function puzzleFor(date, heads) {
 // ---- the live WIRE ------------------------------------------------------------------------------
 // The latest few lines, newest first: the venues' calls over the last machine hours (clock-only),
 // the market's "because" lines and its events, and the gossip. -> [{t, text, href}]
-export function wireOf({ mt, board, social }, n = 8) {
+export function wireOf({ mt, board, social, tourney = [] }, n = 8) {
   const out = [];
+  // the open tournaments' standings, live (tourneyWire below)
+  for (const x of tourney.slice(0, 2)) out.push({ t: mt - 0.1, text: x.text, href: x.href });
   const a = mt - 3;
   for (const e of raceEvents(a, mt)) out.push({ t: e.t, text: e.text, href: "#heights" });
   for (const e of pitEvents(a, mt) || []) out.push({ t: e.t ?? mt, text: e.text, href: "#city/league/pit" });
@@ -471,4 +496,17 @@ export async function publishEdition(store, io, nowMs, opts = {}) {
     if (await store.setIf(INDEX_KEY, { editions, at: new Date(nowMs).toISOString() }, cur.etag)) break;
   }
   return { date, no: ed.no, headline: ed.front.lead.text, editorial: ed.editorial.by, note: ed.editorial.note || null };
+}
+
+// THE OPEN TOURNAMENTS on the WIRE: one line per open event with cards on its board.
+// evs: [{ev, board: publicStandings}] -> [{text, href}]
+export function tourneyWire(evs) {
+  const out = [];
+  for (const { ev, board } of evs || []) {
+    const o = board?.divisions?.open?.[0];
+    if (!o) continue;
+    const by = board.divisions.open[1];
+    out.push({ text: `${ev.name}: ${o.holder} LEADS AT ${scoreText(ev, o)}${by ? `, ${by.holder} NEXT AT ${scoreText(ev, by)}` : ""}. ${board.entrants} ON THE BOARD. PROJECTED.`, href: ev.href });
+  }
+  return out;
 }

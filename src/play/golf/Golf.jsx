@@ -13,6 +13,8 @@ import { endScene, skipEnd, CAPTION, SCENE_SOUND, SCENE_LEN, endFrame } from "./
 import { golfers, golferBySlug } from "./roster.js";
 import { lookFor, paintCard } from "./looks.js";
 import * as sfx from "./audio.js";
+import TournamentDesk, { fileLeg } from "../../tournament/TournamentDesk.jsx";
+import { golfCfg, DIV_NAME } from "../../tournament/rules.js";
 import "./golf.css";
 import "../pages.css";
 
@@ -35,7 +37,7 @@ function saveRound(rec) {
   MEMORY.unshift(rec);
   try { localStorage.setItem(KEEP, JSON.stringify([rec, ...loadRounds()].slice(0, 8))); } catch { /* private window: the tab keeps it */ }
 }
-const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); return { cab: q.get("cab") === "1", vs: q.get("vs") || null, course: ["open", "links"].includes(q.get("course")) ? q.get("course") : null, preset: ["cabinet", "sim"].includes(q.get("preset")) ? q.get("preset") : null }; };
+const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); return { cab: q.get("cab") === "1", vs: q.get("vs") || null, course: ["open", "links"].includes(q.get("course")) ? q.get("course") : null, preset: ["cabinet", "sim"].includes(q.get("preset")) ? q.get("preset") : null, t: q.get("t") || null }; };
 // ?preset=: played at home on a piece from THE SHOPS (src/economy/shops.js PLAY_AT_HOME). The same
 // game, framed: the bar-top cabinet is the mouse / trackball drag swing, the simulator the pad's right-stick swing.
 const PRESET = {
@@ -82,7 +84,7 @@ function GolfCard({ g }) {
 }
 
 export default function Golf({ route }) {
-  const { vs, course: course0, preset, cab } = useMemo(() => parseRoute(route), [route]);
+  const { vs, course: course0, preset, cab, t: tourId } = useMemo(() => parseRoute(route), [route]);
   const home = preset ? PRESET[preset] : null;
   const [course, setCourse] = useState(course0 || "open");
   const [count, setCount] = useState(9);
@@ -107,7 +109,24 @@ export default function Golf({ route }) {
     const c = { course, start, count, easy, ...o };
     setGame({ key: seed, args: [g, demo, o], cfg: { seed, course: c.course, mode: g ? "match" : "stroke", start: c.start, count: c.count, ...(c.easy && !demo ? { easy: true, assist: 2 } : {}), player: demo ? { name: "THE CADDIE", color: { shirt: "#7c7c7c", pants: "#000000" } } : { name: p.name, color: p.color }, cpu: g ? { slug: g.slug, name: g.name, rating: g.rating, color: { shirt: g.shirt, pants: g.pants } } : null }, demo, looks: [demo ? lookFor({ hint: { skin: "light_tan", hair_style: "short", hair_color: "grey" }, shirt: "#7c7c7c", pants: "#000000" }) : lookOfMe(p), ...(g ? [lookOfGolfer(g)] : [])] });
   };
-  const done = (rec) => { saveRound(rec); setRounds(loadRounds()); };
+  // THE TOURNAMENT (src/tournament/, #golf?t=<event>): the event's locked setup; an official round is
+  // filed when it ends (re-played by the server), a practice round is not.
+  const [tourLine, setTourLine] = useState(null);
+  const [tourRefresh, setTourRefresh] = useState(0);
+  const beginTour = ({ ev, div, official, entry }) => {
+    sfx.unlock();
+    const p = me();
+    setTourLine(official ? "THE ROUND WILL BE FILED WHEN IT ENDS." : "PRACTICE. NOTHING IS FILED.");
+    setGame({ key: `${ev.id}|${Date.now()}`, args: null, tour: { ev, div, official, entry }, cfg: golfCfg(ev, div, { name: p.name, color: p.color }), demo: false, looks: [lookOfMe(p)] });
+  };
+  const done = (rec) => {
+    saveRound(rec); setRounds(loadRounds());
+    const T = game?.tour;
+    if (!T?.official) return;
+    setTourLine("FILING THE CARD. THE DEPARTMENT IS RE-PLAYING IT.");
+    fileLeg(T.ev, T.entry, 0, { inputLog: rec.inputLog, claim: { total: rec.result.total[0], holes: rec.result.holes.map(h => h.s[0]) }, v: rec.v })
+      .then(line => { setTourLine(line); setTourRefresh(x => x + 1); });
+  };
   // TEE'D OFF, the bar cabinet (src/city/houseGames.js, ?cab=1): straight onto the first tee, the
   // mouse's drag swing first, the trackball's feel
   useEffect(() => { if (cab && !game) begin(null, false, { course: "open", start: 0, count: 9 }); }, [cab]);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -115,12 +134,13 @@ export default function Golf({ route }) {
 
   return (
     <div className="gf" style={home ? { border: home.frame, padding: 6 } : undefined}>
-      <ScreenHead title={home ? home.title : COURSE_NAME[game?.cfg.course || course]} meta={home ? `${COURSE_NAME[game?.cfg.course || course]} // AT HOME` : "EXHIBITION // COUNTS IN NO STANDINGS. THE DEPARTMENT COUNTS IT ANYWAY."} />
+      <ScreenHead title={home ? home.title : COURSE_NAME[game?.cfg.course || course]} meta={home ? `${COURSE_NAME[game?.cfg.course || course]} // AT HOME` : game?.tour ? `${game.tour.ev.name} // ${game.tour.official ? "OFFICIAL ROUND" : "PRACTICE"} // ${DIV_NAME[game.tour.div]}` : "EXHIBITION // COUNTS IN NO STANDINGS. THE DEPARTMENT COUNTS IT ANYWAY."} />
       {home && <p className="pg-lede">{home.line}</p>}
       {game ? (
         <>
           <Play key={game.key} trackball={cab || preset === "cabinet"} cfg={game.cfg} demo={game.demo} lookP={game.looks} onDone={game.demo ? () => {} : done} muted={muted} onMute={toggleMute}
-            onAgain={() => begin(...game.args)}
+            tour={game.tour} tourLine={tourLine}
+            onAgain={() => (game.tour ? beginTour({ ...game.tour, official: false }) : begin(...game.args))}
             onNewCourse={() => { const [g, d, o] = game.args, next = (game.cfg.course === "open" ? "links" : "open"); setCourse(next); begin(g, d, { ...o, course: next }); }}
             onSettings={() => setGame(null)} />
           <ButtonRow split stackOnMobile>
@@ -130,11 +150,13 @@ export default function Golf({ route }) {
         </>
       ) : (
         <>
+          {tourId && !home && <TournamentDesk game="golf" id={tourId} onStart={beginTour} refresh={tourRefresh} />}
           <p className="pg-lede">GOLF ON FAMOUS HOLES, AGAINST THE COURSE OR A FIGURE ON FILE. WITH A MOUSE OR A FINGER: CLICK THE MAP TO AIM, DRAG DOWN TO TAKE THE CLUB BACK, PUSH UP TO SWING. WITH KEYS: LEFT AND RIGHT AIM, A FULL SWING IS THREE PRESSES OF SPACE (START, POWER, THEN ON THE LINE), A PUTT TWO. MIND THE WIND. SOUND IS OPTIONAL.</p>
           <div className="pg-start">
             <Button variant="primary" ref={playRef} onClick={() => begin(pre, false, pre ? {} : { course: "open", start: 0, count: 9 })}>{pre ? `PLAY ${pre.name}` : "PLAY NOW"}</Button>
             <span className="pg-sub">{pre ? `MATCH PLAY, ${count} HOLES${easy ? ", EASY SWING" : ""}.` : `THE FRONT NINE OF THE DEPARTMENT OPEN${easy ? ", EASY SWING ON" : ""}.`}</span>
           </div>
+          {!tourId && !home && <TournamentDesk game="golf" onStart={beginTour} refresh={tourRefresh} />}
           <details className="pg-more" open={Boolean(pre)}>
             <summary>COURSE, HOLES AND EASY SWING</summary>
             <div className="pg-more-body">
@@ -179,7 +201,7 @@ export default function Golf({ route }) {
             </div>
           </details>
           <Rounds rounds={rounds} />
-          <p className="gf-p dim">EXHIBITION ONLY. NO STANDINGS, NO CUP POINTS, NO PRIZES. THE CARD STAYS IN THIS BROWSER.</p>
+          <p className="gf-p dim">EXHIBITIONS COUNT NOWHERE AND THE CARD STAYS IN THIS BROWSER. TOURNAMENT ROUNDS (THE DESK ABOVE) ARE RE-PLAYED BY THE DEPARTMENT AND RANKED.</p>
         </>
       )}
       <details className="pg-more">
@@ -229,7 +251,7 @@ function Rounds({ rounds }) {
 const KEYMAP = { ArrowLeft: BTN.L, ArrowRight: BTN.R, ArrowUp: BTN.U, ArrowDown: BTN.D, " ": BTN.A, z: BTN.A, Z: BTN.A, x: BTN.B, X: BTN.B };
 const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); };
 
-function Play({ trackball = false, cfg, demo, lookP, onDone, muted, onMute, onAgain, onNewCourse, onSettings }) {
+function Play({ trackball = false, cfg, demo, lookP, onDone, muted, onMute, onAgain, onNewCourse, onSettings, tour = null, tourLine = null }) {
   const [endMenu, setEndMenu] = useState(false);   // the shared end menu (../GameMenu.jsx), once the card is up
   const canvas = useRef(null), wrap = useRef(null);
   const touch = useRef(0);
@@ -512,8 +534,10 @@ function Play({ trackball = false, cfg, demo, lookP, onDone, muted, onMute, onAg
       {card && <Card card={card} cfg={cfg} />}
       {paused && !endMenu && <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE DEPARTMENT WAITS." onBack={togglePause}
         options={{ resume: togglePause, restart: onAgain, controls: <Controls />, sound: { on: !muted, onSelect: onMute }, quit: true }} />}
-      {endMenu && <GameMenu key="end" kind="end" title="ROUND FILED." summary={card?.played ? `${toParText(card.toPar[0])} TO PAR OVER ${card.played} HOLES.${cfg.cpu && card.won ? ` MATCH ${card.won[0]}-${card.won[1]}.` : ""}` : undefined} onBack={() => setEndMenu(false)}
-        options={{ again: demo ? false : onAgain, rematch: { label: "NEW COURSE", onSelect: onNewCourse }, settings: onSettings, play: true, city: true }} />}
+      {endMenu && <GameMenu key="end" kind="end" title={tour ? (tour.official ? "CARD SUBMITTED." : "PRACTICE OVER.") : "ROUND FILED."} summary={card?.played ? `${toParText(card.toPar[0])} TO PAR OVER ${card.played} HOLES.${cfg.cpu && card.won ? ` MATCH ${card.won[0]}-${card.won[1]}.` : ""}${tourLine ? ` ${tourLine}` : ""}` : undefined} onBack={() => setEndMenu(false)}
+        options={tour
+          ? { board: { label: "THE LEADERBOARD", onSelect: onSettings }, again: { label: "PRACTICE THIS SETUP", onSelect: onAgain }, play: true, city: true }
+          : { again: demo ? false : onAgain, rematch: { label: "NEW COURSE", onSelect: onNewCourse }, settings: onSettings, play: true, city: true }} />}
     </div>
   );
 }
