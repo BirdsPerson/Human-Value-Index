@@ -27,6 +27,7 @@ const Tennis = lazy(() => import("./play/tennis/Tennis.jsx"));   // THE TENNIS C
 const Golf = lazy(() => import("./play/golf/Golf.jsx"));   // #golf: THE DEPARTMENT LINKS (exhibition golf)
 const Hoops = lazy(() => import("./play/hoops/Hoops.jsx"));   // #hoops: THE COURTS (exhibition basketball)
 const Football = lazy(() => import("./play/football/Football.jsx"));   // #football: THE BOWL (exhibition football)
+const Tecmo = lazy(() => import("./play/tecmo/Tecmo.jsx"));   // #tecmo: FOURTH AND LONG, the arcade football cabinet (src/play/tecmo/)
 const Bowling = lazy(() => import("./play/bowling/Bowling.jsx"));   // #bowling: THE LANES (exhibition bowling, src/play/bowling/)
 const Soccer = lazy(() => import("./play/soccer/Soccer.jsx"));   // #soccer: THE ESTATE PITCH (exhibition soccer)
 const Fish = lazy(() => import("./play/fish/Fish.jsx"));   // #fish: THE WATERS (fishing, src/play/fish/)
@@ -451,7 +452,7 @@ function Screen({ nav, wide = false, banner = false, children }) {
 const TITLES = {
   "#intake": "GET EVALUATED", "#file": "MY FILE", "#arrivals": "INTAKE", "#cube": "THE CUBE", "#city": "THE CITY",
   "#assembly": "THE ASSEMBLY", "#elections": "COUNCIL ELECTIONS", "#docket": "THE DOCKET", "#casino": "HOUSE EDGE CASINO",
-  "#economy": "THE TREASURY", "#shop": "THE SHOPS", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS", "#football": "THE BOWL", "#soccer": "THE ESTATE PITCH", "#fish": "THE WATERS", "#aquarium": "THE AQUARIUM", "#bowling": "THE LANES", "#hunt": "TAGGED OUT",
+  "#economy": "THE TREASURY", "#shop": "THE SHOPS", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS", "#football": "THE BOWL", "#tecmo": "FOURTH AND LONG", "#soccer": "THE ESTATE PITCH", "#fish": "THE WATERS", "#aquarium": "THE AQUARIUM", "#bowling": "THE LANES", "#hunt": "TAGGED OUT",
   "#ski": "THE MOUNTAIN", "#cards": "THE CARD ROOM",
   "#skate": "THE PARK",
   "#play": "THE GAMES", "#scores": "THE SCORES", "#about": "ABOUT", "#privacy": "PRIVACY", "#terms": "TERMS", "#dispute": "DISPUTE A SCORE",
@@ -693,6 +694,13 @@ export default function OverlordAssessment() {
   if (routePath === "#football") return (
     <Screen nav={nav} wide>
       <Suspense fallback={<Loading what="LINING THE FIELD" />}><Football route={route} /></Suspense>
+    </Screen>
+  );
+
+  // #tecmo[?home=<district>][&vs=<district>][&q=1|2|3][&p=2][&cab=1]: FOURTH AND LONG, the arcade football cabinet (src/play/tecmo/)
+  if (routePath === "#tecmo") return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="CHALKING THE LINES" />}><Tecmo route={route} /></Suspense>
     </Screen>
   );
 

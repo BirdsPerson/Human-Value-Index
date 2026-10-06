@@ -189,11 +189,11 @@
     "status": "live",
     "role": "Football",
     "year": "",
-    "line": "THE GRIDIRON, IN A BOX.",
+    "line": "ARCADE FOOTBALL. FOUR PLAYS A SIDE: GUESS THEIRS. MASH A.",
     "play": null,
     "itch": null,
     "house": true,
-    "route": "#football",
+    "route": "#tecmo",
     "campaign": "house-football",
     "hs": {
       "fmt": "line",

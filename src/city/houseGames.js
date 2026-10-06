@@ -29,10 +29,10 @@ export { routesIn };
 // Room types that only exist here (bar-lantern, bar-lodge) are a bar with a different set of
 // cabinets: housePlans() furnishes them as a bar and housePlaceTypes() points the places at them.
 export const HOUSE_PLACES = {
-  bar: ["house-hunt", "house-golf"],                     // THE DIVE, and every bar like it
+  bar: ["house-hunt", "house-golf", "house-football"],   // THE DIVE, and every bar like it
   "bar-lantern": ["house-hoops", "house-tennis"],        // THE LANTERN, upstairs: the shooting machine
   "bar-lodge": ["house-hunt", "house-ski"],              // the summit lodge's bar
-  brewpub: ["house-golf", "house-hunt"],                 // GOODNIGHT IRENE'S
+  brewpub: ["house-golf", "house-hunt", "house-football"],   // GOODNIGHT IRENE'S
   casino: ["house-golf"],                                // a corner of the casino's slot floor
   boardwalk: ["house-hoops", "house-fish", "house-skate"],              // among the boardwalk's stalls
   diner: ["house-fish"],                                 // the all-night diner

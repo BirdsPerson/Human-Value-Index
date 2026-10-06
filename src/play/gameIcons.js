@@ -5,6 +5,7 @@ export const ICONS = {
   golf: ["....fhhh....", "....fhhhhh..", "....fhhh....", "....f.......", "....f.......", "....f.......", "....f.......", "....f...f...", "..aaffaaaa..", ".aaa.mmaaaa.", "..aaaaaaaa..", "............"],
   hoops: [".ffffffffff.", ".f........f.", ".f..ffff..f.", ".f..f..f..f.", ".ffffffffff.", "...wwwwww...", "...d.d.d.d..", "....d.d.d...", "....d.d.d...", ".....ddd.ww.", ".........ww.", "............"],
   football: ["............", "............", "....wwww....", "..wwwwwwww..", ".wwwfwfwfww.", "wwwwffffwwww", ".wwwfwfwfww.", "..wwwwwwww..", "....wwww....", "............", "............", "............"],
+  helmet: ["............", "...wwwww....", "..wwwwwwww..", ".wwfffwwwww.", ".wwwwwwwwwww", "wwwwwwwwd.d.", "wwwwwwwwdddd", "wwwwwwwwd.d.", ".wwwwwwwdddd", "..wwww.w....", "...ww.......", "............"],
   soccer: ["....ffff....", "..ffffffff..", ".fffmmmmfff.", ".ffmmmmmmff.", "fffmmmmmmfff", "fmffmmmmffmf", "fmmffffffmmf", "fmmffffffmmf", ".fffmffmfff.", ".ffmmmmmmff.", "..ffffffff..", "....ffff...."],
   fish: ["............", "............", "....aaaa....", "..aaaaaaa..a", ".aa.aaaaaaaa", ".aaaaaaaaaaa", "..aaaaaaa..a", "....aaaa....", "............", "..d.....d...", "...d...d....", "............"],
   tank: ["ffffffffffff", "f..........f", "f.d.....d..f", "f.d.aa..d..f", "f.daaaa.d..f", "f..d.aa..d.f", "f..d....d..f", "f.dd..d.dd.f", "fwwwwwwwwwwf", "ffffffffffff", ".mm......mm.", "............"],

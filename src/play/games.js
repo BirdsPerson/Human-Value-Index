@@ -3,12 +3,13 @@
 //   { href: "#route", title: "SHORT TITLE", name: "plain name", icon: "<key in gameIcons.js>", note: "ONE LINE" }
 // The tile's accessible name is "Play <name>". A tile whose route App.jsx does not serve yet
 // renders dim, "COMING SOON" (routesIn() reads App.jsx at build; vite.config.js defines it).
-// Icons already drawn: tennis golf hoops football soccer fish tank rook card market joystick trophy ski bowling cards skate.
+// Icons already drawn: tennis golf hoops football helmet soccer fish tank rook card market joystick trophy ski bowling cards skate.
 export const GAMES = [
   { href: "#tennis", title: "TENNIS", name: "tennis", icon: "tennis", note: "EXHIBITIONS AGAINST THE FAMOUS. KEYS, TOUCH OR PAD" },
   { href: "#golf", title: "GOLF", name: "golf", icon: "golf", note: "NINE HOLES. THE COURSE THE ASSEMBLY DECLINED" },
   { href: "#hoops", title: "BASKETBALL", name: "basketball", icon: "hoops", note: "FIVE ON FIVE, WITH THE LEAGUE'S OWN TEAMS" },
   { href: "#football", title: "FOOTBALL", name: "football", icon: "football", note: "THE GRIDIRON. THE LEAGUE'S OWN TEAMS" },
+  { href: "#tecmo", title: "FOURTH AND LONG", name: "the arcade football cabinet", icon: "helmet", note: "ARCADE FOOTBALL. FOUR PLAYS, GUESS THEIRS. ONE OR TWO PLAYERS" },
   { href: "#soccer", title: "SOCCER", name: "soccer", icon: "soccer", note: "THE PITCH. THE LEAGUE'S OWN TEAMS" },
   { href: "#ski", title: "SKIING", name: "skiing", icon: "ski", note: "THE WHOLE MOUNTAIN. LIFTS, PARK, PIPE, RACES" },
   { href: "#skate", title: "SKATE", name: "skateboarding", icon: "skate", note: "THE PARK, THE VERT RAMP, THE PLAZA. TWO-MINUTE RUNS" },

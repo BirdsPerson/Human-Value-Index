@@ -1236,11 +1236,12 @@ one-line hooks.
   its route: TEE'D OFF (#golf; on this cabinet the mouse's drag swing is the default, the trackball's
   feel, and it goes straight to the first tee), TAGGED OUT (#hunt, two plastic rifles on chains),
   SET POINT (#tennis), BUCKETS (#hoops, the shooting machine: backboard, rim and net on top), REEL
-  TIME (#fish, a rod down the side), and LANE NINE (#bowling), FOURTH AND LONG (#football), EXTRA
-  TIME (#soccer), FRESH POWDER (#ski), each hidden everywhere until App.jsx serves its route (the
+  TIME (#fish, a rod down the side), and LANE NINE (#bowling), FOURTH AND LONG (#tecmo: the
+  arcade football game, eight-bit and side-on, four plays a team, the defence guessing the call;
+  the full game stays #football), EXTRA TIME (#soccer), FRESH POWDER (#ski), each hidden everywhere until App.jsx serves its route (the
   build's route table, as the #play tiles). `houseGames.js`: where they stand (`HOUSE_PLACES`, by
-  room type: every bar like THE DIVE has the hunt and golf after JETSAM!; GOODNIGHT IRENE'S golf and
-  the hunt; THE LANTERN its own type `bar-lantern`, the shooting machine and tennis; the summit
+  room type: every bar like THE DIVE has the hunt, golf and FOURTH AND LONG after JETSAM!;
+  GOODNIGHT IRENE'S golf, the hunt and FOURTH AND LONG; THE LANTERN its own type `bar-lantern`, the shooting machine and tennis; the summit
   lodge `bar-lodge`; the casino's corner golf; the boardwalk the shooting machine and fishing; the
   diner fishing; the Union bowling and football when they land), their attract screens and
   furniture, and THE ARCADE's back row, HOUSE GAMES, one of each. `housePlans()` / `houseAliases()`
