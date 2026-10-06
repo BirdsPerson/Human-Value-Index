@@ -123,8 +123,10 @@ export const HALT_LINE = "HALTED FOR THE DAY. THE BAND HELD. THE DEPARTMENT RESU
 export const fmt = (n) => Math.round(Number(n) || 0).toLocaleString("en-US");
 export const fmtPrice = (p) => (Number(p) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const pct = (a, b) => (b > 0 ? (a / b - 1) : 0);
-export const fmtPct = (x) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x * 100).toFixed(1)}%`;
-export const arrow = (x) => (x > 0 ? "▲" : x < 0 ? "▼" : "■");
+// a change that rounds to 0.0% is flat: no arrow, no sign
+const flat = (x) => !(Math.abs(x) >= 0.0005);
+export const fmtPct = (x) => (flat(x) ? "0.0%" : `${x > 0 ? "+" : "−"}${Math.abs(x * 100).toFixed(1)}%`);
+export const arrow = (x) => (flat(x) ? "■" : x > 0 ? "▲" : "▼");
 export const askOf = (p, k = KNOBS) => Math.round(p * (1 + k.spread) * 100) / 100;
 export const bidOf = (p, k = KNOBS) => Math.round(p * (1 - k.spread) * 100) / 100;
 // Whole shares an amount buys at the ask, and what they cost (rounded up to a whole CYCLE).
