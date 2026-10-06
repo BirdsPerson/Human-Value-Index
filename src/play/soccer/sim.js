@@ -144,7 +144,7 @@ export function leversAt(e, hz = 60) {
   return L;
 }
 export const LEVELS = [
-  { id: "beginner", name: "BEGINNER", ...leversAt(0.77, 48) },
+  { id: "beginner", name: "BEGINNER", ...leversAt(0.85, 48) },
   { id: "amateur", name: "AMATEUR", ...leversAt(0.56, 54) },
   { id: "semipro", name: "SEMI-PRO", ...leversAt(0.47) },
   { id: "pro", name: "PROFESSIONAL", ...leversAt(0.38) },

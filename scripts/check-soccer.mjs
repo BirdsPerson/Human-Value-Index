@@ -394,9 +394,9 @@ function playRecorded(seed, cfg, version = S.VERSION) {
 // simulated casual player on your side: he sees the ball a quarter-second late on defence, his
 // timing is off by about 100 ms (sd), his stick wobbles about 20 degrees, he passes to whoever looks
 // open (and misses one marker in four), shoots when close, hardly tries a trick. Against an equal
-// eleven, at the default length, his share of the points (a win 1, a draw a half) on each of
-// EA SPORTS FC's levels lands near: BEGINNER 65-75%, AMATEUR and SEMI-PRO about half, LEGENDARY
-// 15-20% (measured over 40 matches a level when the levels were set; asserted here on fewer, with
+// eleven, at the default length: on BEGINNER he wins about two in three outright (Scott was being
+// crushed: err easy); then his share of the points (a win 1, a draw a half) on EA SPORTS FC's levels
+// lands near: AMATEUR and SEMI-PRO about half, LEGENDARY 15-20% (measured over 40 matches a level when the levels were set; asserted here on fewer, with
 // room for the noise). CPU v CPU (calibration above) plays as rated and is not touched by them.
 function casualBot(seed, hz = 60) {
   const ms = (t) => Math.max(1, Math.round(t * hz / 1000));
@@ -499,11 +499,11 @@ function casualShare(level, N, seed0 = 1) {
   for (let i = 1; i < S.LEVELS.length; i++) assert.ok(S.LEVELS[i].e < S.LEVELS[i - 1].e, `each level is harder than the one before (${S.LEVELS[i].name})`);
   assert.deepEqual(S.leversAt(0.5), S.leversAt(0.5), "a division can ask for the levers at any ease");
   const N = process.env.QUICK ? 4 : 16, pct = (x) => `${Math.round(x * 100)}%`;
-  const beg = casualShare(0, N), semi = process.env.QUICK ? null : casualShare(2, N), leg = casualShare(5, N);
+  const beg = casualShare(0, process.env.QUICK ? N : 32), semi = process.env.QUICK ? null : casualShare(2, N), leg = casualShare(5, N);
   if (process.env.VERBOSE) console.log("casual human, share of points (wins):", `BEGINNER ${pct(beg.share)} (${pct(beg.wins)})`, semi ? `SEMI-PRO ${pct(semi.share)} (${pct(semi.wins)})` : "", `LEGENDARY ${pct(leg.share)} (${pct(leg.wins)})`);
   assert.ok(beg.share > leg.share + 0.25, `BEGINNER (${pct(beg.share)}) is far kinder than LEGENDARY (${pct(leg.share)})`);
   if (!process.env.QUICK) {
-    assert.ok(beg.share >= 0.55 && beg.share <= 0.9, `a casual human on BEGINNER takes ${pct(beg.share)} of the points, wanted about 65-75%`);
+    assert.ok(beg.wins >= 0.6 && beg.wins <= 0.78, `a casual human on BEGINNER wins ${pct(beg.wins)} outright (${pct(beg.share)} of the points), wanted about 65-70%`);
     assert.ok(semi.share >= 0.33 && semi.share <= 0.7, `on SEMI-PRO ${pct(semi.share)}, wanted about half`);
     assert.ok(leg.share >= 0.03 && leg.share <= 0.33, `on LEGENDARY ${pct(leg.share)}, wanted about 15-20%`);
   }

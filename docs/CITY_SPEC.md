@@ -2889,7 +2889,8 @@ mechanics and conventions of the FC games; none of their names, marks, kits, clu
   a division to an e (`leversAt`) later. The yardstick (`check-soccer`, "difficulty: a casual human"): a
   simulated casual player on your side (a quarter-second late on defence, ~100 ms timing noise, a stick
   ~20 degrees loose, passes to whoever looks open, hardly a trick) against an equal eleven, share of the
-  points (a draw a half; outright wins in brackets) over 40 matches a level when set: BEGINNER 75% (58%),
+  points (a draw a half; outright wins in brackets) over 40 matches a level when set: BEGINNER 81% (67%; raised
+  2026-10-06 so he wins about two in three outright),
   AMATEUR 57% (30%), SEMI-PRO 53% (28%), PROFESSIONAL 43% (13%), WORLD CLASS 34% (3%), LEGENDARY 19% (3%);
   about half his matches are draws (he scores about once a match). Version 1 records keep the old EASY MODE
   switch.
