@@ -8,6 +8,7 @@ import { initState, step, turnInstruction, closeState } from "../lib/interview.j
 import { claudeText, ScoreError } from "../lib/score.js";
 import { isCaseId } from "../lib/intake.js";
 import { getCase, updateCase, hitLimit, refundLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
 export const CHAT_MODEL = "claude-haiku-4-5-20251001";
@@ -101,6 +102,9 @@ export default async (req, context) => {
     const record = await getCase(caseId);
     if (!record) return json(404, { error: `Case ${caseId} does not exist. Either you invented it or the Department lost it. The Department does not lose things.` });
     if (!record.pending?.vars) return json(409, { error: "No interview is open on this case. Request intake first. The Officer does not freelance." });
+    // a file secured to an email is interviewed only from that account's session (lib/auth.js)
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth));
     const vars = record.pending.vars;
 
     if (!messages.length) return json(200, { reply: fillVars(vars.appeal_sections ? APPEAL_FIRST_MESSAGE : FIRST_MESSAGE, vars), end: false });

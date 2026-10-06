@@ -8,13 +8,14 @@
 //     sell {industry, amount, nonce}           a position -> cash
 // There is deliberately no action that buys CYCLES, cashes them out, or moves them between
 // files; scripts/check-economy.mjs fails the build if one appears, and the ledger itself refuses
-// a txn touching two cases. Holding the case number is the credential (as /api/casino); only
-// assessed files hold a wallet. With no ledger configured (SUPABASE_URL and
+// a txn touching two cases. An unclaimed file draws on its number; a file secured to an email
+// draws (and shows its wallet) only from that account's session (lib/auth.js requireCaseAuth).
+// Only assessed files hold a wallet. With no ledger configured (SUPABASE_URL and
 // SUPABASE_SERVICE_ROLE_KEY unset) the Treasury is CLOSED: the board and the apartment still
 // read, every write answers THE TREASURY IS NOT YET OPEN.
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
-import { caseOwner, isOwnerCase } from "../lib/auth.js";
+import { isOwnerCase, requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { deviceHash } from "../lib/proposals.js";
 import { NO_SUCH_FILE } from "./case.js";
@@ -68,6 +69,8 @@ export default async (req, context) => {
     }
     const assessed = Array.isArray(rec.history) && rec.history.some(h => h && typeof h.score === "number");
     if (!assessed) return json(403, { open, assessed: false, error: "Only assessed citizens draw an allowance. Your file has no assessment on it." });
+    const auth = await requireCaseAuth(req, caseId, { write: req.method === "POST" });
+    if (!auth.ok) return json(auth.status, { open, assessed, ...caseAuthBody(auth) }, noStore);
 
     if (req.method === "GET") {
       if (!open) return json(200, { open, assessed, ...PUBLIC, ...(chip ? {} : { apartment: apartmentOf(caseId, rec), board: await boardView() }) }, noStore);
@@ -79,8 +82,8 @@ export default async (req, context) => {
     if (!open) return json(503, { open, error: CLOSED_LINE });
     let out;
     if (body.action === "collect") {
-      const owner = await caseOwner(caseId).catch(() => null);
-      out = await collect(caseId, rec, { ip, deviceHash: deviceHash(body.device), owner, exempt: isOwnerCase(caseId) });
+      // one allowance per email: the claiming account's key (auth.acct) rides into the enrolment as a hash
+      out = await collect(caseId, rec, { ip, deviceHash: deviceHash(body.device), owner: auth.acct, exempt: isOwnerCase(caseId) });
       if (!out.ok) return json(403, { open, error: ENROL_REFUSED[out.error] || "The Treasury refused the disbursement.", wallet: await walletView(caseId, rec) }, noStore);
     } else {
       out = await trade(caseId, body);

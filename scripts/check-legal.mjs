@@ -125,7 +125,7 @@ const other = await A.upsertAccount("other@example.com");
 const otherCookie = `hvi_sid=${await A.createSession(other.key)}`;
 
 assert.equal((await post(purge, "/api/purge", { caseId: CASE2, confirm: CASE2 })).status, 401, "no session: refused");
-assert.equal((await post(purge, "/api/purge", { caseId: CASE2, confirm: CASE2 }, { cookie: otherCookie })).status, 401, "another account: refused");
+assert.equal((await post(purge, "/api/purge", { caseId: CASE2, confirm: CASE2 }, { cookie: otherCookie })).status, 403, "another account: refused");
 assert.ok(await S.getCase(CASE2), "refused purge deleted nothing");
 
 r = await read(await post(purge, "/api/purge", { caseId: CASE2, confirm: CASE2 }, { cookie }));

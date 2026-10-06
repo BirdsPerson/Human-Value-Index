@@ -12,11 +12,13 @@
 //     place   {itemId, room, spot}          a piece into a room of your assigned flat
 //     unplace {itemId}                      back to the inventory
 // There is deliberately no action that gives, sells on or transfers an item or a CYCLE between
-// files; scripts/check-shops.mjs fails the build if one appears. Holding the case number is the
-// credential (as /api/economy); only assessed files with a wallet buy. With no ledger configured the
+// files; scripts/check-shops.mjs fails the build if one appears. An unclaimed file shops on its
+// number; a file secured to an email shops (and shows its wardrobe) only from that account's session
+// (lib/auth.js requireCaseAuth). Only assessed files with a wallet buy. With no ledger configured the
 // shops are CLOSED: every read says so, every write answers THE TREASURY IS NOT YET OPEN.
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { ledger, LedgerDown } from "../lib/economy-db.js";
@@ -71,6 +73,8 @@ export default async (req, context) => {
     }
     const assessed = Array.isArray(rec.history) && rec.history.some(h => h && typeof h.score === "number");
     if (!assessed) return json(403, { open, assessed: false, error: "Only assessed citizens shop. Your file has no assessment on it." });
+    const auth = await requireCaseAuth(req, caseId, { write: req.method === "POST" });
+    if (!auth.ok) return json(auth.status, { open, assessed, ...caseAuthBody(auth) }, noStore);
     if (!open) return json(req.method === "GET" ? 200 : 503, { open, assessed, error: CLOSED_LINE, machineDay: md, collection: collectionOf(md) }, noStore);
     if (req.method === "GET") return json(200, { open, assessed, ...(await shopsView(caseId, rec)) }, noStore);
 

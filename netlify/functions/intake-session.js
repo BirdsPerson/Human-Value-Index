@@ -1,6 +1,7 @@
 import { isCaseId, newCaseId, pickQuestions, pickAppealQuestions, appealError, rubricOf, RUBRIC } from "../lib/intake.js";
 import { visitCount } from "../../src/movement.js";
 import { getCase, updateCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE } from "../lib/http.js";
 import { PHOTO_DIM, PHOTO_Q } from "../lib/avatar.js";
 
@@ -37,6 +38,12 @@ export default async (req, context) => {
       return json(429, { error: "Your location has requested twenty interviews today. The Department suspects a household of attention seekers. Return tomorrow." }, { "Retry-After": "3600" });
     }
 
+    // Reopening a file is a write on it: a file secured to an email opens an interview only
+    // from that account's session (lib/auth.js requireCaseAuth). A new file needs nothing.
+    if (given) {
+      const auth = await requireCaseAuth(req, String(given).toUpperCase(), { write: true });
+      if (!auth.ok) return json(auth.status, caseAuthBody(auth), { "Cache-Control": "no-store" });
+    }
     let record = given ? await getCase(given) : null;
     if (appeal) {
       const last = record?.history?.[record.history.length - 1];

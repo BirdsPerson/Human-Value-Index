@@ -44,7 +44,7 @@ function memStore({ failTally = 0 } = {}) {
 
 // ---- the world: voters in each quadrant, referral cards -----------------------------------------------
 const cases = new Map();
-const OWNER = "HVI-KKN67AUZ";
+const OWNER = "HVI-OWNERAAA";   // a test id: the real owner case lives only in the environment
 const QN = ["ADMIRED", "TRUSTED RESERVE", "ENVIED", "DISMISSED"];
 const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const idOf = (i) => `HVI-T${[i >> 10, (i >> 5) & 31, i & 31].map(x => B32[x]).join("").padStart(7, "A")}`;

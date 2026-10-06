@@ -9,11 +9,13 @@
 //     poker-sit {seats, buyIn} | poker-deal | poker-act {type, to?} | poker-reload {buyIn} | poker-leave
 // There is deliberately no action that buys chips, cashes them out, or moves them between
 // files; scripts/check-casino.mjs fails the build if one appears.
-// Holding the case number is the credential (as with /api/quest); only assessed files play.
+// An unclaimed file plays on its number; a file secured to an email plays (and shows its wallet)
+// only from that account's session (lib/auth.js requireCaseAuth). Only assessed files play.
 // Every hand, spin and coup is one server call; the RNG is node:crypto; every balance change
 // is one etag-conditional write (casino-store.updateWallet).
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { updateWallet, getWallet, postStack, readBoard, Busy } from "../lib/casino-store.js";
@@ -261,6 +263,8 @@ export default async (req, context) => {
     }
     if (!Array.isArray(rec.history) || !rec.history.length) return json(403, { error: "Only assessed subjects play. Your file has no assessment on it. Be assessed; then you may lose chips like a citizen." });
     const tier = rec.history[rec.history.length - 1]?.tier || null;
+    const auth = await requireCaseAuth(req, caseId, { write: req.method === "POST" });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth), noStore);
     if (req.method === "GET") return json(200, view(await getWallet(caseId), rec, { board: await readBoard() }), noStore);
 
     let result;

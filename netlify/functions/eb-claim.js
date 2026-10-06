@@ -5,6 +5,7 @@
 // or echoes the email or the order: only salted hashes reach the ledger.
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, allowedOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { ledger, caseHash, LedgerDown } from "../lib/economy-db.js";
@@ -41,6 +42,9 @@ export default async (req, context) => {
   const rec = await getCase(caseId);
   if (!rec) return json(404, { error: NO_SUCH_FILE });
   try {
+    // a file secured to an email takes claims only from that account's session (lib/auth.js)
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth), noStore);
     const order = await findOrder(cfg, name);
     const chk = checkOrder(order, body.email);
     if (!chk.ok) {

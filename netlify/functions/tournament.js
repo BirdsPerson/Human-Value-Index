@@ -11,9 +11,12 @@
 //   POST {caseId, action: "submit", permit, leg, inputLog, claim, opts?, n?, v?}
 //                                re-plays the leg from the event's locked setup; files it only when it
 //                                comes out exactly as claimed; one official result per leg of an attempt
-// Holding the case number is the credential (as with /api/aquarium and /api/ski). Practice needs nothing.
+// An unclaimed file enters on its number; a file secured to an email enters and submits only from that
+// account's session (lib/auth.js requireCaseAuth). Practice needs nothing. The GET is open: a file's
+// places and honours are what the boards show.
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { eventsBetween, eventById, statusOf, ID_RE, GRACE_MS } from "../../src/tournament/calendar.js";
@@ -93,6 +96,8 @@ export default async (req, context) => {
       }
       return json(200, { now, mine: { honours: mine?.honours || [], places } }, noStore);
     }
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth), noStore);
 
     const ev = body.action === "enter" ? (ID_RE.test(String(body.id || "")) ? eventById(body.id) : null) : null;
     if (body.action === "enter") {

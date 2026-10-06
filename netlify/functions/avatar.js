@@ -2,6 +2,7 @@
 // A case whose photo is a hand-drawn sprite keeps it; everyone else gets enum-only specs.
 import { isCaseId } from "../lib/intake.js";
 import { getCase, updateCase, putPenCard, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { descriptionError, extractSpec } from "../lib/avatar.js";
 import { sanitizeAvatar, outfitOf } from "../../src/avatar.js";
@@ -43,6 +44,9 @@ export default async (req, context) => {
   try {
     const record = await getCase(caseId);
     if (!record?.history?.length) return json(404, { error: "There is no file to photograph. Be assessed first." });
+    // a secured file is redrawn only by its account (the GET above is public: the pen card shows the same photo)
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth));
     if (record.avatar?.kind === "sprite") return json(409, { error: HAND_DRAWN_LINE, avatar: sanitizeAvatar(record.avatar) });
     try {
       if (!(await hitLimit(`avatar-ip:${ip}`, UPDATES_PER_IP_DAILY)).ok) return json(429, { error: "Your location has been redrawn enough for one day. Return tomorrow." }, { "Retry-After": "3600" });

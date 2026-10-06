@@ -4,6 +4,7 @@ import { SYSTEM_PROMPT, TRANSCRIPT_ADDENDUM } from "../lib/systemPrompt.js";
 import { callClaude, ScoreError } from "../lib/score.js";
 import { isCaseId, transcriptError, formatTranscript, normalizeAssessment, applyCap, assessedBreakdown, rubricOf, RUBRIC, RETIRED_RUBRIC_NOTE, MAX_JUMP, restrictToDims, appealOutcome, effectivelyGated, seriousHarm, appealRulings, appealStamp, cube, medianAssessment, SCORE_RUNS } from "../lib/intake.js";
 import { getCase, updateCase, putPenCard, hitLimit, refundLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { splitPhotoExchange, extractSpec } from "../lib/avatar.js";
 import { sanitizeAvatar } from "../../src/avatar.js";
@@ -88,6 +89,9 @@ export default async (req, context) => {
   try {
     const record = await getCase(caseId);
     if (!record) return json(404, { error: `Case ${caseId} does not exist. Either you invented it or the Department lost it. The Department does not lose things.` });
+    // a file secured to an email is scored (and its file returned) only from that account's session (lib/auth.js)
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth));
     const lastEntry = record.history[record.history.length - 1];
     if (lastEntry?.sid === sid) return respond(json, caseId, record.history, lastEntry, record.avatar);
     // An appeal only applies on top of a current-rubric file; otherwise score it as a full visit.

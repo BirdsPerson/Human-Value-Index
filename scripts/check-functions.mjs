@@ -121,8 +121,8 @@ const avatarFn = (await import("../netlify/functions/avatar.js")).default;
 const { sanitizeAvatar, sanitizeSpec, AVATAR_KEYS } = await import("../src/avatar.js");
 
 const HOST = "https://humanvalueindex.com";
-const post = (fn, path, body, { origin = HOST, ip = "203.0.113.7" } = {}) =>
-  fn(new Request(HOST + path, { method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify(body) }), { ip });
+const post = (fn, path, body, { origin = HOST, ip = "203.0.113.7", cookie } = {}) =>
+  fn(new Request(HOST + path, { method: "POST", headers: { "content-type": "application/json", origin, ...(cookie ? { cookie } : {}) }, body: JSON.stringify(body) }), { ip });
 const read = async r => ({ status: r.status, body: await r.json(), headers: r.headers });
 
 // foreign origin refused before anything is charged
@@ -516,10 +516,19 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
   r = await read(await post(refer, "/api/refer", { name: "Dolly Parton", caseId }, { ip: "192.0.2.53" }));
   assert.equal(r.status, 410);
 
-  // the owner case: no assessment on file, no monthly quota, still a normal scored referral
-  const own = await read(await refer(new Request(HOST + "/api/refer?caseId=HVI-OWNERAAA"), {}));
-  assert.equal(own.body.assessed, true); assert.equal(own.body.owner, true); assert.equal(own.body.remaining, null);
+  // the owner case: no assessment on file, no monthly quota, still a normal scored referral. The
+  // owner is the owner's SESSION (lib/auth.js requireCaseAuth): the number alone is nobody.
+  const A = await import("../netlify/lib/auth.js");
+  const ownerAcct = await A.upsertAccount("owner@example.com");
+  await A.claimCase(ownerAcct.key, "HVI-OWNERAAA");
+  const OWNER_COOKIE = `hvi_sid=${await A.createSession(ownerAcct.key)}`;
+  const bare = await read(await refer(new Request(HOST + "/api/refer?caseId=HVI-OWNERAAA"), {}));
+  assert.equal(bare.body.owner, undefined, "the number alone is not the owner"); assert.equal(bare.body.assessed, false);
   r = await read(await post(refer, "/api/refer", { name: "Terence McKenna", caseId: "HVI-OWNERAAA" }, { ip: "192.0.2.60" }));
+  assert.equal(r.status, 401, "the owner's number without the owner's session: refused before anything is looked up");
+  const own = await read(await refer(new Request(HOST + "/api/refer?caseId=HVI-OWNERAAA", { headers: { cookie: OWNER_COOKIE } }), {}));
+  assert.equal(own.body.assessed, true); assert.equal(own.body.owner, true); assert.equal(own.body.remaining, null);
+  r = await read(await post(refer, "/api/refer", { name: "Terence McKenna", caseId: "HVI-OWNERAAA" }, { ip: "192.0.2.60", cookie: OWNER_COOKIE }));
   assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.equal(r.body.remaining, null, "the owner has no monthly counter");
   assert.ok(![...globalThis.__blobs.get("hvi-limits").keys()].some(k => k.includes("refer-case:HVI-OWNERAAA")), "no monthly charge for the owner");
@@ -546,19 +555,19 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
       assert.equal(gets.length, 0, "no source is fetched for a non-owner"); assert.equal(claudeCalls, c0, "nothing scored");
       // the owner: unsafe URLs refused before anything is fetched or charged
       for (const bad of ["http://localhost/x", "http://169.254.169.254/latest/meta-data/", "http://10.0.0.8/", "file:///etc/passwd", "ftp://example.org/a", "https://example.org:8443/"]) {
-        r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: [SRC[0], bad] }, { ip: "192.0.2.64" }));
+        r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: [SRC[0], bad] }, { ip: "192.0.2.64", cookie: OWNER_COOKIE }));
         assert.equal(r.status, 400, bad); assert.equal(r.body.reason, "sources");
       }
-      r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: [...SRC, "https://d.example/", "https://e.example/"] }, { ip: "192.0.2.64" }));
+      r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: [...SRC, "https://d.example/", "https://e.example/"] }, { ip: "192.0.2.64", cookie: OWNER_COOKIE }));
       assert.equal(r.status, 400, "at most three sources");
       assert.equal(gets.length, 0);
       // someone with an article files by name, not from sources
-      r = await read(await post(refer, "/api/refer", { name: "Fred Rogers", caseId: "HVI-OWNERAAA", sources: [SRC[0]] }, { ip: "192.0.2.64" }));
+      r = await read(await post(refer, "/api/refer", { name: "Fred Rogers", caseId: "HVI-OWNERAAA", sources: [SRC[0]] }, { ip: "192.0.2.64", cookie: OWNER_COOKIE }));
       assert.equal(r.status, 409, JSON.stringify(r.body)); assert.equal(r.body.reason, "hasArticle");
       // the owner with sources: three readings on the sources alone, median kept, fact-checked against them
       const c1 = claudeCalls, f1 = factCalls, o1 = ownerCalls, fm = factMode;
       factMode = "owner";
-      r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: SRC }, { ip: "192.0.2.64" }));
+      r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: SRC }, { ip: "192.0.2.64", cookie: OWNER_COOKIE }));
       assert.equal(r.status, 201, JSON.stringify(r.body));
       assert.equal(ownerCalls - o1, 3, "median of three readings"); assert.equal(factCalls - f1, 1, "one fact-check"); assert.equal(claudeCalls - c1, 4);
       assert.match(lastUser, /PUBLIC OFFICIAL: Zack Mullock\nSTATUS: living/);
@@ -589,10 +598,10 @@ const KNOWN_QID = { "Dolly Parton": "Q180453", "Joe Jackson (musician)": "Q13490
       assert.deepEqual(fig.body.subject.sources, SRC.slice(0, 2));
       // filed once: a second add is the file on record, not a second scoring
       const c2 = claudeCalls;
-      r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: SRC }, { ip: "192.0.2.64" }));
+      r = await read(await post(refer, "/api/refer", { name: "Zack Mullock", caseId: "HVI-OWNERAAA", sources: SRC }, { ip: "192.0.2.64", cookie: OWNER_COOKIE }));
       assert.equal(r.body.status, "on-file"); assert.equal(claudeCalls, c2);
       // every source unreadable: nothing charged, nothing filed
-      r = await read(await post(refer, "/api/refer", { name: "Pat Nobody", caseId: "HVI-OWNERAAA", sources: ["https://gone.example/1"] }, { ip: "192.0.2.64" }));
+      r = await read(await post(refer, "/api/refer", { name: "Pat Nobody", caseId: "HVI-OWNERAAA", sources: ["https://gone.example/1"] }, { ip: "192.0.2.64", cookie: OWNER_COOKIE }));
       assert.equal(r.status, 422); assert.equal(r.body.reason, "sources"); assert.equal(claudeCalls, c2);
     } finally { OS.transport.get = realGet; }
   }

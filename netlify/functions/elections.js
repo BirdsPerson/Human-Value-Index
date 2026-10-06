@@ -3,8 +3,9 @@
 //        running tally, the Substrate's advisory lean), the result once closed, and with a case
 //        number that file's own ballots. The first GET ever anchors the calendar.
 // POST   /api/elections {caseId, district, candidate (a key, or null to withdraw), device}
-//        cast, change or withdraw one race's ballot. Holding the case number is the credential
-//        (as with /api/assembly). Non-binding civic theatre. No paid API is called here.
+//        cast, change or withdraw one race's ballot. An unclaimed file votes on its number; a
+//        file secured to an email votes (and sees its ballots) only from that account's session
+//        (lib/auth.js requireCaseAuth). Non-binding civic theatre. No paid API is called here.
 // POST   {caseId, district, writein (a subject's key), device}   a write-in ballot instead
 // GET    /api/elections?writein=<district>&q=<text>[&caseId=]   the write-in picker's type-ahead:
 //        subjects on file who live or work there and may be written in, and with a case number
@@ -17,6 +18,7 @@
 import { getStore } from "@netlify/blobs";
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit, listFigures } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { closedToOpinion } from "../lib/petition.js";
 import { FAMOUS_FIGURES, slugify } from "../../src/figures.js";
 import { censusSubjects } from "../lib/census.js";
@@ -53,14 +55,22 @@ export default async (req, context) => {
     const io = { store: store(), census, getCase, hitLimit, writeins };
     if (req.method === "GET") {
       const u = new URL(req.url);
-      const caseId = String(u.searchParams.get("caseId") || "").trim().toUpperCase();
-      if (u.searchParams.has("candidacy")) return json(200, isCaseId(caseId) ? await myCandidacy(io, caseId) : { open: false, districts: [] }, noStore);
-      if (u.searchParams.has("writein")) return json(200, await pickerOf(io, String(u.searchParams.get("writein")).toLowerCase(), u.searchParams.get("q") || "", isCaseId(caseId) ? caseId : null), noStore);
-      const view = await publicView(io);
+      let caseId = String(u.searchParams.get("caseId") || "").trim().toUpperCase();
+      // The public view always answers; the file's own part (ballots, seats, candidacy, self)
+      // only to whoever may read the file. Refused, the view says so and carries nothing of it.
+      let secured = null;
       if (isCaseId(caseId)) {
+        const auth = await requireCaseAuth(req, caseId, { write: false });
+        if (!auth.ok) { secured = caseAuthBody(auth); caseId = ""; }
+      } else caseId = "";
+      if (u.searchParams.has("candidacy")) return json(200, caseId ? await myCandidacy(io, caseId) : { open: false, districts: [], ...(secured || {}) }, noStore);
+      if (u.searchParams.has("writein")) return json(200, { ...(await pickerOf(io, String(u.searchParams.get("writein")).toLowerCase(), u.searchParams.get("q") || "", caseId || null)), ...(secured || {}) }, noStore);
+      const view = await publicView(io);
+      if (caseId) {
         Object.assign(view, await myBallots(io.store, caseId));
         view.myseats = await mySeats(io.store, caseId);
       }
+      if (secured) Object.assign(view, secured);
       return json(200, view, noStore);
     }
     if (foreignOrigin(req)) return json(403, { error: FOREIGN_ORIGIN_LINE });
@@ -68,6 +78,8 @@ export default async (req, context) => {
     try { body = await req.json(); } catch { return json(400, { error: "Your ballot is not legible." }); }
     const caseId = String(body?.caseId || "").trim().toUpperCase();
     if (!isCaseId(caseId)) return json(400, { error: "That is not a case number. Only files vote." });
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth), noStore);
     if (body?.resign) {
       const cycle = Number(body.resign.cycle), district = String(body.resign.district || "").toLowerCase();
       if (!Number.isInteger(cycle) || cycle < 1) return json(400, { error: "No such term." });

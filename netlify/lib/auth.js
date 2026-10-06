@@ -9,7 +9,12 @@ export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const COOKIE = "hvi_sid";
 export const FROM_DEFAULT = "The Department <file@mail.humanvalueindex.com>";
 export const RESEND_DOMAIN_ID = "69b9e1d0-1318-4187-8ddd-b2a4795c05ea";
-const OWNER_CASE = "HVI-KKN67AUZ";
+// The owner's case numbers come only from the environment (HVI_OWNER_CASES, a comma list),
+// never from the source: this repository is public, and a case number is a credential for an
+// unclaimed file. No committed digest either: a case id is 36^8 possibilities, so a bare hash
+// is reversed by brute force in hours. Unset, nobody is the owner and the owner's extras
+// (review queue, referral caps, prune exemption) are simply off. docs/SECURITY.md.
+if (!process.env.HVI_OWNER_CASES && process.env.CONTEXT === "production") console.warn("[auth] HVI_OWNER_CASES is not set: no case is the owner's");
 
 const auth = () => getStore({ name: "hvi-auth", consistency: "strong" });
 const accounts = () => getStore({ name: "hvi-accounts", consistency: "strong" });
@@ -63,7 +68,7 @@ export async function upsertAccount(email, now = Date.now()) {
 
 export const getAccount = async key => (key ? (await accounts().get(key, { type: "json" })) || null : null);
 
-const ownerCases = () => new Set([OWNER_CASE, ...String(process.env.HVI_OWNER_CASES || "").split(",").map(s => s.trim()).filter(Boolean)]);
+const ownerCases = () => new Set(String(process.env.HVI_OWNER_CASES || "").split(",").map(s => s.trim()).filter(Boolean));
 export const isOwnerCase = id => ownerCases().has(id);
 export const isOwnerAccount = account => Boolean(account?.owner || account?.cases?.some(c => ownerCases().has(c)));
 
@@ -122,6 +127,34 @@ export async function revokeSession(req) {
   const sid = readCookie(req);
   if (sid && sid.length <= 100) await auth().delete(`sess:${sha256(sid)}`);
 }
+
+// ---- acting on a case file ----------------------------------------------------------
+// Who may act on a case (write) or read its private parts, docs/SECURITY.md:
+//   unclaimed file   whoever holds the number (the free credential; the UI nudges to claim)
+//   claimed file     only a session of the account that claimed it (hvi-accounts case:<id>)
+//   owner's file     only a session of an owner account, claimed or not (HVI_OWNER_CASES)
+// Every endpoint that takes a case id calls this before any state changes and before any
+// private read; scripts/check-caseauth.mjs fails the build when one does not. Returns
+//   { ok: true, claimed, acct (the claiming account's key or null), session (or null) }
+//   { ok: false, status: 401 | 403, code: "sign-in" | "not-yours", error, claimed: true }
+// Throws when the stores are unreachable: callers fail closed with their own 5xx.
+export const SIGN_IN_LINE = "THIS FILE IS SECURED TO AN EMAIL ADDRESS. SIGN IN WITH THAT ADDRESS TO ACT ON IT.";
+export const SIGN_IN_READ_LINE = "THIS FILE IS SECURED TO AN EMAIL ADDRESS. SIGN IN WITH THAT ADDRESS TO OPEN IT.";
+export const NOT_YOURS_LINE = "THAT FILE IS SECURED TO ANOTHER SUBJECT. THE DEPARTMENT DOES NOT SHARE FILES.";
+export async function requireCaseAuth(req, caseId, { write = true } = {}) {
+  const acct = await caseOwner(caseId);
+  const ownerCase = isOwnerCase(caseId);
+  if (!acct && !ownerCase) return { ok: true, claimed: false, acct: null, session: null };
+  const session = await requireAccount(req);
+  if (!session) return { ok: false, status: 401, code: "sign-in", claimed: true, error: write ? SIGN_IN_LINE : SIGN_IN_READ_LINE };
+  const theirs = acct ? session.key === acct : isOwnerAccount(session.account);
+  if (!theirs) return { ok: false, status: 403, code: "not-yours", claimed: true, error: NOT_YOURS_LINE };
+  return { ok: true, claimed: true, acct, session };
+}
+// The body of a refusal: the line, a code the UI keys on, and the flag that says sign in.
+export const caseAuthBody = r => ({ error: r.error, code: r.code, secured: true });
+// Is this file claimed by an email account? For the UI's nudge (/api/me?caseId=).
+export const isClaimed = async caseId => Boolean(await caseOwner(caseId));
 
 // ---- mail --------------------------------------------------------------------------
 export const MAIL_ROOM_CLOSED = "The Department's mail room is not yet open. Your link cannot be dispatched. Retain your case number; it still works.";

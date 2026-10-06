@@ -33,6 +33,7 @@ export function getStore({ name }) {
 registerHooks({ resolve(spec, ctx, next) { return spec === "@netlify/blobs" ? { url: "data:text/javascript," + encodeURIComponent(blobsSrc), shortCircuit: true } : next(spec, ctx); } });
 const __err = console.error; console.error = console.warn = console.log = (...a) => { if (process.env.DEBUG_CHECK) __err(...a); };
 
+process.env.HVI_OWNER_CASES = "HVI-OWNERAAA";   // the owner's case comes from the environment (lib/auth.js)
 const { prune, lastActivity, bucketEnd, isRawIpKey, requestDate } = await import("../netlify/lib/prune.js");
 const { getStore } = await import("@netlify/blobs");
 const S = name => getStore({ name });
@@ -75,7 +76,7 @@ async function seed() {
   await file("HVI-RECALAAA", old, { history: [{ at: old, score: 1 }, { at: recent, score: 2, kind: "recalibration" }] }); // only the Department touched it: expired
   await file("HVI-QUESTAAA", old, { quests: { active: null, done: [{ id: "q", at: recent }] } });                     // a recent directive keeps it
   await cases.setJSON("HVI-UNDATEDA", { caseId: "HVI-UNDATEDA", history: [] });          // no date: never expired on a guess
-  await file("HVI-KKN67AUZ", old);                                                      // the owner's file never expires
+  await file("HVI-OWNERAAA", old);                                                      // the owner's file never expires
   await cases.setJSON("not-a-case", { junk: true });
   for (const id of ["HVI-OLDAAAAA", "HVI-NEWCCCCC"]) await pen.setJSON(`citizen:${id}`, { updated: old });
   await pen.setJSON("index", { cards: [{ key: "citizen:HVI-OLDAAAAA" }, { key: "citizen:HVI-NEWCCCCC" }] });
@@ -121,7 +122,7 @@ const r = await prune({ now: NOW });
 assert.equal(r.errors, 0);
 assert.equal(r.done, true);
 for (const id of ["HVI-OLDAAAAA", "HVI-OLDBBBBB", "HVI-OLDCCCCC", "HVI-RECALAAA"]) assert.ok(!has("hvi-cases", id), `${id} should be gone`);
-for (const id of ["HVI-NEWCCCCC", "HVI-EDGEAAAA", "HVI-QUESTAAA", "HVI-UNDATEDA", "HVI-KKN67AUZ", "not-a-case"]) assert.ok(has("hvi-cases", id), `${id} should stay`);
+for (const id of ["HVI-NEWCCCCC", "HVI-EDGEAAAA", "HVI-QUESTAAA", "HVI-UNDATEDA", "HVI-OWNERAAA", "not-a-case"]) assert.ok(has("hvi-cases", id), `${id} should stay`);
 assert.ok(!has("hvi-pen", "citizen:HVI-OLDAAAAA"));
 assert.deepEqual((await S("hvi-pen").get("index")).cards.map(c => c.key), ["citizen:HVI-NEWCCCCC"]);
 assert.ok(!has("hvi-accounts", "acct-b"), "an account left with no files is deleted");

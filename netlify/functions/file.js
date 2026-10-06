@@ -1,9 +1,10 @@
 // GET /api/file?caseId=: the subject's CURRENT file from the server, so a browser never
-// shows a stale cached result. Holding the case number is the credential (as with
-// /api/case and /api/avatar); a signed-in account may also read its claimed cases.
+// shows a stale cached result. An unclaimed file opens to whoever holds the number; a file
+// secured to an email opens only to that account's session (lib/auth.js requireCaseAuth).
 // Voided entries (removed at the subject's request) are never returned.
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { visitCount, publicHistory } from "../../src/movement.js";
@@ -37,6 +38,8 @@ export default async (req, context) => {
     }
     const record = await getCase(caseId);
     if (!record) return json(404, { exists: false, error: NO_SUCH_FILE });
+    const auth = await requireCaseAuth(req, caseId, { write: false });
+    if (!auth.ok) return json(auth.status, { exists: true, caseId, ...caseAuthBody(auth) }, { "Cache-Control": "no-store" });
     return json(200, { exists: true, caseId, ...currentFile(record) }, { "Cache-Control": "no-store" });
   } catch (err) {
     console.error("file read failed", err?.name);

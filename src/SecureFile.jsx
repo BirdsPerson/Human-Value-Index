@@ -9,6 +9,11 @@ const AUTH_LINES = {
   expired: "THAT LINK IS SPENT OR EXPIRED. REQUEST ANOTHER. THE DEPARTMENT HAS PLENTY.",
   error: "THE ACCESS OFFICE FAILED TO PROCESS YOUR LINK. REQUEST ANOTHER.",
 };
+// An unclaimed file answers to anyone holding its number (docs/SECURITY.md); a claimed one
+// only to its address. The nudge says so before an action is refused.
+export const CLAIM_NUDGE = "CLAIM YOUR FILE WITH YOUR EMAIL TO PROTECT IT. UNTIL IT IS CLAIMED, ANYONE HOLDING THE CASE NUMBER CAN ACT AS YOU.";
+export const SIGN_IN_NUDGE = "THIS FILE IS SECURED TO AN EMAIL ADDRESS. SIGN IN WITH THAT ADDRESS TO ACT ON IT.";
+const LEAD = "TIE YOUR FILE TO AN EMAIL ADDRESS SO IT FOLLOWS YOU TO ANY DEVICE. NO PASSWORD. THE DEPARTMENT SENDS A LINK.";
 
 async function postJSON(url, body) {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -29,11 +34,11 @@ export default function SecureFile({ onCase, autoFocus = false }) {
       if (a) { if (AUTH_LINES[a]) setMsg(AUTH_LINES[a]); u.searchParams.delete("auth"); window.history.replaceState(null, "", u.pathname + u.search + u.hash); }
     } catch { /* leave the URL */ }
     (async () => {
-      const r = await fetch("/api/me", { cache: "no-store" }).then(x => x.json()).catch(() => null);
+      const held = readCaseId();
+      const r = await fetch(`/api/me${held ? `?caseId=${encodeURIComponent(held)}` : ""}`, { cache: "no-store" }).then(x => x.json()).catch(() => null);
       if (dead) return;
       // The access office unreachable: offer the link form anyway (it reports its own failure).
-      if (!r || !r.signedIn) { setMe({ signedIn: false }); return; }
-      const held = readCaseId();
+      if (!r || !r.signedIn) { setMe({ signedIn: false, held: held || null, secured: r?.secured === true }); return; }
       // This browser holds a case the account doesn't: secure it. A browser with no case
       // but a signed-in account: bring the account's latest file here.
       if (held && !r.cases.includes(held)) {
@@ -66,7 +71,10 @@ export default function SecureFile({ onCase, autoFocus = false }) {
 
   async function logout() {
     await postJSON("/api/logout", {}).catch(() => null);
-    setMe({ signedIn: false }); setMsg("SESSION ENDED. YOUR FILE REMAINS. IT ALWAYS REMAINS.");
+    const held = readCaseId();
+    // the file this browser holds stays secured to the address; the nudge now says sign in
+    setMe({ signedIn: false, held: held || null, secured: Boolean(held && me?.cases?.includes(held)) });
+    setMsg("SESSION ENDED. YOUR FILE REMAINS. IT ALWAYS REMAINS.");
   }
 
   if (!me) return <div className="hvi-case-note" role="status">[ .. ] CHECKING WHO YOU ARE <span className="cur" aria-hidden="true">█</span></div>;
@@ -79,9 +87,11 @@ export default function SecureFile({ onCase, autoFocus = false }) {
       {note}
     </div>
   );
+  const nudge = me.held ? (me.secured ? SIGN_IN_NUDGE : CLAIM_NUDGE) : null;
   return (
     <form className="hvi-secure hvi-form" onSubmit={request}>
-      <div className="hvi-note hvi-form-lead">TIE YOUR FILE TO AN EMAIL ADDRESS SO IT FOLLOWS YOU TO ANY DEVICE. NO PASSWORD. THE DEPARTMENT SENDS A LINK.</div>
+      {nudge && <div className="hvi-note hvi-form-lead hvi-secure-nudge" role="status">{nudge}</div>}
+      <div className="hvi-note hvi-form-lead">{LEAD}</div>
       <TextField id="hvi-secure-email" label="EMAIL" type="email" inputMode="email" value={email} autoFocus={autoFocus} disabled={busy}
         onChange={e => setEmail(e.target.value)} placeholder="you@example.com" maxLength={254} autoComplete="email"
         autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="send"

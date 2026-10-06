@@ -3,11 +3,13 @@
 // GET  /api/petition/:slug[?caseId=]    one public figure's petition: state, the lean this
 //      evaluation, the machine's number beside it, earlier evaluations, and your own vote
 // POST /api/petition/:slug {caseId, choice: high|fair|low, device}  vote, or change your vote,
-//      once per evaluation period. Holding the case number is the credential (as /api/assembly).
+//      once per evaluation period. An unclaimed file votes on its number; a file secured to an
+//      email votes (and sees its vote) only from that account's session (lib/auth.js requireCaseAuth).
 // Votes never move a score. No paid API is called here.
 import { getStore } from "@netlify/blobs";
 import { isCaseId } from "../lib/intake.js";
 import { getCase, getFigure, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE } from "../lib/http.js";
 import { STORE, fileView, castVote, parseVote, readSummary } from "../lib/petition.js";
 
@@ -31,9 +33,12 @@ export default async (req, context) => {
       if (!slug) return json(200, { figures: await readSummary(io.store) }, { "Cache-Control": "public, max-age=300" });
       if (!SLUG_RE.test(slug)) return json(404, { error: "No such file." }, noStore);
       const caseId = String(new URL(req.url).searchParams.get("caseId") || "").trim().toUpperCase();
-      const v = await fileView(io, slug, { caseId: isCaseId(caseId) ? caseId : null });
+      // the figure's petition always answers; the file's own vote only to whoever may read the file
+      let mine = isCaseId(caseId) ? caseId : null, secured = null;
+      if (mine) { const auth = await requireCaseAuth(req, mine, { write: false }); if (!auth.ok) { secured = caseAuthBody(auth); mine = null; } }
+      const v = await fileView(io, slug, { caseId: mine });
       if (!v) return json(404, { error: "No such public file. The petition is for public figures only." }, noStore);
-      return json(200, v, noStore);
+      return json(200, secured ? { ...v, ...secured } : v, noStore);
     }
     if (foreignOrigin(req)) return json(403, { error: FOREIGN_ORIGIN_LINE });
     if (!slug || !SLUG_RE.test(slug)) return json(404, { error: "No such file." });
@@ -41,6 +46,8 @@ export default async (req, context) => {
     try { body = await req.json(); } catch { return json(400, { error: "Your petition is not legible." }); }
     const caseId = String(body?.caseId || "").trim().toUpperCase();
     if (!isCaseId(caseId)) return json(400, { error: "That is not a case number. Only files petition." });
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth), noStore);
     const b = parseVote(body);
     if (b.error) return json(400, { error: b.error });
     const r = await castVote(io, { caseId, slug, choice: b.choice, ip: clientIp(req, context), device: body?.device });

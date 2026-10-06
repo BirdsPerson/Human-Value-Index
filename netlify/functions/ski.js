@@ -9,11 +9,13 @@
 //                                re-plays the run in node (src/play/ski/sim.js, the same pure sim the page
 //                                runs, from the challenge's one fixed start) and files it only when it
 //                                finishes exactly as claimed.
-// Holding the case number is the credential (as with /api/aquarium). Anyone can ski without one;
-// the boards need a file. No money, no CYCLES: a name on a board.
+// An unclaimed file files runs on its number; a file secured to an email only from that account's
+// session (lib/auth.js requireCaseAuth). Anyone can ski without one; the boards need a file. No money,
+// no CYCLES: a name on a board. The GET is open: the bests are what the boards show.
 import { randomUUID } from "node:crypto";
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { getRecord, updateRecord, readBoards, updateBoards, fileRun, publicBoards, holderKey, holderName, Busy, RUN_TTL_MS, KEEP_RUNS } from "../lib/ski-store.js";
@@ -59,6 +61,8 @@ export default async (req, context) => {
       return json(miss.ok ? 404 : 429, { error: miss.ok ? NO_SUCH_FILE : "Too many wrong case numbers. The Department suspects you are guessing." });
     }
     if (req.method === "GET") return json(200, { v: VERSION, boarded: BOARDED, boards: publicBoards(await readBoards()), mine: mineOf(await getRecord(caseId)) }, noStore);
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth), noStore);
 
     const ch = String(body.ch || "");
     if (!BOARDED.includes(ch) || !CHALLENGE[ch]) return json(404, { error: "That challenge keeps no board." });

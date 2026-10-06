@@ -10,11 +10,13 @@
 //                                src/play/fish/sim.js; v 1 or none, the frozen EXPERT sim in
 //                                src/play/fish/v1/sim.js; replay.js picks), the same pure sim the page runs, and files catch n only when it comes out exactly as claimed
 //                                (species, hundredths of a pound, tenths of an inch) and was not released.
-// Holding the case number is the credential (as with /api/chess). Anyone can fish without one; donating
-// needs a file. No money, no CYCLES: a plaque.
+// An unclaimed file donates on its number; a file secured to an email donates only from that account's
+// session (lib/auth.js requireCaseAuth). Anyone can fish without one; donating needs a file. No money,
+// no CYCLES: a plaque. The GET is open: donations and records are what the tanks show.
 import { randomInt, randomUUID } from "node:crypto";
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { deviceHash } from "../lib/assembly.js";
 import { NO_SUCH_FILE } from "./case.js";
@@ -62,6 +64,8 @@ export default async (req, context) => {
       return json(miss.ok ? 404 : 429, { error: miss.ok ? NO_SUCH_FILE : "Too many wrong case numbers. The Department suspects you are guessing." });
     }
     if (req.method === "GET") { const tanks = await readTanks(); return json(200, { v: VERSION, tanks: publicTanks(tanks), mine: view(await getRecord(caseId), tanks, caseId) }, noStore); }
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth), noStore);
 
     if (body.action === "trip") {
       const spot = String(body.spot || "");

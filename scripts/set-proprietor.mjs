@@ -4,16 +4,22 @@
 //   node scripts/set-proprietor.mjs <caseId> --business goodnight-irenes [--dry-run]
 //   node scripts/set-proprietor.mjs --business goodnight-irenes --clear
 //
-// Writes two files (commit and deploy them; nothing changes in production until then):
+// Two halves, one record:
 //   src/city/proprietors.json      {business: {owner (public census key), name (as the site shows the
-//                                  subject), since (machine day), by, at}}: what the city draws
-//   netlify/lib/proprietors.json   {business: {case, owner, since, by, at}}: the case id, server only
+//                                  subject), since (machine day), by, at}}: what the city draws. A file;
+//                                  commit and deploy it (nothing changes in production until then).
+//   Blobs store hvi-proprietors    key <business> -> {case, owner, since, by, at}: the case id, written
+//                                  here into production Blobs (scripts/roster/prod.mjs, the CLI's token)
+//                                  and never into the repository, which is public (docs/SECURITY.md).
 // The subject is looked up in the public census (/api/pen) to take the name the site shows. No
 // economic effect: no income, no CYCLES (the business ladder, when it lands, carries the record over).
 import { readFileSync, writeFileSync } from "node:fs";
 import { isCaseId } from "../netlify/lib/intake.js";
 import { OWNABLE } from "../src/city/proprietors.js";
 import { machineClock } from "../src/city/sim.js";
+import { store } from "./roster/prod.mjs";
+
+export const PROPRIETORS_STORE = "hvi-proprietors";
 
 const argv = process.argv.slice(2);
 const opt = (name) => { const i = argv.indexOf(`--${name}`); return i >= 0 ? argv[i + 1] : undefined; };
@@ -25,12 +31,14 @@ if (!OWNABLE.includes(business)) { console.error(`not a business that can be own
 if (!CLEAR && !isCaseId(caseId)) { console.error(usage); process.exit(1); }
 
 const root = new URL("../", import.meta.url).pathname;
-const PUB = root + "src/city/proprietors.json", PRIV = root + "netlify/lib/proprietors.json";
+const PUB = root + "src/city/proprietors.json";
 const read = (p) => { try { return JSON.parse(readFileSync(p, "utf8")); } catch { return {}; } };
-const pub = read(PUB), priv = read(PRIV);
-console.log(`now:  ${JSON.stringify(pub[business] || null)}`);
+const pub = read(PUB);
+const priv = store(PROPRIETORS_STORE);
+console.log(`now:  ${JSON.stringify(pub[business] || null)} / server ${JSON.stringify((await priv.get(business, { type: "json" }))?.owner || null)}`);
 
-if (CLEAR) { delete pub[business]; delete priv[business]; }
+let record = null;
+if (CLEAR) delete pub[business];
 else {
   // the census key and the name the site shows (the public census, as the pen reads it)
   const owner = `citizen-${caseId.slice(-4).toLowerCase()}`;
@@ -40,10 +48,10 @@ else {
   const name = String(row.name || `SUBJECT ${caseId.slice(-4)}`).toUpperCase();
   const at = new Date().toISOString(), since = machineClock(Date.now()).day;
   pub[business] = { owner, name, since, by: "operator", at };
-  priv[business] = { case: caseId, owner, since, by: "operator", at };
+  record = { case: caseId, owner, since, by: "operator", at };
 }
 console.log(`new:  ${JSON.stringify(pub[business] || null)}`);
 if (DRY) { console.log("dry run: nothing written"); process.exit(0); }
+if (record) await priv.setJSON(business, record); else await priv.delete(business);
 writeFileSync(PUB, JSON.stringify(pub, null, 2) + "\n");
-writeFileSync(PRIV, JSON.stringify(priv, null, 2) + "\n");
-console.log(`written: ${PUB.replace(root, "")}, ${PRIV.replace(root, "")}. Commit and deploy them.`);
+console.log(`written: ${PUB.replace(root, "")} (commit and deploy it) and Blobs ${PROPRIETORS_STORE}/${business} (live now).`);

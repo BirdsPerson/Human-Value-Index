@@ -74,4 +74,7 @@ const cardRows = await applyToCards(prev, next, log);
 console.log(`production cards: ${cardRows.length} updated`);
 const citizens = await applyToCitizens(prev, next, log);
 console.log(`citizens: ${citizens.length} recalibrated: ${citizens.map(c => `${c.caseId} ${c.from}→${c.to} (${c.tier})`).join(", ")}`);
-fs.writeFileSync(P(`docs/calibration/method-${spec.method}-applied.json`), JSON.stringify({ at, method: spec.method, note: spec.note, cutoffs: next.tiers, top: sorted.slice(0, 20), movers, citizens, cards: cardRows.length }, null, 2));
+// The committed record names citizens by their public tag only: a case number is a credential
+// for an unclaimed file, and this repository is public (docs/SECURITY.md).
+const publicCitizens = citizens.map(({ caseId, ...c }) => ({ subject: `SUBJECT ${String(caseId).slice(-4)}`, ...c }));
+fs.writeFileSync(P(`docs/calibration/method-${spec.method}-applied.json`), JSON.stringify({ at, method: spec.method, note: spec.note, cutoffs: next.tiers, top: sorted.slice(0, 20), movers, citizens: publicCitizens, cards: cardRows.length }, null, 2));

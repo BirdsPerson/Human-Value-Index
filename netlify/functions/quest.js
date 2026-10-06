@@ -1,10 +1,11 @@
 // GET /api/quest?caseId= : the file's directives and vouches.
 // POST /api/quest {caseId, action: accept|complete|abandon, questId, buildingId?}
-// Holding the case number is the credential (as with /api/file). Completion is checked
-// against the city sim server-side: the figure must be in that building now.
-// No paid API is called here.
+// An unclaimed file answers to its number; a file secured to an email needs that account's
+// session (lib/auth.js requireCaseAuth). Completion is checked against the city sim
+// server-side: the figure must be in that building now. No paid API is called here.
 import { isCaseId } from "../lib/intake.js";
 import { getCase, updateCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { applyQuest, questState } from "../lib/quests.js";
 import { loadSocialSnapshots } from "../lib/social-store.js";
 import { loadOnFile, questDays } from "../lib/plans.js";
@@ -46,6 +47,8 @@ export default async (req, context) => {
     } catch {
       return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
     }
+    const auth = await requireCaseAuth(req, caseId, { write: req.method === "POST" });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth), noStore);
     if (req.method === "GET") {
       const record = await getCase(caseId);
       if (!record) return json(404, { error: NO_SUCH_FILE });

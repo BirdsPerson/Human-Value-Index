@@ -14,7 +14,7 @@ import { deleteTournaments } from "../lib/tournament-store.js";
 import { purgeLedger } from "../lib/economy-db.js";
 import { getStore } from "@netlify/blobs";
 import { dropEntry, STORE as LEAGUES_STORE } from "../lib/league-entries.js";
-import { requireAccount, caseOwner, detachCase, revokeSession, clearCookie } from "../lib/auth.js";
+import { requireCaseAuth, caseAuthBody, detachCase, revokeSession, clearCookie } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
 export const PURGES_PER_IP_DAILY = 10;
@@ -38,12 +38,11 @@ export default async (req, context) => {
       return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
     }
     if (!(await getCase(caseId))) return json(404, { error: "No such file. It may already have been purged." });
-    const owner = await caseOwner(caseId);
+    // the same rule as every other write on a file (lib/auth.js requireCaseAuth)
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, { ...caseAuthBody(auth), error: auth.code === "sign-in" ? "This file is secured to an email address. Sign in with that address first, then purge." : auth.error });
+    const owner = auth.acct;
     let accountDeleted = false;
-    if (owner) {
-      const s = await requireAccount(req);
-      if (!s || s.key !== owner) return json(401, { error: "This file is secured to an email address. Sign in with that address first, then purge." });
-    }
     // The Treasury's ledger first: if it is down, nothing is deleted and the purge can be retried.
     await purgeLedger(caseId);
     await deleteCase(caseId);

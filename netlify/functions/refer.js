@@ -10,6 +10,7 @@ import { slugify } from "../../src/figures.js";
 import { nameError, cleanName, resolveTitle, resolveCandidates, needsChoice, safeToAssume, searchHumans, qualifierFrom, matchesName, onFileByQid, fetchArticleText, onFileFigure, placeReferral, publicFigure, isHeadOfStateOrGov, originsOf, staturesOf, REJECT, PER_CASE_MONTHLY, remainingThisMonth } from "../lib/refer.js";
 import { displayName } from "../../src/figures.js";
 import { getCase, hitLimit, refundLimit, peekLimit, getFigure, createFigure, listFigures } from "../lib/store.js";
+import { isOwnerCase, requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { EXCLUDED_LINE, excludedAmong } from "../lib/excluded.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 
@@ -27,10 +28,10 @@ const REFER_DAILY = Number(process.env.HVI_REFER_DAILY_CAP) || 50;
 const LOOKUP_DAILY = Number(process.env.HVI_REFER_LOOKUP_DAILY) || 300;
 const MAX_LOOK = 400;
 const DECLINE = new Set(["minor", "victim", "pending_case"]);
-// Owner cases (env HVI_OWNER_CASES, comma list) skip the monthly quota and the assessed
-// check. They still pay the IP, lookup, global referral and Anthropic caps.
-const OWNER = new Set(String(process.env.HVI_OWNER_CASES || "").split(",").map(s => s.trim()).filter(Boolean));
-const isOwner = id => OWNER.has(id);
+// Owner cases (env HVI_OWNER_CASES, lib/auth.js isOwnerCase) skip the monthly quota and the
+// assessed check. They still pay the IP, lookup, global referral and Anthropic caps. The
+// number alone is not the owner: requireCaseAuth has checked the owner's session first.
+const isOwner = id => Boolean(id) && isOwnerCase(id);
 
 // Figures on file are static and fully public; referred ones go through publicFigure.
 const onFileCard = f => ({
@@ -51,7 +52,8 @@ export default async (req, context) => {
     const id = new URL(req.url).searchParams.get("caseId");
     if (!id) return json(200, { remaining: null, assessed: false });
     if (!isCaseId(id)) return json(400, { error: "That is not a case number." });
-    if (isOwner(id)) return json(200, { remaining: null, assessed: true, owner: true });
+    // the owner flag only for the owner's own session; to anyone else the number is a number
+    if (isOwner(id) && (await requireCaseAuth(req, id, { write: false }).catch(() => ({ ok: false }))).ok) return json(200, { remaining: null, assessed: true, owner: true });
     try {
       if (!(await getCase(id))?.history?.length) return json(200, { remaining: null, assessed: false });
       return json(200, { remaining: remainingThisMonth(await peekLimit(`refer-case:${id}`, "month")), assessed: true });
@@ -77,6 +79,12 @@ export default async (req, context) => {
 
   let assessed;
   try {
+    // A referral is charged to the file: a file secured to an email refers only from that
+    // account's session, and the owner's powers need the owner's session (lib/auth.js).
+    if (caseId) {
+      const auth = await requireCaseAuth(req, caseId, { write: true });
+      if (!auth.ok) return json(auth.status, caseAuthBody(auth));
+    }
     assessed = isOwner(caseId) || Boolean(caseId && (await getCase(caseId))?.history?.length);
   } catch (err) {
     console.error("refer case read failed", err);

@@ -13,7 +13,7 @@
 //                the brick oven, the stage); the proprietor on record holds Irene's units
 //   the record   proprietors.json and its server half agree; no case id in the bundle's half
 // node scripts/check-shoreplaza.mjs
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import * as SIM from "../src/city/sim.js";
 import * as SP from "../src/city/shorePlaza.js";
@@ -130,16 +130,16 @@ ok(staffed > 0, `day ${D}: Sam's and Irene's are staffed (${staffed} half-hours 
 
 // ---- the proprietor record ------------------------------------------------------------------------------------
 {
-  const priv = JSON.parse(readFileSync(root + "netlify/lib/proprietors.json", "utf8"));
+  // The case id half lives in Blobs (hvi-proprietors, scripts/set-proprietor.mjs), never in the
+  // repository: no case number anywhere in either source file (docs/SECURITY.md).
   const pubText = readFileSync(root + "src/city/proprietors.json", "utf8");
   ok(!/HVI-[A-Z0-9]+/i.test(pubText), "the bundle's half carries no case id");
+  ok(!existsSync(root + "netlify/lib/proprietors.json"), "no committed server half (the case id is in Blobs)");
   ok(Object.keys(PROPRIETORS).every(id => OWNABLE.includes(id)) && !(SP.SAMS in PROPRIETORS), "only the city's own businesses are on record (never Sam's)");
   for (const [id, r] of Object.entries(PROPRIETORS)) {
     ok(/^citizen-[a-z0-9]{4}$/.test(r.owner) && /^SUBJECT [A-Z0-9]{4}$|^[A-Z]/.test(r.name) && r.by === "operator" && Number.isInteger(r.since), `${id}: a public key, a name, by the operator, since a machine day`);
-    ok(priv[id] && /^HVI-[A-Z0-9]{8}$/.test(priv[id].case) && priv[id].owner === r.owner && priv[id].case.slice(-4).toLowerCase() === r.owner.slice(-4), `${id}: the server half names the same subject by case`);
     ok(proprietorOf(id)?.label === `PROPRIETOR: ${r.name}`, `${id}: the plaque reads PROPRIETOR: ${r.name}`);
   }
-  ok(Object.keys(priv).every(id => id in PROPRIETORS), "no server record without its public half");
 }
 
 console.log(fails ? `check-shoreplaza: ${fails} of ${checks} FAILED` : `check-shoreplaza: ${checks} checks passed (PLAZA_DAY ${D})`);

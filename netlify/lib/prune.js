@@ -12,7 +12,7 @@ import { isCaseId } from "./intake.js";
 import { deleteCase, removePenCard } from "./store.js";
 import { deleteWallet } from "./casino-store.js";
 import { purgeLedger } from "./economy-db.js";
-import { caseOwner, detachCase } from "./auth.js";
+import { caseOwner, detachCase, isOwnerCase } from "./auth.js";
 import { YOUR_CAUSES, causeOf } from "../../src/movement.js";
 
 export const CASE_MONTHS = 24;
@@ -22,7 +22,6 @@ export const BUDGET_MS = 20_000;
 export const CASE_BATCH = 300;
 const PARALLEL = 8;
 const DAY = 86_400_000;
-const OWNER_CASE = "HVI-KKN67AUZ";
 
 const monthsBefore = (now, n) => { const d = new Date(now); d.setUTCMonth(d.getUTCMonth() - n); return d.getTime(); };
 const ms = s => (typeof s === "string" ? Date.parse(s) : typeof s === "number" ? s : NaN);
@@ -61,8 +60,7 @@ export function isRawIpKey(key) {
 // req-YYYY-MM-DD-<hex>[:mailed] -> ms of that day, or null.
 export const requestDate = key => { const m = /^req-(\d{4}-\d{2}-\d{2})-/.exec(key); return m ? Date.parse(m[1] + "T00:00:00Z") : null; };
 
-const isOwnerCase = id => id === OWNER_CASE || String(process.env.HVI_OWNER_CASES || "").split(",").map(s => s.trim()).includes(id);
-
+// The owner's file never expires (isOwnerCase: env HVI_OWNER_CASES, netlify/lib/auth.js).
 export async function prune({ now = Date.now(), dryRun = false, budgetMs = BUDGET_MS, batch = CASE_BATCH, open = name => getStore({ name, consistency: "strong" }) } = {}) {
   const deadline = Date.now() + budgetMs;
   const late = () => Date.now() > deadline;

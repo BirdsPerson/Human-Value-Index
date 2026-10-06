@@ -7,9 +7,12 @@
 //   GET ?caseId=           + the file's shares and open orders (the wallet's market half)
 //   POST {caseId, action: "order", side: buy|sell, slug, amount (buy, CYCLES) | units (sell), nonce}
 // Orders fill at the next tick (a batch auction, netlify/lib/market.js); the Department is the
-// only counterparty. There is no action that moves CYCLES or shares between files.
+// only counterparty. There is no action that moves CYCLES or shares between files. An unclaimed
+// file trades on its number; a file secured to an email trades (and shows its holdings) only from
+// that account's session (lib/auth.js requireCaseAuth).
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { ledger, LedgerDown } from "../lib/economy-db.js";
@@ -49,6 +52,8 @@ export default async (req, context) => {
       if (!rec) return json(404, { error: NO_SUCH_FILE });
       const assessed = Array.isArray(rec.history) && rec.history.some(h => h && typeof h.score === "number");
       if (!assessed || !open) return json(200, { open, assessed, ...PUBLIC, board }, { "Cache-Control": "no-store" });
+      const auth = await requireCaseAuth(req, caseId, { write: false });
+      if (!auth.ok) return json(auth.status, { open, assessed, ...caseAuthBody(auth) }, { "Cache-Control": "no-store" });
       return json(200, { open, assessed, ...PUBLIC, board, wallet: await walletView(caseId, rec) }, { "Cache-Control": "no-store" });
     }
     let body;
@@ -67,6 +72,8 @@ export default async (req, context) => {
     const rec = await getCase(caseId);
     if (!rec) return json(404, { error: NO_SUCH_FILE });
     if (!(Array.isArray(rec.history) && rec.history.some(h => h && typeof h.score === "number"))) return json(403, { error: "Only assessed citizens trade. Your file has no assessment on it." });
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, { open, ...caseAuthBody(auth) }, { "Cache-Control": "no-store" });
     const out = await placeOrder(caseId, body);
     const wallet = await walletView(caseId, rec);
     if (!out.ok) return json(out.status || 400, { open, error: out.error, wallet }, { "Cache-Control": "no-store" });

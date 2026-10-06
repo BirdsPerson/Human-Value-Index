@@ -6,10 +6,12 @@
 //   POST {caseId, sports: [..]}      enter or change: one or two of baseball, basketball, football,
 //                                    soccer, tennis
 //   POST {caseId, sports: []}        withdraw (before the close: out of that draft; after: the next)
-// Holding the case number is the credential (as with /api/elections). No stakes, no paid API.
+// An unclaimed file enters on its number; a file secured to an email enters (and shows its entry)
+// only from that account's session (lib/auth.js requireCaseAuth). No stakes, no paid API.
 import { getStore } from "@netlify/blobs";
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE } from "../lib/http.js";
 import { STORE, myEntry, setEntry } from "../lib/league-entries.js";
 import { manifest2Cached, partKey, STORE as PLANS } from "../lib/plans.js";
@@ -35,6 +37,8 @@ export default async (req, context) => {
     if (req.method === "GET") {
       const caseId = String(new URL(req.url).searchParams.get("caseId") || "").trim().toUpperCase();
       if (!isCaseId(caseId)) return json(400, { error: "That is not a case number. Only files are drafted." });
+      const auth = await requireCaseAuth(req, caseId, { write: false });
+      if (!auth.ok) return json(auth.status, caseAuthBody(auth), noStore);
       const r = await myEntry(io, caseId);
       return json(r.status, r.body, noStore);
     }
@@ -43,6 +47,8 @@ export default async (req, context) => {
     try { body = await req.json(); } catch { return json(400, { error: "Your entry is not legible." }); }
     const caseId = String(body?.caseId || "").trim().toUpperCase();
     if (!isCaseId(caseId)) return json(400, { error: "That is not a case number. Only files are drafted." });
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth), noStore);
     const r = await setEntry(io, { caseId, sports: body?.sports, ip: clientIp(req, context) });
     if (r.status !== 200) return json(r.status, r.body, r.retry ? { ...noStore, "Retry-After": String(r.retry) } : noStore);
     const view = await myEntry(io, caseId);

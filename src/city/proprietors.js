@@ -3,9 +3,10 @@
 // operator's record, like the athletic record: written only by scripts/set-proprietor.mjs (never by
 // a public API), reviewed and deployed with the code. docs/design/ECONOMY_PROPERTY.md.
 //
-// Two files, one record. proprietors.json (here, in the bundle) carries what the city shows: the
-// owner's public census key and display name. netlify/lib/proprietors.json (server only) carries the
-// case id, which never reaches the client. No economic effect: no income, no CYCLES, no upkeep; when
+// Two halves, one record. proprietors.json (here, in the bundle) carries what the city shows: the
+// owner's public census key and display name. The case id lives in the Blobs store hvi-proprietors
+// (written by the script, never committed: the repository is public and a case number is a credential
+// for an unclaimed file, docs/SECURITY.md). No economic effect: no income, no CYCLES, no upkeep; when
 // the business ladder lands, a record here carries over and the ladder's rules apply to it as to anyone.
 //
 //   proprietorOf(placeId)  -> {kind: "subject", id (census key), name, label: "PROPRIETOR: <name>"} | null

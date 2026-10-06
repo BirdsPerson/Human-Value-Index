@@ -8,10 +8,13 @@
 //                             the figure's moves when the result comes back.
 //   POST {caseId, action: "result", gameId, moves: [uci], resign?}
 //                             files the result once the game replays (netlify/lib/chess-verify.js)
-// Holding the case number is the credential (as with /api/casino); only assessed files are rated.
+// An unclaimed file plays on its number; a file secured to an email plays only from that account's
+// session (lib/auth.js requireCaseAuth). Only assessed files are rated. The record itself is what
+// the board shows, so the GET is open.
 import { randomInt, randomUUID } from "node:crypto";
 import { isCaseId } from "../lib/intake.js";
 import { getCase, hitLimit } from "../lib/store.js";
+import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { putGame, getGame, dropGame, getRecord, updateRecord, postBoard, readBoard, Busy, GAME_TTL_MS, K_PLAYER, KEEP_GAMES, KEEP_HASHES } from "../lib/chess-store.js";
@@ -66,6 +69,8 @@ export default async (req, context) => {
     }
     if (!Array.isArray(rec.history) || !rec.history.length) return json(403, { error: "Only assessed subjects are rated. Be assessed; then lose to a dead grandmaster like a citizen." });
     if (req.method === "GET") return json(200, { record: view(await getRecord(caseId)), board: await readBoard() }, noStore);
+    const auth = await requireCaseAuth(req, caseId, { write: true });
+    if (!auth.ok) return json(auth.status, caseAuthBody(auth), noStore);
 
     if (body.action === "start") {
       const card = figureCard(String(body.vs || ""));

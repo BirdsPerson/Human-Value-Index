@@ -1,7 +1,9 @@
-// GET /api/me: who is signed in (masked), and which case files they hold.
+// GET /api/me[?caseId=]: who is signed in (masked), which case files they hold, and whether
+// the case this browser holds is secured to an email (so the UI can say CLAIM YOUR FILE, or
+// SIGN IN, before an action is refused).
 // POST /api/me {action:"logout"} ends the session; {action:"claim", caseId} attaches the
 // case this browser holds to the account.
-import { requireAccount, revokeSession, clearCookie, maskEmail, claimCase, isOwnerAccount } from "../lib/auth.js";
+import { requireAccount, revokeSession, clearCookie, maskEmail, claimCase, isOwnerAccount, isClaimed } from "../lib/auth.js";
 import { isCaseId } from "../lib/intake.js";
 import { getCase } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, FOREIGN_ORIGIN_LINE } from "../lib/http.js";
@@ -15,7 +17,9 @@ export default async (req) => {
   try {
     if (req.method === "GET") {
       const s = await requireAccount(req);
-      return json(200, s ? view(s) : { signedIn: false }, noStore);
+      const held = String(new URL(req.url).searchParams.get("caseId") || "").trim().toUpperCase();
+      const secured = isCaseId(held) ? await isClaimed(held) : null;
+      return json(200, { ...(s ? view(s) : { signedIn: false }), ...(secured === null ? {} : { held, secured }) }, noStore);
     }
     if (req.method !== "POST") return json(405, { error: "GET or POST. Nothing else." });
     if (foreignOrigin(req)) return json(403, { error: FOREIGN_ORIGIN_LINE });

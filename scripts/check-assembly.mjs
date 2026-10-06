@@ -38,7 +38,7 @@ function memStore({ failTally = 0 } = {}) {
   return s;
 }
 const cases = new Map();
-const OWNER = "HVI-KKN67AUZ";
+const OWNER = "HVI-OWNERAAA";   // a test id: the real owner case lives only in the environment
 for (let i = 0; i < 120; i++) cases.set(`HVI-T${String(i).padStart(7, "0")}`, { history: [{ score: 500 }] });
 cases.set("HVI-UNASSESS", { history: [] });
 cases.set(OWNER, { history: [{ score: 900 }] });

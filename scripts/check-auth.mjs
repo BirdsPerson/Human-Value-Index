@@ -39,6 +39,7 @@ globalThis.fetch = async (url, init) => {
   sent.push(b); return new Response(JSON.stringify({ id: "x" }), { status: 200 });
 };
 
+process.env.HVI_OWNER_CASES = "HVI-OWNERAAA";   // the owner's case comes from the environment, never the source
 const A = await import("../netlify/lib/auth.js");
 const login = (await import("../netlify/functions/login.js")).default;
 const verify = (await import("../netlify/functions/login-verify.js")).default;
@@ -97,7 +98,7 @@ assert.equal((await read(await get(me, "/api/me", "hvi_sid=forged-value-xxxxxxxx
 
 // claim: needs a real case; unique per account; owner case marks the owner
 await (store.updateCase("HVI-AAAAAAAA", () => ({ caseId: "HVI-AAAAAAAA", history: [] })));
-await (store.updateCase("HVI-KKN67AUZ", () => ({ caseId: "HVI-KKN67AUZ", history: [] })));
+await (store.updateCase("HVI-OWNERAAA", () => ({ caseId: "HVI-OWNERAAA", history: [] })));
 assert.equal((await read(await post(me, "/api/me", { action: "claim", caseId: "HVI-AAAAAAAA" }))).status, 401, "claim needs a session");
 assert.equal((await read(await post(me, "/api/me", { action: "claim", caseId: "HVI-BBBBBBBB" }, { cookie }))).status, 404);
 let c = await read(await post(me, "/api/me", { action: "claim", caseId: "HVI-AAAAAAAA" }, { cookie }));
@@ -107,7 +108,7 @@ assert.equal((await read(await post(me, "/api/me", { action: "claim", caseId: "H
 const t2 = tokenFrom(sent[1]);
 const sid2 = (await verify(new Request(`${HOST}/api/login/verify?t=${t2}`))).headers.get("set-cookie").match(/hvi_sid=([^;]+)/)[1];
 assert.equal((await read(await post(me, "/api/me", { action: "claim", caseId: "HVI-AAAAAAAA" }, { cookie: `hvi_sid=${sid2}` }))).status, 409, "case belongs to one account");
-c = await read(await post(me, "/api/me", { action: "claim", caseId: "HVI-KKN67AUZ" }, { cookie: `hvi_sid=${sid2}` }));
+c = await read(await post(me, "/api/me", { action: "claim", caseId: "HVI-OWNERAAA" }, { cookie: `hvi_sid=${sid2}` }));
 assert.equal(c.body.owner, true, "claiming the owner case makes the account owner");
 const req2 = new Request(HOST, { headers: { cookie: `hvi_sid=${sid2}` } });
 assert.ok(A.isOwnerAccount((await A.requireAccount(req2)).account));

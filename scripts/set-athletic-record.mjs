@@ -56,5 +56,6 @@ console.log("written");
 // The panel re-rates a standing entry (a changed record, like a new assessment).
 const r = await fetch(`https://humanvalueindex.com/api/leagues?caseId=${encodeURIComponent(caseId)}`, { cache: "no-store" });
 const d = await r.json().catch(() => ({}));
+if (r.status === 401 || r.status === 403) { console.log(`panel: ${d.error || "secured file"} (the record is written; the panel reads only with the file's own session)`); process.exit(0); }
 if (!r.ok) { console.error(`/api/leagues ${r.status}: ${d.error || "?"}`); process.exit(1); }
 console.log(`panel: record ${JSON.stringify(d.record)}; preview ${row(d.preview || {})}; entry ${d.entry ? `${d.entry.sports.join(",")} ${JSON.stringify(d.entry.r)}` : "none"} (season ${d.season} draft)`);
