@@ -2209,6 +2209,77 @@ or any score.
   seeds, a match replays tick for tick, a round naming no course is the links tick for tick).
 - **Not yet**: a server that verifies a submitted log; spectators; the course in the city map.
 
+### Basketball: THE COURTS (`#hoops`, 2026-10-05)
+
+- **Where**: `#hoops[?home=<district>][&vs=<district>][&fmt=to21][&shot=14]` (alias `#basketball`;
+  `src/play/hoops/Hoops.jsx`), one line on `#play`. Ways in: THE LEAGUES hub's exhibitions line, and
+  DRIVE YOURSELF: E in the middle of THE COURTS' hardcourt offers PLAY BASKETBALL: AN EXHIBITION
+  (`controlIso.js`, kind `hoops`; the lot's edge still steps in).
+- **The teams** (`roster.js`): the basketball league's own fives for the current season, read from
+  today's plan summary (`civic.districts[id].teams.basketball.roster`, the day before while today's is
+  built), best first; a bundled snapshot (season 22, machine day 603) when the plan does not answer.
+  Team names are the league's (`<TEAM> FIVE`); kits are the district's colours on one standard uniform
+  (the away side changes into its trim on a clash). **PLAY NOW**: your own five when this browser's
+  case is a league entrant on a basketball roster (`citizen-<last four>`; you play as yourself, your
+  own file photo, at your rating), else THE DEPARTMENT FIVE; against the team nearest in rating.
+  Options behind "+": your team, the opponent (starts at once), length, shot clock.
+- **Why five a side**: the league drafts fives, so every rostered player appears; 10 sprites at 256 x
+  240 cost nothing on a phone, and Tecmo-style control means you only ever steer one of them.
+- **The game** (`sim.js`, pure: 60 Hz fixed step, seeded mulberry32, only + - * / sqrt): NBA lines in
+  metres, rims 3.05 m. FOUR 2-MINUTE QUARTERS (the clock runs only while the ball is live; level after
+  four means one-minute overtimes; the tip to the side that lost it opens Q2 and Q3) or FIRST TO 21; a
+  24- or 14-second shot clock (reset on a change of possession or the rim). Two inside the arc, three
+  outside it or past 6.71 m in a corner; a shot clock violation or stepping over a line with the ball
+  turns it over; a loose ball out goes to the side that did not touch it last. No fouls or free
+  throws yet. You attack right all game (ends do not change).
+- **Control** (Tecmo): you steer the ball carrier on offence, on defence the defender nearest the
+  ball when it changed hands; C switches to the teammate nearest the ball. A held = the jump shot:
+  let go at the top of the jump (a meter beside the shooter lights the window; PERFECT / EARLY / LATE
+  after); near the rim a layup, a dunk for anyone rated 75+ (a leap to the rim, the rim bends, sparks,
+  a two-pixel shake). B passes toward the d-pad (the nearest teammate with none). On defence A jumps
+  (blocks, rebounds) and B reaches (about one in eight, more with a good defender; a missed reach
+  leaves you off balance). Makes are decided at the release from distance, the shooter's rating, the
+  timing and the nearest defender. CPU players (both sides) play from their league rating: speed,
+  touch, defence, hands, leap; man-to-man marking, a defender squared up slows a drive, the carrier
+  drives, pulls up, kicks out to the open man or beats the shot clock. **EASY MODE** (on for a first
+  visit, remembered in `hvi-hoops-easy`): a wider shot window, a little help on makes and steals,
+  softer CPU hands, and your man guards when you let go of the pad.
+- **The picture** (`render.js`): a true one-point perspective from high in the near stand (camera
+  level along +y, horizon just above the frame): verticals stay vertical, lines across the court stay
+  horizontal, depth lines run to one vanishing point; width, height and jumps share one scale per
+  depth (20 px a metre at the near sideline, 8.4 at the far), so a 2 m player is 40 px near and 17 px
+  far and the rim stands 3.05 m over its own spot on the floor. The camera pans with the ball. Heads
+  are drawn at 0.5 m (the 16-bit habit) so faces read. A 26-row far stand in shadow to the top of the
+  frame, every seat a person who cheers, stands or hangs their head; Department boards on the apron;
+  stanchions, glass boards seen at their true angle, shot clocks on top of the boards, rims and nets.
+- **Faces**: cut from each file photo's frame 0 (`/api/sprite/<slug>`), keeping only the pixels
+  connected to the face above the neck (`render.js headOf`), so an everyday prop held beside the head
+  (a pizza peel, a guitar) is dropped; `roster.js CROPS` overrides a sprite whose prop crosses the
+  face. Pending likenesses (the API answers 204) get a head painted from `roster.js HINTS`.
+- **Presentation**: an arena scoreboard (teams in their colours, the ball's side, quarter, clock,
+  shot clock), the Overlord's calls under it (`calls.js`, the Department's voice about the play; nobody
+  on the floor speaks or is quoted), a live region with the score, crowd moods (cheer on dunks,
+  threes and blocks; groan on airballs, shot-clock violations, rim-outs). Sound (`audio.js`): blips and
+  a noise-band crowd; it uses the shared `src/play/crowdAudio.js` when that is in the build
+  (`import.meta.glob`, so its absence costs nothing). Mute in `hvi-hoops-muted`.
+- **Input** (`input.js`): keys (arrows / WASD, Z J or Space = A, X or K = B, C or L = C, Enter / Esc
+  pause), a pad via `city/gamepad.js` (A, B, a bumper or the left face button = C, Start), touch on
+  coarse pointers (an eight-way pad; SWITCH, PASS/STEAL, SHOOT/JUMP labelled for the side you are on;
+  START). The legend under the court names the buttons in the hands in use (`hvi-hoops-legend`).
+  Reduced motion: no shake, no sparks, a still crowd.
+- **The record**: `{version, seed, cfg (format, shot clock, easy, both fives), home, away, inputLog,
+  result}`, the human's input one bitmask a frame (UP 1, DOWN 2, LEFT 4, RIGHT 8, A 16, B 32, C 64),
+  run-length encoded. At the buzzer the browser replays it and says whether it reproduced; the last
+  five are kept in `localStorage["hvi-hoops-exhibitions"]`. WATCH THE TAPE plays the game back from
+  the log at 2x (or straight to the end).
+- **Check**: `scripts/check-hoops.mjs` (purity; the arc and the corners; forced makes for 2 and 3;
+  a miss; shot clock and out-of-bounds turnovers; FIRST TO 21 and four quarters end properly; a bot's
+  game replayed twice to the same result, another seed differs, a doctored log fails, a wrong version
+  is refused; a strong five beats a weak one 11+ of 12; dunks only by 75+; team names and the copied
+  clock equal the league's and the city's; the calls quote nobody).
+- **Not yet**: fouls and free throws, backcourt and three-second rules, changing ends, a server
+  replay check, counting results anywhere.
+
 ## The unbuilt Substrate, and a quiet map (2026-10-05)
 
 - **Endless grid.** The faint street grid (every 4 cells, `rgba(74,222,128,0.05)`, 1 px) no longer

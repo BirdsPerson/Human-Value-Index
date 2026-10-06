@@ -118,7 +118,7 @@ export function makeIsoControl(K) {
     if (n.kind === "person") { K.onOpen(n.s); return; }
     if (n.kind === "door" || n.kind === "ground") { enter(n.b); return; }
     if (n.kind === "station") { climb(n.id); return; }
-    if (n.kind === "chess" || n.kind === "tennis") { window.location.hash = n.go; return; }
+    if (n.kind === "chess" || n.kind === "tennis" || n.kind === "hoops") { window.location.hash = n.go; return; }
     if (n.kind === "bench") { Object.assign(st, { mode: "bench", bench: n.bench, x: n.bench.x, y: n.bench.y }); return; }
     if (n.kind === "stand-bench") { const [x, y] = freeSpot(st.x, st.y + 0.5); Object.assign(st, { mode: "street", bench: null, x, y }); return; }
     if (n.kind === "sit") { st.seat = { placeId: n.placeId, i: n.i }; return; }
@@ -235,6 +235,8 @@ export function makeIsoControl(K) {
       const fz = TENNIS.fence;
       if (st.x > fz.x0 && st.x < fz.x1 && st.y > fz.y0 && st.y < fz.y1) { near = { kind: "tennis", go: "#tennis", label: "PLAY TENNIS: AN EXHIBITION" }; return; }
       const g = groundAt(st.x, st.y);
+      // THE COURTS, playable: E in the middle of the hardcourt (its edge still steps in)
+      if (g?.id === "the-courts" && Math.abs(st.x - (g.rect.x + g.rect.w / 2)) < g.rect.w * 0.25 && Math.abs(st.y - (g.rect.y + g.rect.h / 2)) < g.rect.h * 0.25) { near = { kind: "hoops", go: "#hoops", label: "PLAY BASKETBALL: AN EXHIBITION" }; return; }
       if (g) { near = { kind: "ground", b: g, label: `STEP INTO ${g.name}` }; return; }
       const sid = stationNear(st.x, st.y);
       if (sid) { near = { kind: "station", id: sid, label: `CLIMB TO ${stationName(sid)}` }; return; }

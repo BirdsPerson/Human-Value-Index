@@ -24,6 +24,7 @@ const Casino = lazy(() => import("./casino/Casino.jsx"));
 const Chess = lazy(() => import("./chess/Chess.jsx"));
 const Tennis = lazy(() => import("./play/tennis/Tennis.jsx"));   // THE TENNIS CLUB, playable (#tennis)
 const Golf = lazy(() => import("./play/golf/Golf.jsx"));   // #golf: THE DEPARTMENT LINKS (exhibition golf)
+const Hoops = lazy(() => import("./play/hoops/Hoops.jsx"));   // #hoops: THE COURTS (exhibition basketball)
 const Economy = lazy(() => import("./economy/Economy.jsx"));
 // YOUR FIRST DAY, one line on the logon for an assessed file that has not finished it (src/FirstDay.jsx).
 const FirstDay = lazy(() => import("./FirstDay.jsx"));
@@ -418,6 +419,7 @@ function Screen({ nav, wide = false, banner = false, children }) {
 const GAMES = [
   { href: "#tennis", label: "THE TENNIS CLUB", sub: "EXHIBITIONS AGAINST THE FAMOUS. KEYS, TOUCH OR PAD" },
   { href: "#golf", label: "THE DEPARTMENT LINKS", sub: "NINE HOLES. THE COURSE THE ASSEMBLY DECLINED" },
+  { href: "#hoops", label: "THE COURTS", sub: "BASKETBALL, FIVE ON FIVE, WITH THE LEAGUE'S OWN TEAMS" },
   { href: "#chess", label: "PARK CHESS", sub: "SIT AT A STONE TABLE OPPOSITE A FIGURE ON FILE" },
   { href: "#casino", label: "HOUSE EDGE CASINO", sub: "PLAY CHIPS ONLY. THE HOUSE IS THE MACHINE" },
   { href: "#market", label: "THE MARKET", sub: "SHARES IN HUMANS. PRICES MOVE WITH WHAT THEY DO IN THE CITY" },
@@ -428,7 +430,7 @@ const GAMES = [
 const TITLES = {
   "#intake": "GET EVALUATED", "#file": "MY FILE", "#arrivals": "INTAKE", "#cube": "THE CUBE", "#city": "THE CITY",
   "#assembly": "THE ASSEMBLY", "#elections": "COUNCIL ELECTIONS", "#docket": "THE DOCKET", "#casino": "HOUSE EDGE CASINO",
-  "#economy": "THE TREASURY", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS",
+  "#economy": "THE TREASURY", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS",
   "#play": "THE GAMES", "#scores": "THE SCORES", "#about": "ABOUT", "#privacy": "PRIVACY", "#terms": "TERMS", "#dispute": "DISPUTE A SCORE",
   "#heights": "THE CITY", "#enterprise": "THE CITY", "#prefects": "THE CITY",
 };
@@ -647,6 +649,13 @@ export default function OverlordAssessment() {
   if (routePath === "#golf") return (
     <Screen nav={nav} wide>
       <Suspense fallback={<Loading what="RAKING THE BUNKERS" />}><Golf route={route} /></Suspense>
+    </Screen>
+  );
+
+  // #hoops[?home=<district>][&vs=<district>][&fmt=to21][&shot=14] (or #basketball): THE COURTS, exhibition basketball (src/play/hoops/)
+  if (routePath === "#hoops" || routePath === "#basketball") return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="SWEEPING THE FLOOR" />}><Hoops route={route} /></Suspense>
     </Screen>
   );
 
