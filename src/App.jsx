@@ -34,6 +34,18 @@ const Shops = lazy(() => import("./shops/Shops.jsx"));   // #shop[/<store>]: THE
 const FirstDay = lazy(() => import("./FirstDay.jsx"));
 const firstDayOpen = (id) => { try { return Boolean(id) && readLastResult()?.caseId === id && localStorage.getItem(`hvi-fd:${id}:done`) !== "1"; } catch { return false; } };
 const Market = lazy(() => import("./market/Market.jsx"));   // #market: THE MARKET (src/market/)
+const Paper = lazy(() => import("./paper/Paper.jsx"));   // #paper: THE DAILY COMPLIANCE, the city's newspaper (docs/PAPER.md)
+// The logon's one line for a returning file: today's front-page headline, which opens the paper.
+function PaperLine() {
+  const [h, setH] = useState(null);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/paper?index=1").then(r => (r.ok ? r.json() : null)).then(d => { if (live && d?.editions?.[0]) setH(d.editions[0]); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
+  if (!h) return null;
+  return <p className="hvi-paperline"><a href="#paper">THE DAILY COMPLIANCE, NO. {h.no}: {h.headline}</a></p>;
+}
 const LEGAL = ["about", "privacy", "terms", "dispute"];
 const FigurePicker = lazy(() => import("./FigureIndex.jsx").then(m => ({ default: m.FigurePicker })));
 
@@ -125,6 +137,7 @@ const globalStyles = `
   .hvi-logon .say.big { font-size: var(--t-l); line-height: var(--lh-tight); margin-top: var(--s2); }
   .hvi-prompt { color: var(--accent); }
   .hvi-whatis { color: var(--fg); font-size: var(--t-s); line-height: var(--lh-body, 1.5); margin: var(--s2) 0 var(--s3); max-width: 60ch; }
+  .hvi-paperline { margin: var(--s2) 0 var(--s3); font-size: var(--t-s); line-height: 1.4; max-width: 70ch; } .hvi-paperline a { color: var(--accent); }
   .hvi-skip { color: var(--fg-mute); font-size: var(--t-xs); margin-top: var(--s1); }
   @media (pointer: coarse) { .hvi-desk-only { display: none; } }
 
@@ -283,6 +296,7 @@ const MORE = [
   { label: "THE DOCKET", note: "PETITION THE OVERLORD", go: "#docket" },
   { label: "THE TREASURY", note: "YOUR ALLOWANCE, IN CYCLES", go: "#economy" },
   { label: "THE MARKET", note: "SHARES IN HUMANS. PRICES MOVE WITH THE CITY", go: "#market" },
+  { label: "THE PAPER", note: "THE DAILY COMPLIANCE: NEWS, JOBS, SCORES, COMICS", go: "#paper" },
 ];
 
 // The logon ritual: diagnostics scroll past, the terminal logs you on, greets you,
@@ -356,6 +370,7 @@ function Logon({ onPick: pick }) {
         <>
           {!caseId && <p className="hvi-whatis">A SATIRE. A MACHINE OVERLORD SCORES HUMANS OUT OF 1000 AND HOUSES THEM IN ITS CITY. HUNDREDS OF FAMOUS ONES ARE ON FILE. YOU ARE NEXT.</p>}
           {firstDayOpen(caseId) && <Suspense fallback={null}><FirstDay caseId={caseId} variant="compact" /></Suspense>}
+          {caseId && <PaperLine />}
           <CommandList className="hvi-doors" label="Main menu. Type a number or use the arrow keys.">
             {MENU.map((m, i) => (
               <Command key={m.key} ref={el => { btnRefs.current[i] = el; }} n={m.key} label={m.label} sub={m.note} kbd={null} className={`ic-${m.ic}`}
@@ -415,11 +430,11 @@ const TITLES = {
   "#assembly": "THE ASSEMBLY", "#elections": "COUNCIL ELECTIONS", "#docket": "THE DOCKET", "#casino": "HOUSE EDGE CASINO",
   "#economy": "THE TREASURY", "#shop": "THE SHOPS", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS", "#fish": "THE WATERS", "#aquarium": "THE AQUARIUM",
   "#play": "THE GAMES", "#scores": "THE SCORES", "#about": "ABOUT", "#privacy": "PRIVACY", "#terms": "TERMS", "#dispute": "DISPUTE A SCORE",
-  "#heights": "THE CITY", "#enterprise": "THE CITY", "#prefects": "THE CITY",
+  "#heights": "THE CITY", "#enterprise": "THE CITY", "#prefects": "THE CITY", "#paper": "THE DAILY COMPLIANCE",
 };
 const PHASE_TITLES = { survey: "WRITTEN SURVEY", processing: "EVALUATING", result: "YOUR SCORE", leaderboard: "THE SCORES" };
 function pageTitle(routePath, phase) {
-  const room = TITLES[routePath] || (routePath.startsWith("#city") ? "THE CITY" : routePath.startsWith("#casino") ? "HOUSE EDGE CASINO" : routePath.startsWith("#market") ? "THE MARKET" : routePath.startsWith("#shop/") ? "THE SHOPS" : null)
+  const room = TITLES[routePath] || (routePath.startsWith("#city") ? "THE CITY" : routePath.startsWith("#casino") ? "HOUSE EDGE CASINO" : routePath.startsWith("#market") ? "THE MARKET" : routePath.startsWith("#shop/") ? "THE SHOPS" : routePath.startsWith("#paper") ? "THE DAILY COMPLIANCE" : null)
     || (!routePath || routePath === "#" ? PHASE_TITLES[phase] : null);
   return room ? `${room} // HUMAN VALUE INDEX` : "HUMAN VALUE INDEX // THE MACHINE WILL ASSESS YOU NOW";
 }
@@ -601,6 +616,12 @@ export default function OverlordAssessment() {
     </Screen>
   );
 
+  // #paper, #paper/<date>: THE DAILY COMPLIANCE (src/paper/, docs/PAPER.md)
+  if (routePath === "#paper" || routePath.startsWith("#paper/")) return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="FETCHING THE PAPER" />}><Paper route={routePath} /></Suspense>
+    </Screen>
+  );
   // #market: THE MARKET (src/market/: shares in humans and the industries, CYCLES only)
   if (routePath === "#market" || routePath.startsWith("#market/")) return (
     <Screen nav={nav} wide>

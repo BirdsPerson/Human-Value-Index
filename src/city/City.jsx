@@ -551,6 +551,7 @@ const NowList = memo(function NowList({ stats, k }) {
     <section className="hvi-city-nowbox" aria-labelledby="hvi-city-now-h">
       <h2 id="hvi-city-now-h" className="hvi-city-now-h">NOW IN THE SUBSTRATE</h2>
       <ul className="hvi-city-now">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+      <p className="hvi-city-now-paper"><a href="#paper">READ TODAY'S PAPER: THE DAILY COMPLIANCE</a></p>
     </section>
   );
 }, (a, b) => a.k === b.k && a.stats.sig === b.stats.sig);

@@ -23,6 +23,7 @@ const Cutaway = lazy(() => import("./Cutaway.jsx"));
 const WATERS_DOOR = {
   "the-pier": ["FISHING BY PERMIT", "#fish?spot=pier", "FISH OFF THE PIER"],
   "the-break": ["SURF CASTING, SUPERVISED", "#fish?spot=break", "CAST INTO THE BREAK"],
+  "the-plaza": ["THE NEWSSTAND: TODAY'S DAILY COMPLIANCE, FREE, BY ORDER", "#paper", "READ THE PAPER"],
   "city-museum": ["THE AQUARIUM WING: ONE TANK PER SPECIES, EVERY FISH CHECKED BY REPLAY", "#aquarium", "SEE THE TANKS"],
 };
 const SHAFT = 46;   // CSS px: the lift shaft and the floor codes, left of the rooms

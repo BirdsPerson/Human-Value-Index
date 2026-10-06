@@ -193,6 +193,7 @@ const css = `
   .hvi-city-now li { padding: 2px 0; }
   .hvi-city-now li::before { content: "> "; color: var(--accent); }
   .hvi-city-now-h { font-size: var(--t-xs); color: var(--accent); letter-spacing: 0.06em; margin: 0 0 var(--s1); }
+  .hvi-city-now-paper { margin: 0 0 var(--s4); font-size: var(--t-s); } .hvi-city-now-paper a { color: var(--accent); }
 
   /* directories */
   .hvi-city-list { columns: 2 30ch; column-gap: var(--s5); margin: var(--s2) 0 var(--s4); }

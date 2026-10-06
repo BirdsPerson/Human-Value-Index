@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/sync-arcade.mjs && vite build",
+    "build": "node scripts/sync-arcade.mjs && vite build && node scripts/paper-notices.mjs",
     "sync:arcade": "node scripts/sync-arcade.mjs",
     "preview": "vite preview"
   },

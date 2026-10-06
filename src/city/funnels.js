@@ -127,6 +127,7 @@ export function funnelButtons(buildingId) {
   if (f?.kind === "shop") out.push({ label: "SHOP", aria: "Shop the EB Shop's live stock", spec: { kind: "shop", campaign: f.campaign } });
   if (f?.kind === "arrivals") out.push({ label: "ARRIVALS", aria: "INTAKE: the new arrivals, awaiting release", spec: { kind: "arrivals", go: "#arrivals" } });
   if (f?.kind === "ebtv") out.push({ label: "WATCH", aria: "Watch Electric Basement TV live", spec: { kind: "ebtv", campaign: f.campaign } });
+  if (buildingId === "the-plaza") out.push({ label: "PAPER", aria: "The newsstand: read today's Daily Compliance", spec: { kind: "paper", go: "#paper" } });
   const c = CABINET_BUILDINGS[buildingId];
   if (c) out.push({ label: "JETSAM!", aria: "Play JETSAM! on the cabinet here", spec: { kind: "game", slug: "jetsam", campaign: c } });
   if (buildingId === "customs-house" && GAME["internet-city"]) out.push({ label: "INTERNET CITY", aria: "The gateway to Internet City, a neighbouring city", spec: { kind: "game", slug: "internet-city", campaign: campaignFor("internet-city") } });

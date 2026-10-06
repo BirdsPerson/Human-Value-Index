@@ -1,0 +1,59 @@
+// THE DAILY COMPLIANCE (docs/PAPER.md), read side.
+//   GET /api/paper               -> {today, edition (today's, else the latest printed), wire, index}
+//   GET /api/paper?date=<date>   -> {edition} (immutable once printed: cached for a year)
+//   GET /api/paper?index=1       -> {editions: [{date, no, headline}]}
+//   GET /api/paper?wire=1        -> {wire} (the live WIRE, 60 s)
+// When today's edition is missing, the first reader wakes the press (at most once a minute an
+// instance) and gets the latest printed one meanwhile.
+import { getStore } from "@netlify/blobs";
+import { paperStore } from "../lib/paper-store.js";
+import { paperDate, wireOf, DATE_RE } from "../lib/paper.js";
+import { tickSecret, TICK_HEADER, publicCached } from "../lib/social-store.js";
+import { readBoard } from "../lib/market.js";
+import { machineClock } from "../../src/city/sim.js";
+
+const json = (status, body, cache = "no-store") => new Response(JSON.stringify(body), {
+  status, headers: { "Content-Type": "application/json", "Cache-Control": cache },
+});
+let woke = 0;
+async function wake(base) {
+  if (Date.now() - woke < 60_000) return;
+  woke = Date.now();
+  const secret = tickSecret();
+  if (!secret) return;
+  await fetch(`${base}/.netlify/functions/paper-build-background`, { method: "POST", headers: { [TICK_HEADER]: secret }, signal: AbortSignal.timeout(8_000) }).catch(() => {});
+}
+async function wire() {
+  const [board, social] = await Promise.all([readBoard().catch(() => null), publicCached().catch(() => null)]);
+  return wireOf({ mt: machineClock(Date.now()).mt, board, social });
+}
+
+export default async (req, context) => {
+  if (req.method !== "GET") return json(405, { error: "THE PAPER IS READ, NOT WRITTEN TO." });
+  const url = new URL(req.url), store = paperStore();
+  const base = context?.site?.url || process.env.URL || url.origin;
+  try {
+    const date = url.searchParams.get("date");
+    if (date) {
+      if (!DATE_RE.test(date)) return json(400, { error: "NO SUCH DATE. THE DEPARTMENT KEEPS A CALENDAR." });
+      const ed = await store.edition(date);
+      if (!ed) return json(404, { error: "NO EDITION WAS PRINTED THAT DAY." }, "public, max-age=60");
+      return json(200, { edition: ed }, "public, max-age=31536000, immutable");
+    }
+    if (url.searchParams.get("index")) return json(200, { editions: (await store.index())?.editions || [] }, "public, max-age=120");
+    if (url.searchParams.get("wire")) return json(200, { wire: await wire() }, "public, max-age=60");
+    const today = paperDate(Date.now());
+    const idx = (await store.index())?.editions || [];
+    let ed = idx[0]?.date === today ? await store.edition(today) : null;
+    if (!ed) {
+      await wake(base);
+      ed = idx[0] ? await store.edition(idx[0].date) : null;
+    }
+    return json(200, { today, edition: ed, wire: await wire(), index: idx.slice(0, 30).map(({ date, no, headline }) => ({ date, no, headline })) }, "public, max-age=60");
+  } catch (err) {
+    console.error("paper read failed", err?.message);
+    return json(503, { error: "THE PRESSES ARE STOPPED. THE DEPARTMENT IS LOOKING INTO IT. IT IS NOT HURRYING." });
+  }
+};
+
+export const config = { path: "/api/paper" };
