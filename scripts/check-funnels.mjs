@@ -99,7 +99,7 @@ for (const g of F.PLAYABLE) ok(!!PROPS.PROP[`cab:${g.slug}`], `cab:${g.slug} is 
 ok(SIM.BUILDING["the-arcade"]?.district === "strip" && SIM.BUILDING["the-arcade"].name === "THE ARCADE" && !/IRIDESCENT/i.test(SIM.BUILDING["the-arcade"].name), "THE ARCADE is on the Strip (not called Iridescent)");
 ok(SIM.BUILDING["eb-shop"]?.arch === "recordshop" && SIM.BUILDING["eb-shop"].places.includes("eb-shop"), "EB SHOP is a record shop with a shop floor");
 ok(SIM.BUILDING["studio-block"]?.arch === "station" && /ELECTRIC BASEMENT/.test(SIM.BUILDING["studio-block"].name), "the Arts sound stages are ELECTRIC BASEMENT TV");
-ok(!SIM.JOBS.some(j => j.place === "eb-shop"), "nobody on file works the EB Shop: its staff are cardboard");
+ok(!SIM.JOBS.some(j => j.place === "eb-shop"), "nobody on file works the EB Shop: its staff are the EBSN hosts, drawn, never in the census");
 for (const [pid, games] of Object.entries(F.CABINET_PLACES)) {
   const plan = PROPS.roomPlan(PROPS.typeOf(pid), 916, 120, 32, Math.round(SIM.PLACES[pid].cap / SIM.PLACES[pid].floors.length));
   const cabs = plan.rows.flatMap(r => r.items.map(i => FP.cabinetGame(i.prop)).filter(Boolean));
@@ -113,7 +113,7 @@ for (const [pid, games] of Object.entries(F.CABINET_PLACES)) {
 }
 {
   const plan = PROPS.roomPlan("recordshop", 916, 120, 32, 10);
-  ok(plan.rows.some(r => r.items.some(i => /^standee:/.test(i.prop || ""))), "the shop floor has EBSN standees");
+  ok(plan.rows.some(r => r.items.some(i => /^standee:/.test(i.prop || ""))), "the shop floor keeps its standee slots (the plans unchanged; the hosts work it in person)");
   const hits = FP.funnelRoomHits("dive-bar", PROPS.roomPlan("bar", 916, 120, 32, 12));
   ok(hits.some(h => h.spec.kind === "game" && h.spec.slug === "jetsam" && h.spec.campaign === "the-dive"), "a tap on the Dive's cabinet opens JETSAM! for the Dive");
 }

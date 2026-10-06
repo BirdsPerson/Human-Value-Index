@@ -1136,6 +1136,22 @@ one-line hooks.
   link per rack ("BUY <title>, $<price>, at the EB Shop"), hidden until focused, its frame lit.
   FIND > finds the EB SHOP, THE ARCADE and EBTV by name (`findFunnel`) above the people.
   `scripts/check-funnel-shop.mjs`.
+- **The hosts, live** (2026-10-05; Scott: "bots that actually walk around and do stuff, or sit
+  behind the counter and talk to each other, or that you could interact with"). The cardboard
+  standees are gone (their plan slots stay and draw nothing; the sim is untouched). `hostsLive.js`:
+  the six EBSN hosts (Scott's own characters, eb-command-center/edit/qvc_hosts.md) work the shop
+  floor in shifts on the city clock, deterministic from the building and the machine day and
+  hour: the daypart's pair (DALE and CAROL 06-14, HÉCTOR and ASUKA 14-22, VERN and JOAN
+  after) plus one other covering, dealt REGISTER (behind the till), TURNTABLE (beside the stand)
+  and FLOOR (walking the bins, a stop at each end); the other three are off the clock in THE
+  UNION LOUNGE upstairs. Each is their face from `hosts.png` on a small pixel body in their own
+  clothes (no two alike). One bubble per room at a time: a line of chatter every 7 s in the
+  speaker's voice (10+ scripted lines each, no shipping or discount promises). A tap (or the
+  TALK TO buttons for the keyboard, the reply announced) turns a host to you: a pitch for a real
+  item from the live stock (its title and price only) opens that item with their line over it;
+  the next tap another item; the third a line of banter; off the clock, an off-duty line.
+  Reduced motion: nobody walks, bubbles hold still. No model calls: `hostSay()` is the one seam
+  a future voice or chat would replace. DALE and CAROL sit at the EBSN desk on EBTV's stage too.
 - **The neighbours** (2026-10-05). Other people's games get a tribute cabinet: entries in
   `arcade.json` marked `"neighbour": true`, which `sync-arcade.mjs` keeps after Iridescent's own.
   First: INTERNET CITY (internetcitygame.com, not ours): first in THE ARCADE's front row and the

@@ -38,8 +38,11 @@ export function shopSlots(w, h, u, n) {
   const s = Math.max(4 * u, Math.min(14 * u, Math.round((h * 0.17) / u) * u));
   const gap = Math.max(u, Math.round(s * 0.28 / u) * u);
   const x0 = 6 * u, x1 = w * 0.68;
-  const per = Math.max(0, Math.floor((x1 - x0 + gap) / (s + gap)));
+  const fit = Math.max(0, Math.floor((x1 - x0 + gap) / (s + gap)));
   const tops = [Math.round(h * 0.09), Math.round(h * 0.09) + s + gap + u];
+  const rows = tops.filter(y0 => y0 + s <= h * 0.5).length;
+  // as few racks as hold it, evenly filled (never 23 and a lonely one)
+  const per = fit && rows ? Math.min(fit, Math.ceil(Math.min(n, fit * rows) / Math.max(1, Math.ceil(Math.min(n, fit * rows) / fit)))) : 0;
   const out = [];
   for (let r = 0; r < tops.length && out.length < n; r++) {
     if (tops[r] + s > h * 0.5) break;   // never down into the shelf and the people

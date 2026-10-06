@@ -13,6 +13,7 @@ import { GAMES, GAME, PLAYABLE, OWN_GAMES, NEIGHBOURS, cabColors, highScore, ebt
 import { ebtvFrame, drawFrame, tvBox } from "./ebtvFrame.js";
 import { machineClock } from "./sim.js";
 import { shopState, wallOpen, loadShop, shopSlots, thumb, shopFocus } from "./shopStock.js";
+import { HOSTS as CAST, shiftAt, chatterAt, pitching } from "./hostsLive.js";
 
 export const FUNNEL_ROOM_TYPE = { "customs-house": "customs", arcade: "arcade", "eb-shop": "recordshop", "campus-lounge": "union", "studio-row": "ebtv", boardwalk: "boardwalk" };
 export const FUNNEL_LOOK = { boardwalk: ["#241c10", "#5a4630"], arcade: ["#140c20", "#2a1a3a"], recordshop: ["#241a16", "#3e2c22"], union: ["#1c1a22", "#34303c"], ebtv: ["#12282a", "#2a2a30"] };
@@ -159,7 +160,126 @@ export function customsSign(c, x, y, w, h, u) {
   text(c, "GATEWAY // ARRIVALS FROM OTHER CITIES", x + 6 * u, y + 5.4 * u, 2.6 * u, "#bae6fd");
 }
 
+
+// ---- the hosts, live (hostsLive.js has who, when and what they say) -------------------------
+// Each host: their face from hosts.png on a small pixel body in their own clothes, standing,
+// walking or talking. Drawn by the room's LIVE layer, so the counter and the bins stand in
+// front of them. Room-relative spots (hostSpots) are shared with the taps.
+const HOST_ROOM = { "eb-shop": "shop", "campus-lounge": "lounge" };
+const LAST_T = new Map();   // the time each room was last drawn at (the taps use the same)
+const hostDay = () => { try { return machineClock().day; } catch { return 1; } };
+const hourNow = () => { try { const m = machineClock().mt; return ((m % 24) + 24) % 24; } catch { return 12; } };
+
+// -> [{host, role, x, y (feet), p, dir, walk, off}] for the hosts in this room now.
+export function hostSpots(pid, plan, t = LAST_T.get(pid) ?? 0, hour = hourNow(), day = hostDay()) {
+  const kind = HOST_ROOM[pid];
+  if (!kind || !plan?.rows?.length) return [];
+  const sh = shiftAt("eb-shop", day, hour);
+  const front = plan.rows[plan.rows.length - 1], pf = (plan.sw * front.s) / 32 * 1.1;
+  if (kind === "lounge") {
+    return sh.off.map((host, i) => ({ host, role: "off", off: true, x: plan.w * (0.95 - 0.1 * i) - 8 * pf, y: front.y - pf, p: pf, dir: i ? 1 : -1, walk: false }));
+  }
+  let counter = null, crow = front;
+  for (const r of plan.rows) for (const it of r.items) if (it.prop === "shopCounter") { counter = it; crow = r; }
+  const pc = (plan.sw * crow.s) / 32 * 1.1;
+  const out = [];
+  if (counter) {
+    const W = counter.x1 - counter.x0;
+    // the register at the till end, the presenter at the other end beside the turntable stand
+    out.push({ host: sh.register, role: "register", x: counter.x0 + W * 0.94, y: crow.y - 3 * pc, p: pc, dir: -1, walk: false });
+    out.push({ host: sh.turntable, role: "turntable", x: counter.x0 + W * 0.16, y: crow.y - pc, p: pc, dir: 1, walk: false });
+  } else {
+    out.push({ host: sh.register, role: "register", x: plan.w * 0.2, y: crow.y, p: pc, dir: 1, walk: false });
+    out.push({ host: sh.turntable, role: "turntable", x: plan.w * 0.35, y: crow.y, p: pc, dir: 1, walk: false });
+  }
+  // the floor: up and down the front row's bins, restocking
+  const xs = front.items.map(i => i.x0).concat(front.items.map(i => i.x1));
+  const a = Math.min(...xs) + 6 * pf, b = Math.max(...xs) - 6 * pf, span = Math.max(1, b - a);
+  const speed = 9 * pf * (CAST[sh.floor]?.walk || 1), period = (2 * span) / speed;
+  const ph = (((t / period) % 1) + 1) % 1, pause = 0.12;   // a stop at each end to straighten the stock
+  const q = ph < 0.5 ? Math.min(1, ph / (0.5 - pause)) : Math.max(0, 1 - (ph - 0.5) / (0.5 - pause));
+  const moving = t > 0 && ((ph < 0.5 - pause) || (ph >= 0.5 && ph < 1 - pause));
+  out.push({ host: sh.floor, role: "floor", x: a + span * q, y: front.y + pf, p: pf, dir: ph < 0.5 ? 1 : -1, walk: moving });
+  return out;
+}
+const HOST_W = 12, HOST_H = 44;   // sprite px: the body's box, feet at the bottom
+export function hostBox(sp) { const w = HOST_W * sp.p, h = HOST_H * sp.p * ((CAST[sp.host]?.h || 30) / 30); return [sp.x - w / 2, sp.y - h, sp.x + w / 2, sp.y]; }
+
+function drawHost(c, sp, t, facing = false) {
+  const H = CAST[sp.host]; if (!H) return;
+  const p = sp.p, k = (H.h || 30) / 30, x = sp.x, y = sp.y;
+  const step = sp.walk ? Math.floor(t * 6) % 4 : 0, sw = sp.walk ? [0, 1, 0, -1][step] : 0;
+  const talk = facing ? Math.floor(t * 5) % 2 : 0;
+  const legH = 16 * p * k, torH = 15 * p * k, headH = 11 * p * k, bw = (H.w || 12) * p;
+  const yHip = y - legH, ySh = yHip - torH, yHead = ySh - headH;
+  R(c, "rgba(0,0,0,0.3)", x - bw * 0.6, y - p, bw * 1.2, 2 * p);   // the shadow
+  // legs (or a skirt), shoes
+  if (H.dress) { R(c, H.bottom, x - bw * 0.48, yHip - p, bw * 0.96, legH * 0.62); R(c, H.skin, x - bw * 0.3 + sw * p, yHip + legH * 0.6, 2.4 * p, legH * 0.4 - p); R(c, H.skin, x + bw * 0.1 - sw * p, yHip + legH * 0.6, 2.4 * p, legH * 0.4 - p); }
+  else { R(c, H.bottom, x - bw * 0.36 + sw * p, yHip, bw * 0.32, legH - p); R(c, H.bottom, x + bw * 0.04 - sw * p, yHip, bw * 0.32, legH - p); }
+  R(c, "#141414", x - bw * 0.4 + sw * p, y - 1.6 * p, bw * 0.36, 1.6 * p); R(c, "#141414", x + bw * 0.04 - sw * p, y - 1.6 * p, bw * 0.36, 1.6 * p);
+  // the torso, the accent (collar, tie, bow), the arms
+  R(c, H.top, x - bw / 2, ySh, bw, torH);
+  R(c, H.accent, x - 1.2 * p, ySh, 2.4 * p, sp.host === "dale" || sp.host === "hector" ? torH * 0.7 : 2.4 * p);
+  const arm = sp.walk ? -sw : 0, lift = talk ? 3 * p : 0;
+  R(c, H.top, x - bw / 2 - 2.2 * p, ySh + p + arm * p, 2.2 * p, torH * 0.8);
+  R(c, H.top, x + bw / 2, ySh + p - lift - arm * p, 2.2 * p, torH * 0.8);
+  R(c, H.skin, x - bw / 2 - 2.2 * p, ySh + p + torH * 0.8 + arm * p, 2.2 * p, 2 * p);
+  R(c, H.skin, x + bw / 2, ySh + p + torH * 0.8 - lift - arm * p, 2.2 * p, 2 * p);
+  // the head: their own face (hosts.png), else hair and skin
+  const hw = 10 * p * k, img = sheet(), idx = Math.max(0, HOSTS.indexOf(sp.host));
+  if (img && img.complete && img.naturalWidth) {
+    c.imageSmoothingEnabled = false;
+    const flip = !facing && sp.dir < 0;
+    if (flip) { c.save(); c.translate(Math.round(x), 0); c.scale(-1, 1); c.drawImage(img, idx * 40 + 10, 1, 20, 22, Math.round(-hw / 2), Math.round(yHead), Math.round(hw), Math.round(headH + p)); c.restore(); }
+    else c.drawImage(img, idx * 40 + 10, 1, 20, 22, Math.round(x - hw / 2), Math.round(yHead), Math.round(hw), Math.round(headH + p));
+  } else { R(c, H.hair, x - hw / 2, yHead, hw, headH * 0.5); R(c, H.skin, x - hw * 0.35, yHead + headH * 0.3, hw * 0.7, headH * 0.7); }
+}
+
+// One bubble per room: a host who turned to you, else the chatter's line of the moment.
+function bubble(c, x, yTop, line, px, alpha, room) {
+  if (!line || alpha <= 0.02) return;
+  c.save();
+  c.globalAlpha = alpha;
+  c.font = `bold ${Math.round(px)}px 'Fira Mono', ui-monospace, Menlo, monospace`;
+  const maxW = Math.max(80, Math.min(room.w * 0.5, 34 * px));
+  const words = line.split(" "), lines = [];
+  let cur = "";
+  for (const w of words) { const t2 = cur ? cur + " " + w : w; if (c.measureText(t2).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t2; }
+  if (cur) lines.push(cur);
+  const lw = Math.max(...lines.map(l => c.measureText(l).width)) + px, lh = px * 1.25, bh = lines.length * lh + px * 0.6;
+  let bx = Math.round(x - lw / 2), by = Math.round(yTop - bh - px * 0.8);
+  bx = Math.max(room.x + 2, Math.min(room.x + room.w - lw - 2, bx)); by = Math.max(room.y + 2, by);
+  c.fillStyle = "#fef3c7"; c.fillRect(bx, by, Math.round(lw), Math.round(bh));
+  c.fillStyle = "#1a1206"; c.fillRect(bx, by + Math.round(bh), Math.round(lw), 1);
+  const tx = Math.max(bx + 3, Math.min(bx + lw - 5, x)); c.fillStyle = "#fef3c7"; c.fillRect(Math.round(tx), by + Math.round(bh), Math.max(2, Math.round(px * 0.4)), Math.round(px * 0.5));
+  c.fillStyle = "#1a1206"; c.textAlign = "left"; c.textBaseline = "top";
+  lines.forEach((l, i) => c.fillText(l, bx + px * 0.5, by + px * 0.35 + i * lh));
+  c.restore();
+}
+
+export function drawHosts(pid, c, x, y, w, h, u, o) {
+  const plan = o.plan; if (!plan) return;
+  const t = o.t || 0;
+  LAST_T.set(pid, t);
+  const spots = hostSpots(pid, plan, t, o.hour ?? hourNow());
+  const P = pitching(), now = typeof performance !== "undefined" ? performance.now() / 1000 : 0;
+  const pitchHere = P && now - P.at < 5.5 && spots.find(s => s.host === P.host) ? P : null;
+  for (const sp of spots) drawHost(c, { ...sp, x: x + sp.x, y: y + sp.y }, t || now, pitchHere?.host === sp.host);
+  // the bubble: the pitch, or the room's chatter (only the hosts at work talk to each other)
+  const px = Math.max(7, Math.min(13, 2.6 * u));
+  let who = null, line = null, alpha = 1;
+  if (pitchHere) { who = pitchHere.host; line = pitchHere.line; alpha = o.t ? Math.min(1, (5.5 - (now - P.at)) / 0.6) : 1; }
+  else if (HOST_ROOM[pid] === "shop") {
+    const ch = chatterAt("eb-shop", spots.map(s => s.host), o.t ? o.t : Math.floor(now / 12) * 12);
+    if (ch) { who = ch.host; line = ch.line; alpha = o.t ? ch.fade : 1; }
+  }
+  const sp = who && spots.find(s => s.host === who);
+  if (sp) { const b = hostBox(sp); bubble(c, x + sp.x, y + b[1], line, px, alpha, { x, y, w, h }); }
+}
+
 // A cardboard host on an easel: the photo keyed out of its set, a white board edge, the name.
+// (No longer stood in the shop or on the EBSN set: the hosts are there in person. Kept for the
+// plans' standee slots, which now draw nothing: the plans and the sim stay as they were.)
 function standee(host) {
   const idx = Math.max(0, HOSTS.indexOf(host));
   return {
@@ -184,7 +304,8 @@ export function turntableBox(X, Y, W, p) { const s = Math.round(13 * p), x0 = X 
 export function funnelPropDrawers({ SIDE }) {
   const PROP = {};
   for (const g of GAMES) PROP[`cab:${g.slug}`] = cabinet(g.slug, SIDE);
-  for (const h of HOSTS) PROP[`standee:${h}`] = standee(h);
+  for (const h of HOSTS) PROP[`standee:${h}`] = {};   // the hosts work the floor in person now (drawHosts)
+  void standee;
   PROP.prizeCounter = {
     back(c, X, Y, W, p, t, a) {
       const [x0, x1] = rightOf(X, W, a, p, SIDE);
@@ -238,9 +359,9 @@ export function funnelPropDrawers({ SIDE }) {
   PROP.hostDesk = {
     back(c, X, Y, W, p, t, a) {
       // Dale and Carol, in cardboard, seated to the presenter's right
-      const x0 = (a ? a.x : X + W * 0.2) + 8 * p;
-      PROP["standee:dale"].back(c, x0, Y - 6 * p, 20 * p, p * 0.9);
-      PROP["standee:carol"].back(c, x0 + 20 * p, Y - 6 * p, 20 * p, p * 0.9);
+      const x0 = (a ? a.x : X + W * 0.2) + 18 * p;
+      drawHost(c, { host: "dale", x: x0, y: Y - 2 * p, p: p * 0.9, dir: 1, walk: false }, t, Math.floor(t / 3) % 2 === 0);
+      drawHost(c, { host: "carol", x: x0 + 20 * p, y: Y - 2 * p, p: p * 0.9, dir: -1, walk: false }, t, Math.floor(t / 3) % 2 === 1);
     },
     front(c, X, Y, W, p) {
       const x0 = X + W * 0.1, x1 = X + W - p;
@@ -357,7 +478,8 @@ export function funnelRooms() {
   };
   const LIVE = {
     arcade(c, x, y, w, h, u, { t }) { R(c, `rgba(167,139,250,${(0.05 + 0.04 * Math.sin(t * 2)).toFixed(3)})`, x, y, w, h); },
-    union(c, x, y, w, h, u, { t }) { ebtvTv(c, x + w * 0.72, y + 5 * u, u, t, 20); },
+    union(c, x, y, w, h, u, o) { ebtvTv(c, x + w * 0.72, y + 5 * u, u, o.t, 20); drawHosts("campus-lounge", c, x, y, w, h, u, o); },
+    recordshop(c, x, y, w, h, u, o) { drawHosts("eb-shop", c, x, y, w, h, u, o); },
   };
   return { DRAW, LIVE };
 }
@@ -388,6 +510,8 @@ export function funnelRoomHits(pid, plan, side = 0.3, u = null) {
       out.push({ spec: { kind: "game", slug, campaign: campaignFor(slug, CAMPAIGN_OF_PLACE[pid]), place: pid, ...(pid === "arcade" ? { back: { kind: "arcade" } } : {}) }, box: cabinetBox(it, row.y, p, side) });
     }
   }
+  // the hosts, frontmost: a tap turns one to you (hostsLive.tapHost, via openFunnel)
+  for (const sp of hostSpots(pid, plan)) { const b = hostBox(sp), pad = 2 * sp.p; out.push({ spec: { kind: "host", host: sp.host, role: sp.role, off: Boolean(sp.off), campaign: "eb-shop" }, box: [b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad] }); }
   return out;
 }
 // What a tap at room-relative (x, y) opens: the frontmost hit (people are the caller's), or null.

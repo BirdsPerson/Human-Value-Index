@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { GAME, GAMES, ITCH_LINE, EB_SHOP, EBTV_SITE, EBTV_STREAM, EBTV_NOW, utm, highScore, clickBody, setEbtvNow, ebtvNow, campaignFor, cabColors } from "./funnels.js";
 import { machineClock } from "./sim.js";
 import { loadShop, shopState, onShop, setShopFocus, wallOpen } from "./shopStock.js";
+import { tapHost, shiftAt, HOSTS as CAST } from "./hostsLive.js";
 
 // The funnels' overlays (funnels.js has the data): a CRT that plays an Iridescent game, the
 // Arcade's cabinet floor, the EB SHOP's live stock with its turntable videos, and EBTV's
@@ -12,9 +13,20 @@ import { loadShop, shopState, onShop, setShopFocus, wallOpen } from "./shopStock
 //   spec: {kind: "game", slug, campaign} | {kind: "arcade"} | {kind: "shop", campaign} | {kind: "ebtv", campaign}
 
 export function openFunnel(spec) {
+  if (spec?.kind === "host") { askHost(spec); return; }
   if (typeof window !== "undefined" && spec?.href) { countFunnel(spec.campaign, "out", spec.href); window.open(spec.href, "_blank", "noopener"); return; }   // straight out (a TV: the real channel)
   if (typeof window !== "undefined" && spec?.go) { window.location.hash = spec.go; return; }   // a door to another page (the departures hall: #arrivals)
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("hvi-funnel", { detail: spec }));
+}
+// A host turned to you (hostsLive.js): a pitch for a real item opens it in the shop with their
+// line over it; banter (or a host off the clock) is a bubble in the room, and the line is
+// announced for screen readers (ShopWallLinks' live region).
+function askHost(spec) {
+  const st = shopState();
+  const r = tapHost(spec.host, st.state === "open" ? st.items : [], typeof performance !== "undefined" ? performance.now() / 1000 : 0, spec.off);
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("hvi-host-line", { detail: { host: spec.host, line: r.line } }));
+  if (r.item) openFunnel({ kind: "shop", campaign: spec.campaign || "eb-shop", item: r.item.handle, pitch: { host: spec.host, line: r.line } });
+  else if (st.state === "idle") loadShop();
 }
 export function countFunnel(campaign, kind, url = null) {
   try {
@@ -67,9 +79,10 @@ const CSS = `
 .hvi-fn-detail{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:var(--s4,16px);align-items:start}
 .hvi-fn-detail video,.hvi-fn-detail img{width:100%;max-height:60dvh;object-fit:contain;background:#000;display:block}
 .hvi-fn-now{font-size:var(--t-s,14px)}.hvi-fn-now b{color:var(--warn,#fbbf24);font-weight:400}
+.hvi-fn-pitch{margin:0;font-size:var(--t-s,14px);color:#1a1206;background:#fef3c7;padding:8px 12px;line-height:1.4;letter-spacing:.03em}.hvi-fn-pitch b{font-weight:700}
 .hvi-shopwall{list-style:none;margin:0;padding:0;position:relative;height:0}
-.hvi-shopwall a{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
-.hvi-shopwall a:focus{left:8px;top:8px;width:auto;height:auto;max-width:calc(100% - 16px);z-index:5;background:var(--bg,#0a0f0a);color:var(--accent,#4ade80);border:1px solid var(--accent,#4ade80);padding:8px 10px;font:12px var(--mono);letter-spacing:.04em;outline:2px solid var(--accent);outline-offset:2px;white-space:nowrap;text-overflow:ellipsis}
+.hvi-shopwall a,.hvi-shopwall button{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+.hvi-shopwall a:focus,.hvi-shopwall button:focus{left:8px;top:8px;width:auto;height:auto;max-width:calc(100% - 16px);z-index:5;background:var(--bg,#0a0f0a);color:var(--accent,#4ade80);border:1px solid var(--accent,#4ade80);padding:8px 10px;font:12px var(--mono);letter-spacing:.04em;outline:2px solid var(--accent);outline-offset:2px;white-space:nowrap;text-overflow:ellipsis}
 @media (max-width:640px){.hvi-fn-head .meta{display:none}.hvi-fn-veil{padding:0}.hvi-fn{max-height:100dvh;height:100dvh;border:0}.hvi-fn-detail{grid-template-columns:1fr}.hvi-fn-crt{padding:10px 10px 22px;border-radius:12px}.hvi-fn-crt iframe,.hvi-fn-crt video{height:62dvh}.hvi-fn-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 `;
 function injectStyles() {
@@ -119,7 +132,7 @@ function Overlay({ spec, setSpec, close, now }) {
   let title, meta, body;
   if (spec.kind === "game") ({ title, meta, body } = gameView(spec, setSpec));
   else if (spec.kind === "arcade") ({ title, meta, body } = { title: "THE ARCADE // CABINET FLOOR", meta: `${GAMES.length} CABINETS`, body: <ArcadeFloor setSpec={setSpec} /> });
-  else if (spec.kind === "shop") ({ title, meta, body } = { title: "EB SHOP // LIVE STOCK", meta: "SHOP.ELECTRICBASEMENT.TV", body: <Shop key={spec.item || "all"} campaign={spec.campaign || "eb-shop"} item={spec.item || null} /> });
+  else if (spec.kind === "shop") ({ title, meta, body } = { title: "EB SHOP // LIVE STOCK", meta: "SHOP.ELECTRICBASEMENT.TV", body: <Shop key={`${spec.item || "all"}|${spec.pitch?.line || ""}`} campaign={spec.campaign || "eb-shop"} item={spec.item || null} pitch={spec.pitch || null} /> });
   else ({ title, meta, body } = { title: "ELECTRIC BASEMENT TV", meta: "LIVE", body: <Ebtv campaign={spec.campaign || "ebtv-station"} now={now} /> });
   return (
     <div className="hvi-fn-veil" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
@@ -237,7 +250,7 @@ export function useShop() {
   useEffect(() => { const off = onShop(setSt); loadShop(); setSt(shopState()); return off; }, []);
   return st;
 }
-function Shop({ campaign, item }) {
+function Shop({ campaign, item, pitch }) {
   const raw = useShop();
   const st = raw.state === "idle" ? { state: "loading" } : raw;
   const [pickH, setPick] = useState(item);
@@ -253,6 +266,7 @@ function Shop({ campaign, item }) {
     const url = `${EB_SHOP}/products/${pick.handle}`;
     return (
       <>
+        {pitch && pickH === item && <p className="hvi-fn-pitch"><b>{CAST[pitch.host]?.name || pitch.host.toUpperCase()}:</b> "{pitch.line}"</p>}
         <div className="hvi-fn-detail">
           {pick.video
             ? <video key={pick.handle} src={pick.video.mp4} poster={pick.video.poster || pick.image} autoPlay muted loop playsInline controls aria-label={`${pick.title}, on the turntable`} />
@@ -292,10 +306,27 @@ function Shop({ campaign, item }) {
 // that opens links its own way.
 export function ShopWallLinks({ campaign = "eb-shop" }) {
   const st = useShop();
-  useEffect(() => { injectStyles(); }, []);
-  if (!wallOpen(st)) return st.state === "closed" || st.stale ? <p className="sr-only">THE EB SHOP'S RACKS: CLOSED FOR INVENTORY.</p> : null;
+  const mc = machineClock(), sh = shiftAt("eb-shop", mc.day, ((mc.mt % 24) + 24) % 24);
+  const hosts = [...["register", "turntable", "floor"].map(role => ({ host: sh[role], role })), ...sh.off.map(host => ({ host, off: true }))];
+  const [said, setSaid] = useState("");
+  useEffect(() => { injectStyles(); const on = (e) => setSaid(`${CAST[e.detail.host]?.name || ""}: ${e.detail.line}`); window.addEventListener("hvi-host-line", on); return () => window.removeEventListener("hvi-host-line", on); }, []);
+  const staff = hosts.map(h => (
+    <li key={`host-${h.host}`}>
+      <button type="button" onClick={() => openFunnel({ kind: "host", host: h.host, off: h.off, campaign })}>
+        {`TALK TO ${CAST[h.host]?.name || h.host}, ${h.off ? "OFF THE CLOCK IN THE LOUNGE" : h.role === "register" ? "AT THE REGISTER" : h.role === "turntable" ? "AT THE TURNTABLE" : "ON THE FLOOR"}`}
+      </button>
+    </li>
+  ));
+  const live = <li className="sr-only" role="status" aria-live="polite">{said}</li>;
+  if (!wallOpen(st)) return (
+    <ul className="hvi-shopwall" aria-label="In the EB Shop">
+      {staff}{live}
+      {(st.state === "closed" || st.stale) && <li className="sr-only">THE EB SHOP'S RACKS: CLOSED FOR INVENTORY.</li>}
+    </ul>
+  );
   return (
     <ul className="hvi-shopwall" aria-label="On the EB Shop's walls">
+      {staff}{live}
       {st.items.map(it => (
         <li key={it.handle}>
           <a href={utm(`${EB_SHOP}/products/${it.handle}`, campaign, it.handle)} target="_blank" rel="noopener"

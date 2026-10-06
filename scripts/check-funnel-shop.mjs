@@ -85,6 +85,54 @@ for (const [pid, games] of Object.entries(rooms)) {
   const iso = readFileSync(join(ROOT, "src/city/CityIso.jsx"), "utf8");
   ok(/funnelRoomHits\(pid, plan, 0\.3, u\)/.test(iso), "the city's cutaway passes the room's pixel (the racks answer there too)");
 }
+// 4. The hosts (hostsLive.js): the shift is the same for every viewer at the same hour, three
+//    on the floor in three roles, the rest in the lounge; a tap lands on a host, and the host
+//    pitches a real item from the stock (its title and price), then a line of banter.
+{
+  const HL = await import("../src/city/hostsLive.js");
+  for (const day of [1, 2, 3, 40, 605]) for (const hour of [0, 5, 7, 13, 15, 23]) {
+    const a = HL.shiftAt("eb-shop", day, hour), b = HL.shiftAt("eb-shop", day, hour);
+    const all = [a.register, a.floor, a.turntable, ...a.off];
+    if (JSON.stringify(a) !== JSON.stringify(b) || new Set(all).size !== 6 || !all.every(h => HL.HOSTS[h])) { ok(false, `shift ${day}/${hour}: deterministic, six hosts, each once`); continue; }
+  }
+  ok(true, "shifts: deterministic, three on the floor, three in the lounge, each host once");
+  const pair = (h) => HL.shiftAt("eb-shop", 9, h).on;
+  ok(pair(9).includes("dale") && pair(9).includes("carol") && pair(16).includes("hector") && pair(16).includes("asuka") && pair(2).includes("vern") && pair(2).includes("joan"), "each daypart's crew works its own hours (day, La Hora Internacional, Liquidation Hour)");
+  const covers = new Set(); for (let d = 1; d < 60; d++) covers.add(HL.shiftAt("eb-shop", d, 9).on[2]);
+  ok(covers.size >= 3, "the third host on the floor changes from day to day");
+  ok(Object.values(HL.CHATTER).every(l => l.length >= 10 && l.every(x => x === x.toUpperCase() && x.length <= 80)), "every host has 10+ short lines of chatter, all caps");
+  ok(Object.values(HL.CHATTER).flat().every(x => !/FREE SHIPPING|FREE RETURNS|DISCOUNT|GUARANTEE/.test(x)), "nobody promises shipping, returns or discounts");
+  const looks = Object.values(HL.HOSTS).map(h => `${h.top}|${h.bottom}`);
+  ok(new Set(looks).size === looks.length, "no two hosts in the same clothes");
+  const c1 = HL.chatterAt("eb-shop", ["dale", "carol", "joan"], 70.2), c2 = HL.chatterAt("eb-shop", ["dale", "carol", "joan"], 70.2);
+  ok(c1 && JSON.stringify(c1) === JSON.stringify(c2) && HL.CHATTER[c1.host].includes(c1.line), "one bubble per room at a time, the same for everyone");
+  SS.setShop({ items });
+  for (const [w, h, sw, u] of SIZES) {
+    const plan = PROPS.roomPlan("recordshop", w, h, sw, cap("eb-shop"));
+    const spots = FP.hostSpots("eb-shop", plan, 3.3, 10, 50);
+    const sh = HL.shiftAt("eb-shop", 50, 10);
+    ok(spots.length === 3 && spots.map(s => s.host).sort().join() === sh.on.slice().sort().join(), `shop ${w}x${h}: the shift's three hosts on the floor`);
+    const hits = FP.funnelRoomHits("eb-shop", plan, 0.3, u).filter(x => x.spec.kind === "host");
+    ok(hits.length === 3 && hits.every(x => x.box[0] >= -4 && x.box[2] <= w + 4 && x.box[1] >= 0), `shop ${w}x${h}: each host can be tapped, inside the room`);
+    const [cx, cy] = centre(hits[0].box);
+    const spec = FP.funnelTapAt("eb-shop", plan, cx, cy, u);
+    ok(spec?.kind === "host" && HL.HOSTS[spec.host], `shop ${w}x${h}: a tap on a host resolves to that host (${spec?.host})`);
+    const lounge = PROPS.roomPlan("union", w, h, sw, cap("campus-lounge"));
+    ok(FP.funnelRoomHits("campus-lounge", lounge, 0.3, u).filter(x => x.spec.kind === "host" && x.spec.off).length === 3, `lounge ${w}x${h}: the hosts off the clock are upstairs, tappable`);
+  }
+  HL.resetHosts();
+  const t1 = HL.tapHost("carol", items, 1), t2 = HL.tapHost("carol", items, 2), t3 = HL.tapHost("carol", items, 3);
+  ok(t1.item && items.includes(t1.item) && t1.line.includes(t1.item.title.toUpperCase().slice(0, 10)) && t1.line.includes(`$${Number(t1.item.price)}`), `a tap: a pitch for a real item, its title and price ("${t1.line}")`);
+  ok(t2.item && t2.item !== t1.item, "a second tap: another item");
+  ok(!t3.item && HL.CHATTER.carol.includes(t3.line), "a third: a line of banter");
+  ok(!HL.tapHost("vern", [], 4).item, "no stock: banter, never an invented product");
+  ok(HL.tapHost("joan", items, 5, true).line === HL.OFF_LINES.joan, "off the clock: an off-duty line");
+  const ov = readFileSync(join(ROOT, "src/city/FunnelOverlay.jsx"), "utf8");
+  ok(/kind: "shop", campaign: spec\.campaign \|\| "eb-shop", item: r\.item\.handle, pitch/.test(ov), "a pitch opens that item in the shop (BUY AT THE EB SHOP, tagged)");
+  ok(/TALK TO \$\{/.test(ov) && /aria-live="polite"/.test(ov), "keyboard and screen readers: a TALK TO button per host, the reply announced");
+}
+SS.setShop(null);
+
 // FIND > finds the shop
 ok(F.findFunnel("eb sh")[0]?.id === "eb-shop" && F.findFunnel("arcade")[0]?.id === "the-arcade" && F.findFunnel("x").length === 0, "FIND finds the EB Shop and the Arcade by name");
 

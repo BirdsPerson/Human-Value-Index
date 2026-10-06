@@ -517,7 +517,7 @@ export function drawRoom(c, placeId, x, y, w, h, u = 2, o = {}) {
   R(c, floor, x, y + h - 3 * u, w, 3 * u);
   R(c, "rgba(0,0,0,0.25)", x, y + h - 3 * u, w, u);
   (DRAW[type] || DRAW.office)(c, x, y, w, h, u, { t, hour });
-  (LIVE[type] || NOOP)(c, x, y, w, h, u, { t, hour });
+  (LIVE[type] || NOOP)(c, x, y, w, h, u, { t, hour, plan: o.plan });
   const plan = o.plan;
   if (plan) plan.rows.forEach((row, ri) => {
     const p = (plan.sw * row.s) / 32;   // one sprite pixel at this row's scale
