@@ -53,7 +53,7 @@ export const editionNo = (date) => Math.round((Date.parse(`${date}T12:00:00Z`) -
 export const ROUTES = ["#paper", "#city", "#city/league", "#city/league/baseball", "#city/league/basketball", "#city/league/football",
   "#city/league/soccer", "#city/league/tennis", "#city/league/pit", "#city/league/cup", "#heights", "#prefects", "#enterprise",
   "#market", "#economy", "#assembly", "#docket", "#elections", "#arrivals", "#file", "#fish", "#aquarium", "#tennis", "#golf",
-  "#hoops", "#chess", "#casino", "#play", "#city/strip/the-arcade"];
+  "#hoops", "#chess", "#casino", "#play", "#shop", "#city/strip/the-arcade"];
 export const validHref = (h) => typeof h === "string" && (ROUTES.includes(h) || /^#market\/[a-z0-9-]+$/.test(h) || /^#paper\/\d{4}-\d{2}-\d{2}$/.test(h));
 
 // check-no-death-labels' markers (scripts/check-no-death-labels.mjs), for printed text.
@@ -276,6 +276,7 @@ export function buildEdition(I) {
     { cat: "PUBLIC NOTICES", title: "FILE A PROPOSAL", text: "BUILD, POLICY, RENAME OR EVENT. ONE FILING A DAY PER FILE. CO-SIGNED PROPOSALS GO TO THE FLOOR.", href: "#docket", act: "FILE ONE" },
     { cat: "INVESTMENTS", title: "SHARES IN HUMANS", text: `${markets ? `THE INDEX STANDS AT ${markets.level}. ` : ""}BUY AND SELL IN CYCLES. NO REAL MONEY GOES IN OR COMES OUT. THE DEPARTMENT IS THE ONLY COUNTERPARTY.`, href: "#market", act: "INVEST" },
     { cat: "INVESTMENTS", title: "THE TREASURY: YOUR DAILY CYCLES", text: "COLLECT THE ALLOWANCE. BACK A DISTRICT INDUSTRY. THE APARTMENT IS ASSIGNED; NO FLATS ARE FOR SALE OR TO LET. THE DEPARTMENT IS THE LANDLORD.", href: "#economy", act: "COLLECT" },
+    { cat: "FOR SALE", title: "CLOTHES AND FURNITURE, FOR CYCLES", text: "THE SHOPS ARE OPEN: OUTFITS FOR YOUR FILE PHOTO, FURNITURE FOR YOUR ASSIGNED FLAT, UPGRADES FOR BOTH. PURCHASES BURN CYCLES. TASTE IS NOT REFUNDED.", href: "#shop", act: "GO SHOPPING" },
     toLet ? { cat: "PREMISES", title: `${toLet} SHOP UNIT${toLet === 1 ? "" : "S"} TO LET`, text: "STOREFRONTS IN THE MALL, VACATED BY THE MARKET'S JUDGEMENT. LET TO CITIZENS WHO QUIT THEIR JOBS TO OPEN ONE. YOURS LATER, FOR CYCLES.", href: "#enterprise", act: "SEE THE UNITS" } : null,
     { cat: "RECREATION", title: "ANGLERS WANTED", text: `THE WATERS ARE ${watersWeather(day)} TODAY. LAND A FISH; DONATE A RECORD TO THE AQUARIUM AND YOUR FILE GOES ON THE PLAQUE.`, href: "#fish", act: "FISH" },
     { cat: "RECREATION", title: "THE AQUARIUM ACCEPTS DONATIONS", text: "EVERY CATCH IS REPLAYED BY THE DEPARTMENT BEFORE IT IS BELIEVED. RECORDS ARE PUBLIC. SO ARE FAILURES.", href: "#aquarium", act: "SEE THE TANKS" },
