@@ -129,8 +129,8 @@ export function step(st, input = 0) {
     case "landed":
       if (st.t > 30 && (pressed & (BTN.A | BTN.B))) {
         const c = st.catches[st.catches.length - 1], s = SPECIES_BY[c.sp];
-        if (pressed & BTN.A && !s.protected) { c.fate = "keep"; st.msg = "KEPT. IN THE TACKLE BOX. THE DEPARTMENT HAS WEIGHED IT TOO."; }
-        else { c.fate = "release"; st.msg = s.protected && pressed & BTN.A ? "PROTECTED. RELEASED BY LAW. THE LAW THANKS YOU." : "RELEASED. IT WILL REMEMBER YOU."; }
+        if (pressed & BTN.A && !s.protected) { c.fate = "keep"; st.msg = "KEPT. IN THE TACKLE BOX."; }
+        else { c.fate = "release"; st.msg = s.protected && pressed & BTN.A ? "PROTECTED SPECIES. RELEASED." : "RELEASED."; }
         st.ev.push(c.fate);
         st.phase = "ready"; st.t = 0; st.bob = null; st.tone = "";
       }
@@ -148,10 +148,10 @@ function fishing(st, pressed, spot) {
     const biter = st.fish.find(f => f.st === "bite");
     if (biter) return hook(st, biter);
     const nibbler = st.fish.find(f => f.st === "nibble");
-    if (nibbler) { flee(st, nibbler); st.msg = "TOO EARLY. THAT WAS A NIBBLE. IT LEFT. ANOTHER WILL COME."; st.tone = "warn"; st.ev.push("miss"); return; }
+    if (nibbler) { flee(st, nibbler); st.msg = "TOO EARLY. THAT WAS A NIBBLE: WAIT FOR THE BITE. ANOTHER WILL COME."; st.tone = "warn"; st.ev.push("miss"); return; }
     const looker = st.fish.find(f => f.st === "look");
     if (looker) { looker.st = "roam"; looker.t = 0; }
-    st.msg = "REELED IN. NOTHING. NOTED."; st.tone = "";
+    st.msg = "REELED IN. NOTHING YET."; st.tone = "";
     st.phase = "ready"; st.t = 0; st.bob = null; st.ev.push("reel");
     return;
   }
@@ -183,7 +183,7 @@ function fishing(st, pressed, spot) {
       }
     } else if (f.st === "bite") {
       f.x = b.x; f.d = b.d;
-      if (f.t > f.next) { st.msg = "TOO SLOW. IT TOOK A LOOK AT YOU AND LEFT."; st.tone = "warn"; st.ev.push("miss"); flee(st, f); }
+      if (f.t > f.next) { st.msg = "TOO SLOW. IT LEFT. CAST AGAIN."; st.tone = "warn"; st.ev.push("miss"); flee(st, f); }
     }
   }
 }

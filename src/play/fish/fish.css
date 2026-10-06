@@ -60,3 +60,5 @@
 }
 @media (max-width: 380px) { .aq-wall { grid-template-columns: 1fr; } }
 .fi-gift { margin: var(--s2) 0; padding: var(--s2) var(--s3); border: var(--bw) solid var(--accent); }
+
+.fi-guidewrap { margin: 0 0 var(--s3); padding: var(--s3); border: 1px solid var(--line-hi); }

@@ -13,6 +13,8 @@ import { loadBox, loadBests, recordCatch, markDonated, saveTrip } from "./box.js
 import { startTrip, donateCatch, loadAquarium } from "./api.js";
 import * as sfx from "./audio.js";
 import GameMenu from "../GameMenu.jsx";
+import FishGuide, { GUIDE_KEY, TIPS_KEY, tipText } from "./Guide.jsx";
+import { guideSeen, markGuideSeen, tipsUsed, markTipUsed, Tip } from "../guideKit.jsx";
 import "./fish.css";
 import "../pages.css";
 
@@ -85,7 +87,7 @@ export default function Fish({ route }) {
 
   return (
     <div className="fi">
-      <ScreenHead title="THE WATERS" meta="FISHING BY PERMIT. THE FISH HAVE NOT BEEN ASKED." />
+      <ScreenHead title="THE WATERS" meta="FISHING BY PERMIT." />
       {game ? (
         <>
           {note && <p className="fi-p dim">{note}</p>}
@@ -225,12 +227,16 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
   const [mode, setMode] = useState(() => { try { return window.matchMedia("(pointer: coarse)").matches ? "touch" : "keys"; } catch { return "keys"; } });
   const [pad, setPad] = useState(null);
   const [say, setSay] = useState("");
+  const [guide, setGuide] = useState(() => simple && !demo && !guideSeen(GUIDE_KEY));   // the controls guide, once, before the first trip
+  const guideRef = useRef(guide); guideRef.current = guide;
+  const dismissGuide = () => { markGuideSeen(GUIDE_KEY); guideRef.current = false; setGuide(false); };
+  const [tip, setTip] = useState({ id: null, gone: true });
   const [landed, setLanded] = useState(null);   // {k, n} while the catch card is up
   const [gift, setGift] = useState(null);       // the donation's state for the card: {busy} | {ok, line} | {error}
   const logRef = useRef([]);
   const donated = useRef(new Set());
   const reduced = useMemo(REDUCED, []);
-  const togglePause = () => { pausedRef.current = !pausedRef.current; setPaused(pausedRef.current); };
+  const togglePause = () => { if (guideRef.current) return; pausedRef.current = !pausedRef.current; setPaused(pausedRef.current); };
   const resume = () => { pausedRef.current = false; setPaused(false); };
   const [ended, setEnded] = useState(null);   // {n, kept, best} once the trip is over: the end menu
   const endedRef = useRef(false), stRef = useRef(null);
@@ -241,6 +247,7 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
     const best = cs.reduce((a, k) => (!a || k.cw > a.cw ? k : a), null);
     setEnded({ n: cs.length, kept: cs.filter(k => k.fate === "keep").length, best });
   };
+  const tipUsed = useRef(null), tipShown = useRef(null);
   const onChangeRef = useRef(onChange); onChangeRef.current = onChange;
 
   useEffect(() => {
@@ -294,11 +301,19 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
       while (acc >= 1 / HZ) {
         acc -= 1 / HZ;
         const b = demo ? (input(), S.botBits(st)) : input();
-        if (pausedRef.current || endedRef.current || st.phase === "done") continue;
+        if (pausedRef.current || guideRef.current || endedRef.current || st.phase === "done") continue;
         S.logPush(log, b);
         S.step(st, b);
         for (const e of st.ev) sfx.play(e);
         st.ev.length = 0;
+      }
+      // first-run prompts: a line while the thing is in front of you, gone once you have done it
+      if (!demo && simple) {
+        const want = guideRef.current || pausedRef.current ? null : st.phase === "ready" ? "cast" : st.phase === "fishing" && st.fish.some(f => f.st === "bite") ? "bite" : st.phase === "reel" ? "reel" : null;
+        if (tipUsed.current === null) tipUsed.current = tipsUsed(TIPS_KEY);
+        const t = tipShown.current;
+        if (t && t !== want) { tipUsed.current = markTipUsed(TIPS_KEY, t); tipShown.current = null; setTip(x => ({ ...x, gone: true })); }
+        if (!tipShown.current && want && !tipUsed.current.has(want)) { tipShown.current = want; setTip({ id: want, gone: false }); }
       }
       if (st.msg !== said) { said = st.msg; if (said) setSay(said); }
       // a new catch: the card; its fate decided: the tackle box
@@ -376,6 +391,7 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
 
   return (
     <div className="fi-play" ref={wrap}>
+      {guide && <div className="fi-guidewrap"><FishGuide mode={pad ? "pad" : mode} family={pad} onDone={dismissGuide} /></div>}
       <div className="fi-stage">
         <canvas ref={canvas} width={W} height={H} style={{ width: scale.css, height: (scale.css * H) / W, touchAction: simple ? "none" : undefined, cursor: simple && !demo ? "pointer" : undefined }} {...stage}
           aria-label={simple ? "Fishing: the angler on the left, the water in cross-section with fish shadows under the surface, the float, the reel bar along the bottom. Click or tap the water to cast there, again on the bite, hold to reel." : "Fishing: the angler on the left, the water in cross-section with the fish under the surface, the line and the lure, the tension gauge along the bottom."} role="img" />
@@ -399,7 +415,7 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
       {gift?.ok && <p className="fi-p good fi-gift" role="status">{gift.line} <a href="#aquarium">SEE THE TANK</a></p>}
       {ended ? (
         <GameMenu key="end" kind="end" title={demo ? "THE WARDEN'S TRIP IS FILED." : "TRIP FILED."}
-          summary={ended.n ? `${ended.n} LANDED, ${ended.kept} KEPT. HEAVIEST: ${SPECIES_BY[ended.best.sp]?.name || ended.best.sp}, ${lbText(ended.best.cw)}.` : "NOTHING LANDED. THE FISH HAVE BEEN NOTIFIED."}
+          summary={ended.n ? `${ended.n} LANDED, ${ended.kept} KEPT. HEAVIEST: ${SPECIES_BY[ended.best.sp]?.name || ended.best.sp}, ${lbText(ended.best.cw)}.` : "NOTHING LANDED THIS TRIP."}
           options={{
             again: { label: demo ? "WATCH AGAIN" : "FISH AGAIN", onSelect: onRestart },
             rematch: { label: "NEW SPOT", onSelect: onNewSpot },
@@ -408,15 +424,16 @@ function Play({ game, muted, onChange, onMute, onRestart, onNewSpot }) {
             city: { label: `BACK TO ${here.name}`, href: "#city" },
           }} />
       ) : paused && (
-        <GameMenu key="pause" kind="pause" title="PAUSED. THE FISH WAIT." summary={`${here.name} // ${stRef.current?.catches.length || 0} LANDED SO FAR.`} onBack={resume}
+        <GameMenu key="pause" kind="pause" title="PAUSED." summary={`${here.name} // ${stRef.current?.catches.length || 0} LANDED SO FAR.`} onBack={resume}
           options={{
             resume, restart: { label: "NEW TRIP, SAME SPOT", onSelect: onRestart },
-            controls: <Controls mode={legendMode} family={pad} expert={!simple} />,
+            controls: simple ? <FishGuide mode={legendMode} family={pad} compact /> : <Controls mode={legendMode} family={pad} expert />,
             sound: { on: !muted, onSelect: onMute },
             end: { label: "END THE TRIP", onSelect: endTrip },
             quit: true,
           }} />
       )}
+      {!guide && <Tip text={tipText(tip.id, pad ? "pad" : mode, pad)} gone={tip.gone} />}
       <div className="fi-status">{simple ? (pad ? `CONTROLLER: ${pad.toUpperCase()} // ${(GLYPHS[pad] || GLYPHS.generic).act}: CAST / HOOK / REEL` : mode === "touch" ? "TAP: CAST / HOOK // HOLD: REEL" : "A (Z / SPACE): CAST / HOOK / REEL // OR CLICK THE WATER") : pad ? `CONTROLLER: ${pad.toUpperCase()}` : mode === "touch" ? "◀ ▶ LURE // REEL (HOLD) // JERK // II PAUSES" : "KEYS: ← → LURE // Z REELS AND CASTS // X JERKS // ENTER PAUSES"}{muted ? " // MUTED" : ""}{demo ? " // THE WARDEN IS FISHING" : tripId ? " // PERMITTED TRIP" : ""}</div>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{say}</p>
       {simple ? (

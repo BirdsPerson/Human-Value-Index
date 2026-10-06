@@ -414,4 +414,36 @@ function hookIndex(c, log) { const st = S.newTrip(c); for (let i = 0; i < log.le
   ok(/never speak/.test(render) && !/say\(|speech|bubble/i.test(render), "the background anglers never speak");
 }
 
+// ---- a casual human (Scott, 2026-10-06: the sports games are too hard) -----------------------------------
+// Answers a bite ~250 ms late (+-100 ms), and now and then (1 nibble in 8) jumps the gun on a nibble, which
+// scares that fish off. Of all the bites, a casual player should hook at least 80%.
+{
+  let bites = 0, hooks = 0, landed = 0, trips = 0;
+  for (let k = 0; k < 12; k++) {
+    let r = (k * 2654435761 + 12345) >>> 0;
+    const rnd = () => { r = (Math.imul(r ^ (r >>> 15), 2246822507) + 0x6d2b79f5) >>> 0; return r / 4294967296; };
+    const g = () => (rnd() + rnd() + rnd() + rnd() - 2) * 1.73;
+    const st = S.newTrip({ seed: 900 + k * 37, spot: ["pier", "lake", "river", "estuary"][k % 4], at: Date.UTC(2026, 5 + (k % 4), 12, 6 + (k % 12), 0, 0) });
+    let delay = null, jump = null, sawNib = false;
+    while (st.phase !== "done" && st.tick < 20 * 60 * 60) {
+      let b = 0;
+      if (st.phase === "ready") b = st.prev & S.BTN.A || st.t < 12 + Math.round(Math.abs(g()) * 20) ? 0 : S.BTN.A;
+      else if (st.phase === "fishing") {
+        const bite = st.fish.find(f => f.st === "bite"), nib = st.fish.find(f => f.st === "nibble");
+        if (bite) { if (delay == null) delay = Math.max(6, Math.round(15 + g() * 6)); if (bite.t >= delay && !(st.prev & S.BTN.A)) b = S.BTN.A; } else delay = null;
+        if (nib && !bite && sawNib && rnd() < 0.125) jump = 8 + Math.floor(rnd() * 10);
+        if (jump != null && --jump <= 0) { jump = null; b = S.BTN.A; }
+      } else if (st.phase === "reel") b = S.BTN.A;
+      else if (st.phase === "landed") b = st.t > 32 && !(st.prev & S.BTN.A) ? S.BTN.A : 0;
+      S.step(st, b);
+      bites += st.ev.filter(e => e === "bite").length; hooks += st.ev.filter(e => e === "hook").length;
+      sawNib = st.ev.includes("nibble");
+      st.ev.length = 0;
+    }
+    landed += st.catches.length; trips++;
+  }
+  ok(bites >= 20, `the casual bot saw ${bites} bites over ${trips} trips`);
+  ok(hooks / bites >= 0.8, `a casual human hooks ${(hooks / bites * 100).toFixed(0)}% of bites (>= 80%): ${hooks} of ${bites}, ${landed} landed`);
+}
+
 console.log(`check-fish: ${n} checks passed`);
