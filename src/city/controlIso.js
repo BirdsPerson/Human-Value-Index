@@ -23,6 +23,7 @@ import { TENNIS } from "./venueGeo.js";   // THE TENNIS CLUB, playable: E on the
 import { PIER } from "./coastGeo.js";   // THE WATERS, playable: E at the pier's rail (src/play/fish/)
 import { riverShown, FISHING_SPOTS } from "./river.js";
 import { LIFTS as SKI_LIFTS } from "./mountainGeo.js";   // THE MOUNTAIN, skiable: E at a lift's foot (src/play/ski/)
+import { LANES_ID, lanesOpen } from "./lanes.js";   // THE LANES, playable: E upstairs at the Arcade
 import {
   CTL, publishUi, keysVector, screenToMapDir, stepStreet, stepInside, stateFromTarget, loadControl, saveControl,
   doorOf, doorNear, groundAt, setRiverLive, isClassified, benchNear, stationNear, stairFoot, platformPoint, platformStep, stationGeoOf,
@@ -121,7 +122,7 @@ export function makeIsoControl(K) {
     if (n.kind === "person") { K.onOpen(n.s); return; }
     if (n.kind === "door" || n.kind === "ground") { enter(n.b); return; }
     if (n.kind === "station") { climb(n.id); return; }
-    if (n.kind === "chess" || n.kind === "tennis" || n.kind === "hoops" || n.kind === "football" || n.kind === "fish") { window.location.hash = n.go; return; }
+    if (n.kind === "chess" || n.kind === "tennis" || n.kind === "hoops" || n.kind === "football" || n.kind === "fish" || n.kind === "bowl") { window.location.hash = n.go; return; }
     if (n.kind === "ski") { window.location.hash = n.go; return; }   // THE MOUNTAIN, skiable
     if (n.kind === "bench") { Object.assign(st, { mode: "bench", bench: n.bench, x: n.bench.x, y: n.bench.y }); return; }
     if (n.kind === "stand-bench") { const [x, y] = freeSpot(st.x, st.y + 0.5); Object.assign(st, { mode: "street", bench: null, x, y }); return; }
@@ -265,6 +266,8 @@ export function makeIsoControl(K) {
       if (st.seat) near = { kind: "stand", label: "STAND UP" };
       else if (n?.person) near = { kind: "person", s: n.person, label: `READ THE FILE: ${nameOf(n.person)}` };
       else if (n?.seat != null) near = { kind: "sit", placeId: n.placeId, i: n.seat, label: "SIT DOWN" };
+      // THE LANES (lanes.js): upstairs at the Arcade, E takes a lane
+      else if (BUILDING[st.bId]?.floors[st.floor]?.places.includes(LANES_ID) && lanesOpen(mt)) near = { kind: "bowl", go: `#bowling?lane=${1 + Math.min(7, Math.floor(Math.max(0, st.fx || 0) * 8))}&from=lanes`, label: "BOWL: TAKE A LANE" };
       else if (isExitFloor(BUILDING[st.bId], st.floor) && st.fx >= EXIT_X - 0.08) near = { kind: "leave", label: "LEAVE THE BUILDING" };
     } else if (st.mode === "platform") {
       const tr = trainIn(trains, st.stationId);

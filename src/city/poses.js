@@ -167,7 +167,8 @@ export function drawPose(c, sheet, a, act, x, y, hh0, t, ph, k = 1) {
         case "amble": fi = frames > 1 ? Math.floor(t * 4 + ph * 8) % 2 : 0; dy = fi ? -px : 0; break;
         case "lift": dy = every(t, 2, 0.5, ph) ? 2 * px : 0; break;
         // the funnels: hands on the stick (and a hop on a good run); flicking through the crates
-        case "arcade": dx += every(t, 0.3, 0.5, ph) ? px : 0; dy = every(t, 9, 0.06, ph) ? -2 * px : 0; break;
+        case "bowl": { const g = frac(t / 7 + ph); if (g > 0.55 && g < 0.8) { dx += (flip ? 1 : -1) * Math.round((g - 0.55) * 16) * px; dy = g > 0.7 ? px : 0; } break; }   // THE LANES: the approach, the slide
+      case "arcade": dx += every(t, 0.3, 0.5, ph) ? px : 0; dy = every(t, 9, 0.06, ph) ? -2 * px : 0; break;
         case "browse": dy = every(t, 2.6, 0.4, ph) ? px : 0; break;
         case "run": fi = frames > 1 ? Math.floor(t * 8 + ph * 8) % 2 : 0; dy = fi ? -px : 0; break;
         case "punch": dx += every(t, 1.1, 0.2, ph) ? 2 * px * (flip ? 1 : -1) : 0; break;
@@ -210,6 +211,11 @@ function tool(c, act, x, top, p, flip, t, ph, seated) {
       const up = t > 0 && every(t, 5, 0.18, ph);
       R(c, "#fbbf24", hx - p, up ? top + 10 * p : hy - 3 * p, 2 * p, 3 * p);
       R(c, "#e5e5e5", hx - p, up ? top + 10 * p : hy - 3 * p, 2 * p, p);
+      break;
+    }
+    case "bowl": {   // THE LANES: the ball held at the chest, swung back, gone down the lane
+      const g = t > 0 ? frac(t / 7 + ph) : 0.2;
+      if (g < 0.62) R(c, ["#2b5fbf", "#b8322a", "#2f8f4e", "#6b3fa0"][Math.floor(ph * 4) % 4], x + (g > 0.45 ? -side * 6 : side * 2) * p, top + (g > 0.45 ? 26 : 18) * p, 4 * p, 4 * p);
       break;
     }
     case "serve": {

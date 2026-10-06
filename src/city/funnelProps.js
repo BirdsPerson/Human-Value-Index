@@ -557,7 +557,7 @@ export function withTv(LIVE) {
 // What a tap in a funnel room opens: each cabinet its game; the rest of the shop floor the
 // shop, the stage EBTV, the arcade floor the cabinet list. -> [{spec, box: [x0, y0, x1, y1]}]
 // in room px, the room itself first (so a cabinet, then a person, drawn later, win the tap).
-const ROOM_SPEC = { "eb-shop": { kind: "shop", campaign: "eb-shop" }, "studio-row": { kind: "ebtv", campaign: "ebtv-station" }, arcade: { kind: "arcade" } };
+const ROOM_SPEC = { "eb-shop": { kind: "shop", campaign: "eb-shop" }, "studio-row": { kind: "ebtv", campaign: "ebtv-station" }, arcade: { kind: "arcade" }, "the-lanes": { go: "#bowling" } };
 // u (the room's pixel, as drawRoom was given it): the shop's racks answer too, each its product.
 export function funnelRoomHits(pid, plan, side = 0.3, u = null) {
   const out = [];

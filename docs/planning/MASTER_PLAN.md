@@ -367,3 +367,12 @@ off, 63-69 on; core 30-32 / 32; the coast 20 / 21-22).
 
 **Next.** NPC anglers at the fishing spots (the fishing game may add them as their own layout version);
 a water taxi on THE CHANNEL; the river in the 3D STACK view.
+
+## THE LANES (2026-10-06)
+
+A bowling alley as a new top floor (2F) on THE ARCADE: the second place with a day of its own in the
+code. `lanes.LANES_DAY` is set past every day published at the push; before it the lanes are not in a
+plan's place list (appended last, so every index stays), take no staff and draw no visitors, the
+arcade keeps its ground (`SHARED_RECT`), and nobody is bumped into them by the overflow chains.
+`check-lanes` holds the two days before it, plans and whereAt for a 430-subject census, against the
+earlier code's hashes. No layout version: no ground moved.

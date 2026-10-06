@@ -3010,3 +3010,48 @@ in the city itself nothing is killed (THE OUTFITTER captures).
   on the server and puts the trip on the machine day's board only at exactly the claimed score,
   one filing per permit, never longer than the time since the permit. Initials (three) are the
   only name. The bar cabinets' marquees show the board's best when it beats the dead figure's.
+
+## THE LANES: a bowling alley and a bowling game (2026-10-06)
+
+Scott, 2026-10-05: "we need a bowling alley and a bowling game."
+
+**The game** (`#bowling`, `src/play/bowling/`, tile on `#play`). Ten-pin, exhibition only, 1-4 bowlers in
+turn (humans hot-seat, CPU figures), from behind the bowler in one-point perspective; the camera
+dollies after the ball and comes down to the deck for the pin action.
+- *Sim* (`sim.js`, pure, 60 Hz, seeded, sqrt the only transcendental): the ball skids, hooks and rolls
+  from a slip-friction model (dv = -mu g s^, dw = +5/2 mu g s^ on the slip between the ball and its spin);
+  the oil is a house shot (fresh in the heads, a crown on the middle boards, dry from 40 ft). Pins are 2D
+  rigid bodies: a standing pin is a disc at the belly, a falling pin a capsule that grows as it topples
+  and slides and turns; ball-pin, pin-pin and capsule-capsule impulses, the kickbacks, the pit, wobblers
+  from the seeded rng. Ball weight is mass in the collisions and a little speed. Bumpers per bowler.
+- *Measured* (`scripts/check-bowl.mjs`): a 17.5 mph pocket ball within an inch strikes about 85% of the
+  time (dead flush ~95%); light hits leave the 7, the 10, the 5-7, the 7-10; high ones the 4; head-on
+  never strikes and splits about half the time; the Brooklyn side, crossing at a steep angle, carries
+  often; a left hand into the 1-2 mirrors; a 16-pounder carries 81% to an 8-pounder's 37% on one line;
+  the hook: 2 in of movement by 25 ft, 13 in more on the backend. The figures split on 3-20% of first
+  balls and average from ~90 (the party guest) to ~230 (the league secretary).
+- *Controls*: mouse/touch drag back and flick (direction = line, speed = speed, the curl at the end =
+  hook; far too hard = over the line); pad right stick pull and push (left stick stands, bumpers aim, A
+  the meter); keyboard three presses (power into the red fouls, accuracy, hook). Easy: slower meters,
+  a straighter ball, the line drawn.
+- *Rules*: ten frames, the tenth's bonus balls, fouls (F, 0, the rack respotted), splits circled on the
+  overhead monitor, MAX column. CPU figures on file with a lane in their record (Murray, Harrelson,
+  Nixon, Goodman, Buscemi, Obama) and two of the house's own; ratings set the miss. Nobody is given words.
+- *Record*: `{cfg, inputLog}` (RLE masks with throw/position events between ticks); replay, version,
+  a doctored log fails. A finished game is re-run; if it reproduces it is kept in this browser
+  (`results.js`, `hvi-bowling-results`): the small shape the sports page can read.
+- *COSMIC BOWLING*: 21:00-03:00 on the machine clock (or by choice): blacklight palette, glowing boards.
+
+**The alley** (`src/city/lanes.js`, `lanesProps.js`). A new top floor, 2F, on THE ARCADE (the Strip):
+no building moved, no id changed; the place stands on the arcade's own ground (`SHARED_RECT`), so the
+arcade's spot and every walk to it are unchanged. The room: the lanes running into the wall under their
+masking units, pins struck and swept, a bowler at each ball return, the shoe counter and the snack bar
+(staffed), benches, ball racks, cabinets (`LANES_CABINETS`: add a slug). Neon after 19:00, cosmic late.
+Entry: the arcade's BOWL button and TAKE A LANE link on its building page, a tap anywhere in the room,
+and in DRIVE YOURSELF, E on the lanes floor. Jobs (shoe clerk, lane mechanic) come from the Strip's
+service staff and the Works' fabricators by hash; visitors from noon to two, three times the pull on
+league nights (Tuesday, Thursday from 19:00).
+
+**The day boundary.** `lanes.LANES_DAY` (see MASTER_PLAN.md): before it the plan's place list stops short
+of the lanes (they are appended last), nobody works or visits, and days are byte for byte the earlier
+code's (`scripts/check-lanes.mjs` against `scripts/fixtures/lanes-pre.json`).

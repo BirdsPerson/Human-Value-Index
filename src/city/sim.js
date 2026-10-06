@@ -17,7 +17,8 @@ import { STEP5_DISTRICTS, STEP5_PLACES, STEP5_BUILDINGS, STEP5_OPEN_LOTS, STEP5_
 import { EAST_DISTRICTS, EAST_PLACES, EAST_BUILDINGS, EAST_OPEN_LOTS, EAST_ARCH, EAST_HOUSING, EAST_JOBS, EAST_LEISURE_BAND, EAST_LEISURE_FIELD, EAST_FAMILY, EAST_FIXTURES, SUBURB_HOUSES, SUBURB_STARTERS } from "./eastSim.js";
 import { MOUNTAIN_PLACES, MOUNTAIN_BUILDINGS, MOUNTAIN_ARCH, MOUNTAIN_JOBS, MOUNTAIN_LEISURE_BAND, MOUNTAIN_LEISURE_FIELD, MOUNTAIN_FAMILY, MOUNTAIN_FIXTURES, MOUNTAIN_OPEN_LOTS, MOUNTAIN_SPOTS } from "./mountainSim.js";   // THE MOUNTAIN (mountainGeo.js)
 import { shuttle, lineTrainState, lineNextArrival, lineRide } from "./lines.js";
-import { RIVER_DAY, RIVER_LAYOUT, RIVER_BLOCKS } from "./river.js";   // THE ATTRITION: the river's ground from its day (layout 7)
+import { RIVER_DAY, RIVER_LAYOUT, RIVER_BLOCKS } from "./river.js";
+import { LANES_DAY, LANES_PLACE, LANES_BUILDING, LANES_FLOOR, SHARED_RECT, LANES_JOBS, LANES_STAFF, LANES_PULL, LEAGUE_DAYS, lanesHours } from "./lanes.js";   // THE LANES: upstairs at the Arcade from LANES_DAY   // THE ATTRITION: the river's ground from its day (layout 7)
 // THE NIGHTLIFE QUARTERS (nightlifeSim.js): UPTOWN and DOWNTOWN, their venues, hours, the rope, the lineups
 import { NIGHT_DISTRICTS, NIGHT_PLACES, NIGHT_BUILDINGS, NIGHT_ARCH, NIGHT_JOBS, NIGHT_LEISURE_BAND, NIGHT_LEISURE_FIELD, NIGHT_FAMILY, NIGHT_FIELD_RULES, NIGHT_FIXTURES, NIGHT_SET, HOURS as NIGHT_HOURS, openAt as nightOpenAt, openThrough as nightOpenThrough, closeFor as nightCloseFor, NIGHT_OUT_P, ropeCheck, ROPE_PLACES, gigOf } from "./nightlifeSim.js";
 
@@ -281,6 +282,9 @@ PLACE_LIST.push(...NIGHT_PLACES.map(([id, d, kind, cap, name, engine]) => P(id, 
 PLACE_LIST.push(...EAST_PLACES.map(a => P(...a)));
 // THE FARMLAND and THE ENGINE (farmSim.js)
 PLACE_LIST.push(...STEP5_PLACES.map(a => P(...a)));
+// THE LANES (lanes.js): last of all, and only in the plans of the days it is open (buildPlan), so every
+// published day's place list and indices are what they were.
+PLACE_LIST.push({ ...P(...LANES_PLACE), from: LANES_DAY });
 for (const p of PLACE_LIST) DISTRICT[p.district].places.push(p.id);
 
 export const PLACES = Object.fromEntries(PLACE_LIST.map(p => [p.id, p]));
@@ -429,7 +433,7 @@ const BUILDING_LIST = [
   B("bowling-green", "THE BOWLING GREEN", "oldtown", [["G", "THE LAWN (BOWLS, LOGGED)", ["bowling-green"]]], { x: -50, y: -14.5, w: 12.75, h: 6 }),
   B("the-old-bell", "THE OLD BELL", "oldtown", [["1F", "THE SNUG", ["the-old-bell"]], ["G", "THE TAPROOM", ["the-old-bell"]]], { x: -35, y: -14.5, w: 11, h: 6 }),
 ];
-BUILDING_LIST.push(...FUNNEL_BUILDINGS.map(([id, name, district, floors]) => B(id, name, district, floors)));
+BUILDING_LIST.push(...FUNNEL_BUILDINGS.map(([id, name, district, floors]) => B(id, name, district, id === LANES_BUILDING ? [LANES_FLOOR, ...floors] : floors)));
 BUILDING_LIST.push(...VENUE_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
 BUILDING_LIST.push(...MOUNTAIN_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
 BUILDING_LIST.push(...EAST_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
@@ -451,7 +455,7 @@ for (const d of DISTRICTS) {
   if (blds.some(b => b.lot)) {
     if (!blds.every(b => b.lot)) throw new Error(`district ${d.id}: lay out every building by hand or none`);
     for (const b of blds) {
-      const ids = [...new Set(b.floors.flatMap(f => f[2]))], pw = b.lot.w / ids.length;
+      const ids = [...new Set(b.floors.flatMap(f => f[2]))].filter(id => !SHARED_RECT[id]), pw = b.lot.w / ids.length;
       ids.forEach((id, k) => {
         const p = PLACES[id];
         p.rect = { x: b.lot.x + k * pw, y: b.lot.y, w: pw, h: b.lot.h };
@@ -467,7 +471,7 @@ for (const d of DISTRICTS) {
   const cw = iw / cols, rh = ih / rows;
   blds.forEach((b, i) => {
     const bx = ix + (i % cols) * cw, by = iy + Math.floor(i / cols) * rh;
-    const ids = [...new Set(b.floors.flatMap(f => f[2]))];
+    const ids = [...new Set(b.floors.flatMap(f => f[2]))].filter(id => !SHARED_RECT[id]);
     const pw = cw / Math.max(1, ids.length);
     ids.forEach((id, k) => {
       const p = PLACES[id];
@@ -479,6 +483,8 @@ for (const d of DISTRICTS) {
 // THE MOUNTAIN's places arrive at their own spots on their bands (mountainSim.js MOUNTAIN_SPOTS);
 // the bands stay the buildings' lots (BUILDINGS: a building with a lot is its lot).
 for (const [id, r] of Object.entries(MOUNTAIN_SPOTS)) { PLACES[id].rect = { ...r }; PLACES[id].pos = { x: r.x + r.w / 2, y: r.y + r.h / 2 }; }
+// a place on another's ground (THE LANES over the arcade): its rect and spot, not a share of the cell
+for (const [id, of] of Object.entries(SHARED_RECT)) { PLACES[id].rect = { ...PLACES[of].rect }; PLACES[id].pos = { ...PLACES[of].pos }; }
 for (const p of PLACE_LIST) if (!p.rect) throw new Error(`place ${p.id} is in no building`);
 // Architecture (the building design pass, 2026-09-29: "different buildings that look
 // differently, like big low-income housing projects versus high-income high-rises"). Every
@@ -680,6 +686,9 @@ JOBS.push(...EAST_JOBS.map(a => J(...a)));
 JOBS.push(...STEP5_JOBS.map(a => J(...a)));   // THE FARMLAND and THE ENGINE (farmSim.js)
 JOBS.push(J("tool-librarian", "Tool Librarian", "tool-library", ["Returns Clerk", "Librarian", "Senior Librarian", "Keeper of the Torque Wrenches"], ["*", "engineering"], ["utility", "care"], { draft: 3 }));   // THE SUBURBS and THE AIRPORT (eastSim.js)
 export const JOB = Object.fromEntries(JOBS.map(j => [j.id, j]));
+// THE LANES' jobs: in JOB (so a day's work can name them) but not in JOBS (assignment is unchanged);
+// who works them, from LANES_DAY, is workOf's (below).
+export const LANES_JOB = Object.fromEntries(LANES_JOBS.map(a => { const j = J(...a); JOB[j.id] = j; return [j.id, j]; }));
 
 // ---- subject reading --------------------------------------------------------------
 export const TIER_ORDER = TIERS.map(t => t.label);   // 0 = ESSENTIAL ... 5 = SOYLENT GREEN
@@ -1348,7 +1357,11 @@ export function clearEnterprise() { if (ENT.size) { ENT.clear(); memo.clear(); }
 // The job a subject works on a day: their storefront's, else the one assigned.
 function workOf(s, day, seed) {
   const w = seed === SEED ? ENT.get(day)?.work?.get(keyOf(s)) : null;
-  return w || JOB[assignJob(s, seed).jobId];
+  if (w) return w;
+  const job = JOB[assignJob(s, seed).jobId];
+  // THE LANES (from LANES_DAY): some of the Strip's service staff and the Works' fabricators move upstairs
+  if (day >= LANES_DAY && job) for (const st of LANES_STAFF) if (st.from.includes(job.id) && h01(`${seed}|lanes-staff|${keyOf(s)}`) < st.p) return LANES_JOB[st.job];
+  return job;
 }
 export function clearSocialSnapshots() { if (SOCIAL.size) { SOCIAL.clear(); memo.clear(); } }
 const socialVer = (day) => SOCIAL.get(day)?.ver ?? "-";
@@ -1368,7 +1381,7 @@ function leisureWeights(s, seed, day = null) {
     const w = new Map(list);
     for (const [id, frac] of Object.entries(boost)) {
       const p = PLACES[id];
-      if (!p || p.kind === "home" || (p.kind === "work" && !owl) || typeof frac !== "number") continue;
+      if (!p || p.kind === "home" || (p.kind === "work" && !owl) || typeof frac !== "number" || (p.from && day < p.from)) continue;   // (THE LANES: not before its day)
       if (frac >= 0) w.set(id, (w.get(id) || 0) + Math.min(frac, 1.2) * top);
       else if (w.has(id)) w.set(id, w.get(id) * Math.max(0.3, 1 + Math.max(frac, -1)));
     }
@@ -1490,6 +1503,14 @@ function pickLeisure(s, day, i, seed, avoid, hour = null) {
   // THE MALL: the businesses trading that day draw their customers (enterprise.js shopsFor)
   const ent = seed === SEED ? ENT.get(day) : null;
   if (ent?.shops) { list = ent.shops(list, total, s, hour); total = list.reduce((a, [, v]) => a + v, 0); }
+  // THE LANES (from LANES_DAY): open noon to two; league nights pull harder
+  if (day >= LANES_DAY && lanesHours(hour)) {
+    const f = fieldsOf(s);
+    let v = LANES_PULL.band[bandOf(s)] + ((f.sport || 0) * LANES_PULL.sport + (f.hospitality || 0) * LANES_PULL.hospitality) / 10;
+    if (hour != null && hour >= 19 && LEAGUE_DAYS.includes(weekdayOf(day))) v *= LANES_PULL.league;
+    v *= Math.sqrt(PLACES[LANES_PLACE[0]].cap);
+    list = [...list, [LANES_PLACE[0], v]]; total += v;
+  }
   // A fixture on at the ground when the visit starts pulls its fans (and the curious) in.
   const on = hour == null ? null : gamesOn(day, hour);
   if (on) { list = list.map(([id, v]) => [id, on.has(id) ? v * GAME_PULL : v]); total = list.reduce((a, [, v]) => a + v, 0); }
@@ -1531,7 +1552,7 @@ for (const [k, id] of EAST_FAMILY) FAMILY[k].push(id);
 for (const [k, id] of STEP5_FAMILY) FAMILY[k].push(id);
 const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
 // (a storefront unit takes visitors only while a business trades in it: enterprise.js, below)
-const LEISURE_ROOMS = Object.values(PLACES).filter(p => (p.kind === "leisure" || p.kind === "mixed") && !UNIT_SET.has(p.id)).map(p => p.id);
+const LEISURE_ROOMS = Object.values(PLACES).filter(p => (p.kind === "leisure" || p.kind === "mixed") && !UNIT_SET.has(p.id) && !p.from).map(p => p.id);
 export const OVERFLOW = Object.fromEntries(Object.keys(PLACES).map(id => {
   const fam = (FAMILY.find(f => f.includes(id)) || []).filter(q => q !== id).sort((a, b) => dist2(id, a) - dist2(id, b));
   const rest = LEISURE_ROOMS.filter(q => q !== id && !fam.includes(q)).sort((a, b) => dist2(id, a) - dist2(id, b));
@@ -2629,7 +2650,7 @@ function planSegs(P, row, i0, t0) {
 // The builder's side: this roster's (setRoster) schedules for `day` in format 1, from the
 // sim itself (a plan already loaded for the day is not read). -> {format, day, ..., subjects}
 export function buildPlan(day, seed = SEED) {
-  const places = PLACE_LIST.map(p => p.id), idx = Object.fromEntries(places.map((id, i) => [id, i]));
+  const places = PLACE_LIST.filter(p => !p.from || day >= p.from).map(p => p.id), idx = Object.fromEntries(places.map((id, i) => [id, i]));
   const subjects = {};
   for (const s of ROSTER_ORDER) {
     const key = keyOf(s);
@@ -2753,7 +2774,7 @@ export function standInAt(placeId, key, activity, seed = SEED) {
   return { placeId, districtId: pl.district, activity, progress: 0.5, x: p.x, y: p.y, buildingId: pl.building, floor, floorId: BUILDING[pl.building].floors[floor].id };
 }
 // A walker in a district: back and forth between two of its places, at walking pace.
-const DPLACES = Object.fromEntries(DISTRICTS.map(d => [d.id, PLACE_LIST.filter(p => p.district === d.id).map(p => p.id)]));
+const DPLACES = Object.fromEntries(DISTRICTS.map(d => [d.id, PLACE_LIST.filter(p => p.district === d.id && !p.from).map(p => p.id)]));
 export function standInWalk(districtId, i, machineTime, seed = SEED) {
   return onGround(Math.floor(toHours(machineTime) / 24) + 1, () => standInWalkOn(districtId, i, machineTime, seed));
 }

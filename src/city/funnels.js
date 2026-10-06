@@ -165,6 +165,7 @@ export function funnelButtons(buildingId) {
   const out = [];
   const f = FUNNEL_OF[buildingId];
   if (f?.kind === "arcade") out.push({ label: "PLAY", aria: "Play: the Arcade's cabinets", spec: { kind: "arcade" } });
+  if (buildingId === "the-arcade") out.push({ label: "BOWL", aria: "Bowl: THE LANES, upstairs", spec: { kind: "lanes", go: "#bowling?from=lanes" } });   // THE LANES (lanes.js)
   if (f?.kind === "shop") out.push({ label: "SHOP", aria: "Shop the EB Shop's live stock", spec: { kind: "shop", campaign: f.campaign } });
   if (f?.kind === "arrivals") out.push({ label: "ARRIVALS", aria: "INTAKE: the new arrivals, awaiting release", spec: { kind: "arrivals", go: "#arrivals" } });
   if (f?.kind === "ebtv") out.push({ label: "WATCH", aria: "Watch Electric Basement TV live", spec: { kind: "ebtv", campaign: f.campaign } });
