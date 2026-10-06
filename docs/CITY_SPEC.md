@@ -2484,9 +2484,10 @@ or any score.
   Options behind "+": your team, the opponent (starts at once), length, shot clock.
 - **Why five a side**: the league drafts fives, so every rostered player appears; 10 sprites at 256 x
   240 cost nothing on a phone, and Tecmo-style control means you only ever steer one of them.
-- **The game** (`sim.js`, pure: 60 Hz fixed step, seeded mulberry32, only + - * / sqrt; **SIM VERSION 2**,
-  2026-10-05, the 2K-style game; v1 frozen in `v1/sim.js`, `replay.js` routes a record by version, and
-  `scripts/fixtures/hoops-v1-records.json` holds three v1 games that must keep replaying): NBA lines in
+- **The game** (`sim.js`, pure: 60 Hz fixed step, seeded mulberry32, only + - * / sqrt; **SIM VERSION 3**,
+  2026-10-06, the 2K-style game with difficulty levels; v1 and v2 frozen in `v1/sim.js` and `v2/sim.js`,
+  `replay.js` routes a record by version, and `scripts/fixtures/hoops-v1-records.json` /
+  `hoops-v2-records.json` hold three games each that must keep replaying): NBA lines in
   metres, rims 3.05 m. FOUR 2-MINUTE QUARTERS (the clock runs only while the ball is live; level after
   four means one-minute overtimes) or FIRST TO 21; a 24- or 14-second shot clock. Two inside the arc,
   three outside it or past 6.71 m in a corner; shot clock, out of bounds and charges turn it over.
@@ -2530,9 +2531,27 @@ or any score.
   toward the rim a drive burst, round a spin. The nearest defender may lose his ankles (handle v
   perimeter D, the move, his lean; intense D resists; a fall shows him on the floor) and a handler who
   overdoes it, or has no handle, loses the ball. RT sprints and drains stamina; standing restores it.
-- **Control** (2K conventions): see the legend; EASY MODE (on for a first visit, `hvi-hoops-easy`): a
-  wider green band, smarter teammates (more cuts), a little help on makes and steals, softer CPU hands,
-  your man guards when you let go.
+- **Difficulty** (2026-10-06, Scott: "the basketball game is way too hard"; replaces EASY MODE): 2K's
+  **ROOKIE** (default for a new player), **PRO**, **ALL-STAR**, **HALL OF FAME**, chips on the start
+  screen, remembered in `hvi-hoops-level`, `cfg.level` in the record (a v2 record's `assist` reads as
+  ROOKIE). `sim.js LEVELS` holds the dials, each biasing only your side and the CPU against you: the
+  green band, how much a contest costs your shot, your and the CPU's make rates, CPU steals,
+  interceptions, blocks and its reaction time, help-rotation speed, teammates' cuts and how tightly they
+  guard, dribble-move turnovers and ankles, foul strictness on your defence, auto-guard when you let go,
+  defence auto-switch (to the ball's defender; nearest the ball; HALL OF FAME only on a change of
+  possession), stamina drain, speed, the tip. A CPU v CPU game plays as rated at any level, so the
+  calibration is unchanged. The rated game itself proved too hard for a casual player, so HALL OF FAME
+  is the rated game with the CPU's shots a little softer. Measured by check-hoops' **simulated casual
+  human** (release about 100 ms either side of the top, a quarter-second late on defence, loose passes,
+  random dribble moves, ball-watching) steering one man a possession against an equal five, 100 games a
+  level: ROOKIE wins 68% (shoots 47%, 2.9 turnovers, 30-26), PRO 49%, ALL-STAR 35%, HALL OF FAME 23%
+  (41%, 5.7 turnovers, 22-29); asserted in bands 65-75 / 45-55 / 30-40 / 15-25 and ROOKIE FG 45-50%.
+- **Reading it**: the man you steer stands in a bright ring with a big arrow over him; holding the
+  ball, a tag over him says OPEN / LIGHTLY CONTESTED / CONTESTED before you shoot; a taller meter with
+  the green band lit over the fill. The first game shows tips in the picture until each is done: HOLD
+  X, LET GO AT THE TOP; A TO PASS; on defence, stay between your man and the rim; the free-throw meter
+  (button names follow the pad, keys or touch; `hvi-hoops-tips-done`).
+- **Control** (2K conventions): see the legend.
 - **Cameras** (`render.js` CAMS, one true perspective camera for all, remembered in `hvi-hoops-cam`,
   chosen under "+", V / View in a game, or the pause menu): **2K BROADCAST** (default: the side, 9 m up,
   13 m off the sideline, tipped down, turning and pushing in with the ball), **2K STEADY** (higher,
@@ -2571,21 +2590,23 @@ or any score.
   (a direction = a move, a circle = a spin). Crowd: boos (made in `audio.js`; the shared crowd has
   none) when a foul goes against the home side, a roar for an and-one or broken ankles, the hush at the
   line (`crowdAudio.js` "quiet").
-- **The record**: `{version, seed, cfg (format, shot clock, easy, both fives), home, away, inputLog,
+- **The record**: `{version, seed, cfg (format, shot clock, level, both fives), home, away, inputLog,
   result}`, the human's input one bitmask a frame (v2: the virtual pad above; v1: UP 1, DOWN 2, LEFT 4,
   RIGHT 8, A 16, B 32, C 64), run-length encoded. At the buzzer the browser replays it and says whether it reproduced; the last
   five are kept in `localStorage["hvi-hoops-exhibitions"]`. WATCH THE TAPE plays the game back from
   the log at 2x (or straight to the end).
 - **Check**: `scripts/check-hoops.mjs` (purity; the arc and corners; forced makes; shot clock, out of
   bounds; FIRST TO 21 and quarters; a bot's v2 game replayed twice, another seed differs, a doctored log
-  fails; every v1 fixture game replays on v1; calibration bands over 120 CPU games (FG 44-49.5%, 3P
+  fails; every v1 and v2 fixture game replays on its own frozen sim; calibration bands over 120 CPU games (FG 44-49.5%, 3P
   33-39.5%, rim 58-72%, FT 70-84%, threes over a quarter of shots, sane foul rate); open GREEN three
   75-95%, contested LATE 20% or less, an EARLY release well under green; contested dunks not automatic
   (blocks and fouls happen), open ones 90%+, no lane or no dunk rating = a layup; shooting fouls to the
   line with and-ones; reach-ins (side-out with 14, or two in the bonus); charges on a set man; foul-out
   and the stand-in; free throws (green 85%+, the ten-second violation, make/miss on the last); every
   dribble move trigger, ankles some of the time, a poor handler overdoing it loses the ball; sprint
-  tires; a strong five beats a weak one 11+ of 12; dunks only by dunkers; rosters and calls).
+  tires; a strong five beats a weak one 11+ of 12; dunks only by dunkers; the casual human's win rate
+  per difficulty in its band, the CPU v CPU game identical at every level, v2 fixtures replay on v2;
+  rosters and calls).
 - **Not yet**: timeouts, substitutions and benches (a five plays the whole game), icon passing, mouse
   play, backcourt and three-second rules, goaltending, changing ends, dunk replays, a server replay
   check, counting results anywhere.

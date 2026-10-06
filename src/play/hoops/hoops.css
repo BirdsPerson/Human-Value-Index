@@ -94,3 +94,9 @@
   .hp-board .tm b small { font-size: 0.56rem; }
   .hp-board .mid { padding: 2px var(--s2); }
 }
+
+/* difficulty, and the first game's tips */
+.hp-level { margin: 0 0 var(--s3); }
+.hp-level .hp-small { margin: 0 0 var(--s1); }
+.hp-level-note { max-width: 70ch; }
+.hp-tip { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); max-width: calc(100% - 16px); padding: 3px 10px; background: rgba(10, 15, 10, 0.88); color: #ffe14a; border: 2px solid #ffe14a; font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.06em; text-align: center; pointer-events: none; }

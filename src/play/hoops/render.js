@@ -11,7 +11,7 @@
 // is 20 px, at the far one 8.4: a 2 m player is 40 px near and 17 px far, the rim 3.05 m up. The
 // camera pans along the court with the ball (render-only; the sim never sees it). The heads are
 // drawn a little large (0.5 m), the 16-bit habit, so a face reads at this size.
-import { COURT as C, TOP, FT_TOP, dirOf, greenOf, kindAt } from "./sim.js";
+import { COURT as C, TOP, FT_TOP, dirOf, greenOf, kindAt, LEVELS, contestOf } from "./sim.js";
 import { shrinkHead } from "../heads.js";
 
 export const W = 256, H = 240;
@@ -250,7 +250,12 @@ function drawPlayer(ctx, P, look, st, cam, frame, ctl) {
   const by = gy - P.z * sv;
   // the shadow stays on the floor
   rect(ctx, gx - 0.32 * s, gy - Math.max(1, 0.06 * s), 0.64 * s, Math.max(1, 0.12 * s), PAL.shadow);
-  if (ctl) { const w = Math.round(0.9 * s); line(ctx, gx - w / 2, gy + 1, gx + w / 2, gy + 1, PAL.mark); }
+  if (ctl) {
+    // the man you steer: a bright ring on the floor round his feet, outlined so it reads on any paint
+    const rx = Math.max(5, Math.round(0.55 * s)), ry = Math.max(2, Math.round(0.2 * s));
+    ctx.save(); ctx.lineWidth = 3; ctx.strokeStyle = PAL.outline; ctx.beginPath(); ctx.ellipse(Math.round(gx), Math.round(gy), rx, ry, 0, 0, 6.2832); ctx.stroke();
+    ctx.lineWidth = 1.6; ctx.strokeStyle = PAL.mark; ctx.stroke(); ctx.restore();
+  }
   // a man down (his ankles gone): flat on the floor for a moment
   if (P.stumble > 45) {
     box(ctx, gx - 0.9 * k, gy - 0.28 * kv, gx + 0.9 * k, gy, look.jersey); box(ctx, gx + 0.6 * k * P.face, gy - 0.3 * kv, gx + 0.95 * k * P.face, gy - 0.02 * kv, look.skin);
@@ -285,8 +290,9 @@ function drawPlayer(ctx, P, look, st, cam, frame, ctl) {
     ctx.drawImage(hd, Math.round(gx - hw / 2), top, hw, hh);
   } else { R(-0.13, 1.55, 0.26, 0.4, sk); R(-0.14, 1.85, 0.28, 0.12, look.hair || "#2a1a10"); }
   if (ctl) {
-    const mx = Math.round(gx), my = top - 4 - ((frame >> 4) & 1);
-    rect(ctx, mx - 2, my, 5, 1, PAL.mark); rect(ctx, mx - 1, my + 1, 3, 1, PAL.mark); rect(ctx, mx, my + 2, 1, 1, PAL.mark);
+    const mx = Math.round(gx), my = top - 6 - ((frame >> 4) & 1);
+    rect(ctx, mx - 4, my - 1, 9, 5, PAL.outline);
+    rect(ctx, mx - 3, my, 7, 1, PAL.mark); rect(ctx, mx - 2, my + 1, 5, 1, PAL.mark); rect(ctx, mx - 1, my + 2, 3, 1, PAL.mark); rect(ctx, mx, my + 3, 1, 1, PAL.mark);
   }
 }
 
@@ -311,19 +317,29 @@ function drawBall(ctx, st, cam, frame) {
 function drawMeter(ctx, st, cam) {
   const P = st.p[st.ctl];
   if (!P || st.cfg.auto) return;
-  const [gx, gy, s] = proj(P.x, P.y, 0, cam), x = Math.round(gx + 0.55 * s + 3), hgt = 26, y0 = Math.round(gy - 2.4 * s);
+  const [gx, gy, s] = proj(P.x, P.y, 0, cam), x = Math.round(gx + 0.55 * s + 4), hgt = 36, y0 = Math.round(gy - 2.6 * s);
   const a = P.act, ft = a?.kind === "ftshot";
   if (a?.kind === "jump" || ft) {
     const top = ft ? FT_TOP : TOP, full = 2 * top, r = Math.hypot(dirOf(P.t) * C.rimX - P.x, C.cy - P.y);
-    const win = greenOf(P, ft ? "ft" : kindAt(r, a.post), st.cfg.assist), yy = (f) => y0 + hgt - Math.round((Math.min(full, Math.max(0, f)) / full) * hgt);
-    rect(ctx, x - 1, y0 - 1, 6, hgt + 2, PAL.outline);
-    rect(ctx, x, y0, 4, hgt, "#22382a");
-    rect(ctx, x, yy(top + win), 4, yy(top - win) - yy(top + win) + 1, PAL.eye);
-    rect(ctx, x, yy(a.f), 4, y0 + hgt - yy(a.f), a.f > top + win ? "#e05050" : "#e0c040");
-    rect(ctx, x - 2, yy(a.f), 8, 1, "#ffffff");
+    const win = greenOf(P, ft ? "ft" : kindAt(r, a.post), LEVELS[st.cfg.level]?.green || 0), yy = (f) => y0 + hgt - Math.round((Math.min(full, Math.max(0, f)) / full) * hgt);
+    rect(ctx, x - 2, y0 - 2, 10, hgt + 4, PAL.outline);
+    rect(ctx, x - 1, y0 - 1, 8, hgt + 2, "#ffffff");
+    rect(ctx, x, y0, 6, hgt, "#22382a");
+    rect(ctx, x, yy(a.f), 6, y0 + hgt - yy(a.f), a.f > top + win ? "#e05050" : "#e0c040");
+    // the green band over the fill, so it stays visible as the fill passes it; ticks mark it outside
+    const g0 = yy(top + win), g1 = yy(top - win);
+    rect(ctx, x, g0, 6, g1 - g0 + 1, a.f >= top - win && a.f <= top + win ? "#7dff7a" : PAL.eye);
+    rect(ctx, x - 4, g0, 3, 1, PAL.eye); rect(ctx, x - 4, g1, 3, 1, PAL.eye); rect(ctx, x + 7, g0, 3, 1, PAL.eye); rect(ctx, x + 7, g1, 3, 1, PAL.eye);
+    rect(ctx, x - 3, yy(a.f), 12, 1, "#ffffff");
   }
-  const L = st.lastRel;
-  if (L && L.g === P.g && st.frame - L.frame < 70) {
+  const L = st.lastRel, showing = L && L.g === P.g && st.frame - L.frame < 70;
+  // before the shot: how open you are, from the nearest defender (the word the grade will carry)
+  if (!showing && !a && st.phase === "live" && st.ball.st === "held" && st.ball.own === P.g) {
+    const c = contestOf(st, P).c, w = c < 0.28 ? "OPEN" : c < 0.46 ? "LIGHTLY CONTESTED" : "CONTESTED";
+    const hy = Math.max(2, Math.round(gy - 2.6 * s - 10));
+    textOutlined(ctx, w, Math.max(1, Math.min(W - textW(w) - 1, gx - textW(w) / 2)), hy, c < 0.28 ? "#7dff7a" : c < 0.46 ? "#ffd040" : "#ff6050");
+  }
+  if (showing) {
     const green = L.grade === "GREEN", y = Math.max(2, gy - 2.6 * s - 16);
     textOutlined(ctx, L.grade, Math.max(1, Math.min(W - textW(L.grade) - 1, gx - textW(L.grade) / 2)), y, green ? PAL.eye : /VERY/.test(L.grade) ? "#ff6050" : "#ffd040");
     if (L.word) textOutlined(ctx, L.word, Math.max(1, Math.min(W - textW(L.word) - 1, gx - textW(L.word) / 2)), y + 7, L.c < 0.28 ? "#ffffff" : L.c < 0.66 ? "#ffd040" : "#ff6050");

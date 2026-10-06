@@ -4,7 +4,7 @@ import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
-import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, FORMATS, dirOf } from "./sim.js";
+import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, FORMATS, dirOf, LEVELS, LEVEL_ORDER } from "./sim.js";
 import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortFive, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS } from "./roster.js";
 import { draw, camFollow, camStart, CAMS, CAM_ORDER, headOf, skinOf, shade, W, H } from "./render.js";
 import GameMenu from "../GameMenu.jsx";
@@ -30,7 +30,16 @@ const parseRoute = (route) => {
   const id = (k) => (TEAM_IDS.includes(q.get(k)) ? q.get(k) : null);
   return { home: id("home"), vs: id("vs"), fmt: q.get("fmt") === "to21" ? "to21" : "quarters", shot: q.get("shot") === "14" ? 14 : 24 };
 };
-const KEEP = "hvi-hoops-exhibitions", KEEP_N = 5, ASSIST_KEY = "hvi-hoops-easy", LEGEND_KEY = "hvi-hoops-legend", CAM_KEY = "hvi-hoops-cam";
+const KEEP = "hvi-hoops-exhibitions", KEEP_N = 5, LEVEL_KEY = "hvi-hoops-level", TIPS_KEY = "hvi-hoops-tips-done", LEGEND_KEY = "hvi-hoops-legend", CAM_KEY = "hvi-hoops-cam";
+// The difficulty: ROOKIE for a new player, then whatever was picked last.
+const readLevel = () => { try { const v = localStorage.getItem(LEVEL_KEY); return LEVELS[v] ? v : "rookie"; } catch { return "rookie"; } };
+const writeLevel = (v) => { try { localStorage.setItem(LEVEL_KEY, v); } catch { /* the tab remembers */ } };
+const LEVEL_NOTES = {
+  rookie: "START HERE. A WIDER GREEN WINDOW, TEAMMATES WHO CUT AND GUARD TIGHT, YOUR MAN GUARDS FOR YOU WHEN YOU LET GO, FEW STEALS AND BLOCKS AGAINST YOU.",
+  pro: "A FAIR GAME. A LITTLE HELP ON THE METER AND ON DEFENCE; THE CPU STILL GAMBLES LESS THAN IT COULD.",
+  allstar: "THE CPU ROTATES, BLOCKS AND STEALS ALMOST AS RATED. YOUR MAN STILL GUARDS WHEN YOU LET GO.",
+  hof: "THE GAME AS RATED. A TIGHT GREEN WINDOW, FULL HELP DEFENCE, NO AUTO-GUARD, AND YOU SWITCH ON DEFENCE YOURSELF (A).",
+};
 const readCam = () => { try { const v = localStorage.getItem(CAM_KEY); return CAMS[v] ? v : "broadcast"; } catch { return "broadcast"; } };
 const writeCam = (v) => { try { localStorage.setItem(CAM_KEY, v); } catch { /* the tab remembers */ } };
 export function loadRecords() { try { const j = JSON.parse(localStorage.getItem(KEEP) || "[]"); return Array.isArray(j) ? j : []; } catch { return []; } }
@@ -61,7 +70,8 @@ export default function Hoops({ route }) {
   useEffect(() => { let off = false; loadLeague().then(lg => { if (lg && !off) setLeague(lg); }).catch(() => {}); return () => { off = true; }; }, []);
   const [fmt, setFmt] = useState(opts.fmt);
   const [shot, setShot] = useState(opts.shot);
-  const [assist, setAssist] = useState(() => readFlag(ASSIST_KEY, loadRecords().length === 0));
+  const [level, setLevelS] = useState(readLevel);
+  const setLevel = (v) => { writeLevel(v); setLevelS(v); };
   const [game, setGame] = useState(null);   // {seed, n, home, away, cfg}
   const [done, setDone] = useState(null);
   const [tape, setTape] = useState(null);
@@ -71,11 +81,10 @@ export default function Hoops({ route }) {
   const mine = teamOfCase(league, me.caseId);
   const start = (home, away, f = fmt, s = shot) => {
     SFX.unlock();
-    const cfg = { fmt: f, shot: s, assist, home: fiveOf(league, home, me), away: fiveOf(league, away, me) };
+    const cfg = { fmt: f, shot: s, level, home: fiveOf(league, home, me), away: fiveOf(league, away, me) };
     setDone(null); setTape(null);
-    setGame({ seed: seedNow(), n: Date.now(), home, away, cfg });
+    setGame({ seed: seedNow(), n: Date.now(), home, away, cfg, tips: !readFlag(TIPS_KEY, false) });
   };
-  const toggleAssist = () => setAssist(v => { writeFlag(ASSIST_KEY, !v); return !v; });
   let body;
   const again = () => start(game.home, game.away, game.cfg.fmt, game.cfg.shot);
   const nextOpponent = () => { const ids = TEAM_IDS.filter(id => id !== game.home); start(game.home, ids[(ids.indexOf(game.away) + 1) % ids.length], game.cfg.fmt, game.cfg.shot); };
@@ -83,7 +92,7 @@ export default function Hoops({ route }) {
   if (tape) body = <Match key={`tape${tape.rec.at}`} game={tape.game} me={me} tape={tape.rec} camId={camId} setCamId={setCamId} onDone={() => setTape(null)} onQuit={() => setTape(null)} />;
   else if (game && !done) body = <Match key={game.n} game={game} me={me} camId={camId} setCamId={setCamId} onDone={setDone} onQuit={() => setGame(null)} onRestart={again} />;
   else if (done) body = <Done done={done} game={game} onAgain={again} onNew={nextOpponent} onSettings={settings} onTape={() => setTape({ rec: done.rec, game })} />;
-  else body = <Picker league={league} me={me} mine={mine} pre={opts} fmt={fmt} setFmt={setFmt} shot={shot} setShot={setShot} assist={assist} toggleAssist={toggleAssist} onStart={start} camId={camId} setCamId={setCamId} moreOpen={moreOpen} />;
+  else body = <Picker league={league} me={me} mine={mine} pre={opts} fmt={fmt} setFmt={setFmt} shot={shot} setShot={setShot} level={level} setLevel={setLevel} onStart={start} camId={camId} setCamId={setCamId} moreOpen={moreOpen} />;
   return (
     <div className="hp">
       <ScreenHead title="THE COURTS" meta="BASKETBALL // EXHIBITION // FIVE ON FIVE. PICKUP PERMITTED. EVERYTHING IS RECORDED." />
@@ -93,7 +102,7 @@ export default function Hoops({ route }) {
 }
 
 // ---- choosing ------------------------------------------------------------------------------------
-function Picker({ league, me, mine, pre, fmt, setFmt, shot, setShot, assist, toggleAssist, onStart, camId, setCamId, moreOpen }) {
+function Picker({ league, me, mine, pre, fmt, setFmt, shot, setShot, level, setLevel, onStart, camId, setCamId, moreOpen }) {
   const [home0, away0] = playNowPair(league, mine);
   const [home, setHome] = useState(pre.home || home0);
   useEffect(() => { if (!pre.home) setHome(mine || home0); }, [mine, home0]);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -113,12 +122,15 @@ function Picker({ league, me, mine, pre, fmt, setFmt, shot, setShot, assist, tog
       <p className="pg-lede">BASKETBALL, FIVE ON FIVE, WITH THE CITY'S OWN LEAGUE TEAMS. YOU STEER THE MAN WITH THE BALL, AND ON DEFENCE THE MAN NEAREST IT. A CONTROLLER PLAYS LIKE 2K: X SHOOTS (LET GO AT THE TOP), A PASSES, THE RIGHT STICK DRIBBLES. KEYS: ARROWS, Z SHOOTS, X PASSES, SHIFT SPRINTS. PHONES GET A PAD.</p>
       <div className="pg-start">
         <Button variant="primary" ref={playRef} onClick={quick}>PLAY NOW</Button>
-        <span className="pg-sub">{teamName(home)}{home === mine ? " (YOUR TEAM)" : ""} V {teamName(away)}. {len}, {shot}-SECOND CLOCK.</span>
+        <span className="pg-sub">{teamName(home)}{home === mine ? " (YOUR TEAM)" : ""} V {teamName(away)}. {len}, {shot}-SECOND CLOCK, {LEVELS[level].name}.</span>
       </div>
-      <p className="hp-you">
-        <button type="button" className="pg-toggle" aria-pressed={assist} onClick={toggleAssist}>EASY MODE</button>
-        <span>{assist ? "A WIDER GREEN WINDOW, SMARTER TEAMMATES, SOFTER CPU HANDS, YOUR MAN GUARDS FOR YOU WHEN YOU LET GO." : "THE CPU PLAYS AS RATED."}</span>
-      </p>
+      <div className="hp-level">
+        <p className="hp-small">DIFFICULTY</p>
+        <div className="hp-chips" role="radiogroup" aria-label="Difficulty">
+          {LEVEL_ORDER.map(id => <button key={id} type="button" role="radio" aria-checked={level === id} className={`hp-chip${level === id ? " on" : ""}`} onClick={() => setLevel(id)}>{LEVELS[id].name}</button>)}
+        </div>
+        <p className="hp-small hp-level-note">{LEVEL_NOTES[level]}</p>
+      </div>
       {mine ? <p className="hp-you">YOU ARE ON THE {teamName(mine)} THIS SEASON. YOU PLAY AS YOURSELF, AT YOUR RATING.</p>
         : me.caseId ? <p className="hp-you hp-dim">YOUR FILE IS NOT ON A BASKETBALL ROSTER THIS SEASON. ENTRIES ARE MADE FROM <a href="#file">MY FILE</a>.</p> : null}
       <details className="pg-more" open={moreOpen || undefined}>
@@ -189,6 +201,12 @@ export function legendRows(mode, family) {
   if (mode === "touch") return [["MOVE", "THE ROUND PAD", ""], ["SHOOT", "HOLD SHOOT", "LET GO AT THE TOP."], ["PASS", "PASS / LOB", "TOWARD THE PAD."], ["MOVES", "SWIPE THE COURT", "SIDE CROSS, BACK STEPBACK, CIRCLE SPIN."], ["SPRINT", "SPRINT", ""], ["DEFENCE", "STEAL / BLOCK / CHARGE / SWITCH", ""], ["PAUSE", "START", ""]];
   return [["MOVE", "←↑↓→ / WASD", "SHIFT SPRINTS."], ["SHOOT", "HOLD Z / J / SPACE", "LET GO AT THE TOP. ON D: STEAL."], ["PASS", "X / K", "F BOUNCE, C LOB. ON D: X SWITCH, C BLOCK, F CHARGE."], ["MOVES", "Q + ARROW", "Q ALONE: SPIN."], ["PICK", "R", ""], ["POST", "E", "ON D: INTENSE D."], ["CAMERA", "V", ""], ["PAUSE", "ENTER / ESC", ""]];
 }
+// The names of the shoot, pass and block buttons for the tips, by how you are playing.
+function keyNames(mode, family) {
+  if (mode === "pad") { const g = PAD_GLYPHS[family] || PAD_GLYPHS.generic; return { shoot: g.west, pass: g.south, block: g.north }; }
+  if (mode === "touch") return { shoot: "SHOOT", pass: "PASS", block: "BLOCK" };
+  return { shoot: "Z", pass: "X", block: "C" };
+}
 // The 2K button names, by position, on each pad family.
 const PAD_GLYPHS = {
   xbox: { west: "X", south: "A", east: "B", north: "Y", rt: "RT", lt: "LT", lb: "LB", view: "VIEW", start: "MENU" },
@@ -251,6 +269,8 @@ function Match({ game, me, tape = null, camId, setCamId, onDone, onQuit, onResta
   const [touch, setTouch] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer: coarse)").matches));
   const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, !touch));
   const [skipping, setSkipping] = useState(false);
+  const [tip, setTip] = useState(null);
+  const modeRef = useRef("keys"), padRef = useRef(null);
   const pausedRef = useRef(false), mutedRef = useRef(muted), skipRef = useRef(false), camRef = useRef(camStart(camId)), camIdRef = useRef(camId);
   camIdRef.current = camId;
   const cycleCam = () => { const id = CAM_ORDER[(CAM_ORDER.indexOf(camIdRef.current) + 1) % CAM_ORDER.length]; setCamId(id); };
@@ -258,6 +278,7 @@ function Match({ game, me, tape = null, camId, setCamId, onDone, onQuit, onResta
   const togglePause = (v) => { pausedRef.current = v ?? !pausedRef.current; setPaused(pausedRef.current); };
   const teams = [teamName(home), teamName(away)], shorts = [teamShort(home), teamShort(away)];
   const mode = pad ? "pad" : touch ? "touch" : "keys";
+  modeRef.current = mode; padRef.current = pad;
 
   useEffect(() => { const f = () => setTouch(true); window.addEventListener("touchstart", f, { once: true, passive: true }); return () => window.removeEventListener("touchstart", f); }, []);
   useEffect(() => {
@@ -283,6 +304,24 @@ function Match({ game, me, tape = null, camId, setCamId, onDone, onQuit, onResta
     const fx = { mood: "idle", t: 0, dunk: null, shake: 0, paint: paintOf(kitsFor(home, away)[0]) };
     const ctx = canvasRef.current.getContext("2d");
     let raf, last = performance.now(), acc = 0, hudKey = "", ended = false, scoreKey = "0-0", noteSeen = -1;
+    // first-game tips: shoot, pass, defend, the line; each until it is done (or it has had its time)
+    const tips = game.tips && !tape && !cfg.auto ? { stage: 0, shown: 0, key: "" } : null;
+    const tipStep = () => {
+      if (!tips) return;
+      const P = st.p[st.ctl], has = st.ball.st === "held" && st.ball.own === P.g && st.phase === "live";
+      const K = keyNames(modeRef.current, padRef.current);
+      for (const e of st.ev) {
+        if (tips.stage === 0 && (e === "shoot" || e === "shoot3" || e === "slam") && st.note?.team === 0) tips.stage = 1;
+        else if (tips.stage === 1 && (e === "pass" || e === "lob") && st.note?.team === 0) tips.stage = 2;
+      }
+      let want = null;
+      if (st.phase === "ft" && st.ft && st.p[st.ft.g].t === 0 && !tips.ft) { want = `${K.shoot}: HOLD, LET GO AT THE TOP OF THE METER`; if (st.ev.includes("ftshot")) tips.ft = true; }
+      else if (has && tips.stage === 0) want = `HOLD ${K.shoot}, LET GO AT THE TOP`;
+      else if (has && tips.stage === 1) want = `${K.pass} TO PASS (THE STICK PICKS WHO)`;
+      else if (st.phase === "live" && st.poss === 1 && tips.stage >= 1 && !tips.d) { want = `ON DEFENCE: STAY BETWEEN YOUR MAN AND THE RIM. ${K.shoot} STEALS, ${K.block} BLOCKS`; if (++tips.shown > 360) tips.d = true; }
+      if (tips.stage >= 2 && tips.d && tips.ft) { writeFlag(TIPS_KEY, true); }
+      if (want !== tips.key) { tips.key = want; setTip(want); }
+    };
     const onVis = () => { if (document.hidden && !tape) togglePause(true); };
     document.addEventListener("visibilitychange", onVis);
     const finish = () => {
@@ -322,7 +361,8 @@ function Match({ game, me, tape = null, camId, setCamId, onDone, onQuit, onResta
               if (mood) { fx.mood = mood; fx.t = 0; if (!skipRef.current) SFX.crowd(mood, mutedRef.current, N.k, st.buzzer); }
               if (N.k === "dunk") { fx.dunk = { side: dirOf(N.team), age: 0 }; fx.shake = 10; }
             }
-            if (st.phase === "over") finish();
+            tipStep();
+            if (st.phase === "over") { if (tips) writeFlag(TIPS_KEY, true); finish(); }
           }
         }
       } else acc = 0;
@@ -361,6 +401,7 @@ function Match({ game, me, tape = null, camId, setCamId, onDone, onQuit, onResta
       <div className="hp-stage" ref={wrapRef}>
         <div className="hp-screen" style={{ width: W * scale, height: H * scale }}>
           <canvas ref={canvasRef} width={W} height={H} style={{ width: W * scale, height: H * scale }} role="img" aria-label={`Basketball: ${teams[0]} against ${teams[1]}`} {...(touch && !tape ? swipeHandlers(inputRef) : {})} />
+          {tip && !paused && <div className="hp-tip" role="status">{tip}</div>}
           {tape && <div className="hp-tape">THE TAPE // {skipping ? "TO THE END" : "2X"}</div>}
         </div>
       </div>
@@ -468,7 +509,7 @@ function Done({ done, game, onAgain, onNew, onSettings, onTape }) {
         ))}
       </div>
       <p className="hp-notice">{NOTICE}</p>
-      <p className="hp-small">FG {pct(r.fgm[0], r.fga[0])} AND {pct(r.fgm[1], r.fga[1])} // 3PT {pct(r.tpm[0], r.tpa[0])} AND {pct(r.tpm[1], r.tpa[1])} // FT {pct(r.ftm[0], r.fta[0])} AND {pct(r.ftm[1], r.fta[1])} // FOULS {r.fouls[0]} AND {r.fouls[1]} // TURNOVERS {r.tov[0]} AND {r.tov[1]}</p>
+      <p className="hp-small">{LEVELS[rec.cfg.level]?.name || "ALL-STAR"} // FG {pct(r.fgm[0], r.fga[0])} AND {pct(r.fgm[1], r.fga[1])} // 3PT {pct(r.tpm[0], r.tpa[0])} AND {pct(r.tpm[1], r.tpa[1])} // FT {pct(r.ftm[0], r.fta[0])} AND {pct(r.ftm[1], r.fta[1])} // FOULS {r.fouls[0]} AND {r.fouls[1]} // TURNOVERS {r.tov[0]} AND {r.tov[1]}</p>
       <p className="hp-small">{Math.round(r.frames / 60)} SECONDS OF PLAY // {verified ? "RE-RUN FROM THE INPUT LOG: SAME RESULT. YOU ARE REPRODUCIBLE." : "THE RE-RUN DISAGREED. THE DEPARTMENT IS LOOKING INTO ITSELF."} KEPT IN THIS BROWSER ONLY.</p>
       <ButtonRow>
         <Button variant="primary" onClick={() => setMenu(true)}>Menu</Button>

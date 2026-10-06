@@ -20,17 +20,146 @@
 //   determinism  a bot's game replays from {version, seed, cfg, inputLog} to the same result, twice;
 //                a different seed differs; a doctored log does not reproduce; every v1 record in
 //                scripts/fixtures/hoops-v1-records.json replays on the frozen v1 sim (replay.js)
+//   difficulty   a simulated casual human (noisy release about 100 ms either side of the top, a
+//                quarter-second late on defence, loose passes, random dribble moves, no pro stick),
+//                steering one man a possession like a person, against an equal five, 100 games a
+//                level (one worker per level): wins ROOKIE 65-75%, PRO 45-55%, ALL-STAR 30-40%, HALL
+//                OF FAME 15-25%; shoots 45-50% on ROOKIE; harder levels shoot worse and turn it over
+//                more; a CPU v CPU game is the same at every level; EASY MODE records read as ROOKIE
 //   strength     a stronger five beats a weaker one over N CPU games; dunks only by dunk-capable men
 //   roster       team names equal the league's, the copied clock equals the city's, and so on
 //   calls        no line quotes anyone or has anyone speak
 // Run: node scripts/check-hoops.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 
 const S = await import("../src/play/hoops/sim.js");
 const R = await import("../src/play/hoops/roster.js");
 const K = await import("../src/play/hoops/calls.js");
 const { BTN, COURT: C } = S;
+
+// ---- difficulty: a casual human (Scott, 2026-10-06: "the basketball game is way too hard") ---------------
+// Plays the human's man the way a person new to the game does: picks a plan on the catch (drive, a spot
+// to shoot from, or look to pass), reads the OPEN tag but not always, lets go of X about 100 ms either
+// side of the top (sd 6 frames), flicks the right stick at random now and then, passes toward a
+// teammate with his thumb 30 degrees off; on defence chases where the ball was a quarter-second ago,
+// reaches now and then, jumps at shots late, and ball-watches with the stick let go.
+function casualHuman(seed) {
+  const { BTN, COURT: C } = S;
+  let s = seed >>> 0;
+  const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const g = () => (rnd() + rnd() + rnd() + rnd() - 2) * 1.732;   // sd 1
+  const LAG = 15;                                                   // 250 ms on defence
+  const hist = [];
+  let prev = 0, plan = null, rel = 0, tipAt = -1, ftKey = "", ftRel = 0, rs = 0, rsT = 0, watch = 0, jumped = -99;
+  const stickTo = (P, tx, ty, slop = 0.35) => {
+    const dx = tx - P.x, dy = ty - P.y; let m = 0;
+    if (dx > slop) m |= BTN.RIGHT; else if (dx < -slop) m |= BTN.LEFT;
+    if (dy > slop) m |= BTN.UP; else if (dy < -slop) m |= BTN.DOWN;
+    return m;
+  };
+  const press = (bit) => (prev & bit ? 0 : bit);
+  const out = (m) => { prev = m; return m; };
+  return (st) => {
+    const b = st.ball, P = st.p[st.ctl];
+    hist.push({ x: b.x, y: b.y, st: b.st, own: b.own, hx: b.own >= 0 ? st.p[b.own].x : b.x, hy: b.own >= 0 ? st.p[b.own].y : b.y, shooting: b.own >= 0 && st.p[b.own].act?.kind === "jump" });
+    if (hist.length > LAG + 1) hist.shift();
+    const seen = hist[0];
+    if (st.phase === "tip") { if (tipAt < 0) tipAt = S.TIP_JUMP + Math.round(g() * 9); return out(st.t === tipAt ? BTN.Y : 0); }
+    if (st.phase === "ft") {
+      if (!st.ft || st.ft.g !== P.g) return out(0);
+      const key = `${st.ft.g}|${st.frame - st.ft.t}|${st.ft.k}`;
+      if (key !== ftKey) { ftKey = key; ftRel = S.FT_TOP + Math.round(g() * 6); }
+      if (st.ft.t < 40 + (st.ft.k ? 0 : 10)) return out(0);
+      if (P.act?.kind === "ftshot") return out(P.act.f < ftRel - 1 ? BTN.X : 0);
+      return out(st.ball.st === "held" ? press(BTN.X) : 0);
+    }
+    if (st.phase !== "live") { plan = null; return out(0); }
+    const has = b.st === "held" && b.own === P.g, d = 1, rx = C.rimX;
+    if (has) {
+      if (P.act?.kind === "jump") return out(P.act.f < rel - 1 ? BTN.X : 0);
+      if (P.act) return out(0);
+      if (!plan || plan.g !== P.g || plan.caught !== P.caught) {
+        const u = rnd();
+        const ang = (rnd() - 0.5) * 2.6, dist = rnd() < 0.5 ? 7.6 + rnd() * 0.6 : 4.8 + rnd() * 1.6;
+        plan = { g: P.g, caught: P.caught, kind: u < 0.4 ? "drive" : u < 0.85 ? "spot" : "swing", tx: rx - dist * Math.cos(ang), ty: C.cy + dist * Math.sin(ang), patience: 30 + Math.floor(rnd() * 90), passAt: 20 + Math.floor(rnd() * 40), think: 0 };
+      }
+      const r = Math.hypot(rx - P.x, C.cy - P.y), held = P.hold;
+      // a dribble move now and then, no pro-stick mastery: a random flick
+      if (rsT > 0) { rsT--; return out(rs); }
+      const shoot = () => { rel = S.TOP + Math.round(g() * 6); return out(BTN.X | (r < 2.6 && rnd() < 0.3 ? BTN.RT : 0)); };
+      if (prev & BTN.X) return out(0);
+      if (st.shot < 100 + rnd() * 60) return shoot();
+      if (r < 1.9 && rnd() < 0.2) return shoot();
+      let D = null, dd = 9;
+      for (const Q of st.p) if (Q.t === 1) { const k = Math.hypot(Q.x - P.x, Q.y - P.y); if (k < dd) { dd = k; D = Q; } }
+      if (dd < 1.6 && rnd() < 0.006) { rs = [BTN.RSU, BTN.RSD, BTN.RSL, BTN.RSR][Math.floor(rnd() * 4)]; rsT = 2; return out(rs); }
+      const c = S.contestOf(st, P).c;
+      if (--plan.think <= 0) {
+        plan.think = 8 + Math.floor(rnd() * 10);
+        if (plan.kind === "swing" && held > plan.passAt) {
+          const mates = st.p.filter(Q => Q.t === 0 && Q !== P), Q = mates[Math.floor(rnd() * mates.length)];
+          const a = Math.atan2(Q.y - P.y, Q.x - P.x) + g() * 0.5, m = stickTo({ x: 0, y: 0 }, Math.cos(a), Math.sin(a), 0.38);
+          plan.kind = rnd() < 0.5 ? "spot" : "drive";
+          return out(press(BTN.A) | m);
+        }
+        if (plan.kind === "spot" && (Math.hypot(plan.tx - P.x, plan.ty - P.y) < 0.9 || held > plan.patience)) {
+          if (c < 0.46 || rnd() < 0.3) return shoot();
+          plan.kind = rnd() < 0.5 ? "drive" : "swing"; plan.passAt = held + 10;
+        }
+        if (plan.kind === "drive" && r < 4.5 && c > 0.66 && rnd() < 0.25) {
+          if (rnd() < 0.5) return shoot();
+          plan.kind = "swing"; plan.passAt = held;
+        }
+        if (plan.kind === "drive" && r < 3.2 && rnd() < 0.5) return shoot();
+      }
+      const [tx, ty] = plan.kind === "drive" ? [rx - 0.6, C.cy + (P.y > C.cy ? 0.4 : -0.4)] : [plan.tx, plan.ty];
+      let m = stickTo(P, tx, ty);
+      if (rnd() < 0.04) m = [BTN.UP, BTN.DOWN, BTN.LEFT, BTN.RIGHT][Math.floor(rnd() * 4)];   // a slip of the thumb
+      if (plan.kind === "drive" && r > 3.5 && P.sta > 0.3) m |= BTN.RT;
+      return out(m);
+    }
+    plan = null;
+    // without the ball: defence (and the glass), on what was there a quarter-second ago
+    if (b.st === "pass" && b.to === P.g) return out(0);
+    if (st.poss === 0 && b.st === "held") return out(0);
+    if (watch > 0) { watch--; return out(0); }
+    if (rnd() < 0.004) { watch = 30 + Math.floor(rnd() * 40); return out(0); }   // ball-watching
+    let m = 0;
+    if (seen.st === "held" && seen.own >= 5) {
+      const tx = seen.hx - 1.0, ty = seen.hy + (C.cy - seen.hy) * 0.15;
+      m = stickTo(P, tx, ty, 0.4);
+      const k = Math.hypot(seen.hx - P.x, seen.hy - P.y);
+      if (seen.shooting && k < 2.2 && st.frame - jumped > 40) { jumped = st.frame; return out(m | press(BTN.Y)); }
+      if (k < 1.1 && rnd() < 1 / 45) m |= press(BTN.X);
+      if (k > 4 && P.sta > 0.3) m |= BTN.RT;
+      return out(m);
+    }
+    m = stickTo(P, seen.x, seen.y, 0.3);
+    if (seen.st === "loose" && b.z > 2 && Math.hypot(b.x - P.x, b.y - P.y) < 1 && st.frame - jumped > 30) { jumped = st.frame; m |= press(BTN.Y); }
+    return out(m);
+  };
+}
+
+const DIFF_N = 100;
+function measureLevel(level, n) {
+  const five = (p, base) => [[p + "g", "G", base + 6, "guard"], [p + "w", "W", base + 3, "wing"], [p + "s", "S", base, "slasher"], [p + "w2", "W2", base - 2, "wing"], [p + "b", "B", base + 2, "big"]];
+  const t = { level, n, w: 0, fga: 0, fgm: 0, tov: 0, pts: 0, opp: 0, ofga: 0, ofgm: 0 };
+  for (let k = 0; k < n; k++) {
+    // equal fives: the same ratings and archetypes, and the human's side alternates between them
+    const A = five("x" + k, 74 + (k % 5)), B = five("y" + k, 74 + (k % 5));
+    const st = S.newGame(9100 + k, { level, home: k % 2 ? A : B, away: k % 2 ? B : A });
+    const bot = casualHuman(777 + k * 13);
+    for (let f = 0; st.phase !== "over" && f < 200000; f++) S.step(st, bot(st));
+    if (st.score[0] > st.score[1]) t.w++;
+    t.fga += st.fga[0]; t.fgm += st.fgm[0]; t.tov += st.tov[0]; t.pts += st.score[0]; t.opp += st.score[1]; t.ofga += st.fga[1]; t.ofgm += st.fgm[1];
+  }
+  return t;
+}
+if (!isMainThread) { parentPort.postMessage(measureLevel(workerData.level, workerData.n)); process.exit(0); }
+// started now, read near the end: four levels in parallel while the rest of the checks run
+const DIFF = S.LEVEL_ORDER.map(level => new Promise((res, rej) => { const w = new Worker(new URL(import.meta.url), { workerData: { level, n: DIFF_N } }); w.once("message", res); w.once("error", rej); }));
 let n = 0;
 const ok = (msg) => { n++; if (process.env.VERBOSE) console.log("ok", msg); };
 
@@ -143,7 +272,7 @@ function bot(mem) {
   };
 }
 const LG = R.FALLBACK;
-const cfgA = { fmt: "quarters", shot: 24, assist: true, home: R.sortFive(LG.teams.hq), away: R.sortFive(LG.teams.works) };
+const cfgA = { fmt: "quarters", shot: 24, level: "rookie", home: R.sortFive(LG.teams.hq), away: R.sortFive(LG.teams.works) };
 {
   const st = S.newGame(424242, cfgA);
   const masks = run(st, bot({ t: 0, lastA: -9 }));
@@ -171,9 +300,13 @@ const cfgA = { fmt: "quarters", shot: 24, assist: true, home: R.sortFive(LG.team
   const FIX = JSON.parse(readFileSync(new URL("./fixtures/hoops-v1-records.json", import.meta.url), "utf8"));
   assert.ok(FIX.records.length >= 3, "the v1 fixture games are on file");
   for (const rec of FIX.records) assert.deepEqual(RP.replayRecord(rec), rec.result, `v1 record seed ${rec.seed} replays on v1`);
-  assert.equal(RP.simOf(1).VERSION, 1); assert.equal(RP.simOf(2).VERSION, S.VERSION);
-  assert.ok(S.VERSION >= 2, "the live sim is v2 or later");
-  ok("v1 replay");
+  assert.equal(RP.simOf(1).VERSION, 1);
+  assert.ok(S.VERSION >= 3, "the live sim is v3 or later");
+  const FIX2 = JSON.parse(readFileSync(new URL("./fixtures/hoops-v2-records.json", import.meta.url), "utf8"));
+  assert.ok(FIX2.records.length >= 3, "the v2 fixture games are on file");
+  for (const rec of FIX2.records) assert.deepEqual(RP.replayRecord(rec), rec.result, `v2 record seed ${rec.seed} replays on v2`);
+  assert.equal(RP.simOf(2).VERSION, 2); assert.equal(RP.simOf(3).VERSION, S.VERSION);
+  ok("v1 and v2 replay");
 }
 
 // ---- calibration -------------------------------------------------------------------------------------
@@ -229,7 +362,7 @@ function shooting({ x, y, rel, defender = null, n = 300, home = STARS, away = CE
   if (process.env.VERBOSE) console.log("open green 3", open.rate, "mid", mid.rate, "contested late", bad.rate, "open early", early.rate);
   // the probability itself: a better shooter, a closer defender, a worse release all cost
   const P = S.newGame(1, { home: STARS, away: CELEBS }).p[0];
-  const pr = (o) => S.shotProb({ cfg: { assist: false, auto: false } }, P, { kind: "jump", r: 7.5, three: true, grade: "GREEN", c: 0, ...o });
+  const pr = (o) => S.shotProb({ cfg: { auto: false } }, P, { kind: "jump", r: 7.5, three: true, grade: "GREEN", c: 0, ...o });
   assert.ok(pr({}) > pr({ c: 0.5 }) && pr({ c: 0.5 }) > pr({ c: 0.9 }), "contest costs");
   assert.ok(pr({}) > pr({ grade: "SLIGHTLY LATE" }) && pr({ grade: "SLIGHTLY LATE" }) > pr({ grade: "LATE" }) && pr({ grade: "LATE" }) > pr({ grade: "VERY LATE" }), "timing costs");
   assert.ok(pr({ r: 7.5 }) > pr({ r: 9.5 }), "distance costs");
@@ -483,6 +616,26 @@ function moveFrom(seq, { home = STARS, away = CELEBS, defender = true, seed = 11
   assert.match(K.callFor({ k: "dunk", g: 3, team: 0 }, names, ["A FIVE", "B FIVE"], 0), /P3/);
   assert.equal(K.callFor({ k: "pass", g: 1, team: 0 }, names, ["A", "B"]), null, "not every event is called");
   ok("calls");
+}
+
+// ---- difficulty ---------------------------------------------------------------------------------------------
+{
+  assert.deepEqual(S.LEVEL_ORDER, ["rookie", "pro", "allstar", "hof"]);
+  assert.equal(S.newGame(1, { assist: true }).cfg.level, "rookie", "an EASY MODE cfg reads as ROOKIE");
+  assert.equal(S.newGame(1, {}).cfg.level, "allstar");
+  // the CPU v CPU game ignores the level: the calibration is the same at every level
+  const auto = (level) => { const st = S.newGame(4321, { auto: true, level, home: NBA("p", 76), away: NBA("q", 76) }); run(st); return S.resultOf(st); };
+  assert.deepEqual(auto("rookie"), auto("hof"), "a CPU v CPU game plays the same at every level");
+  const res = await Promise.all(DIFF), by = Object.fromEntries(res.map(r => [r.level, r]));
+  const pc = (a, b) => (b ? (100 * a) / b : 0);
+  const line = res.map(r => `${S.LEVELS[r.level].name} win ${pc(r.w, r.n).toFixed(0)}% FG ${pc(r.fgm, r.fga).toFixed(1)}% TOV ${(r.tov / r.n).toFixed(1)} pts ${(r.pts / r.n).toFixed(1)}-${(r.opp / r.n).toFixed(1)} oppFG ${pc(r.ofgm, r.ofga).toFixed(1)}%`).join("; ");
+  if (process.env.VERBOSE) console.log(line);
+  const band = (lv, lo, hi) => { const w = pc(by[lv].w, by[lv].n); assert.ok(w >= lo && w <= hi, `a casual human on ${S.LEVELS[lv].name} wins ${w.toFixed(0)}% (${lo}-${hi}): ${line}`); };
+  band("rookie", 65, 75); band("pro", 45, 55); band("allstar", 30, 40); band("hof", 15, 25);
+  const fg = (lv) => pc(by[lv].fgm, by[lv].fga);
+  assert.ok(fg("rookie") >= 45 && fg("rookie") <= 50, `a casual human shoots ${fg("rookie").toFixed(1)}% on ROOKIE (45-50): ${line}`);
+  assert.ok(fg("rookie") > fg("hof") && by.hof.tov > by.rookie.tov && by.hof.opp > by.rookie.opp, `HALL OF FAME is harder all round: ${line}`);
+  ok(`difficulty ${line}`);
 }
 
 console.log(`check-hoops: ${n} checks passed`);

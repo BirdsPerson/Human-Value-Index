@@ -1,12 +1,15 @@
+// FROZEN: hoops sim VERSION 2, exactly as shipped 2026-10-05 (the 2K-style game with one EASY MODE
+// switch, cfg.assist). Kept so a v2 record replays to its result (../replay.js picks the sim by
+// version; scripts/fixtures/hoops-v2-records.json holds games recorded on it). Never edit; the live
+// sim is ../sim.js.
 // THE COURTS, playable (docs/CITY_SPEC.md "PLAYABLE SPORTS", Basketball). The game itself: pure,
 // no DOM, no clock, no Math.random, no trig. A fixed 60 Hz step over a seeded generator, so a game
 // is a function of (version, seed, cfg, the human's input per frame): the browser plays it, and
 // anything holding the record plays it again to the same result (scripts/check-hoops.mjs does).
 // Only + - * / and sqrt touch the state, which IEEE 754 rounds the same everywhere.
 //
-// SIM VERSION 3 (the 2K-style game with 2K-style difficulty levels: ROOKIE, PRO, ALL-STAR, HALL OF
-// FAME, cfg.level; LEVELS below). Version 1 and 2 records replay on the frozen ./v1/sim.js and
-// ./v2/sim.js (./replay.js picks by version).
+// SIM VERSION 2 (the 2K-style game). Version 1 records replay on the frozen ./v1/sim.js
+// (./replay.js picks by version).
 //
 // The court is in metres, NBA lines: x along the length (the centre line at 0, the baselines at
 // +-14.325), y across it (the near sideline, the camera's, at 0; the far one at 15.24), z up. The
@@ -22,7 +25,7 @@
 // stick is a dribble move too. Defence: X reaches for the steal, Y jumps (block, rebound), B takes a
 // charge, LT is intense D, A switches. Every other player is the CPU, from its ratings.
 
-export const VERSION = 3;
+export const VERSION = 2;
 export const HZ = 60;
 const DT = 1 / HZ, G = 9.8;
 export const COURT = { hx: 14.325, w: 15.24, cy: 7.62, rimX: 12.75, rimZ: 3.05, rimR: 0.23, boardX: 13.125, three: 7.24, corner: 6.71, cornerX: 10.055, laneHW: 2.44, ftX: 8.535, circle: 1.8, ra: 1.22 };
@@ -95,45 +98,7 @@ function mkPlayer(t, i, row) {
   };
 }
 
-// ---- difficulty ----------------------------------------------------------------------------------
-// 2K's four levels. Each only biases your side (team 0 when a human plays) and how the CPU plays
-// against you; a CPU v CPU game (cfg.auto) plays as rated (NEUTRAL), so the calibration holds. The
-// game as rated (v2 without EASY MODE) proved too hard for a casual player even against an equal five
-// (Scott, 2026-10-06: "way too hard"), so HALL OF FAME is the rated game with the CPU's shots a little
-// softer; the rest ease down from there.
-// Measured with a simulated casual human (scripts/check-hoops.mjs "difficulty") against an equal five.
-//   green     frames added either side of your meter's green band
-//   contest   how much a defender's contest costs your shot (1 = as rated)
-//   make      your side's shots; ft your free throws; cpuMake the CPU's shots against you
-//   cpuSteal  the CPU's reach-ins and interceptions against you; cpuBlock its blocks; react the frames
-//             its defenders add before leaving their feet at your shot
-//   help      how fast the CPU's help defence rotates to your drive (1 = a sprint)
-//   cut       your teammates' extra cuts to the rim; mateD how tightly they guard (their contests)
-//   lose      the chance a dribble move loses the ball; ankle added to its chance of breaking ankles
-//   steal     added to your reach-in's chance of a steal
-//   foul      how strictly your defence is whistled (reach-ins, shooting fouls, blocks)
-//   autoD     your man guards for you when you let go of the stick
-//   sw        defence auto-switch: "mark" (to the man guarding the ball), "near" (nearest the ball),
-//             "poss" (only when possession changes; A switches)
-//   sta       your sprint's stamina drain; spd your speed; drive how much a defender in front slows
-//             your drive less; tip the jump ball
-export const LEVELS = {
-  rookie: { id: "rookie", name: "ROOKIE", green: 1, contest: 0.9, make: 0.97, ft: 1.06, cpuMake: 0.82, cpuSteal: 0.4, cpuBlock: 0.5, react: 6, help: 0.6, cut: 0.1, mateD: 1.4, lose: 0.3, ankle: 0.06, steal: 0.05, foul: 0.5, autoD: true, sw: "mark", sta: 0.6, spd: 1.06, drive: 0.2, tip: 0.1 },
-  pro: { id: "pro", name: "PRO", green: 1, contest: 0.95, make: 0.98, ft: 1.03, cpuMake: 0.87, cpuSteal: 0.65, cpuBlock: 0.8, react: 3, help: 0.8, cut: 0.06, mateD: 1.2, lose: 0.6, ankle: 0.03, steal: 0.025, foul: 0.75, autoD: true, sw: "mark", sta: 0.8, spd: 1.03, drive: 0.1, tip: 0.05 },
-  allstar: { id: "allstar", name: "ALL-STAR", green: 1, contest: 1, make: 1, ft: 1, cpuMake: 0.91, cpuSteal: 0.75, cpuBlock: 0.9, react: 1, help: 0.85, cut: 0.03, mateD: 1.12, lose: 0.75, ankle: 0.01, steal: 0.01, foul: 0.9, autoD: true, sw: "near", sta: 0.9, spd: 1, drive: 0.05, tip: 0 },
-  hof: { id: "hof", name: "HALL OF FAME", green: 0, contest: 1, make: 1, ft: 1, cpuMake: 0.95, cpuSteal: 1, cpuBlock: 1, react: 0, help: 1, cut: 0, mateD: 1, lose: 1, ankle: 0, steal: 0, foul: 1, autoD: false, sw: "poss", sta: 1, spd: 1, drive: 0, tip: 0 },
-};
-// the game as rated, every dial at 1: what a CPU v CPU game plays (and v2's game without EASY MODE)
-const NEUTRAL = { id: "rated", green: 0, contest: 1, make: 1, ft: 1, cpuMake: 1, cpuSteal: 1, cpuBlock: 1, react: 0, help: 1, cut: 0, mateD: 1, lose: 1, ankle: 0, steal: 0, foul: 1, autoD: false, sw: "near", sta: 1, spd: 1, drive: 0, tip: 0 };
-export const LEVEL_ORDER = ["rookie", "pro", "allstar", "hof"];
-// a record from before the levels: EASY MODE (assist) was the nearest thing to ROOKIE
-export const levelOf = (cfg = {}) => (LEVELS[cfg.level] ? cfg.level : cfg.assist ? "rookie" : "allstar");
-// The level's dials for a player of team t: your side and the CPU against you see the level; a CPU
-// v CPU game is as rated.
-const lv = (st) => st.lv;
-const you = (st, t) => t === 0 && !st.cfg.auto;
-
-// cfg: {fmt: "quarters" | "to21", shot: 24 | 14, level (LEVELS; old records: assist), home: [[key, name, r, arch?] x 5], away,
+// cfg: {fmt: "quarters" | "to21", shot: 24 | 14, assist, home: [[key, name, r, arch?] x 5], away,
 // auto (team 0 played by the CPU too: the checks and the attract mode)}. Rows are taken in the
 // order given (the page sorts each five best first: the best brings the ball up).
 export function newGame(seed = 1, cfg = {}) {
@@ -142,7 +107,7 @@ export function newGame(seed = 1, cfg = {}) {
   const rows = (r) => { const a = (Array.isArray(r) ? r : []).slice(0, 5); while (a.length < 5) a.push([`stand-in-${a.length}`, "A STAND-IN", 40]); return a; };
   const st = {
     v: VERSION, seed: seed >>> 0, rng: seed | 0, frame: 0,
-    cfg: { fmt, shot, level: levelOf(cfg), auto: Boolean(cfg.auto) },
+    cfg: { fmt, shot, assist: Boolean(cfg.assist), auto: Boolean(cfg.auto) },
     p: [...rows(cfg.home).map((r, i) => mkPlayer(0, i, r)), ...rows(cfg.away).map((r, i) => mkPlayer(1, i, r))],
     ball: { st: "dead", own: -1, x: 0, y: C.cy, z: 1, vx: 0, vy: 0, vz: 0, f: 0, from: -1, to: -1, made: false, pts: 0, T: 0, kind: "", rim: false, air: false, sx: 0, sy: 0, fouled: null, pass: "", alley: false },
     phase: "tip", t: 0, deadFor: 0, after: null, afterTeam: -1, spot: null,
@@ -151,7 +116,6 @@ export function newGame(seed = 1, cfg = {}) {
     fga: [0, 0], fgm: [0, 0], tpa: [0, 0], tpm: [0, 0], rima: [0, 0], rimm: [0, 0], fta: [0, 0], ftm: [0, 0], fouls: [0, 0], tov: [0, 0],
     tf: [0, 0], mark: [5, 6, 7, 8, 9, 0, 1, 2, 3, 4], pick: null, help: -1, ft: null, run: [-1, 0], out: [], gest: null, transT: 0,
   };
-  st.lv = st.cfg.auto ? NEUTRAL : LEVELS[st.cfg.level];
   setupTip(st);
   return st;
 }
@@ -254,11 +218,10 @@ function flight(b) { b.vz -= G * DT; b.x += b.vx * DT; b.y += b.vy * DT; b.z += 
 
 // ---- the shot: quality = f(rating for the shot, distance, contest, timing, fatigue, type) --------
 export const GRADES = ["GREEN", "SLIGHTLY EARLY", "SLIGHTLY LATE", "EARLY", "LATE", "VERY EARLY", "VERY LATE"];
-// The green band (frames either side of the top): wider for a better shooter, wider (or narrower)
-// by the level's `green` for you (extra).
-export function greenOf(P, kind, extra = 0) {
+// The green band (frames either side of the top): wider for a better shooter, wider still easy.
+export function greenOf(P, kind, assist = false) {
   const s = kind === "ft" ? P.S.ft : kind === "lay" || kind === "float" || kind === "hook" ? P.S.close : P.S.mid > P.S.three ? (P.S.mid + P.S.three) / 2 : P.S.three;
-  return Math.max(1, 2 + Math.round(2 * s) + (extra | 0));
+  return 2 + Math.round(2 * s) + (assist ? 2 : 0);
 }
 export function gradeOf(e, w) {
   const a = e < 0 ? -e : e;
@@ -283,7 +246,6 @@ export function contestOf(st, S, x = S.x, y = S.y) {
     let v = clos * (0.3 + 0.7 * fr) * (0.6 + 0.3 * dskill) * clamp(1 + 0.6 * (D.h - S.h), 0.7, 1.3) * (D.z > 0.1 ? 1.3 : D.hands > 0 ? 1.1 : 0.8);
     if (D.stumble > 0) v *= 0.1;
     if (D.screened > 0) v *= 0.6;
-    if (you(st, D.t) && st.lv) v *= st.lv.mateD;
     if (v > c) { c = v; who = D; }
   }
   return { c: clamp(c, 0, 1), D: who };
@@ -305,8 +267,7 @@ export function shotProb(st, P, o) {
   let tm = TIMING[o.grade] ?? 0.9;
   if (kind === "lay") tm = 1 + (tm - 1) * 0.5;
   const green = o.grade === "GREEN";
-  const L = st.lv || NEUTRAL, mine = you(st, P.t);
-  const cm = 1 - (green ? 0.6 : kind === "lay" ? 0.45 : 0.75) * o.c * (mine ? L.contest : 1);
+  const cm = 1 - (green ? 0.6 : kind === "lay" ? 0.45 : 0.75) * o.c;
   let p = base * tm * cm;
   if (o.cs) p *= 1.04;
   if (o.od) p *= 0.96;
@@ -315,14 +276,14 @@ export function shotProb(st, P, o) {
   if (o.moving) p *= 0.93;
   if (P.sta < 0.5) p *= 0.85 + 0.3 * P.sta;
   if (P.hot) p *= 1.06;
-  p *= mine ? L.make : st.cfg.auto ? 1 : L.cpuMake;
+  if (st.cfg.assist) p *= P.t === 0 && !st.cfg.auto ? 1.08 : 0.97;
   return clamp(p, 0.01, green && o.c < 0.3 ? 0.95 : 0.92);
 }
 // The chance of a free throw.
 export function ftProb(st, P, grade) {
   const tm = { GREEN: 1.1, "SLIGHTLY EARLY": 0.92, "SLIGHTLY LATE": 0.92, EARLY: 0.7, LATE: 0.7, "VERY EARLY": 0.35, "VERY LATE": 0.35 }[grade] ?? 0.9;
   let p = (0.55 + 0.34 * P.S.ft) * tm;
-  if (you(st, P.t)) p *= (st.lv || NEUTRAL).ft;
+  if (st.cfg.assist) p *= P.t === 0 && !st.cfg.auto ? 1.06 : 0.98;
   return clamp(p, 0.05, 0.98);
 }
 
@@ -331,7 +292,7 @@ function release(st, P, e) {
   if (b.st !== "held" || b.own !== P.g) { P.act = null; return; }
   const r = len(rx - P.x, C.cy - P.y), kind = kindAt(r, P.act?.post);
   const three = isThree(P.x, P.y, d), pts = three ? 3 : 2;
-  const grade = gradeOf(e, greenOf(P, kind, human(st, P) ? lv(st).green : 0));
+  const grade = gradeOf(e, greenOf(P, kind, st.cfg.assist && human(st, P)));
   const { c, D } = contestOf(st, P);
   const a = P.act || {};
   const o = { kind, r, grade, c, three, cs: st.frame - P.caught < 50 && st.frame - P.lastMove > 60, od: st.frame - P.lastMove < 40, sb: P.sb > 0, fade: a.fade, moving: a.moving };
@@ -343,7 +304,6 @@ function release(st, P, e) {
     if (dd < 1.05) {
       let pf = (D.z > 0.1 ? 0.1 : 0.025) + (kind === "jump" ? 0 : 0.07) + 0.08 * (1 - D.def) + (D.intense ? 0.02 : 0);
       if (o.three) pf *= 0.6;
-      if (you(st, D.t)) pf *= lv(st).foul;
       if (rnd(st) < pf) { fouled = { g: D.g }; p *= 0.5; }
     }
   }
@@ -361,8 +321,7 @@ function release(st, P, e) {
   P.sb = 0;
   st.lastTouch = P.t;
   st.lastRel = { g: P.g, e, grade, c, word: contestWord(c), p, frame: st.frame };
-  const vsYou = you(st, P.t), bk = vsYou ? lv(st).cpuBlock : 1, rx2 = vsYou ? lv(st).react : 0;
-  for (const Q of st.p) if (Q.t !== P.t && !human(st, Q) && Q.z === 0 && len(Q.x - P.x, Q.y - P.y) < 2.4 && rnd(st) < (0.2 + 0.4 * Q.S.block) * bk) Q.jumpAt = st.frame + Math.max(1, Math.round(2 + (1 - Q.k) * 7) + rx2);
+  for (const Q of st.p) if (Q.t !== P.t && !human(st, Q) && Q.z === 0 && len(Q.x - P.x, Q.y - P.y) < 2.4 && rnd(st) < 0.2 + 0.4 * Q.S.block) Q.jumpAt = st.frame + Math.round(2 + (1 - Q.k) * 7);
   say(st, three ? "shoot3" : "shoot", P, { grade, c });
   if (fouled) foulCall(st, st.p[fouled.g], P, "shooting");
 }
@@ -386,8 +345,7 @@ function startShot(st, P, hard = false) {
   P.face = d;
   if (P.dunker && r < 2.9 && !P.post && (laneToRim(st, P) || hard)) {
     P.act = { kind: "dunk", f: 0, x0: P.x, y0: P.y };
-    const vsYou = you(st, P.t), bk = vsYou ? lv(st).cpuBlock : 1, rx2 = vsYou ? lv(st).react : 0;
-    for (const Q of st.p) if (Q.t !== P.t && !human(st, Q) && Q.z === 0 && len(Q.x - P.x, Q.y - P.y) < 2.8 && rnd(st) < (0.3 + 0.5 * Q.S.block) * bk) Q.jumpAt = st.frame + Math.max(1, Math.round(2 + (1 - Q.k) * 6) + rx2);
+    for (const Q of st.p) if (Q.t !== P.t && !human(st, Q) && Q.z === 0 && len(Q.x - P.x, Q.y - P.y) < 2.8 && rnd(st) < 0.3 + 0.5 * Q.S.block) Q.jumpAt = st.frame + Math.round(2 + (1 - Q.k) * 6);
     say(st, "gather", P); return;
   }
   const kind = kindAt(r, P.post), sp = len(P.vx, P.vy);
@@ -415,7 +373,7 @@ function dunkStep(st, P) {
     a.contested = Boolean(D);
     if (D) {
       const up = D.z > 0.15;
-      const pBlock = (up ? clamp(0.05 + 0.25 * D.S.block + 0.4 * (D.h - P.h) - 0.2 * P.S.dunk, 0.03, 0.35) : 0.03) * (you(st, P.t) ? lv(st).cpuBlock : 1);
+      const pBlock = up ? clamp(0.05 + 0.25 * D.S.block + 0.4 * (D.h - P.h) - 0.2 * P.S.dunk, 0.03, 0.35) : 0.03;
       const pFoul = up ? 0.2 : 0.14, pStrip = 0.04 + 0.08 * (1 - P.S.handle);
       const u = rnd(st);
       if (u < pBlock) { blocked(st, D, P); a.blocked = true; return; }
@@ -508,7 +466,7 @@ function passTo(st, P, Q, kind = "chest") {
   if (Q.t === 0 && !st.cfg.auto) st.ctl = Q.i;
   // give and go: the passer cuts to the rim when his man is behind him or asleep
   const M = markerOf(st, P);
-  if (!alley && M && !human(st, P) && (st.frame & 1) === 0 && rnd(st) < 0.35 + (you(st, P.t) ? lv(st).cut * 1.5 : 0)) { const d = dirOf(P.t); P.cut = { x: d * (C.rimX - 1.2), y: C.cy + (P.y > C.cy ? 0.8 : -0.8), until: st.frame + 70 }; }
+  if (!alley && M && !human(st, P) && (st.frame & 1) === 0 && rnd(st) < 0.35 + (st.cfg.assist && P.t === 0 ? 0.15 : 0)) { const d = dirOf(P.t); P.cut = { x: d * (C.rimX - 1.2), y: C.cy + (P.y > C.cy ? 0.8 : -0.8), until: st.frame + 70 }; }
   say(st, alley ? "lob" : "pass", P, { to: Q.g });
 }
 function stealTry(st, P) {
@@ -519,11 +477,10 @@ function stealTry(st, P) {
   // behind or beside the dribbler is a reach-in more often than a steal
   const hv = len(H.vx, H.vy), behind = hv > 0.5 && ((P.x - H.x) * H.vx + (P.y - H.y) * H.vy) / hv < -0.2;
   let p = 0.07 + 0.16 * P.S.steal - 0.09 * H.S.handle + (P.intense ? 0.03 : 0) + (H.act?.kind === "move" ? 0.03 : 0);
-  if (you(st, P.t)) p += lv(st).steal;
-  else if (you(st, H.t)) p *= lv(st).cpuSteal;
+  if (st.cfg.assist) p += P.t === 0 && !st.cfg.auto ? 0.05 : -0.03;
   const u = rnd(st);
   if (u < p) { const from = H; H.act = null; P.cool = 0; st.tov[from.t]++; giveBall(st, P); say(st, "steal", P, { victim: from.g }); return; }
-  const pf = (0.05 + 0.14 * (1 - P.S.steal) + (behind ? 0.12 : 0)) * (you(st, P.t) ? lv(st).foul : 1);
+  const pf = 0.05 + 0.14 * (1 - P.S.steal) + (behind ? 0.12 : 0);
   if (u < p + pf * (1 - p)) { foulCall(st, P, H, "reach"); return; }
   say(st, "reach", P);
 }
@@ -559,11 +516,11 @@ function moveStep(st, P) {
       const bonus = { cross: 0, btl: 0.03, btb: 0.04, hesi: 0.04, stepback: 0.07, spin: 0.06 }[a.m] || 0;
       const lean = D.vy * a.side < -0.5 ? 0.15 : 0;   // he was going the other way
       let p = clamp(0.008 + 0.3 * (P.S.handle - D.S.perD) + bonus * 0.5 + lean * 0.5 - 0.04 * Math.max(0, P.heat - 2), 0, 0.5) * (D.intense ? 0.7 : 1);
-      if (human(st, P)) p += lv(st).ankle;
+      if (st.cfg.assist && human(st, P)) p += 0.06;
       const u = rnd(st);
       if (u < p) { D.stumble = u < p * 0.3 ? 80 : 45; D.act = null; D.vx = 0; D.vy = 0; say(st, "ankles", D, { by: P.g, fall: D.stumble > 50 }); }
       else {
-        const lose = (Math.max(0, 0.035 * (P.heat - 2)) + 0.05 * (1 - P.S.handle) * (dd < 1 ? 1 : 0.4)) * (human(st, P) ? lv(st).lose : 1);
+        const lose = Math.max(0, 0.035 * (P.heat - 2)) + 0.05 * (1 - P.S.handle) * (dd < 1 ? 1 : 0.4);
         if (rnd(st) < lose) { lostBall(st, P, D); return; }
       }
     }
@@ -700,7 +657,7 @@ function offBall(st, P) {
   const M = markerOf(st, P), think = (st.frame + P.g * 7) % 30 === 0;
   if (think && M && st.transT <= 0) {
     const gap = len(M.x - P.x, M.y - P.y), lane = st.p.filter(Q => Q.t !== P.t && distRim(Q, P.t) < 2.2).length;
-    const want = (gap > 2.4 ? 0.12 : 0.015) + (you(st, P.t) ? lv(st).cut : 0);
+    const want = (gap > 2.4 ? 0.12 : 0.015) + (st.cfg.assist && P.t === 0 ? 0.08 : 0);
     if (lane < 2 && distRim(P) > 3 && rnd(st) < want) { P.cut = { x: rx - d * 1.1, y: C.cy + (P.y > C.cy ? 0.9 : -0.9), until: st.frame + 60 }; say(st, "cut", P); return; }
   }
   // spacing: the spot, a little drift so it never stands like a statue; sprint in transition
@@ -715,7 +672,7 @@ function onDefence(st, P) {
   // a help man in the path of a hard drive plants his feet for the charge, now and then
   if (P.charge > 0) { P.vx = 0; P.vy = 0; return; }
   if (H && H.t !== P.t && st.help === P.g && len(H.vx, H.vy) > 4 && len(H.x - P.x, H.y - P.y) < 2.2 && distRim(P, H.t) > C.ra + 0.2 && rnd(st) < 0.03 * (0.5 + P.S.intD)) { P.charge = 30; P.still = 12; return; }
-  if (st.help === P.g && st.helpAt) { const k = H && you(st, H.t) ? lv(st).help : 1; goTo(P, st.helpAt[0], st.helpAt[1], k); P.sprint = k >= 1; P.hands = 10; return; }
+  if (st.help === P.g && st.helpAt) { goTo(P, st.helpAt[0], st.helpAt[1]); P.sprint = true; P.hands = 10; return; }
   let [tx, ty] = markSpot(st, P);
   if (P.close > 0 && H === M) {
     // the closeout: sprint at the catch, stop short with a hand up
@@ -728,7 +685,7 @@ function onDefence(st, P) {
   if (H === M && len(H.x - P.x, H.y - P.y) < 1.4) { P.intense = P.sta > 0.35; P.hands = Math.max(P.hands, 2); }
   if (H && H.t !== P.t && P.cool <= 0 && len(H.x - P.x, H.y - P.y) < 1.15) {
     let p = 0.001 * (0.3 + P.S.steal);
-    if (you(st, H.t)) p *= lv(st).cpuSteal;
+    if (st.cfg.assist && H.t === 0 && !st.cfg.auto) p *= 0.5;
     if (rnd(st) < p) stealTry(st, P);
   }
 }
@@ -903,7 +860,7 @@ function humanThink(st, P, m, press) {
   } else { st.gest = null; P.post = false; }
   if (dx || dy) {
     const n = dx && dy ? 0.70710678 : 1;
-    let sp = P.spd * (has ? 0.88 : 1) * lv(st).spd * n;
+    let sp = P.spd * (has ? 0.88 : 1) * (st.cfg.assist ? 1.06 : 1) * n;
     if (P.post) sp *= 0.4;
     P.vx = dx * sp; P.vy = dy * sp;
   }
@@ -918,7 +875,7 @@ function humanThink(st, P, m, press) {
   }
   // a pass coming to you: go and meet it unless you steer; on defence the easy assist guards for you
   if (!dx && !dy && b.st === "pass" && b.to === P.g) { if (b.alley && P.cut) goTo(P, P.cut.x, P.cut.y); else goTo(P, b.x + b.vx * 0.15, b.y + b.vy * 0.15); }
-  else if (!dx && !dy && lv(st).autoD && st.poss === 1 && b.st === "held") { const [tx, ty] = markSpot(st, P); goTo(P, tx, ty); }
+  else if (!dx && !dy && st.cfg.assist && st.poss === 1 && b.st === "held") { const [tx, ty] = markSpot(st, P); goTo(P, tx, ty); }
   if (st.poss === 1 || b.st === "loose") {
     P.intense = Boolean(m & BTN.LT) && P.sta > 0.05;
     if (P.intense) { P.vx *= 0.9; P.vy *= 0.9; P.hands = Math.max(P.hands, 2); }
@@ -954,7 +911,7 @@ function ftStep(st) {
 }
 function ftRelease(st, S, e) {
   const b = st.ball, d = dirOf(S.t), rx = d * C.rimX;
-  const grade = gradeOf(e, greenOf(S, "ft", human(st, S) ? lv(st).green : 0));
+  const grade = gradeOf(e, greenOf(S, "ft", st.cfg.assist && human(st, S)));
   const p = ftProb(st, S, grade), made = rnd(st) < p;
   S.act = null;
   st.lastRel = { g: S.g, e, grade, c: 0, word: "", p, ft: true, frame: st.frame };
@@ -1044,7 +1001,7 @@ function ballStep(st) {
     for (const O of st.p) {
       if (O.t === from.t || O.stumble > 0) continue;
       const reach = b.pass === "lob" ? O.z + O.h + 0.4 : 2.3 + O.z;
-      if (len(O.x - b.x, O.y - b.y) < 0.55 && b.z < reach && rnd(st) < (0.06 + 0.12 * O.S.steal) * (b.pass === "bounce" ? 0.6 : 1) * (you(st, from.t) ? lv(st).cpuSteal : 1)) { st.tov[from.t]++; giveBall(st, O); say(st, "intercept", O); return; }
+      if (len(O.x - b.x, O.y - b.y) < 0.55 && b.z < reach && rnd(st) < (0.06 + 0.12 * O.S.steal) * (b.pass === "bounce" ? 0.6 : 1)) { st.tov[from.t]++; giveBall(st, O); say(st, "intercept", O); return; }
     }
     for (const Q of st.p) {
       if (Q.t !== from.t || Q.g === b.from) continue;
@@ -1066,7 +1023,7 @@ function ballStep(st) {
         if (D.t === S.t || D.z < 0.15 || D.act?.blockTried) continue;
         if (len(D.x - b.x, D.y - b.y) < 0.75 && b.z < D.z + D.h + 0.7) {
           if (D.act) D.act.blockTried = true;
-          if (rnd(st) < (0.05 + 0.2 * D.S.block + (b.kind === "jump" ? 0 : 0.04)) * (you(st, S.t) ? lv(st).cpuBlock : 1)) { blocked(st, D, S); return; }
+          if (rnd(st) < 0.05 + 0.2 * D.S.block + (b.kind === "jump" ? 0 : 0.04)) { blocked(st, D, S); return; }
         }
       }
     }
@@ -1144,7 +1101,7 @@ function contact(st) {
     const ra = distRim(D, H.t) < C.ra, set = D.still >= 12 || D.charge > 0 && D.still >= 4;
     const u = rnd(st);
     if (set && !ra) { if (u < (D.charge > 0 ? 0.75 : 0.25)) { foulCall(st, H, D, "charge"); return; } }
-    else if (!set) { if (u < 0.2 * (1.2 - D.S.perD * 0.6) * (you(st, D.t) ? lv(st).foul : 1)) { foulCall(st, D, H, "block"); return; } }
+    else if (!set) { if (u < 0.2 * (1.2 - D.S.perD * 0.6)) { foulCall(st, D, H, "block"); return; } }
     // no call: the drive is stopped dead
     H.vx *= 0.2; H.vy *= 0.2; H.burst = 0;
     return;
@@ -1169,7 +1126,7 @@ export function step(st, mask = 0) {
     if (st.t === 63) {
       const J = st.jumpers.map(g => st.p[g]);
       let p0 = 0.5 + 0.35 * (J[0].k - J[1].k);
-      if (!st.cfg.auto) { const e = st.tipPress < 0 ? 99 : Math.abs(st.tipPress - TIP_JUMP); p0 += e <= 6 ? 0.2 : e <= 14 ? 0.05 : -0.15; p0 += lv(st).tip; }
+      if (!st.cfg.auto) { const e = st.tipPress < 0 ? 99 : Math.abs(st.tipPress - TIP_JUMP); p0 += e <= 6 ? 0.2 : e <= 14 ? 0.05 : -0.15; if (st.cfg.assist) p0 += 0.1; }
       const w = rnd(st) < clamp(p0, 0.05, 0.95) ? 0 : 1;
       st.tipWinner = w;
       const to = st.p.filter(Q => Q.t === w && !st.jumpers.includes(Q.g)).reduce((a, Q) => (len(Q.x, Q.y - C.cy) < len(a.x, a.y - C.cy) ? Q : a));
@@ -1184,12 +1141,7 @@ export function step(st, mask = 0) {
   if (st.phase === "live" && !st.cfg.auto) {
     const H = holder(st);
     if (H && H.t === 0) st.ctl = H.i;
-    else if ((H && H.t === 1 && st.ctlFor !== H.g) || (b.st === "loose" && st.ctlFor !== "loose")) {
-      // the level's auto-switch: to the man guarding the new ball handler, the man nearest the ball,
-      // or (HALL OF FAME) only when the ball changes sides
-      const sw = lv(st).sw, wasD = typeof st.ctlFor === "number" && st.ctlFor >= 5;
-      if (sw !== "poss" || !wasD || !H) { const N = (sw === "mark" && H && markerOf(st, H)) || nearestToBall(st, 0); if (N) st.ctl = N.i; }
-    }
+    else if ((H && H.t === 1 && st.ctlFor !== H.g) || (b.st === "loose" && st.ctlFor !== "loose")) { const N = nearestToBall(st, 0); if (N) st.ctl = N.i; }
     st.ctlFor = H ? H.g : b.st === "loose" ? "loose" : st.ctlFor;
   }
   if (st.phase === "ft" && !st.cfg.auto && st.ft && st.p[st.ft.g].t === 0) st.ctl = st.p[st.ft.g].i;
@@ -1231,7 +1183,7 @@ export function step(st, mask = 0) {
       if (D.t === Hb.t || D.z > 0 || D.stumble > 0 || D.charge > 0) continue;
       const ox = D.x - Hb.x, oy = D.y - Hb.y, d = len(ox, oy);
       if (d < 0.95 && (ox * Hb.vx + oy * Hb.vy) / (d * v || 1) > 0.45) {
-        const k = 0.55 - 0.3 * D.S.perD + 0.2 * Hb.S.handle + (human(st, Hb) ? lv(st).drive : 0) - (D.intense ? 0.12 : 0) + (Hb.burst > 0 ? 0.25 : 0);
+        const k = 0.55 - 0.3 * D.S.perD + 0.2 * Hb.S.handle + (st.cfg.assist && human(st, Hb) ? 0.2 : 0) - (D.intense ? 0.12 : 0) + (Hb.burst > 0 ? 0.25 : 0);
         Hb.vx *= clamp(k, 0.2, 0.95); Hb.vy *= clamp(k, 0.2, 0.95);
         break;
       }
@@ -1252,7 +1204,7 @@ export function step(st, mask = 0) {
       const moving = P.vx || P.vy;
       let mul = 1;
       if (moving && P.act?.kind !== "move") {
-        if (P.sprint && P.sta > 0.05) { mul = 1.2 * (0.82 + 0.18 * P.sta); P.sta -= 0.0025 * (you(st, P.t) ? lv(st).sta : 1); }
+        if (P.sprint && P.sta > 0.05) { mul = 1.2 * (0.82 + 0.18 * P.sta); P.sta -= 0.0025; }
         if (P.burst > 0) mul *= 1.22;
       }
       if (P.intense) P.sta -= 0.0008;
