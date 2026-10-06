@@ -27,6 +27,7 @@ const Tennis = lazy(() => import("./play/tennis/Tennis.jsx"));   // THE TENNIS C
 const Golf = lazy(() => import("./play/golf/Golf.jsx"));   // #golf: THE DEPARTMENT LINKS (exhibition golf)
 const Hoops = lazy(() => import("./play/hoops/Hoops.jsx"));   // #hoops: THE COURTS (exhibition basketball)
 const Football = lazy(() => import("./play/football/Football.jsx"));   // #football: THE BOWL (exhibition football)
+const Bowling = lazy(() => import("./play/bowling/Bowling.jsx"));   // #bowling: THE LANES (exhibition bowling, src/play/bowling/)
 const Fish = lazy(() => import("./play/fish/Fish.jsx"));   // #fish: THE WATERS (fishing, src/play/fish/)
 const Aquarium = lazy(() => import("./play/fish/Aquarium.jsx"));   // #aquarium: THE AQUARIUM (replay-checked donations)
 const Hunt = lazy(() => import("./play/hunt/Hunt.jsx"));   // #hunt: TAGGED OUT, the light-gun bar cabinet (src/play/hunt/)
@@ -469,7 +470,7 @@ function Screen({ nav, wide = false, banner = false, children }) {
 const TITLES = {
   "#intake": "GET EVALUATED", "#file": "MY FILE", "#arrivals": "INTAKE", "#cube": "THE CUBE", "#city": "THE CITY",
   "#assembly": "THE ASSEMBLY", "#elections": "COUNCIL ELECTIONS", "#docket": "THE DOCKET", "#casino": "HOUSE EDGE CASINO",
-  "#economy": "THE TREASURY", "#shop": "THE SHOPS", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS", "#football": "THE BOWL", "#fish": "THE WATERS", "#aquarium": "THE AQUARIUM", "#hunt": "TAGGED OUT",
+  "#economy": "THE TREASURY", "#shop": "THE SHOPS", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS", "#football": "THE BOWL", "#fish": "THE WATERS", "#aquarium": "THE AQUARIUM", "#bowling": "THE LANES", "#hunt": "TAGGED OUT",
   "#ski": "THE MOUNTAIN",
   "#play": "THE GAMES", "#scores": "THE SCORES", "#about": "ABOUT", "#privacy": "PRIVACY", "#terms": "TERMS", "#dispute": "DISPUTE A SCORE",
   "#heights": "THE CITY", "#enterprise": "THE CITY", "#prefects": "THE CITY", "#paper": "THE DAILY COMPLIANCE",
@@ -717,6 +718,13 @@ export default function OverlordAssessment() {
   if (routePath === "#hoops" || routePath === "#basketball") return (
     <Screen nav={nav} wide>
       <Suspense fallback={<Loading what="SWEEPING THE FLOOR" />}><Hoops route={route} /></Suspense>
+    </Screen>
+  );
+
+  // #bowling[?vs=<key>][&lane=<n>]: THE LANES, exhibition ten-pin (src/play/bowling/)
+  if (routePath === "#bowling") return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="OILING THE LANES" />}><Bowling route={route} /></Suspense>
     </Screen>
   );
 
