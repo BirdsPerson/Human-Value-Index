@@ -32,6 +32,8 @@ import { PrefectHost, PrefectsPage } from "./PrefectPanel.jsx";   // THE PREFECT
 import { BusinessHost, EnterprisePage, EnterpriseLine } from "./EnterprisePanel.jsx";   // THE MALL
 import { paLines as enterprisePa } from "./enterprise.js";
 import { enterpriseOf } from "./enterpriseClient.js";
+import { paLines as emergePa, nowLine as emergeNowLine } from "./emergence.js";
+import { emergeOf, airNow } from "./emergeClient.js";
 import { prefectPaLines } from "./prefects.js";
 import { buildIndex, bySlug, findHref } from "./find.js";
 import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
@@ -276,7 +278,7 @@ export default function City({ route }) {
     const record = civicPaLines(civicOf(clock.day), here);
     if (civic.length && k % 5 === 3 && (!here || here === "commons")) setPa(civic[Math.floor(k / 5) % civic.length]);
     else if (record.length && k % 7 === 6) setPa(record[Math.floor(k / 7) % record.length]);
-    else if (k % 5 === 1 && enterprisePa(enterpriseOf(clock.day), here).length) { const el = enterprisePa(enterpriseOf(clock.day), here); setPa(el[Math.floor(k / 5) % el.length]); }
+    else if (k % 5 === 1 && [...enterprisePa(enterpriseOf(clock.day), here), ...(!here || AIR_DISTRICTS.has(here) ? emergePa(emergeOf(clock.day)) : [])].length) { const el = [...enterprisePa(enterpriseOf(clock.day), here), ...(!here || AIR_DISTRICTS.has(here) ? emergePa(emergeOf(clock.day)) : [])]; setPa(el[Math.floor(k / 5) % el.length]); }
     else if ((!here || here === "coast") && k % 11 === 8) setPa("THE BOARDWALK // WATCH THE TRAM CAR, PLEASE. WATCH THE TRAM CAR, PLEASE.")
     else if (k % 6 === 4 && prefectPaLines(civicOf(clock.day), here).length) { const pl = prefectPaLines(civicOf(clock.day), here); setPa(pl[Math.floor(k / 6) % pl.length]); }
     else if ((games.length || venues.length) && k % 4 === 1) {
@@ -521,6 +523,8 @@ function AssemblyRow({ asm }) {
 // NOW: what the picture is showing, in words. The PA above types and rotates and is hidden
 // from screen readers; this is the same city as a short list that holds still. Fixtures, the
 // Pit, the club, the race, the night, the Loop, the busiest districts. Never more than six lines.
+// The districts whose PA carries the air's lines (the depot, the pads, the heliport); the city view always does.
+const AIR_DISTRICTS = new Set(["works", "finance", "airport"]);
 const NowList = memo(function NowList({ stats, k }) {
   const mt = clockAt(Date.now()).mt;
   const lines = [];
@@ -534,6 +538,9 @@ const NowList = memo(function NowList({ stats, k }) {
   else if (race?.phase === "on") lines.push(`THE MOUNTAIN: THE WEEKEND RACE IS ON.`);
   const night = nightPa(mt, null);
   if (night.length) lines.push(night[0]);
+  // EMERGENCE (emergence.js): what the city grew, in the air now (the news first, the day it opened)
+  const A = airNow(mt), air = A && emergeNowLine(A.today, A.air);
+  if (air) { if (air.startsWith("NEW:")) lines.unshift(air); else lines.push(air); }
   lines.splice(4);
   lines.push(`${stats.transit} RIDING THE LOOP. ${stats.waiting} WAITING ON PLATFORMS.`);
   const busy = stats.districts.slice().sort((a, b) => b.count - a.count).slice(0, 3).filter(x => x.count > 0);

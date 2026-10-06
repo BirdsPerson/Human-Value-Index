@@ -2642,3 +2642,15 @@ YOURSELF), `prefects.js` (patrols), `src/play/fish/data.js` (the fishing game's 
   (21 cells round at worst); days 612-613 byte for byte; day 614 on layout 7, read back from its plan the
   same as the sim, nobody on the water but over a bridge, nobody jumping at midnight; the views from 00:00
   of the day; every spot on its water with a dry stand within a cast; the fishing game reads them.
+
+## EMERGENCE: industries the city grows (2026-10-06)
+
+Design and as-built: `docs/design/EMERGENCE.md`. `src/city/emergence.js` (pure) measures each
+published day (storefronts, orders, the penthouses, the top 5%'s share, the longest commute) and
+opens an industry when its hashed thresholds hold for a few days (hysteresis both ways; a decline
+re-draws them). The builder steps it after THE MALL from machine day `EMERGE_FROM` (622) only;
+the state rides the plan (`emerge`, ledger `emerge/latest`), its posts ride THE MALL's work map,
+the summary publishes `emerge` (status, posts, today's drone routes and helicopter hops, each
+derived from that day's plan). Slice 1: DELIVERY DRONES (the Parts Depot) and PRIVATE
+HELICOPTERS (rooftop pads). Drawn in the iso view's sky pass (`emergeDraw.js`); NOW, the PA and
+the file's assignment line carry it. Check: `scripts/check-emergence.mjs`.

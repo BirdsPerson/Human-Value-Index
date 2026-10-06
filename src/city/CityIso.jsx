@@ -37,6 +37,9 @@ import { takeTvBoxes, watchHref, ebtvLabel } from "./ebtvFrame.js";
 import { COAST_LOTS, COAST_PLACES, terrainH, onTerrain, TERRAIN } from "./coastGeo.js";
 import { drawCoastLot, drawCoastGround, drawPod, coastLabel, coastLine } from "./coastDraw.js";
 import { drawEastLot, drawSky, EAST_LOT_FILL } from "./eastDraw.js";
+import { airNow } from "./emergeClient.js";
+import { drawAir } from "./emergeDraw.js";
+import { padsOn, DEPOT } from "./emergence.js";
 import { drawFarmLot, FARM_LOT_FILL } from "./farmDraw.js";   // THE FARMLAND's fields and orchards   // THE SUBURBS' parks, THE AIRPORT's airfield and its aircraft
 // THE MOUNTAIN (mountainGeo.js): everyone on it placed once a frame, the bands' labels where they belong
 import { skiersIn, SKI_PLACES, LABEL_AT, PEAKS } from "./mountainGeo.js";
@@ -1366,6 +1369,9 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         for (const it of tops.get(k) || []) drawTower(it);
       }
       drawSky(archG(), lod, mt, nightAt(((mt % 24) + 24) % 24));   // THE AIRPORT's aircraft on finals and climbing out, over everything
+      // EMERGENCE (emergence.js): the drones and helicopters the city grew, and the helipads; capped (phones and reduced motion fewer)
+      { const narrow = V.cssW < 640, A = airNow(mt, V.reduced ? { drones: 4, helis: 2, thin: 3 } : narrow ? { drones: 6, helis: 3 } : { drones: 14, helis: 4 });
+        if (A) { drawAir(archG(), lod, nightAt(((mt % 24) + 24) % 24), V.reduced ? 0 : performance.now() / 1000, V.reduced, { air: A.air, today: A.today, pads: padsOn(A.today), depot: DEPOT }); } }
       // the overview's landmarks: where to look first (they fade as the street labels come up)
       if (V.cam.z < V.fitZ * 1.3 && !V.sel) for (const [id, text, x, y, h] of LANDMARKS) { const [lx, ly] = Q(x, y, h); V.labels.push({ id: `lm:${id}`, text, x: lx, y: ly, landmark: true, rank: 1e9 }); }
       // THE ATTRITION: the reach or fishing spot under the pointer, or the one tapped

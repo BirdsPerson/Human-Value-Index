@@ -2,6 +2,7 @@
 // Everything the map and the district views read goes through here. Pure, no DOM.
 
 import * as SIM from "./sim.js";
+import { jobWord } from "./emergence.js";
 
 export const { DISTRICTS, PLACES, JOBS, BUS, LOOP_LINE, STATIONS, STATION_ORDER, TRAINS, TRAIN, BUILDINGS, BUILDING, HEADWAY, OPEN_LOTS, GAMES, GAME_VENUE, lotPhase, civicState, LOT_BREAK, LOT_BUILD, LINES, LINE, STOPS, linesOn, stationName } = SIM;
 export const DISTRICT = Object.fromEntries(DISTRICTS.map(d => [d.id, d]));
@@ -65,6 +66,9 @@ export function roomIn(w, s) {
 
 // "Radiant Systems Engineer // RANK: CHIEF OF THE CORE"
 export function jobLine(subject) {
+  // EMERGENCE (emergence.js): a post in an industry the city grew, from the day's published summary
+  const em = jobWord(summaryOf(clockAt(Date.now()).day)?.emerge, SIM.keyOf(subject));
+  if (em) return em;
   const j = jobOf(subject);
   return j.rankTitle && j.rankTitle !== j.title ? `${j.title.toUpperCase()} // ${j.rankTitle.toUpperCase()}` : j.title.toUpperCase();
 }

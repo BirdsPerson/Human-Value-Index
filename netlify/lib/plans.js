@@ -25,11 +25,13 @@ import { splitDay, SECTORS, FORMAT as FORMAT2 } from "../../src/city/planSplit.j
 import { civicFold, CIVIC_V, setSeats, setEntries } from "../../src/city/civic.js";
 import { stepEnterprise, simDay, publicBlock, satisfactionDay, satRow, ENT_V } from "../../src/city/enterprise.js";
 import { marketTerms } from "../../src/market/activity.js";
+import { stepEmergence, withJobs, summaryBlock as emergeBlock, EMERGE_V, EMERGE_FROM } from "../../src/city/emergence.js";
 
 export const STORE = "hvi-plans";
 export const FORMAT = SIM.PLAN_FORMAT;
 export const LOOKAHEAD = 3;
 export const ENT_LEDGER = "ent/latest";
+export const EMERGE_LEDGER = "emerge/latest";
 export const KEEP_BEHIND = 2;          // days before today kept in the manifest (the tick and quests look back)
 export const MANIFEST = `f${FORMAT}/manifest`;
 export const dayKey = (day, ver) => `f${FORMAT}/day/${day}/${ver}`;
@@ -91,6 +93,9 @@ export function planIo(s = store, { census, snapshots, civic, elections, entries
     // THE MALL's latest state (src/city/enterprise.js): the register outlives the plans it rides.
     async entLedger() { return s().get(ENT_LEDGER, { type: "json" }); },
     async putEntLedger(v) { await s().setJSON(ENT_LEDGER, v); },
+    // EMERGENCE's latest state (src/city/emergence.js): what has opened outlives the plans it rides.
+    async emergeLedger() { return s().get(EMERGE_LEDGER, { type: "json" }); },
+    async putEmergeLedger(v) { await s().setJSON(EMERGE_LEDGER, v); },
     async dropDay(key) { await s().delete(key).catch(() => {}); },
     async list() { return (await s().list({ prefix: `f${FORMAT}/day/` })).blobs.map(b => b.key); },
     async getDay(key) { return s().get(key, { type: "json" }); },
@@ -169,6 +174,7 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
       SIM.setRoster(roster);
       const people = new Map(roster.map(s => [SIM.keyOf(s), s]));
       let ledger = io.entLedger ? await io.entLedger() : null;
+      let emLedger = io.emergeLedger ? await io.emergeLedger() : null;
       for (const day of missing) {
         if (built.length && clock() - t0 >= budgetMs) break;
         if (day > today + 1 && !snaps[day]) { waiting = day; break; }   // later days wait too: they need this one's snapshot first
@@ -176,14 +182,19 @@ export async function buildPlans(nowMs = Date.now(), io, opts = {}) {
         // THE MALL (src/city/enterprise.js): the day's businesses from yesterday's, before the day
         // is built (who works at a storefront, and the shops' pull on everyone's leisure)
         const { prevEnt, state: ent } = await enterpriseFor(io, day, { jsons, manifest, people, ledger });
-        SIM.setEnterprise({ [day - 1]: simDay(prevEnt), [day]: simDay(ent) });
+        // EMERGENCE (src/city/emergence.js), from EMERGE_FROM only: the industries the city has grown,
+        // their posts riding THE MALL's work map. Before it, nothing here changes a byte.
+        const { prevEm, state: em } = await emergenceFor(io, day, { jsons, manifest, people, ledger: emLedger, ent });
+        SIM.setEnterprise({ [day - 1]: withJobs(simDay(prevEnt), prevEm), [day]: withJobs(simDay(ent), em) });
         const json = SIM.buildPlan(day);
         json.ent = ent;
+        if (em) json.emerge = em;
         const ver = versionOf(json), key = dayKey(day, ver);
         const bytes = JSON.stringify(json).length;
         await io.putDay(key, json);   // the day's blob first ...
         jsons.set(day, json);
         if (io.putEntLedger && !(ledger?.day >= day)) { ledger = { day, state: ent }; await io.putEntLedger(ledger); }
+        if (em && io.putEmergeLedger && !(emLedger?.day >= day)) { emLedger = { day, state: em }; await io.putEmergeLedger(emLedger); }
         const entry = { ver, key, roster: json.roster, social: json.social, n: json.n, bytes, at: new Date(clock()).toISOString(), run };
         // ... then the manifest, only over the version we read. On a conflict, re-read: if
         // another builder published this day meanwhile, theirs stands.
@@ -283,6 +294,19 @@ export async function enterpriseFor(io, day, { jsons, manifest, people, ledger }
   return { prevEnt, state };
 }
 
+// EMERGENCE's state for `day` (null before EMERGE_FROM): stepped from yesterday's (measuring
+// yesterday's plan), else from the ledger across a gap (nothing measured: the counts hold), else new.
+// -> {prevEm: the state yesterday's plan was built with | null, state | null}
+export async function emergenceFor(io, day, { jsons, manifest, people, ledger, ent }) {
+  if (day < EMERGE_FROM) return { prevEm: null, state: null };
+  const e1 = manifest?.days?.[day - 1];
+  const prevJson = jsons?.get(day - 1) || (e1 && io.getDay ? await io.getDay(e1.key) : null);
+  const prevEm = prevJson?.emerge?.v === EMERGE_V ? prevJson.emerge : null;
+  const carried = !prevEm && ledger?.state?.v === EMERGE_V && ledger.day < day ? ledger.state : null;
+  const state = stepEmergence(prevEm || carried, prevJson?.subjects ? prevJson : null, people, day, ent);
+  return { prevEm, state };
+}
+
 // Yesterday's civic block for the fold of `day` (docs/CITY_SPEC.md "The civic fold"): this
 // run's own, else yesterday's published summary, else recomputed from yesterday's plan (the
 // fold's window is two days, so the recompute is the block the chain would have read), else
@@ -315,6 +339,7 @@ export async function publishSplit(io, json, ver, roster, run, clock = Date.now,
   // THE MALL: the day's businesses, and every subject's satisfaction beside their window rows
   // (the figures on file's in the summary: their rows are there too)
   if (json.ent) summary.enterprise = publicBlock(json.ent, people);
+  if (json.emerge) summary.emerge = emergeBlock(json);   // EMERGENCE (from EMERGE_FROM): what flies today, and why
   const sat = satisfactionDay(json, people, json.ent || null);
   for (const sector of SECTORS) for (const w of windows[sector]) for (const [k, entry] of Object.entries(w.subjects)) { const x = sat.get(k); if (x) w.subjects[k] = [...entry, satRow(x)]; }
   summary.sat = Object.fromEntries(Object.keys(summary.onFile || {}).filter(k => sat.has(k)).map(k => [k, satRow(sat.get(k))]));
