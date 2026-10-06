@@ -54,6 +54,7 @@ export async function shopsView(caseId, rec, nowMs = Date.now()) {
 export async function buy(caseId, { sku, nonce }, nowMs = Date.now()) {
   const it = itemOf(sku);
   if (!it) return { ok: false, status: 400, error: "THE DEPARTMENT DOES NOT STOCK THAT." };
+  if (it.award) return { ok: false, status: 409, error: "TROPHIES ARE WON. THE DEPARTMENT DOES NOT SELL THEM.", code: "award" };
   if (it.upgradeOnly) return { ok: false, status: 409, error: `THE ${it.name} IS NOT SOLD OUTRIGHT. BUY THE TIER BELOW AND UPGRADE IT.`, code: "upgrade-only" };
   if (!onSale(sku, machineDayNow(nowMs))) return { ok: false, status: 409, error: SHOP_LINES.offSeason };
   // an EB SHOP virtual copy is sold only as the catalog has it (a made-up SKU is not stocked)

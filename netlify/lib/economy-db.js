@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import { marketMemory } from "./market-db.js";
 import { shopsMemory } from "./shops-db.js";
 import { ebvirtualMemory } from "./ebvirtual-db.js";
+import { awardMemory } from "./tournament-db.js";
 
 const salt = () => process.env.HVI_IP_SALT || "hvi-limits-v1";
 const sha = (s) => createHash("sha256").update(s).digest("hex");
@@ -162,6 +163,8 @@ export function memoryLedger() {
   // THE EB SHOP's real-purchase claims (ebvirtual-db.js)
   const V = ebvirtualMemory(db, { nowMs });
   Object.assign(fns, { econ_irl_claim: V.econ_irl_claim, econ_shop_view: V.wrapView(fns.econ_shop_view), econ_purge: V.wrapPurge(fns.econ_purge) });
+  // THE OPEN TOURNAMENTS' trophies (tournament-db.js)
+  Object.assign(fns, awardMemory(db, { nowMs }));
   return {
     kind: "memory",
     db,

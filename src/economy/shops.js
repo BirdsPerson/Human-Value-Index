@@ -15,6 +15,7 @@ import { WEAR, WEAR_SLOTS, wearOf } from "../wear.js";
 import { CATALOG, pieceOf } from "../city/furniture.js";
 import { parseVirtual, tierPrice, FORM_ROOMS } from "./ebvirtual.js";
 import { seasonOf } from "../city/seasons.js";
+import { trophyOf } from "../tournament/rules.js";
 
 export const SHOP_V = 1;
 export const MAX_FURN_EACH = 3;       // copies of one furniture piece a file may own
@@ -182,6 +183,7 @@ export function itemOf(sku) {
     if (!c) return null;
     return { sku, kind: "wear", id: w.id, way: w.way, wear: sku.slice(2), slot: w.slot, shape: w.shape, name: c[0], store: c[1], price: c[2], seasons: c[3], rail: c[4], colour: w.main, detail: w.detail, house: w.id.startsWith("h-") };
   }
+  if (sku.startsWith("f:trophy.")) return trophyItemOf(sku);
   if (sku.startsWith("f:")) {
     const id = sku.slice(2), it = CATALOG[id], price = FURNITURE_PRICES[id];
     if (!it || !price) return null;
@@ -203,6 +205,12 @@ function virtualItemOf(sku) {
   }
   const p = pieceOf(v.id);
   return { sku, kind: "furn", id: v.id, name: "EB SHOP COPY", store: "eb-shop", price, rooms: FORM_ROOMS[v.form], wall: p.wall, floor: false, whole: false, effect: null, upgrade: null, upgradeOnly: false, play: null, top: false, form: v.form, virtual: true };
+}
+// A tournament trophy (src/tournament/rules.js trophyOf): won, never sold; placed like any piece.
+function trophyItemOf(sku) {
+  const t = trophyOf(sku.slice(2));
+  if (!t) return null;
+  return { sku, kind: "furn", id: t.id, name: t.name, store: "the-department", price: 1, rooms: ["living", "study", "bedroom"], wall: false, floor: false, whole: false, effect: null, upgrade: null, upgradeOnly: false, play: null, top: false, award: true };
 }
 export const inSeason = (item, collection) => !item.seasons || item.seasons.includes(collection);
 // A store's stock today: [{rail, items: [item...]}], the rails in order. machineDay: the city's.
@@ -228,6 +236,7 @@ export function onSale(sku, machineDay) {
   const it = itemOf(sku);
   if (!it) return false;
   if (it.virtual) return true;   // a copy is stocked all year, sold or not
+  if (it.award) return false;     // a trophy is won, never stocked
   if (it.kind === "furn") return !it.upgradeOnly;
   return inSeason(it, collectionOf(machineDay));
 }
