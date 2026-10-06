@@ -18,6 +18,7 @@ import MyChess from "./chess/MyChess.jsx";
 import MyFish from "./play/fish/MyFish.jsx";
 import { MyTournaments } from "./tournament/TournamentList.jsx";
 import MyLeagues from "./leagues/MyLeagues.jsx";
+import MyMail from "./mail/MyMail.jsx";   // DEPARTMENT MAIL's line in MY FILE (src/mail/)
 import FirstDay, { scrollToId } from "./FirstDay.jsx";
 import { selfFindHref, note as noteFirstDay } from "./firstDay.js";
 
@@ -679,6 +680,8 @@ export default function Intake({ view = "intake" }) {
           {/* YOUR FIRST DAY (src/FirstDay.jsx): until done, the five things; then one line */}
           <FirstDay caseId={caseId} />
           {fileDesk(last, visits)}
+          {/* DEPARTMENT MAIL (src/mail/): the unread count, the way in */}
+          <MyMail caseId={caseId} />
           {error && errLine(error)}
           <div className="hvi-next">
             <ButtonRow stackOnMobile>

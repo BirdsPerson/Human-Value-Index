@@ -25,7 +25,7 @@ import { displayName } from "../figures.js";
 import { readCaseId } from "../caseFile.jsx";
 import { loadRooms, loadShops, lastView, onView } from "../shops/client.js";
 import { useShops, Closet, Furnish, playAtHome, injectShopStyles } from "../shops/parts.jsx";
-import { furnishLook, PLAY_AT_HOME, TOP_TIER } from "../economy/shops.js";
+import { furnishLook, PLAY_AT_HOME, TOP_TIER, withIssuedPc } from "../economy/shops.js";
 
 const ROOF_H = 40, STREET_H = 16, FOUND_H = 12;
 const H0 = 52, H1 = 124, PH_H = 68;   // a storey; the focused storey; the penthouse, double height
@@ -737,7 +737,7 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord, mine
         c.fillStyle = wallOf(plan, st); c.fillRect(cx, cy, rw, RH);
         c.fillStyle = floorStyle(st.id, st.code === "PH").corridor; c.fillRect(cx, cy + RH - 4, rw, 4);
         const lamp = night && !Pref.current?.units?.get(u.id) ? lampRoom(u, mt, (Pref.current?.residents.get(u.id) || []).length > 0) : null;
-        drawRoom(c, rm, cx, cy, rw, RH - 4, { night, lamp: lamp === rm.id, sprite: true, sheet: true, t: reduced ? 0 : now / 1000, reduced, people: Pref.current?.rooms.get(rm.id) || [], look: lookOf(plan, st, u, tagsOf(Pref.current?.residents.get(u.id))), play, guests });
+        drawRoom(c, rm, cx, cy, rw, RH - 4, { night, lamp: lamp === rm.id, sprite: true, sheet: true, t: reduced ? 0 : now / 1000, reduced, people: Pref.current?.rooms.get(rm.id) || [], look: mine ? withIssuedPc(lookOf(plan, st, u, tagsOf(Pref.current?.residents.get(u.id))), u) : lookOf(plan, st, u, tagsOf(Pref.current?.residents.get(u.id))), play, guests });
         c.font = `9px ${FONT}`; c.fillStyle = "#4d8a62"; c.textBaseline = "top";
         fitText(c, `${PURPOSE_NAME[rm.purpose]}`, cx + 2, cy + RH + 3, rw - 4);
         c.textBaseline = "alphabetic";
@@ -781,7 +781,7 @@ function YourFlat({ u, plan }) {
   const S = useShops(caseId);
   const [panel, setPanel] = useState(null);   // closet | furnish
   useEffect(() => { injectShopStyles(); }, []);
-  const look = lookOf(plan, plan.storeys.find(s => s.units.includes(u)), u, "");
+  const look = withIssuedPc(lookOf(plan, plan.storeys.find(s => s.units.includes(u)), u, ""), u);   // DEPARTMENT MAIL: the issued BEIGE PC
   const playable = look ? Object.values(look.rooms).flatMap(r => r.furniture).filter(f => f.placed && PLAY_AT_HOME[f.item]) : [];
   const btn = { font: "inherit", fontSize: "var(--t-xs)", minHeight: 44, minWidth: 44, background: "none", color: "var(--accent)", border: "var(--bw) solid var(--accent)", cursor: "pointer", padding: "0 10px" };
   return (

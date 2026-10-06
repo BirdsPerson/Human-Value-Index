@@ -24,6 +24,7 @@ import { findFunnel } from "../src/city/funnels.js";
 import { PROPRIETORS, proprietorOf, OWNABLE } from "../src/city/proprietors.js";
 import { massingOf } from "../src/city/archGeo.js";
 import { synthRoster } from "./synth-roster.mjs";
+import * as TERMINAL from "../src/city/terminal.js";   // THE TERMINAL: the first old lot, let as the internet cafe (check-mail.mjs)
 
 let fails = 0, checks = 0;
 const ok = (c, msg) => { checks++; if (!c) { fails++; console.log("  FAIL", msg); } else if (process.env.VERBOSE) console.log("  ok", msg); };
@@ -54,7 +55,7 @@ ok(B.floors.find(f => f.code === "G").places.includes("surfside"), "the resident
 ok(JSON.stringify(SIM.PLACES[SP.SAMS].rect) === JSON.stringify(SIM.PLACES.surfside.rect), "Sam's stands on the Plaza's ground (the lot is not split for it)");
 for (const [id, sh] of Object.entries(SP.SHELL_OF)) {
   const b = SIM.BUILDING[id];
-  ok(b && b.places.length === 1 && b.places[0] === sh && SIM.PLACES[sh].shell && SIM.PLACES[sh].from === Infinity, `${id}: the old lot keeps its building id, TO LET (${b?.name})`);
+  ok(b && b.places.length === 1 && b.places[0] === sh && SIM.PLACES[sh].shell && (SIM.PLACES[sh].from === Infinity || (sh === TERMINAL.CAFE_ID && SIM.PLACES[sh].from === TERMINAL.CAFE_DAY)), `${id}: the old lot keeps its building id, TO LET or let as THE TERMINAL from its day (${b?.name})`);
 }
 ok(SIM.BUILDING["goodnight-irenes"].floors.length === 2, "Irene's old corner keeps its two floors (a day published before the move names its upstairs)");
 for (const id of SP.PLAZA_MOVES) {

@@ -46,6 +46,7 @@ const Paper = lazy(() => import("./paper/Paper.jsx"));
 // The desk's small windows beside the logon: MARKET.TKR (risers and fallers), WIRE.TKR (news and
 // trending), SUBSTRATE.CAM (the city, small). A lazy chunk: the entry script has a budget.
 const FrontDesk = lazy(() => import("./front/FrontDesk.jsx"));   // #paper: THE DAILY COMPLIANCE, the city's newspaper (docs/PAPER.md)
+const Mail = lazy(() => import("./mail/Mail.jsx"));   // #mail[?at=home|terminal]: DEPARTMENT MAIL (src/mail/, docs/design/COMMS.md)
 // The logon's one line for a returning file: today's front-page headline, which opens the paper.
 function PaperLine() {
   const [h, setH] = useState(null);
@@ -457,6 +458,7 @@ const TITLES = {
   "#skate": "THE PARK",
   "#play": "THE GAMES", "#scores": "THE SCORES", "#about": "ABOUT", "#privacy": "PRIVACY", "#terms": "TERMS", "#dispute": "DISPUTE A SCORE",
   "#heights": "THE CITY", "#enterprise": "THE CITY", "#prefects": "THE CITY", "#paper": "THE DAILY COMPLIANCE",
+  "#mail": "DEPARTMENT MAIL",
 };
 const PHASE_TITLES = { survey: "WRITTEN SURVEY", processing: "EVALUATING", result: "YOUR SCORE", leaderboard: "THE SCORES" };
 function pageTitle(routePath, phase) {
@@ -648,6 +650,13 @@ export default function OverlordAssessment() {
   if (routePath === "#paper" || routePath.startsWith("#paper/")) return (
     <Screen nav={nav} wide>
       <Suspense fallback={<Loading what="FETCHING THE PAPER" />}><Paper route={routePath} /></Suspense>
+    </Screen>
+  );
+  // #mail[?at=home|terminal]: DEPARTMENT MAIL (src/mail/): from MY FILE the client; from the flat's BEIGE PC
+  // or THE TERMINAL's public PCs, a little desktop first
+  if (routePath === "#mail") return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="DIALLING THE MAIL ROOM" />}><Mail route={route} /></Suspense>
     </Screen>
   );
   // #market: THE MARKET (src/market/: shares in humans and the industries, CYCLES only)

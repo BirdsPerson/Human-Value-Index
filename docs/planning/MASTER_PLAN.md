@@ -393,3 +393,16 @@ ground, TO LET (two shell places appended after everything, never in a plan). Fr
 at the Plaza, and Irene's new staff (a head brewer, cellar hands, servers: `PLAZA_STAFF`, in JOB not
 JOBS) come on. The city is drawn as the Plaza from the deploy; a pre-619 stay keeps its old map spot
 under the Plaza's floor (the known seam, a few hours long).
+
+## THE TERMINAL (2026-10-06)
+
+The Shore Plaza's first old lot (THE OLD PIZZA COUNTER, building `sams-pizza`, place
+`boardwalk-east-to-let-a`) is let to the Department as THE TERMINAL, the city's internet cafe: rows of
+beige PCs along the old counter, a coffee counter where the ovens stood (`src/city/terminal.js`,
+`terminalProps.js`). The fourth place with a day of its own: `terminal.CAFE_DAY` = **644** (from 2026-10-06 17:12 UTC, 13:12 EDT; at the push the builder had published to 634, today 632) is set
+past every day published at the push. Before it the shell is in no plan, as it always was (still a
+shell in the place list, so no index moves); from it, cafe attendants (`CAFE_STAFF`, in JOB not JOBS)
+and visitors, 08:00 to 01:00, the online most. `check-mail` holds the two days before it, plans and
+whereAt for a 430-subject census, against the earlier code's hashes (`scripts/fixtures/terminal-pre.json`).
+The room is drawn as the cafe from the deploy, and a tap in it opens a public PC (DEPARTMENT MAIL,
+`#mail?at=terminal`) from the deploy. No layout version: no ground moved.

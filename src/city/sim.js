@@ -19,6 +19,7 @@ import { MOUNTAIN_PLACES, MOUNTAIN_BUILDINGS, MOUNTAIN_ARCH, MOUNTAIN_JOBS, MOUN
 import { shuttle, lineTrainState, lineNextArrival, lineRide } from "./lines.js";
 import { RIVER_DAY, RIVER_LAYOUT, RIVER_BLOCKS } from "./river.js";
 import { LANES_DAY, LANES_PLACE, LANES_BUILDING, LANES_FLOOR, SHARED_RECT as LANES_SHARED, LANES_JOBS, LANES_STAFF, LANES_PULL, LEAGUE_DAYS, lanesHours } from "./lanes.js";
+import { CAFE_DAY, CAFE_ID, CAFE_NAME, CAFE_BUILDING, CAFE_SHORT, CAFE_FLOOR, CAFE_JOBS, CAFE_STAFF, CAFE_PULL, cafeHours } from "./terminal.js";   // THE TERMINAL: the internet cafe in the Plaza's old pizza counter from CAFE_DAY
 import { PLAZA_DAY, PLAZA_NAME, PLAZA_FLOORS, PLAZA_SHARED, PLAZA_SHELLS, PLAZA_MOVES, PLAZA_JOBS, PLAZA_STAFF, SAMS, IRENES } from "./shorePlaza.js";   // THE SHORE PLAZA: Sam's and Irene's in the Surfside's tower from PLAZA_DAY   // THE LANES: upstairs at the Arcade from LANES_DAY   // THE ATTRITION: the river's ground from its day (layout 7)
 // THE NIGHTLIFE QUARTERS (nightlifeSim.js): UPTOWN and DOWNTOWN, their venues, hours, the rope, the lineups
 import { NIGHT_DISTRICTS, NIGHT_PLACES, NIGHT_BUILDINGS, NIGHT_ARCH, NIGHT_JOBS, NIGHT_LEISURE_BAND, NIGHT_LEISURE_FIELD, NIGHT_FAMILY, NIGHT_FIELD_RULES, NIGHT_FIXTURES, NIGHT_SET, HOURS as NIGHT_HOURS, openAt as nightOpenAt, openThrough as nightOpenThrough, closeFor as nightCloseFor, NIGHT_OUT_P, ropeCheck, ROPE_PLACES, gigOf } from "./nightlifeSim.js";
@@ -309,6 +310,9 @@ PLACE_LIST.push(...STEP5_PLACES.map(a => P(...a)));
 PLACE_LIST.push({ ...P(...LANES_PLACE), from: LANES_DAY });
 // THE SHORE PLAZA's old boardwalk lots, TO LET (shorePlaza.js): after the lanes, never in a plan.
 PLACE_LIST.push(...PLAZA_SHELLS.map(a => ({ ...P(...a, []), from: Infinity, shell: true })));
+// THE TERMINAL (terminal.js): the first old lot, let to the Department as an internet cafe; in the plans
+// from its day (still a shell in the list, so every index and every earlier day stays as it was)
+Object.assign(PLACE_LIST.find(p => p.id === CAFE_ID), { name: CAFE_NAME, from: CAFE_DAY });
 for (const p of PLACE_LIST) DISTRICT[p.district].places.push(p.id);
 
 export const PLACES = Object.fromEntries(PLACE_LIST.map(p => [p.id, p]));
@@ -469,6 +473,7 @@ BUILDING_LIST.push(...STEP5_BUILDINGS.map(([id, name, district, floors, lot]) =>
 // THE MALL's frontage lots (storefrontSim.js): placed on their own lots, outside the district's
 // grid or hand layout, so nothing already standing moves.
 BUILDING_LIST.push(...STORE_BUILDINGS.map(([id, name, district, floors, lot, frontage]) => ({ ...B(id, name, district, floors, lot), frontage })));
+{ const b = BUILDING_LIST.find(x => x.id === CAFE_BUILDING); b.name = `${CAFE_SHORT} (INTERNET CAFE)`; b.floors = b.floors.map(f => (f[2].includes(CAFE_ID) ? [f[0], CAFE_FLOOR, f[2]] : f)); }   // THE TERMINAL (terminal.js)
 // THE NIGHTLIFE QUARTERS: laid out by hand in their own districts (nightlifeSim.js NIGHT_LOTS)
 BUILDING_LIST.push(...NIGHT_BUILDINGS.map(([id, name, district, floors, lot]) => B(id, name, district, floors, lot)));
 // Each district is gridded by BUILDING (so a building's rooms stay one block on the map),
@@ -741,6 +746,8 @@ export const JOB = Object.fromEntries(JOBS.map(j => [j.id, j]));
 export const LANES_JOB = Object.fromEntries(LANES_JOBS.map(a => { const j = J(...a); JOB[j.id] = j; return [j.id, j]; }));
 // THE SHORE PLAZA's brewery staff (shorePlaza.js), the same way: in JOB, not in JOBS, from PLAZA_DAY.
 export const PLAZA_JOB = Object.fromEntries(PLAZA_JOBS.map(a => { const j = J(...a); JOB[j.id] = j; return [j.id, j]; }));
+// THE TERMINAL's attendants (terminal.js), the same way: in JOB, not in JOBS, from CAFE_DAY.
+export const CAFE_JOB = Object.fromEntries(CAFE_JOBS.map(a => { const j = J(...a); JOB[j.id] = j; return [j.id, j]; }));
 
 // ---- subject reading --------------------------------------------------------------
 export const TIER_ORDER = TIERS.map(t => t.label);                 // v2: 0 = ESSENTIAL ... 8 = SOYLENT GREEN
@@ -1442,6 +1449,8 @@ function workOf(s, day, seed) {
   if (day >= LANES_DAY && job) for (const st of LANES_STAFF) if (st.from.includes(job.id) && h01(`${seed}|lanes-staff|${keyOf(s)}`) < st.p) return LANES_JOB[st.job];
   // THE SHORE PLAZA (from PLAZA_DAY): Irene's brewery takes a head brewer, cellar hands and servers
   if (day >= PLAZA_DAY && job) for (const st of PLAZA_STAFF) if (st.from.includes(job.id) && h01(`${seed}|plaza-staff|${keyOf(s)}`) < st.p) return PLAZA_JOB[st.job];
+  // THE TERMINAL (from CAFE_DAY): a few of the cafes' and the depot's people mind the PCs
+  if (day >= CAFE_DAY && job) for (const st of CAFE_STAFF) if (st.from.includes(job.id) && h01(`${seed}|cafe-staff|${keyOf(s)}`) < st.p) return CAFE_JOB[st.job];
   return job;
 }
 export function clearSocialSnapshots() { if (SOCIAL.size) { SOCIAL.clear(); memo.clear(); } }
@@ -1591,6 +1600,12 @@ function pickLeisure(s, day, i, seed, avoid, hour = null) {
     if (hour != null && hour >= 19 && LEAGUE_DAYS.includes(weekdayOf(day))) v *= LANES_PULL.league;
     v *= Math.sqrt(PLACES[LANES_PLACE[0]].cap);
     list = [...list, [LANES_PLACE[0], v]]; total += v;
+  }
+  // THE TERMINAL (from CAFE_DAY): open 08:00 to 01:00; the online come most
+  if (day >= CAFE_DAY && cafeHours(hour)) {
+    const f = fieldsOf(s);
+    const v = (CAFE_PULL.band[bandOf(s)] + ((f.computing || 0) * CAFE_PULL.computing + (f.writing || 0) * CAFE_PULL.writing) / 10) * Math.sqrt(PLACES[CAFE_ID].cap);
+    list = [...list, [CAFE_ID, v]]; total += v;
   }
   // A fixture on at the ground when the visit starts pulls its fans (and the curious) in.
   const on = hour == null ? null : gamesOn(day, hour);

@@ -1,0 +1,15 @@
+{
+ "note": "THE TERMINAL (check-mail): plan and whereAt hashes for synthRoster(430), built by the code before the cafe; days before cafeDay must match byte for byte, cafeDay must not.",
+ "commit": "a00daa1",
+ "cafeDay": 644,
+ "n": 430,
+ "plans": {
+  "642": "1149633015455f23",
+  "643": "477a03fd53f697ad",
+  "644": "af74f0c2483a0b85"
+ },
+ "where": {
+  "642": "d93845e19f6839e2",
+  "643": "b35aa88c0cddc036"
+ }
+}

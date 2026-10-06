@@ -90,11 +90,13 @@ export const FURNITURE_PRICES = {
   plant: 100, "plant-tall": 350, cactus: 60, bookshelf: 600, "record-player": 900, aquarium: 2_200, chandelier: 8_000,
   easel: 400, piano: 6_000, "grand-piano": 20_000, books: 150, weights: 750, trophies: 500,
   deck: 50, "deck-eb": 400,
+  "beige-pc": 150,
   pc: 2_000, arcade: 4_000, globe: 300, filing: 250, drafting: 1_800, desk: 700,
   tub: 1_500, clawfoot: 4_500, shower: 900, sink: 400, toilet: 300, towels: 80,
   // the upgrade tiers: never sold outright, reached only by UPGRADE (their value on the ladder)
   "golf-cabinet": 10_000, "golf-sim": 35_000, "ebtv-big": 4_500, "home-theater": 18_000, kegerator: 9_000, brewery: 16_000,
   "card-table": 1_500, "poker-table": 6_000,
+  "gaming-rig": 3_500, "server-rack": 12_000,
 };
 
 // ---- UPGRADES (Scott, 2026-10-05: "buy an arcade machine cabinet, then upgrade it to the Golden
@@ -109,6 +111,7 @@ export const UPGRADES = {
   tv: "ebtv-big", ebtv: "ebtv-big", "tv-flat": "ebtv-big", "ebtv-big": "home-theater",
   "beer-tap": "kegerator", kegerator: "brewery",
   deck: "card-table", "deck-eb": "card-table", "card-table": "poker-table",   // THE CARD ROOM: home game night
+  "beige-pc": "gaming-rig", "gaming-rig": "server-rack",   // DEPARTMENT MAIL: the PC the Department issued, then a flex
 };
 export const UPGRADE_ONLY = new Set(Object.values(UPGRADES));
 export const UPGRADE_FEE = (diff) => Math.max(100, Math.round(diff * 0.05));
@@ -136,6 +139,10 @@ export const PLAY_AT_HOME = {
   "deck-eb": { go: "#cards?at=home", label: "DEAL THE EB HOUSE DECK: SOLITAIRE OR SPIDER" },
   "card-table": { go: "#cards?at=home", label: "HOME GAME NIGHT: HEARTS, SPADES, SOLITAIRE" },
   "poker-table": { go: "#cards?at=home", label: "HOME GAME NIGHT AT THE POKER TABLE" },
+  // DEPARTMENT MAIL (src/mail/): the PC opens its desktop (mail, the market, the paper, solitaire)
+  "beige-pc": { go: "#mail?at=home", label: "THE BEIGE PC: DEPARTMENT MAIL" },
+  "gaming-rig": { go: "#mail?at=home&pc=rig", label: "THE GAMING RIG: DEPARTMENT MAIL" },
+  "server-rack": { go: "#mail?at=home&pc=rack", label: "THE SERVER RACK: DEPARTMENT MAIL" },
   "ebtv-big": { ebtv: true, label: "WATCH EBTV, BIG" }, "home-theater": { ebtv: true, label: "EBTV IN THE HOME THEATER" },
 };
 // The top of each chain: at night, the city's figures gather round it (render-side, the cutaway).
@@ -144,7 +151,7 @@ export const FURN_SECTIONS = [
   ["BEDROOM", ["bed-single", "bed-futon", "bed-bunk", "bed-double", "bed-canopy", "wardrobe", "dresser", "nightstand"]],
   ["LIVING ROOM", ["sofa", "loveseat", "sectional", "armchair", "beanbag", "rug", "tv-crt", "tv", "tv-flat", "ebtv", "record-player", "bookshelf", "books"]],
   ["KITCHEN", ["fridge", "fridge-retro", "fridge-steel", "stove", "range", "counter", "island", "table", "table-round", "dinette", "pots", "beer-tap"]],
-  ["STUDY", ["desk", "pc", "drafting", "filing", "globe"]],
+  ["STUDY", ["desk", "pc", "beige-pc", "drafting", "filing", "globe"]],
   ["BATHROOM", ["sink", "toilet", "shower", "tub", "clawfoot", "towels"]],
   ["LIGHTS, WALLS AND PLANTS", ["lamp", "chandelier", "poster", "painting", "cactus", "plant", "plant-tall", "aquarium"]],
   ["PASTIMES", ["deck", "deck-eb", "arcade", "piano", "grand-piano", "easel", "weights", "trophies"]],
@@ -294,6 +301,20 @@ export function furnishLook(look, placements) {
     r.furniture.push({ item: p.item, x, role: it.role, tint: it.tints ? it.tints[0] : null, flip: false, placed: true });
   }
   return { ...look, rooms };
+}
+
+// DEPARTMENT MAIL (src/mail/): every assigned flat has a computer. A resident who owns none (or has
+// not placed one) finds the BEIGE PC the Department issued standing in the study (or, with no study,
+// the living room), at the far spot; render-side only (nothing is stored, nothing is in the
+// inventory), and it answers a tap like a placed one (PLAY_AT_HOME). Buy one at EASTGATE HOME to
+// move it, or to upgrade it.
+export const PC_CHAIN = ["beige-pc", "gaming-rig", "server-rack"];
+export function withIssuedPc(look, unit) {
+  if (!look || !unit?.rooms) return look;
+  if (Object.values(look.rooms).some(r => r.furniture.some(f => f.placed && PC_CHAIN.includes(f.item)))) return look;
+  const r = unit.rooms.find(x => x.purpose === "study") || unit.rooms.find(x => x.purpose === "living");
+  if (!r || !look.rooms[r.id] || look.rooms[r.id].furniture.some(f => f.placed && pieceOf(f.item)?.whole)) return look;
+  return furnishLook(look, [{ room: r.id, spot: "f4", item: "beige-pc" }]);
 }
 
 // ---- lines -----------------------------------------------------------------------------------------

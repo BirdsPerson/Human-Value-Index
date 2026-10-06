@@ -30,6 +30,7 @@ const WATERS_DOOR = {
   "rec-ground": ["THE PARK: QUARTER PIPES, A FUNBOX, A FLAT RAIL. THE VERT RAMP OUT BACK", "#skate?lvl=park", "SKATE THE PARK"],
   "the-arcade": ["UPSTAIRS: THE LANES. TEN PINS, SHOES LOGGED. COSMIC BOWLING 21:00 TO 03:00", "#bowling?from=lanes", "TAKE A LANE"],
   "city-museum": ["THE AQUARIUM WING: ONE TANK PER SPECIES, EVERY FISH CHECKED BY REPLAY", "#aquarium", "SEE THE TANKS"],
+  "sams-pizza": ["THE TERMINAL: PUBLIC PCS. DEPARTMENT MAIL, THE PAPER, THE MARKET. EVERY KEYSTROKE LOGGED", "#mail?at=terminal", "USE A PC"],   // THE TERMINAL (terminal.js)
 };
 const SHAFT = 46;   // CSS px: the lift shaft and the floor codes, left of the rooms
 

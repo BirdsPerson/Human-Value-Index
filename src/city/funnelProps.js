@@ -16,6 +16,7 @@ import { drawBrand } from "./brand.js";
 import { machineClock } from "./sim.js";
 import { shopState, wallOpen, loadShop, shopSlots, thumb, shopFocus } from "./shopStock.js";
 import { HOSTS as CAST, shiftAt, chatterAt, pitching } from "./hostsLive.js";
+import { CAFE_ID, CAFE_HREF } from "./terminal.js";   // THE TERMINAL: a tap on a public PC opens DEPARTMENT MAIL
 
 export const FUNNEL_ROOM_TYPE = { ...HOUSE_PLACE_TYPES, "customs-house": "customs", arcade: "arcade", "eb-shop": "recordshop", "campus-lounge": "union", "studio-row": "ebtv", boardwalk: "boardwalk" };
 export const FUNNEL_LOOK = { boardwalk: ["#241c10", "#5a4630"], arcade: ["#140c20", "#2a1a3a"], recordshop: ["#241a16", "#3e2c22"], union: ["#1c1a22", "#34303c"], ebtv: ["#12282a", "#2a2a30"] };
@@ -557,7 +558,8 @@ export function withTv(LIVE) {
 // What a tap in a funnel room opens: each cabinet its game; the rest of the shop floor the
 // shop, the stage EBTV, the arcade floor the cabinet list. -> [{spec, box: [x0, y0, x1, y1]}]
 // in room px, the room itself first (so a cabinet, then a person, drawn later, win the tap).
-const ROOM_SPEC = { "eb-shop": { kind: "shop", campaign: "eb-shop" }, "studio-row": { kind: "ebtv", campaign: "ebtv-station" }, arcade: { kind: "arcade" }, "the-lanes": { go: "#bowling" } };
+const ROOM_SPEC = { "eb-shop": { kind: "shop", campaign: "eb-shop" }, "studio-row": { kind: "ebtv", campaign: "ebtv-station" }, arcade: { kind: "arcade" }, "the-lanes": { go: "#bowling" },
+  [CAFE_ID]: { go: CAFE_HREF } };   // THE TERMINAL (terminal.js): a public PC, DEPARTMENT MAIL
 // u (the room's pixel, as drawRoom was given it): the shop's racks answer too, each its product.
 export function funnelRoomHits(pid, plan, side = 0.3, u = null) {
   const out = [];

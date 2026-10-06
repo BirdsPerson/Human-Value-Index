@@ -3432,3 +3432,22 @@ record), `scripts/check-shoreplaza.mjs`.
 - **The proprietor.** An operator's record (`scripts/set-proprietor.mjs`), shown on the landmark card,
   the cutaway, the building page and the paper; no economic effect until the property ladder lands
   (docs/design/ECONOMY_PROPERTY.md "Proprietors on record").
+
+## THE TERMINAL and the BEIGE PC: where DEPARTMENT MAIL is read (2026-10-06)
+
+Code: `src/city/terminal.js` (the place, the day, the staff, the pull), `terminalProps.js` (the room),
+`src/mail/` (the client and the desktops), docs/design/COMMS.md (the design, layers 1 to 4).
+
+- **THE TERMINAL**: THE SHORE PLAZA's first old lot on the east boardwalk (THE OLD PIZZA COUNTER,
+  building `sams-pizza`), let to the Department as the internet cafe. Same building id, place id and
+  ground. The room: THE TERMINAL in green over the old counter's tiles, the house rules (LOG ON. LOG OFF.
+  IT IS KEPT.), a clock, rows of beige PCs with a citizen typing at each, the coffee counter (staff)
+  where the ovens stood. A tap anywhere in it, or USE A PC on the building page, opens a public PC:
+  a little desktop (DEPARTMENT MAIL, THE PAPER, THE MARKET, LOG OFF), `#mail?at=terminal`. Trades from
+  `CAFE_DAY` (MASTER_PLAN "THE TERMINAL"): cafe attendants and visitors, 08:00 to 01:00.
+- **THE BEIGE PC**: every assigned flat has one. A resident who has none placed sees the one the
+  Department issued in the study (else the living room), far spot, render-side (`shops.js
+  withIssuedPc`); one bought at EASTGATE HOME (150) moves where it is placed, and upgrades: GAMING RIG,
+  then SERVER RACK. A tap opens its desktop (`#mail?at=home`): DEPARTMENT MAIL, THE PAPER, THE MARKET,
+  SOLITAIRE when the file owns a deck, SHUT DOWN.
+- **MY FILE** carries DEPARTMENT MAIL's line (the unread count, OPEN MAIL): no new nav tab, no pop-ups.

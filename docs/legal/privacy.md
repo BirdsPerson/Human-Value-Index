@@ -71,11 +71,12 @@ A sweep runs once a day and deletes whatever has passed these limits.
 - **Dispute requests:** **2 years** after they are filed, then deleted. The copy emailed to the operator's inbox is deleted on the same 2-year schedule.
 - **Casino chips:** the play-chip balance and any table in progress are stored under the case number, and deleted with the file (purged or expired). The weekly casino board shows only the last four characters of a case number.
 - **The Treasury's ledger (CYCLES):** kept while the file exists, and deleted with it: purging your file, or its expiry 24 months after your last visit, deletes every ledger entry, position, allowance claim and wallet record for the case. Per-industry totals and daily returns, which hold no case, are kept.
+- **Department mail:** the letters the site generates for your file (from the day's paper, the market, the shops and the city's calendar; nobody else writes to you, and nothing you type is stored with them) are kept with the file and deleted with it, purged or expired 24 months after your last visit. A letter you delete is removed for good after 30 days.
 - **Rate-limit counters:** hashed, and deleted **7 days** after the hour, day or month they count.
 
 ## Purge your file
 
-Use **PURGE MY FILE** below. It deletes the case file on this browser (transcripts, scores, verdicts, photo, history), its casino chips and its Treasury ledger (CYCLES, positions, claims), removes its public card, and detaches it from your email. If that was the last file on your email address, the address and your sign-in are deleted too.
+Use **PURGE MY FILE** below. It deletes the case file on this browser (transcripts, scores, verdicts, photo, history), its department mail, its casino chips and its Treasury ledger (CYCLES, positions, claims), removes its public card, and detaches it from your email. If that was the last file on your email address, the address and your sign-in are deleted too.
 
 If the file is secured to an email address, you must be signed in with that address to purge it. If it is not, holding the case number is enough, the same as for viewing it. Copies already held by a provider (ElevenLabs' 30-day recordings, provider logs) expire on their own schedule. A file you never purge is deleted anyway 24 months after your last visit.
 

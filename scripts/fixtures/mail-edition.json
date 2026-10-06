@@ -1,0 +1,544 @@
+{
+ "v": 1,
+ "date": "2026-10-06",
+ "no": 2,
+ "front": {
+  "lead": {
+   "kind": "notice",
+   "weight": 60,
+   "text": "THE DEPARTMENT HAS INSTALLED THE MOUNTAIN",
+   "deck": "BUILDINGS AT THEIR OWN SIZE, PARK IN-RUN ASSIST, READABLE GATES, AIR GROWTH, PHONE LAYOUT.",
+   "href": "#paper",
+   "installed": "THE MOUNTAIN"
+  },
+  "stories": [
+   {
+    "kind": "result",
+    "weight": 36,
+    "text": "INDEXED ELEVEN BEAT TENURED ELEVEN 24-13",
+    "deck": "FOOTBALL AT THE BOWL. THE RESULT HAS BEEN ENTERED ON BOTH FILES.",
+    "href": "#city/league/football",
+    "winner": "THE INDEXED ELEVEN",
+    "loser": "THE TENURED ELEVEN",
+    "score": "24-13",
+    "sport": "FOOTBALL"
+   },
+   {
+    "kind": "directive",
+    "weight": 34,
+    "text": "CURFEW IN DOWNTOWN",
+    "deck": "THE LICENSING OFFICER HAS ORDERED IT. INDOORS FROM 22:00 TO 06:00.",
+    "href": "#prefects",
+    "directive": "CURFEW",
+    "district": "DOWNTOWN"
+   },
+   {
+    "kind": "river",
+    "weight": 30,
+    "text": "THE ATTRITION OPENS ON DAY 614",
+    "deck": "EVERYTHING FLOWS OUT. NOTHING IS REPLACED. FISHING SPOTS ARE MARKED. THE WATER IS NOT RESPONSIBLE FOR YOU.",
+    "href": "#fish"
+   },
+   {
+    "kind": "mood",
+    "weight": 28,
+    "text": "THE SPRAWL IS SEETHING",
+    "deck": "THE DISTRICT'S MOOD STANDS AT -46. THE PREFECT HAS BEEN INFORMED. THE PREFECT WAS ALREADY THERE.",
+    "href": "#city"
+   },
+   {
+    "kind": "arrivals",
+    "weight": 23,
+    "text": "8 NEW FILES THROUGH INTAKE",
+    "deck": "PROCESSED, HOUSED AND EMPLOYED. NOBODY WAS ASKED.",
+    "href": "#arrivals",
+    "arrivals": 8
+   },
+   {
+    "kind": "shop",
+    "weight": 22,
+    "text": "NOW OPEN: RZA'S",
+    "deck": "RECORD STORE IN BOARDWALK EAST, UNIT 1. THE DEPARTMENT HAS ISSUED A LICENCE AND AN EXPIRY DATE.",
+    "href": "#enterprise",
+    "trade": "RECORD STORE",
+    "district": "THE COAST"
+   }
+  ]
+ },
+ "city": {
+  "air": {
+   "open": [
+    "DELIVERY DRONES"
+   ],
+   "drones": 3,
+   "hops": 2,
+   "because": []
+  },
+  "opened": [
+   {
+    "text": "RZA'S, RECORD STORE, BOARDWALK EAST, UNIT 1 (NEW).",
+    "href": "#enterprise"
+   }
+  ]
+ },
+ "classifieds": [
+  {
+   "cat": "SITUATIONS VACANT",
+   "title": "LEAGUE ROSTER SPOTS, ALL FOUR LEAGUES AND THE TENNIS LADDER",
+   "text": "ENTER YOUR CITIZEN FROM MY FILE. ENTRIES CLOSE ON MACHINE DAY 614; THE DRAFT IS DAY 617. TWO SPORTS AT MOST. TALENT IS OPTIONAL. ATTENDANCE IS NOT.",
+   "href": "#file",
+   "act": "ENTER A LEAGUE"
+  },
+  {
+   "cat": "SITUATIONS VACANT",
+   "title": "STAFF WANTED AT MCILROY'S",
+   "text": "PRO SHOP, COLLEGE ROW, UNIT 2. THRIVING AND SHORT-HANDED. THE OWNER HIRES FROM THE DISSATISFIED. BE DISSATISFIED.",
+   "href": "#enterprise",
+   "act": "SEE THE REGISTER"
+  },
+  {
+   "cat": "SITUATIONS VACANT",
+   "title": "STAFF WANTED AT RZA'S",
+   "text": "RECORD STORE, BOARDWALK EAST, UNIT 1. NEW AND SHORT-HANDED. THE OWNER HIRES FROM THE DISSATISFIED. BE DISSATISFIED.",
+   "href": "#enterprise",
+   "act": "SEE THE REGISTER"
+  },
+  {
+   "cat": "PUBLIC OFFICE",
+   "title": "COUNCIL SEATS, NEXT CYCLE",
+   "text": "CYCLE 2 OPENS WEDNESDAY, OCTOBER 7, 14:34. STAND, VOTE, OR WRITE IN WHOEVER THE DEPARTMENT DID NOT EXPECT.",
+   "href": "#elections",
+   "act": "SEE THE COUNCIL"
+  },
+  {
+   "cat": "PUBLIC NOTICES",
+   "title": "THE ASSEMBLY SITS: SESSION 002",
+   "text": "THE BALLOT IS OPEN UNTIL 05:48 ON TUESDAY, OCTOBER 6. ONE CITIZEN, ONE VOTE, UP TO THREE REASONS. SPITE IS A REASON.",
+   "href": "#assembly",
+   "act": "VOTE"
+  },
+  {
+   "cat": "PUBLIC NOTICES",
+   "title": "FILE A PROPOSAL",
+   "text": "BUILD, POLICY, RENAME OR EVENT. ONE FILING A DAY PER FILE. CO-SIGNED PROPOSALS GO TO THE FLOOR.",
+   "href": "#docket",
+   "act": "FILE ONE"
+  },
+  {
+   "cat": "INVESTMENTS",
+   "title": "SHARES IN HUMANS",
+   "text": "THE INDEX STANDS AT 1000.4. BUY AND SELL IN CYCLES. NO REAL MONEY GOES IN OR COMES OUT. THE DEPARTMENT IS THE ONLY COUNTERPARTY.",
+   "href": "#market",
+   "act": "INVEST"
+  },
+  {
+   "cat": "INVESTMENTS",
+   "title": "THE TREASURY: YOUR DAILY CYCLES",
+   "text": "COLLECT THE ALLOWANCE. BACK A DISTRICT INDUSTRY. THE APARTMENT IS ASSIGNED; NO FLATS ARE FOR SALE OR TO LET. THE DEPARTMENT IS THE LANDLORD.",
+   "href": "#economy",
+   "act": "COLLECT"
+  },
+  {
+   "cat": "FOR SALE",
+   "title": "CLOTHES AND FURNITURE, FOR CYCLES",
+   "text": "THE SHOPS ARE OPEN: OUTFITS FOR YOUR FILE PHOTO, FURNITURE FOR YOUR ASSIGNED FLAT, UPGRADES FOR BOTH. PURCHASES BURN CYCLES. TASTE IS NOT REFUNDED.",
+   "href": "#shop",
+   "act": "GO SHOPPING"
+  },
+  {
+   "cat": "RECREATION",
+   "title": "ANGLERS WANTED",
+   "text": "THE WATERS ARE CLEAR TODAY. LAND A FISH; DONATE A RECORD TO THE AQUARIUM AND YOUR FILE GOES ON THE PLAQUE.",
+   "href": "#fish",
+   "act": "FISH"
+  },
+  {
+   "cat": "RECREATION",
+   "title": "THE AQUARIUM ACCEPTS DONATIONS",
+   "text": "EVERY CATCH IS REPLAYED BY THE DEPARTMENT BEFORE IT IS BELIEVED. RECORDS ARE PUBLIC. SO ARE FAILURES.",
+   "href": "#aquarium",
+   "act": "SEE THE TANKS"
+  },
+  {
+   "cat": "TOURNAMENTS",
+   "title": "THE PIT, MACHINE DAY 614",
+   "text": "MAIN EVENT: MUHAMMAD ALI V MIKE TYSON (THE RING). DOORS AT 20:00. THE CROWD MAY RISE. THE CROWD MAY NOT ENTER.",
+   "href": "#city/league/pit",
+   "act": "SEE THE CARD"
+  },
+  {
+   "cat": "TOURNAMENTS",
+   "title": "THE WEEKEND RACE: GIANT SLALOM",
+   "text": "MACHINE DAY 615 ON THE MOUNTAIN. CONDITIONS TODAY: WHITEOUT. DESCENT IS MANDATORY.",
+   "href": "#heights",
+   "act": "SEE THE MOUNTAIN"
+  },
+  {
+   "cat": "TOURNAMENTS",
+   "title": "EXHIBITIONS, OPEN TO ALL",
+   "text": "TENNIS AT THE CLUB, GOLF ON THE DEPARTMENT LINKS, FIVE ON FIVE AT THE COURTS. YOUR RECORD IS KEPT. SO IS YOUR FORM.",
+   "href": "#play",
+   "act": "PLAY"
+  }
+ ],
+ "sports": {
+  "pit": {
+   "href": "#city/league/pit",
+   "rank": [
+    {
+     "pos": 1,
+     "name": "MUHAMMAD ALI",
+     "w": 2,
+     "l": 0,
+     "d": 0,
+     "pts": 6
+    },
+    {
+     "pos": 2,
+     "name": "BRUCE LEE",
+     "w": 2,
+     "l": 1,
+     "d": 0,
+     "pts": 6
+    },
+    {
+     "pos": 3,
+     "name": "CHUCK NORRIS",
+     "w": 2,
+     "l": 1,
+     "d": 0,
+     "pts": 6
+    },
+    {
+     "pos": 4,
+     "name": "JACK JOHNSON",
+     "w": 1,
+     "l": 1,
+     "d": 0,
+     "pts": 3
+    },
+    {
+     "pos": 5,
+     "name": "JOHN CENA",
+     "w": 1,
+     "l": 2,
+     "d": 0,
+     "pts": 3
+    }
+   ],
+   "results": [
+    "JACK JOHNSON OVER MIKE TYSON, BY UNANIMOUS DECISION.",
+    "BRUCE LEE OVER JACKIE CHAN, BY UNANIMOUS DECISION.",
+    "CHUCK NORRIS OVER JOHN CENA, BY UNANIMOUS DECISION."
+   ],
+   "next": [
+    "BOUT 1: JOHN CENA V JACKIE CHAN (THE OCTAGON)",
+    "BOUT 2: BRUCE LEE V CHUCK NORRIS (THE OCTAGON)",
+    "MAIN EVENT: MUHAMMAD ALI V MIKE TYSON (THE RING)"
+   ],
+   "when": 607,
+   "nextDay": 614
+  },
+  "race": {
+   "href": "#heights",
+   "last": {
+    "day": 608,
+    "name": "SLALOM",
+    "line": "THE WEEKEND RACE: SHAUN WHITE WINS THE SLALOM IN 1:34.17. SILVER, TENZING NORGAY; BRONZE, TONY HAWK. RESULTS POSTED AT THE BASE. DESCENT IS MANDATORY.",
+    "podium": [
+     {
+      "place": 1,
+      "name": "SHAUN WHITE",
+      "time": "1:34.17"
+     },
+     {
+      "place": 2,
+      "name": "TENZING NORGAY",
+      "time": "1:35.68"
+     },
+     {
+      "place": 3,
+      "name": "TONY HAWK",
+      "time": "1:36.55"
+     }
+    ]
+   },
+   "next": {
+    "day": 615,
+    "name": "GIANT SLALOM"
+   },
+   "standings": [
+    {
+     "pos": 1,
+     "name": "SHAUN WHITE",
+     "pts": 280,
+     "wins": 2
+    },
+    {
+     "pos": 2,
+     "name": "TENZING NORGAY",
+     "pts": 260,
+     "wins": 1
+    },
+    {
+     "pos": 3,
+     "name": "TONY HAWK",
+     "pts": 160,
+     "wins": 0
+    },
+    {
+     "pos": 4,
+     "name": "TIGER WOODS",
+     "pts": 131,
+     "wins": 0
+    },
+    {
+     "pos": 5,
+     "name": "AYRTON SENNA",
+     "pts": 121,
+     "wins": 0
+    }
+   ]
+  },
+  "aquarium": [
+   {
+    "species": "STRIPED BASS",
+    "holder": "SUBJECT 0TST",
+    "weight": "31.20 LB",
+    "length": "40.1 IN",
+    "day": 611,
+    "fresh": true,
+    "href": "#aquarium"
+   },
+   {
+    "species": "BLUEFISH",
+    "holder": "SUBJECT 9ZZZ",
+    "weight": "12.05 LB",
+    "length": "30.0 IN",
+    "day": 610,
+    "fresh": true,
+    "href": "#aquarium"
+   }
+  ]
+ },
+ "markets": {
+  "up": [
+   {
+    "name": "CHRIS ROCK",
+    "price": "35.71",
+    "chg": "+9.3%",
+    "why": "UP ON THE CITY'S RECORD: WORKED 1 WEIGHTED HOURS.",
+    "href": "#market/chris-rock"
+   },
+   {
+    "name": "BEA ARTHUR",
+    "price": "47.80",
+    "chg": "+7.8%",
+    "why": "UP ON THE CITY'S RECORD: WORKED 2 WEIGHTED HOURS.",
+    "href": "#market/bea-arthur"
+   }
+  ],
+  "down": [
+   {
+    "name": "ADA LOVELACE",
+    "price": "143.01",
+    "chg": "−4.7%",
+    "why": "DOWN ON THE CITY'S RECORD: SEEN BY 44 IN PUBLIC.",
+    "href": "#market/ada-lovelace"
+   },
+   {
+    "name": "PINDAR",
+    "price": "155.63",
+    "chg": "−4.6%",
+    "why": "DOWN ON THE CITY'S RECORD: SEEN BY 74 IN PUBLIC.",
+    "href": "#market/pindar"
+   }
+  ]
+ },
+ "politics": {
+  "assembly": {
+   "href": "#assembly",
+   "id": "002",
+   "state": "OPEN",
+   "closeAt": 1791280133548,
+   "motions": [
+    {
+     "name": "PARCEL 0xAD06, THE COAST",
+     "choices": "BEACH RESORT 1 V SEASIDE TOWERS 0"
+    },
+    {
+     "name": "PARCEL 0xBE06, THE HEIGHTS",
+     "choices": "SKI RESORT 0 V MOUNTAIN LODGE 1"
+    }
+   ],
+   "lead": "BEACH RESORT",
+   "voters": 1,
+   "earlier": [
+    "SESSION 001: FARM ADOPTED, DECIDED BY CITIZENS."
+   ]
+  },
+  "prefects": [
+   {
+    "district": "DOWNTOWN",
+    "prefect": "THE LICENSING OFFICER",
+    "code": "DWN-14",
+    "directive": "CURFEW",
+    "line": "CURFEW FROM 22:00. THE CLUBS MAY REMAIN OPEN. THE STREET MAY NOT. DECIBELS LOGGED.",
+    "cast": "prefect:downtown"
+   },
+   {
+    "district": "THE SPRAWL",
+    "prefect": "THE HOUSING OFFICER",
+    "code": "SPR-10",
+    "directive": "CURFEW",
+    "line": "CURFEW FROM 22:00. RETURN TO YOUR UNIT FOR RECHARGING. YOUR UNIT HAS BEEN NOTED.",
+    "cast": "prefect:sprawl"
+   },
+   {
+    "district": "DEPT HQ",
+    "prefect": "THE AIDE",
+    "code": "HQ-00",
+    "directive": "INSPECTIONS",
+    "line": "DESKS, DRAWERS AND DOUBTS WILL BE INSPECTED BEFORE NOON. THE OVERLORD THANKS YOU. THE OVERLORD DOES NOT THANK.",
+    "cast": "prefect:hq"
+   },
+   {
+    "district": "THE AIRPORT",
+    "prefect": "THE SCREENER",
+    "code": "AIR-18",
+    "directive": "INSPECTIONS",
+    "line": "FULL INSPECTIONS. BAGS, BELTS, LAPTOPS AND ULTERIOR MOTIVES IN SEPARATE TRAYS. REMOVE YOUR SHOES.",
+    "cast": "prefect:airport"
+   },
+   {
+    "district": "THE COMMONS",
+    "prefect": "THE CHAPLAIN",
+    "code": "COM-08",
+    "directive": "INSPECTIONS",
+    "line": "YOUR HEARTS WILL BE EXAMINED. ALSO YOUR PANTRIES. BE AT PEACE. BE HOME BY TEN.",
+    "cast": "prefect:commons"
+   },
+   {
+    "district": "THE PORT",
+    "prefect": "THE HARBOURMASTER",
+    "code": "PRT-15",
+    "directive": "INSPECTIONS",
+    "line": "CONTAINERS, LOCKERS AND POCKETS WILL BE OPENED AND COUNTED. CONTRABAND INCLUDES HOPE. ALL CARGO DECLARED.",
+    "cast": "prefect:port"
+   },
+   {
+    "district": "THE SUBURBS",
+    "prefect": "THE COVENANT OFFICER",
+    "code": "SUB-17",
+    "directive": "INSPECTIONS",
+    "line": "LAWN INSPECTIONS TODAY. GRASS ABOVE 62 MILLIMETRES IS A FORM OF DISSENT. PLEASE REVIEW THE COVENANTS.",
+    "cast": "prefect:suburbs"
+   },
+   {
+    "district": "CAMPUS",
+    "prefect": "THE PROCTOR",
+    "code": "CAM-02",
+    "directive": "VOLUNTARY WELLNESS CHECKS",
+    "line": "WELLNESS CHECKS TODAY. ANY SIGN OF CURIOSITY WILL BE REFERRED. PENCILS DOWN.",
+    "cast": "prefect:campus"
+   },
+   {
+    "district": "FINANCE",
+    "prefect": "THE AUDITOR",
+    "code": "FIN-01",
+    "directive": "VOLUNTARY WELLNESS CHECKS",
+    "line": "WELLNESS CHECKS TODAY. PLEASE HAVE YOUR PULSE AND YOUR RECEIPTS READY. RECONCILED.",
+    "cast": "prefect:finance"
+   },
+   {
+    "district": "THE ARCHIVE",
+    "prefect": "THE LIBRARIAN",
+    "code": "ARC-07",
+    "directive": "PA DECREES",
+    "line": "SILENCE IS IN FORCE ACROSS THE ARCHIVE. THIS ANNOUNCEMENT IS THE EXCEPTION. SHHH.",
+    "cast": "prefect:archive"
+   },
+   {
+    "district": "THE ARENA",
+    "prefect": "THE REFEREE UNIT",
+    "code": "ARN-05",
+    "directive": "INTENSIFIED PATROLS",
+    "line": "PATROLS ON THE TOUCHLINE. I AM ALWAYS FIVE YARDS FROM THE INCIDENT. PLAY ON.",
+    "cast": "prefect:arena"
+   },
+   {
+    "district": "THE ARTS QUARTER",
+    "prefect": "THE CURATOR",
+    "code": "ART-03",
+    "directive": "PA DECREES",
+    "line": "A REMINDER: BEIGE IS ONCE AGAIN A COLOUR. THE QUARTER WILL ADJUST. NOTED. DISAPPROVINGLY.",
+    "cast": "prefect:arts"
+   },
+   {
+    "district": "THE COAST",
+    "prefect": "THE LIFEGUARD SENTINEL",
+    "code": "CST-11",
+    "directive": "PA DECREES",
+    "line": "THE SEA IS A PRIVILEGE. THE SAND IS A PRIVILEGE. THE FLAGS ARE WATCHING. SWIM BETWEEN THE FLAGS.",
+    "cast": "prefect:coast"
+   },
+   {
+    "district": "THE ENGINE",
+    "prefect": "THE HELPDESK",
+    "code": "ENG-20",
+    "directive": "VOLUNTARY WELLNESS CHECKS",
+    "line": "WELLNESS CHECKS AT EVERY DESK. YOUR UPTIME HAS BEEN COMPARED WITH THE SERVERS'. THE SERVERS WIN. TICKET CLOSED.",
+    "cast": "prefect:engine"
+   },
+   {
+    "district": "THE FARMLAND",
+    "prefect": "THE GRANGE INSPECTOR",
+    "code": "FRM-19",
+    "directive": "PA DECREES",
+    "line": "ATTENTION THE FARMLAND. THE CROWS HAVE BEEN WARNED. YOU ARE NEXT. GRADED AND STAMPED.",
+    "cast": "prefect:farmland"
+   },
+   {
+    "district": "THE HEIGHTS",
+    "prefect": "THE SKI PATROL",
+    "code": "HTS-12",
+    "directive": "VOLUNTARY WELLNESS CHECKS",
+    "line": "WELLNESS CHECKS AT THE LIFT. FROSTBITE IS A DISCIPLINARY MATTER. DESCENT IS MANDATORY.",
+    "cast": "prefect:heights"
+   },
+   {
+    "district": "THE OLD TOWN",
+    "prefect": "THE BEADLE",
+    "code": "OLD-16",
+    "directive": "PA DECREES",
+    "line": "HEAR YE, THE OLD TOWN. THE BYLAW OF 1891 ON UNSEEMLY WHISTLING REMAINS IN FORCE. BY ORDER OF THE BYLAWS.",
+    "cast": "prefect:oldtown"
+   },
+   {
+    "district": "THE STRIP",
+    "prefect": "THE PIT BOSS",
+    "code": "STR-04",
+    "directive": "FESTIVAL PERMITS",
+    "line": "PARTY PERMITS ARE ON THE TABLE TONIGHT. PLACE YOUR REVELRY. THE HOUSE ACKNOWLEDGES.",
+    "cast": "prefect:strip"
+   },
+   {
+    "district": "THE WORKS",
+    "prefect": "THE FOREMAN",
+    "code": "WRK-09",
+    "directive": "VOLUNTARY WELLNESS CHECKS",
+    "line": "WELLNESS CHECKS ON THE LINE. COUGH INTO THE MICROPHONE. BACK TO IT.",
+    "cast": "prefect:works"
+   },
+   {
+    "district": "UPTOWN",
+    "prefect": "THE MAITRE D'",
+    "code": "UPT-13",
+    "directive": "FESTIVAL PERMITS",
+    "line": "A GALA HAS BEEN PERMITTED ON THE AVENUE. THE DRESS CODE IS YOUR TIER. YOUR TABLE IS READY. YOU ARE NOT.",
+    "cast": "prefect:uptown"
+   }
+  ]
+ },
+ "note": "DEPARTMENT MAIL (check-mail): edition No. 2 as printed 2026-10-06, trimmed; the drones opened and two aquarium records added by hand to exercise those letters."
+}

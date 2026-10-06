@@ -163,6 +163,12 @@ const ITEMS = [
     rects: [[-4.5, 0, 9, 24, "$a"], [-4.5, 22, 9, 4, "#0f1c22"], [-4.5, 21.6, 9, 0.5, "$b"], [-3.5, 12, 7, 8, ["#203040", "#3ad0ff"]], [-3.5, 9, 7, 2, "#1a1a1a"], [-2, 10.5, 1, 1.5, "#ff3030"], [1, 10.5, 1, 1, "#30ff30"], [-3, 3, 6, 4, "#1a1a1a"]],
     // the marquee: the game's own logotype (brand.js), backlit on the cabinet's dark glass
     after: (c, cx, fy, s) => { if (!drawBrand(c, "jetsam", cx, fy - 24 * s, 3.2 * s)) word(c, "JETSAM!", cx, fy, 24, s, "#e5f6f6", 2.3); } },
+  // DEPARTMENT MAIL (src/mail/): the BEIGE PC the Department issues to every assigned flat (tap it at
+  // home: a little desktop with the mail, the market, the paper, solitaire), and what it upgrades into.
+  { id: "beige-pc", name: "BEIGE PC", rooms: ["study", "living", "bedroom"], tiers: [0, 1, 2], role: "desk", fw: 14,
+    rects: [[-7, 9, 14, 1.5, "#5a4632"], [-6, 0, 1, 9, "#4a3a2a"], [5, 0, 1, 9, "#4a3a2a"], [1.5, 0, 3.5, 9, "#d8d0b4"], [2, 6, 2.5, 0.6, "#a8a088"], [2.2, 1.5, 0.8, 0.8, ["#1a3a1a", "#40ff70"]],
+      [-6, 10.5, 9, 8, "#d8d0b4"], [-5.4, 11.6, 7.8, 6, "#1a1f1a"], [-5, 12, 7, 5.2, W("#008080")], [-5, 16.3, 7, 0.9, ["#7a7a7a", "#c0c0c0"]], [-2.5, 10.5, 3, 0.8, "#b8b09a"], [-6, 10.5, 9, 0.5, "#e8e0c4"]],
+    after: (c, cx, fy, s, o) => { if (o.on) word(c, "MAIL", cx - 1.5 * s, fy, 14.5, s, "#ffffff", 1.8); } },
   // THE CARD ROOM (src/play/cards/): a deck of cards on a little table (tap it at home: Solitaire,
   // Spider), the EB house deck, and what a deck upgrades into (the card table, the poker table).
   { id: "deck", name: "DECK OF CARDS", rooms: ["living", "kitchen", "bedroom", "study"], tiers: [0, 1, 2], fw: 10, tints: [["#0f3d22", "#2f8a50"]],
@@ -180,6 +186,14 @@ const ITEMS = [
     after: (c, cx, fy, s) => word(c, "HOME GAME", cx, fy, 17, s, "#c9a227", 2.2) },
   // ---- the upgrade tiers (src/economy/shops.js UPGRADES): never placed by dressUnit, only by a
   // resident who bought the tier below and upgraded it. whole: the piece takes the whole room.
+  { id: "gaming-rig", name: "GAMING RIG", rooms: ["study", "living", "bedroom"], tiers: [0, 1, 2], role: "desk", fw: 18, glow: true, tints: [["#ff2fd0", "#30f0ff"]],
+    rects: [[-9, 9, 18, 1.5, "#1a1a20"], [-8, 0, 1.2, 9, "#101014"], [6.8, 0, 1.2, 9, "#101014"], [3, 0, 4.5, 11, "#14141a"], [3.4, 0.5, 0.5, 10, "$a"], [6.6, 0.5, 0.5, 10, "$b"], [4, 4, 2.6, 2.6, ["#203040", "#30f0ff"]],
+      [-9, 11, 7, 6, "#0c0c10"], [-8.6, 11.4, 6.2, 5, W("#7a2fff")], [-2, 11, 7, 6, "#0c0c10"], [-1.6, 11.4, 6.2, 5, W("#2fd07a")], [-6, 10.5, 9, 0.6, "$a"]],
+    after: (c, cx, fy, s) => word(c, "RGB", cx - 2 * s, fy, 18.5, s, "#30f0ff", 1.8) },
+  { id: "server-rack", name: "SERVER RACK", rooms: ["study", "living", "bedroom"], tiers: [0, 1, 2], role: "desk", fw: 12, glow: true,
+    rects: [[-6, 0, 12, 30, "#16181c"], [-5.4, 0.6, 10.8, 28.8, "#0c0d10"], ...Array.from({ length: 8 }, (_, k) => [-5, 2 + k * 3.4, 10, 2.6, "#23262c"]),
+      ...Array.from({ length: 8 }, (_, k) => [3, 2.8 + k * 3.4, 0.8, 0.8, k % 3 ? ["#1a3a1a", "#40ff70"] : ["#3a2a0a", "#ffb030"]]), ...Array.from({ length: 8 }, (_, k) => [-4, 3 + k * 3.4, 5, 0.4, "#3a3e46"])],
+    after: (c, cx, fy, s) => word(c, "UPTIME", cx, fy, 31.5, s, "#40ff70", 1.8) },
   { id: "golf-cabinet", name: "BAR-TOP GOLF CABINET", rooms: ["living", "bedroom", "study"], tiers: [0, 1, 2], fw: 10, glow: true, tints: [["#0e3a1e", "#e8c040"]],
     rects: [[-5, 0, 10, 24, "$a"], [-5, 24, 10, 4, "$b"], [-4, 13, 8, 8, ["#103018", "#5ad870"]], [-3.5, 15, 7, 2, ["#16401e", "#8af0a0"]], [-5, 10, 10, 2.4, "#1a1a1a"], [-1, 11.4, 2, 1.6, "#e8e8e8"], [-3.5, 11, 1, 1, "#e03030"], [2.5, 11, 1, 1, "#3070e0"], [-3, 3, 6, 4, "#151515"]],
     after: (c, cx, fy, s) => word(c, "GOLF", cx, fy, 26, s, "#0e3a1e", 2.4) },

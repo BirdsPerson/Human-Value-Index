@@ -11,6 +11,7 @@ import { getStore } from "@netlify/blobs";
 import { isCaseId } from "./intake.js";
 import { deleteCase, removePenCard } from "./store.js";
 import { deleteWallet } from "./casino-store.js";
+import { deleteMail } from "./mail-store.js";
 import { purgeLedger } from "./economy-db.js";
 import { caseOwner, detachCase, isOwnerCase } from "./auth.js";
 import { YOUR_CAUSES, causeOf } from "../../src/movement.js";
@@ -126,6 +127,7 @@ export async function prune({ now = Date.now(), dryRun = false, budgetMs = BUDGE
       if (owner) await detachCase(owner, id);
       await deleteWallet(id);   // the casino's chips go with the file
       await purgeLedger(id);    // and the Treasury's ledger (CYCLES, positions, claims)
+      await deleteMail(id);     // and its DEPARTMENT MAIL
       await deleteCase(id);
     } catch (err) { report.errors++; console.error("prune case failed", err?.name); } }));
     last = chunk[chunk.length - 1];
