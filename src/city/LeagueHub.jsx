@@ -67,7 +67,7 @@ export function LeagueHub({ tab }) {
       {t === "tennis" && <TennisTab block={block} h={h} />}
       {t === "pit" && <PitTab block={block} h={h} />}
       {t === "cup" && <CupTab block={block} h={h} go={go} />}
-      <div className="hvi-city-note">EXHIBITIONS, PLAYED BY YOU, COUNTED NOWHERE: <a href="#golf">GOLF AT THE DEPARTMENT LINKS</a>, <a href="#hoops">BASKETBALL AT THE COURTS</a>, <a href="#football">FOOTBALL AT THE BOWL</a>.</div>
+      <div className="hvi-city-note">EXHIBITIONS, PLAYED BY YOU, COUNTED NOWHERE: <a href="#golf">GOLF AT THE DEPARTMENT LINKS</a>, <a href="#hoops">BASKETBALL AT THE COURTS</a>, <a href="#football">FOOTBALL AT THE BOWL</a>, <a href="#soccer">SOCCER AT THE ESTATE PITCH</a>.</div>
     </Frame>
   );
 }

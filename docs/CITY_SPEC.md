@@ -2704,6 +2704,94 @@ the AI, the rules and the calibration.
   audible, motion, more than one hot route at a time, changing ends, a server replay check, counting
   results anywhere.
 
+### Soccer: THE ESTATE PITCH (`#soccer`, 2026-10-06)
+
+Scott: "model them off of FIFA FC" and "keep the design simple ... make the gameplay perfect". The
+mechanics and conventions of the FC games; none of their names, marks, kits, clubs or competitions.
+
+- **Where**: `#soccer[?home=<district>][&vs=<district>][&half=3|4|6|8][&form=442|433|352][&cam=broadcast|tele|coop][&ko=1]`
+  (`src/play/soccer/Soccer.jsx`, lazy chunk). Ways in: the SOCCER tile on `#play` (`src/play/games.js`), THE
+  LEAGUES hub's exhibitions line, and DRIVE YOURSELF: E in the middle of THE ESTATE PITCH (`controlIso.js`,
+  kind `soccer`). (`#football` is American football's.)
+- **The sides** (`roster.js`): the soccer league's drafted elevens for the current season from today's plan
+  summary (`civic.districts[id].teams.soccer.roster`), else a bundled snapshot (season 22, machine day 608).
+  Names are the league's (`CURATED F.C.`); kits the district's colours on one plain kit (the away side
+  changes on a clash; keepers in a colour nobody else wears). Positions follow the league's own rule: the
+  lowest rated keeps goal; of the rest, best first, forwards, then midfield, then defence. **PLAY NOW**: your
+  own side when this browser's case is rostered (`citizen-<last four>`), else DEPARTMENT F.C., against the
+  side nearest in rating. **PLAYER LOCK** (rostered only): control stays on you; A calls for the ball, Y for
+  it in behind. Options behind "+": length, knockout (extra time and penalties), formation (4-4-2, 4-3-3,
+  3-5-2), camera, your side, the opponent (starts at once). EASY MODE (on for a first visit): the same match
+  stepped at 48 Hz instead of 60 (slower), assisted passing (wider cone, half the error), assisted shooting
+  (60% of the error), a softer CPU.
+- **Why eleven a side**: measured: the sim costs ~0.03 ms a frame and the picture ~1.4 ms on a desktop
+  (22 players, the stand, the radar), so a phone at a fifth of the speed still draws inside a frame; the
+  league drafts elevens, so every rostered player appears.
+- **The match** (`sim.js`, pure: 60 Hz fixed step, seeded mulberry32, only + - * / sqrt): a 105 x 68 m pitch,
+  regulation markings; the ends change at half time. Two halves of 3, 4 (default), 6 or 8 real minutes, the
+  clock in match minutes, running through stoppages (the FC habit), added time shown at 45 and 90 (1-5, from
+  the stoppages). Knockout: two 15-minute halves of extra time (a third of the length each), then a shootout
+  (five each, then sudden death, at one goal).
+- **Controls** (FC Xbox layout): attacking: left stick moves; A pass (to the teammate the stick points at,
+  control goes with it); Y through ball (hold: further; LT + Y lobbed); X lob, or from wide in the last third
+  a cross (up / down: far / near post); B shoot (hold: the power bar under the player, its red end goes over;
+  let go; up / down aims at that post, neither the far corner); RB + B finesse (curled), LT + B chip; B then A
+  at once: fake shot; RT sprint (the ball runs further ahead); LT close control; LB sends a forward on a run;
+  right stick: skill moves (toward goal: step-over, twice: heel flick; away: roulette; across: ball roll).
+  Stars = 1 + one per ten rating points over 50; a move above them is a stumble (sometimes losing it).
+  Defending: A standing tackle (hold: contain), B slide (from behind: a foul, maybe a card), X a teammate
+  presses too (close in: a shoulder), LT jockey, LB the man nearest the ball, right stick the man that way.
+  Keys: WASD / arrows, J A, K B, L X, I Y, Shift RT, Space LT, Q LB, E RB, R + direction the right stick,
+  Enter / Esc pause. Pads by button position (`input.js`; gamepad.js for the family and stick). Touch: the
+  round pad, PASS / THRU / CROSS / SHOOT, SPRINT, RUN / SWITCH, START; a swipe on the picture is a skill move.
+  The legend under the picture names the buttons in the hands in use, attacking or defending.
+- **The CPU** (both sides, from each player's rating, with per-player variety): a formation shape that moves
+  with the ball and with possession; the back line holds a line (dropping when the ball carrier is free),
+  the forwards play on the last man's shoulder and read the line only now and then (a line that steps up
+  leaves them offside); off-ball runs in behind (some go too soon); support angles; the nearest presses,
+  the next covers, the rest mark goal side; the carrier weighs a shot (geometric xG, pressure), every pass
+  and ball in behind (lane safety, the receiver's space, how far up the pitch, a passer who sees a runner a
+  moment late), a cross, the dribble with most room, a trick, a clearance. Passing and first touch by
+  rating; a good passer's ball is harder to cut out. The keeper stands on the ball-goal line and comes off
+  it with the ball, rushes one-on-ones, claims crosses, and reads each shot once (pace, where it crosses his
+  line, how far he must go, his reaction): dive and save (catch or parry, sometimes round the post) or not;
+  then throws or kicks it out.
+- **Laws**: offside judged when a teammate plays the ball (second-last defender, the ball, halfway; not from
+  throw-ins, corners, goal kicks; a save does not reset it) and called on the offside man's touch (an
+  indirect free kick); throw-ins, corners and goal kicks by who touched it last (a shot that goes wide
+  through a crowd is usually given as a corner); the woodwork; fouls from mistimed and from-behind tackles,
+  slides and shoulders (a booked man is more careful); yellow, second yellow and red (serious foul play;
+  denying an obvious chance outside the area); a sent-off man leaves; free kicks with a wall of 3-5 at 9.15
+  m (in range: aim with the stick, R + up / down height, LB / RB curl, hold B; the curl bends the flight);
+  penalties (stick for a side, B for power; the CPU keeper guesses, the human's dives the way the stick is
+  held as it is struck).
+- **Calibration** (CPU v CPU, the default 2 x 4 minutes, 80 matches): 2.98 goals, 27.9 shots, 10.3 on target
+  (saves + goals), 11.2 fouls, 2.8 yellows, 0.4 reds, 2.9 offsides, 8.5 corners, ~34% draws; a stronger
+  eleven wins nearly every time and has a little more of the ball (52-54%). `check-soccer` holds bands over 24
+  matches.
+- **Presentation**: the score bug (codes, score, minute, added time, penalties), the Overlord's captions
+  (`calls.js`, the Department's voice; nobody speaks or is quoted), a banner for GOAL / OFFSIDE / cards /
+  set-piece prompts, the radar, goal replays (the last four seconds at half speed while the match waits;
+  A, B or START skips; nothing stepped or logged), the scorer's run to the corner flag, a stand that rises,
+  the shared crowd (`crowdAudio.js`: roar, ooh, groan, applause) and the terrace's own clapped chant
+  (`audio.js`), the whistle. Pause and the final whistle use `src/play/GameMenu.jsx`. The camera:
+  BROADCAST (side-on, elevated, true perspective, following the ball with a lead), TELE (lower, closer),
+  CO-OP (high and wide); changeable mid-match.
+- **Faces**: heads cut from each file photo by `src/play/heads.js`, on the kit; painted from the default
+  spec when no likeness exists.
+- **The record**: `{version, seed, cfg (length, formations, knockout, easy, lock, both elevens), inputLog,
+  result}`, the human's 16-bit mask a frame (UP 1, DOWN 2, LEFT 4, RIGHT 8, A 16, B 32, X 64, Y 128, RT 256,
+  LT 512, LB 1024, RB 2048, right stick 4096-32768), run-length encoded. Re-run at the whistle; the last five
+  kept in `localStorage["hvi-soccer-exhibitions"]`; WATCH THE REPLAY plays the tape at 2x.
+- **Check**: `scripts/check-soccer.mjs` (purity; offside beyond / level / from a throw-in / through a save;
+  throw-in, goal kick, corner, goal, the post; penalty; yellow, second yellow, straight red, ten men; extra
+  time and the shootout's arithmetic; the power bar, the assisted pass, the stars; a bot pressing every
+  button replays exactly, another seed differs, a doctored log fails, another version is refused, easy and
+  lock replay; strength; calibration bands; the rosters and clock equal the league's and the city's; the
+  calls quote nobody).
+- **Not yet**: advantage, substitutions, injuries, stamina, the human controlling the keeper in open play,
+  manual (unassisted) passing, set-piece routines, counting results anywhere, a server replay check.
+
 ### Fishing: THE WATERS (`#fish`, 2026-10-05)
 
 - **Where**: `#fish[?spot=pier|break|estuary|river|lake]` (`src/play/fish/Fish.jsx`, lazy chunk). Ways in:
