@@ -57,6 +57,25 @@ export async function putPenCard(caseId, card) {
   console.warn("pen index: lost the write race; card saved, index catches up on the next write");
 }
 
+// A new outfit on a citizen's file photo: the card and its line in the index change in place
+// (the index keeps its order: dressing is not news). No card on file: nothing to change.
+export async function setPenAvatar(caseId, avatar) {
+  const store = pen();
+  const key = `citizen:${caseId}`;
+  const prev = await store.get(key, { type: "json" }).catch(() => null);
+  if (!prev) return false;
+  await store.setJSON(key, { ...prev, avatar });
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const cur = await store.getWithMetadata(PEN_INDEX, { type: "json" });
+    if (!cur?.data?.cards) return true;
+    if (!cur.data.cards.some(c => c.key === key)) return true;
+    const cards = cur.data.cards.map(c => (c.key === key ? { ...c, avatar } : c));
+    const res = await store.setJSON(PEN_INDEX, { cards }, { onlyIfMatch: cur.etag });
+    if (res.modified) return true;
+  }
+  return true;
+}
+
 async function rebuildPenIndex(store) {
   const { blobs } = await store.list({ prefix: "citizen:" });
   const cards = await Promise.all(blobs.map(b => store.get(b.key, { type: "json" }).then(c => c && { key: b.key, ...c }).catch(() => null)));

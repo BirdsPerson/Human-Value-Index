@@ -10,6 +10,7 @@
 // whole suite against a real Postgres with the migration applied (HVI_ECON_PG=1, psql).
 import { createHash } from "node:crypto";
 import { marketMemory } from "./market-db.js";
+import { shopsMemory } from "./shops-db.js";
 
 const salt = () => process.env.HVI_IP_SALT || "hvi-limits-v1";
 const sha = (s) => createHash("sha256").update(s).digest("hex");
@@ -153,6 +154,10 @@ export function memoryLedger() {
   const M = marketMemory(db, { nowMs, clone });
   const { wrapView, wrapPurge, ...mfns } = M;
   Object.assign(fns, mfns, { econ_view: wrapView(fns.econ_view), econ_purge: wrapPurge(fns.econ_purge) });
+  // THE SHOPS' functions (shops-db.js), and the purge with their rows
+  const S = shopsMemory(db, { nowMs, clone });
+  const { wrapPurge: shopPurge, ...sfns } = S;
+  Object.assign(fns, sfns, { econ_purge: shopPurge(fns.econ_purge) });
   return {
     kind: "memory",
     db,

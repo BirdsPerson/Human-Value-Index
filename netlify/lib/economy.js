@@ -5,6 +5,7 @@
 // and tier): wealth never raises the score (scripts/check-economy.mjs).
 import { randomUUID } from "node:crypto";
 import * as SIM from "../../src/city/sim.js";
+import { towerPlan, residentFlat } from "../../src/city/tower.js";
 import { getStore } from "@netlify/blobs";
 import { STORE as PLANS, manifest2Cached, partKey } from "./plans.js";
 import { ledger, caseHash, ownerHash } from "./economy-db.js";
@@ -24,6 +25,9 @@ export function citizenOf(caseId, rec) {
   const last4 = caseId.slice(-4);
   return { slug: `citizen-${last4.toLowerCase()}`, name: `Subject ${last4}`, score: last?.score, tier: last?.tier, kind: "citizen" };
 }
+// MY APARTMENT names the same door as the tower: where the cutaway (tower.js residentFlat) puts the
+// citizen, its storey, flat and rooms. A home that is not a tower (a house, a cottage) keeps the
+// floor and a unit number hashed from the citizen (no cutaway flat, so no furniture placement yet).
 export function apartmentOf(caseId, rec) {
   try {
     const s = citizenOf(caseId, rec);
@@ -31,12 +35,20 @@ export function apartmentOf(caseId, rec) {
     const b = SIM.BUILDING[p?.building];
     const fi = SIM.floorOf(place, SIM.keyOf(s));
     const f = b?.floors?.find(x => x.index === fi) || null;
-    const floorCode = f ? (f.code || (f.index === 0 ? "G" : `${f.index}F`)) : null;
-    const unit = `${floorCode || "G"}-${String(1 + (SIM.keyOf(s).split("").reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7) % 24)).padStart(2, "0")}`;
+    let floorCode = f ? (f.code || (f.index === 0 ? "G" : `${f.index}F`)) : null;
+    let unit = `${floorCode || "G"}-${String(1 + (SIM.keyOf(s).split("").reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7) % 24)).padStart(2, "0")}`;
+    let flat = null, storeyLevel = null;
+    const plan = b ? towerPlan(b) : null;
+    const u = plan ? residentFlat(plan, s) : null;
+    if (u) {
+      const st = plan.storeys.find(x => x.units.includes(u));
+      storeyLevel = st.level; floorCode = st.code; unit = u.label;
+      flat = { id: u.id, label: u.label, storey: st.id, level: st.level, rooms: u.rooms.map(r => ({ id: r.id, purpose: r.purpose })) };
+    }
     return {
       place, placeName: placeName(place).toUpperCase(), building: b?.id || null, buildingName: (b?.name || placeName(place)).toUpperCase(),
-      district: p?.district || null, districtName: districtName(p?.district).toUpperCase(), floor: fi, floorName: f ? String(f.name || "").replace(`${b?.name} // `, "").toUpperCase() : null, floorCode, unit,
-      tier: s.tier || null, href: b ? `#city/${p.district}/${b.id}${fi != null ? `?floor=${fi}` : ""}` : `#city/${p?.district || ""}`,
+      district: p?.district || null, districtName: districtName(p?.district).toUpperCase(), floor: fi, floorName: f ? String(f.name || "").replace(`${b?.name} // `, "").toUpperCase() : null, floorCode, unit, flat,
+      tier: s.tier || null, href: b ? `#city/${p.district}/${b.id}${fi != null ? `?floor=${fi}${storeyLevel != null ? `&storey=${storeyLevel}` : ""}` : ""}` : `#city/${p?.district || ""}`,
       rent: 0, tenure: "PERMANENT",
     };
   } catch { return null; }

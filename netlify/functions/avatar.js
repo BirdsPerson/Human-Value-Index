@@ -4,7 +4,7 @@ import { isCaseId } from "../lib/intake.js";
 import { getCase, updateCase, putPenCard, hitLimit } from "../lib/store.js";
 import { makeJson, preflight, foreignOrigin, clientIp, chargeGlobal, FOREIGN_ORIGIN_LINE, GLOBAL_CAP_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { descriptionError, extractSpec } from "../lib/avatar.js";
-import { sanitizeAvatar } from "../../src/avatar.js";
+import { sanitizeAvatar, outfitOf } from "../../src/avatar.js";
 
 export const UPDATES_PER_CASE_DAILY = 5;
 export const UPDATES_PER_IP_DAILY = 20;
@@ -54,7 +54,8 @@ export default async (req, context) => {
     }
     const spec = await extractSpec(description).catch(() => null);
     if (!spec) return json(502, { error: "The Department's illustrator could not make sense of that. Plainer words. Hair, build, clothes." });
-    const avatar = { kind: "procedural", spec };
+    // a new likeness keeps the outfit the file is wearing (THE SHOPS: bought, so kept)
+    const avatar = sanitizeAvatar({ kind: "procedural", spec: { ...spec, ...outfitOf(record.avatar?.spec) } }) || { kind: "procedural", spec };
     const saved = await updateCase(caseId, cur => (cur && cur.avatar?.kind !== "sprite" ? { ...cur, avatar } : undefined));
     if (!saved || saved.avatar?.kind === "sprite") return json(409, { error: HAND_DRAWN_LINE });
     const last = saved.history[saved.history.length - 1];
