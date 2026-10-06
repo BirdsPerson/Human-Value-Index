@@ -20,13 +20,12 @@ draws one reads from it. `scripts/check-ads.mjs` checks it.
 | City billboard (the planner's reserved sites) | 10 | yes | 7 house ads (one brand each: EBTV, EB Shop, EBSN, JETSAM!, Goodnight Irene's, Beacon, Brainforest), 3 THIS SPACE AVAILABLE |
 | Stadium perimeter (the Estate Pitch's ring) | 15 | yes | the ground's name on the halfway line, Electric Basement and EB Shop either side, 12 AVAILABLE |
 | Court-side boards (tennis back wall and side walls, the Courts' apron) | 11 | yes | one small EB mark on each venue, the ground's name at the Courts, the rest plain or AVAILABLE |
-| Venue naming rights | 7 | no | the Tennis Club, the Estate Pitch, the Courts, the Bowl, the Lanes, the Links, the Mountain |
-| Team (shirt) sponsor | 10 | no | one per district; it covers that district's sides in every sport |
-| League title sponsor | 4 | no | baseball, basketball, football, soccer |
+| Venue naming rights (venues outside the leagues) | 4 | no | the Tennis Club, the Lanes, the Links, the Mountain |
 | Scoreboard / score bug | 4 | no | tennis, soccer, basketball, football broadcasts |
 | Arcade marquee side | 1 | no | |
 | Bus / train wrap | 2 | no | the Loop, the Shore Line |
-| **Total** | **64** | **36 drawn** | |
+| **Total in the inventory** | **47** | **36 drawn** | |
+| League sponsorships (the pyramid's) | per season | no | `shirt:<sport>:<clubId>`, `league-title:<sport>:<k>`, `ground:<sport>:<k>`, `cup-title`, from `sponsorSlots(block)` in `src/city/leagues.js` (PYRAMID.md section 8); derived from the season, so they are not copied into the inventory |
 
 The satirical slogans ("APPLAUSE IS MONITORED", "YOUR SEAT IS ASSIGNED", "NO DUNKING ON STAFF")
 are gone from the boards. The joke lives in the commentary and the Department's notices. A board
@@ -40,9 +39,9 @@ THE LANES.
 |---|---|---|
 | **Board** (a perimeter or court-side board, one billboard) | a week | that board, every match or every view |
 | **Billboard takeover** (all city billboards, or all of one venue's boards) | a week or a month | everywhere at once; the launch-week product |
-| **Team sponsor** (the shirt) | a season (the leagues' season) | the shirt in every match, the team page, the standings row: "CURATED F.C., SPONSORED BY ..." |
+| **Team sponsor** (the shirt, the pyramid's `shirt:` slots) | a season (the leagues' season) | the shirt in every match, the team page, the standings row: "CURATED F.C., SPONSORED BY ..." |
 | **Venue naming** | a season | the venue's title in the city, the game's title card: "<SPONSOR> PRESENTS THE ESTATE PITCH" (the ground keeps its name) |
-| **League title** | a season | the league table's header, the fixture list |
+| **League title** (`league-title:`, `cup-title`) | a season | the league table's header, the fixture list |
 | **Score bug** | a week | a small mark on the broadcast score bug |
 
 "Individual people" is the board product. One board is the smallest thing anyone can buy.
@@ -144,6 +143,8 @@ price = base(surface) x audience(slot) x length
 
 ## 9. Refunds and the kill switch
 
+- The league slots bind through `sponsorOf(id)` in leagues.js, which returns null today. Selling
+  one means `sponsorOf` reads the booking calendar, and the hub prints the sponsor's name.
 - **Kill switch:** each slot, each buyer and all ads globally (one flag). A killed slot shows
   THIS SPACE AVAILABLE at once. `creativeOf` already falls back to AVAILABLE for anything unknown,
   never to a blank.

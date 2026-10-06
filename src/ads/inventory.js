@@ -18,7 +18,7 @@
 //   creative     a key of CREATIVES
 //   placeholder  how an AVAILABLE slot is drawn: "label" (THIS SPACE AVAILABLE, dim) or "plain"
 //                (an empty board, for venues that want the breathing room)
-//   drawn        false: an inventory line that no surface draws yet (shirt sponsors, naming rights)
+//   drawn        false: an inventory line that no surface draws yet (naming rights, score bugs, wraps)
 //   at           games only: where the face stands in the game's own world units, for the check:
 //                {x0, x1, y} (soccer, hoops: along the far side) or {wall: "back" | "side"} (tennis)
 
@@ -75,7 +75,6 @@ const RING_AT = (() => {
 // The Courts' apron: six boards of 9 m along the far side, from x = -27.
 const COURTS_APRON = [["available", "plain"], ["ebtv"], ["available", "label"], ["venue-courts"], ["available", "plain"], ["available", "label"]];
 
-const TEAM_DISTRICTS = ["arts", "campus", "finance", "strip", "arena", "hq", "archive", "commons", "works", "sprawl"];
 const planned = (id, surface, venue, location, basis) =>
   ({ id, surface, venue, location, size: null, audience: { measured: null, basis, share: null }, creative: "available", drawn: false });
 
@@ -110,10 +109,11 @@ export const SLOTS = [
     creative, ...(placeholder ? { placeholder } : {}), drawn: true, at: { x0: -27 + i * 9.1, x1: -27 + i * 9.1 + 9, y: 17.14 },
   })),
   // ---- planned: in the inventory, drawn nowhere yet (ADS.md "What is for sale") ----
-  ...[["tennis", "THE TENNIS CLUB"], ["soccer", "THE ESTATE PITCH"], ["hoops", "THE COURTS"], ["football", "THE BOWL"], ["bowling", "THE LANES"], ["golf", "THE DEPARTMENT LINKS"], ["ski", "THE MOUNTAIN"]]
+  // The leagues' own sponsorships (shirts, league titles, the grounds, the Cup) are the pyramid's:
+  // src/city/leagues.js sponsorSlots(block) derives their ids from the season (docs/design/PYRAMID.md
+  // section 8), so they are not copied here. These are the venues outside the leagues.
+  ...[["tennis", "THE TENNIS CLUB"], ["bowling", "THE LANES"], ["golf", "THE DEPARTMENT LINKS"], ["ski", "THE MOUNTAIN"]]
     .map(([v, name]) => planned(`naming-${v}`, "venue-naming", v, `${name}: "<sponsor> presents ${name}"`, `every visit to ${name}`)),
-  ...TEAM_DISTRICTS.map(d => planned(`team-${d}`, "team-sponsor", "leagues", `the ${d} district's sides: the shirt, every sport`, "every match the district plays, the standings")),
-  ...["baseball", "basketball", "football", "soccer"].map(s => planned(`league-${s}`, "league-title", "leagues", `the city's ${s} league`, "the league table, every fixture")),
   ...["tennis", "soccer", "hoops", "football"].map(g => planned(`bug-${g}`, "scoreboard", g, "the broadcast's score bug", "every frame of every match")),
   planned("arcade-marquee", "arcade-marquee", "city", "the arcade's marquee, the side panel", "the arcade's visitors"),
   planned("wrap-loop", "transit-wrap", "city", "the Loop's train", "the whole ring"),
