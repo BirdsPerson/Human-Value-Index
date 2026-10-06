@@ -4,8 +4,10 @@ import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { CLOTH } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
 import { COURSES, COURSE_NAME, parOf } from "./course.js";
-import { newRound, step, logPush, cardOf, toParText, botBits, BTN, VERSION, HZ } from "./sim.js";
-import { draw, W, H } from "./render.js";
+import { newRound, step, logPush, cardOf, toParText, botBits, BTN, VERSION, HZ, holeOf, CLUBS } from "./sim.js";
+import { draw, W, H, windWords } from "./render.js";
+import { reactionFor, holeReaction } from "./gallery.js";
+import { endScene, skipEnd, CAPTION, SCENE_SOUND, endFrame } from "./scenes.js";
 import { golfers, golferBySlug } from "./roster.js";
 import { lookFor, paintCard } from "./looks.js";
 import * as sfx from "./audio.js";
@@ -15,8 +17,11 @@ import "../pages.css";
 // #golf[?vs=<slug>]: THE DEPARTMENT LINKS (docs/CITY_SPEC.md "PLAYABLE SPORTS / Golf"). The course
 // APPLICATION 001 proposed for LOT 0x6F07, which THE ASSEMBLY declined in favour of the farm, played
 // anyway, NES-style: stroke play alone or a match against a golfer on file. Exhibitions only: no
-// result reaches any standings. A round is kept in this browser as {seed, version, inputLog, result}
-// (sim.js replays it tick for tick) for the day a server checks it.
+// result reaches any standings. A round is kept in this browser as {v, seed, cfg, inputLog, result}
+// (replay.js replays it tick for tick on the sim version it was played on) for the day a server
+// checks it. The gallery (gallery.js) reacts to each shot: a sound (../crowdAudio.js, under the
+// same mute), the crowd's arms (render.js) and a line for the screen reader. After the last hole,
+// a short scene (scenes.js), then the card.
 
 const KEEP = "hvi-golf-rounds";
 const MEMORY = [];   // this tab's rounds, kept even when storage is not
@@ -105,7 +110,7 @@ export default function Golf({ route }) {
         </>
       ) : (
         <>
-          <p className="pg-lede">GOLF ON FAMOUS HOLES, AGAINST THE COURSE OR A FIGURE ON FILE. LEFT AND RIGHT AIM. EACH SHOT IS THREE PRESSES OF SPACE (SWING ON A PHONE): START, POWER, THEN ON THE LINE. SOUND IS OPTIONAL.</p>
+          <p className="pg-lede">GOLF ON FAMOUS HOLES, AGAINST THE COURSE OR A FIGURE ON FILE. LEFT AND RIGHT AIM. A FULL SWING IS THREE PRESSES OF SPACE (SWING ON A PHONE): START, POWER, THEN ON THE LINE. A PUTT IS TWO: START, THEN PACE. MIND THE WIND. SOUND IS OPTIONAL.</p>
           <div className="pg-start">
             <Button variant="primary" ref={playRef} onClick={() => begin(pre, false, pre ? {} : { course: "open", start: 0, count: 9, easy: true })}>{pre ? `PLAY ${pre.name}` : "PLAY NOW"}</Button>
             <span className="pg-sub">{pre ? `MATCH PLAY, ${count} HOLES${easy ? ", EASY SWING" : ""}.` : "THE FRONT NINE OF THE DEPARTMENT OPEN, EASY SWING ON."}</span>
@@ -161,6 +166,7 @@ export default function Golf({ route }) {
         <summary>HOW TO PLAY</summary>
         <div className="pg-more-body"><Controls /></div>
       </details>
+      <p className="gf-p dim">THE OPEN'S GREENS, FAIRWAYS, BUNKERS AND WATER: MAP DATA &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OPENSTREETMAP CONTRIBUTORS</a> (ODBL), TURNED AND SCALED BY THE DEPARTMENT.</p>
     </div>
   );
 }
@@ -170,6 +176,9 @@ function Controls() {
     <dl className="gf-keys">
       <dt>AIM</dt><dd>LEFT / RIGHT (ARROWS, D-PAD, STICK, OR THE ARROW BUTTONS ON A PHONE). HOLD TO AIM FASTER.</dd>
       <dt>SWING</dt><dd>SPACE OR Z (PAD: A / CROSS; PHONE: SWING). PRESS TO START, PRESS FOR POWER, PRESS ON THE RED LINE. EARLY HOOKS, LATE SLICES.</dd>
+      <dt>PUTT</dt><dd>TWO PRESSES: START, THEN PACE (NO RED LINE ON THE GREEN). THE GREEN MARK ON THE METER IS WHERE A FLAT PUTT REACHES THE CUP. LET THE MARKER FALL BACK AND THE PUTT IS CALLED OFF.</dd>
+      <dt>WIND</dt><dd>THE ARROW IS THE WIND AS YOU FACE THE SHOT. HELP / INTO: WITH YOU OR AGAINST (INTO COSTS MORE). L&gt;R / R&gt;L: IT DRIFTS THE BALL. A HIGH SHOT FEELS IT MORE THAN A LOW ONE. PUTTS IGNORE IT.</dd>
+      <dt>THE GROUND</dt><dd>THE BALL BOUNCES AND RUNS: FURTHEST ON FAIRWAY, LITTLE IN ROUGH, HARDLY AT ALL IN SAND. WEDGES SPIN AND STOP ON THE GREEN; THE DRIVER RUNS. SLOPES MOVE IT EVERYWHERE.</dd>
       <dt>CLUB</dt><dd>X OR DOWN: SHORTER. UP: LONGER. (PAD: B / CIRCLE, BUMPERS. PHONE: CLUB.)</dd>
       <dt>PAUSE</dt><dd>ENTER (PAD: START; PHONE: II).</dd>
       <dt>THE GREEN</dt><dd>THE ARROWS ON THE GREEN POINT DOWNHILL. DARKER IS STEEPER. THE PUTTER'S METER IS SLOWER.</dd>
@@ -210,7 +219,7 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
   doneRef.current = onDone;
   const togglePause = () => { pausedRef.current = !pausedRef.current; setPaused(pausedRef.current); };
 
-  // integer scaling in device pixels: the 256x224 frame is drawn at k device pixels per pixel
+  // integer scaling in device pixels: the 320x224 frame is drawn at k device pixels per pixel
   useEffect(() => {
     const fit = () => {
       const w = wrap.current?.clientWidth || W, dpr = window.devicePixelRatio || 1;
@@ -224,6 +233,8 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
 
   useEffect(() => {
     const st = newRound(cfg), log = [];
+    const still = (() => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } })();
+    let endBits = 0, endPlayed = 0, endSaid = false;
     // the golfers' looks arrive when their faces load; the picture uses whatever is here
     const looks = [];
     (lookP || []).forEach((p, i) => Promise.resolve(p).then(l => { if (l) { l.card = paintCard(l); looks[i] = l; } }).catch(() => {}));
@@ -265,17 +276,31 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
       last = now;
       while (acc >= 1 / HZ) {
         acc -= 1 / HZ;
-        const b = demo ? (input(), botBits(st)) : input();
-        if (pausedRef.current || st.phase === "done") continue;
+        const raw = input(), b = demo ? botBits(st) : raw;
+        if (st.phase === "done") {
+          // the end scene: any button goes to the card
+          if (raw & ~endBits & 63 && skipEnd(st)) setSay(`THE FINAL CARD. ${st.result?.line || ""}`);
+          endBits = raw;
+          continue;
+        }
+        if (pausedRef.current) continue;
         logPush(log, b);
         step(st, b);
         for (const e of st.ev) sfx.play(e);
         st.ev.length = 0;
       }
-      if (st.msg !== said) { said = st.msg; if (said) setSay(said); }
+      if (st.msg !== said) { said = st.msg; if (said && st.phase !== "rest") setSay(said); }
       if (st.phase !== phase || st.hi !== hi) {
         phase = st.phase; hi = st.hi;
-        if (phase === "intro") { const r = cardOf(st).rows[hi]; if (r) setSay(`HOLE ${r.n}. PAR ${r.par}. ${r.yards} YARDS. WIND ${st.wind?.mph ?? 0} MPH.`); }
+        if (phase === "rest") {
+          // the gallery takes the shot: a sound and a line (the crowd's arms are render.js's)
+          const r = reactionFor(st, holeOf(st));
+          if (r) sfx.crowd(r.kind);
+          setSay([st.msg, r?.say].filter(Boolean).join(" "));
+        }
+        if (phase === "holeEnd") { const r = holeReaction(st, holeOf(st), st.players[0]); if (r) sfx.crowd(r.kind); }
+        if (phase === "aim" && st.players[st.cur].kind === "human" && CLUBS[st.club].putt) setSay("PUTTER. TWO PRESSES: START, THEN PACE.");
+        if (phase === "intro") { const r = cardOf(st).rows[hi]; if (r) setSay(`HOLE ${r.n}. PAR ${r.par}. ${r.yards} YARDS. WIND ${st.wind?.mph ?? 0} MPH${st.wind?.mph ? `, ${windWords(st.wind, 0).replace(/HELP/g, "HELPING").replace(/L>R/g, "LEFT TO RIGHT").replace(/R>L/g, "RIGHT TO LEFT")}` : ""}.`); }
         if (phase === "holeEnd") { const c = cardOf(st); setSay(`HOLE DONE. THRU ${c.played}: ${toParText(c.toPar[0])}.`); }
         if (phase === "holeEnd" || phase === "done" || phase === "intro") setCard(cardOf(st));
         if (phase === "done" && !recorded) {
@@ -283,7 +308,14 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
           doneRef.current({ v: VERSION, seed: st.cfg.seed, cfg: st.cfg, inputLog: log.slice(), result: st.result, at: Date.now() });
         }
       }
-      draw(ctx, st, frame++, pausedRef.current, looks);
+      if (st.phase === "done") {
+        // the end scene's sounds, once each, on its own clock
+        const kind = endScene(st), f = endFrame(st, frame);
+        if (!endSaid) { endSaid = true; setSay(CAPTION[kind]); }
+        for (const [k, at] of SCENE_SOUND[kind] || []) if (f >= at && endPlayed < at + 1) sfx.crowd(k);
+        endPlayed = f + 1;
+      }
+      draw(ctx, st, frame++, pausedRef.current, looks, { still });
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -302,9 +334,9 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
     <div className="gf-play" ref={wrap}>
       <div className="gf-stage">
         <canvas ref={canvas} width={W} height={H} style={{ width: scale.css, height: (scale.css * H) / W }}
-          aria-label="Golf: the golfer from behind with the hole running away to the horizon, the hole from above in the corner window, the swing meter along the bottom." role="img" />
+          aria-label="Golf: the golfer from behind with the hole running away to the horizon, the hole from above in the corner window, the swing meter and the wind along the bottom." role="img" />
       </div>
-      <div className="gf-status">{pad ? `CONTROLLER: ${pad.toUpperCase()}` : coarse ? "\u25C0 \u25B6 AIM // SWING, THREE TAPS // CLUB // II PAUSES" : "KEYS: ARROWS AIM // SPACE SWINGS // X CLUB // ENTER PAUSES"}{muted ? " // MUTED" : ""}{cfg.easy ? " // EASY SWING" : ""}</div>
+      <div className="gf-status">{pad ? `CONTROLLER: ${pad.toUpperCase()}` : coarse ? "\u25C0 \u25B6 AIM // SWING: THREE TAPS, PUTT: TWO // CLUB // II PAUSES" : "KEYS: ARROWS AIM // SPACE SWINGS (3 PRESSES, PUTTS 2) // X CLUB // ENTER PAUSES"}{muted ? " // MUTED" : ""}{cfg.easy ? " // EASY SWING" : ""}</div>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{say}</p>
       <div className="gf-touch" aria-label="Touch controls">
         <button type="button" className="gf-tb" aria-label="Aim left" {...hold(BTN.L)}>&#9664;</button>

@@ -1,33 +1,68 @@
-// THE DEPARTMENT LINKS / THE DEPARTMENT OPEN on a 256x224 canvas, NES-style, framed the way the
-// old cartridge golf games framed it: the golfer large, from behind, the hole running away from
-// him in perspective to a horizon (sky, clouds, a far tree line or the sea), and the hole from
-// above in a small bordered window in the corner. After contact the camera follows the ball down
-// the hole; on the green it drops low behind the putter and the green's fall is drawn on the turf.
+// THE DEPARTMENT LINKS / THE DEPARTMENT OPEN on a 320x224 canvas (the 16-bit consoles' wide mode),
+// framed the way the cartridge golf games framed it: the golfer large, from behind, the hole
+// running away from him in perspective to a horizon (a dithered sky, far hills that slide slower
+// than the near tree line, clouds, the sea), and the hole from above in a small window in the
+// corner. After contact the camera follows the ball down the hole; on the green it drops low
+// behind the putter and the green's fall is shaded into the turf and drawn as arrows.
 //
-// Reads the sim's state and changes nothing in it (a camera and a ball trail are kept here, per
-// round, for the picture only). Every pixel is a whole pixel; the canvas is scaled by whole
-// device pixels with smoothing off (Golf.jsx).
-import { surfaceAt, slopeAt, frameOf, fnv, rngOf } from "./course.js";
-import { CLUBS, LIE, ACC_ZONE, ACC_END, PUTT_MAX, holeOf, dirOf, cardOf, toParText } from "./sim.js";
+// The look is 16-bit, the cost is not: every material has a ramp of four to nine shades, picked
+// per pixel through a 4x4 ordered (Bayer) dither (mowing stripes, the green's slopes, the sky,
+// the haze toward the horizon); static layers (the sky, the maps, sprites, the golfer's poses)
+// are cached; the turf is re-sampled only when the camera moves. Soft shadows are a few rows of
+// translucent black. Every pixel is a whole pixel; the canvas is scaled by whole device pixels
+// with smoothing off (Golf.jsx).
+//
+// Reads the sim's state and changes nothing in it (a camera, a ball trail, the gallery's mood are
+// kept here, per round, for the picture only).
+import { surfaceAt, slopeAt, fnv, rngOf, inPoly } from "./course.js";
+import { CLUBS, LIE, ACC_ZONE, ACC_END, PUTT_MAX, holeOf, dirOf, cardOf, toParText, windRel, puttMark } from "./sim.js";
 import { drawText, textWidth, wrap } from "./font.js";
-import { shade } from "./looks.js";
+import { golferCanvas, poseOf, GW, GH, ballPx } from "./golfer.js";
+import { reactionFor } from "./gallery.js";
+import { drawEnd } from "./scenes.js";
 
-export const W = 256, H = 224;
+export const W = 320, H = 224;
+const CX = W / 2;
 const PANEL_Y = 168;                          // the HUD strip along the bottom
 export const PAL = {
   black: "#000000", white: "#fcfcfc", grey: "#bcbcbc", dgrey: "#7c7c7c", red: "#d82800", gold: "#f8b800", lime: "#b8f818",
-  ob: "#004000", ob2: "#005800", rough: "#00a800", rough2: "#008800", rough3: "#20b820", fairway: "#58d854", fairway2: "#48c444",
-  fringe: "#80d010", green: "#b8f818", green2: "#a8e410", bunker: "#fce0a8", bunker2: "#ecd098", lipD: "#c09050", lipL: "#fcf4dc",
-  waste: "#e4c890", scrub: "#8c7400", water: "#0058f8", water2: "#3cbcfc", deep: "#0040c8", tree: "#005800", tree2: "#00a800",
-  under: "#006c00", tee: "#58d854", skin: "#fca044", line: "#3cbcfc",
-  sky0: "#5c7cf8", sky1: "#3cbcfc", sky2: "#a4e4fc", cloud: "#fcfcfc", cloud2: "#bcd8fc",
+  ink: "#0c0a14", panel: "#10101c", panel2: "#1c1c30", line: "#3cbcfc", skin: "#e8a070",
 };
-const SURF = { ob: [PAL.ob, PAL.ob2], rough: [PAL.rough, PAL.rough2], fairway: [PAL.fairway, PAL.fairway], fringe: [PAL.fringe, PAL.fringe], green: [PAL.green, PAL.green], bunker: [PAL.bunker, PAL.bunker2], water: [PAL.water, PAL.water2], tee: [PAL.tee, PAL.fairway], trees: [PAL.tree, PAL.tree2] };
+// the ramps, dark to light
+export const RAMP = {
+  rough: ["#0e4a16", "#14601c", "#1c7424", "#26882c", "#349c36"],
+  fairway: ["#2a8a2a", "#38a034", "#48b440", "#5cc64e", "#74d662"],
+  green: ["#4caa2c", "#62be36", "#7ad042", "#92e050", "#acee66", "#c6f88a"],
+  fringe: ["#3c9a28", "#4cae30", "#5cbe38", "#70ce44"],
+  tee: ["#38a034", "#48b440", "#5cc64e", "#74d662"],
+  sand: ["#a87c48", "#c49a5c", "#dab676", "#ead094", "#f6e6b8"],
+  waste: ["#8c7440", "#a88c54", "#c2a66a", "#d6bc84"],
+  water: ["#08246c", "#0c368e", "#144cb2", "#2066cc", "#3a86e2", "#6caaf2", "#a8d0fa"],
+  woods: ["#06260e", "#0a3214", "#0e3e1a", "#144c20"],
+  tree: ["#04200e", "#0a3418", "#124a22", "#1c602c", "#2a7838", "#3e9046"],
+  path: ["#5c5c62", "#76767c", "#909096", "#aaaab0"],
+  sky: ["#2c3ca8", "#3450bc", "#3e64cc", "#4c7ad8", "#5e90e2", "#74a6ea", "#90bcf0", "#b0d2f6", "#d0e6fa"],
+  hills: ["#4c6c9c", "#587aa6", "#6688b0", "#7896bc", "#8aa6c8"],
+  dunes: ["#7c8c50", "#8e9c5c", "#a2ae6c", "#b8be80"],
+  cloud: ["#9cb4dc", "#c0d2ee", "#e2ecfa", "#fcfcfc"],
+};
+const RGBC = new Map();
+const rgbOf = (h) => { let v = RGBC.get(h); if (!v) { v = [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; RGBC.set(h, v); } return v; };
+const RR = Object.fromEntries(Object.entries(RAMP).map(([k, a]) => [k, a.map(rgbOf)]));
+const BAY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+// a shade v (0 .. ramp length - 1, fractional) at pixel (x, y): two neighbours, ordered dither
+export function dith(ramp, v, x, y) {
+  const n = ramp.length - 1;
+  if (v <= 0) return ramp[0];
+  if (v >= n) return ramp[n];
+  let i = Math.floor(v);
+  if (v - i > BAY[((y & 3) << 2) | (x & 3)]) i++;
+  return ramp[i];
+}
 const TONE = { harm: PAL.red, warn: PAL.gold, good: PAL.lime, "": PAL.white };
 const yds = (v) => `${Math.round(v)}Y`;
-const RGB = {};
-const rgbOf = (h) => RGB[h] || (RGB[h] = [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
 const hash = (a, b, c = 0) => { let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263) ^ Math.imul(c | 0, 2147483647); h = Math.imul(h ^ (h >>> 13), 1274126177); return (h ^ (h >>> 16)) >>> 0; };
+const LIGHT = [-0.55, 0.83];                  // the sun, in the hole's yards (upper left of the map)
 
 function px(ctx, x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); }
 function line(ctx, x0, y0, x1, y1, c, u = 1, ox = 0, oy = 0) {
@@ -35,7 +70,7 @@ function line(ctx, x0, y0, x1, y1, c, u = 1, ox = 0, oy = 0) {
   const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
   let e = dx + dy;
   ctx.fillStyle = c;
-  for (let k = 0; k < 600; k++) {
+  for (let k = 0; k < 800; k++) {
     ctx.fillRect(ox + x0 * u, oy + y0 * u, u, u);
     if (x0 === x1 && y0 === y1) break;
     const e2 = 2 * e;
@@ -44,44 +79,85 @@ function line(ctx, x0, y0, x1, y1, c, u = 1, ox = 0, oy = 0) {
   }
 }
 function box(ctx, x, y, w, h) { px(ctx, x, y, w, h, PAL.white); px(ctx, x + 1, y + 1, w - 2, h - 2, PAL.black); }
+// a soft shadow: an ellipse of translucent black, a few rows deep, darker in its middle
+export function shadow(ctx, cx, cy, rx, ry, a = 0.32) {
+  if (rx < 0.6) return;
+  ctx.save();
+  for (const [k, al] of [[1, a * 0.55], [0.62, a * 0.5]]) {
+    ctx.globalAlpha = al; ctx.fillStyle = "#000000";
+    const RX = rx * k, RY = Math.max(0.5, ry * k);
+    for (let y = -Math.ceil(RY); y <= Math.ceil(RY); y++) {
+      const w = Math.round(RX * Math.sqrt(Math.max(0, 1 - (y / (RY + 0.5)) ** 2)));
+      if (w > 0) ctx.fillRect(Math.round(cx - w), Math.round(cy + y), w * 2, 1);
+    }
+  }
+  ctx.restore();
+}
+
+// The shade of a surface at a world point: -> a ramp and a fractional shade on it (dith picks the
+// pixel). Split so the turf works the shade out once per sample and dithers two pixels from it.
+let TR = null, TV = 0;
+function turfShade(h, s, wx, wy, extra = 0) {
+  const hv = hash(Math.floor(wx * 2), Math.floor(wy * 2)) % 97 / 97;
+  switch (s) {
+    case "fairway": TR = RR.fairway; TV = 2.1 + ((Math.floor(wy / 6) & 1) ? 0.85 : -0.35) + extra + (hv - 0.5) * 0.4; return;
+    case "tee": TR = RR.tee; TV = 2 + extra + (hv - 0.5) * 0.3; return;
+    case "green": {
+      const [sx, sy] = slopeAt(h, wx, wy), lit = -(sx * LIGHT[0] + sy * LIGHT[1]);
+      TR = RR.green; TV = 2.5 + lit * 5 + ((Math.floor(wx / 2.2) + Math.floor(wy / 2.2)) & 1 ? 0.3 : -0.2) + extra; return;
+    }
+    case "fringe": TR = RR.fringe; TV = 1.6 + extra + (hv - 0.5) * 0.5; return;
+    case "rough": TR = RR.rough; TV = 1.9 + extra + (hv - 0.5) * 1.6; return;
+    case "bunker": TR = RR.sand; TV = 2.6 + extra + (hv - 0.5) * 0.8; return;
+    case "waste": if (hv < 0.06) { TR = RR.rough; TV = 1; } else { TR = RR.waste; TV = 2 + extra + (hv - 0.5) * 1.4; } return;
+    case "path": TR = RR.path; TV = 1.7 + extra + (hv - 0.5) * 0.6; return;
+    case "water": TR = RR.water; TV = 2.4 + extra + (hv > 0.94 ? 2 : 0); return;
+    case "trees": TR = RR.tree; TV = 1.2 + extra + (hv - 0.5) * 1.2; return;
+    default: TR = RR.woods; TV = 1.4 + extra + (hv - 0.5) * 2;
+  }
+}
+function turf(h, s, wx, wy, x, y, extra = 0) { turfShade(h, s, wx, wy, extra); return dith(TR, TV, x, y); }
 
 // =====================================================================================================
 // The top-down map (the corner window, the hole card at the tee): world yards <-> window pixels.
 export function holeView(h, w, hh) {
-  const xs = h.pts.map(p => p[0]);
+  const xs = h.pts.map(p => p[0]).concat(h.green.poly.pts.map(p => p[0]));
   const s = Math.max(0.6, (h.top - h.bottom) / hh, (Math.max(...xs) - Math.min(...xs) + 70) / w);
   return { s, cx: (Math.min(...xs) + Math.max(...xs)) / 2, cy: (h.top + h.bottom) / 2, kind: "hole", w, h: hh };
 }
 export function greenView(h, ball, w, hh) {
   const d = Math.hypot(ball.x - h.pin.x, ball.y - h.pin.y);
-  const s = Math.max((2 * (h.green.r + 6)) / w, (d + 8) / (hh * 0.85));
+  const b = h.green.poly.bb, gw = b[2] - b[0] + 12, gh = b[3] - b[1] + 12;
+  const s = Math.max(gw / w, gh / hh, (d + 8) / (hh * 0.85));
   const far = d > h.green.r + 4;
-  return { s, cx: far ? (ball.x + h.pin.x) / 2 : h.green.x, cy: far ? (ball.y + h.pin.y) / 2 : h.green.y, kind: "green", w, h: hh };
+  return { s, cx: far ? (ball.x + h.pin.x) / 2 : (b[0] + b[2]) / 2, cy: far ? (ball.y + h.pin.y) / 2 : (b[1] + b[3]) / 2, kind: "green", w, h: hh };
 }
 const toPx = (v, x, y, ox, oy) => [Math.round(ox + v.w / 2 + (x - v.cx) / v.s), Math.round(oy + v.h / 2 - (y - v.cy) / v.s)];
 
 const CACHE = new Map();
-function terrain(h, v) {
+export function terrain(h, v) {
   const key = `${h.id || h.n}|${h.famous ? "o" : "l"}|${v.kind}|${v.w}x${v.h}|${v.s.toFixed(3)}|${v.cx.toFixed(2)}|${v.cy.toFixed(2)}`;
   if (CACHE.has(key)) return CACHE.get(key);
   const c = document.createElement("canvas");
   c.width = v.w; c.height = v.h;
   const g = c.getContext("2d"), img = g.createImageData(v.w, v.h), d = img.data;
-  const RG = Object.fromEntries(Object.entries(SURF).map(([k, [a, b]]) => [k, [rgbOf(a), rgbOf(b)]]));
   for (let py = 0; py < v.h; py++) for (let qx = 0; qx < v.w; qx++) {
     const x = v.cx + (qx + 0.5 - v.w / 2) * v.s, y = v.cy - (py + 0.5 - v.h / 2) * v.s;
     const s = surfaceAt(h, x, y);
-    let alt = false;
-    if (s === "rough") alt = (qx + py * 3) % 7 === 0;
-    else if (s === "ob") alt = (qx + py) % 2 === 0;
-    else if (s === "water") alt = (qx * 3 + py * 5) % 23 === 0;
-    else if (s === "bunker") alt = (qx + py * 2) % 9 === 0;
-    else if (s === "trees") alt = (qx + py) % 2 === 0;
-    else if (s === "fairway") alt = v.kind !== "green" && Math.floor(py / 3) % 2 === 1;
-    let col = RG[s][alt ? 1 : 0];
-    if (s === "fairway" && alt) col = rgbOf(PAL.fairway2);
+    const col = turf(h, s, x, y, qx, py, s === "fairway" && v.kind === "green" ? -0.3 : 0);
     const i = (py * v.w + qx) * 4;
     d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
+  }
+  // the trees from above: a dark crown with a lit edge
+  for (const t of h.trees) {
+    const cx = (t.x - v.cx) / v.s + v.w / 2, cy = v.h / 2 - (t.y - v.cy) / v.s, r = Math.max(1, t.r / v.s);
+    for (let y = Math.floor(cy - r); y <= cy + r; y++) for (let x = Math.floor(cx - r); x <= cx + r; x++) {
+      if (x < 0 || y < 0 || x >= v.w || y >= v.h) continue;
+      const u = (x + 0.5 - cx) / r, w2 = (y + 0.5 - cy) / r, q = u * u + w2 * w2;
+      if (q > 1) continue;
+      const col = dith(RR.tree, 2.6 - (u * LIGHT[0] - w2 * LIGHT[1]) * 2 - q, x, y), i = (y * v.w + x) * 4;
+      d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2];
+    }
   }
   g.putImageData(img, 0, 0);
   if (v.kind === "green") {
@@ -91,9 +167,9 @@ function terrain(h, v) {
       const sf = surfaceAt(h, x, y);
       if (sf !== "green" && sf !== "fringe") continue;
       const [sx, sy] = slopeAt(h, x, y), m = Math.hypot(sx, sy);
-      g.fillStyle = m > 0.35 ? "#007800" : "#58a800";
-      if (m < 0.04) { g.fillRect(qx, py, 1, 1); continue; }
-      const ux = sx / m, uy = -sy / m, L = m > 0.35 ? 4 : 3;
+      g.fillStyle = m > 0.22 ? "#1c5a10" : "#3a8a1c";
+      if (m < 0.03) { g.fillRect(qx, py, 1, 1); continue; }
+      const ux = sx / m, uy = -sy / m, L = m > 0.22 ? 4 : 3;
       for (let k = -L; k <= L; k++) g.fillRect(Math.round(qx + ux * k), Math.round(py + uy * k), 1, 1);
       const hx = qx + ux * L, hy = py + uy * L;
       g.fillRect(Math.round(hx - ux * 2 + uy * 1.5), Math.round(hy - uy * 2 - ux * 1.5), 1, 1);
@@ -113,7 +189,7 @@ function mapIn(ctx, st, v, ox, oy, frame, small) {
   ctx.save();
   ctx.beginPath(); ctx.rect(ox, oy, v.w, v.h); ctx.clip();
   const P = st.players[st.cur], c = CLUBS[st.club];
-  if (v.kind === "hole") { const [tx, ty] = toPx(v, 0, 0, ox, oy); px(ctx, tx - 2, ty - 1, 5, 3, PAL.fairway); px(ctx, tx - 2, ty - 1, 1, 1, PAL.white); px(ctx, tx + 2, ty - 1, 1, 1, PAL.white); }
+  if (v.kind === "hole") { const [tx, ty] = toPx(v, 0, 0, ox, oy); px(ctx, tx - 2, ty - 1, 5, 3, RAMP.tee[2]); px(ctx, tx - 2, ty - 1, 1, 1, PAL.white); px(ctx, tx + 2, ty - 1, 1, 1, PAL.white); }
   const [fx, fy] = toPx(v, h.pin.x, h.pin.y, ox, oy);
   if (v.kind === "green") px(ctx, fx - 1, fy - 1, 3, 3, PAL.black);
   if (small) { px(ctx, fx, fy - 5, 1, 6, PAL.white); px(ctx, fx + 1, fy - 5, 3, 2, PAL.red); } else flagTop(ctx, fx, fy);
@@ -140,21 +216,21 @@ function mapIn(ctx, st, v, ox, oy, frame, small) {
 }
 
 // =====================================================================================================
-// The view from behind the golfer. A camera behind the ball, looking along the aim: a screen row
-// below the horizon is a distance, a column a distance across. The rows are the old cartridge
-// cheat, not a lens: depth d sits sqrt(K / d) rows under the horizon, so the far half of a hole
-// gets rows enough to read (a green 140 yards out is a shape, not a line). Across is plain
-// perspective (F / d px a yard), and so are heights. Rows are sampled from a lazily filled raster
-// of the hole (half-yard cells), two pixels wide.
+// The view from behind the golfer. A camera behind the ball (and a little to the golfer's back),
+// looking along the aim: a screen row below the horizon is a distance, a column a distance across.
+// The rows are the old cartridge cheat, not a lens: depth d sits sqrt(K / d) rows under the
+// horizon, so the far half of a hole gets rows enough to read. Across is plain perspective (F / d
+// px a yard), and so are heights. Rows are sampled from a lazily filled raster of the hole
+// (half-yard cells).
 const MODES = {
-  // grip: where the clubhead sits at address, in px from the golfer's feet (golferSprite at k = 1)
-  drive: { F: 160, back: 8.7, ballY: 164, side: -1.7, grip: [17.4, -0.2] },
-  putt: { F: 184, back: 5.2, ballY: 152, side: -0.9, grip: [12.4, -7.7] },
+  drive: { F: 176, back: 8.7, ballY: 162, side: 1.15 },
+  putt: { F: 196, back: 5.2, ballY: 150, side: 0.75 },
 };
 const horizonOf = (h) => 62 - Math.round((h.elev || 0) * 7);
 const rowOf = (cam, d) => cam.H0 + Math.sqrt(cam.K / d);
 
-const CODE = { water: 0, bunker: 1, green: 2, fringe: 3, tee: 4, ob: 5, trees: 6, fairway: 7, rough: 8, waste: 9 };
+const CODE = { water: 0, bunker: 1, green: 2, fringe: 3, tee: 4, ob: 5, trees: 6, fairway: 7, rough: 8, waste: 9, path: 11 };
+const NAME = Object.fromEntries(Object.entries(CODE).map(([k, v]) => [v, k]));
 const RASTERS = new Map();
 function rasterOf(h) {
   const key = h.id || `l${h.n}`;
@@ -173,15 +249,7 @@ function cellAt(h, R, x, y) {
   if (ix < 0 || iy < 0 || ix >= R.w || iy >= R.h) return 10;
   const i = iy * R.w + ix;
   let c = R.d[i];
-  if (c === 255) {
-    const wx = R.x0 + (ix + 0.5) / 2, wy = R.y0 + (iy + 0.5) / 2, s = surfaceAt(h, wx, wy);
-    c = CODE[s];
-    if (s === "bunker" && h.famous && !h.bunkers.some(b => Math.hypot(wx - b.x, wy - b.y) <= b.r)) {
-      const { along } = frameOf(h.pts, wx, wy);
-      if (h.z.some(z => z.k === "cross" && z.a[2] === "waste" && along >= z.a[0] && along <= z.a[1])) c = CODE.waste;
-    }
-    R.d[i] = c;
-  }
+  if (c === 255) { c = CODE[surfaceAt(h, R.x0 + (ix + 0.5) / 2, R.y0 + (iy + 0.5) / 2)] ?? CODE.rough; R.d[i] = c; }
   return c;
 }
 
@@ -193,7 +261,6 @@ function cameraOf(st, h) {
   const ox = moving && fl ? fl.ox : P.x, oy = moving && fl ? fl.oy : P.y;
   const aim = moving && fl?.aim != null ? fl.aim : st.aim;
   const [dx, dy] = dirOf(aim), rx = dy, ry = -dx;
-  // follow the ball down the hole once it is well away (never on a putt)
   const mem = memOf(st);
   let adv = 0, lat = 0;
   if (moving && !putt && st.ball) {
@@ -202,22 +269,23 @@ function cameraOf(st, h) {
   }
   if (!moving) { mem.adv = 0; mem.lat = 0; mem.trail = []; }
   else { mem.adv += (adv - mem.adv) * 0.12; mem.lat += (lat - mem.lat) * 0.12; }
-  const cx = ox + dx * (mem.adv - M.back) + rx * (mem.lat - M.side), cy = oy + dy * (mem.adv - M.back) + ry * (mem.lat - M.side);
+  const side = M.side * Math.max(0, 1 - mem.adv / 60);
+  const cx = ox + dx * (mem.adv - M.back) + rx * (mem.lat - side), cy = oy + dy * (mem.adv - M.back) + ry * (mem.lat - side);
   const H0 = horizonOf(h);
   return { ...M, putt, x: cx, y: cy, dx, dy, rx, ry, aim, ox, oy, H0, K: M.back * (M.ballY - H0) ** 2, adv: mem.adv };
 }
 const MEM = new WeakMap();
-function memOf(st) { let m = MEM.get(st); if (!m) MEM.set(st, m = { adv: 0, lat: 0, trail: [], floorKey: "", floor: null, water: [] }); return m; }
+function memOf(st) { let m = MEM.get(st); if (!m) MEM.set(st, m = { adv: 0, lat: 0, trail: [], floorKey: "", floor: null, water: [], react: null, reactKey: "", shotT: 0 }); return m; }
 // world -> screen: [x, ground y, scale (px per yard), depth]
 function project(cam, x, y, z = 0) {
   const qx = x - cam.x, qy = y - cam.y, d = qx * cam.dx + qy * cam.dy, l = qx * cam.rx + qy * cam.ry;
   if (d < 0.3) return null;
   const s = cam.F / d;
-  return [128 + l * s, rowOf(cam, d) - z * s, s, d];
+  return [CX + l * s, rowOf(cam, d) - z * s, s, d];
 }
 
-// the turf: one colour per sample, from the cell, its neighbours and where it is in the world
-function floor(ctx, st, h, cam, frame) {
+// the turf: a colour per pixel, from the cell under it, the haze of distance and the dither
+function floor(ctx, st, h, cam, frame, still) {
   const mem = memOf(st), R = rasterOf(h);
   const key = `${h.id || h.n}|${cam.x.toFixed(2)}|${cam.y.toFixed(2)}|${cam.aim.toFixed(4)}|${cam.putt}`;
   const top = cam.H0 + 1, rows = PANEL_Y - top;
@@ -227,128 +295,195 @@ function floor(ctx, st, h, cam, frame) {
     const ocean = h.scene === "ocean";
     for (let r = 0; r < rows; r++) {
       const y = top + r, z = cam.K / (y - cam.H0 + 0.5) ** 2;
+      const haze = z > 120 ? Math.min(1.1, (z - 120) / 260) : 0;   // far turf lightens toward the horizon
       for (let x = 0; x < W; x += 2) {
-        const l = ((x + 1 - 128) * z) / cam.F;
+        const l = ((x + 1 - CX) * z) / cam.F;
         const wx = cam.x + cam.dx * z + cam.rx * l, wy = cam.y + cam.dy * z + cam.ry * l;
         let c = cellAt(h, R, wx, wy);
         if (c === 10) c = ocean ? CODE.water : CODE.ob;
-        const fx = Math.floor(wx * 2), fy = Math.floor(wy * 2), hv = hash(fx, fy) % 13;
-        let col;
-        switch (c) {
-          case CODE.fairway: col = Math.floor(wy / 5) & 1 ? PAL.fairway2 : PAL.fairway; break;
-          case CODE.green: col = (Math.floor(wx / 2.5) + Math.floor(wy / 2.5)) & 1 ? PAL.green2 : PAL.green; break;
-          case CODE.fringe: col = PAL.fringe; break;
-          case CODE.tee: col = PAL.tee; break;
-          case CODE.rough: col = hv === 0 ? PAL.rough2 : hv === 1 ? PAL.rough3 : PAL.rough; break;
-          case CODE.trees: col = hv < 6 ? PAL.under : PAL.ob2; break;
-          case CODE.ob: col = hv < 5 ? PAL.ob : PAL.ob2; break;
-          case CODE.waste: col = hv === 0 || hv === 1 ? PAL.scrub : hv < 5 ? PAL.bunker2 : PAL.waste; break;
-          case CODE.bunker: {
-            // the lip: the far edge in shadow, the near edge lit
-            const far = cellAt(h, R, wx + cam.dx * 0.7, wy + cam.dy * 0.7), nr = cellAt(h, R, wx - cam.dx * 0.6, wy - cam.dy * 0.6);
-            col = far !== CODE.bunker && far !== CODE.waste ? PAL.lipD : nr !== CODE.bunker && nr !== CODE.waste ? PAL.lipL : hv === 0 ? PAL.bunker2 : PAL.bunker;
-            break;
-          }
-          case CODE.water: col = z > 220 && (x >> 1) % 2 === r % 2 ? PAL.deep : PAL.water; if ((hv === 3 || hv === 7) && r % 2 === 0) water.push(r * W + x); break;
-          default: col = PAL.rough;
+        const s = NAME[c];
+        let extra = haze * 0.9;
+        if (s === "bunker" || s === "waste") {
+          // the lip: the far edge in shadow, the near edge lit
+          const far = cellAt(h, R, wx + cam.dx * 0.7, wy + cam.dy * 0.7), nr = cellAt(h, R, wx - cam.dx * 0.6, wy - cam.dy * 0.6);
+          if (far !== CODE.bunker && far !== CODE.waste) extra -= 1.6;
+          else if (nr !== CODE.bunker && nr !== CODE.waste) extra += 1.1;
+        } else if (s === "water") {
+          extra = z > 220 ? -0.8 : (z < 40 ? 0.4 : 0);
+          if ((hash(Math.floor(wx * 2), Math.floor(wy * 2)) % 13 === 3) && (r & 1) === 0) water.push(r * W + x);
+        } else if (s === "fairway" || s === "rough" || s === "fringe") {
+          // the ground's own swell, lit from the upper left
+          const [sx, sy] = slopeAt(h, wx, wy);
+          extra += -(sx * LIGHT[0] + sy * LIGHT[1]) * 3;
         }
-        const [R0, G0, B0] = rgbOf(col), i = (r * W + x) * 4;
-        d[i] = d[i + 4] = R0; d[i + 1] = d[i + 5] = G0; d[i + 2] = d[i + 6] = B0; d[i + 3] = d[i + 7] = 255;
+        const i = (r * W + x) * 4;
+        turfShade(h, s, wx, wy, extra);
+        const c0 = dith(TR, TV, x, y), c1 = dith(TR, TV, x + 1, y);
+        d[i] = c0[0]; d[i + 1] = c0[1]; d[i + 2] = c0[2]; d[i + 3] = 255;
+        d[i + 4] = c1[0]; d[i + 5] = c1[1]; d[i + 6] = c1[2]; d[i + 7] = 255;
       }
     }
     mem.floor = img; mem.floorKey = key; mem.water = water;
   }
   ctx.putImageData(mem.floor, 0, top);
   // the water's shimmer: a few of the water's pixels catch the light each frame
+  if (still) return;
   const t = frame >> 3;
   for (const p of mem.water) {
     const hv = hash(p, t) % 11;
     if (hv > 1) continue;
-    px(ctx, p % W, top + Math.floor(p / W), 2, 1, hv ? PAL.water2 : PAL.white);
+    px(ctx, p % W, top + Math.floor(p / W), 2, 1, hv ? RAMP.water[5] : PAL.white);
   }
 }
 
-// The sky, the clouds, the far edge of the world.
+// ---- the sky, the far hills (slow), the tree line (with the view), clouds --------------------------
 function noise1(seed, v) { const i = Math.floor(v), f = v - i, a = hash(seed, i) / 4294967296, b = hash(seed, i + 1) / 4294967296; return a + (b - a) * (f * f * (3 - 2 * f)); }
-function sky(ctx, st, h, cam, frame) {
-  const H0 = cam.H0;
-  px(ctx, 0, 0, W, H0 + 1, PAL.sky0);
-  const b1 = Math.round(H0 * 0.38), b2 = H0 - 12;
-  px(ctx, 0, b1, W, b2 - b1, PAL.sky1);
-  px(ctx, 0, b2, W, H0 + 1 - b2, PAL.sky2);
-  // dithered seams between the bands
-  for (let x = 0; x < W; x += 2) { px(ctx, x + ((b1 >> 0) & 1), b1 - 1, 1, 1, PAL.sky1); px(ctx, x, b1 - 2, 1, 1, PAL.sky0); px(ctx, x + 1, b2 - 1, 1, 1, PAL.sky2); }
-  // clouds: fixed per hole, drifting with the wind across the view, turning with the aim
-  const seed = fnv(`clouds|${h.id || h.n}`), rnd = rngOf(seed);
-  const wl = (st.wind.x * cam.rx + st.wind.y * cam.ry);
-  for (let i = 0; i < 5; i++) {
-    const bx = rnd() * 512, by = 6 + rnd() * (H0 - 34), cw = 18 + Math.floor(rnd() * 26);
-    let x = bx - cam.aim * cam.F * 1.2 + frame * wl * 0.004;
-    x = (((x % 512) + 512) % 512) - 128;
-    const y = Math.round(by);
-    for (let k = 0; k < 4; k++) {
-      const ox = Math.round(x + (k * cw) / 4), r = Math.round(cw / 5 + ((k * 7 + i) % 3) * 2);
-      for (let yy = -r; yy <= 0; yy += 2) { const ww = Math.round(Math.sqrt(r * r - yy * yy)) * 2; px(ctx, ox - (ww >> 1), y + yy, ww, 2, yy > -3 ? PAL.cloud2 : PAL.cloud); }
-    }
-    px(ctx, Math.round(x) - 2, y, cw + 8, 2, PAL.cloud2);
+const SKY = new Map();
+function skyLayer(H0) {
+  let c = SKY.get(H0);
+  if (c) return c;
+  c = document.createElement("canvas"); c.width = W; c.height = H0 + 1;
+  const g = c.getContext("2d"), img = g.createImageData(W, H0 + 1), d = img.data;
+  for (let y = 0; y <= H0; y++) for (let x = 0; x < W; x++) {
+    const col = dith(RR.sky, (y / H0) ** 1.3 * (RR.sky.length - 1.01), x, y), i = (y * W + x) * 4;
+    d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
   }
-  // the far edge: per column, sea where the hole runs out to water, else trees, dunes or pines
-  const R = rasterOf(h), sd = fnv(`edge|${h.id || h.n}`);
+  g.putImageData(img, 0, 0);
+  SKY.set(H0, c);
+  return c;
+}
+const CLOUDS = new Map();
+function cloudSprite(seed) {
+  let c = CLOUDS.get(seed);
+  if (c) return c;
+  const rnd = rngOf(seed), w = 34 + Math.floor(rnd() * 34), hh = 12 + Math.floor(rnd() * 8);
+  c = document.createElement("canvas"); c.width = w; c.height = hh;
+  const g = c.getContext("2d"), img = g.createImageData(w, hh), d = img.data;
+  const puffs = Array.from({ length: 5 }, (_, i) => [w * (0.15 + i * 0.17 + rnd() * 0.06), hh * (0.45 + rnd() * 0.2), hh * (0.32 + rnd() * 0.22) * (i === 2 ? 1.25 : 1)]);
+  for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++) {
+    let best = -1;
+    for (const [cx, cy, r] of puffs) { const q = 1 - Math.hypot(x + 0.5 - cx, (y + 0.5 - cy) * 1.25) / r; if (q > best) best = q; }
+    if (best < 0 || y > hh * 0.78) continue;
+    const col = dith(RR.cloud, 1 + best * 3 - (y / hh) * 1.6, x, y), i = (y * w + x) * 4;
+    d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  CLOUDS.set(seed, c);
+  return c;
+}
+// The far hills for a hole, a strip twice the view wide (cached), slid at a third of the near
+// line's rate: the parallax.
+const HILLS = new Map();
+function hillLayer(h, H0) {
+  const key = `${h.id || h.n}|${H0}`;
+  let c = HILLS.get(key);
+  if (c) return c;
+  const scene = h.scene || "parkland", sd = fnv(`edge|${h.id || h.n}`), hill = scene === "links" ? RR.dunes : RR.hills;
+  const LW = W * 3;
+  c = document.createElement("canvas"); c.width = LW; c.height = H0 + 1;
+  const g = c.getContext("2d"), img = g.createImageData(LW, H0 + 1), d = img.data;
+  for (let x = 0; x < LW; x++) {
+    const a = x / 40;
+    const ht = (scene === "ocean" ? 5 : scene === "links" ? 7 : 13) + Math.round(noise1(sd + 7, a * 0.9) * (scene === "links" ? 6 : 16) + noise1(sd + 9, a * 3) * 4);
+    for (let y = Math.max(0, H0 - ht); y <= H0; y++) {
+      const col = dith(hill, 1.2 + ((y - (H0 - ht)) / Math.max(1, ht)) * 2.6 - (y === H0 - ht ? 1 : 0), x, y), i = (y * LW + x) * 4;
+      d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  if (HILLS.size > 6) HILLS.delete(HILLS.keys().next().value);
+  HILLS.set(key, c);
+  return c;
+}
+function sky(ctx, st, h, cam, frame, still) {
+  const H0 = cam.H0;
+  ctx.drawImage(skyLayer(H0), 0, 0);
+  // clouds: fixed per hole, drifting with the wind across the view, turning with the aim (slowly:
+  // they are far)
+  const seed = fnv(`clouds|${h.id || h.n}`), rnd = rngOf(seed);
+  const wl = st.wind.x * cam.rx + st.wind.y * cam.ry;
+  for (let i = 0; i < 5; i++) {
+    const sp = cloudSprite(seed + i), bx = rnd() * 640, by = 4 + rnd() * (H0 - 30);
+    let x = bx - cam.aim * cam.F * 0.6 + (still ? 0 : frame * wl * 0.004);
+    x = (((x % 640) + 640) % 640) - 160;
+    ctx.drawImage(sp, Math.round(x), Math.round(by));
+  }
+  // far hills, slid at a third of the rate
+  const HL = hillLayer(h, H0), off = (((Math.round(-cam.aim * cam.F * 0.35) + W) % W) + W) % W;
+  ctx.drawImage(HL, off, 0, W, H0 + 1, 0, 0, W, H0 + 1);
+  // the near edge: per column, sea where the hole runs out to water, else trees, dunes or pines;
+  // written as pixels into one strip and laid over the sky in a single draw
+  const R = rasterOf(h), scene = h.scene || "parkland", sd = fnv(`edge|${h.id || h.n}`);
+  const SH = 34, y0 = H0 - SH + 1;
+  if (!EDGE || EDGE.height !== SH) { EDGE = document.createElement("canvas"); EDGE.width = W; EDGE.height = SH; EDGE_IMG = EDGE.getContext("2d").createImageData(W, SH); }
+  const d = EDGE_IMG.data;
+  d.fill(0);
+  const put = (x, y, col) => { if (y < y0 || y > H0) return; const i = ((y - y0) * W + x) * 4; d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255; d[i + 4] = col[0]; d[i + 5] = col[1]; d[i + 6] = col[2]; d[i + 7] = 255; };
   for (let x = 0; x < W; x += 2) {
-    const ang = cam.aim + Math.atan((x + 1 - 128) / cam.F);
-    const zf = 330, l = ((x + 1 - 128) * zf) / cam.F;
+    const ang = cam.aim + Math.atan((x + 1 - CX) / cam.F);
+    const zf = 330, l = ((x + 1 - CX) * zf) / cam.F;
     const c = cellAt(h, R, cam.x + cam.dx * zf + cam.rx * l, cam.y + cam.dy * zf + cam.ry * l);
     const sea = c === CODE.water || (c === 10 && h.scene === "ocean");
-    if (sea) { px(ctx, x, H0 - 1, 2, 2, (hash(x, frame >> 4) % 7) ? PAL.water : PAL.water2); continue; }
-    const scene = h.scene || "parkland";
+    if (sea) { const col = (hash(x, still ? 0 : frame >> 4) % 7) ? RR.water[3] : RR.water[5]; put(x, H0 - 1, col); put(x, H0, col); continue; }
     const n = noise1(sd, ang * 34), n2 = noise1(sd + 1, ang * 120);
     if (scene === "links") {
       const ht = 2 + Math.round(n * 5);
-      px(ctx, x, H0 - ht, 2, ht + 1, "#88a830"); px(ctx, x, H0 - ht, 2, 1, "#c8c070");
-    } else if (scene === "pines" || scene === "ocean") {
-      const ht = 5 + Math.round(n * 9 + (n2 > 0.6 ? 4 : 0) + ((x >> 1) % 3 === 0 ? 2 : 0));
-      px(ctx, x, H0 - ht, 2, ht + 1, PAL.tree); if (n2 > 0.5) px(ctx, x, H0 - ht + 2, 1, ht - 2, "#007800");
+      for (let y = H0 - ht; y <= H0; y++) put(x, y, y === H0 - ht ? RR.dunes[3] : RR.dunes[1]);
     } else {
-      const ht = 6 + Math.round(n * 8 + n2 * 3);
-      px(ctx, x, H0 - ht, 2, ht + 1, "#007800"); px(ctx, x, H0 - ht, 2, 2, PAL.tree2); px(ctx, x, H0 - ht + 4, 2, ht - 3, PAL.tree);
+      const ht = (scene === "pines" || scene === "ocean" ? 5 + Math.round(n * 9 + (n2 > 0.6 ? 4 : 0) + ((x >> 1) % 3 === 0 ? 2 : 0)) : 6 + Math.round(n * 8 + n2 * 3));
+      for (let y = H0 - ht; y <= H0; y++) put(x, y, dith(RR.tree, 3.2 - ((y - (H0 - ht)) / ht) * 2.4 + (n2 > 0.5 ? 0.4 : 0), x, y));
     }
   }
+  EDGE.getContext("2d").putImageData(EDGE_IMG, 0, 0);
+  ctx.drawImage(EDGE, 0, y0);
 }
+let EDGE = null, EDGE_IMG = null;
 
-// ---- sprites: trees, the crowd, the flag ------------------------------------------------------------
+// ---- sprites: trees (crown and trunk apart, so the crown can sway) -------------------------------------
 const SPR = {};
 function sprite(kind) {
   if (SPR[kind]) return SPR[kind];
-  const mk = (w, h, f) => { const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); f((x, y, ww, hh, col) => { g.fillStyle = col; g.fillRect(x, y, ww, hh); }); return c; };
-  const D = PAL.tree, L = PAL.tree2, M = "#007800", T = "#7c4c00", T2 = "#503000";
-  let c;
-  if (kind === "pine") c = mk(14, 30, (r) => {
-    r(6, 25, 2, 5, T);
-    for (let i = 0; i < 26; i++) { const tier = Math.floor(i / 7), w = 2 + (i % 7) + tier * 2; r(7 - (w >> 1), i, w, 1, D); r(7, i, Math.max(1, w >> 2), 1, (i % 7) < 2 ? L : M); }
-  });
-  else if (kind === "oak") c = mk(20, 22, (r) => {
-    r(9, 15, 3, 7, T); r(9, 15, 1, 7, T2);
-    for (let y = 0; y < 17; y++) { const w = Math.round(2 * Math.sqrt(Math.max(0, 64 - (y - 8) * (y - 8)))) + 2; r(10 - (w >> 1), y, w, 1, y > 11 ? D : M); }
-    r(11, 2, 4, 3, L); r(13, 5, 4, 3, L); r(6, 4, 3, 2, L); r(4, 10, 3, 2, D); r(14, 11, 3, 2, D);
-  });
-  else if (kind === "cypress") c = mk(26, 18, (r) => {
-    r(11, 8, 2, 10, T); r(13, 11, 3, 2, T); r(9, 13, 2, 2, T);
-    r(2, 3, 22, 4, D); r(0, 5, 26, 3, D); r(4, 1, 15, 3, M); r(5, 1, 6, 1, L); r(14, 2, 6, 1, L); r(1, 7, 8, 2, M); r(16, 7, 9, 2, M);
-  });
-  else if (kind === "palm") c = mk(16, 28, (r) => {
-    for (let y = 6; y < 28; y++) r(7 + Math.round(Math.sin(y / 9) * 2), y, 2, 1, y % 3 ? "#a87c3c" : "#7c5420");
-    r(2, 3, 12, 2, L); r(0, 5, 5, 2, D); r(11, 5, 5, 2, D); r(5, 1, 6, 2, M); r(1, 7, 3, 2, D); r(12, 7, 3, 2, D); r(7, 5, 3, 2, "#7c5420");
-  });
-  else if (kind === "gorse") c = mk(12, 7, (r) => {
-    r(1, 2, 10, 5, D); r(3, 0, 6, 2, M); r(0, 4, 12, 3, D); r(3, 1, 1, 1, PAL.gold); r(7, 3, 1, 1, PAL.gold); r(9, 1, 1, 1, PAL.gold); r(2, 4, 1, 1, PAL.gold);
-  });
-  else if (kind === "person") c = mk(3, 6, (r) => { r(1, 0, 1, 1, "#fca044"); r(0, 1, 3, 3, "#fcfcfc"); r(0, 4, 1, 2, "#000000"); r(2, 4, 1, 2, "#000000"); });
-  SPR[kind] = c;
-  return c;
+  const mk = (w, h, f) => {
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const g = c.getContext("2d"), img = g.createImageData(w, h), d = img.data;
+    const set = (x, y, col) => { if (x < 0 || y < 0 || x >= w || y >= h) return; const i = (y * w + x) * 4; d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255; };
+    f(set);
+    // a dark outline round the shape
+    const o = [];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (d[i + 3]) continue; const s = (xx, yy) => xx >= 0 && yy >= 0 && xx < w && yy < h && d[(yy * w + xx) * 4 + 3] === 255; if (s(x - 1, y) || s(x + 1, y) || s(x, y - 1) || s(x, y + 1)) o.push(x, y); }
+    for (let i = 0; i < o.length; i += 2) { const j = (o[i + 1] * w + o[i]) * 4; d[j] = 4; d[j + 1] = 18; d[j + 2] = 10; d[j + 3] = 254; }
+    g.putImageData(img, 0, 0);
+    return c;
+  };
+  const T = RR.tree, BARK = ["#3c2410", "#5c3a1c", "#7c5430"].map(rgbOf);
+  let c, trunk = 0.25;
+  if (kind === "pine") { trunk = 0.16; c = mk(18, 36, (set) => {
+    for (let y = 30; y < 36; y++) for (let x = 8; x < 10; x++) set(x, y, BARK[x === 8 ? 1 : 0]);
+    for (let y = 0; y < 31; y++) { const tier = Math.floor(y / 8), k = y % 8, w = 1 + k + tier * 1.6; for (let x = Math.round(9 - w); x <= Math.round(8 + w); x++) { const u = (x - 8.5) / (w + 0.5); set(x, y, dith(T, 3.4 - u * 2.2 - (k / 8) * 1.4 - tier * 0.2, x, y)); } }
+  }); }
+  else if (kind === "oak") { trunk = 0.3; c = mk(24, 26, (set) => {
+    for (let y = 17; y < 26; y++) for (let x = 10; x < 14; x++) set(x, y, BARK[x === 10 ? 2 : x === 13 ? 0 : 1]);
+    const lobes = [[12, 9, 9], [6, 12, 6], [18, 12, 6], [9, 5, 6], [15, 5, 6], [12, 15, 6]];
+    for (let y = 0; y < 21; y++) for (let x = 0; x < 24; x++) { let q = -1; for (const [cx, cy, r] of lobes) q = Math.max(q, 1 - Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / r); if (q < 0) continue; set(x, y, dith(T, 1.4 + q * 2.2 - ((x - 12) * -0.06 + (y - 10) * 0.09) * 1.6, x, y)); }
+  }); }
+  else if (kind === "cypress") { trunk = 0.4; c = mk(30, 22, (set) => {
+    for (let y = 9; y < 22; y++) for (let x = 13; x < 16; x++) set(x + ((y < 14) ? (14 - y) >> 2 : 0), y, BARK[x === 13 ? 2 : 1]);
+    const pads = [[8, 6, 8, 3.2], [20, 5, 9, 3], [14, 3, 7, 2.6], [4, 9, 5, 2.4], [25, 9, 5, 2.2]];
+    for (let y = 0; y < 14; y++) for (let x = 0; x < 30; x++) { let q = -1; for (const [cx, cy, rx, ry] of pads) q = Math.max(q, 1 - Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry)); if (q < 0) continue; set(x, y, dith(T, 1.2 + q * 2.6 - (y - 5) * 0.12, x, y)); }
+  }); }
+  else if (kind === "palm") { trunk = 0.7; c = mk(20, 32, (set) => {
+    for (let y = 7; y < 32; y++) { const x = 9 + Math.round(Math.sin(y / 9) * 2); set(x, y, BARK[y % 3 ? 2 : 1]); set(x + 1, y, BARK[0]); }
+    const fr = [[-8, 3], [8, 3], [-6, -3], [6, -3], [0, -5], [-9, 7], [9, 7]];
+    for (const [fx, fy] of fr) for (let k = 0; k <= 10; k++) { const t = k / 10, x = Math.round(10 + fx * t), y = Math.round(7 + fy * t + 3 * t * t); set(x, y, dith(T, 3.6 - t * 2, x, y)); set(x, y + 1, T[1]); }
+  }); }
+  else { trunk = 0; c = mk(14, 9, (set) => {
+    for (let y = 0; y < 9; y++) for (let x = 0; x < 14; x++) { const q = 1 - Math.hypot((x + 0.5 - 7) / 7, (y + 0.5 - 6) / 5.5); if (q < 0) continue; set(x, y, (hash(x, y, 9) % 9 === 0) ? rgbOf(PAL.gold) : dith(T, 1.2 + q * 2.4, x, y)); }
+  }); }
+  SPR[kind] = { c, trunk };
+  return SPR[kind];
 }
-const TREE_W = { pine: 14, oak: 20, cypress: 26, palm: 16, gorse: 12 };
 const treeKind = (h, t) => t.k || (hash(Math.round(t.x * 10), Math.round(t.y * 10)) % 3 === 0 ? "oak" : "pine");
-const SHIRTS = ["#d82800", "#fcfcfc", "#f8b800", "#0058f8", "#00a800", "#f878f8", "#7c7c7c", "#000000", "#3cbcfc"];
+const SHIRTS = ["#d82800", "#fcfcfc", "#f8b800", "#0058f8", "#00a800", "#f878f8", "#7c7c7c", "#202020", "#3cbcfc", "#a85000"];
 
 // The crowd: a few dozen people round the green, on the side the hole names, out of the water.
 const CROWD = new Map();
@@ -359,110 +494,100 @@ function crowdOf(h) {
   const side = h.gallery ?? (h.n % 2 ? 1 : -1);
   const [ux, uy] = (() => { const a = h.pts[h.pts.length - 2], b = h.pts[h.pts.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; })();
   const c0 = side === 0 ? 150 : side > 0 ? 40 : 230, span = side === 0 ? 80 : 100;
-  for (let i = 0; i < 46; i++) {
-    const deg = c0 + rnd() * span, a = (deg * Math.PI) / 180, dist = h.green.r + 9 + rnd() * 7;
+  for (let i = 0; i < 52; i++) {
+    const deg = c0 + rnd() * span, a = (deg * Math.PI) / 180, dist = h.green.r + 9 + rnd() * 8;
     const x = h.green.x - ux * Math.cos(a) * dist + uy * Math.sin(a) * dist, y = h.green.y - uy * Math.cos(a) * dist - ux * Math.sin(a) * dist;
     const s = surfaceAt(h, x, y);
-    if (s === "water" || s === "bunker" || s === "green") continue;
-    out.push({ x, y, shirt: SHIRTS[Math.floor(rnd() * SHIRTS.length)], skin: ["#fca044", "#e4a070", "#a86c3c", "#6c4420"][Math.floor(rnd() * 4)] });
+    if (s === "water" || s === "bunker" || s === "green" || s === "fringe") continue;
+    out.push({ x, y, shirt: SHIRTS[Math.floor(rnd() * SHIRTS.length)], skin: ["#f0b080", "#d89868", "#a86c3c", "#6c4420"][Math.floor(rnd() * 4)], ph: rnd() * 6.28, hat: rnd() < 0.3 });
   }
   CROWD.set(key, out);
   return out;
 }
-
-// ---- the golfer, from behind, in 2-px units ------------------------------------------------------------
-const GW = 72, GH = 100, GOX = 36, GOY = 98;
-let GC = null;
-function swingPose(st, frame) {
-  const putt = st.fl?.putt || (!st.fl && CLUBS[st.club]?.putt) || (st.phase !== "flight" && st.phase !== "roll" && st.phase !== "rest" && CLUBS[st.club]?.putt);
-  const addr = 0.05, top = putt ? 0.55 : 2.55;
-  const m = st.meter;
-  if (st.phase === "meter" && m) { const k = Math.max(0, m.m); return { a: addr + (top - addr) * k, hinge: putt ? 0.42 : 0.45 + 0.95 * k, putt, k }; }
-  if ((st.phase === "flight" || st.phase === "roll" || st.phase === "rest") && !st.fl?.putt) {
-    const k = Math.min(1, (st.phase === "flight" ? st.t : 30) / 12);
-    return { a: addr - 2.7 * k, hinge: 0.45 - 1.6 * k, putt: false, k: 0 };
-  }
-  if ((st.phase === "roll" || st.phase === "rest") && st.fl?.putt) return { a: addr - 0.45, hinge: 0.42, putt: true, k: 0 };
-  const sway = st.phase === "aim" ? Math.sin(frame / 11) * 0.05 : 0;
-  return { a: addr + sway, hinge: (putt ? 0.42 : 0.45) + sway, putt, k: 0 };
+// One spectator, hh px tall with feet at (x, y), in the gallery's mood
+export function spectator(ctx, c, x, y, hh, mood, f) {
+  const w = Math.max(1, Math.round(hh / 2.4)), head = Math.max(1, Math.round(hh * 0.22)), body = Math.max(1, Math.round(hh * 0.4));
+  let sit = 0, arms = 0;
+  const t = f + c.ph * 10;
+  if (mood === "roar" || mood === "cheer") { arms = 2; y -= ((t >> 3) & 1) && hh > 6 ? 1 : 0; }
+  else if (mood === "warm" || mood === "polite" || mood === "thin") arms = ((t >> 2) & 1) && (mood !== "thin" || c.ph < 1.5) ? 1 : 0;
+  else if (mood === "ooh" || mood === "groan") arms = 3;
+  else if (mood === "crickets") sit = c.ph < 3 ? Math.round(hh * 0.25) : 0;
+  const top = y - hh + 1 + sit;
+  px(ctx, x - (w >> 1), top, w, head, c.skin);
+  if (c.hat && hh > 6) px(ctx, x - (w >> 1), top, w, 1, PAL.white);
+  px(ctx, x - (w >> 1), top + head, w, body, c.shirt);
+  px(ctx, x - (w >> 1), top + head + body, w, Math.max(1, hh - head - body - sit), "#202020");
+  if (hh < 5) return;
+  if (arms === 2) { px(ctx, x - (w >> 1) - 1, top - 2, 1, head + 2, c.skin); px(ctx, x + (w >> 1) + (w & 1), top - 2, 1, head + 2, c.skin); }
+  else if (arms === 3) { px(ctx, x - (w >> 1) - 1, top, 1, 2, c.skin); px(ctx, x + (w >> 1) + (w & 1), top, 1, 2, c.skin); px(ctx, x - (w >> 1), top - 1, w, 1, c.skin); }
+  else if (arms === 1) px(ctx, x - 1, top + head + 1, 2, 1, c.skin);
 }
-function golferSprite(st, look, frame) {
-  if (!GC) { GC = document.createElement("canvas"); GC.width = GW; GC.height = GH; }
-  const g = GC.getContext("2d");
-  g.clearRect(0, 0, GW, GH);
-  const u = 2;
-  const r = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(GOX + Math.round(x * u), GOY + Math.round(y * u), Math.round(w * u), Math.round(h * u)); };
-  const L = look || {};
-  const shirt = L.shirt || "#3cbcfc", shirtD = shade(shirt, 0.7), pants = L.pants || "#7c7c7c", pantsD = shade(pants, 0.7);
-  const skin = L.skin || PAL.skin, hair = L.hair || "#503000", cap = L.cap || PAL.white, capD = shade(cap, 0.75);
-  const pose = swingPose(st, frame);
-  const twist = pose.k > 0.5 ? 1 : 0, bob = st.phase === "aim" && (frame >> 5) % 2 ? 0.5 : 0;
-  // feet, legs, belt
-  r(-7, -1, 5, 1, "#202020"); r(2, -1, 5, 1, "#202020"); r(-7, -1, 2, 1, PAL.white); r(5, -1, 2, 1, PAL.white);
-  r(-6, -15, 4, 14, pants); r(2, -15, 4, 14, pants); r(-3, -15, 1, 14, pantsD); r(2, -15, 1, 6, pantsD); r(-2, -15, 4, 3, pants);
-  r(-6, -16 + bob, 12, 1, "#202020");
-  // torso (the back of the polo), turned a touch at the top of the swing
-  const tx = twist;
-  r(-6 + tx, -28 + bob, 12, 12, shirt); r(-6 + tx, -28 + bob, 2, 12, shirtD); r(-1 + tx, -26 + bob, 1, 8, shirtD);
-  r(-8 + tx, -28 + bob, 2, 4, shirtD); r(6 + tx, -28 + bob, 2, 4, shirt);
-  r(-2 + tx, -29 + bob, 4, 1, shirtD); r(-1 + tx, -30 + bob, 2, 1, skin);
-  // the head from behind: hair, ears, the cap and its strap
-  const hx = tx * 0.5;
-  r(-3 + hx, -36 + bob, 6, 6, hair); r(-4 + hx, -34 + bob, 1, 2, skin); r(3 + hx, -34 + bob, 1, 2, skin);
-  r(-3 + hx, -31 + bob, 6, 1, shade(hair, 0.8));
-  r(-3 + hx, -38 + bob, 6, 3, cap); r(-3 + hx, -36 + bob, 6, 1, capD); r(-1 + hx, -36 + bob, 2, 1, shade(cap, 0.55));
-  // arms and club: the hands swing round the shoulders' middle; the club hinges at the wrists
-  const sx = 0 + tx, sy = -26 + bob, R = 11, a = pose.a;
-  const hxp = sx + Math.sin(a) * R, hyp = sy + Math.cos(a) * R;
-  const ca = a + pose.hinge, cl = pose.putt ? 12.5 : 17;
-  const kx = hxp + Math.sin(ca) * cl, ky = hyp + Math.cos(ca) * cl;
-  const lineU = (x0, y0, x1, y1, c) => line(g, x0, y0, x1, y1, c, u, GOX, GOY);
-  lineU(-5 + tx, -26 + bob, hxp, hyp, skin); lineU(5 + tx, -26 + bob, hxp, hyp, skin);
-  lineU(-5 + tx, -27 + bob, -4 + tx, -24 + bob, shirt); lineU(5 + tx, -27 + bob, 4 + tx, -24 + bob, shirt);
-  lineU(hxp, hyp, kx, ky, PAL.grey);
-  r(Math.round(kx) - 0.5, Math.round(ky) - 0.5, 2, 1, "#505050");
-  r(Math.round(hxp) - 0.5, Math.round(hyp) - 0.5, 1, 1, L.glove || PAL.white); r(Math.round(hxp) + 0.5, Math.round(hyp) - 0.5, 1, 1, skin);
-  return GC;
+
+// ---- the golfer -------------------------------------------------------------------------------------
+function poseFor(st, frame, still) {
+  const putt = st.fl?.putt || (!st.fl && CLUBS[st.club]?.putt) || (st.phase !== "flight" && st.phase !== "roll" && st.phase !== "rest" && CLUBS[st.club]?.putt);
+  const m = st.meter;
+  const waggle = st.phase === "aim" && !still ? Math.sin(frame / 11) * 0.5 : 0;
+  const mem = memOf(st);
+  const after = st.phase === "flight" || st.phase === "roll" || st.phase === "rest";
+  if (after) { if (mem.shotT === 0) mem.shotT = frame; } else mem.shotT = 0;
+  const t = after ? frame - mem.shotT : 0;
+  return poseOf(st.phase, { putt: Boolean(putt), m: m ? Math.max(0, m.m) : 0, stage: m?.stage ?? 1, power: m?.power ?? 0, dir: m?.dir ?? 1, t, still, waggle });
 }
 
 // The view itself.
-function behindView(ctx, st, frame, looks) {
-  const h = holeOf(st), cam = cameraOf(st, h), P = st.players[st.cur];
-  sky(ctx, st, h, cam, frame);
-  floor(ctx, st, h, cam, frame);
+function behindView(ctx, st, frame, looks, still) {
+  const h = holeOf(st), cam = cameraOf(st, h), P = st.players[st.cur], mem = memOf(st);
+  sky(ctx, st, h, cam, frame, still);
+  floor(ctx, st, h, cam, frame, still);
   const items = [];
   const vis = (p, rad) => p && p[3] < 700 && p[0] + rad * p[2] > -8 && p[0] - rad * p[2] < W + 8;
-  // trees, in play and beyond
+  // the wind in the trees: a crown leans and sways with the breeze across the view
+  const wl = st.wind.x * cam.rx + st.wind.y * cam.ry, gust = st.wind.mph / 14;
   for (const list of [h.trees, h.decor || []]) for (const t of list) {
     const p = project(cam, t.x, t.y);
     if (!p || p[3] < 2.5 || !vis(p, t.r)) continue;
-    const k = treeKind(h, t), sp = sprite(k), w = Math.max(2, Math.round(2 * t.r * p[2] * (k === "gorse" ? 1 : 1.15))), hh = Math.max(2, Math.round((w * sp.height) / sp.width * (k === "gorse" ? 0.8 : (t.h || 11) / 11)));
-    items.push({ d: p[3], f: () => ctx.drawImage(sp, Math.round(p[0] - w / 2), Math.round(p[1] - hh + 1), w, hh) });
+    const k = treeKind(h, t), sp = sprite(k), img = sp.c;
+    const w = Math.max(2, Math.round(2 * t.r * p[2] * (k === "gorse" ? 1 : 1.15))), hh = Math.max(2, Math.round((w * img.height) / img.width * (k === "gorse" ? 0.8 : (t.h || 11) / 11)));
+    const lean = still ? 0 : Math.round((Math.sign(wl) * gust * 0.6 + Math.sin(frame / (9 - gust * 3) + t.x * 0.7) * gust * 0.8) * Math.min(4, hh / 14));
+    items.push({ d: p[3], f: () => {
+      const x0 = Math.round(p[0] - w / 2), y0 = Math.round(p[1] - hh + 1), cut = Math.round(hh * (1 - sp.trunk));
+      if (p[3] < 60 && w > 6) shadow(ctx, p[0] + w * 0.25, p[1], w * 0.45, Math.max(1, w * 0.1), 0.28);
+      if (!lean || cut < 2) { ctx.drawImage(img, x0, y0, w, hh); return; }
+      const shh = Math.round(img.height * (1 - sp.trunk));
+      ctx.drawImage(img, 0, shh, img.width, img.height - shh, x0, y0 + cut, w, hh - cut);
+      ctx.drawImage(img, 0, 0, img.width, shh, x0 + lean, y0, w, cut);
+    } });
   }
-  // the crowd
+  // the crowd, in the gallery's mood
+  const mood = mem.react && frame - mem.react.f0 < 260 ? mem.react.kind : null;
   for (const c of crowdOf(h)) {
     const p = project(cam, c.x, c.y);
     if (!p || p[3] < 3 || !vis(p, 1)) continue;
-    const hh = Math.max(3, Math.round(1.8 * p[2])), w = Math.max(1, Math.round(hh / 2.2));
-    items.push({ d: p[3], f: () => { px(ctx, p[0] - (w >> 1), p[1] - hh + 1, w, Math.max(1, Math.round(hh * 0.25)), c.skin); px(ctx, p[0] - (w >> 1), p[1] - hh + 1 + Math.max(1, Math.round(hh * 0.25)), w, Math.max(1, Math.round(hh * 0.45)), c.shirt); px(ctx, p[0] - (w >> 1), p[1] - Math.round(hh * 0.3) + 1, w, Math.max(1, Math.round(hh * 0.3)), "#202020"); } });
+    const hh = Math.max(3, Math.round(1.85 * p[2]));
+    items.push({ d: p[3], f: () => spectator(ctx, c, Math.round(p[0]), Math.round(p[1]), hh, mood, still ? 0 : frame) });
   }
   // the tee markers
   if (Math.hypot(P.x, P.y) < 40) for (const tx of [-3.5, 3.5]) {
     const p = project(cam, tx, 0.5);
-    if (p && p[3] > 1) { const s = Math.max(2, Math.round(0.35 * p[2])); items.push({ d: p[3], f: () => { px(ctx, p[0] - s / 2, p[1] - s + 1, s, s, PAL.red); px(ctx, p[0] - s / 2, p[1] - s + 1, Math.max(1, s >> 1), Math.max(1, s >> 1), PAL.white); } }); }
+    if (p && p[3] > 1) { const s = Math.max(2, Math.round(0.35 * p[2])); items.push({ d: p[3], f: () => { shadow(ctx, p[0] + s * 0.4, p[1], s * 0.7, Math.max(1, s * 0.2)); px(ctx, p[0] - s / 2, p[1] - s + 1, s, s, PAL.red); px(ctx, p[0] - s / 2, p[1] - s + 1, Math.max(1, s >> 1), Math.max(1, s >> 1), "#fc7460"); } }); }
   }
-  // the flag: a pole, a cloth that streams with the wind across the view, the cup when close
+  // the flag: a pole, a cloth that streams with the wind across the view (further and faster the
+  // harder it blows, drooping in a breeze), the cup when close
   {
     const p = project(cam, h.pin.x, h.pin.y);
     if (p) {
-      const pole = Math.max(9, Math.round(2.6 * p[2])), fw = Math.max(4, Math.round(pole * 0.45)), fh = Math.max(3, Math.round(pole * 0.28));
-      const wl = st.wind.x * cam.rx + st.wind.y * cam.ry, dir = st.wind.mph < 1 ? 0 : wl >= 0 ? 1 : -1, wave = (frame >> (st.wind.mph > 8 ? 2 : 3)) % 3;
+      const pole = Math.max(9, Math.round(2.6 * p[2])), fw = Math.max(4, Math.round(pole * (0.32 + 0.02 * Math.min(14, st.wind.mph)))), fh = Math.max(3, Math.round(pole * 0.26));
+      const dir = st.wind.mph < 1 ? 0 : wl >= 0 ? 1 : -1, wave = still ? 0 : (frame >> (st.wind.mph > 8 ? 2 : 3)) % 3;
+      const droop = Math.max(0, 1 - st.wind.mph / 10);
       items.push({ d: p[3], f: () => {
         if (p[3] < 30) px(ctx, p[0] - Math.max(1, p[2] * 0.12), p[1] - 1, Math.max(2, Math.round(p[2] * 0.25)), Math.max(1, Math.round(p[2] * 0.06)), PAL.black);
         px(ctx, p[0], p[1] - pole + 1, 1, pole, PAL.white);
+        if (pole > 14) px(ctx, p[0] + 1, p[1] - pole + 1, 1, pole, "#a8a8a8");
         if (!dir) { px(ctx, p[0] + 1, p[1] - pole + 1, Math.max(2, fh >> 1), fh + 1, PAL.red); return; }
         for (let i = 0; i < fw; i++) {
-          const dy = Math.round(Math.sin((i / fw) * 3.1 + wave * 2.1) * (fh * 0.3) * (i / fw));
+          const dy = Math.round(Math.sin((i / fw) * 3.1 + wave * 2.1) * (fh * 0.3) * (i / fw) + droop * i * 0.6);
           const hgt = Math.max(1, Math.round(fh * (1 - (i / fw) * 0.45)));
           px(ctx, dir > 0 ? p[0] + 1 + i : p[0] - 1 - i, p[1] - pole + 1 + dy, 1, hgt, i % 3 === 2 && fw > 6 ? "#a81800" : PAL.red);
         }
@@ -475,20 +600,25 @@ function behindView(ctx, st, frame, looks) {
     const p = project(cam, Q.x, Q.y);
     if (p) items.push({ d: p[3], f: () => { const s = Math.max(2, Math.min(4, Math.round(p[2] * 0.15))); px(ctx, p[0] - s / 2, p[1] - s + 1, s, s, Q.color?.shirt || PAL.gold); } });
   });
-  // the golfer: stands left of the ball where it was played, drawn at full size at address
+  // the golfer: left of the ball he is playing, the clubhead on it at address
   const moving = st.phase === "flight" || st.phase === "roll" || st.phase === "rest";
   const showGolfer = !moving || cam.adv < 40;
   if (showGolfer && st.phase !== "holeEnd") {
-    // placed from the ball he is playing, so the clubhead sits on it at address
     const p = project(cam, cam.ox, cam.oy);
     if (p) {
-      const k = Math.min(1, p[2] / (cam.F / cam.back)), fx = p[0] - cam.grip[0] * k, fy = p[1] - cam.grip[1] * k;
-      const look = looks?.[st.cur];
-      items.push({ d: p[3] + 0.05, f: () => { const sp = golferSprite(st, look, frame), w = Math.round(GW * k), hh = Math.round(GH * k); ctx.drawImage(sp, Math.round(fx - GOX * k), Math.round(fy - GOY * k), w, hh); } });
+      const k = Math.min(1, p[2] / (cam.F / cam.back)), look = looks?.[st.cur] || { shirt: P.color?.shirt, pants: P.color?.pants };
+      const pose = poseFor(st, frame, still), [bx, by] = ballPx(pose.putt);
+      items.push({ d: p[3] + 0.05, f: () => {
+        const sp = golferCanvas(pose, look), w = Math.round(GW * k), hh = Math.round(GH * k);
+        const x0 = Math.round(p[0] - bx * k), y0 = Math.round(p[1] + 1 - by * k);
+        // his shadow: on the turf down and to the right of his feet (the sun is behind his left shoulder)
+        shadow(ctx, x0 + 78 * k, y0 + 147 * k, 30 * k, 5 * k, 0.3);
+        ctx.drawImage(sp, x0, y0, w, hh);
+      } });
     }
   }
-  // the ball: its shadow on the ground, a trail through the air
-  const mem = memOf(st), b = st.ball;
+  // the ball: its soft shadow on the ground, a trail through the air
+  const b = st.ball;
   const holedNow = st.phase === "rest" && P.holed && b && Math.hypot(b.x - h.pin.x, b.y - h.pin.y) < 0.2;
   if (b && !holedNow) {
     if (st.phase === "flight") { mem.trail.push([b.x, b.y, b.z || 0]); if (mem.trail.length > 40) mem.trail.shift(); }
@@ -496,13 +626,12 @@ function behindView(ctx, st, frame, looks) {
     if (pb) items.push({ d: pb[3] - 0.01, f: () => {
       mem.trail.forEach((q, i) => { if (i % 3) return; const pq = project(cam, q[0], q[1], q[2]); if (pq) px(ctx, pq[0], pq[1], 1, 1, i > mem.trail.length - 10 ? PAL.white : PAL.grey); });
       const s = Math.max(2, Math.min(4, Math.round(pb[2] * 0.22)));
-      if (ps && (b.z || 0) > 0.3) px(ctx, ps[0] - s / 2, ps[1] - 1, s, Math.max(1, s >> 1), "#004400");
-      if (pb[1] < cam.H0 + 4 || (b.z || 0) > 0.3) px(ctx, pb[0] - s / 2 - 1, pb[1] - s, s + 2, s + 2, "#000000");   // in the sky: an outline so it reads
+      if (ps) { const z = b.z || 0, k = Math.max(0.35, 1 - z / 40); shadow(ctx, ps[0], ps[1] - 0.5, Math.max(1, s * 0.8 * k), Math.max(0.6, s * 0.3 * k), 0.4 * k); }
+      if (pb[1] < cam.H0 + 4 || (b.z || 0) > 0.3) px(ctx, pb[0] - s / 2 - 1, pb[1] - s, s + 2, s + 2, PAL.ink);   // in the sky: an outline so it reads
       px(ctx, pb[0] - s / 2, pb[1] - s + 1, s, s, PAL.white);
       if (s > 2) px(ctx, pb[0] - s / 2 + s - 1, pb[1], 1, 1, PAL.grey);
     } });
   }
-  // the aim line on the turf (under everything standing), slope arrows on a green
   if (st.phase === "aim" || st.phase === "meter") aimLine(ctx, st, h, cam, frame);
   if (cam.putt) slopeArrows(ctx, h, cam);
   items.sort((a, b2) => b2.d - a.d).forEach(it => it.f());
@@ -522,88 +651,108 @@ function aimLine(ctx, st, h, cam, frame) {
   }
 }
 function slopeArrows(ctx, h, cam) {
-  const g = h.green, step = 1.6;
-  for (let y = g.y - g.r; y <= g.y + g.r; y += step) for (let x = g.x - g.r; x <= g.x + g.r; x += step) {
-    if (Math.hypot(x - g.x, y - g.y) > g.r - 0.4) continue;
+  const G = h.green.poly, b = G.bb, step = 1.6;
+  for (let y = b[1]; y <= b[3]; y += step) for (let x = b[0]; x <= b[2]; x += step) {
+    if (!inPoly(G, x, y)) continue;
     const [sx, sy] = slopeAt(h, x, y), m = Math.hypot(sx, sy);
     const p = project(cam, x, y);
-    if (!p || p[3] > 40 || p[1] >= PANEL_Y - 2 || m < 0.04) continue;
+    if (!p || p[3] > 40 || p[1] >= PANEL_Y - 2 || m < 0.03) continue;
     const q = project(cam, x + (sx / m) * 0.9, y + (sy / m) * 0.9);
     if (!q) continue;
-    const col = m > 0.35 ? "#005800" : "#388800";
+    const col = m > 0.22 ? "#1c5a10" : "#3a8a1c";
     line(ctx, p[0], p[1], q[0], q[1], col);
     px(ctx, q[0] - 1, q[1] - 1, 3, 2, col);
   }
 }
 
 // ---- the HUD -------------------------------------------------------------------------------------------
-const MX = 6, MY = 184, MW = 100;
+const MX = 6, MY = 184, MW = 120;
 const mPos = (m) => MX + Math.round(((m - ACC_END) / (1 - ACC_END)) * MW);
-function meter(ctx, st) {
+function meter(ctx, st, h, P) {
+  const putt = CLUBS[st.club]?.putt;
   px(ctx, MX - 1, MY - 1, MW + 3, 10, PAL.white);
   px(ctx, MX, MY, MW + 1, 8, PAL.black);
-  px(ctx, mPos(-ACC_ZONE), MY, mPos(ACC_ZONE) - mPos(-ACC_ZONE), 8, "#000088");
+  if (!putt) px(ctx, mPos(-ACC_ZONE), MY, mPos(ACC_ZONE) - mPos(-ACC_ZONE), 8, "#1c1c88");
   for (const q of [0.25, 0.5, 0.75, 1]) px(ctx, mPos(q), MY + 6, 1, 2, PAL.dgrey);
+  // the putter's meter is pace only: a mark where a flat putt would just reach the cup
+  // (the meter is finer at the short end: pace = marker^1.5, sim.js puttPace)
+  if (putt) { const d = Math.hypot(h.pin.x - P.x, h.pin.y - P.y) / PUTT_MAX; if (d <= 1) px(ctx, mPos(puttMark(d)), MY + 1, 1, 6, PAL.lime); }
   const m = st.meter;
   if (m) {
     const top = m.stage === 1 ? m.m : m.power;
-    px(ctx, mPos(0), MY + 1, Math.max(0, mPos(top) - mPos(0)), 6, PAL.gold);
+    for (let x = mPos(0); x < mPos(top); x++) px(ctx, x, MY + 1, 1, 6, x & 1 ? "#f8b800" : (x - mPos(0)) > MW * 0.7 ? "#f86800" : "#f8d000");
     if (m.stage === 2) px(ctx, mPos(m.power), MY - 3, 1, 3, PAL.white);
     px(ctx, mPos(m.m), MY - 2, 2, 12, PAL.white);
   }
-  px(ctx, mPos(0), MY - 2, 1, 12, PAL.red);
+  if (!putt) px(ctx, mPos(0), MY - 2, 1, 12, PAL.red);
 }
+// the wind as the golfer feels it: an arrow turned to the view (up = toward the target)
 function windIcon(ctx, x, y, w, rot = 0) {
   px(ctx, x, y, 13, 13, PAL.black);
   px(ctx, x + 6, y + 6, 1, 1, PAL.dgrey);
   if (!w.mph) return;
   const a = w.dir * Math.PI / 4 - rot, ux = Math.sin(a), uy = -Math.cos(a);
-  line(ctx, x + 6 - ux * 5, y + 6 - uy * 5, x + 6 + ux * 5, y + 6 + uy * 5, PAL.white);
-  line(ctx, x + 6 + ux * 5, y + 6 + uy * 5, x + 6 + ux * 2 - uy * 3, y + 6 + uy * 2 + ux * 3, PAL.white);
-  line(ctx, x + 6 + ux * 5, y + 6 + uy * 5, x + 6 + ux * 2 + uy * 3, y + 6 + uy * 2 - ux * 3, PAL.white);
+  const col = w.mph >= 10 ? PAL.gold : PAL.white;
+  line(ctx, x + 6 - ux * 5, y + 6 - uy * 5, x + 6 + ux * 5, y + 6 + uy * 5, col);
+  line(ctx, x + 6 + ux * 5, y + 6 + uy * 5, x + 6 + ux * 2 - uy * 3, y + 6 + uy * 2 + ux * 3, col);
+  line(ctx, x + 6 + ux * 5, y + 6 + uy * 5, x + 6 + ux * 2 + uy * 3, y + 6 + uy * 2 - ux * 3, col);
+}
+// "HELP 6 L>R 9": the wind along and across the aim, in mph
+export function windWords(w, aim) {
+  if (!w.mph) return "";
+  const { tail, cross } = windRel(w, aim), out = [];
+  if (Math.abs(tail) >= 1) out.push(`${tail > 0 ? "HELP" : "INTO"} ${Math.round(Math.abs(tail))}`);
+  if (Math.abs(cross) >= 1) out.push(`${cross > 0 ? "L>R" : "R>L"} ${Math.round(Math.abs(cross))}`);
+  return out.join(" ");
 }
 function portrait(ctx, look, x, y) {
   box(ctx, x, y, 32, 28);
-  px(ctx, x + 1, y + 1, 30, 26, "#000088");
+  px(ctx, x + 1, y + 1, 30, 26, "#1c1c88");
   const hd = look?.head;
   if (hd) ctx.drawImage(hd, x + 16 - hd.width, y + 26 - hd.height * 2, hd.width * 2, hd.height * 2);
   else { px(ctx, x + 10, y + 6, 12, 14, look?.skin || PAL.skin); px(ctx, x + 10, y + 4, 12, 4, look?.hair || "#503000"); }
 }
 function hud(ctx, st, frame, looks) {
   const h = holeOf(st), P = st.players[st.cur], c = CLUBS[st.club];
-  // top left: the golfer's face, who, where
   portrait(ctx, looks?.[st.cur], 4, 4);
-  px(ctx, 38, 4, 126, h.name ? 44 : 34, PAL.black);
-  drawText(ctx, P.name.slice(0, 20), 41, 7, P.kind === "cpu" ? PAL.gold : PAL.white);
+  px(ctx, 38, 4, 150, h.name ? 44 : 34, PAL.black);
+  drawText(ctx, P.name.slice(0, 24), 41, 7, P.kind === "cpu" ? PAL.gold : PAL.white);
   drawText(ctx, `HOLE ${h.n} PAR ${h.par} ${h.yards}Y`, 41, 17, PAL.grey);
   const c0 = cardOf(st), tp = c0.toPar[st.cur];
   drawText(ctx, `SHOT ${Math.min(10, P.strokes + (st.phase === "rest" || st.phase === "holeEnd" ? 0 : 1))}`, 41, 27, PAL.white);
   const tpt = c0.played ? toParText(tp) : "E";
-  drawText(ctx, tpt, 161 - textWidth(tpt), 27, tp < 0 ? PAL.lime : tp > 0 ? PAL.red : PAL.white);
-  if (h.name) drawText(ctx, h.name.slice(0, 20), 41, 38, PAL.gold);
+  drawText(ctx, tpt, 185 - textWidth(tpt), 27, tp < 0 ? PAL.lime : tp > 0 ? PAL.red : PAL.white);
+  if (h.name) drawText(ctx, h.name.slice(0, 24), 41, 38, PAL.gold);
   // the strip along the bottom
-  px(ctx, 0, PANEL_Y, W, H - PANEL_Y, PAL.black);
+  px(ctx, 0, PANEL_Y, W, H - PANEL_Y, PAL.panel);
   px(ctx, 0, PANEL_Y, W, 1, PAL.white);
+  px(ctx, 0, PANEL_Y + 1, W, 1, PAL.panel2);
   const carry = c.putt ? "" : yds(c.carry * (LIE[P.lie] ?? 1));
   drawText(ctx, `${c.id} ${carry}`, 4, 172, PAL.white);
   const pin = Math.hypot(h.pin.x - P.x, h.pin.y - P.y), pinTxt = `PIN ${pin < 30 ? `${Math.round(pin * 3)}FT` : yds(pin)}`;
-  drawText(ctx, pinTxt, 70, 172, PAL.white);
-  const lie = `LIE ${P.lie.toUpperCase()}`;
-  drawText(ctx, lie, W - 4 - textWidth(lie), 172, P.lie === "bunker" || P.lie === "trees" ? PAL.gold : PAL.grey);
-  meter(ctx, st);
-  // the wind as the golfer feels it: turned to the view
+  drawText(ctx, pinTxt, 84, 172, PAL.white);
+  const lie = `LIE ${P.lie === "path" ? "ROAD" : P.lie.toUpperCase()}${P.plug ? " PLUGGED" : ""}`;
+  drawText(ctx, lie, W - 4 - textWidth(lie), 172, P.lie === "bunker" || P.lie === "trees" || P.plug ? PAL.gold : PAL.grey);
+  meter(ctx, st, h, P);
   const aim = st.fl?.aim ?? st.aim;
-  windIcon(ctx, 116, 181, st.wind, aim);
-  drawText(ctx, st.wind.mph ? `WIND ${st.wind.mph}` : "CALM", 133, 184, PAL.white);
-  if (c.putt && st.phase !== "flight") drawText(ctx, `MAX ${Math.round(PUTT_MAX * 3)}FT`, W - 4 - textWidth(`MAX ${Math.round(PUTT_MAX * 3)}FT`), 184, PAL.dgrey);
-  const hint = st.phase === "aim" ? (P.kind === "cpu" ? "THE FIGURE AIMS." : "AIM LEFT/RIGHT. A TO SWING. X CHANGES CLUB.") : st.phase === "meter" ? (P.kind === "cpu" ? "" : st.meter.stage === 1 ? "A: SET THE POWER." : "A: ON THE RED LINE.") : "";
+  if (c.putt && st.phase !== "flight") {
+    const mx = `PACE // MAX ${Math.round(PUTT_MAX * 3)}FT`;
+    drawText(ctx, mx, W - 4 - textWidth(mx), 184, PAL.dgrey);
+  } else {
+    windIcon(ctx, 134, 181, st.wind, aim);
+    drawText(ctx, st.wind.mph ? `${st.wind.mph} MPH` : "CALM", 151, 184, st.wind.mph >= 10 ? PAL.gold : PAL.white);
+    const ww = windWords(st.wind, aim);
+    if (ww) drawText(ctx, ww, W - 4 - textWidth(ww), 184, PAL.grey);
+  }
+  const hint = st.phase === "aim" ? (P.kind === "cpu" ? "THE FIGURE AIMS." : c.putt ? "PUTTER: A STARTS THE STROKE, A AGAIN SETS THE PACE." : "AIM LEFT/RIGHT. A TO SWING. X CHANGES CLUB.")
+    : st.phase === "meter" ? (P.kind === "cpu" ? "" : c.putt ? "A: SET THE PACE." : st.meter.stage === 1 ? "A: SET THE POWER." : "A: ON THE RED LINE.") : "";
   const msg = st.msg || hint;
   const tone = st.msg ? TONE[st.tone] || PAL.white : PAL.grey;
-  wrap(msg, 41).slice(0, 2).forEach((l, i) => drawText(ctx, l, 4, 200 + i * 10, tone));
+  wrap(msg, 52).slice(0, 2).forEach((l, i) => drawText(ctx, l, 4, 200 + i * 10, tone));
   void frame;
 }
 // the corner window: the hole from above (the green close up when putting or near it)
-const PIP = { x: 172, y: 4, w: 80, h: 100 };
+const PIP = { x: W - 86, y: 4, w: 82, h: 104 };
 export function pipView(st) {
   const h = holeOf(st), P = st.players[st.cur], iw = PIP.w - 2, ih = PIP.h - 2;
   const near = P.lie === "green" || CLUBS[st.club]?.putt || st.fl?.putt;
@@ -621,10 +770,10 @@ function pip(ctx, st, frame) {
 function intro(ctx, st, frame, looks) {
   const h = holeOf(st);
   px(ctx, 0, 0, W, H, PAL.black);
-  const v = holeView(h, 104, 216);
-  box(ctx, 3, 3, 108, 218);
-  mapIn(ctx, st, v, 5, 4 + 1, frame, false);
-  const x = 118, w = 22;
+  const v = holeView(h, 112, 200);
+  box(ctx, 3, 3, 116, 204);
+  mapIn(ctx, st, v, 5, 5, frame, false);
+  const x = 128, w = 31;
   let y = 8;
   const put = (s, c, gap = 10) => { drawText(ctx, s, x, y, c); y += gap; };
   put(`HOLE ${h.n} // PAR ${h.par}`, PAL.gold, 12);
@@ -632,30 +781,31 @@ function intro(ctx, st, frame, looks) {
   for (const l of wrap(h.after ? `AFTER: ${h.after}` : "AFTER: APPLICATION 001", w)) put(l, PAL.dgrey);
   y += 2;
   put(`${h.yards} YARDS`, PAL.white);
-  put(st.wind.mph ? `WIND ${st.wind.mph} MPH` : "NO WIND", PAL.grey, 13);
-  for (const l of wrap(h.note || "THE ASSEMBLY DECLINED THIS HOLE. THE DEPARTMENT KEPT THE DRAWINGS.", w).slice(0, 7)) put(l, PAL.lime);
-  // who plays: each golfer as they look today
+  put(st.wind.mph ? `WIND ${st.wind.mph} MPH ${windWords(st.wind, 0)}` : "NO WIND", PAL.grey, 13);
+  for (const l of wrap(h.note || "THE ASSEMBLY DECLINED THIS HOLE. THE DEPARTMENT KEPT THE DRAWINGS.", w).slice(0, 6)) put(l, PAL.lime);
   const cards = st.players.map((Q, i) => looks?.[i]?.card).filter(Boolean);
-  const cy = 150;
-  cards.forEach((c, i) => ctx.drawImage(c, x + i * 40, cy, 32, 48));
-  drawText(ctx, `${st.players[st.honor[0]].name.split(" ").pop()} ON THE TEE`.slice(0, 22), x, 202, PAL.white);
-  if ((frame >> 5) % 2) drawText(ctx, "A TO PLAY", x, 213, PAL.dgrey);
-  if (h.osm) drawText(ctx, "MAP DATA (C) OPENSTREETMAP CONTRIBUTORS", 4, H - 9, PAL.dgrey);
+  cards.forEach((c, i) => ctx.drawImage(c, x + i * 40, 148, 32, 48));
+  drawText(ctx, `${st.players[st.honor[0]].name.split(" ").pop()} ON THE TEE`.slice(0, 22), x, 200, PAL.white);
+  if ((frame >> 5) % 2) drawText(ctx, "A TO PLAY", W - 4 - textWidth("A TO PLAY"), 200, PAL.dgrey);
+  // the shapes' source, in the small print (ODbL)
+  if (h.osm) drawText(ctx, "MAP DATA (C) OPENSTREETMAP CONTRIBUTORS", 4, H - 10, PAL.dgrey);
+  else drawText(ctx, h.famous ? "SHAPES DRAWN BY THE DEPARTMENT" : "THE DEPARTMENT'S DRAWINGS", 4, H - 10, PAL.dgrey);
 }
 export function scorecard(ctx, st, title) {
   const c = cardOf(st), k = Math.min(st.hi, st.holes.length - 1), nine = Math.floor(k / 9) * 9;
   const rows = c.rows.slice(nine, nine + 9);
-  box(ctx, 4, 28, W - 8, 30 + 12 * (2 + st.players.length) + 30);
+  const bx = 24, bw = W - 48;
+  box(ctx, bx, 28, bw, 30 + 12 * (2 + st.players.length) + 30);
   drawText(ctx, title, Math.round(W / 2 - textWidth(title) / 2), 34, PAL.gold);
-  const x0 = 10, colW = 18, lx = 58, y0 = 50;
+  const x0 = bx + 6, colW = 20, lx = bx + 54, y0 = 50;
   drawText(ctx, "HOLE", x0, y0, PAL.grey);
   drawText(ctx, "PAR", x0, y0 + 12, PAL.grey);
   rows.forEach((r, i) => {
     const s = String(r.n), x = lx + i * colW + Math.round((colW - textWidth(s)) / 2);
     drawText(ctx, s, x, y0, PAL.grey);
-    drawText(ctx, String(r.par), lx + i * colW + 6, y0 + 12, PAL.white);
+    drawText(ctx, String(r.par), lx + i * colW + 7, y0 + 12, PAL.white);
   });
-  const tw = lx + 9 * colW + 2;
+  const tw = lx + 9 * colW + 4;
   drawText(ctx, "TOT", tw, y0, PAL.grey);
   drawText(ctx, String(rows.reduce((a, r) => a + r.par, 0)), tw, y0 + 12, PAL.white);
   st.players.forEach((P, pi) => {
@@ -675,7 +825,7 @@ export function scorecard(ctx, st, title) {
   });
   const yb = y0 + 24 + st.players.length * 12 + 8;
   const totals = st.players.map((P, i) => `${P.name.split(" ").pop().slice(0, 9)} ${c.played ? toParText(c.toPar[i]) : "E"}`).join("  ");
-  drawText(ctx, `THRU ${c.played}: ${totals}`.slice(0, 40), x0, yb, PAL.white);
+  drawText(ctx, `THRU ${c.played}: ${totals}`.slice(0, 44), x0, yb, PAL.white);
   if (st.players.length > 1 && c.played) {
     const d = c.won[0] - c.won[1];
     const s = d === 0 ? "MATCH ALL SQUARE" : `${st.players[d > 0 ? 0 : 1].name.split(" ").pop()} ${Math.abs(d)} UP`;
@@ -683,25 +833,34 @@ export function scorecard(ctx, st, title) {
   }
 }
 
+// The gallery's mood for the shot that just came to rest (render's copy; Golf.jsx asks the same
+// gallery.js for the sound and the screen reader's line).
+function trackGallery(st, frame) {
+  const mem = memOf(st);
+  if (st.phase !== "rest") return;
+  const P = st.players[st.cur], key = `${st.hi}|${st.cur}|${P.strokes}|${P.holed}`;
+  if (mem.reactKey === key) return;
+  mem.reactKey = key;
+  const r = reactionFor(st, holeOf(st));
+  mem.react = r ? { kind: r.kind, f0: frame } : null;
+}
+
 // looks: per player {head, skin, hair, shirt, pants, cap, glove, card} (looks.js), or nothing yet
-export function draw(ctx, st, frame, paused, looks) {
+// opts: {still (reduced motion: no sway, no shimmer; the end scene one frame)}
+export function draw(ctx, st, frame, paused, looks, opts = {}) {
   ctx.imageSmoothingEnabled = false;
   px(ctx, 0, 0, W, H, PAL.black);
-  if (st.phase === "done") {
-    scorecard(ctx, st, "FINAL CARD // EXHIBITION");
-    wrap(st.result?.line || "", 40).slice(0, 3).forEach((l, i) => drawText(ctx, l, 10, 160 + i * 10, PAL.gold));
-    drawText(ctx, "THE DEPARTMENT COUNTS IT ANYWAY.", 10, 196, PAL.grey);
-    return;
-  }
+  if (st.phase === "done") { drawEnd(ctx, st, frame, looks, opts, { W, H, scorecard, PAL, RAMP, dith, shadow }); return; }
+  trackGallery(st, frame);
   if (st.phase === "intro") { intro(ctx, st, frame, looks); }
   else {
-    behindView(ctx, st, frame, looks);
+    behindView(ctx, st, frame, looks, Boolean(opts.still));
     hud(ctx, st, frame, looks);
     pip(ctx, st, frame);
   }
   if (st.phase === "holeEnd") scorecard(ctx, st, `AFTER HOLE ${holeOf(st).n}`);
   if (paused) {
-    box(ctx, 40, 90, W - 80, 40);
+    box(ctx, 60, 90, W - 120, 40);
     drawText(ctx, "PAUSED", Math.round(W / 2 - textWidth("PAUSED") / 2), 98, PAL.gold);
     drawText(ctx, "THE DEPARTMENT WAITS.", Math.round(W / 2 - textWidth("THE DEPARTMENT WAITS.") / 2), 112, PAL.grey);
   }

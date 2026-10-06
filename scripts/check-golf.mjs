@@ -26,7 +26,7 @@ import { OSM } from "../src/play/golf/holes/osm.js";
 import { replayRecord, versionOf } from "../src/play/golf/replay.js";
 import * as V1 from "../src/play/golf/v1/sim.js";
 import { FAMOUS } from "../src/play/golf/holes/famous.js";
-import { newRound, step, autoplay, replay, cardOf, toParText, BTN, CLUBS, RISE_PUTT, holeOf, MAX_STROKES, VERSION, predict, makeFlight, flightAt, solveShot } from "../src/play/golf/sim.js";
+import { newRound, step, autoplay, replay, cardOf, toParText, BTN, CLUBS, RISE_PUTT, holeOf, MAX_STROKES, VERSION, predict, makeFlight, flightAt, solveShot, puttMark, puttPace, lineFor } from "../src/play/golf/sim.js";
 import { fnv } from "../src/play/golf/course.js";
 import { GOLFERS } from "../src/play/golf/roster.js";
 
@@ -70,6 +70,7 @@ function at(x, y, lie, hole = 0) {
 // press A on the tick the meter reaches `p`, then on the red line (perfect accuracy)
 function swing(st, aim, club, p) {
   st.aim = aim; st.club = club;
+  if (CLUBS[club].putt) p = puttMark(p);   // the putter's meter: pace = marker^1.5
   while (st.phase === "aim") step(st, st.prev & BTN.A ? 0 : st.t > 7 ? BTN.A : 0);
   ok(st.phase === "meter", "A starts the meter");
   while (st.phase === "meter") {
@@ -86,7 +87,8 @@ function swing(st, aim, club, p) {
   const st = at(h.pin.x, h.pin.y - 1, "green");
   st.players[0].strokes = 3;
   const sol = solveShot(h, st.players[0], CLUBS.length - 1, h.pin.x, h.pin.y, st.wind);
-  swing(st, sol.aim, CLUBS.length - 1, sol.power);
+  const pace = puttPace(Math.max(1, Math.round(puttMark(sol.power) * RISE_PUTT)) / RISE_PUTT);
+  swing(st, lineFor(h, st.players[0], pace, sol.aim), CLUBS.length - 1, pace);
   ok(st.players[0].holed, "a putt at the cup at the right pace drops");
   ok(st.players[0].strokes === 4, "and counts as a stroke");
   while (st.phase === "rest") step(st, 0);
@@ -293,6 +295,25 @@ ok(Math.abs(b7.roll) < 0.5 && Math.abs(bW.roll) < 0.5, `a ball in a bunker barel
   for (let i = 0; i < 30; i++) step(sw, 0);
   step(sw, BTN.A); step(sw, 0);
   ok(sw.phase === "meter" && sw.meter.stage === 2, "a full swing still asks for the third press");
+}
+
+// ---- the gallery and the end scene: read-only, deterministic
+{ const { reactionFor } = await import("../src/play/golf/gallery.js");
+  const { endScene, SCENES } = await import("../src/play/golf/scenes.js");
+  const h = COURSE[0], mk = (P, shot) => { const st = newRound({ seed: 5, mode: "stroke", count: 9, player: { name: "T" } }); Object.assign(st.players[0], P); st.shot = shot; st.phase = "rest"; return st; };
+  const k = (P, shot) => reactionFor(mk(P, shot), h)?.kind ?? null;
+  ok(k({ holed: true, strokes: 1, x: h.pin.x, y: h.pin.y }, { putt: false, from: 150 }) === "roar", "the gallery roars at a hole in one");
+  ok(k({ holed: true, strokes: h.par - 1, putts: 1, x: h.pin.x, y: h.pin.y }, { putt: true, from: 4 }) === "warm", "a holed birdie putt: warm applause");
+  ok(k({ holed: true, strokes: h.par, putts: 2, x: h.pin.x, y: h.pin.y }, { putt: true, from: 2 }) === "polite", "a holed par putt: polite applause");
+  ok(k({ strokes: 2, lie: "fairway", x: 0, y: 100 }, { putt: false, from: 200, shank: true }) === "crickets", "a shank: crickets");
+  ok(k({ strokes: 3, lie: "green", putts: 1, x: h.pin.x + 0.12, y: h.pin.y }, { putt: true, from: 9, lip: true }) === "ooh", "a lip-out: the gallery gasps");
+  ok(k({ strokes: 2, lie: "green", x: h.pin.x + 2, y: h.pin.y }, { putt: false, from: 120 }) === "cheer", "an approach inside ten feet: cheers");
+  ok(k({ strokes: 4, lie: "green", putts: 1, x: h.pin.x + 1.2, y: h.pin.y }, { putt: true, from: 0.6 }) === "crickets", "a missed tap-in: crickets");
+  const st = autoplay({ ...cfg, count: 9 }).st, s1 = endScene(st), s2 = endScene(replay(st.cfg, autoplay({ ...cfg, count: 9 }).log));
+  ok(SCENES.includes(s1) && s1 === s2, `the end scene follows from the round (${s1}), the same on replay`);
+  const fake = (over, winner, seed) => endScene({ cfg: { seed }, result: { holes: Array(9).fill(0), toPar: [over], total: [36 + over], mode: winner === undefined ? "stroke" : "match", winner } });
+  const seen = new Set(); for (let sd = 1; sd < 60; sd++) for (const [o, w] of [[-2], [2], [8], [20], [1, null], [3, 1]]) seen.add(fake(o, w, sd));
+  ok(SCENES.every(x => seen.has(x)), `every end scene is reachable (${[...seen].join(", ")})`);
 }
 
 console.log(`check-golf: ${n} checks passed. 9 holes by the bot: ${a.st.result.total[0]} (${toParText(a.st.result.toPar[0])}); ${cfg.cpu.name}: ${a.st.result.total[1]}. The open, 18 by the bot: ${oa.st.result.total[0]} (${toParText(oa.st.result.toPar[0])}).`);
