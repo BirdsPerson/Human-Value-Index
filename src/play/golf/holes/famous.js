@@ -31,6 +31,11 @@
 //   scene             the horizon: "parkland", "links", "ocean", "pines"
 //   elev              -1 (downhill) .. 1 (uphill): how the hole looks, not how it plays
 //   gallery           the side the crowd stands near the green: -1 left, 1 right, 0 behind
+//   road              [from, to] yards past the back of the green: a road in play (geometry v2), the
+//                     wall (out of bounds) past it
+// Geometry v2 replaces the drawn green, bunkers and water with OpenStreetMap's where holes/osm.js
+// has the hole (course.js); these numbers still place the pin, the green's fall, the trees and the
+// zones OSM does not map.
 
 export const FAMOUS = [
   // source: https://en.wikipedia.org/wiki/Pebble_Beach_Golf_Links (7: par 3, 87-109 yards)
@@ -132,7 +137,7 @@ export const FAMOUS = [
   // source: https://en.wikipedia.org/wiki/Old_Course_at_St_Andrews (17: par 4, 495, hotel sheds, the bunker, road and wall)
   { id: "standrews-17", name: "THE ROAD HOLE", after: "ST ANDREWS OLD NO. 17", par: 4, yards: 495,
     bend: [[0.45, 18]], fw: [150, [22, 19, 15]], corridor: 54, green: [11, [300, 0.34], [270, 0.4]],
-    haz: [["ob", 1, 22, 60, 250], ["ob", 1, 18, 430, 540], ["obback", 6], ["gb", 300, 3.4], ["b", 350, -20, 4]],
+    haz: [["ob", 1, 22, 60, 250], ["ob", 1, 18, 430, 540], ["obback", 6], ["gb", 300, 3.4], ["b", 350, -20, 4]], road: [2, 8],
     trees: ["none", 0], scene: "links", elev: 0, gallery: -1,
     note: "DRIVE OVER THE OLD SHEDS. THE ROAD BEHIND THE GREEN IS IN PLAY. SO, THE DEPARTMENT NOTES, IS THE WALL." },
   // source: https://en.wikipedia.org/wiki/Old_Course_at_St_Andrews (18: par 4, 357, Swilcan Burn, Valley of Sin, no bunkers)

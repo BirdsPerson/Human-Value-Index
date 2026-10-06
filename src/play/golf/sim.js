@@ -3,70 +3,234 @@
 // tick, so a round is {cfg, inputLog} and can be replayed anywhere (scripts/check-golf.mjs does;
 // a server can later). The renderer (render.js) only reads the state.
 //
-// A shot: AIM (left/right; B or down for a shorter club, up for a longer one), then the classic
-// three-press meter: A starts the swing, A sets the power as the marker climbs, A sets the
-// accuracy as it falls back through the line. Early is a hook, late a slice, missed a shank.
-// Wind drifts the ball in flight; trees stop it; water costs a stroke and a drop; out of bounds
-// costs a stroke and the shot again from where it was played. On the green the putter rolls the
-// ball over the green's fall (course.js slopeAt).
+// SIM VERSION 2. Version 1 rounds (circle greens, three-press putts, the first flight and roll)
+// replay through the frozen ./v1/sim.js (./replay.js picks by version); cfg.v says which.
+//
+// A shot: AIM (left/right; B or down for a shorter club, up for a longer one), then the meter. A
+// full swing is the classic three presses: A starts the swing, A sets the power as the marker
+// climbs, A sets the accuracy as it falls back through the line (early hooks, late slices, missed
+// is a shank). A PUTT IS TWO: A starts the stroke, A sets the pace; there is no accuracy press on
+// the green. Leave the putter's marker alone and it climbs, falls back, and the stroke is called
+// off (no stroke counted).
+//
+// The ball (v2):
+//   flight   carry, height and the landing angle are the club's; WIND acts in proportion to how
+//            high the ball flies and how long it stays up: into the wind the ball comes up short
+//            (about twice as much as the same wind behind adds), a crosswind drifts it, a low or
+//            soft shot is moved less than a high full one
+//   landing  every surface has its own bounce (restitution), grip (friction), how much a steep
+//            ball ploughs in, and how it rolls; backspin (wedges, short irons) checks the ball on
+//            the first bounces, a driver runs out; a steep landing stops quicker than a shallow one
+//   roll     deceleration = a constant (the grass) + a share of the speed (the drag of the blades),
+//            so the ball slows in a smooth curve and stops, never slides or halts dead; the ground's
+//            fall pulls it everywhere (course.js slopeAt), the green's most
+//   hazards  water is a splash and a drop (+1), out of bounds is +1 and the shot again; a steep ball
+//            into a bunker can plug; the Road Hole's road is in play and fast
 
 import { COURSE, COURSES, surfaceAt, slopeAt, treeTop, lineDist, pointAlong, rngStep, fnv } from "./course.js";
 
-export const VERSION = 1;
+export const VERSION = 2;
 export const HZ = 60;
 const DT = 1 / HZ;
 export const BTN = { L: 1, R: 2, U: 4, D: 8, A: 16, B: 32 };
 
-// carry in yards at full power from a good lie; loft: apex as a share of carry; roll: share of
-// carry run out on fairway
+// carry in yards at full power from a good lie; loft: apex as a share of carry; land: the landing
+// angle in degrees; spin: backspin, 0..1; roll: the run-out a caddie expects on fairway (planning)
 export const CLUBS = [
-  { id: "1W", carry: 235, loft: 0.12, roll: 0.12 },
-  { id: "3W", carry: 215, loft: 0.13, roll: 0.10 },
-  { id: "3I", carry: 192, loft: 0.15, roll: 0.08 },
-  { id: "5I", carry: 172, loft: 0.17, roll: 0.07 },
-  { id: "7I", carry: 152, loft: 0.20, roll: 0.05 },
-  { id: "9I", carry: 132, loft: 0.24, roll: 0.04 },
-  { id: "PW", carry: 110, loft: 0.27, roll: 0.03 },
-  { id: "SW", carry: 78, loft: 0.32, roll: 0.02 },
+  { id: "1W", carry: 235, loft: 0.12, land: 37, spin: 0.12, roll: 0.11 },
+  { id: "3W", carry: 215, loft: 0.13, land: 40, spin: 0.2, roll: 0.09 },
+  { id: "3I", carry: 192, loft: 0.15, land: 43, spin: 0.38, roll: 0.06 },
+  { id: "5I", carry: 172, loft: 0.17, land: 46, spin: 0.5, roll: 0.05 },
+  { id: "7I", carry: 152, loft: 0.2, land: 49, spin: 0.64, roll: 0.04 },
+  { id: "9I", carry: 132, loft: 0.24, land: 51, spin: 0.8, roll: 0.03 },
+  { id: "PW", carry: 110, loft: 0.27, land: 52, spin: 0.9, roll: 0.02 },
+  { id: "SW", carry: 78, loft: 0.32, land: 54, spin: 1, roll: 0.015 },
   { id: "PT", carry: 0, putt: true },
 ];
 const PT = CLUBS.length - 1;
-export const LIE = { tee: 1, fairway: 1, fringe: 0.95, green: 1, rough: 0.82, bunker: 0.6, trees: 0.55 };
-export const FRIC = { green: 1.5, fringe: 2.6, fairway: 3.6, tee: 3.6, rough: 9, trees: 22, bunker: 30 };
-const ROLLF = { green: 0.7, fringe: 0.8, fairway: 1, tee: 1, rough: 0.3, trees: 0, bunker: 0 };
-export const PUTT_MAX = 22;          // yards on a flat green at full power
+export const LIE = { tee: 1, fairway: 1, fringe: 0.95, green: 1, rough: 0.82, bunker: 0.6, trees: 0.55, waste: 0.8, path: 0.97 };
+// the ground, per surface: e (bounce), mu (grip), plough (a steep ball's loss), c0 + c1 * speed
+// (rolling deceleration, yards/s^2)
+export const GROUND = {
+  green: { e: 0.22, mu: 0.55, plough: 0.25, c0: 0.62, c1: 0.1 },
+  fringe: { e: 0.22, mu: 0.6, plough: 0.35, c0: 1.1, c1: 0.3 },
+  fairway: { e: 0.25, mu: 0.5, plough: 0.35, c0: 2.2, c1: 0.5 },
+  tee: { e: 0.25, mu: 0.5, plough: 0.35, c0: 2.2, c1: 0.5 },
+  rough: { e: 0.12, mu: 0.9, plough: 0.8, c0: 5.5, c1: 1.8 },
+  trees: { e: 0.1, mu: 1, plough: 0.9, c0: 8, c1: 2.5 },
+  waste: { e: 0.08, mu: 1, plough: 0.85, c0: 7, c1: 2 },
+  bunker: { e: 0.03, mu: 1, plough: 0.98, c0: 16, c1: 4 },
+  path: { e: 0.58, mu: 0.15, plough: 0.05, c0: 0.9, c1: 0.12 },
+};
+const SPIN_LIE = { rough: 0.4, trees: 0.3, bunker: 0.6, waste: 0.7, fringe: 0.9 };
+export const GRAV = 10.7;            // yards/s^2
+export const PUTT_MAX = 22;          // yards a full putt rolls on a flat green
 export const CUP_R = 0.075, CAPTURE_V = 2.1, MAX_STROKES = 10;
 export const RISE = 54, RISE_PUTT = 90, ACC_ZONE = 0.12, ACC_END = -0.14;
 const TREE_H = 11;
 
-const lieFactor = (club, lie) => (lie === "bunker" && CLUBS[club].id === "SW" ? 0.92 : LIE[lie] ?? 1);
+const lieFactor = (club, lie, plug) => (lie === "bunker" ? (plug ? 0.45 : CLUBS[club].id === "SW" ? 0.92 : LIE.bunker) : LIE[lie] ?? 1);
 const flightT = (carry) => 1.1 + carry / 160;      // seconds in the air
-export const reachOf = (club, lie) => { const c = CLUBS[club]; return c.putt ? PUTT_MAX : c.carry * lieFactor(club, lie) * (1 + c.roll * 0.8); };
+export const reachOf = (club, lie) => { const c = CLUBS[club]; return c.putt ? PUTT_MAX : c.carry * lieFactor(club, lie) * (1 + c.roll); };
 export const courseOf = (st) => COURSES[st.course] || COURSE;
 export const holeOf = (st) => courseOf(st)[st.holes[st.hi]];
 export const dirOf = (aim) => [Math.sin(aim), Math.cos(aim)];   // aim 0 = straight up the hole, + = right
 
+// ---- wind --------------------------------------------------------------------------------------
+// The wind as the shot feels it: -> {tail (mph, + behind the ball), cross (mph, + blowing to the
+// right of the aim)}
+export function windRel(wind, aim) {
+  const [dx, dy] = dirOf(aim);
+  return { tail: wind.x * dx + wind.y * dy, cross: wind.x * dy - wind.y * dx };
+}
+// How much of the wind a shot feels: a high ball more, a low one less (0.35 .. 1.25)
+const exposure = (apex) => Math.max(0.35, Math.min(1.25, Math.sqrt(Math.max(0, apex) / 28)));
+
+// ---- the flight (pure): from a club, power, aim and lie to the curve through the air ------------
+export function makeFlight(h, P, club, aim, power, acc, wind) {
+  const c = CLUBS[club];
+  const carry0 = c.carry * lieFactor(club, P.lie, P.plug) * power;
+  const apex0 = carry0 * c.loft, ex = exposure(apex0);
+  const { tail, cross } = windRel(wind, aim);
+  const carry = carry0 * (1 + (tail >= 0 ? 0.0048 : 0.0085) * tail * ex);
+  const apex = apex0 * (1 - 0.006 * tail * ex);
+  const drift = 0.0056 * cross * carry0 * ex;
+  const T = flightT(carry), ticks = Math.max(20, Math.round(T * HZ));
+  const a = acc;
+  const vh = 0.11 * carry0 + 2;
+  const land = Math.min(70, Math.max(20, c.land - 0.35 * tail * ex)) * (Math.PI / 180);
+  const s = c.spin * 2.2 * vh * (SPIN_LIE[P.lie] ?? 1) * (0.5 + 0.5 * power) * (P.lie === "bunker" && c.id === "SW" ? 1.3 : 1);
+  return { ox: P.x, oy: P.y, aim: aim + a * 0.035, carry, carry0, ticks, T, apex, curve: a * carry0 * 0.17, drift, a, club, vh, vz: vh * Math.tan(land), spin: s, ex };
+}
+// Where the ball is, f (0..1) of the way through its flight. The ball climbs to its apex 60% of
+// the way out and falls more steeply than it rose; it slows as it goes.
+export function flightAt(fl, wind, f) {
+  const [dx, dy] = dirOf(fl.aim), rx = dy, ry = -dx;
+  const fwd = fl.carry * f * (1.35 - 0.35 * f), side = (fl.curve + fl.drift) * f * f;
+  void wind;
+  return { x: fl.ox + dx * fwd + rx * side, y: fl.oy + dy * fwd + ry * side, z: Math.max(0, fl.apex * 5.379 * Math.pow(f, 1.5) * (1 - f)) };
+}
+// The ball at the end of its flight: where, and its velocity (horizontal along the flight's last
+// heading; vertical down), and its backspin.
+function landingOf(fl, wind) {
+  const p = flightAt(fl, wind, 1), q = flightAt(fl, wind, 0.98);
+  const vx = p.x - q.x, vy = p.y - q.y, n = Math.hypot(vx, vy) || 1;
+  return { x: p.x, y: p.y, z: 0, vx: (vx / n) * fl.vh, vy: (vy / n) * fl.vh, vz: -fl.vz, s: fl.spin, hops: 0, putt: false };
+}
+
+// ---- the ground (pure): one tick of a ball on or just above the ground --------------------------
+// b: {x, y, z, vx, vy, vz, s, hops, putt}. -> null (still going) | "rest" | "water" | "ob" | "cup" |
+// "lip" (it caught the cup and spun out; still going)
+export function groundStep(h, b) {
+  if (b.z > 0 || b.vz > 0) {   // a hop
+    b.vz -= GRAV * DT; b.z += b.vz * DT; b.x += b.vx * DT; b.y += b.vy * DT;
+    if (b.z > 0) return null;
+    b.z = 0;
+    const s = surfaceAt(h, b.x, b.y);
+    if (s === "water" || s === "ob") return s;
+    return bounce(h, b, s);
+  }
+  const s = surfaceAt(h, b.x, b.y);
+  if (s === "water" || s === "ob") return s;
+  const g = GROUND[s] || GROUND.rough, [gx, gy] = slopeAt(h, b.x, b.y);
+  const sp = Math.hypot(b.vx, b.vy);
+  if (sp < 0.04 && Math.hypot(gx, gy) < g.c0 * 0.85) return "rest";
+  let vx = b.vx + gx * DT, vy = b.vy + gy * DT;
+  const n = Math.hypot(vx, vy) || 1, dec = Math.min(n, (g.c0 + g.c1 * n) * DT);
+  vx -= (vx / n) * dec; vy -= (vy / n) * dec;
+  const x0 = b.x, y0 = b.y, nx = x0 + vx * DT, ny = y0 + vy * DT;
+  // the cup: the closest the path came to it this tick
+  const ux = nx - x0, uy = ny - y0, L2 = ux * ux + uy * uy;
+  const t = L2 ? Math.max(0, Math.min(1, ((h.pin.x - x0) * ux + (h.pin.y - y0) * uy) / L2)) : 0;
+  const off = Math.hypot(x0 + ux * t - h.pin.x, y0 + uy * t - h.pin.y);
+  b.vx = vx; b.vy = vy; b.x = nx; b.y = ny;
+  if (off < CUP_R && !b.lipped) {
+    // dead centre drops at up to CAPTURE_V; an edge only at a crawl
+    const edge = off / CUP_R;
+    if (sp < CAPTURE_V * (1 - 0.65 * edge * edge)) { b.x = h.pin.x; b.y = h.pin.y; return "cup"; }
+    // caught the lip: turned off line and slowed, round the back of the cup
+    const side = (ux * (h.pin.y - y0) - uy * (h.pin.x - x0)) >= 0 ? -1 : 1, turn = side * (0.5 + 0.9 * edge);
+    const cs = Math.cos(turn), sn = Math.sin(turn);
+    b.vx = (vx * cs - vy * sn) * 0.6; b.vy = (vx * sn + vy * cs) * 0.6;
+    b.lipped = 12;
+    return "lip";
+  }
+  if (b.lipped) b.lipped--;
+  return null;
+}
+function bounce(h, b, s) {
+  const g = GROUND[s] || GROUND.rough;
+  const vz = -b.vz, vh = Math.hypot(b.vx, b.vy), ux = vh ? b.vx / vh : 0, uy = vh ? b.vy / vh : 0;
+  const sinT = vz / (Math.hypot(vh, vz) || 1);
+  const fr = g.mu * (1 + g.e) * vz, slip = vh + b.s;
+  let v2;
+  if (fr >= (slip * 2) / 7) { v2 = (5 * vh - 2 * b.s) / 7; b.s = 0; }   // it grips: spin can pull it back
+  else { v2 = vh - fr; b.s *= 0.35; }
+  v2 *= 1 - g.plough * sinT;
+  if (s === "bunker" && vz > 14 && sinT > 0.6) { b.plug = true; v2 = 0; }
+  b.vx = ux * v2; b.vy = uy * v2;
+  b.vz = g.e * vz;
+  if (b.vz < 1.2) b.vz = 0;
+  b.hops++;
+  return null;
+}
+// A ball rolled out to rest on the hole (the predictor's; the sim runs the same steps tick by tick).
+function runOut(h, b, maxT = 30) {
+  for (let k = 0; k < HZ * maxT; k++) {
+    const r = groundStep(h, b);
+    if (r && r !== "lip") return r;
+  }
+  return "rest";
+}
+// The full path of a shot without the round: -> {x, y, status}
+export function predict(h, P, club, aim, power, wind) {
+  const c = CLUBS[club];
+  if (c.putt) {
+    const v0 = puttSpeed(power), [dx, dy] = dirOf(aim);
+    const b = { x: P.x, y: P.y, z: 0, vx: dx * v0, vy: dy * v0, vz: 0, s: 0, hops: 0, putt: true };
+    const r = runOut(h, b);
+    return { x: b.x, y: b.y, status: r };
+  }
+  const fl = makeFlight(h, P, club, aim, power, 0, wind);
+  const b = landingOf(fl, wind);
+  const s0 = surfaceAt(h, b.x, b.y);
+  if (s0 === "water" || s0 === "ob") return { x: b.x, y: b.y, status: s0, carry: true };
+  if (Math.hypot(b.x - h.pin.x, b.y - h.pin.y) < 0.1) return { x: h.pin.x, y: h.pin.y, status: "cup" };
+  bounce(h, b, s0);
+  const r = runOut(h, b);
+  return { x: b.x, y: b.y, status: r, lx: fl.ox, ly: fl.oy };
+}
+// The pace a putt is struck at, from the meter: power is the share of PUTT_MAX it would roll on a
+// flat green. (Closed form of the roll: v(t) = (v0 + c0/c1) e^(-c1 t) - c0/c1.)
+const GREEN = GROUND.green;
+const flatRoll = (v0) => { const q = GREEN.c0 / GREEN.c1, t = Math.log((v0 + q) / q) / GREEN.c1; return ((v0 + q) * (1 - Math.exp(-GREEN.c1 * t))) / GREEN.c1 - q * t; };
+export function puttSpeed(power) {
+  const want = Math.max(0, power) * PUTT_MAX;
+  let lo = 0, hi = 12;
+  for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (flatRoll(m) < want) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+}
+
 // ---- the shot a caddie would suggest -------------------------------------------------------------
 // -> {club, aim, tx, ty, d (to the target), pin (to the pin)}
-export function planShot(h, P) {
+export function planShot(h, P, wind = null) {
   const pin = Math.hypot(h.pin.x - P.x, h.pin.y - P.y);
   const aimAt = (tx, ty) => Math.atan2(tx - P.x, ty - P.y);
   if (P.lie === "green" || (P.lie === "fringe" && pin < 14)) return { club: PT, aim: aimAt(h.pin.x, h.pin.y), tx: h.pin.x, ty: h.pin.y, d: pin, pin };
   const longest = P.lie === "tee" ? 0 : 1;
-  if (reachOf(longest, P.lie) >= pin * 0.97) {
+  // the wind along the line to the pin stretches or shortens every club's reach
+  const wk = (club) => { if (!wind) return 1; const c = CLUBS[club], ex = exposure(c.carry * c.loft), { tail } = windRel(wind, aimAt(h.pin.x, h.pin.y)); return 1 + (tail >= 0 ? 0.0048 : 0.0085) * tail * ex; };
+  const reach = (club) => reachOf(club, P.lie) * (P.plug && P.lie === "bunker" ? 0.5 : 1) * wk(club);
+  if (reach(longest) >= pin * 0.97) {
     let club = longest;
-    for (let c = PT - 1; c >= longest; c--) if (reachOf(c, P.lie) >= pin) { club = c; break; }
+    for (let c = PT - 1; c >= longest; c--) if (reach(c) >= pin) { club = c; break; }
     return { club, aim: aimAt(h.pin.x, h.pin.y), tx: h.pin.x, ty: h.pin.y, d: pin, pin };
   }
   const { along } = lineDist(h.pts, P.x, P.y);
-  let [tx, ty] = pointAlong(h.pts, along + reachOf(longest, P.lie) * 0.95);
-  if (h.famous) [tx, ty] = safeLayup(h, along + reachOf(longest, P.lie) * 0.95, tx, ty);
+  let [tx, ty] = pointAlong(h.pts, along + reach(longest) * 0.95);
+  if (h.famous) [tx, ty] = safeLayup(h, along + reach(longest) * 0.95, tx, ty);
   return { club: longest, aim: aimAt(tx, ty), tx, ty, d: Math.hypot(tx - P.x, ty - P.y), pin };
 }
-
-// THE DEPARTMENT OPEN only (the links keep the plain plan): a lay-up the caddie would take, short
-// of the water and the sand rather than in it. Back down the line, then a little either side, until
-// the spot and a ring round it are dry grass.
 function safeLayup(h, along, tx, ty) {
   const ok = (x, y) => {
     const s = surfaceAt(h, x, y);
@@ -74,8 +238,9 @@ function safeLayup(h, along, tx, ty) {
     for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4, q = surfaceAt(h, x + Math.cos(a) * 9, y + Math.sin(a) * 9); if (q === "water" || q === "ob") return false; }
     return true;
   };
+  const total = h.lineLen || h.yards;
   for (let back = 0; back <= 120; back += 8) for (const lat of [0, -6, 6, -12, 12]) {
-    const a = Math.min(along - back, h.yards - h.green.r - 12);
+    const a = Math.min(along - back, total - h.green.r - 12);
     const [x, y] = pointAlong(h.pts, a);
     const [x2, y2] = pointAlong(h.pts, a + 1), n = Math.hypot(x2 - x, y2 - y) || 1;
     const px = x + ((y2 - y) / n) * lat, py = y - ((x2 - x) / n) * lat;
@@ -84,23 +249,47 @@ function safeLayup(h, along, tx, ty) {
   }
   return [tx, ty];
 }
+// The swing that puts the ball at rest nearest (tx, ty): -> {aim, power}. Reads the wind (`read`
+// of it: 1 all, 0 none) and, on the green, the break, by playing the shot out in its head.
+export function solveShot(h, P, club, tx, ty, wind, read = 1) {
+  const c = CLUBS[club], w = { x: wind.x * read, y: wind.y * read };
+  const dist = Math.hypot(tx - P.x, ty - P.y);
+  let aim = Math.atan2(tx - P.x, ty - P.y);
+  const full = c.putt ? PUTT_MAX : c.carry * lieFactor(club, P.lie, P.plug) * (1 + c.roll);
+  let power = Math.max(0.03, Math.min(1, (c.putt ? dist + 0.35 : dist) / full));
+  let best = { aim, power, err: Infinity };
+  for (let it = 0; it < 7; it++) {
+    const r = predict(h, P, club, aim, power, w);
+    const ex = (r.status === "cup" ? h.pin.x : r.x) - P.x, ey = (r.status === "cup" ? h.pin.y : r.y) - P.y;
+    const [dx, dy] = dirOf(aim);
+    const want = [tx - P.x, ty - P.y];
+    const ea = (want[0] - ex) * dx + (want[1] - ey) * dy, ec = (want[0] - ex) * dy - (want[1] - ey) * dx;
+    // a putt aims to finish a foot past: firm enough to hold its line
+    const err = Math.hypot(ea + (c.putt ? 0.3 : 0), ec) + (r.status === "water" || r.status === "ob" ? 40 : 0);
+    if (r.status === "cup") return { aim, power };
+    if (err < best.err) best = { aim, power, err };
+    power = Math.max(0.03, Math.min(1, power + (ea + (c.putt ? 0.33 : 0)) / full));
+    aim += Math.atan2(ec, Math.max(1, dist)) * (c.putt ? 1 : 0.9);
+  }
+  return { aim: best.aim, power: best.power };
+}
 
 // ---- a new round -------------------------------------------------------------------------------
 // cfg: {seed, course: "links" (default) | "open", mode: "stroke" | "match", start (0 or 9), count (9 or 18), player: {name, color},
-//       cpu: {slug, name, rating, color} | null}
+//       cpu: {slug, name, rating, color} | null, easy, v (sim version; this module plays 2)}
 export function newRound(cfg) {
   const count = cfg.count === 9 ? 9 : 18, start = count === 9 && cfg.start === 9 ? 9 : 0;
   const seed = (cfg.seed >>> 0) || 1;
   const course = cfg.course === "open" ? "open" : "links";
-  const mk = (p, kind) => ({ name: String(p?.name || "SUBJECT").toUpperCase().slice(0, 18), kind, slug: p?.slug || null, rating: kind === "cpu" ? Math.max(0, Math.min(99, p.rating | 0)) : null, color: p?.color || null, card: [], x: 0, y: 0, lie: "tee", strokes: 0, holed: false, prev: null });
+  const mk = (p, kind) => ({ name: String(p?.name || "SUBJECT").toUpperCase().slice(0, 18), kind, slug: p?.slug || null, rating: kind === "cpu" ? Math.max(0, Math.min(99, p.rating | 0)) : null, color: p?.color || null, card: [], x: 0, y: 0, lie: "tee", strokes: 0, holed: false, prev: null, plug: false, putts: 0 });
   const players = [mk(cfg.player, "human")];
   const mode = cfg.mode === "match" && cfg.cpu ? "match" : "stroke";
   if (mode === "match") players.push(mk(cfg.cpu, "cpu"));
   const st = {
-    v: VERSION, cfg: { seed, course, mode, start, count, player: cfg.player || null, cpu: mode === "match" ? cfg.cpu : null, ...(cfg.easy ? { easy: true } : {}) },
+    v: VERSION, cfg: { v: VERSION, seed, course, mode, start, count, player: cfg.player || null, cpu: mode === "match" ? cfg.cpu : null, ...(cfg.easy ? { easy: true } : {}) },
     rng: fnv(`golf|${seed}`), mode, course, holes: Array.from({ length: count }, (_, i) => start + i), hi: 0,
     players, cur: 0, honor: players.map((_, i) => i), phase: "intro", t: 0, tick: 0, prev: 0, hold: 0,
-    aim: 0, club: 0, meter: null, fl: null, ball: null, wind: null, msg: "", tone: "", ev: [], plan: null, result: null,
+    aim: 0, club: 0, meter: null, fl: null, ball: null, wind: null, msg: "", tone: "", ev: [], plan: null, result: null, shot: null,
   };
   startHole(st);
   return st;
@@ -112,14 +301,14 @@ function startHole(st) {
   const sp = Math.round(rand(st) * 14), dir = Math.floor(rand(st) * 8);
   const a = dir * Math.PI / 4;                    // 0 = blowing up the screen (toward the green)
   st.wind = { mph: sp, dir, x: Math.sin(a) * sp, y: Math.cos(a) * sp };
-  for (const P of st.players) Object.assign(P, { x: 0, y: 0, lie: "tee", strokes: 0, holed: false, prev: null });
+  for (const P of st.players) Object.assign(P, { x: 0, y: 0, lie: "tee", strokes: 0, holed: false, prev: null, plug: false, putts: 0 });
   st.cur = st.honor[0];
-  st.phase = "intro"; st.t = 0; st.msg = ""; st.ball = null; st.fl = null; st.meter = null;
+  st.phase = "intro"; st.t = 0; st.msg = ""; st.ball = null; st.fl = null; st.meter = null; st.shot = null;
   st.ev.push("hole");
 }
 function startTurn(st) {
   const P = st.players[st.cur], h = holeOf(st);
-  const plan = planShot(h, P);
+  const plan = planShot(h, P, st.wind);
   st.club = plan.club; st.phase = "aim"; st.t = 0; st.meter = null; st.fl = null; st.msg = ""; st.hold = 0;
   st.ball = { x: P.x, y: P.y, z: 0 };
   st.aim = plan.aim;
@@ -127,47 +316,38 @@ function startTurn(st) {
 }
 
 // ---- the CPU figure -----------------------------------------------------------------------------
-// The caddie's plan, then the figure's own errors: the lower the rating, the wider every one.
-// Pressing is quantised to the meter's ticks like anyone's.
+// The caddie's plan played out in the figure's head (reading only part of the wind, the weaker the
+// less), then the figure's own errors: the lower the rating, the wider every one. Pressing is
+// quantised to the meter's ticks like anyone's.
 function planCpu(st, h, P, plan) {
   const k = (100 - P.rating) / 100, skill = 0.35 + 0.65 * (P.rating / 100);
   const c = CLUBS[plan.club];
-  let aim = plan.aim, p;
-  if (c.putt) {
-    const [dx, dy] = dirOf(aim), rx = dy, ry = -dx;
-    const [sx, sy] = slopeAt(h, (P.x + h.pin.x) / 2, (P.y + h.pin.y) / 2);
-    const along = sx * dx + sy * dy, perp = sx * rx + sy * ry;
-    const decel = Math.max(0.6, FRIC.green - along);
-    const v0 = Math.sqrt(2 * decel * (plan.pin + 0.3));
-    p = (v0 * v0) / (2 * FRIC.green * PUTT_MAX);
-    const tt = v0 / decel, drift = 0.25 * perp * tt * tt;
-    aim -= Math.atan2(drift, Math.max(1, plan.pin)) * skill;
-    p *= 1 + gauss(st) * (0.06 + 0.12 * k);
-    aim += gauss(st) * (0.02 + 0.06 * k);
-  } else {
-    const lf = lieFactor(plan.club, P.lie), full = c.carry * lf;
-    const toPin = plan.tx === h.pin.x && plan.ty === h.pin.y;
-    const carry = toPin ? plan.d / (1 + c.roll * ROLLF.green) : plan.d / (1 + c.roll * 0.8);
-    p = Math.min(1, carry / full);
-    // wind: drift = wind * 0.45 * T at the end of the flight; the figure reads part of it
-    const T = flightT(full * p), [dx, dy] = dirOf(aim);
-    const wx = st.wind.x * 0.45 * T, wy = st.wind.y * 0.45 * T;
-    const head = wx * dx + wy * dy, cross = wx * dy - wy * dx;
-    aim -= Math.atan2(cross, Math.max(20, full * p)) * skill;
-    p = Math.min(1, p - (head / full) * skill);
-    p *= 1 + gauss(st) * (0.03 + 0.07 * k);
-    aim += gauss(st) * (0.015 + 0.035 * k);
-  }
-  const a = gauss(st) * (0.2 + 0.6 * k);                 // normalised accuracy error: 0 is the line
+  const sol = solveShot(h, P, plan.club, plan.tx, plan.ty, st.wind, c.putt ? 1 : 0.35 + 0.65 * skill);
+  let aim = plan.aim + (sol.aim - plan.aim) * (c.putt ? skill : 1), p = sol.power;
+  if (c.putt) { p *= 1 + gauss(st) * (0.06 + 0.12 * k); aim += gauss(st) * (0.02 + 0.06 * k); }
+  else { p *= 1 + gauss(st) * (0.03 + 0.07 * k); aim += gauss(st) * (0.015 + 0.035 * k); }
+  const a = c.putt ? 0 : gauss(st) * (0.2 + 0.6 * k);    // normalised accuracy error: 0 is the line
   const rise = c.putt ? RISE_PUTT : RISE;
-  const t1 = Math.max(2, Math.min(rise, Math.round(Math.max(0.02, p) * rise)));
+  const t1 = Math.max(2, Math.min(rise, Math.round(Math.max(0.02, Math.min(1, p)) * rise)));
   const pw = t1 / rise;
-  const t2 = t1 + Math.max(1, Math.round((pw + a * ACC_ZONE) * rise));   // marker = pw - (t2 - t1)/rise = -a*ACC_ZONE
+  const t2 = c.putt ? 0 : t1 + Math.max(1, Math.round((pw + a * ACC_ZONE) * rise));
   return { aim, club: plan.club, t1, t2, wait: 30 + Math.floor(rand(st) * 30) };
 }
 
-// ---- the bot (scripts/check-golf.mjs, and an attract mode): input bits from the state alone ----------
-// Never touches the state; plays the caddie's plan with perfect timing.
+// ---- the bot (scripts/check-golf.mjs, the caddie's attract mode): input bits from the state alone --
+// Never touches the state; plays the caddie's plan with perfect timing, reading wind and break,
+// steering the aim with the arrows like a player would.
+const BOT = new WeakMap();
+function botPlan(st) {
+  const P = st.players[st.cur], key = `${st.hi}|${st.cur}|${P.strokes}|${P.x}|${P.y}|${st.club}`;
+  const m = BOT.get(st);
+  if (m && m.key === key) return m.sol;
+  const h = holeOf(st), plan = planShot(h, P, st.wind);
+  const tx = st.club === plan.club ? plan.tx : h.pin.x, ty = st.club === plan.club ? plan.ty : h.pin.y;
+  const sol = solveShot(h, P, st.club, tx, ty, st.wind, 1);
+  BOT.set(st, { key, sol });
+  return sol;
+}
 export function botBits(st) {
   if (st.prev & BTN.A) return 0;
   const P = st.players[st.cur];
@@ -175,24 +355,19 @@ export function botBits(st) {
   if (st.phase === "intro" || st.phase === "holeEnd") return st.t > 20 ? BTN.A : 0;
   if (st.phase === "aim") {
     if (st.t < 8) return 0;
+    const sol = botPlan(st), fine = CLUBS[st.club].putt ? 0.0035 : 0.006, d = sol.aim - st.aim;
+    if (Math.abs(d) > fine * 0.55) {
+      const bit = d > 0 ? BTN.R : BTN.L;
+      // hold for the fast sweep when far off; tap (one fine step a press) when close
+      if (Math.abs(d) > fine * 4 * 3) return bit;
+      return st.prev & (BTN.L | BTN.R) ? 0 : bit;
+    }
     return BTN.A;
   }
   if (st.phase === "meter") {
-    const m = st.meter, h = holeOf(st), c = CLUBS[st.club];
-    let p;
-    if (c.putt) {
-      const d = Math.hypot(h.pin.x - P.x, h.pin.y - P.y);
-      p = (2 * FRIC.green * (d + 0.3)) / (2 * FRIC.green * PUTT_MAX);
-    } else {
-      const plan = planShot(h, P), full = c.carry * lieFactor(st.club, P.lie);
-      const toPin = plan.tx === h.pin.x && plan.ty === h.pin.y;
-      p = Math.min(1, (toPin ? plan.d / (1 + c.roll * ROLLF.green) : plan.d / (1 + c.roll * 0.8)) / full);
-      // the wind along the line: into it, a firmer swing; with it, a softer one
-      const [dx, dy] = dirOf(st.aim), T = flightT(full * p);
-      p = Math.max(0.03, Math.min(1, p - ((st.wind.x * dx + st.wind.y * dy) * 0.45 * T) / full));
-    }
+    const m = st.meter, p = botPlan(st).power;
     // the press lands on the next tick's marker: press on the tick that puts it nearest the mark
-    if (m.stage === 1) return (m.k + 1.5) / m.rise >= p ? BTN.A : 0;
+    if (m.stage === 1) return m.dir > 0 && (m.k + 1.5) / m.rise >= p ? BTN.A : 0;
     if (m.stage === 2) return m.m - 1.5 / m.rise <= 0 ? BTN.A : 0;
   }
   return 0;
@@ -231,12 +406,22 @@ export function step(st, bits = 0) {
       break;
     }
     case "meter": {
-      const m = st.meter;
+      const m = st.meter, putt = CLUBS[st.club].putt;
       m.k++;
       const press = human ? A : (m.stage === 1 ? m.k === st.plan.t1 : m.k === st.plan.t2);
       if (m.stage === 1) {
-        m.m = Math.min(1, m.k / m.rise);
-        if (press || m.k >= m.rise) { m.power = m.m; m.stage = 2; st.ev.push("tick"); }
+        if (m.dir > 0) m.m = Math.min(1, m.k / m.rise);
+        else m.m = Math.max(0, 1 - (m.k - m.rise) / m.rise);
+        if (press) {
+          m.power = m.m; st.ev.push("tick");
+          if (putt) { m.acc = 0; strike(st); }          // the putter: two taps, no accuracy press
+          else m.stage = 2;
+        } else if (m.k >= m.rise && m.dir > 0) {
+          if (putt) m.dir = -1;                            // left alone, the putter's marker falls back
+          else { m.power = m.m; m.stage = 2; st.ev.push("tick"); }
+        } else if (putt && m.dir < 0 && m.m <= 0) {       // ... and the stroke is called off
+          st.phase = "aim"; st.t = 7; st.meter = null; st.ev.push("club");
+        }
       } else {
         m.m = m.power - (m.k - Math.round(m.power * m.rise)) / m.rise;
         if (press || m.m <= ACC_END) { m.acc = Math.max(ACC_END, m.m); strike(st); }
@@ -263,7 +448,7 @@ function beginMeter(st) {
   st.phase = "meter"; st.t = 0;
   // EASY SWING (cfg.easy, the player's side only): the marker climbs a third slower
   const easy = st.cfg.easy && st.players[st.cur].kind === "human";
-  st.meter = { stage: 1, m: 0, k: 0, rise: Math.round((CLUBS[st.club].putt ? RISE_PUTT : RISE) * (easy ? 1.5 : 1)), power: null, acc: null };
+  st.meter = { stage: 1, dir: 1, m: 0, k: 0, rise: Math.round((CLUBS[st.club].putt ? RISE_PUTT : RISE) * (easy ? 1.5 : 1)), power: null, acc: null };
   st.ev.push("swing");
 }
 
@@ -271,31 +456,25 @@ function beginMeter(st) {
 function strike(st) {
   const P = st.players[st.cur], h = holeOf(st), c = CLUBS[st.club], m = st.meter;
   // early (marker above the line): a < 0, a hook. EASY SWING keeps two fifths of the miss.
-  const a = Math.max(-1.25, Math.min(1.25, (-m.acc / ACC_ZONE) * (st.cfg.easy && P.kind === "human" ? 0.4 : 1)));
+  const a = c.putt ? 0 : Math.max(-1.25, Math.min(1.25, (-m.acc / ACC_ZONE) * (st.cfg.easy && P.kind === "human" ? 0.4 : 1)));
   P.prev = { x: P.x, y: P.y, lie: P.lie };
   P.strokes++;
+  if (c.putt) P.putts++;
   st.ev.push(Math.abs(a) > 1 ? "shank" : "hit");
   st.t = 0;
   st.ball = { x: P.x, y: P.y, z: 0 };
+  // what the gallery (render.js, audio) weighs the shot by, read-only
+  st.shot = { from: Math.hypot(h.pin.x - P.x, h.pin.y - P.y), putt: Boolean(c.putt), shank: Math.abs(a) > 1, lie: P.lie, lip: false, splash: false };
   if (c.putt) {
-    const aim = st.aim + a * 0.05;
-    const v0 = Math.sqrt(2 * FRIC.green * PUTT_MAX * m.power);
-    const [dx, dy] = dirOf(aim);
-    st.fl = { vx: dx * v0, vy: dy * v0, ox: P.x, oy: P.y, putt: true };
+    const v0 = puttSpeed(m.power), [dx, dy] = dirOf(st.aim);
+    st.fl = { ox: P.x, oy: P.y, putt: true, aim: st.aim, b: { x: P.x, y: P.y, z: 0, vx: dx * v0, vy: dy * v0, vz: 0, s: 0, hops: 0, putt: true } };
+    P.plug = false;
     st.phase = "roll";
     return;
   }
-  const carry = c.carry * lieFactor(st.club, P.lie) * m.power;
-  const T = flightT(carry), ticks = Math.max(20, Math.round(T * HZ));
-  const aim = st.aim + a * 0.035;
-  st.fl = { ox: P.x, oy: P.y, aim, carry, ticks, T, apex: carry * c.loft, curve: a * carry * 0.17, a, club: st.club };
+  st.fl = makeFlight(h, P, st.club, st.aim, m.power, a, st.wind);
+  P.plug = false;
   st.phase = "flight";
-}
-// Where the ball is, f (0..1) of the way through its flight.
-export function flightAt(fl, wind, f) {
-  const [dx, dy] = dirOf(fl.aim), rx = dy, ry = -dx;
-  const fwd = fl.carry * f, side = fl.curve * f * f, wk = 0.45 * fl.T * f * f;
-  return { x: fl.ox + dx * fwd + rx * side + wind.x * wk, y: fl.oy + dy * fwd + ry * side + wind.y * wk, z: fl.apex * 4 * f * (1 - f) };
 }
 function flight(st) {
   const fl = st.fl, h = holeOf(st), f = Math.min(1, st.t / fl.ticks);
@@ -303,56 +482,41 @@ function flight(st) {
   st.ball = p;
   if (f > 0.06 && p.z < TREE_H && p.z < treeTop(h, p.x, p.y)) {   // into the branches: it drops where it hit
     st.ev.push("tree");
-    st.fl = { ...fl, vx: 0, vy: 0 };
-    return land(st, p.x, p.y, 0, 0);
+    fl.b = { x: p.x, y: p.y, z: Math.min(p.z, 3), vx: 0, vy: 0, vz: 0, s: 0, hops: 0 };
+    st.phase = "roll"; st.t = 0;
+    return;
   }
   if (f < 1) return;
-  const q = flightAt(fl, st.wind, 0.97), vx = p.x - q.x, vy = p.y - q.y, n = Math.hypot(vx, vy) || 1;
-  const s = surfaceAt(h, p.x, p.y);
   if (Math.hypot(p.x - h.pin.x, p.y - h.pin.y) < 0.1) return holed(st, h.pin.x, h.pin.y);   // in, on the fly
-  const R = fl.carry * CLUBS[fl.club].roll * (ROLLF[s] ?? 0);
-  const v0 = Math.sqrt(2 * (FRIC[s] ?? 30) * R);
+  const b = landingOf(fl, st.wind), s = surfaceAt(h, b.x, b.y);
   st.ev.push("land");
-  land(st, p.x, p.y, (vx / n) * v0, (vy / n) * v0);
-}
-function land(st, x, y, vx, vy) {
-  const h = holeOf(st), s = surfaceAt(h, x, y);
-  if (s === "water") return penalty(st, "water", x, y);
-  if (s === "ob") return penalty(st, "ob", x, y);
-  st.fl = { ...st.fl, vx, vy };
-  st.ball = { x, y, z: 0 };
+  if (s === "water") return penalty(st, "water", b.x, b.y);
+  if (s === "ob") return penalty(st, "ob", b.x, b.y);
+  bounce(h, b, s);
+  fl.b = b;
+  st.ball = { x: b.x, y: b.y, z: 0 };
   st.phase = "roll"; st.t = 0;
 }
 function roll(st) {
-  const h = holeOf(st), fl = st.fl;
-  let { x, y } = st.ball || { x: fl.ox, y: fl.oy };
-  if (!st.ball) st.ball = { x, y, z: 0 };
-  const s = surfaceAt(h, x, y);
-  if (s === "water" || s === "ob") return penalty(st, s, x, y);
-  const fr = FRIC[s] ?? 30, [gx, gy] = slopeAt(h, x, y);
-  let vx = fl.vx, vy = fl.vy;
-  const sp = Math.hypot(vx, vy);
-  if (sp <= fr * DT && Math.hypot(gx, gy) < fr) return rest(st, x, y);
-  vx += gx * DT; vy += gy * DT;
-  const n = Math.hypot(vx, vy) || 1, dec = Math.min(n, fr * DT);
-  vx -= (vx / n) * dec; vy -= (vy / n) * dec;
-  const nx = x + vx * DT, ny = y + vy * DT;
-  // the cup: the closest the path came to it this tick
-  const ux = nx - x, uy = ny - y, L2 = ux * ux + uy * uy;
-  const t = L2 ? Math.max(0, Math.min(1, ((h.pin.x - x) * ux + (h.pin.y - y) * uy) / L2)) : 0;
-  if (Math.hypot(x + ux * t - h.pin.x, y + uy * t - h.pin.y) < CUP_R && sp < CAPTURE_V) return holed(st, h.pin.x, h.pin.y);
-  fl.vx = vx; fl.vy = vy;
-  st.ball = { x: nx, y: ny, z: 0 };
-  if (st.t > HZ * 30) rest(st, nx, ny);           // never rolls forever
+  const h = holeOf(st), b = st.fl.b;
+  const hops = b.hops;
+  const r = groundStep(h, b);
+  st.ball = { x: b.x, y: b.y, z: b.z };
+  if (b.hops > hops && b.hops > 1) st.ev.push("bounce");
+  if (r === "lip") { st.ev.push("lip"); if (st.shot) st.shot.lip = true; return; }
+  if (r === "water" || r === "ob") return penalty(st, r, b.x, b.y);
+  if (r === "cup") return holed(st, h.pin.x, h.pin.y);
+  if (r === "rest" || st.t > HZ * 30) rest(st, b.x, b.y, b.plug);   // never rolls forever
 }
-const LIE_MSG = { fairway: ["FAIRWAY.", "ACCEPTABLE."], rough: ["ROUGH.", "NOTED ON YOUR FILE."], bunker: ["BUNKER.", "SAND. AS PREDICTED."], trees: ["TREES.", "THE TREES WERE DISCLOSED."], green: ["ON THE GREEN.", "COMPLIANT."], fringe: ["FRINGE.", "NEARLY COMPLIANT."], tee: ["STILL ON THE TEE.", "THE DEPARTMENT SAW THAT."] };
-function rest(st, x, y) {
+const LIE_MSG = { fairway: ["FAIRWAY.", "ACCEPTABLE."], rough: ["ROUGH.", "NOTED ON YOUR FILE."], bunker: ["BUNKER.", "SAND. AS PREDICTED."], trees: ["TREES.", "THE TREES WERE DISCLOSED."], green: ["ON THE GREEN.", "COMPLIANT."], fringe: ["FRINGE.", "NEARLY COMPLIANT."], tee: ["STILL ON THE TEE.", "THE DEPARTMENT SAW THAT."], waste: ["WASTE AREA.", "THE DEPARTMENT DID NOT WASTE IT."], path: ["THE ROAD.", "IT IS IN PLAY. SO ARE YOU."] };
+function rest(st, x, y, plug) {
   const P = st.players[st.cur], h = holeOf(st);
   P.x = Math.round(x * 100) / 100; P.y = Math.round(y * 100) / 100;
   P.lie = surfaceAt(h, P.x, P.y);
+  P.plug = Boolean(plug) && P.lie === "bunker";
   st.ball = { x: P.x, y: P.y, z: 0 };
   const m = LIE_MSG[P.lie] || ["", ""];
-  st.msg = st.fl?.putt && P.lie === "green" ? (Math.hypot(h.pin.x - P.x, h.pin.y - P.y) < 1 ? "TAP-IN. THE DEPARTMENT WAITS." : "MISSED. NOTED.") : `${m[0]} ${m[1]}`;
+  st.msg = st.fl?.putt && P.lie === "green" ? (Math.hypot(h.pin.x - P.x, h.pin.y - P.y) < 1 ? "TAP-IN. THE DEPARTMENT WAITS." : "MISSED. NOTED.") : P.plug ? "PLUGGED. THE SAND HAS FILED A CLAIM." : `${m[0]} ${m[1]}`;
   st.tone = P.lie === "bunker" || P.lie === "trees" ? "warn" : "";
   if (P.strokes >= MAX_STROKES) { P.holed = true; P.strokes = MAX_STROKES; st.msg = "PICKED UP. THE DEPARTMENT HAS SEEN ENOUGH."; st.tone = "harm"; }
   st.phase = "rest"; st.t = 0;
@@ -361,6 +525,7 @@ function penalty(st, kind, x, y) {
   const P = st.players[st.cur], h = holeOf(st);
   P.strokes++;
   st.ev.push(kind === "water" ? "splash" : "ob");
+  if (st.shot) st.shot.splash = true;
   if (kind === "ob") {
     P.x = P.prev.x; P.y = P.prev.y; P.lie = P.prev.lie;
     st.msg = "OUT OF BOUNDS. +1. PLAY IT AGAIN.";
@@ -376,6 +541,7 @@ function penalty(st, kind, x, y) {
     P.lie = surfaceAt(h, P.x, P.y);
     st.msg = "IN THE WATER. +1. THE WATER WAS DISCLOSED.";
   }
+  P.plug = false;
   st.tone = "harm";
   st.ball = { x: P.x, y: P.y, z: 0 };
   if (P.strokes >= MAX_STROKES) { P.holed = true; P.strokes = MAX_STROKES; st.msg = "PICKED UP. THE DEPARTMENT HAS SEEN ENOUGH."; }
@@ -403,7 +569,6 @@ function nextTurn(st) {
     st.ev.push("holeEnd");
     return;
   }
-  // honour on the tee, then the ball farthest from the hole plays
   const onTee = left.filter(([P]) => P.strokes === 0);
   if (onTee.length) st.cur = st.honor.find(i => onTee.some(([, j]) => j === i));
   else st.cur = left.sort((a, b) => Math.hypot(h.pin.x - b[0].x, h.pin.y - b[0].y) - Math.hypot(h.pin.x - a[0].x, h.pin.y - a[0].y) || a[1] - b[1])[0][1];
@@ -442,7 +607,7 @@ export function logPush(log, bits) {
   else log.push(bits, 1);
   return log;
 }
-// Replay a round from its config and log. Ticks after the log are empty input; maxTicks bounds it.
+// Replay a v2 round from its config and log (./replay.js routes a v1 record to ./v1/sim.js).
 export function replay(cfg, log, maxTicks = 2_000_000) {
   const st = newRound(cfg);
   for (let i = 0; i < log.length && st.phase !== "done"; i += 2) for (let k = 0; k < log[i + 1] && st.phase !== "done"; k++) { step(st, log[i]); st.ev.length = 0; }

@@ -640,6 +640,7 @@ function intro(ctx, st, frame, looks) {
   cards.forEach((c, i) => ctx.drawImage(c, x + i * 40, cy, 32, 48));
   drawText(ctx, `${st.players[st.honor[0]].name.split(" ").pop()} ON THE TEE`.slice(0, 22), x, 202, PAL.white);
   if ((frame >> 5) % 2) drawText(ctx, "A TO PLAY", x, 213, PAL.dgrey);
+  if (h.osm) drawText(ctx, "MAP DATA (C) OPENSTREETMAP CONTRIBUTORS", 4, H - 9, PAL.dgrey);
 }
 export function scorecard(ctx, st, title) {
   const c = cardOf(st), k = Math.min(st.hi, st.holes.length - 1), nine = Math.floor(k / 9) * 9;
