@@ -2233,8 +2233,57 @@ or any score.
 - Check: `scripts/check-golf.mjs` (course shape, the scripted round twice and its replay identical,
   holed ball ends the hole, OB and water penalties, score v par, a 97 beats a 20; the Open: 18
   holes, par 72, names/credits/notes/sources, builds the same, the bot holes every hole on four
-  seeds, a match replays tick for tick, a round naming no course is the links tick for tick).
-- **Not yet**: a server that verifies a submitted log; spectators; the course in the city map.
+  seeds, a match replays tick for tick, a round naming no course is the links tick for tick; v2:
+  the v1 fixtures replay exactly through replay.js, no green is a circle, OSM greens are OSM's,
+  fairway out-rolls rough, a wedge checks, sand holds, the road is fast, tailwind > calm > headwind,
+  crosswind drifts its way and less for a soft shot, two-tap putts, the gallery's reactions, the
+  end scene is the same on replay).
+- **Sim v2** (2026-10-05, Scott's notes; `VERSION = 2`, `cfg.v = 2`). v1 (circle greens, three-press
+  putts, the first flight and roll) is frozen in `src/play/golf/v1/` (sim, course, famous holes and a
+  snapshot of the civicGeo routing); `replay.js` replays any record on the sim it was played on
+  (`{v, cfg, inputLog}`; no version = v1). `scripts/fixtures/golf-v1-rounds.json` holds six rounds
+  recorded on v1 (bot and sloppy-human logs) that must replay to the same result, tick and resting
+  spots. v2:
+  - **Real shapes**: the Open's greens, fairways, bunkers, tees, water, streams and coastline are
+    OpenStreetMap's (`scripts/golf-osm-import.mjs`, run offline: one Overpass query per course,
+    cached and spaced; the `golf=hole` way with the hole's ref inside the named course; features
+    nearest that hole's line, turned tee-to-green up the screen, scaled to the card's yardage,
+    simplified, big lakes clipped to the hole) in `holes/osm.js`. All 18 holes found (St Andrews has
+    no fairways mapped: the drawn band stays). Map data (c) OpenStreetMap contributors, ODbL: credited
+    on each hole card and on the page. Where OSM has nothing (and on the links), greens, bunkers and
+    ponds are organic blobs (a seeded sum of harmonics, area kept), fairway edges wander. The Road
+    Hole's road is a surface (`path`, fast) and the wall behind it is out. The game never queries OSM.
+  - **Ball**: per-surface bounce, grip, plough and roll (`GROUND`); rolling deceleration = c0 + c1 *
+    speed (a smooth stop); backspin by club checks wedges on greens, the driver runs out; steep
+    landings stop sooner; slopes pull everywhere (the green's most); plugged lies; lip-outs.
+  - **Wind**: scaled by the shot's height (exposure); headwind costs ~0.85% carry per mph, tailwind
+    adds ~0.48%; crosswind drift ~0.56% of carry per mph; putts unaffected. HUD: the arrow turned to
+    the aim plus HELP/INTO and L>R/R>L in mph; the flag streams and trees sway with it.
+  - **Putting is two taps** (start, pace; no accuracy press); the putter meter is pace = marker^1.5
+    (fine control short), a green mark where a flat putt reaches the cup; left alone the marker
+    falls back and the putt is called off. Full swings stay three presses.
+  - The caddie (bot) and the CPU play each shot out in their heads (`solveShot`, `predict`): wind,
+    roll and the break; the CPU reads part of the wind and adds its rating's errors.
+- **Look v2**: 320x224 (16-bit wide mode), integer scale, smoothing off. Ramps of 4-9 shades per
+  material through a 4x4 Bayer dither (sky, mowing stripes, slope-lit greens, distance haze), a
+  far-hills layer at a third of the near tree line's parallax, tree crowns that sway, soft shadows.
+  The golfer (`golfer.js`) is posed in 3D and projected through the view: seen from behind, left of
+  the ball facing it; the club goes back toward the camera and over the right shoulder, through the
+  ball, to a finish with his back to us. Draw time median 1.6 ms (1440 and 390 px viewports;
+  ~4.3 ms at a 4x CPU throttle; v1 was 0.6 / 2.5 ms); static layers cached.
+- **The gallery**: `gallery.js` (pure) turns each shot's outcome into roar / cheer / warm / polite /
+  thin / ooh / groan / crickets; the crowd's arms move to it (render), `src/play/crowdAudio.js`
+  plays it (synthesised: claps, formant crowd voices, crickets, a cough, a bell; no sample files;
+  under each game's remembered mute; nothing before the first gesture) and the screen reader hears
+  a line ("THE GALLERY GROANS."). Shared with THE TENNIS CLUB (aces, breaks, long rallies, match
+  point roar; double faults groan; out and net calls gasp; the toss quiets it) and THE COURTS.
+- **After the round** (`scenes.js`, render-only, chosen from the result and seed so a replay shows
+  the same): champagne and the bell (under par or the match won), the 19th hole (beer, then a hot
+  dog; the opponent silently sips, eats or reads the card), alone at the end of the bar (poor),
+  a club over the knee and the bag in the pond while the caddie drives off (terrible), and about
+  one round in ten a goose takes the hot dog. Any button skips to the card; reduced motion shows
+  one still frame; the caption is read out.
+- **Not yet**: a server that verifies a submitted log; the course in the city map.
 
 ### Basketball: THE COURTS (`#hoops`, 2026-10-05)
 
