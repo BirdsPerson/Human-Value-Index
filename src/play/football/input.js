@@ -27,7 +27,8 @@ export const KEY_GLYPHS = { A: "1", B: "2", X: "3", Y: "4", RB: "5" };
 const pressed = (pad, i) => { const b = pad?.buttons?.[i]; return Boolean(b && (typeof b === "object" ? b.pressed || b.value > 0.5 : b > 0.5)); };
 
 export function createInput() {
-  let keys = 0, touch = 0, startQ = 0, padStart = false, family = null, tapped = 0, rsWas = false;
+  // padStart starts unknown: a Start still held from the menu that launched the game is not a pause
+  let keys = 0, touch = 0, startQ = 0, padStart = null, family = null, tapped = 0, rsWas = false;
   const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); };
   const down = (e) => {
     if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -66,9 +67,9 @@ export function createInput() {
           if (m > 0.7 && !rsWas) mask |= Math.abs(ry) > Math.abs(rx) ? (ry < 0 ? BTN.RSU : BTN.RSD) : rx < 0 ? BTN.RSL : BTN.RSR;
           rsWas = m > 0.5;
         }
-        if (p.held.start && !padStart) startQ++;
+        if (p.held.start && padStart === false) startQ++;
         padStart = p.held.start;
-      } else family = null;
+      } else { family = null; padStart = null; }
       const start = startQ > 0; startQ = 0;
       return { mask, start, pad: family };
     },

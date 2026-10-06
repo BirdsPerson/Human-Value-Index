@@ -8,6 +8,8 @@
 // Content rule (the chess tables', the tennis club's, the courts'): the living appear and play and
 // never speak; nobody here is quoted. The calls are the Department's, about the play.
 
+import { lineup, abilities, OS, DS, DS_NAMES } from "./sim.js";
+
 export const TEAM_IDS = ["arts", "campus", "finance", "strip", "arena", "hq", "archive", "commons", "works", "sprawl"];
 export const TEAMS = {
   arts: ["THE CURATED", "CURATED"], campus: ["THE TENURED", "TENURED"], finance: ["THE LEVERAGED", "LEVERAGED"], strip: ["THE HOUSE EDGE", "HOUSE EDGE"],
@@ -119,3 +121,24 @@ export const HINTS = {
   "andre-the-giant": { skin: "fair", hair_style: "curly", hair_color: "black" },
 };
 export const CROPS = {};
+
+// ---- the ratings on the setup screen -----------------------------------------------------------------
+// One number per unit, from the eleven as the sim lines them up (sim.js lineup): the offence weighted
+// to the men who touch the ball, the defence to the men in coverage and the middle linebacker, special
+// teams the kicker and the returner. OVERALL stays the league's own figure (the mean of the eleven,
+// teamRating) so the setup screen and the league table agree. Key players: who plays where.
+const wmean = (pairs) => { let n = 0, d = 0; for (const [v, w] of pairs) { n += v * w; d += w; } return d ? Math.round(n / d) : 0; };
+export function teamUnits(rows) {
+  const xi = sortEleven(rows);
+  if (xi.length < 11) return { ovr: teamRating(xi), off: 0, def: 0, st: 0, key: [] };
+  const L = lineup(xi), r = (i) => xi[i][2], at = (slots) => slots.map(([s, w]) => [r(L.os[s]), w]), dt = (slots) => slots.map(([s, w]) => [r(L.ds[s]), w]);
+  const off = wmean(at([[OS.QB, 3], [OS.RB, 2], [OS.WR1, 1.6], [OS.WR2, 1.6], [OS.TE, 1.1], [OS.WR3, 1.1], [OS.LT, 0.7], [OS.LG, 0.7], [OS.C, 0.7], [OS.RG, 0.7], [OS.RT, 0.7]]));
+  const def = wmean(dt([[DS.CB1, 1.6], [DS.CB2, 1.6], [DS.FS, 1.2], [DS.SS, 1.2], [DS.MLB, 1.6], [DS.WLB, 1], [DS.SLB, 1], [DS.LE, 1], [DS.RE, 1], [DS.DT1, 0.8], [DS.DT2, 0.8]]));
+  const ret = xi.map((row, i) => [i, abilities(row[2], row[0]).spd]).filter(([i]) => i !== L.os[OS.QB] && i !== L.k).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const st = wmean([[r(L.k), 1], [ret != null ? r(ret) : r(L.k), 1]]);
+  const DSL = [DS.CB1, DS.CB2, DS.FS, DS.SS, DS.MLB, DS.WLB, DS.SLB, DS.LE, DS.RE, DS.DT1, DS.DT2];
+  const dslot = DSL.filter(s => L.ds[s] !== L.os[OS.QB] && L.ds[s] !== L.os[OS.RB]).sort((a, b) => r(L.ds[b]) - r(L.ds[a]))[0];
+  const key = [["QB", L.os[OS.QB]], ["HB", L.os[OS.RB]], ["WR", L.os[OS.WR1]], ["TE", L.os[OS.TE]], [DS_NAMES[dslot], L.ds[dslot]], ["K", L.k]]
+    .map(([pos, i]) => ({ pos, key: xi[i][0], name: shownName(xi[i][1]), r: r(i) }));
+  return { ovr: teamRating(xi), off, def, st, key };
+}

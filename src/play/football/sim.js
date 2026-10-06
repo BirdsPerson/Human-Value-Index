@@ -107,7 +107,7 @@ export function lineup(rows) {
 // ---- the playbook ----------------------------------------------------------------------------------
 // Formations: [lat (yards toward +y from the ball), back (yards behind the line)] per offence slot.
 const OLINE = [[2.8, 0.75], [1.4, 0.75], [0, 0.55], [-1.4, 0.75], [-2.8, 0.75]];
-const FORMS = {
+export const FORMS = {
   single: { name: "SINGLEBACK", at: [[0, 1.3], [0, 6.5], [17, 0.75], [-17, 0.75], [-4.3, 0.85], [9, 1.5], ...OLINE] },
   gun: { name: "SHOTGUN", at: [[0, 5], [-1.6, 5.2], [18, 0.75], [-18, 0.75], [-9, 1.5], [10, 1.5], ...OLINE] },
   goal: { name: "GOAL LINE", at: [[0, 1.3], [0, 6.5], [8, 0.75], [-8, 0.75], [-4.3, 0.85], [0, 4], ...OLINE] },
@@ -173,8 +173,10 @@ export const DEFS = {
 export const DEF_BOOK = [33, 34, 35, 36, 37, 38];
 
 // ---- a new game ------------------------------------------------------------------------------------
-// cfg: {qlen: 2 | 3 | 5 (minutes), assist, auto (team 0 played by the CPU too: the checks and the
-// attract mode), home: [[key, name, r] x 11], away: [...], ot (overtime when level, default true),
+// cfg: {qlen: 2 | 3 | 5 (minutes), assist (ROOKIE: the human's edges), hard (ALL-PRO: the CPU side
+// reads faster, covers tighter, tackles surer, throws truer; nothing when auto), auto (team 0 played
+// by the CPU too: the checks and the attract mode), home: [[key, name, r] x 11], away: [...], ot
+// (overtime when level, default true),
 // coach: [0..1, 0..1] (each CPU coach's lean to the pass; the page passes one per district)}.
 export function newGame(seed = 1, cfg = {}) {
   const qlen = QLENS.includes(cfg.qlen) ? cfg.qlen : 3;
@@ -182,7 +184,7 @@ export function newGame(seed = 1, cfg = {}) {
   const R0 = rows(cfg.home), R1 = rows(cfg.away);
   const st = {
     v: VERSION, seed: seed >>> 0, rng: seed | 0, frame: 0,
-    cfg: { qlen, assist: Boolean(cfg.assist), auto: Boolean(cfg.auto), ot: cfg.ot !== false, coach: Array.isArray(cfg.coach) ? cfg.coach.map(Number) : [0.5, 0.5] },
+    cfg: { qlen, assist: Boolean(cfg.assist), hard: Boolean(cfg.hard), auto: Boolean(cfg.auto), ot: cfg.ot !== false, coach: Array.isArray(cfg.coach) ? cfg.coach.map(Number) : [0.5, 0.5] },
     p: [...R0.map((r, i) => mkPlayer(0, i, r)), ...R1.map((r, i) => mkPlayer(1, i, r))],
     off: [], def: [], kicker: [], ret: [],
     phase: "pre", pt: 0, q: 1, clock: qlen * 60 * HZ, score: [0, 0], to: [3, 3], poss: 0, los: 35, ballY: CY, down: 1, togo: 10, fd: 45,
@@ -206,6 +208,8 @@ export function newGame(seed = 1, cfg = {}) {
 }
 function mkStat() { return { plays: 0, yds: 0, ra: 0, ry: 0, pa: 0, pc: 0, py: 0, sacks: 0, sackYds: 0, ints: 0, fum: 0, td: 0, fd: 0, pen: 0, penYds: 0, punts: 0, fga: 0, fgm: 0, third: 0, thirdOk: 0, top: 0, big: 0 }; }
 const human = (st, P) => !st.cfg.auto && P.t === 0 && P.g === st.ctl;
+// ALL-PRO: the CPU side against a human (never in a CPU v CPU game, so the calibration holds).
+const edge = (st, P) => st.cfg.hard && !st.cfg.auto && P.t === 1;
 function say(st, k, g = -1, extra = {}) { st.ev.push(k); st.note = { k, g, team: g >= 0 ? st.p[g].t : (extra.team ?? -1), frame: st.frame, ...extra }; }
 export const humanOn = (st) => (st.cfg.auto ? -1 : 0);
 
@@ -531,7 +535,7 @@ function pursue(st, D, C, sp = D.spd) {
 }
 // The defence reads run: everyone not engaged chases, after his own reaction.
 function chase(st, D, C) {
-  if (D.react === 0) D.react = st.pt + Math.round((D.role.k === "zone" && D.role.deep ? 18 : D.role.k === "rush" ? 4 : 10) + (1 - D.awr) * 14 * (st.cfg.assist && D.t === 1 ? 1.4 : 1));
+  if (D.react === 0) D.react = st.pt + Math.round(((D.role.k === "zone" && D.role.deep ? 18 : D.role.k === "rush" ? 4 : 10) + (1 - D.awr) * 14 * (st.cfg.assist && D.t === 1 ? 1.4 : 1)) * (edge(st, D) ? 0.7 : 1));
   if (st.pt < D.react) return false;
   pursue(st, D, C);
   return true;
@@ -658,6 +662,7 @@ function throwTo(st, Q, Rr, lob) {
   if (len(Q.vx, Q.vy) > 2.5) sig *= 1.35;
   if (lob) sig *= 1.15;
   if (st.cfg.assist) sig *= hum ? 0.6 : 1.1;
+  if (edge(st, Q)) sig *= 0.85;
   px += gauss(st) * sig * 1.12; py += gauss(st) * sig * 1.12;
   const T = Math.max(6, Math.round((len(px - Q.x, py - Q.y) / L.vh) * HZ));
   Object.assign(b, { st: "air", own: -1, from: Q.g, to: Rr.g, x: Q.x, y: Q.y, z: 2.0, f: 0, T, tx: px, ty: py, lob, away: false, swat: -99 });
@@ -666,7 +671,7 @@ function throwTo(st, Q, Rr, lob) {
   st.stat[Q.t].pa++; st.ps[Q.g].pa++;
   Rr.role = { k: "catch", r: Rr.role.r };
   if (hum) st.ctl = Rr.g;
-  for (const D of st.p) if (D.t !== Q.t) D.seen = st.pt + Math.round(5 + (1 - D.awr) * 12 + (st.cfg.assist && D.t === 1 ? 6 : 0));
+  for (const D of st.p) if (D.t !== Q.t) D.seen = st.pt + Math.round(5 + (1 - D.awr) * 12 + (st.cfg.assist && D.t === 1 ? 6 : 0) - (edge(st, D) ? 3 : 0));
   say(st, lob ? "lob" : "throw", Q.g, { to: Rr.g });
 }
 function throwAway(st, Q, Rr) {
@@ -785,7 +790,7 @@ function coverThink(st, D) {
     if (Rr.role.k === "pblock" || Rr.role.k === "rblock") {   // he stays in to block: sit underneath and read
       want(D, st.los + d * 6, clamp(st.ballY + (D.fy - st.ballY) * 0.4, 2, W - 2), D.spd * 0.7); return;
     }
-    const lag = Math.round(10 + (1 - D.cov) * 14 + (st.cfg.assist && D.t === 1 ? 6 : 0));
+    const lag = Math.round(10 + (1 - D.cov) * 14 + (st.cfg.assist && D.t === 1 ? 6 : 0) - (edge(st, D) ? 4 : 0));
     if (!D.seenR || st.frame - D.seenR.f >= lag) D.seenR = { f: st.frame, vx: Rr.vx, vy: Rr.vy };
     const deep = d * (Rr.x - st.los) > 12 ? 0.9 : 0.6, inside = Rr.y > st.ballY ? -0.6 : 0.6;
     const tx = Rr.x + D.seenR.vx * 0.3 + d * deep, ty = Rr.y + D.seenR.vy * 0.3 + inside;
@@ -1108,6 +1113,7 @@ function tackles(st) {
     p += 0.12 * gang;
     if (hd) p += act === "wrap" ? 0.1 : act === "dive" ? -0.08 : act === "hit" ? -0.05 : -0.08;
     if (st.cfg.assist) { if (hd || D.t === 0) p += 0.06; if (hc) p -= 0.08; }
+    if (edge(st, D)) p += 0.05;
     if (C.role.k === "qb" || st.cur.sackable) p += 0.12;   // a passer in the pocket is not elusive
     p = clamp(p * engM, 0.05, 0.97);
     D.tkCool = 36;

@@ -2601,6 +2601,22 @@ the AI, the rules and the calibration.
   (`src/play/football/Football.jsx`), a tile on `#play` (`src/play/games.js`). Ways in: THE LEAGUES
   hub's exhibitions line; DRIVE YOURSELF: E in the middle of THE BOWL's gridiron offers PLAY
   FOOTBALL: AN EXHIBITION (`controlIso.js`, kind `football`). Phase 1: exhibitions, counted nowhere.
+- **The front end** (`menus.jsx`, 2026-10-06; Scott: "it feels like Madden as though it were drawn as
+  Tecmo Bowl", keep this one going the Madden way): two DEPARTMENT OS windows. THE BOWL: QUICK PLAY
+  (straight in with the day's pairing), EXHIBITION SETUP, HOW TO PLAY, THE TAPES (the games this
+  browser kept). EXHIBITION SETUP: both teams as cards (a pixel crest, `crest.js`: a helmet in the
+  kit's colours with the district's 7 x 7 mark; name; league place; OVR / OFF / DEF / ST meters;
+  the key men QB, HB, WR, TE, the best defender, K with ratings), then rows: AWAY TEAM, HOME TEAM,
+  YOU PLAY AS (home or away: the bug lists away left and home right, the crowd is the home side's),
+  DIFFICULTY (ROOKIE = the old EASY MODE; PRO as rated; ALL-PRO: the CPU reads faster, covers tighter,
+  tackles surer, throws truer, `cfg.hard`, nothing in a CPU v CPU game so the calibration stands),
+  QUARTERS (2, 3, 5), CAMERA; START THE GAME. Controller first (`useMenuPad`: stick or d-pad with a
+  repeat, A on release, B back, Start = QUICK PLAY / START THE GAME), the keyboard the same with
+  arrows / Enter / Esc, every row a real button for a mouse or a thumb; the focused row is inverse
+  video. Unit ratings (`roster.js teamUnits`): OVR is the league's figure (the mean of the eleven),
+  OFF weights the men who touch the ball, DEF the coverage and the middle linebacker, ST the kicker
+  and the returner. Kept in `localStorage["hvi-football-setup"]`; the route's `home`, `vs`, `q`,
+  `cam` override for the visit.
 - **The teams** (`roster.js`): the football league's drafted elevens for the current season from
   today's plan summary (`civic.districts[id].teams.football.roster`), a bundled snapshot (season 22,
   day 608) when the plan does not answer; `<TEAM> ELEVEN`, district kits. Iron men: the same eleven
@@ -2618,7 +2634,14 @@ the AI, the rules and the calibration.
   GOAL LINE, SPECIAL) then a play: HB DIVE, HB STRETCH, PA POST, CURLS, PA BOOT; SLANTS, FOUR
   VERTICALS, HB DRAW, HB SCREEN; GL POWER, QB SNEAK; PUNT, FIELD GOAL, KNEEL; FLIP mirrors it.
   Defence: COVER 2, COVER 3, MAN COVER 1, BLITZ (cover 0), GOAL LINE, PREVENT. ASK THE COORDINATOR
-  picks for you (the CPU's own situational logic, shown before you choose). After a touchdown: KICK
+  picks for you (the CPU's own situational logic, shown before you choose, its play drawn on the
+  button). **Play art** (`playart.js`, pure, 72 x 44 drawn 2x): every card carries its chalkboard.
+  Offence: O's (the centre a square, the man who gets the ball filled), routes as lines in the
+  receivers' button colours with an arrow where they run on and a square where they settle, blocks
+  as a short line with a bar, the run as a thick amber path through the hole, a dashed line for a
+  play-action fake; FLIP mirrors the art. Defence: X's at their alignments over a standard offence,
+  red arrows for the rush, bubbles for zones (deep in blue, underneath in yellow), a dotted line
+  from a man defender to the man he takes. Generic chalk notation, drawn our way, no one's art. After a touchdown: KICK
   THE EXTRA POINT or GO FOR TWO. TIMEOUT (three a half) when the clock would run. The CPU calls by
   down, distance, field position, score and clock, with a per-district coach's lean to the pass;
   fourth downs by its kicker's real range. The call reaches the sim as a code in bits 16-23 of the
@@ -2667,15 +2690,33 @@ the AI, the rules and the calibration.
   level after four: one sudden-death overtime period (a tie if it stays level). Teams keep their ends.
 - **The picture** (`render.js`, 320 x 240, whole-pixel scaling): the broadcast angle behind the play,
   a true pitched perspective (the camera always looks downfield for team 0: behind the quarterback on
-  offence, behind the defence on defence), HIGH AND WIDE under "+". Striped turf, yard lines, hashes,
-  numbers, end zones in the kits' colours, goalposts, crowd stands on both sides and the far end
-  (cheering, standing, heads down). Line of scrimmage (blue) and the line to gain (yellow). Players
-  drawn 1.3x life size (the 16-bit habit), every one by depth: cleats, socks, pants, jersey over the
-  pads with numbers, the file photo's face under a helmet's crown (`heads.js`, head only). Banners for
-  the big moments; a two-pixel shake on a big hit (none with reduced motion).
+  offence, behind the defence on defence), HIGH AND WIDE as the other preset. **The shot moves with
+  the play** (`camFollow`, 2026-10-06): wide and high while a pass develops (the routes in view),
+  tight on the man with the ball once he is past the line or has caught it, leading his run; wide
+  under a kick; back to the set shot between downs. F, height and pitch are eased together so the
+  perspective stays true and nothing cuts; HIGH AND WIDE takes about half the effect. Striped turf,
+  yard lines, hashes, numbers, end zones in the kits' colours, goalposts, crowd stands on both sides
+  and the far end (cheering, standing, heads down). Line of scrimmage (blue) and the line to gain
+  (yellow). **The figures** (1.5x life size, boxes in yards so one description draws at every
+  depth; our own pixel men, a notch up, imitating nobody): helmets in the trim colour (a stripe down
+  the back, a face mask in front), jerseys with numbers, pants, socks, cleats; four facings (away,
+  toward the camera, left, right: a man faces his own way until he is plainly running somewhere
+  else; a defender in coverage keeps facing the passer, so he backpedals; the passer in the pocket
+  drops back); poses: three-point and two-point stances before the snap, a four-phase run cycle paced
+  by speed (legs and arms), the carry (ball under the arm), the throw (cocked, then released), the
+  catch (hands up as the ball arrives, and under a kick), block (arms out, leaning in), wrap, hit,
+  the dive (flat out in the air), swat, stiff arm, the fall (knees, then the turf), the celebration
+  (arms up, a hop, facing the crowd). The file photo's face shows under the helmet whenever a man
+  faces the camera. **Reading the field**: a yellow ring on the turf under your man (with the arrow
+  over his head), a white ring under whoever else has the ball; on ROOKIE, faint lanes on the turf
+  ahead of your runner where no defender stands within reach of the next six yards. Banners for the
+  big moments; a two-pixel shake on a big hit (none with reduced motion).
 - **Presentation**: a score bug (teams, scores, timeouts, possession, quarter, clock, down and
-  distance, the spot, your play clock), the Department's calls under it (`calls.js`, about the play;
-  nobody on the field speaks or is quoted), a live region with the score, the shared crowd
+  distance, the spot, your play clock; away left, home right, YOU marked), the calls under it
+  (`calls.js`: plain play-by-play. Scott, 2026-10-06: "we're going a little overboard with the
+  overlord feel, give it a break in the sports games", so the in-game copy is football's own and the
+  wink is kept for the final board; nobody on the field speaks or is quoted), a live region with the
+  score, the shared crowd
   (`crowdAudio.js`): a roar for your touchdowns and interceptions, groans for theirs, oohs for big hits
   and broken tackles. Mute in `hvi-football-muted`. Pause and the end through `src/play/GameMenu.jsx`.
 - **Input** (`input.js`): keys (arrows/WASD, Shift sprint, Space/J A, K B, U X, I Y, O RB, L the right
@@ -2683,11 +2724,14 @@ the AI, the rules and the calibration.
   RB, the triggers and the right stick; Switch positions swapped; the legend and the receivers' discs
   name the pad's own buttons); touch (an eight-way pad and the buttons the moment needs: SNAP /
   AUDIBLE / HOT, the five receivers, SPRINT / JUKE / SPIN / TRUCK / STIFF, SWITCH / TACKLE / DIVE / HIT
-  / SWAT, KICK; tap a receiver on the picture to throw to him). **EASY MODE** (on for a first visit,
-  `hvi-football-easy`): a bigger catch radius, steadier throws, slower CPU coverage reads, surer
-  tackles for you, a wider kick window, and your runner runs on his own when you let go.
-- **The record**: `{version, seed, cfg (quarter length, easy, both elevens, coaches), home, away,
-  inputLog, result}`, the human's input one mask a frame (UP 1, DOWN 2, LEFT 4, RIGHT 8, A 16, B 32, X
+  / SWAT, KICK; tap a receiver on the picture to throw to him). **ROOKIE** (the old EASY MODE, on for
+  a first visit, `cfg.assist`): a bigger catch radius, steadier throws, slower CPU coverage reads,
+  surer tackles for you, a wider kick window, the open lanes drawn, and your runner runs on his own
+  when you let go. **ALL-PRO** (`cfg.hard`): the CPU's reaction and coverage lags shortened, its
+  tackles a little surer, its passer a little truer. The call sheet's pad / key navigation reaches
+  it through a ref set after every render (a strict-mode remount nulled the old in-render one).
+- **The record**: `{version, seed, cfg (quarter length, assist, hard, both elevens, coaches), home,
+  away (team 0's and team 1's districts), side (whether team 0 is the home side), inputLog, result}`, the human's input one mask a frame (UP 1, DOWN 2, LEFT 4, RIGHT 8, A 16, B 32, X
   64, Y 128, RB 256, SPRINT 512, right stick up/left/right/down 1024-8192, the call code << 16), run-
   length encoded. At the final whistle the browser replays it and says whether it reproduced; the
   last three are kept in `localStorage["hvi-football-exhibitions"]`; WATCH THE TAPE plays it back.
@@ -2699,7 +2743,11 @@ the AI, the rules and the calibration.
   both directions; scoring values; field goals by physics; safety and the free kick; touchbacks;
   holding, interference, accept/decline; a bot's game with calls replayed twice, another seed
   differs, a doctored call breaks it, a wrong version refused; strength; the calibration bands; roster
-  names, clock, lineups; the calls quote nobody).
+  names, clock, lineups; the setup screen's unit ratings; every play's and coverage's art and every
+  crest through a stub context; ALL-PRO replays and changes nothing CPU v CPU; the version-1 fixture
+  record `scripts/fixtures/football-rec-v1.json` still replays, so old tapes keep working; the
+  calls quote nobody and the crowd follows the home side). The sim stays at version 1: the new
+  difficulty is a cfg flag off by default, the figures and the camera are drawing only.
 - **Not yet**: onside kicks, laterals, intentional grounding, the challenge flag, a defensive
   audible, motion, more than one hot route at a time, changing ends, a server replay check, counting
   results anywhere.

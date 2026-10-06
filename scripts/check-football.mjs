@@ -17,14 +17,23 @@
 //   roster       the team names equal the league's (city/leagues.js), the copied clock equals
 //                city/sim.js, the fallback rosters are elevens of distinct players, PLAY NOW pairs two
 //                different teams, a citizen entrant is found on their team, named quarterbacks play QB
-//   calls        no line quotes anyone or has anyone speak
+//   units        the setup screen's OVR / OFF / DEF / ST per team are in range, OVR is the league's own
+//                figure, the key men are six distinct jobs with the named quarterback at QB
+//   art          every play and every coverage draws its chalkboard through a stub context, the same
+//                way twice; FLIP mirrors a run; every crest draws and every district has a mark
+//   difficulty   ALL-PRO changes nothing in a CPU v CPU game (the calibration stands); a bot's game
+//                on ALL-PRO replays; the fixture record from version 1 still replays to its result
+//                (scripts/fixtures/football-rec-v1.json; --write-fixture rewrites it after a version bump)
+//   calls        no line quotes anyone or has anyone speak; the crowd follows the home side
 // Run: node scripts/check-football.mjs
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const S = await import("../src/play/football/sim.js");
 const R = await import("../src/play/football/roster.js");
 const K = await import("../src/play/football/calls.js");
+const A = await import("../src/play/football/playart.js");
+const C = await import("../src/play/football/crest.js");
 const { BTN, OS, CODE } = S;
 let n = 0;
 const ok = (msg) => { n++; if (process.env.VERBOSE) console.log("ok", msg); };
@@ -224,7 +233,25 @@ function playBot(seed, cfg) {
   assert.notDeepEqual(S.replay({ ...rec, inputLog: bad }), rec.result, "a doctored log does not reproduce the result");
   assert.throws(() => S.replay({ ...rec, version: S.VERSION + 1 }), /version/, "another version is refused");
   ok("determinism");
+  // ALL-PRO: a bot's game replays; the fixture from version 1 (recorded before ALL-PRO, the new
+  // figures and the moving camera existed) still comes out the same
+  const hardCfg = { ...cfg, hard: true };
+  const hb = playBot(1234, hardCfg), hrec = { version: S.VERSION, seed: 1234, cfg: hardCfg, inputLog: S.rleEncode(hb.log), result: S.resultOf(hb.st) };
+  assert.deepEqual(S.replay(JSON.parse(JSON.stringify(hrec))), hrec.result, "an ALL-PRO record replays");
+  const fixture = new URL("./fixtures/football-rec-v1.json", import.meta.url);
+  if (process.argv.includes("--write-fixture")) { writeFileSync(fixture, JSON.stringify(rec)); console.log("fixture written"); }
+  assert.ok(existsSync(fixture), "the version-1 fixture record exists");
+  const old = JSON.parse(readFileSync(fixture, "utf8"));
+  assert.equal(old.version, S.VERSION, "the fixture is of this version (bump it with --write-fixture when the sim changes)");
+  assert.deepEqual(S.replay(old), old.result, "an old record replays to its recorded result");
+  ok("difficulty and the old record");
 }
+const ALLPRO_CHECK = () => {
+  // ALL-PRO is the CPU's edge against a human only: a CPU game is the same with it or without
+  const a = cpuGame(777, R.FALLBACK.teams.hq, R.FALLBACK.teams.works, 2), b = (() => { const st = S.newGame(777, { auto: true, qlen: 2, hard: true, home: R.FALLBACK.teams.hq, away: R.FALLBACK.teams.works }); for (let f = 0; st.phase !== "over" && f < 500000; f++) S.step(st, 0); return st; })();
+  assert.deepEqual(S.resultOf(a), S.resultOf(b), "ALL-PRO changes nothing in a CPU v CPU game");
+  ok("ALL-PRO leaves the calibration alone");
+};
 
 // ---- strength and calibration ------------------------------------------------------------------------
 function cpuGame(seed, home, away, qlen = 3) {
@@ -233,6 +260,7 @@ function cpuGame(seed, home, away, qlen = 3) {
   assert.equal(st.phase, "over");
   return st;
 }
+ALLPRO_CHECK();
 {
   let w = 0;
   const N = 10;
@@ -289,6 +317,46 @@ function cpuGame(seed, home, away, qlen = 3) {
   }
   const line = K.callFor({ k: "td", g: 0, team: 0 }, ["TOM BRADY"], ["A", "B"], 0);
   assert.ok(line.includes("TOM BRADY"));
+  assert.equal(K.crowdFor({ k: "td", team: 0 }, 0), "roar"); assert.equal(K.crowdFor({ k: "td", team: 0 }, 1), "groan", "playing away, the crowd groans at your touchdown");
   ok("calls");
+}
+
+// ---- the setup screen's units ------------------------------------------------------------------------
+{
+  for (const id of R.TEAM_IDS) {
+    const u = R.teamUnits(R.FALLBACK.teams[id]);
+    assert.equal(u.ovr, R.teamRating(R.sortEleven(R.FALLBACK.teams[id])), `${id}: OVR is the league's figure`);
+    for (const k of ["off", "def", "st"]) assert.ok(u[k] >= 40 && u[k] <= 99, `${id}: ${k} ${u[k]} in range`);
+    assert.equal(u.key.length, 6); assert.equal(new Set(u.key.map(k => k.pos)).size, 6, `${id}: six distinct jobs`);
+    for (const k of u.key) assert.ok(k.name && k.r > 0 && k.key);
+  }
+  assert.equal(R.teamUnits(R.FALLBACK.teams.archive).key[0].key, "tom-brady", "the named quarterback is the key QB");
+  assert.equal(R.teamUnits(R.FALLBACK.teams.works).key[1].key, "walter-payton");
+  ok("units");
+}
+
+// ---- the play art and the crests ----------------------------------------------------------------------
+{
+  const stub = () => { const rects = []; return { rects, fillStyle: "", fillRect(x, y, w, h) { rects.push([x, y, w, h, this.fillStyle]); }, clearRect() {} }; };
+  const paint = (f) => { const c = stub(); f(c); return c.rects; };
+  for (const id of Object.keys(S.PLAYS).map(Number)) {
+    const a = paint(c => A.drawOffArt(c, id, false)), b = paint(c => A.drawOffArt(c, id, false));
+    assert.ok(a.length > 60, `play ${id} draws`); assert.deepEqual(a, b, `play ${id} draws the same way twice`);
+    for (const [x, y] of a) assert.ok(x >= -1 && x <= A.ART_W && y >= -1 && y <= A.ART_H + 1, `play ${id} stays on its board (${x}, ${y})`);
+  }
+  const dive = paint(c => A.drawOffArt(c, 2, false)), flipped = paint(c => A.drawOffArt(c, 2, true));
+  assert.notDeepEqual(dive, flipped, "FLIP mirrors the stretch");
+  const runX = (rs) => rs.filter(r => r[4] === "#ffe14a").reduce((n, r) => n + r[0], 0) / Math.max(1, rs.filter(r => r[4] === "#ffe14a").length);
+  assert.ok(Math.sign(runX(dive) - A.ART_W / 2) === -Math.sign(runX(flipped) - A.ART_W / 2), "the run's path changes sides");
+  for (const id of S.DEF_BOOK) { const d = paint(c => A.drawDefArt(c, id)); assert.ok(d.length > 60, `defence ${id} draws`); assert.ok(d.some(r => r[4] === "#ff6a5a"), `defence ${id} shows a rush`); }
+  assert.ok(paint(c => A.drawDefArt(c, 36)).filter(r => r[4] === "#ff6a5a").length > paint(c => A.drawDefArt(c, 33)).filter(r => r[4] === "#ff6a5a").length, "the blitz shows more rush than cover 2");
+  for (const id of R.TEAM_IDS) {
+    const M = C.MARKS[id];
+    assert.ok(M && M.length === 7 && M.every(row => /^[01]{7}$/.test(row)), `${id} has a 7 x 7 mark`);
+    const rs = paint(c => C.drawCrest(c, id, 32));
+    assert.ok(rs.length > 25, `${id}'s crest draws`);
+    assert.ok(rs.some(r => r[4] === R.KITS[id][0]) && rs.some(r => r[4] === R.KITS[id][1]), `${id}'s crest wears the kit`);
+  }
+  ok("art and crests");
 }
 console.log(`check-football: ${n} checks passed`);

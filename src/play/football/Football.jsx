@@ -3,11 +3,12 @@ import { Frame, Button, ButtonRow, ScreenHead } from "../../ui/index.js";
 import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC } from "../../avatar.js";
-import { readPad } from "../../city/gamepad.js";
 import GameMenu from "../GameMenu.jsx";
 import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, CALL_SHIFT, CODE, QLENS, PLAYS, DEFS, OFF_BOOK, DEF_BOOK, lineup, contextOf, iconsOf, coordinatorPick, legalOffence, downText, spotText, goalToGo, toGoal, OS, ICONS, DS_NAMES } from "./sim.js";
-import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortEleven, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS } from "./roster.js";
-import { draw, camInit, camFollow, headOf, skinOf, shade, W, H, PS_GLYPH } from "./render.js";
+import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortEleven, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS } from "./roster.js";
+import { draw, camInit, camFollow, headOf, skinOf, shade, W, H, PS_GLYPH, CAMS } from "./render.js";
+import { drawOffArt, drawDefArt, ART_W, ART_H } from "./playart.js";
+import { FrontEnd, Setup, Sheet, Tapes, DIFF_IDS } from "./menus.jsx";
 import { sheetHints } from "../heads.js";
 import { callFor, crowdFor, bannerFor } from "./calls.js";
 import { createInput, PAD_GLYPHS, KEY_GLYPHS } from "./input.js";
@@ -19,6 +20,8 @@ import "../pages.css";
 // (docs/CITY_SPEC.md "PLAYABLE SPORTS", Football). Phase 1: exhibitions only. Nothing here reaches
 // the league, the Cup or a file: the game is kept in this browser (its seed, its rosters and its
 // input log, play calls included) and re-run once at the final whistle to show it reproduces.
+// The front end (menus.jsx): QUICK PLAY, EXHIBITION SETUP, HOW TO PLAY, THE TAPES. In the sim team 0
+// is always the human's; "home" and "away" are the presentation (the bug's order, the crowd's side).
 
 function injectStyles() {
   let el = document.getElementById("fb-styles");
@@ -29,19 +32,38 @@ const parseRoute = (route) => {
   const q = new URLSearchParams(String(route || "").split("?")[1] || "");
   const id = (k) => (TEAM_IDS.includes(q.get(k)) ? q.get(k) : null);
   const ql = Number(q.get("q"));
-  return { home: id("home"), vs: id("vs"), qlen: QLENS.includes(ql) ? ql : 3, cam: q.get("cam") === "high" ? "high" : "broadcast" };
+  return { home: id("home"), vs: id("vs"), qlen: QLENS.includes(ql) ? ql : null, cam: q.get("cam") === "high" ? "high" : null };
 };
-const KEEP = "hvi-football-exhibitions", KEEP_N = 3, ASSIST_KEY = "hvi-football-easy", LEGEND_KEY = "hvi-football-legend", CAM_KEY = "hvi-football-cam";
+const KEEP = "hvi-football-exhibitions", KEEP_N = 3, ASSIST_KEY = "hvi-football-easy", LEGEND_KEY = "hvi-football-legend", CAM_KEY = "hvi-football-cam", SETUP_KEY = "hvi-football-setup";
 export function loadRecords() { try { const j = JSON.parse(localStorage.getItem(KEEP) || "[]"); return Array.isArray(j) ? j : []; } catch { return []; } }
 function saveRecord(rec) { try { localStorage.setItem(KEEP, JSON.stringify([rec, ...loadRecords()].slice(0, KEEP_N))); } catch { /* a full or private store: the game stays in the tab */ } }
 const readFlag = (k, dflt) => { try { const v = localStorage.getItem(k); return v === null ? dflt : v === "1"; } catch { return dflt; } };
 const writeFlag = (k, v) => { try { localStorage.setItem(k, v ? "1" : "0"); } catch { /* the tab remembers */ } };
 const readStr = (k, dflt) => { try { return localStorage.getItem(k) || dflt; } catch { return dflt; } };
 const REDUCED = () => { try { return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches); } catch { return false; } };
-const NOTICE = "THIS GAME DOES NOT COUNT. THE LEAGUE TABLE IS NOT INFORMED.";
+const NOTICE = "EXHIBITION. THIS GAME DOES NOT COUNT IN THE LEAGUE.";
 function seedNow() { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] || 1; } catch { return (Date.now() >>> 0) || 1; } }
 // Each district's coach: a lean to the pass, fixed per district.
 const coachOf = (id) => { let h = 7; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return 0.3 + ((h % 1000) / 1000) * 0.4; };
+// The setup, kept: {home, away, side, diff, qlen, cam}. A first visit is ROOKIE (the old EASY flag
+// carries over); the route's parameters override for the visit.
+function loadSetup(pre, mine, league) {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(SETUP_KEY) || "null"); } catch { s = null; }
+  const [h0, a0] = playNowPair(league, mine);
+  const o = {
+    home: TEAM_IDS.includes(s?.home) ? s.home : h0, away: TEAM_IDS.includes(s?.away) ? s.away : a0,
+    side: s?.side === "away" ? "away" : "home", diff: DIFF_IDS.includes(s?.diff) ? s.diff : readFlag(ASSIST_KEY, loadRecords().length === 0) ? "rookie" : "pro",
+    qlen: QLENS.includes(s?.qlen) ? s.qlen : 3, cam: CAMS[s?.cam] ? s.cam : CAMS[readStr(CAM_KEY, "")] ? readStr(CAM_KEY, "") : "broadcast",
+  };
+  if (o.home === o.away) o.away = a0 !== o.home ? a0 : TEAM_IDS.find(id => id !== o.home);
+  if (pre.home) { o.home = pre.home; o.side = "home"; if (o.away === o.home) o.away = playNowPair(league, o.home)[1]; }
+  if (pre.vs && pre.vs !== o.home) o.away = pre.vs;
+  if (pre.qlen) o.qlen = pre.qlen;
+  if (pre.cam) o.cam = pre.cam;
+  return o;
+}
+function saveSetup(s) { try { localStorage.setItem(SETUP_KEY, JSON.stringify(s)); localStorage.setItem(CAM_KEY, s.cam); writeFlag(ASSIST_KEY, s.diff === "rookie"); } catch { /* the tab remembers */ } }
 
 function useMe() {
   return useMemo(() => {
@@ -60,110 +82,53 @@ export default function Football({ route }) {
   const me = useMe();
   const [league, setLeague] = useState(FALLBACK);
   useEffect(() => { let off = false; loadLeague().then(lg => { if (lg && !off) setLeague(lg); }).catch(() => {}); return () => { off = true; }; }, []);
-  const [qlen, setQlen] = useState(opts.qlen);
-  const [cam, setCam] = useState(() => (opts.cam === "high" ? "high" : readStr(CAM_KEY, "broadcast")));
-  const [assist, setAssist] = useState(() => readFlag(ASSIST_KEY, loadRecords().length === 0));
+  const mine = teamOfCase(league, me.caseId);
+  const [setup, setSetupS] = useState(() => loadSetup(opts, mine, league));
+  const setupRef = useRef(setup); setupRef.current = setup;
+  const setSetup = (f) => setSetupS(s => { const n = typeof f === "function" ? f(s) : f; saveSetup(n); return n; });
+  // the live league may put you on a team after the first paint: QUICK PLAY's pairing follows
+  useEffect(() => { if (!opts.home && mine && setupRef.current.home !== mine && setupRef.current.away !== mine) setSetupS(s => ({ ...s, home: mine, side: "home", away: playNowPair(league, mine)[1] })); }, [mine]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const [screen, setScreen] = useState("front");
   const [game, setGame] = useState(null);
   const [done, setDone] = useState(null);
   const [tape, setTape] = useState(null);
-  const mine = teamOfCase(league, me.caseId);
-  const start = (home, away, q = qlen) => {
+  const records = useMemo(() => loadRecords(), [done, screen]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const quickPair = useMemo(() => (mine ? [mine, playNowPair(league, mine)[1]] : playNowPair(league, null)), [league, mine]);
+  const start = (s) => {
     SFX.unlock();
-    const cfg = { qlen: q, assist, home: elevenOf(league, home, me), away: elevenOf(league, away, me), coach: [coachOf(home), coachOf(away)] };
+    const user = s.side === "away" ? s.away : s.home, opp = s.side === "away" ? s.home : s.away;
+    const cfg = { qlen: s.qlen, assist: s.diff === "rookie", hard: s.diff === "allpro", home: elevenOf(league, user, me), away: elevenOf(league, opp, me), coach: [coachOf(user), coachOf(opp)] };
     setDone(null); setTape(null);
-    setGame({ seed: seedNow(), n: Date.now(), home, away, cfg });
+    setGame({ seed: seedNow(), n: Date.now(), home: user, away: opp, side: s.side, cfg, cam: s.cam });
   };
-  const toggleAssist = () => setAssist(v => { writeFlag(ASSIST_KEY, !v); return !v; });
-  const pickCam = (c) => { setCam(c); try { localStorage.setItem(CAM_KEY, c); } catch { /* fine */ } };
+  const quick = () => { const s = { ...setup, home: quickPair[0], away: quickPair[1], side: "home" }; setSetup(s); start(s); };
+  const again = () => start({ ...setup, home: game.side === "away" ? game.away : game.home, away: game.side === "away" ? game.home : game.away, side: game.side, qlen: game.cfg.qlen });
+  const toFront = () => { setDone(null); setGame(null); setScreen("front"); };
+  const watch = (rec) => { setTape({ rec, game: { seed: rec.seed, cfg: rec.cfg, home: rec.home, away: rec.away, side: rec.side || "home", cam: setup.cam } }); setScreen("front"); };
   let body;
-  if (tape) body = <Match key={`tape${tape.rec.at}`} game={tape.game} me={me} cam={cam} tape={tape.rec} onDone={() => setTape(null)} onQuit={() => setTape(null)} />;
-  else if (game && !done) body = <Match key={game.n} game={game} me={me} cam={cam} onDone={setDone} onQuit={() => setGame(null)} onRestart={() => start(game.home, game.away, game.cfg.qlen)} />;
-  else if (done) body = <Done done={done} game={game} onAgain={() => start(game.home, game.away, game.cfg.qlen)} onTape={() => setTape({ rec: done.rec, game })} onPick={() => { setDone(null); setGame(null); }} />;
-  else body = <Picker league={league} me={me} mine={mine} pre={opts} qlen={qlen} setQlen={setQlen} cam={cam} pickCam={pickCam} assist={assist} toggleAssist={toggleAssist} onStart={start} />;
+  if (tape) body = <Match key={`tape${tape.rec.at}`} game={tape.game} me={me} tape={tape.rec} onDone={() => setTape(null)} onQuit={() => setTape(null)} />;
+  else if (game && !done) body = <Match key={game.n} game={game} me={me} onDone={setDone} onQuit={toFront} onRestart={again} />;
+  else if (done) body = <Done done={done} game={game} onAgain={again} onTape={() => watch(done.rec)} onPick={() => { setDone(null); setGame(null); setScreen("setup"); }} onFront={toFront} />;
+  else if (screen === "setup") body = <Setup league={league} setup={setup} setSetup={setSetup} mine={mine} onStart={start} onBack={() => setScreen("front")} />;
+  else if (screen === "how") body = <Sheet title="HOW TO PLAY" meta="THE CONTROLS // THE RULES" onBack={() => setScreen("front")}><Controls /><p className="fb-notice">{NOTICE} NOT IN THE STANDINGS, NOT IN THE CUP, NOT ON YOUR FILE. THE TAPE IS KEPT IN THIS BROWSER.</p></Sheet>;
+  else if (screen === "tapes") body = <Tapes records={records} onWatch={watch} onBack={() => setScreen("front")} />;
+  else body = <FrontEnd league={league} pair={quickPair} setup={setup} mine={mine} me={me} records={records} onQuick={quick} onSetup={() => setScreen("setup")} onHow={() => setScreen("how")} onTapes={() => setScreen("tapes")} />;
   return (
     <div className="fb">
-      <ScreenHead title="THE BOWL" meta="FOOTBALL // EXHIBITION // ELEVEN ON ELEVEN. CONTACT IS PERMITTED. EVERYTHING IS RECORDED." />
+      <ScreenHead title="THE BOWL" meta="FOOTBALL // EXHIBITION // ELEVEN ON ELEVEN, THE LEAGUE'S OWN TEAMS" />
       {body}
+      {!game && !tape && <p className="fb-small">ROSTERS: SEASON {league.season || "?"}, MACHINE DAY {league.day}{league.live ? ", AS DRAFTED" : ". THE LIVE LEAGUE DID NOT ANSWER; THESE ARE THE ROSTERS ON FILE"}.</p>}
     </div>
   );
 }
 
-// ---- choosing ------------------------------------------------------------------------------------
-function Picker({ league, me, mine, pre, qlen, setQlen, cam, pickCam, assist, toggleAssist, onStart }) {
-  const [home0] = playNowPair(league, mine);
-  const [home, setHome] = useState(pre.home || home0);
-  useEffect(() => { if (!pre.home) setHome(mine || home0); }, [mine, home0]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const away = pre.vs && pre.vs !== home ? pre.vs : playNowPair(league, home)[1];
-  const playRef = useRef(null);
-  const quick = () => onStart(home, away);
-  useEffect(() => { playRef.current?.focus({ preventScroll: true }); }, []);
-  useEffect(() => {
-    let raf, prev = null;
-    const tick = () => { raf = requestAnimationFrame(tick); const p = readPad(); if (p.connected && prev && ((p.held.act && !prev.act) || (p.held.start && !prev.start))) quick(); prev = p.connected ? p.held : null; };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  });
-  return (
-    <>
-      <p className="pg-lede">FOOTBALL, ELEVEN ON ELEVEN, WITH THE CITY'S OWN LEAGUE TEAMS. CALL A PLAY, SNAP IT, THROW TO A RECEIVER'S BUTTON OR RUN IT; ON DEFENCE TAKE THE MAN NEAREST THE BALL AND TACKLE. A CONTROLLER WORKS; PHONES GET A PAD.</p>
-      <div className="pg-start">
-        <Button variant="primary" ref={playRef} onClick={quick}>PLAY NOW</Button>
-        <span className="pg-sub">{teamName(home)}{home === mine ? " (YOUR TEAM)" : ""} V {teamName(away)}. FOUR {qlen}-MINUTE QUARTERS.</span>
-      </div>
-      <p className="fb-you">
-        <button type="button" className="pg-toggle" aria-pressed={assist} onClick={toggleAssist}>EASY MODE</button>
-        <span>{assist ? "A BIGGER CATCH RADIUS, STEADIER THROWS, SLOWER CPU READS; YOUR RUNNER RUNS ON HIS OWN WHEN YOU LET GO." : "THE CPU PLAYS AS RATED."}</span>
-      </p>
-      {mine ? <p className="fb-you">YOU ARE ON THE {teamName(mine)} THIS SEASON. YOU PLAY AS YOURSELF, AT YOUR RATING.</p>
-        : me.caseId ? <p className="fb-you fb-dim">YOUR FILE IS NOT ON A FOOTBALL ROSTER THIS SEASON. ENTRIES ARE MADE FROM <a href="#file">MY FILE</a>.</p> : null}
-      <details className="pg-more">
-        <summary>CHOOSE TEAMS, QUARTER LENGTH AND CAMERA</summary>
-        <div className="pg-more-body">
-          <div className="fb-chips" role="radiogroup" aria-label="Quarter length">
-            {QLENS.map(q => <button key={q} type="button" role="radio" aria-checked={qlen === q} className={`fb-chip${qlen === q ? " on" : ""}`} onClick={() => setQlen(q)}>{q}-MINUTE QUARTERS</button>)}
-          </div>
-          <div className="fb-chips" role="radiogroup" aria-label="Camera">
-            {[["broadcast", "BEHIND THE PLAY"], ["high", "HIGH AND WIDE"]].map(([c, n]) => <button key={c} type="button" role="radio" aria-checked={cam === c} className={`fb-chip${cam === c ? " on" : ""}`} onClick={() => pickCam(c)}>{n}</button>)}
-          </div>
-          <p className="fb-small">YOUR TEAM:</p>
-          <div className="fb-chips" role="radiogroup" aria-label="Your team">
-            {TEAM_IDS.map(id => <button key={id} type="button" role="radio" aria-checked={home === id} className={`fb-chip${home === id ? " on" : ""}`} onClick={() => setHome(id)}>{teamShort(id)}{id === mine ? " (YOURS)" : ""}</button>)}
-          </div>
-          <p className="fb-small">THEN PICK WHO TO PLAY; THE GAME STARTS AT ONCE. SPEED, HANDS, ARM AND TACKLING FOLLOW EACH PLAYER'S LEAGUE RATING.</p>
-          <ul className="fb-teams">
-            {TEAM_IDS.filter(id => id !== home).map(id => {
-              const xi = sortEleven(league.teams[id]);
-              return (
-                <li key={id}>
-                  <button type="button" className="fb-team" onClick={() => onStart(home, id)} aria-label={`Play ${teamName(id)}, rated ${teamRating(xi)}`}>
-                    <i className="sw" style={{ background: kitsFor(home, id)[1][0], borderColor: kitsFor(home, id)[1][1] }} aria-hidden="true" />
-                    <span className="nm">{teamName(id)}<span className="tag">{xi.slice(0, 3).map(r => shownName(r[1])).join(", ")}{league.pos[id] ? ` // ${ordinal(league.pos[id])} IN THE LEAGUE` : ""}</span></span>
-                    <span className="rt">{teamRating(xi)}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </details>
-      <details className="pg-more">
-        <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><Controls /></div>
-      </details>
-      <p className="fb-notice"><b>EXHIBITION.</b> {NOTICE} NOT IN THE STANDINGS, NOT IN THE CUP, NOT ON YOUR FILE. THE DEPARTMENT KEEPS THE TAPE ANYWAY.</p>
-      <p className="fb-small">ROSTERS: SEASON {league.season || "?"}, MACHINE DAY {league.day}{league.live ? ", AS DRAFTED" : ". THE LIVE LEAGUE DID NOT ANSWER; THESE ARE THE ROSTERS ON FILE"}.</p>
-    </>
-  );
-}
-const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "TH" : ["TH", "ST", "ND", "RD"][n % 10] || "TH"}`;
-
-function Controls() {
+export function Controls() {
   return (
     <dl className="fb-keys">
-      <dt>CALL</dt><dd>BETWEEN DOWNS PICK A FORMATION, THEN A PLAY (ARROWS AND SPACE, OR TAP). ASK THE COORDINATOR (I / PAD Y) IF UNSURE. FLIP MIRRORS IT. DEFENCE PICKS A COVERAGE.</dd>
+      <dt>CALL</dt><dd>BETWEEN DOWNS PICK A FORMATION, THEN A PLAY (ARROWS AND SPACE, OR TAP). EACH CARD DRAWS THE PLAY. ASK THE COORDINATOR (I / PAD Y) IF UNSURE. FLIP MIRRORS IT. DEFENCE PICKS A COVERAGE.</dd>
       <dt>SNAP</dt><dd>SPACE OR J // PAD A. BEFORE IT: U (PAD X) FOR AN AUDIBLE, I (PAD Y) THEN A RECEIVER FOR A HOT ROUTE (HE GOES DEEP).</dd>
       <dt>PASS</dt><dd>EACH RECEIVER WEARS A BUTTON: 1-5 ON KEYS, A B X Y RB ON A PAD, OR TAP HIM. TAP IT FOR A BULLET, HOLD IT FOR A LOB. THE QUARTERBACK DROPS BACK ON HIS OWN; THE ARROWS MOVE HIM.</dd>
-      <dt>RUN</dt><dd>ARROWS. SHIFT (PAD RT) SPRINTS WHILE STAMINA LASTS. Q / E (RIGHT STICK) JUKE, K (PAD B) SPINS, L (RIGHT STICK UP) TRUCKS, I (PAD Y) STIFF-ARMS.</dd>
+      <dt>RUN</dt><dd>ARROWS. SHIFT (PAD RT) SPRINTS WHILE STAMINA LASTS. Q / E (RIGHT STICK) JUKE, K (PAD B) SPINS, L (RIGHT STICK UP) TRUCKS, I (PAD Y) STIFF-ARMS. THE YELLOW RING IS YOUR MAN; A WHITE RING IS THE BALL.</dd>
       <dt>DEFENCE</dt><dd>K (PAD B) SWITCHES TO THE MAN NEAREST THE BALL. RUN INTO THE CARRIER TO TACKLE; J (PAD A) WRAPS UP SURER, U (PAD X) DIVES, L (RIGHT STICK UP) IS THE HIT STICK (A FUMBLE CHANCE, A MISS CHANCE). I (PAD Y) SWATS AT A PASS: TOO EARLY IS INTERFERENCE.</dd>
       <dt>KICKS</dt><dd>A STARTS THE METER, A SETS THE POWER, A AGAIN AS THE NEEDLE CROSSES THE LINE. ARROWS AIM A PUNT OR A KICKOFF. AFTER A TOUCHDOWN: KICK THE POINT OR GO FOR TWO.</dd>
       <dt>RULES</dt><dd>FOUR DOWNS TO GAIN TEN YARDS. TOUCHDOWN 6, EXTRA POINT 1, TWO-POINT TRY 2, FIELD GOAL 3, SAFETY 2. TOUCHBACKS AT THE 25 (KICKOFF) AND 20 (PUNT). FLAGS: HOLDING, PASS INTERFERENCE, OFFSIDE, FALSE START, DELAY OF GAME. THE CLOCK RUNS AFTER A PLAY IN BOUNDS AND STOPS ON AN INCOMPLETION, A SCORE, A TURNOVER, A TIMEOUT (THREE A HALF) AND, LATE IN A HALF, OUT OF BOUNDS.</dd>
@@ -175,10 +140,10 @@ function Controls() {
 export function legendRows(mode, family) {
   if (mode === "pad") {
     const g = PAD_GLYPHS[family] || PAD_GLYPHS.generic;
-    return [["CALL", `D-PAD, ${g.A}; ${g.Y} THE COORDINATOR`, ""], ["SNAP", g.A, `${g.X} AUDIBLE, ${g.Y} HOT ROUTE`], ["PASS", `${g.A} ${g.B} ${g.X} ${g.Y} ${g.RB}`, "TAP: BULLET. HOLD: LOB."], ["RUN", `STICK, ${g.sprint} SPRINT`, `${g.rs} FLICK: JUKE / TRUCK. ${g.B} SPIN, ${g.Y} STIFF ARM`], ["DEFENCE", `${g.B} SWITCH`, `${g.A} TACKLE, ${g.X} DIVE, ${g.rs} UP HIT STICK, ${g.Y} SWAT`], ["KICK", `${g.A} x3`, "START, POWER, ACCURACY"], ["PAUSE", g.start, ""]];
+    return [["CALL", `D-PAD, ${g.A}; ${g.Y} THE COORDINATOR`, `${g.X} FLIP`], ["SNAP", g.A, `${g.X} AUDIBLE, ${g.Y} HOT ROUTE`], ["PASS", `${g.A} ${g.B} ${g.X} ${g.Y} ${g.RB}`, "TAP: BULLET. HOLD: LOB."], ["RUN", `STICK, ${g.sprint} SPRINT`, `${g.rs} FLICK: JUKE / TRUCK. ${g.B} SPIN, ${g.Y} STIFF ARM`], ["DEFENCE", `${g.B} SWITCH`, `${g.A} TACKLE, ${g.X} DIVE, ${g.rs} UP HIT STICK, ${g.Y} SWAT`], ["KICK", `${g.A} x3`, "START, POWER, ACCURACY"], ["PAUSE", g.start, ""]];
   }
   if (mode === "touch") return [["CALL", "TAP A PLAY", "OR ASK THE COORDINATOR"], ["SNAP", "SNAP", ""], ["PASS", "TAP A RECEIVER", "OR HIS BUTTON. HOLD: LOB."], ["RUN", "THE ROUND PAD", "SPRINT, JUKE, SPIN, TRUCK, STIFF"], ["DEFENCE", "SWITCH, TACKLE", "DIVE, HIT, SWAT"], ["KICK", "KICK x3", "START, POWER, ACCURACY"], ["PAUSE", "START", ""]];
-  return [["CALL", "ARROWS, SPACE", "I: THE COORDINATOR"], ["SNAP", "SPACE / J", "U AUDIBLE, I HOT ROUTE"], ["PASS", "1 2 3 4 5", "TAP: BULLET. HOLD: LOB."], ["RUN", "ARROWS, SHIFT", "Q / E JUKE, K SPIN, L TRUCK, I STIFF ARM"], ["DEFENCE", "K SWITCH", "J TACKLE, U DIVE, L HIT STICK, I SWAT"], ["KICK", "SPACE x3", "START, POWER, ACCURACY"], ["PAUSE", "ENTER / ESC", ""]];
+  return [["CALL", "ARROWS, SPACE", "I: THE COORDINATOR, U: FLIP"], ["SNAP", "SPACE / J", "U AUDIBLE, I HOT ROUTE"], ["PASS", "1 2 3 4 5", "TAP: BULLET. HOLD: LOB."], ["RUN", "ARROWS, SHIFT", "Q / E JUKE, K SPIN, L TRUCK, I STIFF ARM"], ["DEFENCE", "K SWITCH", "J TACKLE, U DIVE, L HIT STICK, I SWAT"], ["KICK", "SPACE x3", "START, POWER, ACCURACY"], ["PAUSE", "ENTER / ESC", ""]];
 }
 function Legend({ mode, family, open, onToggle, inMenu = false }) {
   const rows = legendRows(mode, family), label = mode === "pad" ? `CONTROLLER (${String(family || "pad").toUpperCase()})` : mode === "touch" ? "TOUCH" : "KEYBOARD";
@@ -200,14 +165,22 @@ function iconLabels(mode, family) {
 }
 
 // ---- how everyone looks -------------------------------------------------------------------------------
+// The kits by sim team: kitsFor resolves a clash by changing the AWAY side, so it is asked in home /
+// away order and the answer mapped back to team 0 (the human) and team 1.
+function kitsOf(game) {
+  const hi = game.side === "away" ? 1 : 0, ids = [game.home, game.away];
+  const K = kitsFor(ids[hi], ids[1 - hi]);
+  const out = []; out[hi] = K[0]; out[1 - hi] = K[1];
+  return out;
+}
 const NUMS = [12, 26, 81, 84, 87, 88, 71, 64, 52, 65, 76];
-function looksFor(cfg, home, away, me) {
-  const kits = kitsFor(home, away), mine = me.caseId ? citizenKeyOf(me.caseId) : null;
+function looksFor(cfg, kits, me) {
+  const mine = me.caseId ? citizenKeyOf(me.caseId) : null;
   const L = [lineup(cfg.home), lineup(cfg.away)];
   const rows = [...cfg.home, ...cfg.away];
   return rows.map((row, g) => {
     const t = g < 11 ? 0 : 1, kit = kits[t], key = row[0], slot = L[t].os.indexOf(g % 11);
-    const look = { jersey: kit[0], trim: kit[1], pants: shade(kit[1], 0.92), helmet: shade(kit[0], 0.82), skin: "#c68c5e", hair: null, head: null, num: NUMS[slot] ?? 90 + (g % 11) };
+    const look = { jersey: kit[0], trim: kit[1], pants: shade(kit[1], 0.92), helmet: shade(kit[1], 0.9), skin: "#c68c5e", hair: null, head: null, num: NUMS[slot] ?? 90 + (g % 11) };
     const isMe = key === mine;
     const sheetP = isMe ? (me.url ? loadSprite(me.url, { sector: null }).catch(() => null) : Promise.resolve(null))
       : key.startsWith("citizen-") || key.startsWith("stand-in") ? Promise.resolve(null)
@@ -227,8 +200,9 @@ function looksFor(cfg, home, away, me) {
 
 // ---- the game ------------------------------------------------------------------------------------
 const clockOf = (f) => { const s = Math.max(0, Math.ceil(f / 60)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
-function Match({ game, me, cam: camMode, tape = null, onDone, onQuit, onRestart }) {
-  const { cfg, home, away, seed } = game;
+function Match({ game, me, tape = null, onDone, onQuit, onRestart }) {
+  const { cfg, home, away, seed } = game, camMode = CAMS[game.cam] ? game.cam : "broadcast";
+  const hi = game.side === "away" ? 1 : 0;   // which sim team is the home side
   const canvasRef = useRef(null), wrapRef = useRef(null), inputRef = useRef(null), stRef = useRef(null), codeRef = useRef(0), navRef = useRef(null);
   const [hud, setHud] = useState(null);
   const [call, setCall] = useState("");
@@ -248,6 +222,7 @@ function Match({ game, me, cam: camMode, tape = null, onDone, onQuit, onRestart 
   const modeRef = useRef(mode); modeRef.current = mode;
   const padRef = useRef(pad); padRef.current = pad;
   const sendCall = useCallback((code) => { SFX.unlock(); codeRef.current = code; }, []);
+  const kits = useMemo(() => kitsOf(game), [game]);
 
   useEffect(() => { const f = () => setTouch(true); window.addEventListener("touchstart", f, { once: true, passive: true }); return () => window.removeEventListener("touchstart", f); }, []);
   useEffect(() => {
@@ -265,12 +240,11 @@ function Match({ game, me, cam: camMode, tape = null, onDone, onQuit, onRestart 
   useEffect(() => {
     const st = newGame(seed, cfg), log = [], masks = tape ? rleDecode(tape.inputLog) : null;
     stRef.current = st;
-    if (import.meta.env?.DEV && typeof window !== "undefined") window.__hviFootball = st;   // for the browser checks
+    if (import.meta.env?.DEV && typeof window !== "undefined") { window.__hviFootball = st; window.__hviFootballDbg = { get nav() { return navRef.current; }, get input() { return inputRef.current; }, get paused() { return pausedRef.current; } }; import("./sim.js").then(S => { window.__hviFootballSim = S; }); }   // for the browser checks
     let ti = 0;
     const input = createInput(); inputRef.current = input;
-    const looks = looksFor(cfg, home, away, me);
+    const looks = looksFor(cfg, kits, me);
     const names = [...cfg.home, ...cfg.away].map(r => r[1]);
-    const kits = kitsFor(home, away);
     const reduced = REDUCED();
     const fx = { mood: "idle", t: 0, banner: null, shake: 0 };
     const ctx = canvasRef.current.getContext("2d");
@@ -281,7 +255,7 @@ function Match({ game, me, cam: camMode, tape = null, onDone, onQuit, onRestart 
     const finish = () => {
       ended = true;
       if (tape) { setTimeout(() => onDone(null), 1500); return; }
-      const rec = { version: VERSION, seed, cfg, home, away, inputLog: rleEncode(log), result: resultOf(st), at: Date.now() };
+      const rec = { version: VERSION, seed, cfg, home, away, side: game.side, inputLog: rleEncode(log), result: resultOf(st), at: Date.now() };
       let verified = false;
       try { verified = JSON.stringify(replay(rec)) === JSON.stringify(rec.result); } catch { verified = false; }
       saveRecord(rec);
@@ -296,7 +270,7 @@ function Match({ game, me, cam: camMode, tape = null, onDone, onQuit, onRestart 
       if (inp.start && !ended) togglePause();
       const press = inp.mask & ~prevMask; prevMask = inp.mask;
       if (!tape && !pausedRef.current && contextOf(st) === "call") navRef.current?.(press);
-      if (!pausedRef.current) {
+      if (!pausedRef.current && !(import.meta.env?.DEV && window.__hviFootballFreeze)) {   // the freeze: a dev hook for screenshots
         acc += dt;
         let n = 0;
         const quick = st.phase === "call" || st.phase === "dead" || (st.phase === "pre" && st.poss !== 0);
@@ -314,7 +288,7 @@ function Match({ game, me, cam: camMode, tape = null, onDone, onQuit, onRestart 
               noteSeen = N.frame;
               const line = callFor(N, names, teams, N.frame);
               if (line) setCall(line);
-              const kind = crowdFor(N);
+              const kind = crowdFor(N, hi);
               if (kind) { fx.mood = kind === "groan" || kind === "aww" ? "groan" : kind === "polite" || kind === "thin" ? "stand" : "cheer"; fx.t = 0; if (!skipRef.current) SFX.crowd(kind, mutedRef.current); }
               const b = bannerFor(N);
               if (b) fx.banner = { ...b, t: 0 };
@@ -366,13 +340,25 @@ function Match({ game, me, cam: camMode, tape = null, onDone, onQuit, onRestart 
 
   const toggleLegend = () => setLegendOpen(v => { writeFlag(LEGEND_KEY, !v); return !v; });
   const toggleMute = () => { const m = !muted; setMutedS(m); SFX.setMuted(m); if (!m) SFX.unlock(); };
-  const kits = kitsFor(home, away);
+  // the bug: the away side on the left, the home side on the right, as broadcast
+  const L = 1 - hi, Rr = hi;
+  const Team = ({ t, away: isAway }) => (
+    <span className={`tm${isAway ? " away" : ""}${t === 0 ? " you" : ""}`} style={{ borderColor: kits[t][0] }}>
+      {!isAway && <span className="tos" aria-label={`${hud?.to[t] ?? 3} timeouts`}>{"▮".repeat(hud?.to[t] ?? 3)}</span>}
+      {!isAway && hud?.poss === t && <i aria-label="ball">●</i>}
+      {!isAway && <em>{hud?.score[t] ?? 0}</em>}
+      <b className="nm">{shorts[t]}{t === 0 && <small> YOU</small>}</b><span className="ab" aria-hidden="true">{shorts[t].slice(0, 4)}</span>
+      {isAway && <em>{hud?.score[t] ?? 0}</em>}
+      {isAway && hud?.poss === t && <i aria-label="ball">●</i>}
+      {isAway && <span className="tos" aria-label={`${hud?.to[t] ?? 3} timeouts`}>{"▮".repeat(hud?.to[t] ?? 3)}</span>}
+    </span>
+  );
   return (
     <div className="fb-match">
       <div className="fb-bug" role="group" aria-label="Scoreboard">
-        <span className="tm" style={{ borderColor: kits[0][0] }}><b className="nm">{shorts[0]}</b><span className="ab" aria-hidden="true">{shorts[0].slice(0, 4)}</span><em>{hud?.score[0] ?? 0}</em>{hud?.poss === 0 && <i aria-label="ball">●</i>}<span className="tos" aria-label={`${hud?.to[0] ?? 3} timeouts`}>{"▮".repeat(hud?.to[0] ?? 3)}</span></span>
+        <Team t={L} away />
         <span className="mid"><b>{hud?.period || "Q1"} {hud?.clock}</b><span>{hud?.down || ""}</span><small>{hud?.spot}{hud?.pc != null && <span className="pc"> // {hud.pc}</span>}</small></span>
-        <span className="tm away" style={{ borderColor: kits[1][0] }}><span className="tos" aria-label={`${hud?.to[1] ?? 3} timeouts`}>{"▮".repeat(hud?.to[1] ?? 3)}</span>{hud?.poss === 1 && <i aria-label="ball">●</i>}<em>{hud?.score[1] ?? 0}</em><b className="nm">{shorts[1]}</b><span className="ab" aria-hidden="true">{shorts[1].slice(0, 4)}</span></span>
+        <Team t={Rr} />
       </div>
       <div className="fb-call" aria-live="polite" aria-atomic="true">{call || " "}<span className="sr-only"> {sr}</span></div>
       <div className="fb-stage" ref={wrapRef}>
@@ -393,14 +379,21 @@ function Match({ game, me, cam: camMode, tape = null, onDone, onQuit, onRestart 
       </ButtonRow>
       <p className="fb-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{NOTICE}</p>
       {paused && !tape && (
-        <GameMenu key="pause" kind="pause" title="PAUSED. THE DEPARTMENT HAS STOPPED THE CLOCK." summary={hud ? `${shorts[0]} ${hud.score[0]}, ${shorts[1]} ${hud.score[1]} // ${hud.period} ${hud.clock}` : ""} onBack={() => togglePause(false)}
+        <GameMenu key="pause" kind="pause" title="PAUSED." summary={hud ? `${shorts[L]} ${hud.score[L]}, ${shorts[Rr]} ${hud.score[Rr]} // ${hud.period} ${hud.clock}` : ""} onBack={() => togglePause(false)}
           options={{ resume: () => togglePause(false), restart: onRestart ? { label: "RESTART THE GAME", onSelect: onRestart } : null, controls: <Legend mode={mode} family={pad} inMenu />, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "LEAVE THE STADIUM", onSelect: onQuit } }} />
       )}
     </div>
   );
 }
 
-// The play call: formation, then play; or the coverage; or the try. Arrows / pad / taps.
+// A play's picture on its card (playart.js).
+function PlayArt({ kind, id, flip = false }) {
+  const ref = useRef(null);
+  useEffect(() => { const c = ref.current; if (!c) return; const g = c.getContext("2d"); g.imageSmoothingEnabled = false; if (kind === "def") drawDefArt(g, id); else drawOffArt(g, id, flip); }, [kind, id, flip]);
+  return <canvas ref={ref} width={ART_W} height={ART_H} className="fb-art" aria-hidden="true" />;
+}
+// The play call: formation, then play; or the coverage; or the try. Arrows / pad / taps. Every card
+// carries its art; ASK THE COORDINATOR is the one-tap way through.
 function PlayCall({ info, onCall, navRef, mode, family }) {
   const off = info.side === "off";
   const forms = OFF_BOOK.map(f => ({ ...f, plays: f.plays.filter(id => info.legal.includes(id)) })).filter(f => f.plays.length);
@@ -411,7 +404,9 @@ function PlayCall({ info, onCall, navRef, mode, family }) {
   const ylab = g ? g.Y : mode === "keys" ? "I" : "", xlab = g ? g.X : mode === "keys" ? "U" : "";
   const list = info.tryChoice ? [CODE.PAT, CODE.TWO] : off ? forms[Math.min(fi, forms.length - 1)]?.plays || [] : DEF_BOOK;
   const choose = (id) => onCall(id === CODE.PAT || id === CODE.TWO || id === CODE.COACH ? id : id | (flip && off ? CODE.FLIP : 0));
-  navRef.current = (press) => {
+  // the pad / keys reach the sheet through navRef, set after every render (not in it: a strict-mode
+  // remount would null it), so it always sees the current selection
+  const nav = (press) => {
     if (press & BTN.Y) return onCall(CODE.COACH);
     if (press & BTN.X) return setFlip(f => !f);
     if (off && !info.tryChoice && press & BTN.LEFT) { setFi(i => (i + forms.length - 1) % forms.length); setPi(0); }
@@ -421,21 +416,34 @@ function PlayCall({ info, onCall, navRef, mode, family }) {
     if (press & BTN.A) choose(list[Math.min(pi, list.length - 1)]);
     if (press & BTN.R && info.canTO) onCall(CODE.TIMEOUT);
   };
-  useEffect(() => () => { navRef.current = null; }, [navRef]);
+  useEffect(() => { navRef.current = nav; return () => { navRef.current = null; }; });
   const name = (id) => (id === CODE.PAT ? "KICK THE EXTRA POINT" : id === CODE.TWO ? "GO FOR TWO" : off ? PLAYS[id].name : DEFS[id].name);
   const tip = (id) => (id === CODE.PAT ? "ONE POINT. NEARLY CERTAIN." : id === CODE.TWO ? "TWO POINTS FROM THE 2. ONE PLAY." : off ? PLAYS[id].tip : DEFS[id].tip);
+  const artOf = (id) => (id === CODE.PAT ? ["off", 13] : id === CODE.TWO ? ["off", 14] : off ? ["off", id] : ["def", id]);
   const coachName = info.tryChoice ? "" : off ? PLAYS[info.coach]?.name : DEFS[info.coach]?.name;
+  const [ck, cid] = info.tryChoice ? [null, null] : artOf(info.coach);
   return (
     <div className="fb-pc" role="dialog" aria-label={off ? "Call a play" : "Call a defence"}>
       <div className="fb-pc-head"><span>{info.tryChoice ? "AFTER THE TOUCHDOWN" : off ? "YOUR BALL" : "YOUR DEFENCE"} // <b>{info.sit}</b></span>{info.canTO && <span><button type="button" className="fb-chip" onClick={() => onCall(CODE.TIMEOUT)}>TIMEOUT{mode === "pad" ? ` (${g.RB})` : mode === "keys" ? " (O)" : ""}</button></span>}</div>
-      {!info.tryChoice && <button type="button" className="coach" onClick={() => onCall(CODE.COACH)}>ASK THE COORDINATOR{ylab ? ` (${ylab})` : ""} <small>// TODAY HE LIKES {coachName}</small></button>}
+      {!info.tryChoice && (
+        <button type="button" className="coach" onClick={() => onCall(CODE.COACH)}>
+          {ck && <PlayArt kind={ck} id={cid} />}
+          <span className="coach-t">ASK THE COORDINATOR{ylab ? ` (${ylab})` : ""}<small>HE LIKES {coachName} HERE. ONE TAP CALLS IT.</small></span>
+        </button>
+      )}
       {off && !info.tryChoice && (
         <div className="forms" role="tablist" aria-label="Formation">
           {forms.map((f, i) => <button key={f.form} type="button" role="tab" aria-selected={i === fi} className={i === fi ? "on" : ""} onClick={() => { setFi(i); setPi(0); }}>{f.form}</button>)}
+          <span className="forms-hint" aria-hidden="true">{mode === "touch" ? "" : "◂ ▸"}</span>
         </div>
       )}
       <div className="plays">
-        {list.map((id, i) => <button key={id} type="button" className={i === pi ? "on" : ""} onClick={() => choose(id)} onFocus={() => setPi(i)}>{name(id)}<small>{tip(id)}</small></button>)}
+        {list.map((id, i) => { const [k, aid] = artOf(id); return (
+          <button key={id} type="button" className={i === pi ? "on" : ""} onClick={() => choose(id)} onFocus={() => setPi(i)}>
+            <PlayArt kind={k} id={aid} flip={flip && off} />
+            <span className="pl-t">{name(id)}<small>{tip(id)}</small></span>
+          </button>
+        ); })}
       </div>
       {off && !info.tryChoice && <div className="row"><button type="button" aria-pressed={flip} onClick={() => setFlip(f => !f)}>FLIP{xlab ? ` (${xlab})` : ""}</button><span>{mode === "keys" ? "ARROWS AND SPACE" : mode === "pad" ? "D-PAD AND " + g.A : "TAP A PLAY"}</span></div>}
     </div>
@@ -483,19 +491,18 @@ function TouchPad({ input, cx, onStart }) {
 }
 
 // ---- the final whistle ------------------------------------------------------------------------------
-function Done({ done, game, onAgain, onTape, onPick }) {
+function Done({ done, game, onAgain, onTape, onPick, onFront }) {
   const { rec, verified } = done, r = rec.result, won = r.winner === 0, tie = r.winner === -1;
   const [menu, setMenu] = useState(true);
   const teams = [teamName(game.home), teamName(game.away)], rows = [...game.cfg.home, ...game.cfg.away];
   const nm = (g) => shownName(rows[g][1]);
-  const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
   const S = r.stat;
   const lead = (t, f, min = 1) => r.ps.map((x, g) => [g, x]).filter(([g, x]) => (g < 11) === (t === 0) && f(x) >= min).sort((a, b) => f(b[1]) - f(a[1]));
-  const summary = tie ? `${teams[0]} ${r.score[0]}, ${teams[1]} ${r.score[1]}. A TIE. NOBODY IS SATISFIED.` : won ? `${teams[0]} ${r.score[0]}, ${teams[1]} ${r.score[1]}.` : `${teams[1]} ${r.score[1]}, ${teams[0]} ${r.score[0]}.`;
+  const summary = tie ? `${teams[0]} ${r.score[0]}, ${teams[1]} ${r.score[1]}. A TIE.` : won ? `${teams[0]} ${r.score[0]}, ${teams[1]} ${r.score[1]}.` : `${teams[1]} ${r.score[1]}, ${teams[0]} ${r.score[0]}.`;
   return (
     <Frame box title="FINAL" meta="EXHIBITION">
       <p className={`fb-big ${won ? "win" : tie ? "" : "lose"}`}>{summary}</p>
-      <p className="fb-p">{won ? "THE DEPARTMENT HAS NOTED A WIN. IT WILL NOT BE REPEATED IN THE STANDINGS." : tie ? "LEVEL. THE DEPARTMENT DISLIKES AMBIGUITY BUT WILL FILE IT." : "AS PROJECTED. THE PROJECTION IS NOT ON YOUR FILE EITHER."}</p>
+      <p className="fb-p">{won ? "A WIN. THE DEPARTMENT HAS NOTED IT, AND NOTED THAT IT DOES NOT COUNT." : tie ? "LEVEL AFTER OVERTIME. NOBODY GOES HOME HAPPY." : "A LOSS. THE LEAGUE TABLE WAS NOT WATCHING."}</p>
       <div className="fb-box">
         <table aria-label="Team statistics">
           <thead><tr><th scope="col">TEAM</th><th scope="col">{teamShort(game.home)}</th><th scope="col">{teamShort(game.away)}</th></tr></thead>
@@ -516,16 +523,16 @@ function Done({ done, game, onAgain, onTape, onPick }) {
         ))}
       </div>
       <p className="fb-notice">{NOTICE}</p>
-      <p className="fb-small">{Math.round(r.frames / 3600)} MINUTES ON THE CLOCK AND OFF IT // {verified ? "RE-RUN FROM THE INPUT LOG, PLAY CALLS AND ALL: SAME RESULT. YOU ARE REPRODUCIBLE." : "THE RE-RUN DISAGREED. THE DEPARTMENT IS LOOKING INTO ITSELF."} KEPT IN THIS BROWSER ONLY.</p>
+      <p className="fb-small">{Math.round(r.frames / 3600)} MINUTES OF PLAY // {verified ? "RE-RUN FROM THE INPUT LOG, PLAY CALLS AND ALL: SAME RESULT." : "THE RE-RUN DISAGREED; THE TAPE MAY NOT MATCH."} THE TAPE IS KEPT IN THIS BROWSER ONLY.</p>
       <ButtonRow>
         <Button variant="primary" onClick={onAgain}>Rematch</Button>
         <Button onClick={onTape}>Watch the tape</Button>
-        <Button onClick={onPick}>Other teams</Button>
-        <Button variant="back" href="#play">The games</Button>
+        <Button onClick={onPick}>Exhibition setup</Button>
+        <Button variant="back" onClick={onFront}>The Bowl</Button>
       </ButtonRow>
-      {menu && <GameMenu key="end" kind="end" title="FINAL. THE GAME IS FILED." summary={summary} onBack={() => setMenu(false)}
-        options={{ again: { label: "REMATCH", onSelect: onAgain }, rematch: { label: "OTHER TEAMS", onSelect: onPick }, replay: { label: "WATCH THE TAPE", onSelect: onTape }, box: { label: "THE BOX SCORE", onSelect: () => setMenu(false) }, play: true, city: true }} />}
+      {menu && <GameMenu key="end" kind="end" title="FINAL." summary={summary} onBack={() => setMenu(false)}
+        options={{ again: { label: "REMATCH", onSelect: onAgain }, settings: { label: "EXHIBITION SETUP", onSelect: onPick }, replay: { label: "WATCH THE TAPE", onSelect: onTape }, box: { label: "THE BOX SCORE", onSelect: () => setMenu(false) }, front: { label: "THE BOWL", onSelect: onFront }, play: true, city: true }} />}
     </Frame>
   );
 }
-export { goalToGo, OS };
+export { goalToGo, OS, KEY_GLYPHS };
