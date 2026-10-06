@@ -521,7 +521,8 @@ export default function Intake({ view = "intake" }) {
   const acknowledge = () => { if (!ackKey) return; try { localStorage.setItem("hvi-ack", ackKey); } catch { /* noted anyway */ } setAckFor(ackKey); };
   const [questSeen, setQuestSeen] = useState(false); // the Archive is asked on first open
   // Back from the magic link (/?auth=…#intake): the answer is inside SECURE BY EMAIL, so open it.
-  const [authBack] = useState(() => { try { return /[?&]auth=/.test(window.location.search); } catch { return false; } });
+  // So does the city's LOG IN (#file?login=1: Start pressed with no file in this browser).
+  const [authBack] = useState(() => { try { return /[?&]auth=/.test(window.location.search) || /[?&]login=1/.test(window.location.hash); } catch { return false; } });
 
   const errLine = (msg, extra) => <div className="hvi-err" role="alert">!! {msg}{extra}</div>;
   const updatePhoto = (a) => {

@@ -6,10 +6,10 @@ import { CELL_W, CELL_H, layoutDistricts, FAMILY_COLOR, familyOf, lodFor, roomLa
 import { sheetFor, miniFor } from "./spriteBank.js";
 import { wantSectors } from "./planClient.js";
 import { FONT, SubjectTip, ZoomBar } from "./cityUi.jsx";
-import { PadHint } from "./ControlLayer.jsx";
+import { PadHint, NoFileNote } from "./ControlLayer.jsx";
 // THE ATTRITION (river.js): the river on the map from its day, its name on hover or a tap
 import { makePadBrowse, drawReticle, pressView } from "./padBrowse.js";   // GAMEPAD BROWSE: the controller on the map
-import { CTL } from "./control.js";
+import { CTL, noFile } from "./control.js";
 import { riverShown, COURSES, MAIN, MELT, TARN, ESTUARY, BRIDGES, NAME, nearest } from "./river.js";
 
 // THE SUBSTRATE: the whole city as one canvas. District blocks drawn in box characters,
@@ -742,6 +742,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       zoom: (f, x, y) => zoomAt(x, y, f), turn: () => {}, fit: () => fit(), labels: () => {},
       prev: () => padStep(-1), next: () => padStep(1),
       drive: () => { CTL.request = Date.now(); pressView("CITY"); },   // Start: to the CITY view, and take control there
+      nofile: noFile,   // Start with no file in this browser: why, and LOG IN / GET EVALUATED
     });
     canvas.addEventListener("pointerdown", onDown);
     canvas.addEventListener("pointermove", onMove);
@@ -805,6 +806,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
       <ZoomBar api={apiRef} hint="TAP A DISTRICT TO ENTER" />
       <SubjectTip ref={tipRef} tip={tip} onOpen={(s) => onOpenRef.current(s)} />
       <PadHint ui={padUi && padUi.mode === "browse" ? { ...padUi, mode: "map" } : padUi} />
+      <NoFileNote />
       {padUi && padSay && <p className="sr-only" role="status">{padSay}</p>}
     </div>
   );

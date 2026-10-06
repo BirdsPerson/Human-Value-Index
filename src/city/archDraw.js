@@ -374,6 +374,7 @@ function smoke(K, at, h, seed, o = {}) {
 // A glow: a soft disc of light (neon, lamps, the eye).
 function glow(K, x, y, r, col) {
   const { ctx } = K;
+  if (!(r > 0) || !Number.isFinite(x + y + r)) return;   // behind the eye at street level: nothing to light (a radial gradient throws)
   const g = ctx.createRadialGradient(x, y, 0, x, y, r);
   g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();

@@ -85,11 +85,13 @@ export function pressedSince(prev, now) {
   return out;
 }
 
-// Start and Select, between DRIVE YOURSELF and GAMEPAD BROWSE -> "take" | "release" | null.
-// Start takes your own citizen (when you have a file) or lets go; Select only lets go (in
-// browse it is the map toggle). Nothing while a card is open over the city.
+// Start, Select and the right-stick click, between DRIVE YOURSELF and GAMEPAD BROWSE ->
+// "take" | "release" | "view" | "nofile" | null. Start takes your own citizen (when you have a
+// file) or lets go; without a file it says why ("nofile": the city shows LOG IN / GET
+// EVALUATED). Driving, Select or the right-stick click flips the view (overhead / third
+// person); in browse Select is the map toggle. Nothing while a card is open over the city.
 export function driveToggle(pp, { driving = false, hasSelf = false, card = false } = {}) {
   if (card || !pp) return null;
-  if (driving) return pp.start || pp.select ? "release" : null;
-  return pp.start && hasSelf ? "take" : null;
+  if (driving) return pp.start ? "release" : pp.select || pp.rs ? "view" : null;
+  return pp.start ? (hasSelf ? "take" : "nofile") : null;
 }

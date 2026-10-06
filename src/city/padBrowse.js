@@ -144,7 +144,7 @@ export function pressView(name) {
 // tap(x, y); back() -> bool (something was dismissed); pan(dx, dy) in px (the view moves
 // that way); zoom(f, x, y); turn(dir); fit(); labels(); prev() / next() -> [x, y] | null (the
 // cursor goes there); other: "MAP" | "CITY" (Select); drive() (Start, where there is no
-// DRIVE YOURSELF here); poke(); wake() (the pad was picked up); reduced() -> bool; publish(ui | null).
+// DRIVE YOURSELF here); nofile() (Start with no file here, where drive() would be); poke(); wake() (the pad was picked up); reduced() -> bool; publish(ui | null).
 // Cutaway hooks (optional): rooms() -> null | [{key, x, y, box}], items(roomKey) ->
 // [{key, x, y, box, name}], open(item), roomAct(room) (A on a room with nothing in it),
 // enter(), close().
@@ -192,7 +192,7 @@ export function makePadBrowse(H) {
     if (H.driving()) { P.on = false; publish(null); return false; }
     const busy = Object.values(pp).some(Boolean) || pad.lmag > 0 || pad.rmag > 0 || pad.lt > 0 || pad.rt > 0;
     if (busy && !P.on) { P.on = true; H.wake?.(); H.poke(); }
-    if (!P.on) return false;   // connected, untouched: the mouse and the keys have the city
+    if (!P.on) { publish({ family: P.family, mode: "idle", self: H.hasSelf() }); return false; }   // connected, untouched: the mouse and the keys have the city (the hint names the way in: Start)
     const fi = findInput();
     const finding = fi && typeof document !== "undefined" && document.activeElement === fi;
     const rooms = !cardOpen() && H.rooms ? H.rooms() : null;
@@ -275,7 +275,7 @@ export function makePadBrowse(H) {
     if (a === "turnL") H.turn(-1);
     else if (a === "turnR") H.turn(1);
     else if (a === "fit") H.fit();
-    else if (a === "drive") { if (H.hasSelf()) H.drive?.(); }
+    else if (a === "drive") { if (H.hasSelf()) H.drive?.(); else H.nofile?.(); }
     else if (a === "view") pressView(H.other);
     else if (a === "find") { const fi = findInput(); if (fi) { fi.focus(); fi.scrollIntoView?.({ block: "nearest" }); } }
   }

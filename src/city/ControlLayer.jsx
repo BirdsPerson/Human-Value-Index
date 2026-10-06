@@ -28,6 +28,11 @@ const CSS = `
 .hvi-pad-hint span { white-space: nowrap; }
 .hvi-pad-hint b { display: inline-block; min-width: 1.6ch; margin-right: 0.5ch; padding: 0 0.4ch; background: #e5ffe9; color: #06210f; text-align: center; font-weight: 700; }
 @media (max-width: 720px) { .hvi-pad-hint { bottom: calc(var(--hit-min, 44px) + 24px); max-width: calc(100% - 16px); } }
+.hvi-ctl-third .hvi-city-zoom { display: none; }
+.hvi-pad-hint.walk { color: #e5ffe9; border-color: #e5ffe9; font-size: 11px; }
+.hvi-ctl-nofile { position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 24; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; width: max-content; max-width: calc(100% - 24px); background: rgba(6,10,6,0.95); border: 1px solid #fbbf24; color: #e5ffe9; padding: 4px 8px; font-size: var(--t-xs, 12px); }
+.hvi-ctl-nofile span { flex: 1 1 260px; }
+.hvi-ctl-nofile a, .hvi-ctl-nofile button { min-height: 32px; }
 @media (max-width: 640px) { .hvi-ctl-note { bottom: 60px; } .hvi-ctl-legend { font-size: 11px; padding: 3px 6px; max-width: calc(100% - 16px); } .hvi-ctl-legend .opt { display: none; } }
 /* while driving, the TAP TO OPERATE veil (ui/TouchGate.jsx) stays, small, in a corner: a swipe
    still scrolls the page, a tap still lifts it to pan and pinch, and it hides nothing */
@@ -71,6 +76,9 @@ export default memo(function ControlLayer({ onRelease }) {
   }, [ui]);
   // the stage knows it is being driven (the veil steps aside: CSS above)
   useEffect(() => { document.querySelector(".hvi-city-stage")?.classList.toggle("hvi-ctl-on", Boolean(ui)); }, [ui]);
+  // street level: the overhead camera's own buttons (zoom, turn, FIT) step aside
+  const third = ui?.view === "third";
+  useEffect(() => { document.querySelector(".hvi-city-stage")?.classList.toggle("hvi-ctl-third", third); }, [third]);
   if (!ui) return bye ? <div className="hvi-ctl-note" role="status">{RELEASE_LINE}</div> : null;
   const showTouch = touch || ui.source === "touch";
   return (
@@ -78,6 +86,8 @@ export default memo(function ControlLayer({ onRelease }) {
       <div className="hvi-city-found hvi-ctl-strip">
         <span className="tag" aria-hidden="true">DRIVING</span>
         <span className="l" role="status">YOU // {ui.where}</span>
+        <button type="button" className="hvi-city-zb txt" onClick={() => { CTL.input.taps.view++; }} aria-pressed={ui.view !== "iso"}
+          aria-label={ui.view === "iso" ? "Street level: the camera behind your citizen" : "Overhead: the city from above"}>{ui.view === "iso" ? "STREET LEVEL" : "OVERHEAD"}</button>
         <button type="button" className="hvi-city-zb txt" onClick={onRelease} aria-label="Release control: your citizen returns to its schedule">RELEASE</button>
       </div>
       <Legend ui={ui} touch={showTouch} />
@@ -92,11 +102,14 @@ function Legend({ ui, touch }) {
   const g = GLYPHS[ui.family || "generic"] || GLYPHS.generic;
   const actKey = src === "pad" ? g.act : src === "touch" ? "ACT" : "E";
   const backKey = src === "pad" ? g.back : src === "touch" ? "BACK" : "B";
+  const third = ui.view === "third";
   const keys = src === "pad"
-    ? `L-STICK WALK // ${g.run} RUN // ${g.turnL} ${g.turnR} TURN // ${g.start} OR ${g.select} RELEASE`
+    ? (third ? `L-STICK WALK // R-STICK LOOK // ${g.run} RUN // ${g.select} OR ${g.fit} OVERHEAD // ${g.start} RELEASE`
+      : `L-STICK WALK // ${g.run} RUN // ${g.turnL} ${g.turnR} TURN // ${g.select} OR ${g.fit} STREET LEVEL // ${g.start} RELEASE`)
     : src === "touch"
-      ? "STICK WALK (PUSH FAR TO RUN) // RELEASE UP TOP"
-      : "WASD OR ARROWS WALK // SHIFT RUN // Q R TURN // ESC RELEASE";
+      ? `STICK WALK (PUSH FAR TO RUN) // ${third ? "OVERHEAD" : "STREET LEVEL"} AND RELEASE UP TOP`
+      : third ? "WASD OR ARROWS WALK // SHIFT RUN // Q R LOOK // V OVERHEAD // ESC RELEASE"
+        : "WASD OR ARROWS WALK // SHIFT RUN // Q R TURN // V STREET LEVEL // ESC RELEASE";
   return (
     <div className="hvi-ctl-legend" aria-hidden="true">
       <div className="pr">{ui.prompt ? <><span className="k">{actKey}</span>{ui.prompt}</> : <span className="ks">NOTHING WITHIN REACH. KEEP WALKING. IT IS NOTED.</span>}</div>
@@ -145,12 +158,37 @@ function TouchPad({ ui }) {
   );
 }
 
+// Start (or ENTER THE SUBSTRATE) with no file of yours in this browser (controlIso.noFile): one
+// line on why, and the two ways to have one here. A case number without its result in this
+// browser is a secured file (it opens only to its account's session) or one never assessed.
+export const NoFileNote = memo(function NoFileNote() {
+  useEffect(injectCss, []);
+  const [shown, setShown] = useState(null);
+  useEffect(() => {
+    let t = 0;
+    const on = (e) => { setShown({ caseId: e.detail?.caseId || null }); clearTimeout(t); t = setTimeout(() => setShown(null), 9000); };
+    window.addEventListener("hvi-drive-nofile", on);
+    return () => { window.removeEventListener("hvi-drive-nofile", on); clearTimeout(t); };
+  }, []);
+  if (!shown) return null;
+  return (
+    <div className="hvi-ctl-nofile" role="status">
+      <span>{shown.caseId ? `FILE ${shown.caseId} IS NOT OPEN IN THIS BROWSER. LOG IN ON THIS DEVICE TO WALK AS YOURSELF. THE DEPARTMENT DOES NOT TAKE YOUR WORD.` : "NO FILE IN THIS BROWSER. THE DEPARTMENT CANNOT HAND YOU A CITIZEN IT HAS NOT ASSESSED."}</span>
+      <a href="#file?login=1" className="hvi-city-zb txt">LOG IN</a>
+      <a href="#intake" className="hvi-city-zb txt">GET EVALUATED</a>
+      <button type="button" className="hvi-city-zb txt" onClick={() => setShown(null)} aria-label="Dismiss">✕</button>
+    </div>
+  );
+});
+
 // GAMEPAD BROWSE (padBrowse.js): what the buttons do here, in the glyphs printed on this pad.
 // ui: {family, mode: "browse" | "map" | "rooms" | "items" | "find" | "card", self} | null.
 export const PadHint = memo(function PadHint({ ui }) {
   useEffect(injectCss, []);
   if (!ui || ui.mode === "card") return null;
   const g = GLYPHS[ui.family] || GLYPHS.generic;
+  // connected, not yet in use: only the way in
+  if (ui.mode === "idle") return <div className="hvi-pad-hint walk" aria-hidden="true"><span><b>{g.start}</b>WALK AS YOURSELF</span></div>;
   const rows = ui.mode === "find"
     ? [["▲▼", "CHOOSE"], [g.act, "FIND"], [g.back, "CANCEL"]]
     : ui.mode === "rooms"
@@ -158,8 +196,8 @@ export const PadHint = memo(function PadHint({ ui }) {
       : ui.mode === "items"
         ? [[g.lstick, "PICK"], [g.act, "OPEN"], [g.back, "OUT"]]
         : ui.mode === "map"
-          ? [[g.act, "OPEN"], [g.back, "BACK"], [g.find, "FIND"], [`${g.zoomOut} ${g.zoomIn}`, "ZOOM"], ...(ui.self ? [[g.start, "DRIVE"]] : []), [g.select, "CITY"]]
-        : [[g.act, "OPEN"], [g.back, "BACK"], [g.find, "FIND"], [g.labels, "LABELS"], [`${g.zoomOut} ${g.zoomIn}`, "ZOOM"], [`${g.turnL} ${g.turnR}`, "TURN"], ...(ui.self ? [[g.start, "DRIVE"]] : []), [g.select, "MAP"]];
+          ? [[g.act, "OPEN"], [g.back, "BACK"], [g.find, "FIND"], [`${g.zoomOut} ${g.zoomIn}`, "ZOOM"], [g.start, "WALK AS YOURSELF"], [g.select, "CITY"]]
+        : [[g.act, "OPEN"], [g.back, "BACK"], [g.find, "FIND"], [g.labels, "LABELS"], [`${g.zoomOut} ${g.zoomIn}`, "ZOOM"], [`${g.turnL} ${g.turnR}`, "TURN"], [g.start, "WALK AS YOURSELF"], [g.select, "MAP"]];
   return (
     <div className="hvi-pad-hint" aria-hidden="true">
       {rows.map(([k, t]) => <span key={t}><b>{k}</b>{t}</span>)}

@@ -426,7 +426,7 @@ for (const b of BUILDINGS) if (b.id !== "hq" && b.id !== "the-surfside") for (co
   ok(fitStature({ kind: "citizen" }, 30, 40) === 1, "fitStature: citizens 1.0");
   const { readFileSync } = await import("node:fs");
   const src = (f) => readFileSync(new URL(`../src/${f}`, import.meta.url), "utf8");
-  for (const f of ["Pen.jsx", "city/CityIso.jsx", "city/RoomStage.jsx", "city/Street.jsx", "city/CityMap.jsx", "city/City3D.jsx"])
+  for (const f of ["Pen.jsx", "city/CityIso.jsx", "city/RoomStage.jsx", "city/streetScene.js", "city/CityMap.jsx", "city/City3D.jsx"])
     ok(/statureOf|fitStature/.test(src(f)), `${f} draws subjects to scale`);
   ok(!/statureOf|fitStature/.test(src("FilePhoto.jsx")) && !/statureOf/.test(src("city/cityUi.jsx")), "portraits and thumbnails stay uniform");
 }

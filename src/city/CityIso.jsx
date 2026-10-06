@@ -27,7 +27,7 @@ import { billboardItems, drawBillboard } from "./billboardDraw.js";   // THE BIL
 import { findTarget, findLine } from "./find.js";
 // DRIVE YOURSELF (controlIso.js, ControlLayer.jsx): the viewer's own citizen, steered
 import { makeIsoControl } from "./controlIso.js";
-import ControlLayer, { TakeControlButton, PadHint } from "./ControlLayer.jsx";
+import ControlLayer, { TakeControlButton, PadHint, NoFileNote } from "./ControlLayer.jsx";
 import { makePadBrowse, drawReticle, drawFocus } from "./padBrowse.js";   // GAMEPAD BROWSE: the controller, not driving
 import { funnelRoomHits } from "./funnelProps.js";
 import { funnelButtons } from "./funnels.js";
@@ -390,7 +390,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
     // DRIVE YOURSELF: the kit it draws and moves with (controlIso.js)
     const ctl = makeIsoControl({
       V, ctx, P: (u, v, h) => project(u, v, h, V.cam), Q: (x, y, h) => { const [u, v] = rot(x, y, V.cam.r); return project(u, v, h, V.cam); },
-      select, setCam, turn, unfollowFind: unfollow, hit: (h) => V.hits.push(h), onOpen: (s) => onOpenRef.current?.(s), getSelf: () => selfRef.current,
+      select, setCam, turn, unfollowFind: unfollow, hit: (h) => V.hits.push(h), onOpen: (s) => onOpenRef.current?.(s), getSelf: () => selfRef.current, census: () => censusRef.current,
     });
     apiRef.current = {
       takeControl: () => { if (ctl.start(selfRef.current || V.find?.s)) onFindEndRef.current?.(); }, release: () => ctl.release(),
@@ -1338,6 +1338,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       if (V.find) findStep(mt, trains);
       ctl.step(mt, trains);   // DRIVE YOURSELF: input, moves, its camera
       easeCam();
+      // DRIVE YOURSELF, THIRD PERSON: the street renderer behind your citizen draws this frame instead
+      if (ctl.third()) { V.hits = []; V.labels = []; V.padRooms = []; V.panel = null; ctl.drawThird(); V.need = true; return; }
       const lod = lodFor(V.cam.z);
       ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
       ctx.imageSmoothingEnabled = false;
@@ -1565,6 +1567,12 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         pinch.total += da; pinch.prev = ang - pinch.ang0;
         const q = Math.PI / 2, want = pinch.total / q;
         if (Math.abs(want - pinch.done) > 0.62) { const dir = want > pinch.done ? 1 : -1; pinch.done += dir; turn(dir, cx, cy); }
+        return;
+      }
+      if (drag && ctl.third()) {   // DRIVE YOURSELF, THIRD PERSON: a drag turns the camera round you
+        const [x] = local(e);
+        ctl.orbit((x - (drag.lx ?? drag.x)) * 0.008); drag.lx = x;
+        if (Math.abs(x - drag.x) > 4) drag.moved = true;
         return;
       }
       if (drag) {
@@ -1861,6 +1869,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       )}
       <ControlLayer onRelease={() => apiRef.current.release?.()} />
       <PadHint ui={padUi} />
+      <NoFileNote />
       <TouchGate label="TAP TO EXPLORE" hint="DRAG · PINCH">
         <canvas ref={canvasRef} tabIndex={0} className="hvi-city-canvas" role="img"
           aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag or use the arrow keys to move, pinch or plus and minus to zoom, Q and E to turn. Tap a building, or press ] and [ to step through the buildings in view, to open its cutaway: every floor and room, and who is in it; Enter goes inside. With a game controller: the left stick moves a cursor that names what it is over, A opens, B backs out, the right stick pans, the triggers zoom, the bumpers turn, X finds, Y names everything. The list under the city says what is happening now, and the district directory lists every district." />

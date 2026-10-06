@@ -98,6 +98,47 @@ export function screenToMapDir(sx, sy, r) {
   du /= n; dv /= n;
   return vecRot(du, dv, 4 - mod4(r));
 }
+// THIRD PERSON (controlIso.js, streetScene.js): the street-level camera behind your citizen.
+// yaw 0 looks north (map -y); forward is (sin yaw, -cos yaw), right (cos yaw, sin yaw), as
+// streetKit.toCam has it. A stick (screen x right, y down) -> a unit map direction: up is
+// forward, into the screen, whatever way the camera faces.
+export function camToMapDir(sx, sy, yaw) {
+  if (!sx && !sy) return [0, 0];
+  const f = -sy, s = sx, n = Math.hypot(f, s) || 1;
+  return [(Math.sin(yaw) * f + Math.cos(yaw) * s) / n, (-Math.cos(yaw) * f + Math.sin(yaw) * s) / n];
+}
+// The yaw that looks along a map direction, and the yaw that looks "screen up" at an iso turn
+export const yawOf = (dx, dy) => Math.atan2(dx, -dy);
+export const yawOfIso = (r) => { const [dx, dy] = screenToMapDir(0, -1, r); return yawOf(dx, dy); };
+// The shortest turn from a to b, in (-PI, PI]
+export const angleTo = (a, b) => { let d = (b - a) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d <= -Math.PI) d += 2 * Math.PI; return d; };
+// dist / h: the camera's place behind and above the feet (cells); feet: where the feet sit on
+// screen (a fraction of its height); far: the draw distance (a phone draws less).
+export const CHASE = { dist: 6.2, h: 2.7, minH: 2.1, maxH: 6, orbit: 2.6, follow: 1.6, feet: 0.84, farPhone: 40, farDesk: 64 };
+// How far behind (x, y), looking along yaw, the camera can sit before a building's body is in
+// the way: it comes in, never through the wall.
+export function chaseDist(x, y, yaw, dist = CHASE.dist) {
+  const sx = -Math.sin(yaw), sy = Math.cos(yaw), S = solids();
+  for (let d = 0.6; d <= dist; d += 0.2) {
+    const px = x + sx * d, py = y + sy * d;
+    if (S.some(o => px > o.x0 - 0.15 && px < o.x1 + 0.15 && py > o.y0 - 0.15 && py < o.y1 + 0.15)) return Math.max(1.6, d - 0.35);
+  }
+  return dist;
+}
+// The chase camera {x, y, yaw, h} behind a point (x, y) at ground height z (cells). Brought in
+// by a wall, it rises too (a boom), and looks down over your shoulder rather than into your back.
+export function chaseCam(x, y, z, yaw, h = CHASE.h, dist = chaseDist(x, y, yaw)) {
+  return { x: x - Math.sin(yaw) * dist, y: y + Math.cos(yaw) * dist, yaw, h: z + h + Math.max(0, CHASE.dist - dist) * 0.5 };
+}
+// The forward lean of a driven stick: the camera eases round toward where you walk, never
+// when you walk back at it (no spinning), and not while the right stick holds it.
+export function followYaw(yaw, dir, mag, dt, k = CHASE.follow) {
+  if (!mag) return yaw;
+  const d = angleTo(yaw, yawOf(dir[0], dir[1]));
+  if (Math.abs(d) > Math.PI * 0.7) return yaw;
+  return yaw + d * Math.min(1, dt * k * mag);
+}
+
 // A vector turned r quarters (iso.rot without the centre).
 export function vecRot(dx, dy, r) {
   const [a, b] = rot(dx, dy, r), [c, d] = rot(0, 0, r);
@@ -282,10 +323,10 @@ export const RUN_AT = 0.92;   // a stick pushed this far is running
 // ---- the state, and keeping it for the session ---------------------------------------------
 // st = { key (the self's slug), mode: street | inside | seated-street | platform | riding,
 //   x, y, face (1 right / -1 left on screen), moving, bId, floor, fx, seat, bench,
-//   stationId, al, la, waiting, trainId, car, boardedAt, alightNext, t (saved at) }
+//   stationId, al, la, waiting, trainId, car, boardedAt, alightNext, view ("iso" | "third"), t (saved at) }
 export const STORE_KEY = "hvi-control";
 export const STORE_TTL = 6 * 3600 * 1000;
-const FIELDS = ["key", "mode", "x", "y", "face", "bId", "floor", "fx", "seat", "bench", "stationId", "al", "la", "waiting", "trainId", "car", "boardedAt", "alightNext"];
+const FIELDS = ["key", "view", "mode", "x", "y", "face", "bId", "floor", "fx", "seat", "bench", "stationId", "al", "la", "waiting", "trainId", "car", "boardedAt", "alightNext"];
 export function saveControl(st, storage = safeStorage()) {
   try {
     if (!storage) return false;
@@ -331,11 +372,12 @@ export function exitPoint(b) {
 // One tick of the controlled self, for everything that needs no drawing. v: {x, y} screen
 // vector (up is -y), run, r: the quarter turn, dt seconds. Mutates and returns st, plus
 // {bump} on the street (the solid leaned on, for the door-lean entry).
-export function stepStreet(st, v, run, r, dt) {
+// yaw (THIRD PERSON, below): the stick is read against the chase camera, not the iso turn.
+export function stepStreet(st, v, run, r, dt, yaw = null) {
   const mag = Math.min(1, Math.hypot(v.x, v.y));
   st.moving = mag > 0.01;
   if (!st.moving) return null;
-  const [dx, dy] = screenToMapDir(v.x, v.y, r);
+  const [dx, dy] = yaw == null ? screenToMapDir(v.x, v.y, r) : camToMapDir(v.x, v.y, yaw);
   const sp = (run ? RUN_SPEED : WALK_SPEED) * mag * dt;
   const m = moveOnStreet(st.x, st.y, dx * sp, dy * sp);
   st.x = m.x; st.y = m.y;
@@ -372,16 +414,23 @@ export const CTL = {
   st: null,                       // the state above while in control, else null
   self: null,                     // the self being driven
   request: false,                 // when "take control" was asked for before the view was ready (ms), or false
-  input: { keys: new Set(), stick: { x: 0, y: 0, mag: 0 }, taps: { act: 0, back: 0, release: 0 }, source: "keys", pad: null },
+  input: { keys: new Set(), stick: { x: 0, y: 0, mag: 0 }, taps: { act: 0, back: 0, release: 0, view: 0 }, source: "keys", pad: null },
   ui: null,                       // {mode, prompt, where, source, family, note}
   subs: new Set(),
 };
 export const controlOn = () => Boolean(CTL.st);
 export function publishUi(ui) {
-  const a = CTL.ui, same = a && ui && a.mode === ui.mode && a.prompt === ui.prompt && a.where === ui.where && a.source === ui.source && a.family === ui.family && a.note === ui.note && a.back === ui.back;
+  const a = CTL.ui, same = a && ui && a.mode === ui.mode && a.view === ui.view && a.prompt === ui.prompt && a.where === ui.where && a.source === ui.source && a.family === ui.family && a.note === ui.note && a.back === ui.back;
   if (same || (!a && !ui)) return;
   CTL.ui = ui;
   for (const f of CTL.subs) { try { f(ui); } catch { /* a widget gone */ } }
+}
+// Start (or ENTER THE SUBSTRATE) with no file of yours in this browser: ControlLayer.NoFileNote
+// says why, with LOG IN / GET EVALUATED, instead of nothing happening. (caseFile.jsx's key.)
+export function noFile() {
+  let caseId = null;
+  try { caseId = localStorage.getItem("hvi-case-id") || null; } catch { /* private mode */ }
+  try { window.dispatchEvent(new CustomEvent("hvi-drive-nofile", { detail: { caseId } })); } catch { /* no window */ }
 }
 export function subscribeControl(f) { CTL.subs.add(f); return () => CTL.subs.delete(f); }
 // The building the controlled self stands in (for the quest panels), or null.

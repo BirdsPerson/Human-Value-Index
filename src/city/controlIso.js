@@ -9,6 +9,7 @@
 //   overlay()                 after the labels: the YOU marker
 //   owns(e) / hands()         the canvas's own keys stand down; a drag stops following
 //   start(self) / release()   TAKE CONTROL / RELEASE
+//   third() / drawThird()     THIRD PERSON: draw() hands the frame to the street renderer
 
 import { BUILDING, DISTRICTS, STATIONS, STOPS, TRAIN, nextArrivalAt, stationName } from "./sim.js";
 import { SPRITE_W, SPRITE_H, statureOf } from "../sprites.js";
@@ -29,11 +30,12 @@ import {
   doorOf, doorNear, groundAt, setRiverLive, isClassified, benchNear, stationNear, stairFoot, platformPoint, platformStep, stationGeoOf,
   trainIn, nearestCar, entryFloor, roomAt, isExitFloor, nearestSeat, exitPoint, freeSpot, floorsWithRooms,
   PERSON_REACH, BUMP_ENTER, DOOR_REACH, LIFT_X, EXIT_X, PLAT_LA, WALK_SPEED, RUN_SPEED,
+  camToMapDir, yawOf, yawOfIso, chaseCam, chaseDist, followYaw, CHASE, noFile,
 } from "./control.js";
 
 const CAR_TOP = DECK + 0.05 + 0.62;
 const MOVE_KEYS = new Set(["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "shift"]);
-const OWN_KEYS = new Set([...MOVE_KEYS, "e", "q", "r", "b", "escape", "enter", " ", "backspace"]);
+const OWN_KEYS = new Set([...MOVE_KEYS, "e", "q", "r", "b", "v", "escape", "enter", " ", "backspace"]);
 export const TAKE_LINE = "SCHEDULE SUSPENDED. THE DEPARTMENT IS WATCHING YOU WALK.";
 export const RELEASE_LINE = "SCHEDULE RESUMED. YOU WERE NEVER ANYWHERE ELSE.";
 const nameOf = (s) => { const n = displayName(s).toUpperCase(); return n.length > 22 ? n.slice(0, 21) + "…" : n; };
@@ -41,10 +43,12 @@ const districtAt = (x, y) => DISTRICTS.find(d => x >= d.rect.x && x <= d.rect.x 
 const typing = (t) => t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
 const cardOpen = () => typeof document !== "undefined" && Boolean(document.querySelector("[role='dialog'], .hvi-pen-card"));
 
-// K: { V, ctx, P(u, v, h), Q(x, y, h), select(id), setCam(z, ox, oy), hit(h), onOpen(s), turn(dir), getSelf() }
+// K: { V, ctx, P(u, v, h), Q(x, y, h), select(id), setCam(z, ox, oy), hit(h), onOpen(s), turn(dir), getSelf(), census() }
 export function makeIsoControl(K) {
   const { V, ctx } = K;
   let last = 0, resumed = false, saveAt = 0, lean = { id: null, t: 0 }, padPrev = null, padWas = false, near = null, inside = null, follow = true, flew = false;
+  // THIRD PERSON: the chase camera's yaw and height, the street renderer (loaded on first use)
+  const chase = { yaw: 0, h: CHASE.h, scene: null, loading: false, wantAt: 0 };
   const input = CTL.input;
   if (import.meta.env?.DEV && typeof window !== "undefined") window.__hviCtl = CTL;   // for the browser checks
 
@@ -58,6 +62,7 @@ export function makeIsoControl(K) {
     CTL.st = loadControl(key) || stateFromTarget(key, findTarget(self, mt));
     CTL.request = false;
     follow = true; flew = false; lean = { id: null, t: 0 };
+    chase.yaw = yawOfIso(V.cam.r); chase.h = CHASE.h;
     V.censusV = -1;          // re-read the census now: the scheduled self steps out of it
     note(TAKE_LINE);
     V.need = true;
@@ -69,6 +74,7 @@ export function makeIsoControl(K) {
     if (st.mode === "inside" && V.sel === st.bId) K.select(null);
     CTL.st = null;
     CTL.request = false;
+    wantSectorsThird(null);
     saveControl(null);
     input.keys.clear();
     V.censusV = -1;
@@ -91,6 +97,12 @@ export function makeIsoControl(K) {
     const [x, y] = b ? exitPoint(b) : freeSpot(st.x || 0, st.y || 0);
     if (V.sel === st.bId) K.select(null);
     Object.assign(st, { mode: "street", x, y, bId: null, floor: null, fx: null, seat: null });
+    if (b) {
+      // out of the door: the camera looks along the street (whichever way has more room behind you)
+      const out = yawOf(x - (b.rect.x + b.rect.w / 2), y - (b.rect.y + b.rect.h / 2));
+      const a1 = out + Math.PI / 2, a2 = out - Math.PI / 2;
+      chase.yaw = chaseDist(x, y, a1) >= chaseDist(x, y, a2) ? a1 : a2;
+    }
     follow = true;
   }
   function climb(id) {
@@ -156,19 +168,29 @@ export function makeIsoControl(K) {
     padPrev = pad.connected ? pad.held : null;
     if (pad.connected && (pad.mag > 0 || Object.values(pp).some(Boolean))) input.source = "pad";
     if (CTL.request && !CTL.st && K.getSelf()) { if (Date.now() - CTL.request < 15000) start(); else CTL.request = false; }
+    else if (CTL.request && !CTL.st && Date.now() - CTL.request > 6000) { CTL.request = false; noFile(); }   // asked to drive, and no file came
     // a reload (or Back from a building page) resumes a drive saved this session
     if (!resumed && !CTL.st && K.getSelf()) { resumed = true; const sf = K.getSelf(); if (loadControl(sf.slug || sf.name)) start(sf); }
     // Start takes control (or lets go); Select lets go too (GAMEPAD BROWSE: padBrowse.js)
     const tog = pad.connected ? driveToggle(pp, { driving: Boolean(CTL.st), hasSelf: Boolean(K.getSelf()), card: cardOpen() }) : null;
     if (tog === "release") { release(); return; }
     if (tog === "take") start();
+    if (tog === "nofile") noFile();
     const st = CTL.st;
-    if (!st) { input.taps.act = input.taps.back = input.taps.release = 0; return; }
+    if (!st) { input.taps.act = input.taps.back = input.taps.release = input.taps.view = 0; return; }
     V.need = true;
     if (cardOpen()) { input.keys.clear(); input.taps.act = input.taps.back = 0; publish(mt, trains); return; }
     if (input.taps.release) { input.taps.release = 0; release(); return; }
-    if (pp.turnL) K.turn(-1);
-    if (pp.turnR) K.turn(1);
+    if (tog === "view" || input.taps.view) { input.taps.view = 0; setView(st.view === "third" ? "iso" : "third"); }
+    const third = isThird();
+    // the turns: a quarter of the city overhead, an eighth of the chase camera's circle behind you
+    if (pp.turnL) third ? (chase.yaw -= Math.PI / 4) : K.turn(-1);
+    if (pp.turnR) third ? (chase.yaw += Math.PI / 4) : K.turn(1);
+    if (third && pad.connected) {
+      // the right stick orbits (x) and raises or lowers (y) the camera
+      chase.yaw += (pad.rx || 0) * CHASE.orbit * dt;
+      chase.h = Math.max(CHASE.minH, Math.min(CHASE.maxH, chase.h + (pad.ry || 0) * 2.2 * dt));
+    }
     // the vector: the stick in use wins over the keys
     const kv = keysVector(input.keys);
     let v = kv, run = kv.run;
@@ -178,7 +200,9 @@ export function makeIsoControl(K) {
     if (moving) { follow = true; if (V.find?.follow) K.unfollowFind?.(); }
     // modes
     if (st.mode === "street") {
-      const bump = stepStreet(st, v, run, V.cam.r, dt);
+      const bump = stepStreet(st, v, run, V.cam.r, dt, third ? chase.yaw : null);
+      // the chase camera leans round toward where you walk (not while the right stick holds it)
+      if (third && moving && !(pad.connected && pad.rmag > 0)) chase.yaw = followYaw(chase.yaw, camToMapDir(v.x, v.y, chase.yaw), Math.min(1, Math.hypot(v.x, v.y)), dt);
       // lean on a door and you are through it
       const d = bump && doorOf(BUILDING[bump.id]);
       if (d && Math.hypot(d.x - st.x, d.y - st.y) < DOOR_REACH) {
@@ -229,7 +253,50 @@ export function makeIsoControl(K) {
     if (now - saveAt > 1000) { saveAt = now; saveControl(CTL.st); }
     publish(mt, trains);
   }
-  const mapDir = (v) => screenToMapDir(v.x, v.y, V.cam.r);
+  const mapDir = (v) => (isThird() ? camToMapDir(v.x, v.y, chase.yaw) : screenToMapDir(v.x, v.y, V.cam.r));
+  // ---- THIRD PERSON: the street renderer, its camera behind your citizen -----------------------
+  // The view is a choice kept with the drive (st.view); inside a building the cutaway shows
+  // (the street renderer has no rooms), and outside again it comes back.
+  const isThird = () => Boolean(CTL.st && CTL.st.view === "third" && CTL.st.mode !== "inside");
+  function setView(view) {
+    const st = CTL.st;
+    if (!st) return;
+    st.view = view;
+    if (view === "third") { chase.yaw = yawOfIso(V.cam.r); loadScene(); note("STREET LEVEL. THE DEPARTMENT FOLLOWS CLOSELY."); }
+    else { wantSectorsThird(null); follow = true; note("OVERHEAD. AS THE DEPARTMENT PREFERS."); }
+    V.need = true;
+  }
+  function loadScene() {
+    if (chase.scene || chase.loading) return;
+    chase.loading = true;
+    import("./streetScene.js").then(m => { chase.scene = m.makeStreetScene(ctx); V.need = true; }).catch(() => { chase.loading = false; });
+  }
+  let sectorsMod = null;
+  function wantSectorsThird(p) {
+    if (!sectorsMod) { import("./planClient.js").then(m => { sectorsMod = m; if (p) wantSectorsThird(p); }); return; }
+    if (!p) { sectorsMod.wantSectors("third", []); return; }
+    const R = 45;
+    sectorsMod.wantSectors("third", DISTRICTS.filter(d => { const r = d.rect, dx = Math.max(r.x - p.x, 0, p.x - r.x - r.w), dy = Math.max(r.y - p.y, 0, p.y - r.y - r.h); return Math.hypot(dx, dy) < R; }).map(d => d.id));
+  }
+  // The frame, at street level: CityIso's draw() calls this instead of the iso city while third()
+  function drawThird() {
+    const st = CTL.st, p = posOf();
+    if (!st || !p) return;
+    if (!chase.scene) { loadScene(); ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0); ctx.fillStyle = "#060a06"; ctx.fillRect(0, 0, V.cssW, V.cssH); return; }
+    const now = performance.now();
+    if (now - chase.wantAt > 500) { chase.wantAt = now; wantSectorsThird(p); }
+    const z = p.h * STOREY, narrow = V.cssW < 640;
+    const c = chaseCam(p.x, p.y, z, chase.yaw, chase.h);
+    const census = K.census?.() || { list: [], v: 0 };
+    ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+    try { chase.scene({
+      c, W: V.cssW, H: V.cssH, dpr: V.dpr, census, now, reduced: V.reduced,
+      far: narrow ? CHASE.farPhone : CHASE.farDesk, feet: CHASE.feet,
+      me: { x: p.x, y: p.y, z, s: CTL.self, moving: Boolean(st.moving), face: st.face, show: st.mode !== "riding" },
+    }); } catch (e) { if (import.meta.env?.DEV) console.warn("third person frame", e); }   // one bad prop never stops the walk
+    ctx.font = "11px 'Fira Mono', ui-monospace, monospace"; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillStyle = "rgba(167,215,181,0.85)";
+    ctx.fillText(`STREET LEVEL // FACING ${["N", "NE", "E", "SE", "S", "SW", "W", "NW"][((Math.round(chase.yaw / (Math.PI / 4)) % 8) + 8) % 8]}`, 8, 8);
+  }
 
   // What E would do now -> near = {kind, label, ...} | null.
   function computeNear(mt, trains) {
@@ -305,7 +372,7 @@ export function makeIsoControl(K) {
     const insideLift = st.mode === "inside" && !st.seat;
     const n = CTL.note && CTL.note.until > performance.now() ? CTL.note.text : null;
     const backLabel = st.mode === "inside" ? "LEAVE" : st.mode === "platform" ? "DESCEND" : st.mode === "riding" ? "NEXT STOP" : st.mode === "bench" ? "STAND" : null;
-    publishUi({ mode: st.mode, prompt: near?.label || null, where: where(mt), source: input.source, family: input.pad?.family || null, note: n, back: backLabel, lift: insideLift });
+    publishUi({ mode: st.mode, view: isThird() ? "third" : st.view === "third" ? "third-inside" : "iso", prompt: near?.label || null, where: where(mt), source: input.source, family: input.pad?.family || null, note: n, back: backLabel, lift: insideLift });
     void trains;
   }
 
@@ -465,8 +532,9 @@ export function makeIsoControl(K) {
     if (k === "e" || k === "enter" || k === " ") { if (e.repeat) { e.preventDefault(); return; } input.taps.act++; e.preventDefault(); return; }
     if (k === "b" || k === "backspace") { input.taps.back++; e.preventDefault(); return; }
     if (k === "escape") { input.taps.release++; e.preventDefault(); return; }
-    if (k === "q") { K.turn(-1); e.preventDefault(); return; }
-    if (k === "r") { K.turn(1); e.preventDefault(); }
+    if (k === "v") { if (!e.repeat) input.taps.view++; e.preventDefault(); return; }
+    if (k === "q") { if (isThird()) chase.yaw -= Math.PI / 4; else K.turn(-1); e.preventDefault(); return; }
+    if (k === "r") { if (isThird()) chase.yaw += Math.PI / 4; else K.turn(1); e.preventDefault(); }
   }
   function onKeyUp(e) { input.keys.delete(e.key.toLowerCase()); if (e.key === "Shift") input.keys.delete("shift"); }
   function onBlur() { input.keys.clear(); }
@@ -484,11 +552,12 @@ export function makeIsoControl(K) {
       window.removeEventListener("gamepadconnected", onPad);
       window.removeEventListener("gamepaddisconnected", onPad);
       if (CTL.st) saveControl(CTL.st);
+      wantSectorsThird(null);
     };
   }
   const owns = (e) => Boolean(CTL.st && OWN_KEYS.has(e.key.toLowerCase()));
   const hands = () => { if (CTL.st) follow = false; };
   const skipSelf = (s) => Boolean(CTL.st && s && s.you);
 
-  return { start, release, step, movers, drawMover, room, overlay, attach, owns, hands, skipSelf, active: () => Boolean(CTL.st) };
+  return { start, release, step, movers, drawMover, room, overlay, attach, owns, hands, skipSelf, active: () => Boolean(CTL.st), third: isThird, drawThird, setView, orbit: (a) => { chase.yaw += a; V.need = true; } };
 }

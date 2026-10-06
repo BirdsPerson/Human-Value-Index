@@ -15,6 +15,7 @@ import {
   keysVector, stickVector, stepStreet, stepInside, stateFromTarget, saveControl, loadControl, exitPoint, benches, benchNear,
   trainIn, nearestCar, STORE_KEY, STORE_TTL, LIFT_X, EXIT_X, PLAT_LA, DOOR_REACH,
 } from "../src/city/control.js";
+import { camToMapDir, yawOf, yawOfIso, angleTo, chaseCam, chaseDist, followYaw, CHASE } from "../src/city/control.js";
 import { readPad, pressedSince, deadzone, familyOf, GLYPHS, driveToggle } from "../src/city/gamepad.js";
 import { stepCursor, snapTarget, stepPan, zoomFactor, stickStep, nearestInDir, padActions, makePadBrowse, CUR, PAN } from "../src/city/padBrowse.js";
 import { trainsAt } from "../src/city/sim.js";
@@ -299,8 +300,9 @@ void PLACES;
   ok(!padActions(edges([0], "Pro Controller (057e)"), "browse").includes("tap") && padActions(edges([1], "Pro Controller (057e)"), "browse").includes("tap"), "switch: A (right) taps, the bottom button does not");
   // Start toggles DRIVE YOURSELF (controlIso.js reads gamepad.driveToggle)
   ok(driveToggle(edges([9]), { hasSelf: true }) === "take", "Start: take control");
-  ok(driveToggle(edges([9]), { hasSelf: false }) === null, "Start without a file: nothing");
-  ok(driveToggle(edges([9]), { driving: true }) === "release" && driveToggle(edges([8]), { driving: true }) === "release", "driving: Start or Select releases");
+  ok(driveToggle(edges([9]), { hasSelf: false }) === "nofile", "Start without a file: says why (LOG IN / GET EVALUATED)");
+  ok(driveToggle(edges([9]), { driving: true }) === "release", "driving: Start releases");
+  ok(driveToggle(edges([8]), { driving: true }) === "view" && driveToggle(edges([11]), { driving: true }) === "view", "driving: Select or the right-stick click flips overhead / third person");
   ok(driveToggle(edges([8]), { hasSelf: true }) === null, "browse: Select does not take control");
   ok(driveToggle(edges([9]), { hasSelf: true, card: true }) === null, "a card open: Start waits");
 
@@ -371,6 +373,38 @@ void PLACES;
   pads = () => [];
   t += 16; B.poll(t);
   ok(!B.active() && log[log.length - 1][0] === "ui" && log[log.length - 1][1] === null, "unplugged: the hint goes");
+}
+
+// 12. THIRD PERSON: the stick against the chase camera, the camera behind you and out of walls
+{
+  for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 2, 0.7]) {
+    const [fx, fy] = camToMapDir(0, -1, yaw);
+    ok(near(fx, Math.sin(yaw)) && near(fy, -Math.cos(yaw)), `third: stick up walks into the screen at yaw ${yaw.toFixed(2)}`);
+    const [rx, ry] = camToMapDir(1, 0, yaw);
+    ok(near(rx, Math.cos(yaw)) && near(ry, Math.sin(yaw)), `third: stick right walks right at yaw ${yaw.toFixed(2)}`);
+    const c = chaseCam(50, 50, 0, yaw, CHASE.h, 4);
+    ok(near(Math.hypot(c.x - 50, c.y - 50), 4) && near(yawOf(50 - c.x, 50 - c.y), yaw, 1e-9) || near(Math.abs(angleTo(yawOf(50 - c.x, 50 - c.y), yaw)), 0, 1e-9), `third: the camera sits behind, looking at you (yaw ${yaw.toFixed(2)})`);
+  }
+  for (let r = 0; r < 4; r++) { const [dx, dy] = screenToMapDir(0, -1, r), [tx, ty] = camToMapDir(0, -1, yawOfIso(r)); ok(near(dx, tx) && near(dy, ty), `third: entering at turn ${r} keeps up as up`); }
+  ok(near(angleTo(3, -3), 2 * Math.PI - 6, 1e-9), "angleTo takes the short way round");
+  // the camera eases toward a sideways walk, never spins round to face a walk back at it
+  ok(followYaw(0, [1, 0], 1, 0.1) > 0, "third: the camera leans toward the walk");
+  ok(followYaw(0, [0, 1], 1, 0.1) === 0, "third: walking back at the camera does not spin it");
+  // a wall behind you brings the camera in (and up), never through it
+  const o = S.find(q => q.id === "the-dive"), px = (o.x0 + o.x1) / 2, py = o.y0 - 0.6;   // north of the dive, its wall south
+  const d = chaseDist(px, py, 0);   // looking north, away from it: the camera would stand in the dive
+  ok(d < CHASE.dist && d >= 1.6, `third: a wall behind brings the camera in (${d.toFixed(2)})`);
+  const cc = chaseCam(px, o.y0 - 2.5, 0, 0);
+  ok(!solidAt(cc.x, cc.y, 0) && cc.h > CHASE.h, "third: the camera stays out of the wall, and rises");
+  ok(chaseCam(px, py, 0, 0).h >= CHASE.h + 2, "third: hard against a wall, it rises over your shoulder (a boom)");
+  ok(chaseDist(px, py, Math.PI) > d, "third: facing the wall, the camera has more room behind");
+  // a step on the street against the camera's yaw goes where the camera faces
+  const st = { x: px, y: py - 3, mode: "street" };
+  const b = moveOnStreet(st.x, st.y, 0, 0);
+  void b;
+  const x0 = st.x, y0 = st.y;
+  stepStreet(st, { x: 0, y: -1 }, false, 0, 0.1, Math.PI / 2);   // camera faces east: up walks east
+  ok(st.x > x0 && near(st.y, y0, 1e-6), `third: up walks along the camera (east): ${(st.x - x0).toFixed(3)}, ${(st.y - y0).toFixed(3)}`);
 }
 
 console.log(fails ? `check-control: ${fails} FAILED` : "check-control: ALL PASS");

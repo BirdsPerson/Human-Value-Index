@@ -1079,9 +1079,43 @@ introduce a controller function". v1 is solo: you drive your own citizen, nobody
   Xbox / PlayStation / Switch / d-pad / non-standard pads, the Loop's stairs and platform, the
   store), `gamepad.js`, `controlIso.js` (step, camera, drawing), `ControlLayer.jsx` (strip,
   legend, touch pad). CityIso.jsx hooks are marked `DRIVE YOURSELF`.
-- **Not yet**: STREET view (its drone camera still walks by keys and the on-screen pad, not your
-  citizen); others seeing you (multiplayer); bumping into people; a seat can be taken by someone
-  scheduled onto it after you sit.
+- **Not yet**: the STREET tab's own drone still walks by keys and the on-screen pad (your citizen
+  walks at street level through THIRD PERSON, below); others seeing you (multiplayer); bumping
+  into people; a seat can be taken by someone scheduled onto it after you sit.
+
+### THIRD PERSON and the way in (2026-10-06)
+
+Scott: "it still doesn't seem like I can use a CONTROLLER TO WALK THROUGH THE STREETS anymore or
+yet. And I don't have the THIRD PERSON VIEW yet either."
+
+- **Why the pad did nothing**: driving was never broken where this browser held the file (a
+  headless run on production with a TEST case and a mocked Xbox pad: Start took control, the
+  stick walked). Start did *nothing at all*, silently, wherever `s.you` was missing: a device
+  that never took the test, or (since the case-auth fix, f78183c) a secured file whose result
+  this browser has not cached and whose account is not signed in here. Nothing on screen said
+  Start was the way in, either. Now: a connected pad shows `[MENU] WALK AS YOURSELF` (the pad's
+  own glyph) bottom-left even before it is used; Start (or `#city?control=1`) with no file shows
+  one line, why, with LOG IN (`#file?login=1`, SECURE BY EMAIL opened) and GET EVALUATED
+  (`ControlLayer.NoFileNote`, `control.noFile`, `gamepad.driveToggle` -> "nofile"; on the MAP too).
+- **THIRD PERSON**: while driving, Select or the right-stick click (V on the keys, STREET LEVEL /
+  OVERHEAD on the strip) flips the iso overhead for a street-level camera behind your citizen,
+  drawn by the STREET view's renderer (`streetScene.js`, split out of Street.jsx; loaded on first
+  use). Start releases. The camera sits `CHASE.dist` behind and `CHASE.h` above the feet, the
+  horizon set so the feet stand at 84% of the height; a wall behind you brings it in and up (a
+  boom, `chaseDist`), never through. Left stick (and WASD, the touch stick) walk relative to the
+  camera: up is into the screen (`camToMapDir`); the camera eases round toward a sideways walk,
+  never spins to face a walk back at it (`followYaw`); the right stick orbits and raises, a drag
+  orbits, LB / RB (Q / R) turn it an eighth. The same rules as overhead: `stepStreet` collision,
+  doors (A, or leaning), stations, the Loop (aboard, the camera rides behind the car), every E.
+  Inside a building the cutaway shows (the renderer has no rooms); out of the door the street
+  view comes back, looking along the street. Your citizen is drawn over whatever stands nearer;
+  the scheduled self is left out. The iso zoom buttons step aside. Draw distance 40 on a phone,
+  64 on a desktop (FAR is 78); no bob under reduced motion. Measured headless 1280: 9 to 14 ms a
+  frame walking.
+- **Full 3D would need**: back and side sprite frames (the sheets face front, so you are seen
+  from the front while walked from behind), a real pitch (the renderer shears the horizon),
+  per-building occlusion of the avatar, interiors at street level, and a depth buffer instead of
+  the painter's sort.
 - Measured (headless Chromium, dev build): 1440 walking 16.6 ms average frame, p95 17.2; 390
   touch emulation 16.6 / 18.0. Screens: docs/screens/control/.
 
