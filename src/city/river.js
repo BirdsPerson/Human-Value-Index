@@ -11,7 +11,7 @@
 // already leave: the gutter between THE ARTS QUARTER and CAMPUS, under the Loop, round the Arena's
 // grounds, down the street between the Arena and DEPT HQ, under the Loop again, the gutter between THE
 // COMMONS and THE WORKS, along the street behind the Pit, under the Shore Line, through the gap
-// between SEAVIEW FLATS and THE SURFSIDE, under the boardwalk, and out across the sand to the sea
+// between SEAVIEW FLATS and THE SHORE PLAZA (once THE SURFSIDE), under the boardwalk, and out across the sand to the sea
 // beside THE PIER (THE OUTPLACEMENT: the estuary, its sandbars). No building moved; no id changed.
 //
 // THE DAY BOUNDARY. A layout change takes effect at a machine-day boundary (docs/planning/

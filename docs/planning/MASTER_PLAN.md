@@ -376,3 +376,20 @@ plan's place list (appended last, so every index stays), take no staff and draw 
 arcade keeps its ground (`SHARED_RECT`), and nobody is bumped into them by the overflow chains.
 `check-lanes` holds the two days before it, plans and whereAt for a 430-subject census, against the
 earlier code's hashes. No layout version: no ground moved.
+
+## THE SHORE PLAZA (2026-10-06)
+
+The Coast's tower `the-surfside` is THE SHORE PLAZA (after the Wildwood boardwalk's 1957 doo-wop motel
+at 26th Avenue with Sam's Pizza Palace at its foot): SAM'S PIZZA at street level, GOODNIGHT IRENE'S
+brewhouse and taproom on the two floors over it, the suites, the pool on the roof. The third place
+with a day of its own, and the first whose places **move**: `shorePlaza.PLAZA_DAY` (619, from
+2026-10-06 07:12 UTC, 03:12 EDT) is set past every day published at the push (published to 612, today
+612). Before it Sam's and Irene's stand on their old boardwalk lots, in their old buildings, on their
+old floors (`sim.placedOn`, swapped in `onGround`; route memos name it, `GRK`; the overflow chains are
+built for each side, `overflowOn`), so a day before 619 is byte for byte what the code before built
+(`check-shoreplaza` holds days 617 and 618, plans and whereAt, against 1e144df's hashes,
+`scripts/fixtures/shoreplaza-pre.json`). Same place ids; the old lots keep their building ids and
+ground, TO LET (two shell places appended after everything, never in a plan). From 619: the walks end
+at the Plaza, and Irene's new staff (a head brewer, cellar hands, servers: `PLAZA_STAFF`, in JOB not
+JOBS) come on. The city is drawn as the Plaza from the deploy; a pre-619 stay keeps its old map spot
+under the Plaza's floor (the known seam, a few hours long).

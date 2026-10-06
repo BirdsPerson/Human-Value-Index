@@ -47,6 +47,8 @@ export const FUNNEL_FIND = [
   { id: "studio-block", district: "arts", name: "ELECTRIC BASEMENT TV", line: "THE ARTS QUARTER // LIVE", words: "ebtv electric basement tv watch station channel" },
   // the foothills' outfitter: a capture outfitter (tranquilliser darts, nets, crates), never a hunt;
   // the future door to THE SAFARI ZONE (Scott, 2026-10-05: in the city nothing is killed)
+  // THE SHORE PLAZA (shorePlaza.js; the id kept from THE SURFSIDE): Sam's at the street, Irene's over it
+  { id: "the-surfside", district: "coast", name: "THE SHORE PLAZA", line: "THE COAST // SAM'S PIZZA PALACE AT THE STREET, GOODNIGHT IRENE'S UPSTAIRS", words: "shore plaza surfside sams sam's pizza palace slice goodnight irenes irene's brewery brewpub beer taproom motel boardwalk" },
   { id: "the-foothills", district: "heights", name: "THE OUTFITTER", line: "THE FOOTHILLS // WILDLIFE CAPTURE. SAFARI ZONE OPENING SOON", words: "outfitter safari capture wildlife zoo darts nets crates ranger foothills" },
 ];
 export function findFunnel(q) {
@@ -66,7 +68,7 @@ export const CAMPAIGN_OF_PLACE = { "dive-bar": "the-dive", "the-lantern": "the-d
 // Buildings whose rooms hold a cabinet (the toolbar offers PLAY there too).
 export const CABINET_BUILDINGS = { "the-dive": "the-dive", "press-building": "the-diner", casino: "casino", "eb-shop": "union-lounge", "the-boardwalk": "the-boardwalk" };
 // The house cabinets a building's rooms hold (the toolbar offers each), from houseGames.HOUSE_PLACES.
-export const HOUSE_BUILDINGS = { "the-dive": ["house-hunt", "house-golf", "house-hoops"], "goodnight-irenes": ["house-golf", "house-hunt"], casino: ["house-golf"], "the-boardwalk": ["house-hoops", "house-fish"], "press-building": ["house-fish"] };
+export const HOUSE_BUILDINGS = { "the-dive": ["house-hunt", "house-golf", "house-hoops"], "the-surfside": ["house-golf", "house-hunt"], casino: ["house-golf"], "the-boardwalk": ["house-hoops", "house-fish"], "press-building": ["house-fish"] };
 // The foothills outfitter's line (FunnelOverlay "outfitter"; the building's button)
 export const OUTFITTER = { title: "THE OUTFITTER", line: "CAPTURE PERMITS ISSUED. THE ANIMALS WILL BE HOUSED, AT GREAT EXPENSE.", soon: "SAFARI ZONE: OPENING SOON." };
 

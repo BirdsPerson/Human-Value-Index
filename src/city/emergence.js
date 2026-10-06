@@ -43,13 +43,13 @@ const jit = (id, n, name, lo, hi) => lo + h01(`${id}|${n}|${name}`) * (hi - lo);
 // ---- where things are (data: existing buildings, nothing new on the ground) ----------------------
 // The drone depot: the Parts Depot in the Works. The pads: the Meridian's crown (the penthouses),
 // the Reserve Tower's (the Exchange), the Airport's hangar roof, and the other top-band roofs (the
-// Surfside on the Coast, Engine Tower A, the Chalets). x, y map cells; h the roof (archGeo massing).
+// Shore Plaza on the Coast, once the Surfside, Engine Tower A, the Chalets). x, y map cells; h the roof (archGeo massing).
 export const DEPOT = { place: "parts-depot", x: 32.8, y: 52, h: 1.6 };
 export const PADS = [
   { id: "meridian", name: "THE MERIDIAN", building: "the-meridian", x: 62, y: 9.25, h: 14.3 },
   { id: "reserve", name: "THE RESERVE TOWER", building: "reserve-tower", x: 74.2, y: 4.25, h: 13.8 },
   { id: "airport", name: "THE AIRPORT", building: "the-hangars", x: 268, y: 78.8, h: 2.2 },
-  { id: "surfside", name: "THE SURFSIDE", building: "the-surfside", x: 62.8, y: 82.7, h: 7.6 },
+  { id: "surfside", name: "THE SHORE PLAZA", building: "the-surfside", x: 62.8, y: 82.7, h: 7.6 },
   { id: "engine", name: "ENGINE TOWER A", building: "engine-tower-a", x: 142, y: -32.75, h: 14.3 },
   { id: "chalets", name: "THE CHALETS", building: "the-chalets", x: 75.4, y: -17.9, h: 1.6 },
 ];

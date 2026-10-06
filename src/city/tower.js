@@ -17,6 +17,8 @@
 // `furniture[]` ({item, x: 0..1 across the room}), so dressing a room later is data only.
 
 import { PLACES, BUILDINGS, SEED, HOUSING_TIERS, homeOf, floorOf, keyOf, isOwl, toHours } from "./sim.js";
+import { SAMS, IRENES, BREWHOUSE, TAPROOM } from "./shorePlaza.js";   // THE SHORE PLAZA's storefront and brewery
+import { proprietorOf } from "./proprietors.js";   // a business with a subject on record as its proprietor
 
 export const DEPT = Object.freeze({ kind: "dept", id: "dept", name: "THE DEPARTMENT" });
 
@@ -64,8 +66,21 @@ export const FURNISH = {
   shop: [{ item: "rack", x: 0.2 }, { item: "rack", x: 0.45 }, { item: "till", x: 0.8 }],
   lounge: [{ item: "bar", x: 0.3 }, { item: "stool", x: 0.18 }, { item: "stool", x: 0.4 }, { item: "table", x: 0.78 }],
   vault: [{ item: "safe", x: 0.25 }, { item: "safe", x: 0.5 }, { item: "safe", x: 0.75 }],
+  // THE SHORE PLAZA: Sam's at the street (the ovens, the counter under the sign, the booths by the
+  // window on the boards), Irene's brewhouse (mash tun, kettle, fermenters; the bright tanks, the malt,
+  // the kegs) and its taproom (the bar and its taps under the pub's own sign; the brick oven from its
+  // logo, the tables, the stage corner)
+  pizzeria: [{ item: "pizza-oven", x: 0.17 }, { item: "sams-sign", x: 0.6 }, { item: "pizza-counter", x: 0.6 }],
+  booths: [{ item: "diner-booth", x: 0.26 }, { item: "diner-booth", x: 0.74 }],
+  brewhouse: [{ item: "mash-tun", x: 0.14 }, { item: "brew-kettle", x: 0.38 }, { item: "fermenter", x: 0.64 }, { item: "fermenter", x: 0.86 }],
+  cellar: [{ item: "bright-tank", x: 0.16 }, { item: "bright-tank", x: 0.36 }, { item: "grain-sacks", x: 0.62 }, { item: "keg-stack", x: 0.86 }],
+  taproom: [{ item: "irenes-sign", x: 0.5 }, { item: "tap-bar", x: 0.5 }, { item: "stool", x: 0.18 }, { item: "stool", x: 0.82 }],
+  snug: [{ item: "brick-oven", x: 0.16 }, { item: "pub-table", x: 0.5 }, { item: "stage-corner", x: 0.84 }],
 };
-export const PURPOSE_NAME = { bedroom: "BEDROOM", kitchen: "KITCHEN", living: "LIVING ROOM", bath: "BATHROOM", study: "STUDY", lobby: "LOBBY", office: "OFFICE", shop: "SHOP FLOOR", lounge: "LOUNGE", vault: "VAULT" };
+export const PURPOSE_NAME = { bedroom: "BEDROOM", kitchen: "KITCHEN", living: "LIVING ROOM", bath: "BATHROOM", study: "STUDY", lobby: "LOBBY", office: "OFFICE", shop: "SHOP FLOOR", lounge: "LOUNGE", vault: "VAULT",
+  pizzeria: "THE COUNTER AND THE OVENS", booths: "THE BOOTHS (THE WINDOW ON THE BOARDS)", brewhouse: "THE BREWHOUSE", cellar: "THE CELLAR (BRIGHT TANKS, MALT, KEGS)", taproom: "THE BAR", snug: "THE ROOM AND THE STAGE" };
+// THE SHORE PLAZA's rooms by place and floor: [unit kind, rooms]
+const PLAZA_UNITS = { [SAMS]: { G: ["venue", ["pizzeria", "booths", "booths"]] }, [IRENES]: { [BREWHOUSE]: ["venue", ["brewhouse", "cellar"]], [TAPROOM]: ["venue", ["taproom", "snug"]] } };
 const room = (unitId, purpose, n = 0) => ({ id: `${unitId}:${purpose}${n ? n + 1 : ""}`, purpose, furniture: FURNISH[purpose].map(f => ({ ...f })) });
 
 // What a non-home place's unit is used for.
@@ -122,6 +137,8 @@ export function towerPlan(b) {
     };
     if (st.level === 0) unit("lobby", null, ["lobby"], "LOBBY");
     for (const pid of other) {
+      const pu = PLAZA_UNITS[pid]?.[st.simCode];
+      if (pu) { unit(pu[0], pid, pu[1], PLACES[pid].name); continue; }
       // a hotel's upper floors are its rooms: three suites a floor, a bed and a bath each
       if (style === "hotel" && st.level > 0) { for (let j = 0; j < 3; j++) unit("suite", pid, ["bedroom", "bath"], `ROOM ${st.level}${String(j + 1).padStart(2, "0")}`); continue; }
       const purpose = purposeOf(pid, st.level === 0);
@@ -138,6 +155,12 @@ export function towerPlan(b) {
         unit("flat", pid, rooms, `${st.code === "G" ? "G" : st.code === "PH" ? "PH" : st.level}${letter}`);
       }
     }
+  }
+  // a business with a proprietor on record holds its own units (and a storey that is all its own)
+  for (const st of storeys) {
+    for (const u of st.units) { const o = u.placeId && proprietorOf(u.placeId); if (o) u.owner = o; }
+    const own = st.units.length && st.units.every(u => u.owner !== DEPT) ? st.units[0].owner : null;
+    if (own && st.units.every(u => u.owner === own)) st.owner = own;
   }
   const bySim = {};
   for (const st of storeys) (bySim[st.simFloor] = bySim[st.simFloor] || []).push(st);

@@ -8,6 +8,9 @@ import { funnelButtons } from "./funnels.js";
 import { openFunnel, ShopWallLinks } from "./FunnelOverlay.jsx";
 import CasinoDoor from "../casino/CasinoDoor.jsx";
 import { isTower } from "./tower.js";
+import { PLAZA_ID } from "./shorePlaza.js";
+import { proprietorLine } from "./proprietors.js";
+import { openBusiness } from "./EnterprisePanel.jsx";
 // Towers (residential, office, mixed-use) open as a SimTower cutaway, its own chunk (Cutaway.jsx).
 const Cutaway = lazy(() => import("./Cutaway.jsx"));
 
@@ -57,6 +60,9 @@ function BuildingView({ buildingId, floor, censusRef, onOpen, onFloor }) {
     return (
       <Suspense fallback={<div className="hvi-city-note hvi-city-in">RAISING THE CROSS-SECTION. THE BUILDING DOES NOT CONSENT.</div>}>
         {funnelButtons(b.id).length > 0 && <FunnelBar id={b.id} />}
+        {b.id === PLAZA_ID && <div className="hvi-city-note hvi-city-in">
+          AT THE STREET: <button type="button" className="hvi-city-zb txt" onClick={() => openBusiness({ landmark: "sams-pizza" })}>SAM'S PIZZA PALACE</button> // UPSTAIRS: <button type="button" className="hvi-city-zb txt" onClick={() => openBusiness({ landmark: "goodnight-irenes" })}>GOODNIGHT IRENE'S</button>, BREWERY AND BREWPUB{proprietorLine("goodnight-irenes") ? ` // ${proprietorLine("goodnight-irenes")}` : ""}.
+        </div>}
         <Cutaway key={b.id} b={b} floor={floor} censusRef={censusRef} onOpen={onOpen} onFloor={onFloor} />
       </Suspense>
     );

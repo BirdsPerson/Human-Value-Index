@@ -236,7 +236,8 @@ section("buildings");
     ok(PLACES[id].building && [...where[id]][0] === PLACES[id].building && PLACES[id].floors.length >= 1, `${id} knows its building and floors`);
   }
   for (const b of BUILDINGS) {
-    ok(b.floors.length >= 1 && b.floors.length <= 6, `${b.id}: 1-6 floors (${b.floors.length})`);
+    // THE SHORE PLAZA: its storefront and Irene's two floors under the suites (a tower: the cutaway draws it by storey)
+    ok(b.floors.length >= 1 && b.floors.length <= (b.id === "the-surfside" ? 8 : 6), `${b.id}: 1-6 floors (${b.floors.length})`);
     ok(b.floors.every((f, i) => f.index === i && (i === 0 || f.level > b.floors[i - 1].level)), `${b.id}: floors stack ground-up`);
     ok(new Set(b.floors.map(f => f.id)).size === b.floors.length, `${b.id}: floor ids unique`);
     ok(DISTRICT_IDS.has(b.district) && b.places.every(p => PLACES[p].district === b.district), `${b.id}: rooms in its own district`);

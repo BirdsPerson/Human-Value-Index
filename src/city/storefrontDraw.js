@@ -15,13 +15,16 @@
 import { unitView } from "./enterpriseClient.js";
 import { TRAM } from "./storefrontSim.js";
 import { STORE_FIXTURES, UNIT_SET } from "./storefrontSim.js";
+import { SHELL_OF } from "./shorePlaza.js";   // THE SHORE PLAZA: the old lots' names, TO LET
 import { weekdayOf } from "./sim.js";
 import { clockAt } from "./simApi.js";
 import { faceBrand, brandReady, brandFits } from "./brand.js";   // Irene's real lockup (public/brand)
 import { STOREY } from "./iso.js";
 
-export const STORE_MAT = { shopfront: "#7a6a58", pizzawall: "#e8e0d0", brewbrick: "#6a2a2a" };
-export const STORE_ROOF = { shopfront: "#4a4440", pizzawall: "#8a3030", brewbrick: "#3a2424" };
+export const STORE_MAT = { shopfront: "#7a6a58", pizzawall: "#e8e0d0", brewbrick: "#6a2a2a", plazawhite: "#ece6d8" };
+export const STORE_ROOF = { shopfront: "#4a4440", pizzawall: "#8a3030", brewbrick: "#3a2424", plazawhite: "#a9bcbf" };
+// THE SHORE PLAZA's doo-wop palette: cream stucco, aqua rails, a pink stripe, Sam's red and white
+const PLAZA = { aqua: "#14b8a6", aquaLit: "#5eead4", pink: "#f472b6", glass: "#4f8cb0", red: "#b91c1c", cream: "#fef2f2" };
 export const STORE_STYLES_DRAWN = ["storefront", "pizzeria", "brewpub"];
 export const STORE_PROPS_DRAWN = ["skirack", "boardstool", "patiotable", "stringlights", "aboard"];
 const IRENE = { red: "#8c1622", olive: "#a3a028", cream: "#f7f5ec", ink: "#231f20" };
@@ -33,7 +36,8 @@ export function ireneMusic(mt) {
 }
 
 export function storeDeco(X) {
-  const { shade, faceText, neonOn, door, bladeSign, glow } = X;
+  const { shade, faceText, neonOn, door, bladeSign, glow, windowGrid } = X;
+  const hi = (...a) => { let h = 2166136261; for (const c of a.join("|")) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 
   // the window display for a trade, painted in the glass between t0 and t1 (h 0.12 to 0.62)
   function display(K, f, group, t0, t1, seed) {
@@ -82,7 +86,7 @@ export function storeDeco(X) {
       if (v.state === "TO LET") {
         K.G.poly(f.q(0.05, 0.95, 0.06, sb0 - 0.06, 0.01), shade("#cfcac0", f.sh * K.nf));   // whitewash
         K.G.poly(f.q(0.04, 0.96, sb0, sb1, 0.02), shade("#2a2a2a", K.nf));
-        faceText(K, f, 0.5, (sb0 + sb1) / 2, fit(`${v.unit?.name || "UNIT"}`, Math.max(8, Math.floor(f.len * 3.2))), 0.13, K.night ? "#9ca3af" : "#d6d3d1", { d: 0.03 });
+        faceText(K, f, 0.5, (sb0 + sb1) / 2, fit(`${v.unit?.name || (SHELL_OF[p.unit] ? "BOARDWALK EAST" : "UNIT")}`, Math.max(8, Math.floor(f.len * 3.2))), 0.13, K.night ? "#9ca3af" : "#d6d3d1", { d: 0.03 });
         K.G.poly(f.q(0.3, 0.7, 0.24, 0.58, 0.015), "#f8fafc", "rgba(0,0,0,0.4)");
         faceText(K, f, 0.5, 0.45, "TO LET", 0.14, "#b91c1c", { d: 0.02 });
         faceText(K, f, 0.5, 0.33, "APPLY: DISSATISFACTION", 0.06, "#1f2937", { d: 0.02 });
@@ -248,8 +252,139 @@ export function storeDeco(X) {
     }
   }
 
+  // ---- THE SHORE PLAZA (archGeo.js "condo") ------------------------------------------------------
+  // Sam's across the street level, open to the boards; Irene's brewhouse and taproom over it; the
+  // suites behind curved balconies; the name on a blade at the corner and on the roof.
+  function plazaFace(K, p, faces) {
+    const { G, ctx } = K, near = K.lod === "near";
+    const hour = K.env.hour ?? 12, irenesOpen = hour >= 11 || hour < 2;
+    for (const f of faces) {
+      const front = f.s === "s";
+      if (p.win === "plaza-street") {
+        if (!front) {
+          windowGrid(K, f, p, { bay: 1.6, w: 0.6, y0: 0.3, y1: 0.8, glass: "#3f6c80", warm: true });
+          if (f.len > 3 && K.lod !== "far") faceText(K, f, 0.5, 0.95, "SAM'S", 0.24, PLAZA.red, { stroke: PLAZA.cream });
+          continue;
+        }
+        // SAM'S PIZZA PALACE, t 0.02..0.64: the counter open to the boards, the ovens behind
+        const s0 = 0.02, s1 = 0.64;
+        G.poly(f.q(s0, s1, 0.5, 0.92, 0.005), K.night ? "#9a3412" : shade("#2a1810", f.sh));
+        if (K.lod !== "far") {
+          for (let k = 0; k < 4; k++) { const t = s0 + 0.05 + k * 0.15; K.bq("#57534e", f.q(t, t + 0.11, 0.6, 0.9, 0.006)); K.bq(K.night ? "#fb923c" : "#c2410c", f.q(t + 0.015, t + 0.095, 0.66, 0.76, 0.007)); }
+          K.flush();
+        }
+        const tiles = Math.max(6, Math.round(f.len * (s1 - s0) * 3));
+        for (let k = 0; k < tiles; k++) K.bq(shade(k % 2 ? "#f5f5f4" : PLAZA.red, K.nf), f.q(s0 + (s1 - s0) * k / tiles, s0 + (s1 - s0) * (k + 1) / tiles, 0, 0.44, 0.05));
+        K.bq(shade("#d4d4d8", K.nf), f.q(s0, s1, 0.44, 0.5, 0.18));
+        K.flush();
+        if (K.lod !== "far") {
+          const n = Math.max(5, Math.round(f.len * 0.9));
+          for (let k = 0; k < n; k++) { const t = s0 + 0.03 + (s1 - s0 - 0.06) * (k + 0.5) / n, w = 0.22 / n; G.poly([f.F(t - w, 0.51, 0.15), f.F(t + w, 0.51, 0.15), f.F(t, 0.6, 0.12)], shade("#fbbf24", K.nf)); }
+        }
+        // the sign: red and white over the counter, the real logo when Sam's sends it (brand "sams")
+        G.poly(f.q(s0, s1, 0.94, 1.18, 0.04), shade(PLAZA.cream, K.nf), "rgba(0,0,0,0.4)");
+        G.poly(f.q(s0, s1, 0.94, 0.98, 0.045), shade(PLAZA.red, K.nf));
+        if (!faceBrand(K, f, (s0 + s1) / 2, 1.06, "sams", 0.2, { d: 0.05, span: [s0 + 0.02, s1 - 0.02] })) {
+          faceText(K, f, (s0 + s1) / 2, 1.065, "SAM'S PIZZA PALACE", 0.15, PLAZA.red, { d: 0.05, glow: K.night ? "rgba(239,68,68,0.55)" : null });
+        }
+        if (K.night) { const c = f.F((s0 + s1) / 2, 0.7, 0.3); glow(K, c[0], c[1], K.z * 5.5, "rgba(251,146,60,0.4)"); const c2 = f.F((s0 + s1) / 2, 1.06, 0.1); glow(K, c2[0], c2[1], K.z * 3, "rgba(239,68,68,0.16)"); }
+        // the residents' lobby (THE SHORE PLAZA) and Irene's stair door (GOODNIGHT IRENE'S, UPSTAIRS)
+        G.poly(f.q(0.66, 0.84, 0.06, 0.9, 0.01), K.night ? "#f6d58a" : shade(PLAZA.glass, f.sh));
+        door(K, f, 0.75, 0.6, 0.85, "#1a2a34", { lit: true });
+        G.poly(f.q(0.66, 0.84, 0.94, 1.14, 0.03), shade(PLAZA.aqua, K.nf));
+        faceText(K, f, 0.75, 1.04, "SHORE PLAZA", 0.09, "#f0fdfa", { d: 0.035, glow: K.night ? "rgba(94,234,212,0.5)" : null });
+        door(K, f, 0.92, 0.55, 0.88, shade(IRENE.red, K.nf), { lit: true });
+        G.poly(f.q(0.86, 0.98, 0.94, 1.14, 0.03), shade(IRENE.ink, K.nf));
+        faceText(K, f, 0.92, 1.04, "IRENE'S UP", 0.07, IRENE.cream, { d: 0.035 });
+        continue;
+      }
+      if (p.win === "plaza-irenes") {
+        // the brewhouse (1F): tall glass, the copper behind it; the taproom (2F): warm glass, the bar
+        const n = Math.max(3, Math.round(f.len / 1.5));
+        for (let k = 0; k < n; k++) {
+          const t = (k + 0.5) / n, w = 0.38 / n;
+          K.bq(K.night ? "#2a1e14" : shade("#58707a", f.sh), f.q(t - w, t + w, 1.32, 2.0, 0.01));
+          if (K.lod !== "far" && (front || f.len > 3)) {
+            K.bq(shade("#b45309", K.nf * 1.1), f.q(t - w * 0.6, t + w * 0.6, 1.36, 1.92, 0.012));
+            K.bq(shade("#d97706", K.nf * 1.2), f.q(t - w * 0.6, t - w * 0.2, 1.36, 1.92, 0.013));
+            K.bq(shade("#78350f", K.nf), f.q(t - w * 0.7, t + w * 0.7, 1.9, 1.95, 0.014));
+          }
+          K.bq(K.night || irenesOpen ? (K.night ? "#f6c46a" : shade("#c9a46a", f.sh)) : shade("#58707a", f.sh), f.q(t - w, t + w, 2.18, 2.86, 0.01));
+        }
+        K.flush();
+        G.poly(f.q(0, 1, 2.06, 2.12, 0.02), shade(IRENE.olive, f.sh * K.nf));
+        if (!front) { if (f.len > 3 && K.lod !== "far") faceText(K, f, 0.5, 2.5, "BREWPUB", 0.2, IRENE.cream, { stroke: IRENE.ink }); continue; }
+        // the fascia over Sam's: the pub's own lockup on a cream board (or its name in neon)
+        const sp0 = f.F(0.3, 1.27, 0.04), sp1 = f.F(0.7, 1.27, 0.04);
+        if (brandReady() && brandFits("irenes", 0.3 * STOREY * K.z, Math.hypot(sp1[0] - sp0[0], sp1[1] - sp0[1]))) {
+          G.poly(f.q(0.28, 0.72, 1.2, 1.32, 0.03), shade(IRENE.ink, K.nf), "rgba(0,0,0,0.5)");
+          faceBrand(K, f, 0.5, 1.26, "irenes", 0.11, { d: 0.035, span: [0.3, 0.7] });
+        } else {
+          G.poly(f.q(0.18, 0.82, 1.2, 1.32, 0.03), shade(IRENE.ink, K.nf), "rgba(0,0,0,0.5)");
+          faceText(K, f, 0.5, 1.26, "GOODNIGHT IRENE'S BREWERY AND BREWPUB", 0.08, K.night ? "#fca5a5" : IRENE.cream, { d: 0.035, glow: K.night ? "rgba(140,22,34,0.8)" : null });
+        }
+        // string lights along the taproom's sills, a blade at the corner
+        if (K.lod !== "far") for (let k = 0; k < 24; k++) { const c = f.F((k + 0.5) / 24, 2.92 - (k % 3 === 1 ? 0.04 : 0), 0.06); ctx.fillStyle = K.night ? "#fde68a" : "#d6d3d1"; ctx.fillRect(c[0] - 1, c[1] - 1, 2, 2); }
+        bladeSign(K, f, 0.015, 1.3, 2.9, "BREWPUB", "#f87171");
+        if (K.night) { const c = f.F(0.5, 2.5, 0.4); glow(K, c[0], c[1], K.z * 4, "rgba(246,196,106,0.18)"); }
+        continue;
+      }
+      if (p.win === "plaza-suites") {
+        // the doo-wop stripe at every slab, the sliders behind the balconies (lit at night)
+        for (let st = Math.floor(p.h0); st < p.h1 - 0.2; st++) {
+          K.bq(shade("#f8f5ee", f.sh * K.nf), f.q(0, 1, st, st + 0.1, 0.01));
+          const cols = Math.max(2, Math.floor(f.len / 1.3));
+          for (let k = 0; k < cols; k++) {
+            const t = (k + 0.5) / cols, w = 0.34 / cols, lit = hi(K.env.bid, f.i * 31 + st, k) < K.env.lit;
+            K.bq(K.night ? (lit ? "#fcd9a0" : "#12202c") : shade(PLAZA.glass, f.sh), f.q(t - w, t + w, st + 0.2, st + 0.86, 0.005));
+          }
+        }
+        K.flush();
+        if (front && K.lod !== "far") {
+          // the curved balconies: two to a bay, round at the ends, aqua rails
+          const D = 0.42, r = Math.min(0.32, D), rt = r / f.len, bays = Math.max(2, Math.floor(f.len / 2.6));
+          for (let st = Math.floor(p.h0); st < p.h1 - 0.2; st++) for (let k = 0; k < bays; k++) {
+            const t0 = k / bays + 0.012, t1 = (k + 1) / bays - 0.012;
+            const arc = (tc, side) => Array.from({ length: 5 }, (_, i) => { const a = side < 0 ? (i / 4) * Math.PI / 2 : (1 - i / 4) * Math.PI / 2; return f.F(side < 0 ? tc + rt * (1 - Math.cos(a)) : tc - rt * (1 - Math.cos(a)), st + 0.02, D - r + r * Math.sin(a)); });
+            const slab = [f.F(t0, st + 0.02, 0), ...arc(t0, -1), ...arc(t1, 1), f.F(t1, st + 0.02, 0)];
+            G.poly(slab, shade("#f1ece0", 1.1 * K.nf));
+            K.bq(shade(PLAZA.aqua, K.nf), f.q(t0 + rt, t1 - rt, st + 0.04, st + 0.3, D));
+            if (near) K.line(f.F(t0 + rt, st + 0.3, D + 0.01), f.F(t1 - rt, st + 0.3, D + 0.01), K.night ? PLAZA.aquaLit : "#ccfbf1", Math.max(1, K.z * 0.04));
+          }
+          K.flush();
+        }
+        if (front) {
+          // the name: a doo-wop blade at the east corner, pink and aqua neon after dark
+          bladeSign(K, f, 0.975, p.h0 + 0.3, p.h1 - 0.3, "SHORE PLAZA", K.night ? PLAZA.aquaLit : PLAZA.aqua);
+        } else if (f.len > 3 && K.lod !== "far") faceText(K, f, 0.5, p.h1 - 0.5, "SHORE PLAZA", 0.26, PLAZA.aqua, { stroke: "#f0fdfa" });
+        continue;
+      }
+      if (p.win === "plaza-crown") {
+        K.bq(shade(PLAZA.pink, f.sh * K.nf), f.q(0, 1, p.h1 - 0.14, p.h1 - 0.04, 0.01));
+        K.bq(K.night ? "#5eead4" : shade("#cfeefa", f.sh), f.q(0.1, 0.9, p.h0 + 0.12, p.h0 + 0.42, 0.01));
+        K.flush();
+      }
+    }
+  }
+  function plazaRoof(K, p) {
+    if (K.lod === "far") return;
+    const { Q, ctx, G } = K;
+    if (p.pool) { const [a, b, c, d] = p.pool; G.poly([Q(a, b, p.h1 + 0.01), Q(c, b, p.h1 + 0.01), Q(c, d, p.h1 + 0.01), Q(a, d, p.h1 + 0.01)], K.night ? "#0e7490" : "#38bdf8", "rgba(255,255,255,0.7)"); }
+    if (p.umbrellas) for (let k = 0; k < 3; k++) { const x = p.x0 + (k + 0.5) * (p.x1 - p.x0) / 3, y = (p.y0 + p.y1) / 2, [sx, sy] = Q(x, y, p.h1 + 0.45); ctx.fillStyle = [PLAZA.pink, "#f5f5f4", PLAZA.aqua][k]; ctx.beginPath(); ctx.ellipse(sx, sy, K.z * 0.35, K.z * 0.15, 0, 0, Math.PI * 2); ctx.fill(); }
+    if (p.roofSign) {
+      // SHORE PLAZA on the roof's edge over the boards, on two posts
+      const y = p.y1 - 0.3, x0 = p.x0 + 0.5, x1 = p.x0 + 6.2, h0 = p.h1 + 0.2, h1 = p.h1 + 0.85;
+      for (const x of [x0 + 0.5, x1 - 0.5]) K.line(Q(x, y, p.h1), Q(x, y, h0), "#57534e", Math.max(1, K.z * 0.07));
+      const face = { F: (t, h, d = 0) => Q(x0 + (x1 - x0) * t, y + d, h), len: x1 - x0 };
+      G.poly([face.F(0, h1), face.F(1, h1), face.F(1, h0), face.F(0, h0)], K.night ? "#0f172a" : "#f0fdfa", PLAZA.pink);
+      const on = neonOn(K, 1957, 0.02);
+      faceText(K, face, 0.5, (h0 + h1) / 2, "SHORE PLAZA", 0.4, K.night ? `rgba(94,234,212,${on})` : PLAZA.aqua, { glow: K.night ? "rgba(244,114,182,0.55)" : null });
+      if (K.night) { const c = face.F(0.5, (h0 + h1) / 2); glow(K, c[0], c[1], K.z * 4, "rgba(94,234,212,0.14)"); }
+    }
+  }
+
   return {
-    deco: { storefront: { face: unitFace, roof: unitRoof }, pizzeria: { face: pizzaFace, roof: pizzaRoof }, brewpub: { face: ireneFace } },
+    deco: { storefront: { face: unitFace, roof: unitRoof }, pizzeria: { face: pizzaFace, roof: pizzaRoof }, brewpub: { face: ireneFace }, condo: { face: plazaFace, roof: plazaRoof } },
     far: {
       storefront: (K, p, faces) => {
         const v = unitView(p.unit, undefined, K.env.hour);
@@ -257,6 +392,14 @@ export function storeDeco(X) {
       },
       pizzeria: (K, p, faces) => { const f = faces.find(x => x.s === "s"); if (f) K.G.poly(f.q(0.02, 0.98, 1.2, 1.4, 0.01), "#b91c1c"); },
       brewpub: (K, p, faces) => { const f = faces.find(x => x.s === "s"); if (f) K.G.poly(f.q(0.02, 0.98, 1.06, 1.36, 0.01), K.night ? "#f87171" : IRENE.red); },
+      // THE SHORE PLAZA far away: Sam's red band, Irene's warm glass, the aqua rails
+      condo: (K, p, faces) => {
+        const f = faces.find(x => x.s === "s");
+        if (!f) return;
+        if (p.win === "plaza-street") K.G.poly(f.q(0.02, 0.64, 0.94, 1.18, 0.01), "#b91c1c");
+        else if (p.win === "plaza-irenes") K.G.poly(f.q(0.04, 0.96, 2.18, 2.86, 0.01), K.night ? "#f6c46a" : "#8c1622");
+        else if (p.win === "plaza-suites") for (let st = Math.floor(p.h0); st < p.h1 - 0.2; st++) K.G.poly(f.q(0.02, 0.98, st + 0.04, st + 0.24, 0.02), "#14b8a6");
+      },
     },
   };
 }

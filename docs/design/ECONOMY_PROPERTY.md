@@ -87,6 +87,23 @@ Assessed value = BASE x RING x DEMAND (district crowding, mood and vacancy from 
   permit files a BUILD proposal through the existing docket (owner approval -> 3-day session ->
   players decide, the substrate advisory); the 5% permit fee is non-refundable.
 
+### Proprietors on record (before the ladder, 2026-10-06)
+
+GOODNIGHT IRENE'S (THE SHORE PLAZA's brewery and brewpub) is owned by Scott's character, at his
+request. There is no property ladder yet, so ownership is an **operator's record**, the way the
+athletic record is: `scripts/set-proprietor.mjs <case> --business <id>` writes `src/city/proprietors.json`
+(the public census key and the name the site shows: what the city draws) and
+`netlify/lib/proprietors.json` (the case id, server only), and they ship with the code. Only the
+city's own landmark businesses can be put on record (`proprietors.OWNABLE`); SAM'S PIZZA PALACE is a
+real business that lent the city its name and is never anyone's. The city shows **PROPRIETOR: <name>**
+on the landmark card, the cutaway's floor plaques and unit sheets (the business's units are held by
+the proprietor, not THE DEPARTMENT), the building page, and the paper's city section.
+
+**No economic effect yet**: no takings, no CYCLES, no upkeep, no permit. **Fairness rule:** when this
+ladder lands (section 5), every proprietor on record carries over as the owner of that business's
+row, and from then on the same prices, upkeep, permits, Prefects and closure rules apply to it as to
+any other owner: a record is a head start in time, never an exemption.
+
 ## 6. Building customization and uploads
 
 - **Pixel parts catalog** (CYCLES sink, 50-2,000 ¢): facade material, awning, fascia frame, roof

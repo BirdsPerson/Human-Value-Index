@@ -29,7 +29,8 @@ const D = L.LANES_DAY;
   ok(JSON.stringify(SIM.PLACES[L.LANES_ID].rect) === JSON.stringify(SIM.PLACES.arcade.rect), "the lanes stand on the arcade's ground");
   ok(JSON.stringify(b.rect) === JSON.stringify(fx.arcade.building), "the building's lot is unchanged");
   ok(SIM.BUILDINGS.length === fx.buildings && SIM.BUILDINGS.every((x, i) => x.id === fx.buildingIds[i]), "no building added, moved in order or renamed");
-  ok(Object.keys(SIM.PLACES).slice(0, -1).join(",") === fx.placeIds.join(",") && Object.keys(SIM.PLACES).at(-1) === L.LANES_ID, "every place where it was; the lanes last");
+  const ids = Object.keys(SIM.PLACES).filter(id => !SIM.PLACES[id].shell);   // (THE SHORE PLAZA's old lots, appended after: never in a plan)
+  ok(ids.slice(0, -1).join(",") === fx.placeIds.join(",") && ids.at(-1) === L.LANES_ID, "every place where it was; the lanes last");
 }
 
 // ---- the day boundary ---------------------------------------------------------------------------------------

@@ -135,6 +135,8 @@ function paperPattern(c, kind, ink, s) {
 }
 
 const LIT = "#f5d27a";
+// THE SHORE PLAZA's trade rooms keep their lights on after dark (Sam's and Irene's never close)
+const VENUE_LIT = new Set(["pizzeria", "booths", "taproom", "snug", "brewhouse", "cellar"]);
 // An EBTV set that is on shows what is really airing (ebtvFrame.js, the same frame as every TV in
 // the city), or nothing new when the frame is stale (the set's own EBTV card); its box is the tap.
 function ebtvScreen(c, x, y, w, h) {
@@ -176,7 +178,7 @@ function drawRoom(c, room, x, y, w, h, d) {
   const look = d.look, dr = look?.rooms[room.id];
   const furniture = dr ? dr.furniture : room.furniture;
   const awake = d.people.some(p => p.act !== "sleep");
-  const lit = d.night && (awake || d.lamp);
+  const lit = d.night && (awake || d.lamp || VENUE_LIT.has(room.purpose));
   const ft = dr ? Math.max(1, Math.round(2.4 * s)) : 0, ffy = fy - ft;
   if (look) {
     c.fillStyle = look.wall; c.fillRect(x, y, w, h);
@@ -206,6 +208,13 @@ function drawRoom(c, room, x, y, w, h, d) {
     c.fillStyle = d.night ? (lit ? "#ffd27a" : "#0c1630") : "#5f9fae";
     c.fillRect(Math.round(wx), Math.round(wy), Math.round(ww), Math.round(wh));
     if (!d.night) { c.fillStyle = "rgba(255,255,255,0.35)"; c.fillRect(Math.round(wx + 1), Math.round(wy + 1), Math.max(1, Math.round(ww * 0.2)), 1); }
+    // SAM'S (THE SHORE PLAZA): the window on the boards, the sea past the rail, the lights at night
+    if (room.purpose === "pizzeria" || room.purpose === "booths") {
+      c.fillStyle = d.night ? "#0a1a2e" : "#2f7fa8"; c.fillRect(Math.round(wx), Math.round(wy + wh * 0.42), Math.round(ww), Math.round(wh * 0.3));
+      c.fillStyle = d.night ? "#3a2a1a" : "#8a6a46"; c.fillRect(Math.round(wx), Math.round(wy + wh * 0.72), Math.round(ww), Math.round(wh * 0.28));
+      c.fillStyle = "#e5e7eb"; c.fillRect(Math.round(wx), Math.round(wy + wh * 0.66), Math.round(ww), Math.max(1, Math.round(s * 0.5)));
+      if (d.night) for (let k = 0; k < 5; k++) { c.fillStyle = "#fde68a"; c.fillRect(Math.round(wx + (k + 0.5) * ww / 5), Math.round(wy + wh * 0.2), Math.max(1, Math.round(s * 0.6)), Math.max(1, Math.round(s * 0.6))); }
+    }
     c.fillStyle = "rgba(0,0,0,0.35)";
     c.fillRect(Math.round(wx + ww / 2), Math.round(wy), 1, Math.round(wh));
     if (look) {
@@ -510,7 +519,7 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
         c.fillRect(x0, iy, x1 - x0, 15);
         c.fillStyle = fs.plaque; c.fillRect(x0, iy, 2, 15);
         c.font = `700 10px ${FONT}`; c.fillStyle = "#4ade80"; c.textBaseline = "top";
-        fitText(c, `${st.code} // ${st.name} // HELD BY ${st.owner.name}`, x0 + 3, iy + 3, x1 - x0 - 6);
+        fitText(c, `${st.code} // ${st.name} // ${st.owner.label || `HELD BY ${st.owner.name}`}`, x0 + 3, iy + 3, x1 - x0 - 6);
         c.font = `9px ${FONT}`;
         rects.forEach(({ u, x, w }) => {
           const yours = u.id === V.mine;
@@ -629,7 +638,7 @@ function Cutaway({ b, floor, censusRef, onOpen, onFloor }) {
   const curUnit = st ? st.units[Math.min(cur, st.units.length - 1)] : null;
   const unitWord = (u) => (u.kind === "flat" ? `${u.id === mine ? "YOUR FLAT, " : "FLAT "}${u.label}` : u.kind === "suite" ? u.label : u.kind === "lobby" ? "THE LOBBY" : nameplate(u, res));
   const line = st
-    ? <><b>{st.code}</b> // {st.name}. {st.units.filter(u => u.kind === "flat").length ? "TAP A FLAT." : "TAP A ROOM."}{V.kbd && curUnit ? ` ${unitWord(curUnit)}: ${whoIn(curUnit).length} PRESENT.` : ""}</>
+    ? <><b>{st.code}</b> // {st.name}.{st.owner.label ? ` ${st.owner.label}.` : ""} {st.units.filter(u => u.kind === "flat").length ? "TAP A FLAT." : "TAP A ROOM."}{V.kbd && curUnit ? ` ${unitWord(curUnit)}: ${whoIn(curUnit).length} PRESENT.` : ""}</>
     : <>A CROSS-SECTION OF {b.name}. TAP A FLOOR.</>;
   const storeysTD = useMemo(() => plan.storeys.slice().reverse(), [plan]);
   const openU = open ? plan.storeys.flatMap(s => s.units).find(u => u.id === open) : null;
@@ -748,7 +757,7 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord, mine
     <div className="hvi-tw-sheet" role="dialog" aria-modal="false" aria-label={`${title}, ${plan.name}`}>
       <div className="hvi-tw-sheet-in">
         <div className="hvi-tw-sheet-h">
-          <div><b>{title}</b> // {plan.name}<br />{u.kind === "flat" && !mine ? `${nameplate(u, res)} // ` : ""}HELD BY {u.owner.name}{mine ? " // ASSIGNED TO YOU" : ""}</div>
+          <div><b>{title}</b> // {plan.name}<br />{u.kind === "flat" && !mine ? `${nameplate(u, res)} // ` : ""}{u.owner.label || `HELD BY ${u.owner.name}`}{mine ? " // ASSIGNED TO YOU" : ""}</div>
           <button ref={closeRef} type="button" onClick={onClose} aria-label="Close and return to the floors">[ X ]</button>
         </div>
         <canvas ref={ref} aria-hidden="true" onClick={onTap} style={{ height: rowsN * (RH + LBL) }} />

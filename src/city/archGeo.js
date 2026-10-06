@@ -44,7 +44,7 @@ export const STYLES = {
   bunker: { family: "state", name: "BARRACKS" }, prison: { family: "state", name: "PRISON" }, canteen: { family: "industry", name: "CANTEEN" },
   // THE COAST and THE HEIGHTS (2026-09-30): seaside and alpine housing by tier, the base lodge
   shacks: { family: "housing", name: "SURF SHACKS" }, seawall: { family: "housing", name: "SEAWALL ESTATE" }, bungalow: { family: "housing", name: "BEACH BUNGALOWS" },
-  seaview: { family: "housing", name: "SEAVIEW FLATS" }, condo: { family: "housing", name: "OCEANFRONT CONDOMINIUM" },
+  seaview: { family: "housing", name: "SEAVIEW FLATS" }, condo: { family: "housing", name: "BOARDWALK MOTEL OVER THE STOREFRONTS (DOO-WOP, 1957)" },
   bunkhouse: { family: "housing", name: "BUNKHOUSE" }, alpine: { family: "housing", name: "ALPINE FLATS" }, chalet: { family: "housing", name: "CHALETS" },
   lodge: { family: "leisure", name: "SKI LODGE" },
   // open ground: drawn by parkDraw (the fields, the Bowl) or as a lot (the Green, the Street)
@@ -330,14 +330,19 @@ const MASS = {
     ground: [gr("paving", 0.6, 4.6, 11.4, 6.5)],
     yard: [pt("palm", 1.2, 5.6, 0.25), pt("planter", 5.2, 5.6, 0.3), pt("planter", 7.2, 5.6, 0.3), pt("palm", 10.8, 5.6, 0.25)],
   }),
-  // Oceanfront glass: a podium with the pool deck, a slim tower, the penthouse deck.
-  condo: () => ({
+  // THE SHORE PLAZA (shorePlaza.js; the Coast's one "condo", once THE SURFSIDE): after the Wildwood
+  // boardwalk's 1957 doo-wop motel at 26th Avenue. SAM'S PIZZA PALACE across the street level, open to
+  // the boards (the lobby door and Irene's stair door beside it); GOODNIGHT IRENE'S brewhouse and
+  // taproom in the two floors over it, glazed onto the boards; four floors of suites behind curved
+  // balconies; the pool on the roof and the deck house (the helipad's roof, emergence.js PADS).
+  condo: (W) => ({
     rise: 7.6,
-    parts: [box(0.8, 0.8, 12.2, 3.6, 0, 1.5, "glass", { win: "condo", door: "s", pool: [7.8, 1.1, 11.8, 3.3] }),
-      box(1.4, 1.1, 7.2, 3.3, 1.5, 7, "glass", { win: "condo", terrace: true }),
-      box(2.2, 1.5, 6.4, 2.9, 7, 7.6, "glass", { win: "crown", umbrellas: true })],
-    ground: [gr("sand", 0.6, 4.0, 12.4, 6.5)],
-    yard: [pt("doorman", 4.3, 4.2, 0.05), pt("palm", 1.2, 5.5, 0.25), pt("palm", 11.8, 5.5, 0.25), pt("umbrella", 7.2, 5.5, 0.35), pt("umbrella", 9.4, 5.5, 0.35)],
+    parts: [box(0.6, 0.6, 12.4, 5.9, 0, 1.2, "plazawhite", { win: "plaza-street", door: "s" }),
+      box(0.6, 0.6, 12.4, 5.6, 1.2, 3.0, "plazawhite", { win: "plaza-irenes" }),
+      box(0.8, 0.8, 12.2, 5.0, 3.0, 7.0, "plazawhite", { win: "plaza-suites", pool: [7.3, 1.2, 11.8, 4.5], roofSign: true }),
+      box(2.2, 1.5, 6.4, 2.9, 7.0, 7.6, "plazawhite", { win: "plaza-crown", umbrellas: true })],
+    ground: [gr("boards", 0, 5.9, W, 7)],
+    yard: [0, 1, 2, 3].map(i => pt("boardstool", 1.3 + i * 1.3, 6.3, 0.12)).concat([pt("palm", 12.2, 6.2, 0.2)]),
   }),
 
   // ---- THE HEIGHTS ----

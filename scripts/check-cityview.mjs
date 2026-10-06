@@ -112,7 +112,8 @@ ok(roomPlan("bar", 300, 50, 32).anchors.some(a => a.role === "staff" && a.act ==
 // 7. Capacity: in the building view (one row per floor, 1440 wide) every room has exactly one
 //    place for each of its floor's share of capacity: a full room looks full. (District tiles show a whole place in one box and
 //    badge the rest: +K.) HQ is not shown.
-for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (const pid of f.places) {
+// (THE SHORE PLAZA: a tower opens as its cutaway, tower.js, never as this view)
+for (const b of BUILDINGS) if (b.id !== "hq" && b.id !== "the-surfside") for (const f of b.floors) for (const pid of f.places) {
   const per = Math.round(PLACES[pid].cap / PLACES[pid].floors.length);
   const w = (980 - 46) / f.places.length - 18;
   const n = roomPlan(typeOf(pid), w, 120, 32, per).anchors.length;
@@ -210,7 +211,8 @@ for (const b of BUILDINGS) if (b.id !== "hq") for (const f of b.floors) for (con
     const w = SIM.whereAt(sub, T0 + m / 60);
     if (w.activity !== "commute" || w.sub !== "walking") continue;
     n++;
-    const own = new Set([SIM.PLACES[w.placeId]?.building, SIM.PLACES[w.fromPlaceId]?.building]);
+    const dayNow = Math.floor((T0 + m / 60) / 24) + 1;   // (THE SHORE PLAZA: Sam's and Irene's stood on their old lots before PLAZA_DAY)
+    const own = new Set([SIM.placedAt(w.placeId, dayNow)?.building, SIM.placedAt(w.fromPlaceId, dayNow)?.building, SIM.PLACES[w.placeId]?.building, SIM.PLACES[w.fromPlaceId]?.building]);
     const hit = solid.find(o => !own.has(o.id) && w.x > o.x0 && w.x < o.x1 && w.y > o.y0 && w.y < o.y1);
     if (hit) { bad++; if (!eg) eg = `${SIM.keyOf(sub)} ${w.fromPlaceId}->${w.placeId} inside ${hit.id}`; }
   }

@@ -16,7 +16,7 @@ console.log("== buildings");
 ok(BUILDINGS.length >= DISTRICTS.length, `at least one building per district (${BUILDINGS.length})`);
 for (const d of DISTRICTS) ok(BUILDINGS.some(b => b.districtId === d.id), `district ${d.id} has a building`);
 for (const b of BUILDINGS) {
-  ok(b.floors.length >= 1 && b.floors.length <= 6, `${b.id} has 1-6 floors (${b.floors.length})`);
+  ok(b.floors.length >= 1 && b.floors.length <= (b.id === "the-surfside" ? 8 : 6), `${b.id} has 1-6 floors (${b.floors.length}; the Shore Plaza 8)`);
   ok(b.rect.w > 0 && b.rect.h > 0, `${b.id} has a footprint`);
   const d = DISTRICTS.find(x => x.id === b.districtId).rect;
   ok(b.rect.x >= d.x - 0.01 && b.rect.y >= d.y - 0.01 && b.rect.x + b.rect.w <= d.x + d.w + 0.01 && b.rect.y + b.rect.h <= d.y + d.h + 0.01, `${b.id} sits inside ${b.districtId}`);

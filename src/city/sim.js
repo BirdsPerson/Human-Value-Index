@@ -9,7 +9,7 @@
 import { TIERS, getTier, slugify } from "../figures.js";
 import { FLOORS as HQ_FLOORS } from "../building.js";
 import { FUNNEL_PLACES, FUNNEL_BUILDINGS, FUNNEL_ARCH, FUNNEL_JOBS, FUNNEL_LEISURE_BAND, FUNNEL_LEISURE_FIELD, FUNNEL_FAMILY } from "./funnelSim.js";
-import { STORE_PLACES, STORE_BUILDINGS, STORE_ARCH, STORE_JOBS, STORE_LEISURE_BAND, STORE_LEISURE_FIELD, STORE_FAMILY, STORE_FIXTURES, UNIT_SET } from "./storefrontSim.js";   // THE MALL (enterprise.js)
+import { STORE_PLACES, STORE_BUILDINGS, STORE_ARCH, STORE_JOBS, STORE_LEISURE_BAND, STORE_LEISURE_FIELD, STORE_FAMILY, STORE_FIXTURES, UNIT_SET, SAMS_LOT, IRENES_LOT } from "./storefrontSim.js";   // THE MALL (enterprise.js)
 import { VENUE_PLACES, VENUE_BUILDINGS, VENUE_ARCH, VENUE_JOBS, VENUE_LEISURE_BAND, VENUE_LEISURE_FIELD, VENUE_FAMILY, VENUE_FIELD_HINTS, VENUE_FIELD_RULES, VENUE_OPEN_LOTS, VENUE_FIXTURES } from "./venueSim.js";
 // PHASE 2 step 5 (farmSim.js): THE FARMLAND and THE ENGINE
 import { STEP5_DISTRICTS, STEP5_PLACES, STEP5_BUILDINGS, STEP5_OPEN_LOTS, STEP5_ARCH, STEP5_HOUSING, STEP5_JOBS, STEP5_LEISURE_BAND, STEP5_LEISURE_FIELD, STEP5_FAMILY, FARM_HOMES, ENGINE_HOMES } from "./farmSim.js";
@@ -18,7 +18,8 @@ import { EAST_DISTRICTS, EAST_PLACES, EAST_BUILDINGS, EAST_OPEN_LOTS, EAST_ARCH,
 import { MOUNTAIN_PLACES, MOUNTAIN_BUILDINGS, MOUNTAIN_ARCH, MOUNTAIN_JOBS, MOUNTAIN_LEISURE_BAND, MOUNTAIN_LEISURE_FIELD, MOUNTAIN_FAMILY, MOUNTAIN_FIXTURES, MOUNTAIN_OPEN_LOTS, MOUNTAIN_SPOTS } from "./mountainSim.js";   // THE MOUNTAIN (mountainGeo.js)
 import { shuttle, lineTrainState, lineNextArrival, lineRide } from "./lines.js";
 import { RIVER_DAY, RIVER_LAYOUT, RIVER_BLOCKS } from "./river.js";
-import { LANES_DAY, LANES_PLACE, LANES_BUILDING, LANES_FLOOR, SHARED_RECT, LANES_JOBS, LANES_STAFF, LANES_PULL, LEAGUE_DAYS, lanesHours } from "./lanes.js";   // THE LANES: upstairs at the Arcade from LANES_DAY   // THE ATTRITION: the river's ground from its day (layout 7)
+import { LANES_DAY, LANES_PLACE, LANES_BUILDING, LANES_FLOOR, SHARED_RECT as LANES_SHARED, LANES_JOBS, LANES_STAFF, LANES_PULL, LEAGUE_DAYS, lanesHours } from "./lanes.js";
+import { PLAZA_DAY, PLAZA_NAME, PLAZA_FLOORS, PLAZA_SHARED, PLAZA_SHELLS, PLAZA_MOVES, PLAZA_JOBS, PLAZA_STAFF, SAMS, IRENES } from "./shorePlaza.js";   // THE SHORE PLAZA: Sam's and Irene's in the Surfside's tower from PLAZA_DAY   // THE LANES: upstairs at the Arcade from LANES_DAY   // THE ATTRITION: the river's ground from its day (layout 7)
 // THE NIGHTLIFE QUARTERS (nightlifeSim.js): UPTOWN and DOWNTOWN, their venues, hours, the rope, the lineups
 import { NIGHT_DISTRICTS, NIGHT_PLACES, NIGHT_BUILDINGS, NIGHT_ARCH, NIGHT_JOBS, NIGHT_LEISURE_BAND, NIGHT_LEISURE_FIELD, NIGHT_FAMILY, NIGHT_FIELD_RULES, NIGHT_FIXTURES, NIGHT_SET, HOURS as NIGHT_HOURS, openAt as nightOpenAt, openThrough as nightOpenThrough, closeFor as nightCloseFor, NIGHT_OUT_P, ropeCheck, ROPE_PLACES, gigOf } from "./nightlifeSim.js";
 
@@ -217,7 +218,7 @@ const PLACE_LIST = [
   P("pier", "coast", "mixed", 20, "THE PIER (FISHING BY PERMIT)", ["pier", "harbor", "lighthouse"]),
   P("surf", "coast", "mixed", 16, "THE BREAK (SURF, MONITORED)", ["surf", "ocean"]),
   P("shore-lot", "coast", "leisure", 30, "PARCEL 0xAD06 (RESORT, PENDING)"),
-  P("surfside", "coast", "home", 96, "THE SURFSIDE (OCEANFRONT CONDOMINIUMS)"),
+  P("surfside", "coast", "home", 96, "THE SHORE PLAZA (OCEANFRONT SUITES)"),
   P("bungalows", "coast", "home", 80, "BUNGALOW ROW"),
   P("seaview", "coast", "home", 200, "SEAVIEW FLATS"),
   P("shacks", "coast", "home", 40, "THE SURF SHACKS (RENT BY THE TIDE)"),
@@ -285,6 +286,8 @@ PLACE_LIST.push(...STEP5_PLACES.map(a => P(...a)));
 // THE LANES (lanes.js): last of all, and only in the plans of the days it is open (buildPlan), so every
 // published day's place list and indices are what they were.
 PLACE_LIST.push({ ...P(...LANES_PLACE), from: LANES_DAY });
+// THE SHORE PLAZA's old boardwalk lots, TO LET (shorePlaza.js): after the lanes, never in a plan.
+PLACE_LIST.push(...PLAZA_SHELLS.map(a => ({ ...P(...a, []), from: Infinity, shell: true })));
 for (const p of PLACE_LIST) DISTRICT[p.district].places.push(p.id);
 
 export const PLACES = Object.fromEntries(PLACE_LIST.map(p => [p.id, p]));
@@ -295,6 +298,9 @@ export const MOVED_FROM = { foundry: "works", reclamation: "works", "cache-farm"
 const legacyDistrict = (id) => MOVED_FROM[id] || PLACES[id].district;
 // Engine tendency ("dive bar") -> place id.
 export const ENGINE_PLACE = Object.fromEntries(PLACE_LIST.flatMap(p => p.engine.map(e => [e, p.id])));
+
+// places that stand on another's ground (THE LANES over the arcade, Sam's and Irene's in the Plaza)
+const SHARED_RECT = { ...LANES_SHARED, ...PLAZA_SHARED };
 
 // ---- buildings --------------------------------------------------------------------
 // The hierarchy is city -> district -> building -> floor -> room, and a room is a PLACE.
@@ -383,7 +389,8 @@ const BUILDING_LIST = [
   B("the-seawall", "THE SEAWALL ESTATE", "coast", [6, 5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "GROUND-LEVEL UNITS (DAMP)" : `UNIT LEVEL ${n - 1}`, ["seawall"]]), { x: 13.5, y: coastY(68.5), w: 12, h: 7 }),
   B("bungalow-row", "BUNGALOW ROW", "coast", [["1F", "UPSTAIRS (SEA VIEW, PARTIAL)", ["bungalows"]], ["G", "VERANDAS", ["bungalows"]]], { x: 26, y: coastY(68.5), w: 12, h: 7 }),
   B("seaview-flats", "SEAVIEW FLATS", "coast", [5, 4, 3, 2, 1].map(n => [n === 1 ? "G" : `${n - 1}F`, n === 1 ? "GROUND FLOOR (SAND IN THE HALL)" : `FLATS LEVEL ${n - 1}`, ["seaview"]]), { x: 38.5, y: coastY(68.5), w: 12, h: 7 }),
-  B("the-surfside", "THE SURFSIDE", "coast", [["PH", "PENTHOUSE DECK (SUNSET, SCHEDULED)", ["surfside"]], ...[4, 3, 2, 1].map(n => [`${n}F`, `OCEANFRONT LEVEL ${n}`, ["surfside"]]), ["G", "LOBBY (SAND REMOVED AT THE DOOR)", ["surfside"]]], { x: 58.5, y: coastY(68.5), w: 13, h: 7 }),
+  // THE SHORE PLAZA (shorePlaza.js; the id kept from THE SURFSIDE): Sam's at street level, Irene's over it
+  B("the-surfside", PLAZA_NAME, "coast", PLAZA_FLOORS, { x: 58.5, y: coastY(68.5), w: 13, h: 7 }),
   B("lot-shore", "PARCEL 0xAD06", "coast", [["G", "THE PARCEL (PENDING SESSION 002)", ["shore-lot"]]], { x: 72.5, y: coastY(68.5), w: 35.5, h: 11 }),
   B("the-boardwalk", "THE BOARDWALK", "coast", [["G", "THE PLANKS (VENDORS LICENSED)", ["boardwalk"]]], { x: 1, y: coastY(76), w: 70.5, h: 3 }),
   B("the-beach", "THE BEACH", "coast", [["1F", "THE SHALLOWS (SWIMMING, SUPERVISED)", ["beach"]], ["G", "THE SAND (TOWELS REGISTERED)", ["beach"]]], { x: 1, y: coastY(79.5), w: 62, h: 6.5 }),
@@ -552,6 +559,28 @@ for (const b of BUILDINGS) {
 }
 // Capacity per floor: a place that fills n floors puts a 1/n share of its room on each.
 for (const b of BUILDINGS) for (const f of b.floors) f.cap = Math.round(f.places.reduce((n, pid) => n + PLACES[pid].cap / PLACES[pid].floors.length, 0));
+// THE SHORE PLAZA (shorePlaza.js): where Sam's and Irene's stand depends on the day. From PLAZA_DAY in
+// the Plaza (what the catalog above says); before it on their old boardwalk lots, in their old
+// buildings, on their old floors (as the frontage layout put them: the lot, its centre, G and 1F), so
+// a day before the move is laid out exactly as the code before laid it out. PLACES holds one of the
+// two at a time: placedOn(day) swaps them (onGround, whereAt), and every route memo that walks to or
+// from them names which (GRK).
+const lotOf = (r) => ({ rect: { ...r }, pos: { x: r.x + r.w / 2, y: r.y + r.h / 2 } });
+const PLACED = {
+  new: Object.fromEntries(PLAZA_MOVES.map(id => [id, { rect: PLACES[id].rect, pos: PLACES[id].pos, building: PLACES[id].building, floors: PLACES[id].floors }])),
+  old: { [SAMS]: { ...lotOf(SAMS_LOT), building: SAMS, floors: [0] }, [IRENES]: { ...lotOf(IRENES_LOT), building: IRENES, floors: [0, 1] } },
+};
+export const PLAZA_MOVED = new Set(PLAZA_MOVES);
+let PLACED_NEW = true;
+export const plazaOn = (day) => day >= PLAZA_DAY;
+function placedOn(day) {
+  const want = plazaOn(day);
+  if (want === PLACED_NEW) return;
+  for (const id of PLAZA_MOVES) Object.assign(PLACES[id], want ? PLACED.new[id] : PLACED.old[id]);
+  PLACED_NEW = want;
+}
+// The building and floor a moved place stood in on a day (the Plaza's, or its old lot's).
+export const placedAt = (id, day) => (PLAZA_MOVED.has(id) ? (plazaOn(day) ? PLACED.new[id] : PLACED.old[id]) : PLACES[id]);
 // Which of its place's floors a subject keeps. Stable for the whole stay.
 export function floorOf(placeId, key, seed = SEED) {
   const fl = PLACES[placeId]?.floors;
@@ -689,6 +718,8 @@ export const JOB = Object.fromEntries(JOBS.map(j => [j.id, j]));
 // THE LANES' jobs: in JOB (so a day's work can name them) but not in JOBS (assignment is unchanged);
 // who works them, from LANES_DAY, is workOf's (below).
 export const LANES_JOB = Object.fromEntries(LANES_JOBS.map(a => { const j = J(...a); JOB[j.id] = j; return [j.id, j]; }));
+// THE SHORE PLAZA's brewery staff (shorePlaza.js), the same way: in JOB, not in JOBS, from PLAZA_DAY.
+export const PLAZA_JOB = Object.fromEntries(PLAZA_JOBS.map(a => { const j = J(...a); JOB[j.id] = j; return [j.id, j]; }));
 
 // ---- subject reading --------------------------------------------------------------
 export const TIER_ORDER = TIERS.map(t => t.label);   // 0 = ESSENTIAL ... 5 = SOYLENT GREEN
@@ -1361,6 +1392,8 @@ function workOf(s, day, seed) {
   const job = JOB[assignJob(s, seed).jobId];
   // THE LANES (from LANES_DAY): some of the Strip's service staff and the Works' fabricators move upstairs
   if (day >= LANES_DAY && job) for (const st of LANES_STAFF) if (st.from.includes(job.id) && h01(`${seed}|lanes-staff|${keyOf(s)}`) < st.p) return LANES_JOB[st.job];
+  // THE SHORE PLAZA (from PLAZA_DAY): Irene's brewery takes a head brewer, cellar hands and servers
+  if (day >= PLAZA_DAY && job) for (const st of PLAZA_STAFF) if (st.from.includes(job.id) && h01(`${seed}|plaza-staff|${keyOf(s)}`) < st.p) return PLAZA_JOB[st.job];
   return job;
 }
 export function clearSocialSnapshots() { if (SOCIAL.size) { SOCIAL.clear(); memo.clear(); } }
@@ -1553,11 +1586,18 @@ for (const [k, id] of STEP5_FAMILY) FAMILY[k].push(id);
 const dist2 = (a, b) => (PLACES[a].pos.x - PLACES[b].pos.x) ** 2 + (PLACES[a].pos.y - PLACES[b].pos.y) ** 2;
 // (a storefront unit takes visitors only while a business trades in it: enterprise.js, below)
 const LEISURE_ROOMS = Object.values(PLACES).filter(p => (p.kind === "leisure" || p.kind === "mixed") && !UNIT_SET.has(p.id) && !p.from).map(p => p.id);
-export const OVERFLOW = Object.fromEntries(Object.keys(PLACES).map(id => {
+const overflowNow = () => Object.fromEntries(Object.keys(PLACES).map(id => {
   const fam = (FAMILY.find(f => f.includes(id)) || []).filter(q => q !== id).sort((a, b) => dist2(id, a) - dist2(id, b));
   const rest = LEISURE_ROOMS.filter(q => q !== id && !fam.includes(q)).sort((a, b) => dist2(id, a) - dist2(id, b));
   return [id, [...fam, ...rest]];
 }));
+// nearest first, so it depends on where Sam's and Irene's stand (THE SHORE PLAZA): one for each side
+// of PLAZA_DAY
+placedOn(PLAZA_DAY - 1);
+const OVERFLOW_PRE_PLAZA = overflowNow();
+placedOn(PLAZA_DAY);
+export const OVERFLOW = overflowNow();
+const overflowOn = (day) => (plazaOn(day) ? OVERFLOW : OVERFLOW_PRE_PLAZA);
 
 let ROSTER_KEYS = null, ROSTER_ORDER = [], ROSTER_VER = "-";
 export function setRoster(list) {
@@ -1602,7 +1642,7 @@ function allocFor(day, seed) {
             let p = st.placeId;
             if (!fits(p, a, b)) {
               // (a club is no overflow at noon; the rope and the mezzanine are not an overflow for whoever the door turns away)
-              const chain = (OVERFLOW[p] || []).filter(q => parcelOpen(q, day) && nightOpenThrough(q, st.from - NIGHT_EARLY, st.to) && (!ROPE_PLACES.has(q) || (q === "aurum-vip" ? bandOf(s) === 0 : ropeOf(s, day, seed) !== "REFUSED")));
+              const chain = (overflowOn(day)[p] || []).filter(q => parcelOpen(q, day) && nightOpenThrough(q, st.from - NIGHT_EARLY, st.to) && (!ROPE_PLACES.has(q) || (q === "aurum-vip" ? bandOf(s) === 0 : ropeOf(s, day, seed) !== "REFUSED")));
               p = chain.find(q => fits(q, a, b)) || [p, ...chain].reduce((best, q) => (peakOf(q, a, b) < peakOf(best, a, b) ? q : best), p);
               if (p !== st.placeId) moved.set(`${key}|${st.i}`, p);
             }
@@ -2072,11 +2112,14 @@ export const WALK_BLOCK = { hq: { x: 50.9, y: 27.6, w: 7.2, h: 3.8 } };
 let GROUND = 0;
 export const groundOn = (day) => (day >= RIVER_DAY ? 1 : 0);
 export function onGround(day, fn) {
-  const was = GROUND;
+  const was = GROUND, wasPlaced = PLACED_NEW;
   GROUND = groundOn(day);
-  try { return fn(); } finally { GROUND = was; }
+  placedOn(day);   // THE SHORE PLAZA: Sam's and Irene's where they stood that day
+  try { return fn(); } finally { GROUND = was; placedOn(wasPlaced ? PLAZA_DAY : PLAZA_DAY - 1); }
 }
 const GR = () => (GROUND ? "R" : "");
+// a route to or from Sam's or Irene's in the Plaza is not the same walk as to their old lots
+const GRK = (from, to) => GR() + (PLACED_NEW && (PLAZA_MOVED.has(from) || PLAZA_MOVED.has(to)) ? "P" : "");
 const FOOT_BLOCKS = BUILDINGS.filter(b => !OPEN_LOTS.has(b.id)).map(b => { const r = WALK_BLOCK[b.id]; return r ? { id: b.id, x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h } : { id: b.id, x0: b.rect.x + KERB, y0: b.rect.y + KERB, x1: b.rect.x + b.rect.w - KERB, y1: b.rect.y + b.rect.h - KERB }; });
 function makeFoot(blocks) {
   const inside = (p) => blocks.some(o => p.x > o.x0 && p.x < o.x1 && p.y > o.y0 && p.y < o.y1);
@@ -2202,7 +2245,7 @@ function route(from, to, key, seed, net = NET) {
   if (net >= 3 && PLACES[from].district !== PLACES[to].district && (net >= 6 || !(LOOP_SET.has(PLACES[from].district) && LOOP_SET.has(PLACES[to].district)))) return railRoute(from, to, key, seed);
   // a trip published before a place moved district is laid out from its old one (MOVED_FROM)
   const moved = net === 2 && (MOVED_FROM[from] || MOVED_FROM[to]);
-  return remember(`${GR()}${moved ? "rtm" : "rt"}|${seed}|${key}|${from}|${to}`, () => {
+  return remember(`${GRK(from, to)}${moved ? "rtm" : "rt"}|${seed}|${key}|${from}|${to}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
     const dA = moved ? legacyDistrict(from) : PLACES[from].district, dB = moved ? legacyDistrict(to) : PLACES[to].district, hA = hubOf(dA), hB = hubOf(dB);
     if (dA === dB) {
@@ -2294,7 +2337,7 @@ const RAIL_GRAPH = () => remember(`rg|${NET}`, () => {
   return { stations, from };
 });
 function railRoute(from, to, key, seed) {
-  return remember(`${GR()}rt3|${seed}|${key}|${from}|${to}`, () => {
+  return remember(`${GRK(from, to)}rt3|${seed}|${key}|${from}|${to}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
     const dA = PLACES[from].district, dB = PLACES[to].district;
     const { stations, from: G } = RAIL_GRAPH();
@@ -2328,7 +2371,7 @@ function railRoute(from, to, key, seed) {
 const lineRideOf = (line, a, b) => (line === LOOP ? rideHours(line.stops[a].id, line.stops[b].id) : lineRide(line, a, b));
 // All the way on foot (network 3, across a district line).
 function directRoute(from, to, key, seed) {
-  return remember(`${GR()}dr|${seed}|${key}|${from}|${to}`, () => {
+  return remember(`${GRK(from, to)}dr|${seed}|${key}|${from}|${to}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
     const leg = walkLeg(A, B, PLACES[from].district, ownBlocks(from, to));
     leg.dur = Math.max(leg.dur, 0.12);
@@ -2341,7 +2384,7 @@ function directRoute(from, to, key, seed) {
 // is laid out per trip (railTrip).
 function railLegs(from, to, key, seed, rides) {
   const sig = rides.map(r => `${r.line}.${r.a}.${r.b}`).join(",");
-  return remember(`${GR()}rl|${seed}|${key}|${from}|${to}|${sig}`, () => {
+  return remember(`${GRK(from, to)}rl|${seed}|${key}|${from}|${to}|${sig}`, () => {
     const A = spotIn(from, key, seed), B = spotIn(to, key, seed);
     const dA = PLACES[from].district, dB = PLACES[to].district;
     const stop = (i, e) => LINES[rides[i].line].stops[rides[i][e]];
@@ -2873,12 +2916,14 @@ export function whereAt(s, machineTime, seed = SEED) {
   let g = segs[segs.length - 1];
   for (const x of segs) if (h >= x.from && h < x.to) { g = x; break; }
   // a trip is walked on the ground of the day it set out on (a tail from yesterday on yesterday's)
-  if (g.activity === "commute") { const gd = g.span && g.span[0] < 0 ? d0 : d0 + 1; if (groundOn(gd) !== GROUND) return onGround(gd, () => whereAt(s, machineTime, seed)); }
+  if (g.activity === "commute") { const gd = g.span && g.span[0] < 0 ? d0 : d0 + 1; if (groundOn(gd) !== GROUND || plazaOn(gd) !== PLACED_NEW) return onGround(gd, () => whereAt(s, machineTime, seed)); }
   const key = keyOf(s);
   const [a, b] = g.span || [g.from, g.to];
   const progress = clamp((h - a) / Math.max(1e-9, b - a), 0, 1);
   if (g.activity !== "commute") {
-    const p = spotIn(g.placeId, key, seed), pl = PLACES[g.placeId];
+    // a stay at Sam's or Irene's before PLAZA_DAY stands on their old lot (the plan's walks end there);
+    // the building and floor are the Plaza's, as the city is drawn (THE SHORE PLAZA)
+    const p = PLAZA_MOVED.has(g.placeId) && plazaOn(d0 + 1) !== PLACED_NEW ? onGround(d0 + 1, () => spotIn(g.placeId, key, seed)) : spotIn(g.placeId, key, seed), pl = PLACES[g.placeId];
     const floor = floorOf(g.placeId, key, seed);
     const out = { placeId: g.placeId, districtId: pl.district, activity: g.activity, progress, x: p.x, y: p.y, buildingId: pl.building, floor, floorId: BUILDING[pl.building].floors[floor].id };
     if (g.haunt) out.haunt = true;

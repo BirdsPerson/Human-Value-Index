@@ -8,12 +8,15 @@
 //   brewpub       GOODNIGHT IRENE'S: the long bar and its taps, the brewhouse's tanks, the tables,
 //                 the stage corner (the band on music nights; the crowd cheers)
 import { UNIT_SET } from "./storefrontSim.js";
+import { PLAZA_SHELLS } from "./shorePlaza.js";
 import { unitView } from "./enterpriseClient.js";
 import { drawBrand } from "./brand.js";   // Goodnight Irene's real lockup over the bar
 
 export const STORE_ROOM_TYPE = {
   ...Object.fromEntries([...UNIT_SET].map(id => [id, "shopfront"])),
   "sams-pizza": "pizzeria", "goodnight-irenes": "brewpub",
+  // THE SHORE PLAZA's old boardwalk lots, TO LET (shorePlaza.js)
+  ...Object.fromEntries(PLAZA_SHELLS.map(([id]) => [id, "shopfront"])),
 };
 const GROUPS = ["boards", "gear", "gym", "food", "records", "stage", "art", "books", "clothes", "tools", "bottles", "goods"];
 export const STORE_LOOK = {

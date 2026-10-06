@@ -10,6 +10,8 @@ import { UNITS, SHOP_TYPES, LOW_SAT, STREAK_DAYS, LOSS_DAYS, MAX_OPEN } from "./
 import { enterpriseOf, bizById, unitView, roleOf, satisfactionLine } from "./enterpriseClient.js";
 import { UNIT_IDS } from "./storefrontSim.js";
 import { ireneMusic } from "./storefrontDraw.js";
+import { proprietorOf } from "./proprietors.js";   // GOODNIGHT IRENE'S: its proprietor on record
+import { PLAZA_ID, PLAZA_DAY } from "./shorePlaza.js";
 import { injectPrefectStyles } from "./PrefectPanel.jsx";   // the register's rows are the prefects' rows
 
 // Open a card from anywhere: {unit} | {id} (a licence) | {landmark: "sams-pizza" | "goodnight-irenes"}
@@ -19,7 +21,8 @@ export function openBusiness(spec) {
 // The toolbar's buttons for a building (CityIso): a storefront's business, a landmark's card.
 export function storeButtons(buildingId) {
   if (UNITS[buildingId]) return [{ label: "BUSINESS", aria: "Open the business file for this storefront", spec: { unit: buildingId } }];
-  if (LANDMARKS[buildingId]) return [{ label: "LANDMARK", aria: `Open the landmark file: ${LANDMARKS[buildingId].name}`, spec: { landmark: buildingId } }];
+  // THE SHORE PLAZA holds both landmarks: Sam's at the street, Irene's upstairs
+  if (buildingId === PLAZA_ID) return [{ label: "SAM'S", aria: "Open the landmark file: SAM'S PIZZA PALACE", spec: { landmark: "sams-pizza" } }, { label: "IRENE'S", aria: "Open the landmark file: GOODNIGHT IRENE'S", spec: { landmark: "goodnight-irenes" } }];
   return [];
 }
 
@@ -38,15 +41,15 @@ export function useEnterprise() {
 
 const LANDMARKS = {
   "sams-pizza": {
-    name: "SAM'S PIZZA", where: "THE HEAD OF THE EAST BOARDWALK, THE COAST",
-    lines: ["A BOARDWALK PIZZA COUNTER, OPEN TO THE BOARDS. A LANDMARK. NOT OWNED BY ANY SUBJECT. NOT FOR SALE. IT NEVER CLOSES.",
-      "AN AFFECTIONATE HOMAGE TO THE WILDWOOD BOARDWALK INSTITUTION. THE DEPARTMENT ASSESSES EVERYTHING IN THE SUBSTRATE EXCEPT THIS COUNTER.",
+    name: "SAM'S PIZZA PALACE", where: "THE SHORE PLAZA, STREET LEVEL, ON THE BOARDS, THE COAST",
+    lines: ["A BOARDWALK PIZZA COUNTER, OPEN TO THE BOARDS, AT THE FOOT OF THE SHORE PLAZA, AS THE REAL ONE IS. A LANDMARK. NOT OWNED BY ANY SUBJECT. NOT FOR SALE. IT NEVER CLOSES.",
+      "AFTER THE WILDWOOD BOARDWALK INSTITUTION (SINCE 1957), WHICH LENT THE CITY ITS NAME. THE DEPARTMENT ASSESSES EVERYTHING IN THE SUBSTRATE EXCEPT THIS COUNTER.",
       "STAFFED BY ITS REGULARS: THE COUNTER HANDS ARE DRAFTED FROM THE LABOUR POOL, A FEW AT A TIME. THE QUEUE FORMS ON ITS OWN."],
     hours: "WHENEVER THE BOARDWALK IS OUT", sound: "WATCH THE TRAM CAR, PLEASE.",
   },
   "goodnight-irenes": {
-    name: "GOODNIGHT IRENE'S", where: "THE CORNER AT THE EAST END OF THE ROW, THE COAST",
-    lines: ["A BREWPUB ON THE CORNER: THE LONG BAR DOWNSTAIRS, THE BREWHOUSE'S TANKS UPSTAIRS, THE PATIO ON THE BOARDS. A LANDMARK. NEVER CLOSES.",
+    name: "GOODNIGHT IRENE'S", where: "THE SHORE PLAZA, THE TWO FLOORS OVER SAM'S, THE COAST",
+    lines: ["A BREWERY AND BREWPUB: THE BREWHOUSE ON THE FIRST FLOOR (MASH TUN, KETTLE, FERMENTERS, BRIGHT TANKS, THE MALT, THE KEGS), THE TAPROOM OVER IT (THE BAR, THE TAPS, THE BRICK OVEN, THE STAGE). A LANDMARK. NEVER CLOSES.",
       "AN AFFECTIONATE HOMAGE TO THE WILDWOOD BREWPUB. THE DEPARTMENT DOES NOT ASSESS THE TAPS. IT HAS TRIED.",
       "OPEN EVENINGS, LATE. LIVE MUSIC IN THE CORNER ON THURSDAY, FRIDAY AND SATURDAY NIGHTS (MACHINE CALENDAR)."],
     hours: "EVENINGS, LATE", sound: null,
@@ -87,9 +90,11 @@ export function BusinessCard({ spec, onClose }) {
     const music = spec.landmark === "goodnight-irenes" && ireneMusic(mt);
     body = <>
       {lm.lines.map(l => <div key={l} className="hvi-civic-line">{l}</div>)}
-      <div className="hvi-civic-kv" style={{ margin: "var(--s3) 0", gridTemplateColumns: "10ch minmax(0, 1fr)" }}>
+      <div className="hvi-civic-kv" style={{ margin: "var(--s3) 0", gridTemplateColumns: "12ch minmax(0, 1fr)" }}>
         <span className="k">HOURS</span><span className="v">{lm.hours}</span>
         <span className="k">STATUS</span><span className="v"><b>OPEN.</b> A LANDMARK DOES NOT CLOSE.{music ? " LIVE MUSIC TONIGHT. THE CROWD IS CHEERING. THE CHEERING IS LOGGED." : ""}</span>
+        {proprietorOf(spec.landmark) && <><span className="k">PROPRIETOR</span><span className="v"><a href={findHref(proprietorOf(spec.landmark).id)} onClick={onClose}>{proprietorOf(spec.landmark).name}</a>. ON RECORD. NO TAKINGS ARE COUNTED YET; WHEN THE LADDER OPENS, THE RECORD CARRIES OVER.</span></>}
+        {day < PLAZA_DAY && <><span className="k">MOVING</span><span className="v">INTO THE SHORE PLAZA ON MACHINE DAY {PLAZA_DAY}. UNTIL THEN AT ITS OLD LOT ON THE BOARDS.</span></>}
         {lm.sound && <><span className="k">HEARD</span><span className="v">"{lm.sound}"</span></>}
       </div>
     </>;
@@ -197,7 +202,7 @@ export function EnterprisePage() {
         {Object.entries(LANDMARKS).map(([id, l]) => (
           <button key={id} type="button" role="listitem" className="hvi-pf-row" onClick={() => openBusiness({ landmark: id })} aria-label={`${l.name}, a landmark. Open its file.`}>
             <span className="hvi-ent-lic">★</span>
-            <span className="hvi-pf-txt"><b>{l.name}</b><span className="dim">{l.where}</span><span>A LANDMARK. NEVER CLOSES. NOT ON THE REGISTER'S BOOKS.</span></span>
+            <span className="hvi-pf-txt"><b>{l.name}</b><span className="dim">{l.where}</span><span>A LANDMARK. NEVER CLOSES. NOT ON THE REGISTER'S BOOKS.{proprietorOf(id) ? ` ${proprietorOf(id).label}.` : ""}</span></span>
           </button>
         ))}
       </div>

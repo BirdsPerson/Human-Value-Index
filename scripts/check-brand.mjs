@@ -58,6 +58,7 @@ brand._setAtlas(j);
 const marks = new Set(Object.values(j.sprites).map(s => s.mark));
 for (const m of brand.BRAND_MARKS) ok(marks.has(m), `BRAND_MARKS ${m} is in the atlas`);
 for (const m of marks) ok(brand.BRAND_MARKS.includes(m), `atlas mark ${m} is listed in BRAND_MARKS`);
+for (const m of brand.BRAND_PENDING) ok(!marks.has(m) && !brand.BRAND_MARKS.includes(m) && !brand.brandFits(m, 40), `pending mark ${m}: not in the atlas yet, so every sign that asks for it keeps its lettering`);
 const refs = new Map();
 const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.(js|jsx)$/.test(e.name)) refs.set(p, readFileSync(p, "utf8")); } };
 walk(join(root, "src"));
@@ -69,7 +70,7 @@ for (const [p, src] of refs) {
   if (/brand\.js/.test(src)) for (const m of src.matchAll(/"[A-Z][A-Z !']*":\s*"([a-z][a-z-]*)"/g)) used.add(`${m[1]}|${p}`);
 }
 ok(used.size >= 15, `the code draws the marks (${used.size} references found)`);
-for (const u of used) { const [m, p] = u.split("|"); ok(marks.has(m), `${p.replace(root, "")}: draws "${m}", which is in the atlas`); }
+for (const u of used) { const [m, p] = u.split("|"); ok(marks.has(m) || brand.BRAND_PENDING.includes(m), `${p.replace(root, "")}: draws "${m}", which is in the atlas (or a pending slot that falls back to lettering)`); }
 
 // 3. whole-number scales only, never past the room given
 for (const m of marks) for (const neon of [false, true]) for (let px = 1; px <= 200; px++) {

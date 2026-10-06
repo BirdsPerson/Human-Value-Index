@@ -27,6 +27,8 @@ import { lineupFor } from "../../src/city/nightlifeSim.js";
 import { weatherOn as mountainWeather } from "../../src/city/mountainGeo.js";
 import { weatherOn as watersWeather, SPECIES_BY } from "../../src/play/fish/data.js";
 import { RIVER_DAY, NAME as RIVER_NAME, MOTTO as RIVER_MOTTO } from "../../src/city/river.js";
+import { PLAZA_DAY } from "../../src/city/shorePlaza.js";
+import { PROPRIETORS, proprietorLine } from "../../src/city/proprietors.js";
 import { raceEvents } from "../../src/city/race.js";
 import { pitEvents } from "../../src/city/pit.js";
 import { tennisEvents } from "../../src/city/tennis.js";
@@ -187,6 +189,8 @@ export function buildEdition(I) {
     trading: (ent?.biz || []).length,
     gossip: lines(I.gossip.map(g => up(g.text))).slice(0, 5),
     arrivals,
+    // the city's businesses with a subject on record as proprietor (src/city/proprietors.js)
+    proprietors: Object.keys(PROPRIETORS).map(id => ({ text: `${placeName(id)}, THE SHORE PLAZA. ${proprietorLine(id)}.`, href: "#city" })).filter(x => printable(x.text)),
   };
   if (opened[0]) heads.push(head("shop", 22, `NOW OPEN: ${opened[0].sign || opened[0].label}`, `${up(opened[0].label)} IN ${placeName(opened[0].units?.[0] || "")}. THE DEPARTMENT HAS ISSUED A LICENCE AND AN EXPIRY DATE.`, "#enterprise", { trade: opened[0].label, district: SIM.PLACES[opened[0].units?.[0]]?.district ? districtName(SIM.PLACES[opened[0].units[0]].district) : "THE MALL" }));
   const relN = arrivals?.released?.length || 0;
@@ -195,6 +199,12 @@ export function buildEdition(I) {
   if (RIVER_DAY > day0 - 1 && RIVER_DAY <= day + 60) {
     const open = day >= RIVER_DAY;
     heads.push(head("river", open && RIVER_DAY >= day0 ? 88 : 30, open ? `${RIVER_NAME} IS OPEN` : `${RIVER_NAME} OPENS ON DAY ${RIVER_DAY}`, `${RIVER_MOTTO} FISHING SPOTS ARE MARKED. THE WATER IS NOT RESPONSIBLE FOR YOU.`, "#fish"));
+  }
+
+  // THE SHORE PLAZA (src/city/shorePlaza.js): Sam's and Irene's under one roof from PLAZA_DAY
+  if (PLAZA_DAY > day0 - 1 && PLAZA_DAY <= day + 60) {
+    const open = day >= PLAZA_DAY;
+    heads.push(head("plaza", open && PLAZA_DAY >= day0 ? 70 : 26, open ? "SAM'S AND IRENE'S MOVE INTO THE SHORE PLAZA" : `THE SHORE PLAZA OPENS ON DAY ${PLAZA_DAY}`, "SAM'S PIZZA PALACE AT THE STREET, ON THE BOARDS. GOODNIGHT IRENE'S BREWS AND POURS UPSTAIRS. THE OLD LOTS ARE TO LET. THE DEPARTMENT APPROVED THE ZONING AFTER THE FACT.", "#city"));
   }
 
   // EMERGENCE (src/city/emergence.js): the industries the city grew by itself, with their because-lines

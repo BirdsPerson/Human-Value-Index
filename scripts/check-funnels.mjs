@@ -246,7 +246,7 @@ for (const [pid, games] of Object.entries(F.CABINET_PLACES)) {
     ok(FP.funnelTapAt("dive-bar", pl, (h.box[0] + h.box[2]) / 2, (h.box[1] + h.box[3]) / 2)?.slug === s, `${s}: the tap lands on its own box`);
     ok(HG.houseSrc(F.GAME[s]) === `/${F.GAME[s].route}?cab=1`, `${s} plays its own route in the CRT, in cabinet mode`);
   }
-  ok(F.funnelButtons("the-dive").some(b => b.label === "TAGGED OUT") && F.funnelButtons("goodnight-irenes").some(b => b.label === "TEE'D OFF"), "the toolbar offers the house cabinets in their buildings");
+  ok(F.funnelButtons("the-dive").some(b => b.label === "TAGGED OUT") && F.funnelButtons("the-surfside").some(b => b.label === "TEE'D OFF"), "the toolbar offers the house cabinets in their buildings");
   // the marquee: the dead hold the day's high score in the game's own units; a verified player's beats it
   const hs = F.highScore("house-golf", "dive-bar", 600);
   ok(/^-\d+ \(\d+\)$/.test(hs.score) && hs.low && hs.initials.length === 3, "TEE'D OFF's high score is strokes under par, held by a figure on file");

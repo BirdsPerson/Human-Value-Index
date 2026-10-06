@@ -9,6 +9,7 @@ import { massingOf } from "../src/city/archGeo.js";
 import { roomIn } from "../src/city/simApi.js";
 import { CATALOG, dressUnit, lookSig, TAG_PROPS } from "../src/city/furniture.js";
 import { TOWERS, isTower, towerPlan, storeysAbove, placeAll, residentFlat, homeRoom, flatOf, FURNISH, DEPT, TOWER_STYLES } from "../src/city/tower.js";
+import { proprietorOf } from "../src/city/proprietors.js";
 
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log(`  FAIL ${m}`); } return c; };
@@ -33,7 +34,9 @@ for (const b of towers) {
   ok(p.storeys.find(s => s.level === 0).units.some(u => u.kind === "lobby"), `${b.id}: a lobby at the street`);
   for (const s of p.storeys) {
     ok(s.units.length > 0, `${s.id}: has units`);
-    ok(s.owner === DEPT && s.units.every(u => u.owner === DEPT), `${s.id}: held by THE DEPARTMENT`);
+    // held by THE DEPARTMENT, but a business with a proprietor on record (src/city/proprietors.js) holds its own
+    const own = (u) => (u.placeId && proprietorOf(u.placeId)) || DEPT;
+    ok(s.units.every(u => u.owner === own(u)) && s.owner === (s.units.every(u => own(u) === own(s.units[0])) ? own(s.units[0]) : DEPT), `${s.id}: held by THE DEPARTMENT, or by a business's proprietor on record`);
     for (const u of s.units) for (const r of u.rooms) {
       ok(FURNISH[r.purpose] && Array.isArray(r.furniture) && r.furniture.every(f => typeof f.item === "string" && f.x >= 0 && f.x <= 1), `${r.id}: purpose and furniture`);
     }
@@ -92,7 +95,7 @@ for (const hour of [3, 8, 12.5, 15, 19, 23.5]) {
         if (homeOf(s) === w.placeId && f && room.startsWith(`${f.id}:`)) inOwnFlat++;
         if (hour === 3 && !isOwl(s)) { nights++; if (/:bedroom$/.test(room)) asleep++; }
       }
-      if (w.activity === "work" && r.mode === "here") { atWork++; if (/:(office|vault|shop|lounge)\d*$/.test(room) || /^airport-hotel:/.test(room)) inOffice++; else console.log(`  worker ${k} in ${room}`); }
+      if (w.activity === "work" && r.mode === "here") { atWork++; if (/:(office|vault|shop|lounge|pizzeria|booths|brewhouse|cellar|taproom|snug)\d*$/.test(room) || /^airport-hotel:/.test(room)) inOffice++; else console.log(`  worker ${k} in ${room}`); }
     }
   }
 }

@@ -9,10 +9,13 @@
 //                      FRONTAGE lot: sim.js lays it out apart from the district's grid, so nothing
 //                      already standing moves). Who trades in a unit, and what, is enterprise.js:
 //                      a unit with no business that day is TO LET, staffs nobody and draws nobody.
-//   SAM'S PIZZA        a fixed landmark at the head of the east boardwalk (an affectionate homage to
-//                      the Wildwood boardwalk institution; never closes, never owned by a subject).
-//   GOODNIGHT IRENE'S  a fixed landmark brewpub on the corner at the east end of the row (homage to
-//                      the Wildwood brewpub); open evenings, late; live music on some nights.
+//   SAM'S PIZZA        a fixed landmark (with Sam's Pizza Palace's OK), at street level in THE SHORE
+//                      PLAZA on the boards, as the real one is (shorePlaza.js); never closes.
+//   GOODNIGHT IRENE'S  a fixed landmark brewery and brewpub, in THE SHORE PLAZA over Sam's (until the
+//                      move, on the corner at the east end of the row); open evenings, late; live music
+//                      on some nights. Its proprietor is on record (proprietors.json).
+
+import { SHELL_OF } from "./shorePlaza.js";   // pure data too
 
 // The units: [id, district, lot {x, y, w, h}, address name]. Lots are map cells, clear of every
 // building and open lot already standing (scripts/check-enterprise.mjs holds that).
@@ -48,17 +51,20 @@ export const TRAM = { x0: 3, x1: 64, y: 89.45, period: 240 };   // period: real 
 // [id, district, kind, cap, name, engine tendencies]
 export const STORE_PLACES = [
   ...UNIT_LIST.map(([id, d, , name]) => [id, d, "mixed", d === "heights" || d === "coast" ? 10 : 8, name, []]),
-  ["sams-pizza", "coast", "mixed", 14, "SAM'S PIZZA (BY THE SLICE)", ["pizzeria", "pizza parlor"]],
-  ["goodnight-irenes", "coast", "mixed", 22, "GOODNIGHT IRENE'S (BREWPUB)", ["brewpub", "brewery", "pub"]],
+  ["sams-pizza", "coast", "mixed", 14, "SAM'S PIZZA PALACE (BY THE SLICE)", ["pizzeria", "pizza parlor"]],
+  ["goodnight-irenes", "coast", "mixed", 22, "GOODNIGHT IRENE'S (BREWERY AND BREWPUB)", ["brewpub", "brewery", "pub"]],
 ];
 
 // [id, name, district, floors top-down, lot, frontage]
 export const STORE_BUILDINGS = [
   ...UNIT_LIST.map(([id, d, lot, name]) => [id, name, d, [["G", "THE SHOP FLOOR", [id]]], lot, true]),
-  ["sams-pizza", "SAM'S PIZZA", "coast", [["G", "THE COUNTER (OPEN TO THE BOARDS)", ["sams-pizza"]]], SAMS_LOT, true],
-  ["goodnight-irenes", "GOODNIGHT IRENE'S", "coast", [["1F", "THE BREWHOUSE (TANKS)", ["goodnight-irenes"]], ["G", "THE BAR AND THE STAGE", ["goodnight-irenes"]]], IRENES_LOT, true],
+  // THE SHORE PLAZA (shorePlaza.js): Sam's and Irene's moved into the Plaza; their old lots keep their
+  // building ids and ground, each a shop TO LET (a shell place nobody is planned into). Irene's old
+  // corner keeps its two floors (a day published before the move still names its upstairs).
+  ["sams-pizza", "BOARDWALK EAST, THE OLD PIZZA COUNTER (TO LET)", "coast", [["G", "THE SHOP FLOOR (TO LET)", [SHELL_OF["sams-pizza"]]]], SAMS_LOT, true],
+  ["goodnight-irenes", "BOARDWALK EAST, THE OLD CORNER (TO LET)", "coast", [["1F", "UPSTAIRS (EMPTY)", [SHELL_OF["goodnight-irenes"]]], ["G", "THE SHOP FLOOR (TO LET)", [SHELL_OF["goodnight-irenes"]]]], IRENES_LOT, true],
 ];
-export const STORE_ARCH = { ...Object.fromEntries(UNIT_IDS.map(id => [id, "storefront"])), "sams-pizza": "pizzeria", "goodnight-irenes": "brewpub" };
+export const STORE_ARCH = { ...Object.fromEntries(UNIT_IDS.map(id => [id, "storefront"])), "sams-pizza": "storefront", "goodnight-irenes": "storefront" };
 
 // The landmarks' regulars. Draft caps keep them a few each.
 // [id, title, place, ladder, fields, dims, extra]

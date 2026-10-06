@@ -17,6 +17,10 @@ import { STOREY } from "./iso.js";
 export const ATLAS_URL = "/brand/atlas.json";
 export const BRAND_MARKS = ["eb-logo", "eb-bolt", "ebshop", "ebshop-cart", "jetsam", "jetsam-j", "irenes", "irenes-arch",
   "iridescent", "beacon", "beacon-mark", "brainforest", "anamnesis"];
+// Marks the city already asks for that the atlas does not carry yet: every call falls back to the
+// lettering it draws today. "sams": SAM'S PIZZA PALACE's logo (THE SHORE PLAZA's storefront and its
+// sign over the counter), when Scott sends the artwork; then it moves up into BRAND_MARKS.
+export const BRAND_PENDING = ["sams"];
 
 let A = null, IMG = null, asked = false;
 const BY = new Map();   // "mark|neon" -> sprites sorted by height

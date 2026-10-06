@@ -263,6 +263,7 @@ function City({ c, weather }) {
         <h3 className="sub">THE MALL</h3>
         {c.opened.length ? <><p>NOW OPEN:</p><ul className="pp-list">{c.opened.map((x, i) => <li key={i}><a href={x.href}>{x.text}</a></li>)}</ul></> : <p>NO NEW SHOPS OPENED SINCE THE LAST EDITION.</p>}
         {c.closed.length ? <><p>CLOSED:</p><ul className="pp-list">{c.closed.map((x, i) => <li key={i}><a href={x.href}>{x.text}</a></li>)}</ul></> : null}
+        {c.proprietors?.length ? <><p>PROPRIETORS ON RECORD:</p><ul className="pp-list">{c.proprietors.map((x, i) => <li key={i}><a href={x.href}>{x.text}</a></li>)}</ul></> : null}
         <p className="pp-meta">{c.trading} BUSINESSES TRADING. <a href="#enterprise">THE SMALL BUSINESS REGISTER</a></p>
       </div>
       {c.arrivals && (

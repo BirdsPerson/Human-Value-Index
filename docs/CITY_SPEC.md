@@ -3143,3 +3143,44 @@ league nights (Tuesday, Thursday from 19:00).
 **The day boundary.** `lanes.LANES_DAY` (see MASTER_PLAN.md): before it the plan's place list stops short
 of the lanes (they are appended last), nobody works or visits, and days are byte for byte the earlier
 code's (`scripts/check-lanes.mjs` against `scripts/fixtures/lanes-pre.json`).
+
+## THE SHORE PLAZA: Sam's in the lobby, Irene's upstairs (2026-10-06)
+
+Scott, 2026-10-06: "the Surfside could even be the SHORE PLAZA, and you can put SAM'S PIZZA in the lobby
+of it like it actually is ... that's what I was trying to do from the beginning"; and GOODNIGHT IRENE'S
+"there too, as an actual BREWERY and BREW PUB ... OWNED BY MY CHARACTER". Sam's Pizza Palace gave its OK
+to appear. Code: `src/city/shorePlaza.js` (data), `sim.js` (the move), `tower.js` + `furniture.js` (the
+rooms), `archGeo.js` "condo" + `storefrontDraw.js` `plazaFace` (the outside), `proprietors.js` (the
+record), `scripts/check-shoreplaza.mjs`.
+
+- **The real one.** The Shore Plaza on the Wildwood boardwalk at 26th Avenue: a 1957 doo-wop motel with
+  curved balconies over the boards and a rooftop pool, rebuilt on its lot in the same basic design, Sam's
+  Pizza Palace (since 1957) at street level under it, across from the piers. Ours is drawn from that
+  description, no photograph copied: cream stucco, aqua balcony rails with rounded ends, a pink stripe,
+  SHORE PLAZA on a corner blade and a sign on the roof's edge, the pool and the deck house (the
+  helipad's roof) on top.
+- **The building.** Id `the-surfside`, lot, residents' place `surfside` and helipad kept; named THE SHORE
+  PLAZA in the building, the residents' place, the pad, the cutaway, FIND ("shore plaza" and "surfside"
+  both find it), the paper. Floors (bottom up): G SAM'S PIZZA PALACE AND THE LOBBY (Sam's beside the
+  residents' lobby and a flat), BH Irene's BREWHOUSE, TR Irene's TAPROOM, 1F-4F SUITES, PH the roof's pool
+  deck. Sam's and Irene's stand on the residents' ground (`SHARED_RECT`): the lot is not split.
+- **Outside.** Sam's across the street level, open to the boards: the tiled counter, the ovens' glow,
+  slices in the window, SAM'S PIZZA PALACE on a red and white board (the `sams` brand slot: the real
+  logo replaces the lettering when Scott sends it, `brand.BRAND_PENDING`), lit warm after dark, stools on
+  the boards. The lobby's aqua door, Irene's red stair door (IRENE'S UP). Over it Irene's: copper tanks
+  behind the brewhouse glass, the taproom's warm windows and string lights, the pub's lockup on the
+  fascia, a BREWPUB blade at the corner.
+- **The cutaway.** Sam's: the counter and the deck ovens under the sign, two rooms of red booths by the
+  window on the boards (the sea past the rail, the lights at night). Irene's brewhouse: mash tun, kettle,
+  fermenters; the cellar: bright tanks, the malt (grain room), kegs. The taproom: the bar and its taps
+  under the pub's own sign; the brick oven from its logo, a pub table, the stage corner. Trade rooms stay
+  lit after dark. Irene's units and floors read PROPRIETOR: SUBJECT 7AUZ.
+- **The move** (the day boundary: docs/planning/MASTER_PLAN.md "THE SHORE PLAZA"). Same place ids; from
+  `PLAZA_DAY` they are in the Plaza, before it on their old lots. The old lots keep their building ids,
+  ground and floors as storefronts TO LET (`boardwalk-east-to-let-a/-b`, never in a plan); the boardwalk
+  tram car still runs. Irene's staff from the day: HEAD BREWER (half the brewers), CELLAR HAND (from the
+  Parts Depot and the fabricators), SERVER (the diner's line, the cafe, the bars), beside the brewpub
+  bartender and the brewer who were always there.
+- **The proprietor.** An operator's record (`scripts/set-proprietor.mjs`), shown on the landmark card,
+  the cutaway, the building page and the paper; no economic effect until the property ladder lands
+  (docs/design/ECONOMY_PROPERTY.md "Proprietors on record").
