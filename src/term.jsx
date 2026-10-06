@@ -15,9 +15,9 @@ export function prefersReducedMotion() {
 // cut into the top border and a close box on the left, Turbo Vision style. The frame is
 // CSS (ui.css .tb); the close box is decoration, hidden from screen readers, which hear
 // the title once. `double` keeps its old meaning as the emphasis frame (.tb.dbl).
-export function TermBox({ title, right, children, tone, double = false, className = "", bodyClass = "", ...rest }) {
+export function TermBox({ title, right, children, tone, double = false, className = "", bodyClass = "", style, ...rest }) {
   return (
-    <div className={`tb${double ? " dbl" : ""} ${className}`} style={tone ? { "--tb": tone } : undefined} {...rest}>
+    <div className={`tb${double ? " dbl" : ""} ${className}`} style={tone ? { "--tb": tone, ...style } : style} {...rest}>
       <div className="tb-top" aria-hidden="true">
         <span className="tb-box">[■]</span>
         {title && <span className="tb-title">{title}</span>}

@@ -269,3 +269,27 @@
 .hvi-quest-h.first { margin-top: 0; }
 .hvi-quest-rules { margin-top: var(--s3); }
 .hvi-quest-none { margin-bottom: var(--s2); }
+
+/* ---------- MY FILE as windows (DEPARTMENT OS) ----------
+   Phones: FILE, VERDICT, MOVEMENT LOG stacked. Wide screens: the desk breaks out of the
+   reading column, FILE left, VERDICT and MOVEMENT LOG right. */
+.hvi-filedesk { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.hvi-fw-id { display: flex; gap: var(--s4); align-items: flex-end; }
+.hvi-fw-photo { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--s1); padding: var(--s1);
+  border: 2px solid var(--fg-dim); background: var(--bg); }
+.hvi-fw-photo .cap { font-size: var(--t-xs); color: var(--fg-mute); }
+.hvi-fw-num { min-width: 0; }
+.hvi-fw-num .bignum { font-size: 24px; line-height: 1; margin: var(--s1) 0; }
+.hvi-fw-lbl { font-size: var(--t-xs); color: var(--fg-mute); white-space: nowrap; }
+.hvi-fw-chips { margin: var(--s4) 0 var(--s2); }
+/* The tier badge never wraps: it shrinks its tracking, then ellipsizes, before it breaks. */
+.hvi-fw-tier { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0; }
+.hvi-fw-sec { margin: var(--s4) 0 var(--s1); padding-top: var(--s3); border-top: var(--bw) dashed var(--line); font-size: var(--t-xs); color: var(--fg-mute); letter-spacing: 0.06em; }
+.hvi-fw-verdict .hvi-verdict-text { margin: 0 0 var(--s4); }
+.hvi-fw-verdict .ui-btn-row { margin-bottom: 0; }
+.hvi-fw-verdict .ui-btn.push { flex: 1 1 140px; }
+@media (max-width: 640px) { .hvi-fw-num .bignum { font-size: 20px; } }
+@media (min-width: 1100px) {
+  .hvi-filedesk { position: relative; left: 50%; width: min(1008px, calc(100vw - 64px)); margin-left: calc(min(1008px, calc(100vw - 64px)) / -2);
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 0 var(--s6); }
+}

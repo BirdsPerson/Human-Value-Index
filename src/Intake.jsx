@@ -2,12 +2,12 @@ import { useState, useEffect, useRef } from "react";
 import CubePanel, { CubeChips, cubePlace, cubeOf } from "./CubePanel.jsx";
 import { getTier } from "./figures.js";
 import { AGENT_ID } from "./agentConfig.js";
-import { Typed } from "./term.jsx";
+import { Typed, BigNumber } from "./term.jsx";
 import FilePhoto from "./FilePhoto.jsx";
 import SecureFile from "./SecureFile.jsx";
 import { readCaseId, writeCaseId, readLastResult, writeLastResult, ScoreCard, Breakdown, AppealPanel, CaseLogon, MAX_APPEAL,
   assessedMeta, FlagsList, flagsMeta } from "./caseFile.jsx";
-import { Frame, Button, ButtonRow, Disclosure, TextField, Command, CommandList, ListRow } from "./ui/components.jsx";
+import { Frame, Button, ButtonRow, Disclosure, TextField, Command, CommandList, ListRow, Chip, Chips } from "./ui/components.jsx";
 import { useBarAction } from "./ui/barAction.js";
 import { QuestLog } from "./QuestLog.jsx";
 import { FileEconomy } from "./economy/FileEconomy.jsx";
@@ -512,6 +512,12 @@ export default function Intake({ view = "intake" }) {
   }, [draft, stage]);
 
   const [cubeSeen, setCubeSeen] = useState(false);   // the canvas mounts on first open
+  // VERDICT // ACKNOWLEDGED: remembered per file and score on this device. It changes nothing
+  // on the server; the Department simply likes to be acknowledged.
+  const ackKey = caseId && last ? `${caseId}:${last.score}` : null;
+  const [ackFor, setAckFor] = useState(() => { try { return localStorage.getItem("hvi-ack"); } catch { return null; } });
+  const acked = Boolean(ackKey && ackFor === ackKey);
+  const acknowledge = () => { if (!ackKey) return; try { localStorage.setItem("hvi-ack", ackKey); } catch { /* noted anyway */ } setAckFor(ackKey); };
   const [questSeen, setQuestSeen] = useState(false); // the Archive is asked on first open
   // Back from the magic link (/?auth=…#intake): the answer is inside SECURE BY EMAIL, so open it.
   const [authBack] = useState(() => { try { return /[?&]auth=/.test(window.location.search); } catch { return false; } });
@@ -559,11 +565,13 @@ export default function Intake({ view = "intake" }) {
   const caseFrame = (withPhoto = true) => <Frame box title="CASE FILE" meta={caseId || undefined} className="hvi-casefile">{caseBody(withPhoto)}</Frame>;
 
   // A file's sections, under its score card. Breakdown open; everything else one tap away.
-  const fileSections = (r, { history = null } = {}) => (
+  const fileSections = (r, { history = null, desk = false } = {}) => (
     <div className="hvi-sections">
-      <Disclosure title="CATEGORY BREAKDOWN" meta={assessedMeta(r.breakdown)} defaultOpen>
-        <Breakdown breakdown={r.breakdown} confidence={r.confidence} framed={false} />
-      </Disclosure>
+      {!desk && (
+        <Disclosure title="CATEGORY BREAKDOWN" meta={assessedMeta(r.breakdown)} defaultOpen>
+          <Breakdown breakdown={r.breakdown} confidence={r.confidence} framed={false} />
+        </Disclosure>
+      )}
       {cubeOf(r) && (
         <Disclosure title="THE CUBE" meta={cubePlace(r)} onToggle={o => { if (o) setCubeSeen(true); }}>
           {cubeSeen && <CubePanel subject={r} framed={false} />}
@@ -574,7 +582,7 @@ export default function Intake({ view = "intake" }) {
           <FlagsList commendations={r.commendations} flags={r.flags} />
         </Disclosure>
       )}
-      {history && history.length > 0 && (
+      {!desk && history && history.length > 0 && (
         // One section for the file's story over time: the chart, then who moved it.
         <Disclosure title="FILE MOVEMENT" meta={movementSpan(history)}>
           <Sparkline history={history} />
@@ -595,6 +603,54 @@ export default function Intake({ view = "intake" }) {
       </Disclosure>
     </div>
   );
+
+  // MY FILE as windows on the desk (DEPARTMENT OS): the FILE (portrait, score, tier badge,
+  // the nine sections), the VERDICT with ACKNOWLEDGED / DISPUTE, and the MOVEMENT LOG.
+  const fileDesk = (r, visits) => {
+    const tier = getTier(r.score);
+    const history = Array.isArray(r.history) ? r.history : [];
+    return (
+      <div className="hvi-filedesk">
+        <Frame box title={`FILE // ${caseId}`} meta={visits ? `VISIT ${visits}` : undefined} tone={tier.color} className="hvi-fw-file">
+          <div className="hvi-fw-id">
+            {photoSubject && (
+              <div className="hvi-fw-photo"><FilePhoto subject={photoSubject} scale={2} compact /><span className="cap" aria-hidden="true">ON FILE</span></div>
+            )}
+            <div className="hvi-fw-num">
+              <div className="hvi-fw-lbl" aria-hidden="true">YOUR VALUE INDEX</div>
+              <BigNumber value={r.score} tone={tier.color} label={`Your value index: ${r.score} of 1000, ${r.tier || tier.label}`} />
+              <div className="hvi-fw-lbl" aria-hidden="true">OF 1000</div>
+            </div>
+          </div>
+          <Chips className="hvi-fw-chips">
+            <Chip tone={tier.color} className="hvi-fw-tier">{r.tier || tier.label}</Chip>
+            <CubeChips subject={r} />
+          </Chips>
+          <div className="hvi-tier-desc">{tier.desc}</div>
+          <div className="hvi-fw-sec" aria-hidden="true">THE NINE SECTIONS // {assessedMeta(r.breakdown)}</div>
+          <Breakdown breakdown={r.breakdown} confidence={r.confidence} framed={false} />
+        </Frame>
+        <div className="hvi-fw-side">
+          {r.verdict && (
+            <Frame box title="VERDICT" tone="var(--eb-amber)" className="hvi-fw-verdict">
+              <p className="hvi-verdict-text as-typed">{r.verdict}</p>
+              <ButtonRow>
+                <Button variant="push" tone="am" aria-pressed={acked} onClick={acknowledge}>{acked ? "ACKNOWLEDGED ✓" : "ACKNOWLEDGED"}</Button>
+                <Button variant="push" tone="sec" onClick={openAppeal} aria-label="Dispute: open the appeals desk">DISPUTE</Button>
+              </ButtonRow>
+              {acked && <p className="hvi-note" role="status">COMPLIANCE NOTED. THE DEPARTMENT WAS NEVER IN DOUBT.</p>}
+            </Frame>
+          )}
+          {history.length > 0 && (
+            <Frame box title="MOVEMENT LOG" meta={movementSpan(history)} className="hvi-fw-move">
+              <Sparkline history={history} />
+              {history.length > 1 && <FileMovement log={history} />}
+            </Frame>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const scoreCard = (r, { visits, typeVerdict, children } = {}) => (
     <ScoreCard score={r.score} tierLabel={r.tier} verdict={r.verdict} typeVerdict={typeVerdict}
@@ -620,7 +676,7 @@ export default function Intake({ view = "intake" }) {
         <div>
           {/* YOUR FIRST DAY (src/FirstDay.jsx): until done, the five things; then one line */}
           <FirstDay caseId={caseId} />
-          {scoreCard(last, { visits, typeVerdict: false })}
+          {fileDesk(last, visits)}
           {error && errLine(error)}
           <div className="hvi-next">
             <ButtonRow stackOnMobile>
@@ -639,7 +695,7 @@ export default function Intake({ view = "intake" }) {
           <MyFish caseId={caseId} />
           {/* JOIN THE LEAGUES: enter the citizen in the drafts, its season lines (src/leagues/MyLeagues.jsx) */}
           <MyLeagues caseId={caseId} />
-          {fileSections(last, { history: last.history })}
+          {fileSections(last, { history: last.history, desk: true })}
           <div className="hvi-note">CASE {caseId} // FILE LOGGED // THE OVERLORD DOES NOT FORGET.</div>
         </div>
       );
