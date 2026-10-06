@@ -1,0 +1,18 @@
+/* the long-tail games' controls guide and first-run tips (guideKit.jsx) */
+.gk-guide { margin: 0 0 var(--s3); }
+.gk-h { font-size: var(--t-m); letter-spacing: 0.08em; margin: 0 0 var(--s2); }
+.gk-pad { display: block; width: 100%; max-width: 380px; height: auto; margin: 0 0 var(--s2); font-family: inherit; }
+.gk-keys { list-style: none; margin: 0 0 var(--s2); padding: 0; display: grid; gap: 2px; font-size: var(--t-xs); }
+.gk-keys b { display: inline-block; min-width: 5ch; color: var(--accent); }
+.gk-rows { margin: 0 0 var(--s2); display: grid; gap: var(--s2); }
+.gk-rows div { display: grid; grid-template-columns: 10ch 1fr; gap: var(--s3); }
+.gk-rows dt { color: var(--accent); font-weight: 700; font-size: var(--t-xs); }
+.gk-rows dd { margin: 0; color: var(--fg); font-size: var(--t-s); line-height: 1.4; }
+.gk-guide.compact .gk-rows div { grid-template-columns: 1fr; gap: 0; }
+.gk-go { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); margin: 0; }
+.gk-btn { font: inherit; font-weight: 700; letter-spacing: 0.06em; padding: 6px 12px; color: var(--accent-ink); background: var(--accent); border: 1px solid var(--accent); cursor: pointer; }
+.gk-btn:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.gk-small { font-size: var(--t-xs); color: var(--fg-dim); }
+.gk-tip { margin: 4px 0; padding: 4px 8px; text-align: center; font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.08em; color: var(--accent-ink); background: var(--accent); opacity: 1; transition: opacity 600ms ease; }
+.gk-tip.gone { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .gk-tip { transition: none; } }

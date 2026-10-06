@@ -13,6 +13,8 @@ import * as SFX from "./audio.js";
 import CSS from "./bowling.css?inline";
 import TournamentDesk, { fileLeg } from "../../tournament/TournamentDesk.jsx";
 import { bowlCfg, DIV_NAME } from "../../tournament/rules.js";
+import BowlGuide, { GUIDE_KEY, TIPS_KEY } from "./Guide.jsx";
+import { guideSeen, markGuideSeen, tipsUsed, markTipUsed, profileHand, usePlayMode, Tip } from "../guideKit.jsx";
 import "../pages.css";
 
 // #bowling[?vs=<key>][&lane=<n>]: THE LANES (docs/CITY_SPEC.md "THE LANES"): ten-pin bowling, exhibition
@@ -30,7 +32,14 @@ const parseRoute = (route) => {
   return { vs: OPP_BY_KEY.has(q.get("vs")) ? q.get("vs") : null, lane, from: q.get("from"), t: q.get("t") || null };
 };
 const KEEP_SETUP = "hvi-bowling-setup";
-const loadSetup = () => { try { const j = JSON.parse(localStorage.getItem(KEEP_SETUP) || "null"); return j && Array.isArray(j.players) ? j : null; } catch { return null; } };
+// A saved setup that never chose its hand or EASY follows the profile's hand and the casual default (EASY).
+const loadSetup = () => {
+  try {
+    const j = JSON.parse(localStorage.getItem(KEEP_SETUP) || "null"); if (!j || !Array.isArray(j.players)) return null;
+    const ph = profileHand();
+    return { ...j, easy: j.easyPicked ? j.easy : true, players: j.players.map(p => (p.kind === "human" && !p.handPicked && ph ? { ...p, hand: ph } : p)) };
+  } catch { return null; }
+};
 const saveSetup = (s) => { try { localStorage.setItem(KEEP_SETUP, JSON.stringify(s)); } catch { /* the tab remembers */ } };
 const BALL_COLORS = ["#2b5fbf", "#b8322a", "#2f8f4e", "#8a4fc0"];
 const COSMIC_BALLS = ["#39ff6a", "#ff2fd0", "#30f0ff", "#ffe14a"];
@@ -39,8 +48,8 @@ const NOTICE = "EXHIBITION. THIS GAME DOES NOT COUNT TOWARDS ANY LEAGUE. YOUR AV
 function meName() { const id = readCaseId(); return id ? `SUBJECT ${id.slice(-4).toUpperCase()}` : "YOU"; }
 function defaultSetup(vs) {
   return {
-    players: [{ kind: "human", name: meName(), weight: 14, hand: 1, bumpers: false }, { kind: "cpu", key: vs || "john-goodman" }],
-    fouls: true, easy: false, lights: "auto",
+    players: [{ kind: "human", name: meName(), weight: 14, hand: profileHand() || 1, bumpers: false }, { kind: "cpu", key: vs || "john-goodman" }],
+    fouls: true, easy: true, lights: "auto",
   };
 }
 function cfgOf(setup, seed) {
@@ -110,8 +119,8 @@ function Setup({ setup, setSetup, onBowl, lane, desk = null, first = false }) {
                     <span className="bw-lab">BALL</span>
                     {WEIGHTS.map(w => <button type="button" key={w} className={`bw-chip${p.weight === w ? " on" : ""}`} aria-pressed={p.weight === w} onClick={() => upd(i, { weight: w })}>{w} LB</button>)}
                     <span className="bw-lab">HAND</span>
-                    <button type="button" className={`bw-chip${p.hand !== -1 ? " on" : ""}`} aria-pressed={p.hand !== -1} onClick={() => upd(i, { hand: 1 })}>RIGHT</button>
-                    <button type="button" className={`bw-chip${p.hand === -1 ? " on" : ""}`} aria-pressed={p.hand === -1} onClick={() => upd(i, { hand: -1 })}>LEFT</button>
+                    <button type="button" className={`bw-chip${p.hand !== -1 ? " on" : ""}`} aria-pressed={p.hand !== -1} onClick={() => upd(i, { hand: 1, handPicked: true })}>RIGHT</button>
+                    <button type="button" className={`bw-chip${p.hand === -1 ? " on" : ""}`} aria-pressed={p.hand === -1} onClick={() => upd(i, { hand: -1, handPicked: true })}>LEFT</button>
                     <button type="button" className={`bw-chip${p.bumpers ? " on" : ""}`} aria-pressed={!!p.bumpers} onClick={() => upd(i, { bumpers: !p.bumpers })}>BUMPERS {p.bumpers ? "UP" : "DOWN"}</button>
                   </div>
                 )}
@@ -122,7 +131,7 @@ function Setup({ setup, setSetup, onBowl, lane, desk = null, first = false }) {
         </ol>
         {P.length < 4 && (
           <ButtonRow>
-            <Button onClick={() => add({ kind: "human", name: "", weight: 12, hand: 1, bumpers: false })}>Add a bowler (hot seat)</Button>
+            <Button onClick={() => add({ kind: "human", name: "", weight: 12, hand: profileHand() || 1, bumpers: false })}>Add a bowler (hot seat)</Button>
             <Button onClick={() => setPicking(v => !v)}>{picking ? "Close the list" : "Add a figure"}</Button>
           </ButtonRow>
         )}
@@ -138,7 +147,7 @@ function Setup({ setup, setSetup, onBowl, lane, desk = null, first = false }) {
         <h2 className="bw-h">THE HOUSE</h2>
         <div className="bw-opts">
           <button type="button" className={`bw-chip${setup.fouls ? " on" : ""}`} aria-pressed={setup.fouls} onClick={() => setSetup(s => ({ ...s, fouls: !s.fouls }))}>FOUL LINE {setup.fouls ? "ON" : "OFF"}</button>
-          <button type="button" className={`bw-chip${setup.easy ? " on" : ""}`} aria-pressed={setup.easy} onClick={() => setSetup(s => ({ ...s, easy: !s.easy }))}>EASY {setup.easy ? "ON" : "OFF"}</button>
+          <button type="button" className={`bw-chip${setup.easy ? " on" : ""}`} aria-pressed={setup.easy} onClick={() => setSetup(s => ({ ...s, easy: !s.easy, easyPicked: true }))}>EASY {setup.easy ? "ON" : "OFF"}</button>
           <span className="bw-lab">LIGHTS</span>
           {[["auto", "BY THE CLOCK"], ["cosmic", "COSMIC"], ["house", "HOUSE"]].map(([k, l]) => <button type="button" key={k} className={`bw-chip${setup.lights === k ? " on" : ""}`} aria-pressed={setup.lights === k} onClick={() => setSetup(s => ({ ...s, lights: k }))}>{l}</button>)}
         </div>
@@ -169,6 +178,12 @@ function Legend({ pad }) {
       </dl>
     </details>
   );
+}
+
+function tipText(id, mode) {
+  if (id === "throw") return mode === "pad" ? "PULL THE RIGHT STICK BACK, THEN PUSH IT FORWARD TO BOWL" : mode === "touch" ? "PULL DOWN ON THE LANE, THEN FLICK UP TO BOWL" : "PRESS SPACE THREE TIMES TO BOWL: POWER, ACCURACY, HOOK";
+  if (id === "spare") return "PINS LEFT: AIM AT THE NEAREST ONE";
+  return "";
 }
 
 // ---- the overhead monitor --------------------------------------------------------------------------------
@@ -205,15 +220,15 @@ function Monitor({ st, cosmic }) {
 }
 
 const CALLS = {
-  strike: ["STRIKE", "ALL TEN. THE PINSETTER HAS BEEN NOTIFIED."],
-  double: ["DOUBLE", "TWO IN A ROW. THE DEPARTMENT IS WATCHING THE TREND."],
-  turkey: ["TURKEY", "THREE IN A ROW. A BIRD HAS BEEN ENTERED ON YOUR FILE."],
-  spare: ["SPARE", "TIDIED UP. COMPLIANCE NOTED."],
-  split: ["SPLIT", "A GAP HAS OPENED. THE DEPARTMENT DOES NOT CLOSE GAPS FOR YOU."],
-  sevenTen: ["7-10", "THE 7-10. FILED UNDER IMPROBABLE OUTCOMES."],
-  gutter: ["GUTTER", "THE BALL HAS LEFT THE PROGRAMME."],
-  foul: ["FOUL", "OVER THE LINE. THE PINS HAVE BEEN PUT BACK. YOUR SCORE HAS NOT."],
-  miss: ["MISS", "NOTHING. THE PINS ARE UNMOVED. SO IS THE DEPARTMENT."],
+  strike: ["STRIKE", "ALL TEN."],
+  double: ["DOUBLE", "TWO STRIKES IN A ROW."],
+  turkey: ["TURKEY", "THREE STRIKES IN A ROW."],
+  spare: ["SPARE", "CLEARED THE REST."],
+  split: ["SPLIT", "THE PINS LEFT ARE APART."],
+  sevenTen: ["7-10", "THE 7-10: THE HARDEST LEAVE."],
+  gutter: ["GUTTER", "THE BALL WENT OFF THE LANE."],
+  foul: ["FOUL", "OVER THE LINE. THE PINS ARE SET AGAIN; THE BALL COUNTS AS ZERO."],
+  miss: ["MISS", "NO PINS."],
 };
 
 // ---- a game on the lane ------------------------------------------------------------------------------------
@@ -228,9 +243,14 @@ function Lane({ cfg, setup, lane, onAgain, onSettings, tour = null }) {
   const [done, setDone] = useState(null);
   const [muted, setMutedS] = useState(SFX.isMuted());
   const [scale, setScale] = useState(1);
+  const pm = usePlayMode();
+  const [guide, setGuide] = useState(() => !guideSeen(GUIDE_KEY));   // the controls guide, once, before the first game
+  const guideRef = useRef(guide); guideRef.current = guide;
+  const [tip, setTip] = useState({ id: null, gone: true });
+  const tipRef = useRef({ used: null, shown: null });
   const [pad, setPad] = useState(null);
   const [call, setCall] = useState(null);
-  const pausedRef = useRef(false); pausedRef.current = paused;
+  const pausedRef = useRef(false); pausedRef.current = paused || guide;
   const callRef = useRef(null); callRef.current = call;
   const ck = machineClock();
   const cosmic = setup.lights === "cosmic" || (setup.lights === "auto" && cosmicHour(ck.hour));
@@ -257,7 +277,8 @@ function Lane({ cfg, setup, lane, onAgain, onSettings, tour = null }) {
     if (tour?.official) tour.file(rec).then(line => setDone(d => (d ? { ...d, tourLine: line } : d)));
   }, [cfg, lane, tour]);
 
-  const togglePause = useCallback(() => { if (!stRef.current.over) setPaused(p => !p); }, []);
+  const togglePause = useCallback(() => { if (!stRef.current.over && !guideRef.current) setPaused(p => !p); }, []);
+  const dismissGuide = useCallback(() => { markGuideSeen(GUIDE_KEY); guideRef.current = false; setGuide(false); }, []);
 
   // the loop: a fixed 60Hz step, drawn every frame
   useEffect(() => {
@@ -314,6 +335,14 @@ function Lane({ cfg, setup, lane, onAgain, onSettings, tour = null }) {
         SFX.stopRoll();
         SFX.verdict(k === "turkey" || k === "double" ? "strike" : k === "sevenTen" ? "split" : k, { turkey: k === "turkey", sevenTen: k === "sevenTen", split: R.before?.length < 10 && R.frame != null && ev === "spare" && st.players[who].balls.at(-2)?.split });
       }
+      // first-run prompts: a line while the thing is in front of him, gone once he has done it
+      { const T = tipRef.current; if (!T.used) T.used = tipsUsed(TIPS_KEY);
+        const mine = p.kind === "human" && !st.over;
+        if (T.shown && st.phase !== "aim") { T.used = markTipUsed(TIPS_KEY, T.shown); T.shown = null; setTip(t => ({ ...t, gone: true })); }
+        else if (!T.shown && mine && st.phase === "aim" && st.phaseT > 20) {
+          const id = !T.used.has("throw") ? "throw" : st.players[st.cur].balls.length > 0 && position(p.balls).ball === 1 && !T.used.has("spare") ? "spare" : null;
+          if (id) { T.shown = id; setTip({ id, gone: false }); }
+        } }
       if (st.events.includes("over")) finish(st);
       if (st.phase === "aim" && st.phaseT === 1) { setCall(null); SFX.verdict("sweep"); }
     };
@@ -410,6 +439,7 @@ function Lane({ cfg, setup, lane, onAgain, onSettings, tour = null }) {
   return (
     <div className={`bw${cosmic ? " cosmic" : ""}`}>
       {tour && <p className="bw-call" style={{ marginBottom: 6 }}><b>{tour.ev.name}</b> {tour.official ? "OFFICIAL" : "PRACTICE"} // {DIV_NAME[tour.div]} // {tour.ev.cond.oil} // GAME {tour.leg + 1} OF {tour.ev.legs}</p>}
+      {guide && !done && <div className="bw-guidewrap"><BowlGuide mode={pm.mode} family={pm.family} hand={cur.hand} onDone={dismissGuide} /></div>}
       <Monitor st={st} cosmic={cosmic} />
       <div className="bw-call" aria-live="polite" aria-atomic="true">{call ? <><b>{call.head}</b> {call.sub}{call.tell ? <span className="bw-tell"> {call.tell}</span> : null}</> : status}</div>
       <div className="bw-stage" ref={wrapRef}>
@@ -427,11 +457,12 @@ function Lane({ cfg, setup, lane, onAgain, onSettings, tour = null }) {
         {done?.closed && <Button variant="primary" onClick={() => setDone(d => ({ ...d, closed: false }))}>The final sheet</Button>}
         <Button variant="back" onClick={onSettings}>Change bowlers</Button>
       </ButtonRow>
+      <Tip text={tipText(tip.id, pm.mode)} gone={tip.gone} />
       <Legend pad={pad} />
-      <p className="bw-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{tour ? "TOURNAMENT GAMES ARE FILED AS THEY END AND RE-PLAYED BY THE DEPARTMENT." : NOTICE}</p>
+      <p className="bw-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{tour ? "TOURNAMENT GAMES ARE FILED AS THEY END AND RE-PLAYED BY THE DEPARTMENT." : "EXHIBITION: THIS GAME DOES NOT COUNT TOWARDS A LEAGUE."}</p>
       {paused && !done && (
-        <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE PINSETTER WAITS. IT IS PAID TO." onBack={() => setPaused(false)}
-          options={{ resume: () => setPaused(false), restart: onAgain, controls: <Legend pad={pad} />, sound: { on: !muted, onSelect: toggleMute }, quit: true }} />
+        <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE GAME IS HELD. THE BALL STAYS WHERE IT IS." onBack={() => setPaused(false)}
+          options={{ resume: () => setPaused(false), restart: onAgain, controls: <BowlGuide mode={pm.mode} family={pm.family} hand={cur.hand} compact />, sound: { on: !muted, onSelect: toggleMute }, quit: true }} />
       )}
       {done && !done.closed && (
         <GameMenu key="end" kind="end" title={tour ? `${tour.ev.name.replace(/^LEAGUE NIGHT: /, "")}: GAME ${tour.leg + 1} OF ${tour.ev.legs}` : "GAME FILED."} summary={`${resultLine(done.shape)}. ${done.verified ? "RE-RUN FROM THE LOG: SAME SHEET." : "THE RE-RUN DISAGREED. NOT KEPT."}${done.tourLine ? ` ${done.tourLine}` : ""}`}

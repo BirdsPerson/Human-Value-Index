@@ -66,3 +66,5 @@
   .bw-keys { grid-template-columns: 1fr; }
   .bw-who { padding-right: 70px; }
 }
+
+.bw-guidewrap { margin: 0 0 var(--s3); padding: var(--s3); border: 1px solid var(--line-hi); }

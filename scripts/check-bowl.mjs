@@ -208,6 +208,51 @@ function play(cfg, bot = 1) {
   assert.ok(got && got.power > 0.5 && got.curl > 0, `the stick's swing ${JSON.stringify(got)}`);
   ok("the flick and the right stick read as throws (speed, line, the curl's hook)");
 }
+
+// ---- a casual human on the keyboard's three presses (Scott, 2026-10-06: the sports games are too hard) ----
+// Aims at the pocket (or the front pin) with a sloppy eye (about 1.5 boards), presses with ~+-100 ms of
+// timing noise. EASY with the bumpers off should give a casual average of about 120-150.
+function rng(seed) { let r = seed >>> 0; return () => { r = (Math.imul(r ^ (r >>> 15), 2246822507) + 0x6d2b79f5) >>> 0; return r / 4294967296; }; }
+const gauss = (rnd) => (rnd() + rnd() + rnd() + rnd() - 2) * 1.73;
+function casualGame(seed, { easy, bumpers, aimSd = 1.5, tSd = 4 }){
+  const rnd=rng(seed*7+3);
+  const cfg={v:S.VERSION,seed,fouls:true,easy,players:[{name:"B",kind:"human",weight:14,hand:1,bumpers}]};
+  const st=S.newGame(cfg); let plan=null,k=0;
+  while(!st.over&&k++<200000){
+    let mask=0;
+    if(st.phase==="aim"){
+      if(st.phaseT===20){
+        const left=S.standing(st),fresh=left.length===10;
+        const pins=st.pins.filter(q=>q.st===0).sort((a,b)=>a.y-b.y||Math.abs(a.x)-Math.abs(b.x));
+        const tx=(fresh||left.includes(1))?2.6:pins[0].x, ty=(fresh||left.includes(1))?S.HEAD_Y:pins[0].y;
+        const x0=(fresh||left.includes(1))?10:Math.max(-14,Math.min(14,-tx*0.8));
+        const a=S.aimFor(st,x0,S.speedOf(0.85,14),0.4,tx+gauss(rnd)*aimSd,ty,1);
+        const e={t:"set",x:x0,a}; S.act(st,e);
+        const sl=easy?1.5:1;
+        plan=[null, Math.round(110*sl*0.85*0.5)+ Math.round(gauss(rnd)*tSd), Math.round(56*sl/4)+Math.round(gauss(rnd)*tSd), Math.round(80*sl*0.5/1.5*0.5)];
+        plan[3]=Math.round(0.3*80*sl)+Math.round(gauss(rnd)*tSd);
+        st._p=plan;
+      }
+      if(st.phaseT===30) mask=S.BTN.A;
+    } else if(st.phase==="meter"){
+      const m=st.meter; if(m.t===Math.max(3,st._p[m.stage])) mask=S.BTN.A;
+    }
+    st.prevMask; S.step(st,mask);
+  }
+  const B=st.players[0].balls;const G={};const fr=SC.frames(B).frames;for(const x of fr.slice(0,9)){G.fr=(G.fr||0)+1;if(x.marks[0]==='X')G.x=(G.x||0)+1;else{G.o=(G.o||0)+1;if(x.marks[1]==='/')G.sp=(G.sp||0)+1;}G.p1=(G.p1||0)+(x.balls[0]?x.balls[0].n:0);}return SC.frames(B).total;
+}
+
+const casualAvg = (o, N = 40) => { let t = 0; for (let i = 0; i < N; i++) t += casualGame(100 + i, o); return t / N; };
+{
+  const easy = casualAvg({ easy: true, bumpers: false }), hard = casualAvg({ easy: false, bumpers: false });
+  assert.ok(easy >= 115 && easy <= 160, `a casual human on EASY averages ${easy.toFixed(0)} (115-160)`);
+  assert.ok(hard < easy, `EASY helps: ${hard.toFixed(0)} without it, ${easy.toFixed(0)} with`);
+  ok(`casual human (keyboard, +-100 ms): EASY averages ${easy.toFixed(0)}, standard ${hard.toFixed(0)}`);
+  const sloppy = { aimSd: 10, tSd: 6 }, nb = casualAvg({ easy: true, bumpers: false, ...sloppy }), wb = casualAvg({ easy: true, bumpers: true, ...sloppy });
+  assert.ok(wb > nb, `bumpers help a sloppy bowler: ${nb.toFixed(0)} -> ${wb.toFixed(0)}`);
+  ok(`bumpers help a very sloppy casual: ${nb.toFixed(0)} -> ${wb.toFixed(0)}`);
+}
+
 // ---- the roster and the tile -----------------------------------------------------------------------------
 {
   const keys = new Set(R.OPPONENTS.map(o => o.key));
