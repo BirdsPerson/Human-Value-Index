@@ -30,6 +30,7 @@ const Football = lazy(() => import("./play/football/Football.jsx"));   // #footb
 const Fish = lazy(() => import("./play/fish/Fish.jsx"));   // #fish: THE WATERS (fishing, src/play/fish/)
 const Aquarium = lazy(() => import("./play/fish/Aquarium.jsx"));   // #aquarium: THE AQUARIUM (replay-checked donations)
 const Hunt = lazy(() => import("./play/hunt/Hunt.jsx"));   // #hunt: TAGGED OUT, the light-gun bar cabinet (src/play/hunt/)
+const Ski = lazy(() => import("./play/ski/Ski.jsx"));   // #ski: THE MOUNTAIN, skiable (src/play/ski/)
 const Economy = lazy(() => import("./economy/Economy.jsx"));
 const Shops = lazy(() => import("./shops/Shops.jsx"));   // #shop[/<store>]: THE SHOPS (clothes, furniture, the closet; CYCLES only)
 // YOUR FIRST DAY, one line on the logon for an assessed file that has not finished it (src/FirstDay.jsx).
@@ -469,6 +470,7 @@ const TITLES = {
   "#intake": "GET EVALUATED", "#file": "MY FILE", "#arrivals": "INTAKE", "#cube": "THE CUBE", "#city": "THE CITY",
   "#assembly": "THE ASSEMBLY", "#elections": "COUNCIL ELECTIONS", "#docket": "THE DOCKET", "#casino": "HOUSE EDGE CASINO",
   "#economy": "THE TREASURY", "#shop": "THE SHOPS", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS", "#football": "THE BOWL", "#fish": "THE WATERS", "#aquarium": "THE AQUARIUM", "#hunt": "TAGGED OUT",
+  "#ski": "THE MOUNTAIN",
   "#play": "THE GAMES", "#scores": "THE SCORES", "#about": "ABOUT", "#privacy": "PRIVACY", "#terms": "TERMS", "#dispute": "DISPUTE A SCORE",
   "#heights": "THE CITY", "#enterprise": "THE CITY", "#prefects": "THE CITY", "#paper": "THE DAILY COMPLIANCE",
 };
@@ -719,6 +721,13 @@ export default function OverlordAssessment() {
   );
 
   // #fish[?spot=<id>]: THE WATERS, fishing (src/play/fish/); #aquarium: its tanks, donations checked by replay
+  // #ski[?at=<place>][&ch=<challenge>][&board=1]: THE MOUNTAIN, skiable (src/play/ski/)
+  if (routePath === "#ski") return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="GROOMING THE TRAILS" />}><Ski route={route} /></Suspense>
+    </Screen>
+  );
+
   if (routePath === "#fish") return (
     <Screen nav={nav} wide>
       <Suspense fallback={<Loading what="BAITING THE HOOKS" />}><Fish route={route} /></Suspense>

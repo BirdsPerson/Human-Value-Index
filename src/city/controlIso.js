@@ -22,6 +22,7 @@ import { tableNear, tableGo } from "../chess/park.js";   // PARK CHESS: E at a s
 import { TENNIS } from "./venueGeo.js";   // THE TENNIS CLUB, playable: E on the courts
 import { PIER } from "./coastGeo.js";   // THE WATERS, playable: E at the pier's rail (src/play/fish/)
 import { riverShown, FISHING_SPOTS } from "./river.js";
+import { LIFTS as SKI_LIFTS } from "./mountainGeo.js";   // THE MOUNTAIN, skiable: E at a lift's foot (src/play/ski/)
 import {
   CTL, publishUi, keysVector, screenToMapDir, stepStreet, stepInside, stateFromTarget, loadControl, saveControl,
   doorOf, doorNear, groundAt, setRiverLive, isClassified, benchNear, stationNear, stairFoot, platformPoint, platformStep, stationGeoOf,
@@ -121,6 +122,7 @@ export function makeIsoControl(K) {
     if (n.kind === "door" || n.kind === "ground") { enter(n.b); return; }
     if (n.kind === "station") { climb(n.id); return; }
     if (n.kind === "chess" || n.kind === "tennis" || n.kind === "hoops" || n.kind === "football" || n.kind === "fish") { window.location.hash = n.go; return; }
+    if (n.kind === "ski") { window.location.hash = n.go; return; }   // THE MOUNTAIN, skiable
     if (n.kind === "bench") { Object.assign(st, { mode: "bench", bench: n.bench, x: n.bench.x, y: n.bench.y }); return; }
     if (n.kind === "stand-bench") { const [x, y] = freeSpot(st.x, st.y + 0.5); Object.assign(st, { mode: "street", bench: null, x, y }); return; }
     if (n.kind === "sit") { st.seat = { placeId: n.placeId, i: n.i }; return; }
@@ -244,6 +246,9 @@ export function makeIsoControl(K) {
       if (st.x > pd.x0 - 0.4 && st.x < pd.x1 + 0.4 && st.y > pd.y0 + 2 && st.y < pd.y1 + 0.4) { near = { kind: "fish", go: "#fish?spot=pier", label: "FISH OFF THE PIER" }; return; }
       // THE ATTRITION (river.js): from its day, E on a fishing spot's bank fishes that water
       if (riverShown(mt)) for (const f of FISHING_SPOTS) if (f.id !== "pier" && Math.hypot(st.x - f.stand[0], st.y - f.stand[1]) < 1.4) { near = { kind: "fish", go: `#fish?spot=${f.id}`, label: `FISH ${f.name}` }; return; }
+      // THE MOUNTAIN, skiable: E at a lift's foot skis from there; E by THE BASE LODGE, from the base
+      for (const L of SKI_LIFTS) if (Math.hypot(st.x - L.a[0], st.y - L.a[1]) < 2.4) { near = { kind: "ski", go: `#ski?at=${L.id}@a`, label: `SKI: ${L.name}` }; return; }
+      { const lb = BUILDING["the-lodge"]?.rect; if (lb && st.x > lb.x - 1.2 && st.x < lb.x + lb.w + 1.2 && st.y > lb.y - 1.2 && st.y < lb.y + 0.6) { near = { kind: "ski", go: "#ski?at=base", label: "SKI THE MOUNTAIN (FROM THE BASE)" }; return; } }
       const g = groundAt(st.x, st.y);
       // THE COURTS, playable: E in the middle of the hardcourt (its edge still steps in)
       if (g?.id === "the-courts" && Math.abs(st.x - (g.rect.x + g.rect.w / 2)) < g.rect.w * 0.25 && Math.abs(st.y - (g.rect.y + g.rect.h / 2)) < g.rect.h * 0.25) { near = { kind: "hoops", go: "#hoops", label: "PLAY BASKETBALL: AN EXHIBITION" }; return; }

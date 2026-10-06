@@ -3,13 +3,14 @@
 //   { href: "#route", title: "SHORT TITLE", name: "plain name", icon: "<key in gameIcons.js>", note: "ONE LINE" }
 // The tile's accessible name is "Play <name>". A tile whose route App.jsx does not serve yet
 // renders dim, "COMING SOON" (routesIn() reads App.jsx at build; vite.config.js defines it).
-// Icons already drawn: tennis golf hoops football soccer fish tank rook card market joystick trophy.
+// Icons already drawn: tennis golf hoops football soccer fish tank rook card market joystick trophy ski.
 export const GAMES = [
   { href: "#tennis", title: "TENNIS", name: "tennis", icon: "tennis", note: "EXHIBITIONS AGAINST THE FAMOUS. KEYS, TOUCH OR PAD" },
   { href: "#golf", title: "GOLF", name: "golf", icon: "golf", note: "NINE HOLES. THE COURSE THE ASSEMBLY DECLINED" },
   { href: "#hoops", title: "BASKETBALL", name: "basketball", icon: "hoops", note: "FIVE ON FIVE, WITH THE LEAGUE'S OWN TEAMS" },
   { href: "#football", title: "FOOTBALL", name: "football", icon: "football", note: "THE GRIDIRON. THE LEAGUE'S OWN TEAMS" },
   { href: "#soccer", title: "SOCCER", name: "soccer", icon: "soccer", note: "THE PITCH. THE LEAGUE'S OWN TEAMS" },
+  { href: "#ski", title: "SKIING", name: "skiing", icon: "ski", note: "THE WHOLE MOUNTAIN. LIFTS, PARK, PIPE, RACES" },
   { href: "#fish", title: "FISHING", name: "fishing", icon: "fish", note: "FISH THE PIER AND THE RIVER" },
   { href: "#hunt", title: "TAGGED OUT", name: "the light-gun hunting cabinet", icon: "hunt", note: "THE BAR CABINET. BUCKS ONLY. A VIDEO GAME" },
   { href: "#aquarium", title: "AQUARIUM", name: "the aquarium", icon: "tank", note: "THE TANKS. EVERY DONATION CHECKED BY REPLAY" },

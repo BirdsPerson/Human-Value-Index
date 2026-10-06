@@ -13,6 +13,7 @@ export const ICONS = {
   market: ["...........a", "..........aa", ".........a.a", "....a...a...", "...a.a.a....", "..a...a.....", ".a..........", "a...........", "............", "ffffffffffff", "f.f.f.f.f.f.", "............"],
   joystick: [".....hhh....", "....hhhhh...", "....hhhhh...", ".....hhh....", "......f.....", "......f.....", "......f.....", "..ffffffff..", ".fffffffffw.", ".ffaffffffff", ".ffffffffff.", "............"],
   hunt: ["..d......d..", ".d.d....d.d.", "..ddd..ddd..", "....dddd....", "....ffff....", "...ffffff...", "..ffaffaff..", "...ffffff...", "....ffff....", ".....hh.....", ".....hh.....", "............"],
+  ski: [".......ff...", ".......ff...", "......aaa...", ".....aaaa.d.", "....d.aa..d.", "...d..aa...d", "......f.f...", ".....f...f..", "w...f...ff..", ".www...ff...", "...wwwff....", "......www..."],
   trophy: [".wwwwwwwwww.", "ww.wwwwww.ww", "w..wwwwww..w", "ww.wwwwww.ww", ".wwwwwwwwww.", "...wwwwww...", "....wwww....", ".....ww.....", ".....ww.....", "...wwwwww...", "...dddddd...", "..dddddddd.."],
 };
 const INK = { f: "--fg", d: "--fg-dim", m: "--fg-mute", a: "--accent", w: "--warn", h: "--harm" };
