@@ -9,12 +9,12 @@
 //               beside whoever presents), cameras and crew, the vision mixer, a studio audience
 // Cabinets also stand in the Dive, the Lantern, the diner and a corner of the casino; the
 // bars and the diner get a TV showing what EBTV is playing (funnels.js ebtvNow).
-import { GAMES, GAME, PLAYABLE, cabColors, highScore, ebtvNow, ebtvLive, CAMPAIGN_OF_PLACE } from "./funnels.js";
+import { GAMES, GAME, PLAYABLE, OWN_GAMES, NEIGHBOURS, cabColors, highScore, ebtvNow, ebtvLive, CAMPAIGN_OF_PLACE, campaignFor } from "./funnels.js";
 import { ebtvFrame, drawFrame, tvBox } from "./ebtvFrame.js";
 import { machineClock } from "./sim.js";
 import { shopState, wallOpen, loadShop, shopSlots, thumb, shopFocus } from "./shopStock.js";
 
-export const FUNNEL_ROOM_TYPE = { arcade: "arcade", "eb-shop": "recordshop", "campus-lounge": "union", "studio-row": "ebtv", boardwalk: "boardwalk" };
+export const FUNNEL_ROOM_TYPE = { "customs-house": "customs", arcade: "arcade", "eb-shop": "recordshop", "campus-lounge": "union", "studio-row": "ebtv", boardwalk: "boardwalk" };
 export const FUNNEL_LOOK = { boardwalk: ["#241c10", "#5a4630"], arcade: ["#140c20", "#2a1a3a"], recordshop: ["#241a16", "#3e2c22"], union: ["#1c1a22", "#34303c"], ebtv: ["#12282a", "#2a2a30"] };
 export const FUNNEL_ACTS = ["arcade", "browse"];
 export const HOSTS = ["carol", "dale", "asuka", "hector", "joan", "vern"];
@@ -24,12 +24,18 @@ export const cabinetGame = (prop) => (isCabinet(prop) ? prop.slice(4) : null);
 // ---- plans ----------------------------------------------------------------------------
 export function funnelPlans(PLANS, { A, M, P, SIDE }) {
   const cab = (slug) => (GAME[slug]?.status === "dev" ? P(`cab:${slug}`, 0.9) : M(A("stand", "arcade", "patron", 1), `cab:${slug}`, 1.6, SIDE));
-  const floor = GAMES.map(g => cab(g.slug));   // playable first, then the dark ones (sync-arcade.mjs order)
+  const floor = OWN_GAMES.map(g => cab(g.slug));   // playable first, then the dark ones (sync-arcade.mjs order)
+  const guests = NEIGHBOURS.map(g => cab(g.slug));   // the neighbours' cabinets: first thing in the front row
   PLANS.arcade = {
     back: { unit: floor },
-    front: { head: [M(A("counter", "serve", "staff", 1), "prizeCounter", 2.3, SIDE)], unit: floor },
-    solo: { head: [M(A("counter", "serve", "staff", 1), "prizeCounter", 2.3, SIDE)], unit: floor },
+    front: { head: [...guests, M(A("counter", "serve", "staff", 1), "prizeCounter", 2.3, SIDE)], unit: floor },
+    solo: { head: [...guests, M(A("counter", "serve", "staff", 1), "prizeCounter", 2.3, SIDE)], unit: floor },
   };
+  // THE PORT's Customs House: the first gateway, a neighbour's cabinet among the desks
+  if (PLANS.office && GAME["internet-city"]) {
+    PLANS.customs = JSON.parse(JSON.stringify(PLANS.office));
+    PLANS.customs.front.head = [cab("internet-city"), ...(PLANS.customs.front.head || [])];
+  }
   const bin = M(A("stand", "browse", "patron"), "recordBin", 1.25);
   PLANS.recordshop = {
     back: { head: [M(A("stand", "browse", "patron"), "shopCounter", 2.4, 0.2)], unit: [bin, P("standee:dale", 0.8), bin, P("standee:vern", 0.8), bin, P("standee:asuka", 0.8)] },
@@ -95,14 +101,17 @@ function cabinet(slug, side) {
       R(c, "#16121e", bx0, top, w, CAB_H * p);                       // the body
       R(c, dark ? "#2a2a2e" : c2, bx0, top + 8 * p, 2 * p, 30 * p);   // side art
       R(c, dark ? "#3a3a3a" : c1, bx0, top, w, 6 * p);                // the marquee
-      const hs = highScore(slug, g.slug, today());
-      if (p >= 1.4) text(c, dark ? "OUT OF ORDER" : `${hs.initials} ${hs.score}`, bx0 + w / 2, top + 1.2 * p, 3.4 * p, dark ? "#9ca3af" : "#0b0b0f", "center");
+      const hs = g.neighbour ? null : highScore(slug, g.slug, today());
+      if (p >= 1.4) text(c, dark ? "OUT OF ORDER" : hs ? `${hs.initials} ${hs.score}` : g.title, bx0 + w / 2, top + 1.2 * p, 3.4 * p, dark ? "#9ca3af" : "#0b0b0f", "center");
       // the screen
       const sx = bx0 + 2 * p, sy = top + 9 * p, sw = w - 4 * p, sh = 12 * p;
       R(c, "#050608", sx, sy, sw, sh);
       if (dark) {
         R(c, "#e8d36a", sx + sw * 0.15, sy + sh * 0.3, sw * 0.7, sh * 0.4);   // the taped sign
         R(c, "#6b5a1a", sx + sw * 0.25, sy + sh * 0.45, sw * 0.5, p);
+      } else if (g.neighbour) {
+        // the attract screen, ours: a little isometric skyline, its windows coming on
+        neighbourScreen(c, sx, sy, sw, sh, p, t, c1, c2);
       } else if (slug === "jetsam") {
         // stars, the ring, the ship slinging round it
         for (let k = 0; k < 6; k++) R(c, "#e0f2fe", sx + ((hk("st" + k) % 97) / 97) * sw, sy + ((hk("sy" + k) % 89) / 89) * sh, p * 0.8, p * 0.8);
@@ -128,6 +137,26 @@ function cabinet(slug, side) {
       R(c, dark ? "#444" : "#fbbf24", bx0 + w / 2 - p, top + 34 * p, 2 * p, 2 * p);
     },
   };
+}
+
+// INTERNET CITY's attract mode, drawn here (none of its own art): a row of isometric blocks on
+// a night sky, windows lighting one by one.
+export function neighbourScreen(c, sx, sy, sw, sh, p, t, c1, c2) {
+  R(c, "#0a1530", sx, sy, sw, sh);
+  const n = 5, bw = sw / n;
+  for (let i = 0; i < n; i++) {
+    const hgt = sh * (0.35 + ((hk("ic" + i) % 50) / 100)), x = sx + i * bw, y = sy + sh - hgt;
+    R(c, i % 2 ? "#1e3a5f" : "#24476e", x, y, bw * 0.62, hgt);            // the lit face
+    R(c, "#14284a", x + bw * 0.62, y + p * 0.6, bw * 0.38, hgt - p * 0.6);   // the side in shadow
+    R(c, i % 2 ? c1 : c2, x, y - p * 0.6, bw * 0.62, p * 0.6);               // the roofline
+    for (let k = 0; k < 3; k++) if (((Math.floor(t * 1.4) + i * 3 + k) % 5) < 3) R(c, "#fde68a", x + bw * 0.15 + (k % 2) * bw * 0.25, y + p + k * 2.2 * p, p * 0.8, p * 0.8);
+  }
+}
+
+// THE CUSTOMS HOUSE's sign over the gateway cabinet: the Port's door to other cities.
+export function customsSign(c, x, y, w, h, u) {
+  R(c, "#0a1530", x + 4 * u, y + 4 * u, Math.min(w * 0.5, 64 * u), 6 * u);
+  text(c, "GATEWAY // ARRIVALS FROM OTHER CITIES", x + 6 * u, y + 5.4 * u, 2.6 * u, "#bae6fd");
 }
 
 // A cardboard host on an easel: the photo keyed out of its set, a white board edge, the name.
@@ -356,7 +385,7 @@ export function funnelRoomHits(pid, plan, side = 0.3, u = null) {
       if (shop && it.prop === "shopCounter") { const f = featured(); if (f) { const b = turntableBox(it.x0, row.y, it.x1 - it.x0, p); out.push({ spec: { kind: "shop", campaign: "eb-shop", item: f.handle }, box: [b[0] - p, b[1] - p, b[2] + p, b[3] + p] }); } }
       const slug = cabinetGame(it.prop);
       if (!slug) continue;
-      out.push({ spec: { kind: "game", slug, campaign: CAMPAIGN_OF_PLACE[pid] || "city", place: pid, ...(pid === "arcade" ? { back: { kind: "arcade" } } : {}) }, box: cabinetBox(it, row.y, p, side) });
+      out.push({ spec: { kind: "game", slug, campaign: campaignFor(slug, CAMPAIGN_OF_PLACE[pid]), place: pid, ...(pid === "arcade" ? { back: { kind: "arcade" } } : {}) }, box: cabinetBox(it, row.y, p, side) });
     }
   }
   return out;

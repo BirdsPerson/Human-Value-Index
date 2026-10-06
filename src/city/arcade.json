@@ -69,5 +69,18 @@
     "line": "A small-town RPG about a film kid, a baseball bat, and getting a friend back from the screen.",
     "play": null,
     "itch": null
+  },
+  {
+    "slug": "internet-city",
+    "title": "INTERNET CITY",
+    "status": "live",
+    "role": "A neighbouring city",
+    "year": "",
+    "line": "A NEIGHBOURING CITY // INTERNETCITYGAME.COM",
+    "play": "https://internetcitygame.com",
+    "itch": null,
+    "neighbour": true,
+    "frame": false,
+    "campaign": "internet-city-cabinet"
   }
 ]

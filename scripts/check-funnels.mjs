@@ -37,14 +37,14 @@ const SIM = await import("../src/city/sim.js");
 const PROPS = await import("../src/city/props.js");
 const FP = await import("../src/city/funnelProps.js");
 const L = await import("../netlify/lib/funnels.js");
-const { cabinetsFrom, readWorks } = await import("./sync-arcade.mjs");
+const { cabinetsFrom, readWorks, neighboursIn } = await import("./sync-arcade.mjs");
 
 // 1. The Arcade holds every game the works list has: every LIVE game a playable cabinet,
 //    betas playable and marked, the rest OUT OF ORDER. The committed list is current.
 const got = await readWorks();
 if (got) {
   const want = cabinetsFrom(got.works);
-  ok(JSON.stringify(want) === JSON.stringify(F.GAMES), `arcade.json is current with ${got.from} (run node scripts/sync-arcade.mjs)`);
+  ok(JSON.stringify(want) === JSON.stringify(F.OWN_GAMES), `arcade.json is current with ${got.from} (run node scripts/sync-arcade.mjs)`);
   for (const w of got.works.filter(w => w.division === "games" && w.status === "live")) ok(F.GAME[w.slug]?.status === "live", `live game ${w.slug} has a live cabinet`);
 } else console.log("  (no works.json reachable: checking the committed arcade.json only)");
 ok(F.LIVE_GAMES.length >= 2 && F.GAME.jetsam?.status === "live" && F.GAME.anamnesis?.status === "live", "JETSAM! and ANAMNESIS are live cabinets");
@@ -66,6 +66,25 @@ for (const g of F.GAMES) {
   ok(c[0].status === "live" && c[0].play === "https://d.example" && c[0].itch === "https://x.itch.io/d", "sync: a live game plays its embed, links its itch page");
   ok(c[1].status === "beta" && c[1].play === "https://b.example/beta" && c[2].status === "beta" && c[2].play === "https://c.example", "sync: status beta, or a play/beta URL, is a playable BETA");
   ok(c[3].status === "dev" && c[3].play === null, "sync: in development is OUT OF ORDER");
+}
+// the neighbours (INTERNET CITY): kept by the sync, tagged with their own campaign, never framed
+// when their site refuses frames, first in the Arcade's front row, a gateway at the Port
+{
+  const ic = F.GAME["internet-city"];
+  ok(ic && ic.neighbour === true && ic.status === "live" && ic.frame === false && ic.play === "https://internetcitygame.com", "INTERNET CITY: a live neighbour cabinet, opened in its own tab");
+  ok(F.campaignFor("internet-city", "the-arcade") === "internet-city-cabinet", "INTERNET CITY's links carry utm_campaign=internet-city-cabinet wherever it stands");
+  const kept = neighboursIn(readFileSync(join(ROOT, "src/city/arcade.json"), "utf8"));
+  ok(kept.some(c => c.slug === "internet-city"), "the sync keeps the neighbours it finds in arcade.json");
+  const u = new URL(F.utm(ic.play, F.campaignFor("internet-city")));
+  ok(u.searchParams.get("utm_source") === "humanvalueindex" && u.searchParams.get("utm_campaign") === "internet-city-cabinet", "the neighbour's link is tagged");
+  for (const [w, h, sw] of [[916, 120, 32], [380, 90, 30]]) {
+    const plan = PROPS.roomPlan("arcade", w, h, sw, 8);
+    const front = plan.rows[plan.rows.length - 1];
+    ok(front.items.find(i => FP.cabinetGame(i.prop))?.prop === "cab:internet-city", `arcade ${w}x${h}: INTERNET CITY is the front row's first cabinet`);
+  }
+  ok(PROPS.typeOf("customs-house") === "customs" && SIM.BUILDING["customs-house"]?.districtId === "port", "THE PORT's Customs House is the first gateway");
+  const src = readFileSync(join(ROOT, "src/city/City.jsx"), "utf8");
+  ok(/internetcity: \{ building: "the-arcade", line: "WELCOME, NEIGHBOUR\. YOUR CITY HAS A CABINET HERE\." \}/.test(src) && /q\.delete\("welcome"\)/.test(src), "#city?welcome=internetcity opens THE ARCADE with one line, and the parameter never travels on");
 }
 // every live (and beta) cabinet stands on the Arcade floor, at the cutaway's widths
 for (const [w, h, sw] of [[916, 120, 32], [700, 110, 32], [520, 150, 43], [380, 90, 30]]) {

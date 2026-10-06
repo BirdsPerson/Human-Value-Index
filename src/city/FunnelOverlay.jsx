@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { GAME, GAMES, ITCH_LINE, EB_SHOP, EBTV_SITE, EBTV_STREAM, EBTV_NOW, utm, highScore, clickBody, setEbtvNow, ebtvNow } from "./funnels.js";
+import { GAME, GAMES, ITCH_LINE, EB_SHOP, EBTV_SITE, EBTV_STREAM, EBTV_NOW, utm, highScore, clickBody, setEbtvNow, ebtvNow, campaignFor, cabColors } from "./funnels.js";
 import { machineClock } from "./sim.js";
 import { loadShop, shopState, onShop, setShopFocus, wallOpen } from "./shopStock.js";
 
@@ -139,7 +139,8 @@ function Overlay({ spec, setSpec, close, now }) {
 // ---- a game in its cabinet -------------------------------------------------------------------
 function gameView(spec, setSpec) {
   const g = GAME[spec.slug];
-  const campaign = spec.campaign || "the-arcade";
+  const campaign = campaignFor(spec.slug, spec.campaign || "the-arcade");
+  if (g?.neighbour) return neighbourView(g, campaign);
   if (!g) return { title: "CABINET UNPLUGGED", meta: "", body: <p className="hvi-fn-note">THIS CABINET HAS BEEN REMOVED FROM THE FLOOR. THE DEPARTMENT KEEPS THE COINS.</p> };
   const hs = highScore(g.slug, spec.place || "arcade", machineClock().day);
   const tag = <span className={`hvi-fn-tag ${g.status}`}>{g.status === "live" ? "NOW PLAYING" : g.status === "beta" ? "BETA" : "OUT OF ORDER"}</span>;
@@ -169,21 +170,56 @@ function gameView(spec, setSpec) {
   return { title: g.title, meta: g.role ? g.role.toUpperCase() : "", body };
 }
 
+// A neighbour's cabinet (INTERNET CITY): their game is theirs. Our attract screen in the CRT, a
+// welcome, and the door to their site in a new tab (their site refuses frames: X-Frame-Options
+// DENY, frame-ancestors 'none', checked 2026-10-05; a frame is used only if "frame" is true).
+function neighbourView(g, campaign) {
+  const body = (
+    <>
+      <div className="hvi-fn-crt"><div className="glass">
+        {g.frame ? <iframe title={`${g.title}, playing`} src={utm(g.play, campaign)} allow="autoplay; fullscreen" allowFullScreen />
+          : <div className="hvi-fn-dark" style={{ color: "#bae6fd" }}><NeighbourAttract /><b>{g.title}</b><span>A NEIGHBOURING CITY. NOT RUN BY THE DEPARTMENT. NOT SCORED BY IT EITHER.</span></div>}
+        <div className="scan" /></div><span className="brand">{g.title}</span><span className="led" /></div>
+      <div className="hvi-fn-foot">
+        <span className="hvi-fn-tag live">A NEIGHBOUR</span>
+        <span>THIS CABINET IS A WINDOW, NOT A COPY. THEIR CITY OPENS IN ITS OWN TAB.</span>
+      </div>
+      <div className="hvi-fn-foot">
+        <Out href={g.play} campaign={campaign} className="hvi-fn-cta">VISIT {g.title}: {new URL(g.play).host.toUpperCase()}</Out>
+      </div>
+    </>
+  );
+  return { title: g.title, meta: g.line, body };
+}
+// The attract screen as in the room (funnelProps.neighbourScreen), larger: an SVG of blocks.
+function NeighbourAttract() {
+  const [c1, c2] = cabColors("internet-city");
+  const hs = [0.55, 0.8, 0.45, 0.95, 0.6, 0.7, 0.4];
+  return (
+    <svg width="240" height="110" viewBox="0 0 70 32" aria-hidden="true" style={{ imageRendering: "pixelated" }} shapeRendering="crispEdges">
+      <rect width="70" height="32" fill="#0a1530" />
+      {hs.map((h, i) => { const x = 2 + i * 9.5, hh = Math.round(h * 26), y = 32 - hh; return (
+        <g key={i}><rect x={x} y={y} width="6" height={hh} fill={i % 2 ? "#1e3a5f" : "#24476e"} /><rect x={x + 6} y={y + 1} width="3" height={hh - 1} fill="#14284a" /><rect x={x} y={y - 1} width="6" height="1" fill={i % 2 ? c1 : c2} />
+          {[0, 1, 2].map(k => <rect key={k} x={x + 1 + (k % 2) * 3} y={y + 2 + k * 3} width="1" height="1" fill="#fde68a" />)}</g>); })}
+    </svg>
+  );
+}
+
 function ArcadeFloor({ setSpec }) {
   const day = machineClock().day;
   return (
     <>
-      <p className="hvi-fn-note">EVERY IRIDESCENT GAME HAS A CABINET. LIT ONES PLAY. DARK ONES ARE STILL BEING BUILT. SCORES ARE LOGGED AGAINST YOUR FILE.</p>
+      <p className="hvi-fn-note">EVERY IRIDESCENT GAME HAS A CABINET. LIT ONES PLAY. DARK ONES ARE STILL BEING BUILT. SCORES ARE LOGGED AGAINST YOUR FILE. THE NEIGHBOURS' CABINETS ARE WINDOWS TO THEIR OWN CITIES.</p>
       <div className="hvi-fn-grid">
-        {GAMES.map(g => {
+        {[...GAMES].sort((a, b) => Boolean(b.neighbour) - Boolean(a.neighbour)).map(g => {
           const hs = highScore(g.slug, "arcade", day);
           return (
-            <button key={g.slug} type="button" className={`hvi-fn-cab ${g.status}`} onClick={() => setSpec({ kind: "game", slug: g.slug, campaign: "the-arcade", back: { kind: "arcade" } })}
-              aria-label={`${g.title}, ${g.status === "dev" ? "out of order" : g.status === "beta" ? "beta" : "playable"}`}>
+            <button key={g.slug} type="button" className={`hvi-fn-cab ${g.status}`} onClick={() => setSpec({ kind: "game", slug: g.slug, campaign: campaignFor(g.slug, "the-arcade"), back: { kind: "arcade" } })}
+              aria-label={`${g.title}, ${g.neighbour ? "a neighbouring city" : g.status === "dev" ? "out of order" : g.status === "beta" ? "beta" : "playable"}`}>
               <span className="mq" style={{ background: g.status === "dev" ? undefined : cabColor(g.slug) }}>{g.title}</span>
-              <span className={`hvi-fn-tag ${g.status}`} style={{ alignSelf: "flex-start" }}>{g.status === "live" ? (g.self ? "YOU ARE HERE" : "PLAY") : g.status === "beta" ? "BETA" : "OUT OF ORDER"}</span>
-              <span style={{ fontSize: 12, color: "#9ca3af" }}>{g.role}</span>
-              {g.status !== "dev" && !g.self && <span className="hs">HI {hs.initials} {hs.score}</span>}
+              <span className={`hvi-fn-tag ${g.status}`} style={{ alignSelf: "flex-start" }}>{g.neighbour ? "A NEIGHBOUR" : g.status === "live" ? (g.self ? "YOU ARE HERE" : "PLAY") : g.status === "beta" ? "BETA" : "OUT OF ORDER"}</span>
+              <span style={{ fontSize: 12, color: "#9ca3af" }}>{g.neighbour ? g.line : g.role}</span>
+              {g.status !== "dev" && !g.self && !g.neighbour && <span className="hs">HI {hs.initials} {hs.score}</span>}
             </button>
           );
         })}
@@ -192,7 +228,7 @@ function ArcadeFloor({ setSpec }) {
     </>
   );
 }
-const cabColor = (slug) => ({ jetsam: "#22d3ee", anamnesis: "#4ade80", "human-value-index": "#fbbf24" }[slug] || "#a78bfa");
+const cabColor = (slug) => ({ jetsam: "#22d3ee", anamnesis: "#4ade80", "human-value-index": "#fbbf24", "internet-city": "#38bdf8" }[slug] || "#a78bfa");
 
 // ---- the EB SHOP ------------------------------------------------------------------------------
 // The shop's stock, as this page holds it (shopStock.js: one fetch, shared with the walls).

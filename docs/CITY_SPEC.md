@@ -1136,6 +1136,17 @@ one-line hooks.
   link per rack ("BUY <title>, $<price>, at the EB Shop"), hidden until focused, its frame lit.
   FIND > finds the EB SHOP, THE ARCADE and EBTV by name (`findFunnel`) above the people.
   `scripts/check-funnel-shop.mjs`.
+- **The neighbours** (2026-10-05). Other people's games get a tribute cabinet: entries in
+  `arcade.json` marked `"neighbour": true`, which `sync-arcade.mjs` keeps after Iridescent's own.
+  First: INTERNET CITY (internetcitygame.com, not ours): first in THE ARCADE's front row and the
+  Port's first gateway (THE CUSTOMS HOUSE, room type `customs`: the office plus the cabinet;
+  Scott: one megacity, gateways to other worlds at the Port). Its screen is our own drawing (a
+  little isometric skyline), never their art; its site refuses frames (X-Frame-Options DENY,
+  frame-ancestors 'none'), so the cabinet shows our attract screen and a link out in a new tab,
+  `utm_campaign=internet-city-cabinet` wherever it stands. No high score: not our game to score.
+  The share link `#city?welcome=internetcity` glides to THE ARCADE, opens it and shows one
+  dismissable line, "WELCOME, NEIGHBOUR. YOUR CITY HAS A CABINET HERE."; the parameter is
+  dropped from the address at once (City.jsx `WELCOMES`).
 - **The shop proxy.** `/api/funnel?shop=1` (`netlify/lib/funnels.js`): Shopify's public
   `products.json` (up to 3 pages) and the newest 36 in-stock products' `.js` pages for their
   video, the shop's own listings (vendor EBShop) first, 24 shown, videos first. Blobs keeps the

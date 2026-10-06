@@ -118,7 +118,7 @@ const HINT_KEY = "hvi-city-hint-seen";
 // LABELS: every name on the map, the old way. Off unless the viewer turned it on.
 const LABELS_KEY = "hvi-city-labels";
 function labelsOn() { try { return localStorage.getItem(LABELS_KEY) === "1"; } catch { return false; } }
-function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = null }) {
+function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = null, welcome = null, onWelcomeEnd }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const tvLinkRef = useRef(null);   // the TVs, for the keyboard: the real channel, labelled with what is on
@@ -374,6 +374,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       enter: () => { const b = V.sel && BUILDING[V.sel]; if (b) onEnterRef.current?.(b.district, b.id); },
       open: () => { if (V.peek) { unfollow(); select(V.peek); } },
       labels: (on) => { V.allLabels = on; V.need = true; },
+      visit: (id) => { if (BUILDING[id]) { unfollow(); select(id); } },
       find: startFind, follow: refollow, endFind: () => onFindEndRef.current?.(),
     };
 
@@ -1660,6 +1661,8 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
   dropHintRef.current = hint ? dropHint : null;
   // A new find (or the same one picked again: n) flies the camera; null ends it.
   useEffect(() => { apiRef.current.find?.(find); }, [find]);
+  // #city?welcome=<who> (City.jsx): the camera glides to the place they were invited to and opens it
+  useEffect(() => { if (welcome) apiRef.current.visit?.(welcome.building); }, [welcome]);
 
   const b = sel && BUILDING[sel];
   return (
@@ -1673,7 +1676,13 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
           <button type="button" className="hvi-city-zb" aria-label="Stop finding" onClick={() => apiRef.current.endFind?.()}>×</button>
         </div>
       )}
-      {hint && !found && !b && (
+      {welcome && !found && (
+        <div className="hvi-city-found">
+          <span className="l" role="status">{welcome.line}</span>
+          <button type="button" className="hvi-city-zb" aria-label="Dismiss the welcome" onClick={() => onWelcomeEnd?.()}>×</button>
+        </div>
+      )}
+      {hint && !found && !b && !welcome && (
         <div className="hvi-city-hint" role="note" aria-label="What you are looking at">
           <p><b>THE SUBSTRATE.</b> A CITY THAT RUNS ITSELF. EVERYONE IN IT IS ON FILE, ON A SCHEDULE, IN REAL TIME.</p>
           <p className="do">TAP ANY BUILDING TO SEE WHO IS INSIDE.</p>

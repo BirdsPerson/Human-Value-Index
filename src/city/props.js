@@ -17,7 +17,7 @@ import { lotPhase, resortPhase, machineClock } from "./sim.js";
 import { PLANNING_ROOM_TYPE, PLANNING_LOOK, planningPlans, planningPropDrawers } from "./planning.js";
 import { STORE_ROOM_TYPE, STORE_LOOK, storePlans, storePropDrawers, storeRoomType, storeRoomDrawers } from "./storefrontProps.js";   // THE MALL
 import { NIGHT_ROOM_TYPE, NIGHT_LOOK, nightPlans, nightPropDrawers, nightRoomDrawers, nightLive } from "./nightlifeProps.js";   // THE NIGHTLIFE QUARTERS
-import { FUNNEL_ROOM_TYPE, FUNNEL_LOOK, FUNNEL_ACTS, funnelPlans, funnelPropDrawers, funnelRooms, withTv } from "./funnelProps.js";
+import { FUNNEL_ROOM_TYPE, FUNNEL_LOOK, FUNNEL_ACTS, funnelPlans, funnelPropDrawers, funnelRooms, withTv, customsSign } from "./funnelProps.js";
 import { floorRoomType, casinoPlans, casinoLook, casinoDraw, casinoLive, casinoProps } from "../casino/cityRooms.js";
 
 // place id -> interior type
@@ -791,7 +791,7 @@ const DRAW = {
   },
 };
 const FUNNEL_ROOMS = funnelRooms();
-Object.assign(DRAW, FUNNEL_ROOMS.DRAW, { boardwalk: DRAW.market });
+Object.assign(DRAW, FUNNEL_ROOMS.DRAW, { boardwalk: DRAW.market, customs: (c, x, y, w, h, u, o) => { DRAW.office(c, x, y, w, h, u, o); customsSign(c, x, y, w, h, u); } });   // the Port's gateway: an office with a sign
 Object.assign(DRAW, storeRoomDrawers());   // THE MALL's walls
 Object.assign(DRAW, nightRoomDrawers());   // THE NIGHTLIFE QUARTERS' walls
 DRAW.planning = DRAW.office;   // the Dept of Planning's drawing office: the office's walls

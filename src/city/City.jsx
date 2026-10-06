@@ -83,7 +83,7 @@ export default function City({ route }) {
   // The query minus the floor: what survives moving between views (?at=, ?stress=).
   const query = useMemo(() => {
     const q = new URLSearchParams(parsed.query.replace(/^\?/, ""));
-    q.delete("floor"); q.delete("find"); q.delete("control"); q.delete("storey");
+    q.delete("floor"); q.delete("find"); q.delete("control"); q.delete("storey"); q.delete("welcome");
     const s = q.toString();
     return s ? "?" + s : "";
   }, [parsed.query]);
@@ -332,6 +332,19 @@ export default function City({ route }) {
     if (mode !== "city") setMode("city");
     window.location.replace(window.location.href.split("#")[0] + (districtId ? `#city/${districtId}` : "#city") + query);
   }, [wantsControl]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // #city?welcome=internetcity: a share link for a neighbour (Scott, 2026-10-05). The camera
+  // glides to THE ARCADE, opens it (the neighbour's cabinet stands first in the front row) and
+  // one dismissable line welcomes them. The parameter is dropped from the address at once, so
+  // nothing after it (and nobody else) carries it.
+  const wantsWelcome = WELCOMES[(parsed.query.match(/[?&]welcome=([a-z0-9-]+)/) || [])[1]] || null;
+  const [welcome, setWelcome] = useState(null);
+  useEffect(() => {
+    if (!wantsWelcome) return;
+    setWelcome(wantsWelcome);
+    if (mode !== "city") setMode("city");
+    window.location.replace(window.location.href.split("#")[0] + "#city" + query);
+  }, [wantsWelcome]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const endWelcome = useCallback(() => setWelcome(null), []);
   // A find is shown in the CITY view: a pick (or a link) from MAP, STACK or STREET switches to it.
   useEffect(() => { if (findSlug && !districtId && mode !== "city") setMode("city"); }, [findSlug, districtId, mode, setMode]);
   const onPick = useCallback((e) => {
@@ -413,7 +426,7 @@ export default function City({ route }) {
           : d
             ? <DistrictView key={d.id} districtId={d.id} censusRef={censusRef} onOpen={open} onBuilding={onBuilding} counts={stats.buildings} />
             : iso
-              ? <CityIso censusRef={censusRef} onOpen={open} onEnter={goBuilding} find={find} onFindEnd={endFind} self={selfEntry?.s || null} />
+              ? <CityIso censusRef={censusRef} onOpen={open} onEnter={goBuilding} find={find} onFindEnd={endFind} self={selfEntry?.s || null} welcome={welcome} onWelcomeEnd={endWelcome} />
             : street
               ? <Street censusRef={censusRef} onOpen={open} onEnter={goBuilding} />
               : three
@@ -462,6 +475,11 @@ export default function City({ route }) {
     </div>
   );
 }
+
+// Welcome links: who, where the camera goes, the one line they are shown.
+const WELCOMES = {
+  internetcity: { building: "the-arcade", line: "WELCOME, NEIGHBOUR. YOUR CITY HAS A CABINET HERE." },
+};
 
 // The first census waits (briefly) for the Assembly too: the lot's state moves who visits it.
 function civicReady() {

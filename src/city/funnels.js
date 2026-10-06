@@ -14,6 +14,11 @@ export const GAMES = GAMES_JSON;
 export const GAME = Object.fromEntries(GAMES.map(g => [g.slug, g]));
 export const LIVE_GAMES = GAMES.filter(g => g.status === "live");
 export const PLAYABLE = GAMES.filter(g => g.status !== "dev");
+// Iridescent's own games (the works list) and the neighbours: other people's games with a
+// tribute cabinet here (INTERNET CITY), each with its own campaign, never claimed as ours.
+export const OWN_GAMES = GAMES.filter(g => !g.neighbour);
+export const NEIGHBOURS = GAMES.filter(g => g.neighbour);
+export const campaignFor = (slug, fallback) => GAME[slug]?.campaign || fallback || "city";
 
 export const ITCH_LINE = "AN IRIDESCENT PRODUCTION. ALSO ON ITCH.IO";
 export const EB_SHOP = "https://shop.electricbasement.tv";
@@ -46,8 +51,10 @@ export function findFunnel(q) {
 export const CABINET_PLACES = {
   "dive-bar": ["jetsam"], "the-lantern": ["jetsam"], "all-night-diner": ["jetsam"], casino: ["jetsam"],
   "campus-lounge": ["jetsam", "anamnesis"], boardwalk: ["jetsam"],
+  // THE PORT's first gateway to another world (Scott, 2026-10-05: one megacity, gateways at the Port)
+  "customs-house": ["internet-city"],
 };
-export const CAMPAIGN_OF_PLACE = { "dive-bar": "the-dive", "the-lantern": "the-dive", "all-night-diner": "the-diner", casino: "casino", "campus-lounge": "union-lounge", arcade: "the-arcade", "eb-shop": "eb-shop", "studio-row": "ebtv-station", boardwalk: "the-boardwalk" };
+export const CAMPAIGN_OF_PLACE = { "dive-bar": "the-dive", "the-lantern": "the-dive", "all-night-diner": "the-diner", casino: "casino", "campus-lounge": "union-lounge", arcade: "the-arcade", "eb-shop": "eb-shop", "studio-row": "ebtv-station", boardwalk: "the-boardwalk", "customs-house": "internet-city-cabinet" };
 // Buildings whose rooms hold a cabinet (the toolbar offers PLAY there too).
 export const CABINET_BUILDINGS = { "the-dive": "the-dive", "press-building": "the-diner", casino: "casino", "eb-shop": "union-lounge", "the-boardwalk": "the-boardwalk" };
 
@@ -82,7 +89,7 @@ export function highScore(slug, placeId, day) {
 }
 
 // The cabinet's marquee colours, per game (the dark ones grey).
-export const CAB_COLORS = { jetsam: ["#22d3ee", "#f472b6"], anamnesis: ["#4ade80", "#14532d"], "human-value-index": ["#4ade80", "#fbbf24"] };
+export const CAB_COLORS = { "internet-city": ["#38bdf8", "#a3e635"], jetsam: ["#22d3ee", "#f472b6"], anamnesis: ["#4ade80", "#14532d"], "human-value-index": ["#4ade80", "#fbbf24"] };
 export function cabColors(slug) {
   if (CAB_COLORS[slug]) return CAB_COLORS[slug];
   const k = h32(slug);
@@ -122,5 +129,6 @@ export function funnelButtons(buildingId) {
   if (f?.kind === "ebtv") out.push({ label: "WATCH", aria: "Watch Electric Basement TV live", spec: { kind: "ebtv", campaign: f.campaign } });
   const c = CABINET_BUILDINGS[buildingId];
   if (c) out.push({ label: "JETSAM!", aria: "Play JETSAM! on the cabinet here", spec: { kind: "game", slug: "jetsam", campaign: c } });
+  if (buildingId === "customs-house" && GAME["internet-city"]) out.push({ label: "INTERNET CITY", aria: "The gateway to Internet City, a neighbouring city", spec: { kind: "game", slug: "internet-city", campaign: campaignFor("internet-city") } });
   return out;
 }

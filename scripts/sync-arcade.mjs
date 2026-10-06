@@ -16,6 +16,9 @@
 //     URL on a work not yet live
 //   anything else ("in-development")    OUT OF ORDER: a dark cabinet, no build to play
 //   Human Value Index itself            LIVE, and self: you are already inside it
+// Neighbours: entries already in arcade.json with "neighbour": true are other people's games
+// the city hosts a tribute cabinet for (INTERNET CITY, internetcitygame.com). The works list
+// never has them, so the sync keeps them, after Iridescent's own, exactly as they were.
 //   node scripts/sync-arcade.mjs [--check]   (--check: exit 1 if arcade.json would change)
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -80,12 +83,16 @@ export function cabinetsFrom(works) {
   return out.map((c, i) => [c, i]).sort((a, b) => rank[a[0].status] - rank[b[0].status] || a[1] - b[1]).map(([c]) => JSON.parse(JSON.stringify(c)));
 }
 
+export function neighboursIn(text) {
+  try { const j = JSON.parse(text); return Array.isArray(j) ? j.filter(c => c && c.neighbour === true) : []; } catch { return []; }
+}
+
 async function main() {
   const check = process.argv.includes("--check");
   const got = await readWorks();
   if (!got) { console.log("sync-arcade: no works.json reachable; the committed src/city/arcade.json stands"); return; }
-  const next = JSON.stringify(cabinetsFrom(got.works), null, 2) + "\n";
   const prev = existsSync(OUT) ? readFileSync(OUT, "utf8") : "";
+  const next = JSON.stringify([...cabinetsFrom(got.works), ...neighboursIn(prev)], null, 2) + "\n";
   if (next === prev) { console.log(`sync-arcade: arcade.json current (${got.from})`); return; }
   if (check) { console.log(`sync-arcade: arcade.json is behind ${got.from}; run node scripts/sync-arcade.mjs`); process.exit(1); }
   writeFileSync(OUT, next);
