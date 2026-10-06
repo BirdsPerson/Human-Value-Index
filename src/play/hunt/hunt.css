@@ -39,3 +39,5 @@
 .hu-board th[scope="row"] { color: var(--warn); letter-spacing: 0.1em; }
 .hu-list { list-style: none; margin: 0; padding: 0; font-size: var(--t-xs); color: var(--fg-dim); display: grid; gap: 2px; }
 .hu-list li::before { content: "> "; color: var(--fg-mute); }
+
+.hu-guidewrap { margin: 0 0 var(--s3); padding: var(--s3); border: 1px solid var(--line-hi); }

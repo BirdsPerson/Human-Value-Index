@@ -151,5 +151,46 @@ ok(D.seasonOpen("department", AT) && [0, 1, 2, 3].some(s => SPECIES_BY.whitetail
   ok(!JSON.stringify(B.publicBoard(b, 3)).includes("used"), "the public board never shows the permits");
 }
 
+// 6. A casual human (Scott, 2026-10-06: the sports games are too hard): aims at a legal target after a late
+// reaction (~250 ms, +-100 ms), with a sloppy aim (about 4-12 px) and no lead. The easy trip (WHITETAIL,
+// rank 1) should be cleared at stage 1 (one male filed) in at least 70% of runs, and so should the rest.
+{
+function rng(seed){let r=seed>>>0;return()=>{r=(Math.imul(r^(r>>>15),2246822507)+0x6d2b79f5)>>>0;return r/4294967296;};}
+const gauss=(rnd)=>(rnd()+rnd()+rnd()+rnd()-2)*1.73;
+function casual(cfg,{noise=4,react=15,jit=6,speed=5}={}){
+  const rnd=rng(cfg.seed*13+5), st=S.newHunt(cfg);
+  let tgt=null,seenAt=0,aimOff=[0,0],cap=S.tripTicks(cfg.trip),stage1=null;
+  while(st.phase!=="done"&&st.tick<cap){
+    let x=Math.round(st.px),y=Math.round(st.py),b=0;
+    if(st.phase==="play"){
+      if(st.ammo<=0&&st.reload===0){x=S.OFF;y=S.OFF;b=st.prevB&1?0:1;}
+      else{
+        const pts=S.aimPoints(st).filter(p=>p.x>6&&p.x<S.W-6&&p.y>6&&p.y<S.H-6);
+        // sees a target after a reaction delay
+        if(!tgt||!pts.some(p=>Math.hypot(p.x-tgt.x,p.y-tgt.y)<30)){ if(pts.length){ if(!seenAt)seenAt=st.tick; if(st.tick-seenAt>=Math.max(4,Math.round(react+gauss(rnd)*jit))){tgt=pts[0];seenAt=0;aimOff=[gauss(rnd)*noise,gauss(rnd)*noise];} } else {tgt=null;seenAt=0;} }
+        if(tgt){
+          const cur=pts.reduce((a,p)=>!a||Math.hypot(p.x-tgt.x,p.y-tgt.y)<Math.hypot(a.x-tgt.x,a.y-tgt.y)?p:a,null);
+          if(cur){tgt=cur;const tx=cur.x+aimOff[0],ty=cur.y+aimOff[1];
+            const mv=(a,t)=>Math.abs(t-a)<=speed?t:a+Math.sign(t-a)*speed;
+            x=Math.round(mv(st.px,tx));y=Math.round(mv(st.py,ty));
+            if(Math.abs(x-tx)<=2&&Math.abs(y-ty)<=2&&st.cool===0&&st.reload===0&&!(st.prevB&1)){b=1;aimOff=[gauss(rnd)*noise,gauss(rnd)*noise];}}
+        }
+      }
+    }
+    S.step(st,Math.max(-1,Math.min(S.W-1,x)),Math.max(-1,Math.min(S.H-1,y)),b);
+    if(st.stages.length===1&&stage1===null)stage1=st.stages[0].males>=D.RULES.QUOTA;
+    st.ev.length=0;
+  }
+  return {st,stage1:stage1===true};
+}
+
+  for (const [trip, cfgn] of [["whitetail", { noise: 4 }], ["whitetail", { noise: 12, react: 20 }], ["elk", { noise: 8 }]]) {
+    let hit = 0; const N = 40;
+    for (let i = 0; i < N; i++) if (casual({ seed: 500 + i * 11, trip, at: AT }, cfgn).stage1) hit++;
+    ok(hit / N >= 0.7, `a casual human (${JSON.stringify(cfgn)}) clears stage 1 of ${trip} ${(hit / N * 100).toFixed(0)}% of runs (>= 70%)`);
+    if (process.env.VERBOSE) console.log(`  casual ${trip} ${JSON.stringify(cfgn)}: stage 1 ${(hit / N * 100).toFixed(0)}%`);
+  }
+}
+
 console.log(`check-hunt: ${n - failed}/${n} passed`);
 process.exit(failed ? 1 : 0);

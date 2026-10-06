@@ -8,6 +8,8 @@ import { loadScores, saveScore, loadTag, saveTag } from "./scores.js";
 import { getPermit, fileHunt, loadBoard } from "./api.js";
 import * as sfx from "./audio.js";
 import GameMenu from "../GameMenu.jsx";
+import HuntGuide, { GUIDE_KEY, TIPS_KEY, tipText } from "./Guide.jsx";
+import { guideSeen, markGuideSeen, tipsUsed, markTipUsed, Tip } from "../guideKit.jsx";
 import "./hunt.css";
 import "../pages.css";
 
@@ -52,7 +54,7 @@ export default function Hunt({ route }) {
       catch (e) { line = `NO PERMIT (${e.message}). HUNT ANYWAY: THIS TRIP STAYS IN THIS BROWSER.`; }
       setBusy(false);
     }
-    setNote(demo ? "THE DEPARTMENT'S MARKSMAN, FOR DEMONSTRATION. HE HAS NEVER MISSED A FORM." : line);
+    setNote(demo ? "THE DEPARTMENT'S MARKSMAN, FOR DEMONSTRATION." : line);
     setGame({ key: cfg.seed ^ cfg.at, cfg, demo, permit });
   };
   const toggleMute = () => { sfx.setMuted(!muted); setMuted(!muted); };
@@ -173,11 +175,16 @@ function Play({ game, muted, cab, tag, onMute, onScores, onAgain, onMenu, onRepl
   const [mode, setMode] = useState(() => { try { return window.matchMedia("(pointer: coarse)").matches ? "touch" : "keys"; } catch { return "keys"; } });
   const [pad, setPad] = useState(null);
   const [say, setSay] = useState("");
+  const [guide, setGuide] = useState(() => !demo && !replayLog && !guideSeen(GUIDE_KEY));   // the controls guide, once, before the first trip
+  const guideRef = useRef(guide); guideRef.current = guide;
+  const dismissGuide = () => { markGuideSeen(GUIDE_KEY); guideRef.current = false; setGuide(false); };
+  const [tip, setTip] = useState({ id: null, gone: true });
+  const tipUsed = useRef(null), tipShown = useRef(null);
   const [ended, setEnded] = useState(null);
   const [filed, setFiled] = useState(null);   // {busy} | {ok, line} | {error}
   const logRef = useRef([]), stRef = useRef(null), endedRef = useRef(false);
   const reduced = useMemo(REDUCED, []);
-  const togglePause = () => { if (endedRef.current) return; pausedRef.current = !pausedRef.current; setPaused(pausedRef.current); };
+  const togglePause = () => { if (endedRef.current || guideRef.current) return; pausedRef.current = !pausedRef.current; setPaused(pausedRef.current); };
   const resume = () => { pausedRef.current = false; setPaused(false); };
   const watching = demo || Boolean(replayLog);
 
@@ -256,7 +263,7 @@ function Play({ game, muted, cab, tag, onMute, onScores, onAgain, onMenu, onRepl
       last = now;
       while (acc >= 1 / HZ) {
         acc -= 1 / HZ;
-        if (pausedRef.current || endedRef.current || st.phase === "done") { input(); continue; }
+        if (pausedRef.current || guideRef.current || endedRef.current || st.phase === "done") { input(); continue; }
         let x, y, b;
         if (replayLog) {
           if (rp >= replayLog.length) { [x, y, b] = [OFF, OFF, 0]; }
@@ -269,6 +276,15 @@ function Play({ game, muted, cab, tag, onMute, onScores, onAgain, onMenu, onRepl
         if (watching && x >= 0) aim.current = [x, y];
         for (const e of st.ev) { sfx.play(e); if (e === "shot") kick = 4; }
         st.ev.length = 0;
+      }
+      // first-run prompts: a line while the thing is in front of you, gone once you have done it
+      if (!watching) {
+        const live = st.phase === "play" && !pausedRef.current && !guideRef.current;
+        const want = !live ? null : st.shots === 0 ? "aim" : st.targets.some(a => a.kind === "female" && a.state !== "down" && a.state !== "gone" && a.x - st.cam > 0 && a.x - st.cam < W) ? "female" : st.ammo <= 1 && st.reload === 0 ? "reload" : null;
+        if (tipUsed.current === null) tipUsed.current = tipsUsed(TIPS_KEY);
+        const t = tipShown.current;
+        if (t && t !== want) { tipUsed.current = markTipUsed(TIPS_KEY, t); tipShown.current = null; setTip(x => ({ ...x, gone: true })); }
+        if (!tipShown.current && want && !tipUsed.current.has(want)) { tipShown.current = want; setTip({ id: want, gone: false }); }
       }
       if (st.msg !== said) { said = st.msg; if (said) setSay(said); }
       if (st.phase === "done" && !endedRef.current) {
@@ -317,6 +333,7 @@ function Play({ game, muted, cab, tag, onMute, onScores, onAgain, onMenu, onRepl
 
   return (
     <div className="hu-play" ref={wrap}>
+      {guide && <div className="hu-guidewrap"><HuntGuide mode={pad ? "pad" : mode} family={pad} onDone={dismissGuide} /></div>}
       <div className="hu-stage" onPointerDown={onBorder} onContextMenu={(e) => e.preventDefault()}>
         <canvas ref={canvas} width={W} height={H} className={legendMode === "keys" ? "nocursor" : ""}
           style={{ width: scale.css, height: (scale.css * H) / W }}
@@ -340,14 +357,15 @@ function Play({ game, muted, cab, tag, onMute, onScores, onAgain, onMenu, onRepl
             city: cab ? { label: "BACK TO THE BAR", onSelect: leaveCabinet } : true,
           }} />
       ) : paused && (
-        <GameMenu key="pause" kind="pause" title="PAUSED. THE DEER WAIT." summary={`${TRIP[cfg.trip].name} // ${stRef.current?.score || 0} POINTS SO FAR.`} onBack={resume}
+        <GameMenu key="pause" kind="pause" title="PAUSED." summary={`${TRIP[cfg.trip].name} // ${stRef.current?.score || 0} POINTS SO FAR.`} onBack={resume}
           options={{
             resume, restart: { label: "NEW TRIP, SAME SPECIES", onSelect: onAgain },
-            controls: <Controls mode={legendMode} family={pad} />,
+            controls: <HuntGuide mode={legendMode} family={pad} compact />,
             sound: { on: !muted, onSelect: onMute },
             quit: cab ? { label: "BACK TO THE BAR", onSelect: leaveCabinet } : true,
           }} />
       )}
+      {!guide && <Tip text={tipText(tip.id, legendMode, pad)} gone={tip.gone} />}
       <div className="hu-status">{pad ? `CONTROLLER: ${pad.toUpperCase()} // STICK AIMS, RT SHOOTS, X RELOADS` : mode === "touch" ? "TAP TO SHOOT // RELOAD BUTTON, OR TAP THE BORDER // II PAUSES" : "MOUSE AIMS // CLICK SHOOTS // RIGHT-CLICK OR CLICK OFF SCREEN RELOADS // ENTER PAUSES"}{muted ? " // MUTED" : ""}{demo ? " // THE MARKSMAN IS SHOOTING" : replayLog ? " // REPLAY" : permit ? " // PERMITTED TRIP" : ""}</div>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{say}</p>
       <div className="hu-touch" aria-label="Touch controls">

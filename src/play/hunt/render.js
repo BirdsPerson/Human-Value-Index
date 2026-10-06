@@ -367,7 +367,7 @@ export function trophyCard(c, st, t = 0) {
   line(`STAGES ${st.stages.length}/${trip.scenes.length}`, 106);
   const why = st.end === "revoked" ? "LICENCE REVOKED." : st.end === "quota" ? "THE SEASON CLOSED ON YOU." : "TRIP COMPLETE.";
   line(why, 120, st.end === "complete" ? "#4ade80" : "#f87171");
-  TC(c, "TAGS ISSUED. THE DEER WERE NOT CONSULTED.", H - 14, "#9ca3af", 1, null);
+  TC(c, "ONE MALE A STAGE FILLS THE TAG.", H - 14, "#9ca3af", 1, null);
   void t;
 }
 
