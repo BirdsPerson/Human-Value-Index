@@ -88,10 +88,12 @@ export const FURNITURE_PRICES = {
   sofa: 1_600, sectional: 5_500, loveseat: 1_100, beanbag: 200, armchair: 700, rug: 400,
   plant: 100, "plant-tall": 350, cactus: 60, bookshelf: 600, "record-player": 900, aquarium: 2_200, chandelier: 8_000,
   easel: 400, piano: 6_000, "grand-piano": 20_000, books: 150, weights: 750, trophies: 500,
+  deck: 50, "deck-eb": 400,
   pc: 2_000, arcade: 4_000, globe: 300, filing: 250, drafting: 1_800, desk: 700,
   tub: 1_500, clawfoot: 4_500, shower: 900, sink: 400, toilet: 300, towels: 80,
   // the upgrade tiers: never sold outright, reached only by UPGRADE (their value on the ladder)
   "golf-cabinet": 10_000, "golf-sim": 35_000, "ebtv-big": 4_500, "home-theater": 18_000, kegerator: 9_000, brewery: 16_000,
+  "card-table": 1_500, "poker-table": 6_000,
 };
 
 // ---- UPGRADES (Scott, 2026-10-05: "buy an arcade machine cabinet, then upgrade it to the Golden
@@ -105,6 +107,7 @@ export const UPGRADES = {
   arcade: "golf-cabinet", "golf-cabinet": "golf-sim",
   tv: "ebtv-big", ebtv: "ebtv-big", "tv-flat": "ebtv-big", "ebtv-big": "home-theater",
   "beer-tap": "kegerator", kegerator: "brewery",
+  deck: "card-table", "deck-eb": "card-table", "card-table": "poker-table",   // THE CARD ROOM: home game night
 };
 export const UPGRADE_ONLY = new Set(Object.values(UPGRADES));
 export const UPGRADE_FEE = (diff) => Math.max(100, Math.round(diff * 0.05));
@@ -126,7 +129,13 @@ export const PLAY_AT_HOME = {
   "golf-cabinet": { go: "#golf?preset=cabinet", label: "PLAY BAR-TOP GOLF (TRACKBALL: DRAG TO SWING)" },
   "golf-sim": { go: "#golf?preset=sim", label: "TEE OFF ON THE SIMULATOR" },
   tv: { ebtv: true, label: "WATCH EBTV" }, "tv-crt": { ebtv: true, label: "WATCH EBTV" }, "tv-flat": { ebtv: true, label: "WATCH EBTV" },
-  ebtv: { ebtv: true, label: "WATCH EBTV" }, "ebtv-big": { ebtv: true, label: "WATCH EBTV, BIG" }, "home-theater": { ebtv: true, label: "EBTV IN THE HOME THEATER" },
+  ebtv: { ebtv: true, label: "WATCH EBTV" },
+  // THE CARD ROOM (src/play/cards/): the deck deals Solitaire and Spider; the tables seat figures
+  deck: { go: "#cards?at=home", label: "DEAL SOLITAIRE OR SPIDER" },
+  "deck-eb": { go: "#cards?at=home", label: "DEAL THE EB HOUSE DECK: SOLITAIRE OR SPIDER" },
+  "card-table": { go: "#cards?at=home", label: "HOME GAME NIGHT: HEARTS, SPADES, SOLITAIRE" },
+  "poker-table": { go: "#cards?at=home", label: "HOME GAME NIGHT AT THE POKER TABLE" },
+  "ebtv-big": { ebtv: true, label: "WATCH EBTV, BIG" }, "home-theater": { ebtv: true, label: "EBTV IN THE HOME THEATER" },
 };
 // The top of each chain: at night, the city's figures gather round it (render-side, the cutaway).
 export const TOP_TIER = new Set(["golf-sim", "home-theater", "brewery"]);
@@ -137,7 +146,7 @@ export const FURN_SECTIONS = [
   ["STUDY", ["desk", "pc", "drafting", "filing", "globe"]],
   ["BATHROOM", ["sink", "toilet", "shower", "tub", "clawfoot", "towels"]],
   ["LIGHTS, WALLS AND PLANTS", ["lamp", "chandelier", "poster", "painting", "cactus", "plant", "plant-tall", "aquarium"]],
-  ["PASTIMES", ["arcade", "piano", "grand-piano", "easel", "weights", "trophies"]],
+  ["PASTIMES", ["deck", "deck-eb", "arcade", "piano", "grand-piano", "easel", "weights", "trophies"]],
 ];
 // The small in-sim effects (design: "an arcade cabinet draws visitors; a piano lifts a room's
 // mood"). DATA ONLY in slice 1: nothing reads them until EFFECTS_FROM_DAY is set to an absolute

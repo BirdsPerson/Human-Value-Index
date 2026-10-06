@@ -121,3 +121,32 @@
 .cz-board-list .ch { color: var(--gold); text-align: right; }
 @media (max-width: 420px) { .cz-tab { padding: 0 6px; font-size: var(--t-xs); } }
 @media (max-width: 420px) { .cz-edge { grid-template-columns: 1fr; } .cz-edge .e { text-align: left; } }
+
+/* THE CARD ROOM's pixel cards at the casino tables (src/play/cards/), the felt, chip stacks */
+.cz-hand { gap: 3px; align-items: flex-end; }
+.cz .pc { display: inline-block; line-height: 0; vertical-align: top; }
+.cz .pc .pc-svg { display: block; image-rendering: pixelated; }
+@media (prefers-reduced-motion: no-preference) {
+  .cz .pc.deal { animation: cz-deal 260ms steps(6) both; }
+  .cz .pc.flip { animation: cz-flip 240ms steps(5) both; }
+}
+@keyframes cz-deal { from { transform: translateY(-36px) rotate(-6deg); opacity: 0.2; } to { transform: none; opacity: 1; } }
+@keyframes cz-flip { 0% { transform: scaleX(0.05); } 100% { transform: scaleX(1); } }
+.ct-head { position: relative; display: inline-flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.35); border: 2px solid rgba(0, 0, 0, 0.5); flex: none; }
+.ct-head canvas { image-rendering: pixelated; }
+.ct-head .ini { color: var(--fg-mute); font-size: var(--t-xs); }
+.cz-stack { position: relative; display: inline-block; width: 18px; height: 40px; vertical-align: bottom; flex: none; }
+.cz-stack .d { position: absolute; left: 0; width: 18px; height: 4px; box-shadow: 0 1px 0 #000; }
+.cz-felt, .cz-ptable { background-color: #0f4a26; background-image: radial-gradient(#0b3a1d 1px, transparent 1.2px); background-size: 4px 4px; border: 6px solid #4a2c17; box-shadow: inset 0 0 0 2px #c9a227, 4px 4px 0 #000; color: #f2efe2; }
+.cz-ptable { border-radius: 120px / 80px; padding: var(--s4) var(--s4); }
+.cz-ptable .cz-dim, .cz-felt .cz-dim { color: #b8d8c0; }
+.cz-pseats { display: flex; flex-wrap: wrap; justify-content: space-around; gap: var(--s2); }
+.cz-pseat { flex-direction: column; align-items: center; text-align: center; background: rgba(0, 0, 0, 0.35); border-color: rgba(0, 0, 0, 0.4); min-width: 120px; max-width: 170px; }
+.cz-pseat:nth-child(even) { margin-top: var(--s4); }
+.cz-pseat.me { flex-direction: row; text-align: left; align-self: center; max-width: none; margin-top: 0; }
+.cz-pinfo { align-items: center; }
+.cz-pseat.me .cz-pinfo { align-items: flex-start; }
+.cz-pinfo .st { display: flex; gap: 6px; align-items: flex-end; justify-content: center; }
+.cz-board { border-color: rgba(201, 162, 39, 0.5); display: flex; flex-direction: column; align-items: center; gap: var(--s2); }
+.cz-pot { display: inline-flex; gap: 6px; align-items: flex-end; color: #fde68a; font-size: var(--t-xs); }
+@media (max-width: 560px) { .cz-ptable { border-radius: 40px / 30px; padding: var(--s2); } .cz-pseat { min-width: 96px; } .cz-pseat:nth-child(even) { margin-top: 0; } }

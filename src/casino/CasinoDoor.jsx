@@ -12,6 +12,7 @@ export default function CasinoDoor() {
         <Button variant="secondary" href="#casino/baccarat">BACCARAT</Button>
         <Button variant="secondary" href="#casino/poker">HOLD'EM</Button>
         <Button variant="secondary" href="#casino/poker?room=high">HIGH LIMIT ROOM</Button>
+        <Button variant="secondary" href="#cards?at=casino">THE CARD ROOM: HEARTS, SPADES</Button>
       </ButtonRow>
     </div>
   );

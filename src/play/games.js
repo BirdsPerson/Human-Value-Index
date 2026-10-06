@@ -3,7 +3,7 @@
 //   { href: "#route", title: "SHORT TITLE", name: "plain name", icon: "<key in gameIcons.js>", note: "ONE LINE" }
 // The tile's accessible name is "Play <name>". A tile whose route App.jsx does not serve yet
 // renders dim, "COMING SOON" (routesIn() reads App.jsx at build; vite.config.js defines it).
-// Icons already drawn: tennis golf hoops football soccer fish tank rook card market joystick trophy ski bowling.
+// Icons already drawn: tennis golf hoops football soccer fish tank rook card market joystick trophy ski bowling cards.
 export const GAMES = [
   { href: "#tennis", title: "TENNIS", name: "tennis", icon: "tennis", note: "EXHIBITIONS AGAINST THE FAMOUS. KEYS, TOUCH OR PAD" },
   { href: "#golf", title: "GOLF", name: "golf", icon: "golf", note: "NINE HOLES. THE COURSE THE ASSEMBLY DECLINED" },
@@ -16,6 +16,7 @@ export const GAMES = [
   { href: "#hunt", title: "TAGGED OUT", name: "the light-gun hunting cabinet", icon: "hunt", note: "THE BAR CABINET. BUCKS ONLY. A VIDEO GAME" },
   { href: "#aquarium", title: "AQUARIUM", name: "the aquarium", icon: "tank", note: "THE TANKS. EVERY DONATION CHECKED BY REPLAY" },
   { href: "#chess", title: "CHESS", name: "chess", icon: "rook", note: "A STONE TABLE OPPOSITE A FIGURE ON FILE" },
+  { href: "#cards", title: "CARDS", name: "the card room: hearts, spades, solitaire", icon: "cards", note: "HEARTS AND SPADES WITH FIGURES. SOLITAIRE AT HOME" },
   { href: "#casino", title: "CASINO", name: "the casino", icon: "card", note: "PLAY CHIPS ONLY. THE HOUSE IS THE MACHINE" },
   { href: "#market", title: "MARKET", name: "the market", icon: "market", note: "SHARES IN HUMANS. PRICES MOVE WITH THE CITY" },
   { href: "#city/strip/the-arcade", title: "ARCADE", name: "the arcade: JETSAM! and more", icon: "joystick", note: "JETSAM! AND ANAMNESIS CABINETS, ON THE STRIP" },

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, ButtonRow, Chip, Chips, PaLine, Disclosure } from "../ui/index.js";
 import { LIMITS } from "./rules.js";
-import { Hand, Sprite } from "./Cards.jsx";
+import { Hand, Sprite, ChipStack } from "./Cards.jsx";
 
 // Texas Hold'em against figures on file. The server deals, runs every figure's decision and
 // sends back only what the subject may see: its own two cards, the board, the chips, and at
@@ -18,7 +18,7 @@ function Seat({ s, i, P, me }) {
       {!me && <Sprite src={s.sprite} name={s.name} size="s" />}
       <div className="cz-pinfo">
         <div className="nm">{s.name}{P.button === i ? <span className="cz-btn" title="Dealer button">D</span> : null}</div>
-        <div className="st"><span>{s.stack}</span>{s.bet > 0 && <span className="cz-dim"> // IN {s.bet}</span>}{status && <span className={s.allIn || cur ? "cz-warn" : "cz-dim"}> // {status}</span>}{won && <span className="cz-win"> // +{H.result.won[i]}</span>}</div>
+        <div className="st"><ChipStack amount={s.stack} label={`${me ? "Your" : `${s.name}'s`} stack: ${s.stack}`} /><span>{s.stack}</span>{s.bet > 0 && <ChipStack amount={s.bet} label={`In: ${s.bet}`} />}{s.bet > 0 && <span className="cz-dim"> // IN {s.bet}</span>}{status && <span className={s.allIn || cur ? "cz-warn" : "cz-dim"}> // {status}</span>}{won && <span className="cz-win"> // +{H.result.won[i]}</span>}</div>
         {s.cards && <Hand cards={s.cards} small={!me} label={me ? "Your cards" : `${s.name}'s cards`} />}
         {H?.done && H.result?.hands?.[i] && !s.folded && <div className="cz-dim cz-small">{H.result.hands[i]}</div>}
       </div>
@@ -78,6 +78,7 @@ export default function Poker({ st, level, act, busy }) {
         <div className="cz-pseats">{P.seats.slice(1).map((s, k) => <Seat key={s.id} s={s} i={k + 1} P={P} />)}</div>
         <div className="cz-board">
           <div className="cz-sub-h">{H ? `HAND ${P.handNo} // ${H.street}` : "NO HAND"} // POT {H?.pot ?? 0}</div>
+          {H?.pot > 0 && <span className="cz-pot"><ChipStack amount={H.pot} label={`The pot: ${H.pot}`} /></span>}
           <Hand cards={H?.board?.length ? H.board : []} label="The board" />
           {!H?.board?.length && <span className="cz-dim">THE FLOP COMES LATER. SO DOES REGRET.</span>}
         </div>

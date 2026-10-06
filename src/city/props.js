@@ -19,7 +19,7 @@ import { STORE_ROOM_TYPE, STORE_LOOK, storePlans, storePropDrawers, storeRoomTyp
 import { NIGHT_ROOM_TYPE, NIGHT_LOOK, nightPlans, nightPropDrawers, nightRoomDrawers, nightLive } from "./nightlifeProps.js";   // THE NIGHTLIFE QUARTERS
 import { FUNNEL_ROOM_TYPE, FUNNEL_LOOK, FUNNEL_ACTS, funnelPlans, funnelPropDrawers, funnelRooms, withTv, customsSign, housePlans, houseAliases } from "./funnelProps.js";
 import { LANES_ROOM_TYPE, LANES_LOOK, LANES_ACTS, lanesPlans, lanesPropDrawers, lanesRooms } from "./lanesProps.js";   // THE LANES (lanes.js)
-import { floorRoomType, casinoPlans, casinoLook, casinoDraw, casinoLive, casinoProps } from "../casino/cityRooms.js";
+import { floorRoomType, casinoPlans, casinoLook, casinoDraw, casinoLive, casinoProps, cardTablePlans } from "../casino/cityRooms.js";
 
 // place id -> interior type
 export const ROOM_TYPE = {
@@ -328,6 +328,7 @@ planningPlans(PLANS, { A, M, P, SIDE });   // the Dept of Planning (planning.js)
 Object.assign(PLANS, casinoPlans({ A, M, P }));
 Object.assign(LOOK, casinoLook);
 housePlans(PLANS, LOOK, { A, M, P, SIDE });   // HOUSE GAMES: our own games as cabinets in the bars (funnelProps.js)
+cardTablePlans(PLANS, { A, M });   // THE CARD ROOM: card tables in the casino, the bars, the Union lounge (src/casino/cityRooms.js)
 export const PLANNED_TYPES = Object.keys(PLANS);
 
 // Rooms deep enough for two rows get a back row, smaller and set up the wall.

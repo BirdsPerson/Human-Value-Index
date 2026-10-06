@@ -162,6 +162,21 @@ const ITEMS = [
     rects: [[-4.5, 0, 9, 24, "$a"], [-4.5, 22, 9, 4, "#0f1c22"], [-4.5, 21.6, 9, 0.5, "$b"], [-3.5, 12, 7, 8, ["#203040", "#3ad0ff"]], [-3.5, 9, 7, 2, "#1a1a1a"], [-2, 10.5, 1, 1.5, "#ff3030"], [1, 10.5, 1, 1, "#30ff30"], [-3, 3, 6, 4, "#1a1a1a"]],
     // the marquee: the game's own logotype (brand.js), backlit on the cabinet's dark glass
     after: (c, cx, fy, s) => { if (!drawBrand(c, "jetsam", cx, fy - 24 * s, 3.2 * s)) word(c, "JETSAM!", cx, fy, 24, s, "#e5f6f6", 2.3); } },
+  // THE CARD ROOM (src/play/cards/): a deck of cards on a little table (tap it at home: Solitaire,
+  // Spider), the EB house deck, and what a deck upgrades into (the card table, the poker table).
+  { id: "deck", name: "DECK OF CARDS", rooms: ["living", "kitchen", "bedroom", "study"], tiers: [0, 1, 2], fw: 10, tints: [["#0f3d22", "#2f8a50"]],
+    rects: [[-4, 0, 1, 8, "#4b3828"], [3, 0, 1, 8, "#4b3828"], [-5, 8, 10, 1.2, "#6b4a30"], [-3.5, 9.2, 3, 1.2, "#f4f2ea"], [-3.5, 10.4, 3, 0.8, "$a"], [-3.2, 10.6, 0.6, 0.4, "$b"], [0.8, 9.2, 2, 2.8, "#f4f2ea"], [1.2, 10.2, 0.9, 0.9, "#b3121b"], [2.6, 9.2, 0.4, 2.8, "#1b1e24"]],
+    after: (c, cx, fy, s) => word(c, "CARDS", cx, fy, 14.5, s, "#e8e4d4", 2.2) },
+  { id: "deck-eb", name: "EB HOUSE DECK", rooms: ["living", "kitchen", "bedroom", "study"], tiers: [0, 1, 2], fw: 10, tints: [["#2a1446", "#c9a227"]],
+    rects: [[-4, 0, 1, 8, "#2a1a10"], [3, 0, 1, 8, "#2a1a10"], [-5, 8, 10, 1.2, "#3a2418"], [-3.5, 9.2, 3, 1.2, "#f4f2ea"], [-3.5, 10.4, 3, 0.8, "$a"], [-3.2, 10.6, 2.4, 0.4, "$b"], [0.8, 9.2, 2, 2.8, "$a"], [1.1, 9.6, 1.4, 2, "$b"], [1.4, 10.1, 0.8, 1, "$a"]],
+    after: (c, cx, fy, s) => word(c, "EB", cx, fy, 14.5, s, "#c9a227", 2.6) },
+  { id: "card-table", name: "CARD TABLE", rooms: ["living", "kitchen", "study"], tiers: [0, 1, 2], fw: 16,
+    rects: [[-7, 0, 1, 9, "#3a2a1a"], [6, 0, 1, 9, "#3a2a1a"], [-8, 9, 16, 1, "#3a2a1a"], [-8, 10, 16, 1.2, "#14532d"], [-5, 11.2, 1.6, 0.6, "#f4f2ea"], [-2, 11.2, 1.6, 0.6, "#f4f2ea"], [1, 11.2, 1.6, 0.6, "#b3121b"], [4, 11.2, 1.6, 0.6, "#f4f2ea"],
+      [-11, 0, 1, 7, "#5a4632"], [-11, 6, 3, 1, "#5a4632"], [10, 0, 1, 7, "#5a4632"], [8, 6, 3, 1, "#5a4632"]] },
+  { id: "poker-table", name: "POKER TABLE", rooms: ["living", "study"], tiers: [0, 1, 2], fw: 22,
+    rects: [[-8, 0, 2, 9, "#2a1a0c"], [6, 0, 2, 9, "#2a1a0c"], [-11, 9, 22, 1.4, "#3a2a1a"], [-10.5, 10.4, 21, 1.4, "#14532d"], [-11, 11.8, 22, 0.8, "#c9a227"],
+      [-6, 12.6, 1.6, 0.6, "#f4f2ea"], [-3.5, 12.6, 1.6, 0.6, "#f4f2ea"], [-1, 12.6, 1.6, 0.6, "#b3121b"], [3, 12.6, 1.6, 1.8, "#c9a227"], [3, 13.2, 1.6, 0.6, "#7f1d1d"], [6, 12.6, 1.6, 1.2, "#e5e5e5"]],
+    after: (c, cx, fy, s) => word(c, "HOME GAME", cx, fy, 17, s, "#c9a227", 2.2) },
   // ---- the upgrade tiers (src/economy/shops.js UPGRADES): never placed by dressUnit, only by a
   // resident who bought the tier below and upgraded it. whole: the piece takes the whole room.
   { id: "golf-cabinet", name: "BAR-TOP GOLF CABINET", rooms: ["living", "bedroom", "study"], tiers: [0, 1, 2], fw: 10, glow: true, tints: [["#0e3a1e", "#e8c040"]],

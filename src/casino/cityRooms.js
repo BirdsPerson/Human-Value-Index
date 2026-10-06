@@ -10,13 +10,16 @@ export const CASINO_FLOOR_TYPE = { G: "casinoTables", "2F": "casinoHigh" };
 export const floorRoomType = (placeId, floor) => (placeId === "casino" && floor ? CASINO_FLOOR_TYPE[floor] || null : null);
 
 // furniture -> the game it opens
-export const TABLE_GAME = { rouletteTable: "roulette", bjTable: "blackjack", baccaratTable: "baccarat", pokerTable: "poker", highTable: "poker" };
-const hashFor = (plan, prop) => `#casino/${TABLE_GAME[prop]}${plan.type === "casinoHigh" ? "?room=high" : ""}`;
+export const TABLE_GAME = { rouletteTable: "roulette", bjTable: "blackjack", baccaratTable: "baccarat", pokerTable: "poker", highTable: "poker", cardTable: "cards" };
+// THE CARD ROOM's tables (src/play/cards/): a card table in the casino's card room, the bars and THE
+// UNION LOUNGE; a tap sits you at that room's tables (#cards?at=...).
+export const CARD_ROOM_AT = { casinoTables: "casino", bar: "bar", "bar-lantern": "bar", "bar-lodge": "bar", brewpub: "bar", union: "union" };
+const hashFor = (plan, prop) => (prop === "cardTable" ? `#cards?at=${CARD_ROOM_AT[plan.type] || "casino"}` : `#casino/${TABLE_GAME[prop]}${plan.type === "casinoHigh" ? "?room=high" : ""}`);
 
 // Tap boxes for the tables of a planned room, in the room's own px (x0, y0 = its top left).
 // -> [{go: hash, box: [x0, y0, x1, y1]}]
 export function casinoHits(plan, x0 = 0, y0 = 0) {
-  if (!plan || (plan.type !== "casinoTables" && plan.type !== "casinoHigh")) return [];
+  if (!plan || (plan.type !== "casinoTables" && plan.type !== "casinoHigh" && !CARD_ROOM_AT[plan.type])) return [];
   const out = [];
   for (const row of plan.rows) {
     const p = (plan.sw * row.s) / 32;
@@ -47,6 +50,19 @@ export function casinoPlans({ A, M, P }) {
       solo: { head: [P("rope", 0.9), M(A("stand", "guard", "staff"), null, 1.2), M(A("counter", "deal", "staff"), "highTable", 2.0)], unit: [M(A("seat", "gamble", "patron", 1), "stool", 1.15)] },
     },
   };
+}
+
+// The card tables, added to the rooms once every plan exists (props.js, after the house cabinets):
+// one seated table in each room that has them, last in the row's head (once per room).
+export function cardTablePlans(PLANS, { A, M }) {
+  const table = () => M(A("seat", "gamble", "patron"), "cardTable", 1.5);
+  const add = (row, unit = false) => { if (!row) return; if (unit) row.unit = [...(row.unit || []), table()]; else row.head = [...(row.head || []), table()]; };
+  if (PLANS.casinoTables) { add(PLANS.casinoTables.front, true); add(PLANS.casinoTables.solo, true); }
+  for (const t of Object.keys(CARD_ROOM_AT)) {
+    if (t === "casinoTables" || !PLANS[t]) continue;
+    const def = PLANS[t];
+    add(def.front); add(def.solo);
+  }
 }
 
 export const casinoLook = { casinoTables: ["#1a1410", "#3a1e1e"], casinoHigh: ["#1c0d16", "#401626"] };
@@ -159,6 +175,19 @@ export function casinoProps({ R }) {
         for (let j = 0; j < 5; j++) card(c, x - 8 * p + j * 3 * p, Y - 21 * p, p, j % 2 === 0);
         chips(c, x + 9 * p, Y - 17 * p, p, 5 + (Math.floor(t * 0.5) % 3));
         chips(c, X + 4 * p, Y - 17 * p, p, 4, "#e5e5e5");
+      },
+    },
+    // a card table: green baize, a trick on it, the score pad, a seated player behind
+    cardTable: {
+      front(c, X, Y, W, p, t, a) {
+        const x = a ? a.x : X + W / 2, tw = Math.min(W - 2 * p, 26 * p), tx = x - tw / 2;
+        R(c, "#3a2a1a", tx, Y - 12 * p, tw, p);
+        R(c, "#14532d", tx, Y - 11 * p, tw, 2 * p);
+        R(c, "#0b3a1d", tx, Y - 9 * p, tw, p);
+        R(c, "#2a1a0c", tx + 2 * p, Y - 8 * p, 2 * p, 8 * p); R(c, "#2a1a0c", tx + tw - 4 * p, Y - 8 * p, 2 * p, 8 * p);
+        const k = Math.floor(t * 0.7) % 5;
+        for (let j = 0; j < Math.min(4, k + 1); j++) card(c, x - 6 * p + j * 3 * p, Y - 15 * p, p, j % 2 === 1);
+        R(c, "#f4f2ea", tx + tw - 6 * p, Y - 12.5 * p, 3 * p, p);   // the score pad
       },
     },
     champagne: {
