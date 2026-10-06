@@ -13,7 +13,7 @@ export const NAV = [
   { key: "menu", label: "MENU", glyph: "▣", href: "#", fk: "F1", hot: "M" },
   { key: "city", label: "CITY", glyph: "▦", href: "#city", fk: "F2", hot: "C" },
   { key: "play", label: "PLAY", glyph: "◈", href: "#play", fk: "F3", hot: "P" },
-  { key: "file", label: "MY FILE", glyph: "▤", href: "#file", fk: "F4", hot: "F" },
+  { key: "file", label: "MY FILE", glyph: "▤", href: "#file", fk: "F4", hot: "I" },
 ];
 // The accesskey chord, for the yellow tooltip: Ctrl+Option on a Mac, Alt elsewhere.
 const KEY_HINT = (() => { try { return /Mac|iP/.test(navigator.platform) ? "CTRL+OPT+" : "ALT+"; } catch { return "ALT+"; } })();
