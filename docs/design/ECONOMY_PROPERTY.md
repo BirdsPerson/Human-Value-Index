@@ -597,8 +597,8 @@ upgrade that to the golf simulator". Built on THE FURNITURE & OBJECTS SHOP desig
   a home bowling lane (the penthouse only). Upper tiers are never sold outright.
 - **Playable at home** (`PLAY_AT_HOME`): tap the piece in your own flat (or its button): the
   cabinet plays JETSAM! (its live build, utm `home-cabinet`); the golf tiers open `#golf?preset=
-  cabinet|sim` (the same game, framed; the cabinet is the drag / trackball swing; no analog-stick
-  swing exists yet, so the simulator is a frame, not a new control); every TV tier shows the live
+  cabinet|sim` (the same game, framed: the cabinet is the drag / trackball swing, the simulator the
+  pad's right-stick analog swing, the golf's own; no first-person view); every TV tier shows the live
   EBTV frame and opens the channel. At night the city's figures gather round the top of a chain
   (render only).
 - **In-sim effects** (`FURNITURE_EFFECTS`: the cabinet draws visitors, a piano lifts a room) are

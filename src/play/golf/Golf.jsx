@@ -37,10 +37,10 @@ function saveRound(rec) {
 }
 const parseRoute = (route) => { const q = new URLSearchParams(String(route || "").split("?")[1] || ""); return { vs: q.get("vs") || null, course: ["open", "links"].includes(q.get("course")) ? q.get("course") : null, preset: ["cabinet", "sim"].includes(q.get("preset")) ? q.get("preset") : null }; };
 // ?preset=: played at home on a piece from THE SHOPS (src/economy/shops.js PLAY_AT_HOME). The same
-// game, framed: the bar-top cabinet is the mouse / trackball drag swing, the simulator the big screen.
+// game, framed: the bar-top cabinet is the mouse / trackball drag swing, the simulator the pad's right-stick swing.
 const PRESET = {
   cabinet: { title: "YOUR BAR-TOP GOLF CABINET", line: "TRACKBALL RULES: DRAG DOWN, PUSH UP TO SWING. THE MARQUEE GLOWS FOR NOBODY BUT YOU.", frame: "6px solid #0e3a1e" },
-  sim: { title: "YOUR HOME GOLF SIMULATOR", line: "THE STUDY, CONVERTED. THE PROJECTOR HUMS. DRAG THE SWING, OR USE THE PAD.", frame: "10px solid #2a2a2a" },
+  sim: { title: "YOUR HOME GOLF SIMULATOR", line: "THE ROOM, CONVERTED. THE PROJECTOR HUMS. ON A PAD: THE RIGHT STICK, PULL BACK AND PUSH THROUGH. NO PAD: DRAG THE SWING.", frame: "10px solid #2a2a2a" },
 };
 
 // You: your file's photo (a drawn sprite or the procedural one) and its kit, else a SUBJECT.
