@@ -338,6 +338,7 @@ export default function City({ route }) {
     const href = findHref(e.key, query);
     if (window.location.hash === href) setFindN(n => n + 1); else window.location.hash = href;
   }, [query]);
+  const onPlace = useCallback((p) => goBuilding(p.district, p.id), [goBuilding]);
   const endFind = useCallback(() => { window.location.replace((window.location.href.split("#")[0]) + "#city" + query); }, [query]);
   const findKey = findEntry?.key;
   const find = useMemo(() => (findEntry ? { s: findEntry.s, key: findEntry.key, n: findN } : null), [findKey, findN]);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -393,7 +394,7 @@ export default function City({ route }) {
   return (
     <div>
       <CityHeader clockText={<LiveClock />} right={moodHere ? `${right} // MOOD: ${moodWord(moodHere.s)}` : right} pa={pa}
-        find={<CityFind index={index} remote={sectors} onPick={onPick} self={selfEntry} caseId={caseId} />} />
+        find={<CityFind index={index} remote={sectors} onPick={onPick} onPlace={onPlace} self={selfEntry} caseId={caseId} />} />
       <div className="hvi-city-bar">
         <Breadcrumb crumbs={crumbs} />
         {!d && !leaguePage && !prefectsPage && !enterprisePage && !heightsPage && <ViewToggle mode={mode} onChange={setMode} />}

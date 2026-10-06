@@ -8,6 +8,8 @@ import { fieldRole } from "./parkGeo.js";
 import { drawPose, phaseOf, fitStature } from "./poses.js";
 import { greet } from "./rigReact.js";
 import { casinoTap } from "../casino/cityRooms.js";
+import { funnelTapAt } from "./funnelProps.js";
+import { openFunnel } from "./FunnelOverlay.jsx";
 import { FONT, SubjectTip } from "./cityUi.jsx";
 
 // Rooms as terminal boxes on one canvas, with the subjects the census puts in each one
@@ -549,6 +551,10 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         const ri = V.rects.findIndex(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h), G = ri >= 0 ? V.geo[ri] : null;
         const game = G && casinoTap(G.plan, x - V.rects[ri].x - G.ix, y - V.rects[ri].y - G.iy);
         if (game) { window.location.hash = game; return; }
+        // the funnels (funnelProps.js): a cabinet plays its game, a rack in the EB Shop opens its
+        // product, the rest of the shop floor the shop, the arcade floor its cabinet list
+        const spec = G && funnelTapAt(placeOf[ri], G.plan, x - V.rects[ri].x - G.ix, y - V.rects[ri].y - G.iy, G.u);
+        if (spec) { openFunnel(spec); return; }
         const c = cellAt(x, y);
         if (c && cb.current.onCell) cb.current.onCell(c);
         return;
@@ -560,7 +566,9 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
       const [x, y] = local(ev);
       const e = hit(x, y, false);
       if (e !== V.hover) { V.hover = e; if (e) showTip(e); }
-      setCursor(e || (cb.current.onCell && cellAt(x, y) && cellAt(x, y) !== V.focus) ? "point" : "");
+      const ri = e ? -1 : V.rects.findIndex(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h), G = ri >= 0 ? V.geo[ri] : null;
+      const fn = G && funnelTapAt(placeOf[ri], G.plan, x - V.rects[ri].x - G.ix, y - V.rects[ri].y - G.iy, G.u);
+      setCursor(e || fn || (cb.current.onCell && cellAt(x, y) && cellAt(x, y) !== V.focus) ? "point" : "");
     }
     canvas.addEventListener("pointerdown", onDown);
     canvas.addEventListener("pointerup", onUp);

@@ -5,7 +5,7 @@ import RoomStage, { ROOM_H } from "./RoomStage.jsx";
 import { Occupant } from "./cityUi.jsx";
 import { ListRow } from "../ui/index.js";
 import { funnelButtons } from "./funnels.js";
-import { openFunnel } from "./FunnelOverlay.jsx";
+import { openFunnel, ShopWallLinks } from "./FunnelOverlay.jsx";
 import CasinoDoor from "../casino/CasinoDoor.jsx";
 import { isTower } from "./tower.js";
 // Towers (residential, office, mixed-use) open as a SimTower cutaway, its own chunk (Cutaway.jsx).
@@ -117,6 +117,7 @@ function Floors({ b, floor, censusRef, onOpen, onFloor }) {
       </div>
       {funnelButtons(b.id).length > 0 && <FunnelBar id={b.id} />}
       {b.id === "casino" && <CasinoDoor />}
+      {b.id === "eb-shop" && <ShopWallLinks />}
       <RoomStage key={b.id} cells={cells} layout={layout} assign={assign} censusRef={censusRef} onOpen={onOpen} onPresent={setPresent} onCell={onCell} focusId={focusCell} focusScroll={focusScroll}
         ariaLabel={`${b.name}, in cross-section: ${b.floors.length} floors, ${total} subjects present. The floor directory below lists everyone by floor.`} />
       <div className="hvi-city-floors hvi-city-in" role="list" aria-label="Floor directory">

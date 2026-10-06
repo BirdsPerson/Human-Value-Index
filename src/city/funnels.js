@@ -29,6 +29,19 @@ export const FUNNEL_OF = {
   // THE AIRPORT's departures hall is the city's door (PHASE 2 step 4): new arrivals, INTAKE
   "departures-hall": { kind: "arrivals", campaign: "departures-hall", button: "ARRIVALS" },
 };
+// FIND > finds the funnel buildings by name too (CityFind.jsx), above the people: the words
+// someone would type looking for the shop, the games or the channel.
+export const FUNNEL_FIND = [
+  { id: "eb-shop", district: "campus", name: "EB SHOP", line: "CAMPUS // THE SHOP FLOOR: LIVE STOCK ON THE WALLS", words: "eb shop electric basement store records dvd buy merch" },
+  { id: "the-arcade", district: "strip", name: "THE ARCADE", line: "THE STRIP // A CABINET FOR EVERY GAME", words: "arcade games cabinet jetsam anamnesis play iridescent" },
+  { id: "studio-block", district: "arts", name: "ELECTRIC BASEMENT TV", line: "THE ARTS QUARTER // LIVE", words: "ebtv electric basement tv watch station channel" },
+];
+export function findFunnel(q) {
+  const t = String(q || "").trim().toLowerCase();
+  if (t.length < 2) return [];
+  return FUNNEL_FIND.filter(f => f.name.toLowerCase().includes(t) || f.words.split(" ").some(w => w.startsWith(t)) || (t.length >= 4 && f.words.includes(t)));
+}
+
 // Cabinets standing elsewhere, by place: the game and the campaign their links carry.
 export const CABINET_PLACES = {
   "dive-bar": ["jetsam"], "the-lantern": ["jetsam"], "all-night-diner": ["jetsam"], casino: ["jetsam"],

@@ -107,7 +107,8 @@ for (const [pid, games] of Object.entries(F.CABINET_PLACES)) {
   const src = readFileSync(join(ROOT, "src/city/FunnelOverlay.jsx"), "utf8");
   const hrefs = [...src.matchAll(/href=\{([^}]+)\}/g)].map(m => m[1].trim());
   const anchors = [...src.matchAll(/<a\s[^>]*>/g)].map(m => m[0]);
-  ok(anchors.length === 1 && /href=\{url\}/.test(anchors[0]) && /utm\(href, campaign, content\)/.test(src), "the overlay's only <a> is Out, which tags every href");
+  // Out, which tags every href; and the shop wall's keyboard links, each href utm()'d
+  ok(anchors.length === 2 && anchors.some(a => /href=\{url\}/.test(a)) && /utm\(href, campaign, content\)/.test(src) && /<a href=\{utm\(`\$\{EB_SHOP\}\/products\/\$\{it\.handle\}`, campaign, it\.handle\)\}/.test(src), "the overlay's <a>s: Out, which tags every href, and the wall links, tagged");
   ok(hrefs.every(h => !/^["'`]https?:/.test(h)), "no untagged literal href");
   ok(/src=\{utm\(g\.play, campaign\)\}/.test(src), "the game's frame loads the tagged build");
   const buttons = F.funnelButtons("the-arcade").concat(F.funnelButtons("eb-shop"), F.funnelButtons("studio-block"), F.funnelButtons("the-dive"));

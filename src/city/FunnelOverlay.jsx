@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { GAME, GAMES, ITCH_LINE, EB_SHOP, EBTV_SITE, EBTV_STREAM, EBTV_NOW, utm, highScore, clickBody, setEbtvNow, ebtvNow } from "./funnels.js";
 import { machineClock } from "./sim.js";
+import { loadShop, shopState, onShop, setShopFocus, wallOpen } from "./shopStock.js";
 
 // The funnels' overlays (funnels.js has the data): a CRT that plays an Iridescent game, the
 // Arcade's cabinet floor, the EB SHOP's live stock with its turntable videos, and EBTV's
@@ -66,6 +67,9 @@ const CSS = `
 .hvi-fn-detail{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:var(--s4,16px);align-items:start}
 .hvi-fn-detail video,.hvi-fn-detail img{width:100%;max-height:60dvh;object-fit:contain;background:#000;display:block}
 .hvi-fn-now{font-size:var(--t-s,14px)}.hvi-fn-now b{color:var(--warn,#fbbf24);font-weight:400}
+.hvi-shopwall{list-style:none;margin:0;padding:0;position:relative;height:0}
+.hvi-shopwall a{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+.hvi-shopwall a:focus{left:8px;top:8px;width:auto;height:auto;max-width:calc(100% - 16px);z-index:5;background:var(--bg,#0a0f0a);color:var(--accent,#4ade80);border:1px solid var(--accent,#4ade80);padding:8px 10px;font:12px var(--mono);letter-spacing:.04em;outline:2px solid var(--accent);outline-offset:2px;white-space:nowrap;text-overflow:ellipsis}
 @media (max-width:640px){.hvi-fn-head .meta{display:none}.hvi-fn-veil{padding:0}.hvi-fn{max-height:100dvh;height:100dvh;border:0}.hvi-fn-detail{grid-template-columns:1fr}.hvi-fn-crt{padding:10px 10px 22px;border-radius:12px}.hvi-fn-crt iframe,.hvi-fn-crt video{height:62dvh}.hvi-fn-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 `;
 function injectStyles() {
@@ -115,7 +119,7 @@ function Overlay({ spec, setSpec, close, now }) {
   let title, meta, body;
   if (spec.kind === "game") ({ title, meta, body } = gameView(spec, setSpec));
   else if (spec.kind === "arcade") ({ title, meta, body } = { title: "THE ARCADE // CABINET FLOOR", meta: `${GAMES.length} CABINETS`, body: <ArcadeFloor setSpec={setSpec} /> });
-  else if (spec.kind === "shop") ({ title, meta, body } = { title: "EB SHOP // LIVE STOCK", meta: "SHOP.ELECTRICBASEMENT.TV", body: <Shop campaign={spec.campaign || "eb-shop"} /> });
+  else if (spec.kind === "shop") ({ title, meta, body } = { title: "EB SHOP // LIVE STOCK", meta: "SHOP.ELECTRICBASEMENT.TV", body: <Shop key={spec.item || "all"} campaign={spec.campaign || "eb-shop"} item={spec.item || null} /> });
   else ({ title, meta, body } = { title: "ELECTRIC BASEMENT TV", meta: "LIVE", body: <Ebtv campaign={spec.campaign || "ebtv-station"} now={now} /> });
   return (
     <div className="hvi-fn-veil" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
@@ -191,15 +195,17 @@ function ArcadeFloor({ setSpec }) {
 const cabColor = (slug) => ({ jetsam: "#22d3ee", anamnesis: "#4ade80", "human-value-index": "#fbbf24" }[slug] || "#a78bfa");
 
 // ---- the EB SHOP ------------------------------------------------------------------------------
-function Shop({ campaign }) {
-  const [st, setSt] = useState({ state: "loading" });
-  const [pick, setPick] = useState(null);
-  useEffect(() => {
-    let dead = false;
-    fetch("/api/funnel?shop=1").then(r => (r.ok ? r.json() : { closed: true })).catch(() => ({ closed: true }))
-      .then(j => { if (!dead) setSt(j.closed || !j.items?.length ? { state: "closed" } : { state: "open", items: j.items, stale: j.stale }); });
-    return () => { dead = true; };
-  }, []);
+// The shop's stock, as this page holds it (shopStock.js: one fetch, shared with the walls).
+export function useShop() {
+  const [st, setSt] = useState(shopState());
+  useEffect(() => { const off = onShop(setSt); loadShop(); setSt(shopState()); return off; }, []);
+  return st;
+}
+function Shop({ campaign, item }) {
+  const raw = useShop();
+  const st = raw.state === "idle" ? { state: "loading" } : raw;
+  const [pickH, setPick] = useState(item);
+  const pick = st.state === "open" && pickH ? st.items.find(i => i.handle === pickH) || null : null;
   if (st.state === "loading") return <p className="hvi-fn-note">THE CLERK IS COUNTING THE STOCK. THE CLERK IS CARDBOARD. THIS MAY TAKE A MOMENT.</p>;
   if (st.state === "closed") return (
     <>
@@ -220,7 +226,7 @@ function Shop({ campaign }) {
             <span style={{ color: "var(--warn)", fontSize: 20 }}>${pick.price}</span>
             {pick.video && <span className="hvi-fn-tag tt" style={{ alignSelf: "flex-start" }}>ON THE TURNTABLE</span>}
             <Out href={url} campaign={campaign} content={pick.handle} className="hvi-fn-cta">BUY AT THE EB SHOP</Out>
-            <button type="button" className="hvi-fn-btn" onClick={() => setPick(null)}>◀ BACK TO THE BINS</button>
+            <button type="button" className="hvi-fn-btn" onClick={() => setPick(null)}>◀ ALL THE STOCK</button>
             <p className="hvi-fn-note">THE ITEM IS REAL. THE SHOP IS REAL. THE MONEY IS, REGRETTABLY, ALSO REAL.</p>
           </div>
         </div>
@@ -232,7 +238,7 @@ function Shop({ campaign }) {
       <p className="hvi-fn-note">LIVE FROM THE ELECTRIC BASEMENT'S SHELVES.{st.stale ? " (STOCK AS LAST COUNTED.)" : ""} TAP AN ITEM TO SEE IT TURN.</p>
       <div className="hvi-fn-grid">
         {st.items.map(it => (
-          <button key={it.handle} type="button" className="hvi-fn-item" onClick={() => setPick(it)} aria-label={`${it.title}, $${it.price}${it.video ? ", turntable video" : ""}`}>
+          <button key={it.handle} type="button" className="hvi-fn-item" onClick={() => setPick(it.handle)} aria-label={`${it.title}, $${it.price}${it.video ? ", turntable video" : ""}`}>
             <img src={it.image} alt="" loading="lazy" />
             <span className="t">{it.title}</span>
             <span className="p"><span>${it.price}</span>{it.video && <span className="hvi-fn-tag tt">TURNTABLE</span>}</span>
@@ -241,6 +247,29 @@ function Shop({ campaign }) {
       </div>
       <div className="hvi-fn-foot"><Out href={EB_SHOP} campaign={campaign} className="hvi-fn-cta">THE WHOLE SHOP</Out></div>
     </>
+  );
+}
+
+// The racks on the shop floor, for the keyboard and screen readers: one link per item on the
+// wall, hidden until focused (then a small chip over the room, and that rack's frame lit).
+// Enter opens the item in the shop overlay; the href is the item itself, tagged, for anything
+// that opens links its own way.
+export function ShopWallLinks({ campaign = "eb-shop" }) {
+  const st = useShop();
+  useEffect(() => { injectStyles(); }, []);
+  if (!wallOpen(st)) return st.state === "closed" || st.stale ? <p className="sr-only">THE EB SHOP'S RACKS: CLOSED FOR INVENTORY.</p> : null;
+  return (
+    <ul className="hvi-shopwall" aria-label="On the EB Shop's walls">
+      {st.items.map(it => (
+        <li key={it.handle}>
+          <a href={utm(`${EB_SHOP}/products/${it.handle}`, campaign, it.handle)} target="_blank" rel="noopener"
+            onFocus={() => setShopFocus(it.handle)} onBlur={() => setShopFocus(null)}
+            onClick={(e) => { e.preventDefault(); openFunnel({ kind: "shop", campaign, item: it.handle }); }}>
+            {`BUY ${it.title}, $${it.price}, at the EB Shop`}
+          </a>
+        </li>
+      ))}
+    </ul>
   );
 }
 

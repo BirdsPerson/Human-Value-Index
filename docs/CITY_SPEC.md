@@ -1114,13 +1114,28 @@ one-line hooks.
   never subjects; faces from `public/funnels/hosts.png`, keyed from eb-command-center/hosts), the
   EBSN desk, and a TV showing EBTV's now-playing in the bars, the diner and the Union. Poses:
   `arcade`, `browse`, `present`.
-- **Taps.** In the cutaway a cabinet opens its game, the shop floor the shop, the stage EBTV, the
-  arcade floor its cabinet list (`funnelRoomHits`); the toolbar and the building page offer
+- **Taps.** In the city's cutaway and on the building page and district view alike (RoomStage,
+  `funnelTapAt`; before 2026-10-05 only the city's cutaway answered, so ENTER led to a shop and
+  an arcade where nothing could be bought or played) a cabinet opens its game, a rack on the
+  shop floor its product, the rest of the shop floor the shop, the stage EBTV, the arcade floor
+  its cabinet list (`funnelRoomHits`); the toolbar and the building page offer
   PLAY / SHOP / WATCH / JETSAM! (`funnelButtons`). Overlays: `FunnelOverlay.jsx` (portal on the
   body, mounted once by City.jsx): the game in a CRT (iframe; both live games send no
   X-Frame-Options, and OPEN IN A NEW TAB is always there), "AN IRIDESCENT PRODUCTION. ALSO ON
   ITCH.IO"; the shop's live stock with each item's turntable video and BUY AT THE EB SHOP; EBTV's
   own stream (hls.js 1.6.15 from cdnjs with SRI wherever Media Source exists, native HLS on iPhone) and now.json's NOW PLAYING.
+- **The racks** (2026-10-05, Scott: "I should be able to see the listings of things on the wall,
+  and they should be clickable"). `shopStock.js`: one fetch of `/api/funnel?shop=1` per page,
+  shared by the overlay, the walls and the keyboard links, asked for only when the shop room is
+  first drawn. The shop floor's back wall holds the live stock as framed pixel thumbnails
+  (`shopSlots`: two racks where the wall is tall enough, one where it is not), the item with a
+  turntable video turning on the stand behind the till; each opens that item in the overlay
+  (`{kind: "shop", item: handle}`: video or image, title, price, BUY AT THE EB SHOP with
+  `utm_content=<handle>`). Stale or closed stock: the racks carry CLOSED FOR INVENTORY and answer
+  nothing; the floor still opens the overlay, which says why. Keyboard and screen readers: one
+  link per rack ("BUY <title>, $<price>, at the EB Shop"), hidden until focused, its frame lit.
+  FIND > finds the EB SHOP, THE ARCADE and EBTV by name (`findFunnel`) above the people.
+  `scripts/check-funnel-shop.mjs`.
 - **The shop proxy.** `/api/funnel?shop=1` (`netlify/lib/funnels.js`): Shopify's public
   `products.json` (up to 3 pages) and the newest 36 in-stock products' `.js` pages for their
   video, the shop's own listings (vendor EBShop) first, 24 shown, videos first. Blobs keeps the

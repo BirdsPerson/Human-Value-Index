@@ -12,6 +12,7 @@
 import { GAMES, GAME, PLAYABLE, cabColors, highScore, ebtvNow, ebtvLive, CAMPAIGN_OF_PLACE } from "./funnels.js";
 import { ebtvFrame, drawFrame, tvBox } from "./ebtvFrame.js";
 import { machineClock } from "./sim.js";
+import { shopState, wallOpen, loadShop, shopSlots, thumb, shopFocus } from "./shopStock.js";
 
 export const FUNNEL_ROOM_TYPE = { arcade: "arcade", "eb-shop": "recordshop", "campus-lounge": "union", "studio-row": "ebtv", boardwalk: "boardwalk" };
 export const FUNNEL_LOOK = { boardwalk: ["#241c10", "#5a4630"], arcade: ["#140c20", "#2a1a3a"], recordshop: ["#241a16", "#3e2c22"], union: ["#1c1a22", "#34303c"], ebtv: ["#12282a", "#2a2a30"] };
@@ -146,6 +147,11 @@ function standee(host) {
   };
 }
 
+// The shop's featured item: the first with a turntable video (the shop's own way of showing it).
+export function featured(st = shopState()) { return wallOpen(st) ? st.items.find(i => i.video) || st.items[0] : null; }
+// The turntable display behind the till, in room px: [x0, y0, x1, y1].
+export function turntableBox(X, Y, W, p) { const s = Math.round(13 * p), x0 = X + W * 0.42; return [x0, Y - 36 * p, x0 + s, Y - 36 * p + s]; }
+
 export function funnelPropDrawers({ SIDE }) {
   const PROP = {};
   for (const g of GAMES) PROP[`cab:${g.slug}`] = cabinet(g.slug, SIDE);
@@ -178,11 +184,14 @@ export function funnelPropDrawers({ SIDE }) {
   };
   PROP.shopCounter = {
     back(c, X, Y, W, p, t) {
-      // the wall behind the till: THE EB SHOP's own turntable video, a sleeve on a stand
-      const x0 = X + W * 0.42;
-      R(c, "#111", x0, Y - 34 * p, 16 * p, 11 * p);
-      R(c, "#dc2626", x0 + 2 * p, Y - 32 * p, 12 * p, 7 * p);
-      R(c, "#fef3c7", x0 + 6 * p + Math.sin(t * 1.5) * 3 * p, Y - 30 * p, 3 * p, 3 * p);   // the product, turning
+      // the wall behind the till: the shop's own turntable, the featured item on it, turning
+      const [x0, y0, x1, y1] = turntableBox(X, Y, W, p), s = x1 - x0;
+      R(c, "#111", x0 - p, y0 - p, s + 2 * p, s + 2 * p);
+      R(c, "#3a1414", x0, y1 - 2 * p, s, 2 * p);   // the platter
+      const it = featured(), tc = it && thumb(it, Math.max(4, Math.round(s / p)));
+      const k = Math.max(0.12, Math.abs(Math.cos(t * 1.2))), fw = s * k;
+      if (tc) { c.imageSmoothingEnabled = false; c.drawImage(tc, Math.round(x0 + (s - fw) / 2), Math.round(y0), Math.max(1, Math.round(fw)), Math.round(s - 2 * p)); }
+      else R(c, "#dc2626", x0 + (s - fw) / 2, y0, fw, s - 2 * p);
     },
     front(c, X, Y, W, p, t) {
       const x0 = X + W * 0.35, x1 = X + W - p;
@@ -267,13 +276,36 @@ export function funnelRooms() {
       text(c, "THE ARCADE", x + 4 * u, y + 6 * u, 2.6 * u, "#a78bfa");
     },
     recordshop(c, x, y, w, h, u) {
-      // sleeves face-out along the top shelf, spines below
-      R(c, "#3a2414", x + 4 * u, y + h * 0.28, w - 8 * u, 2 * u);
+      // the racks: the live stock, framed, face-out on the back wall (shopStock.js); closed or
+      // stale, a board across them. Drawing the room is what asks for the stock (one fetch).
+      const st = shopState();
+      if (st.state === "idle") loadShop();
+      if (wallOpen(st)) {
+        const f = shopFocus();
+        for (const q of shopSlots(w, h, u, st.items.length)) {
+          const it = st.items[q.i], sx = x + q.x, sy = y + q.y;
+          R(c, f === it.handle ? "#fbbf24" : "#120c08", sx - u, sy - u, q.s + 2 * u, q.s + 2 * u);   // the frame
+          const px = Math.max(4, Math.round(q.s / u));
+          const tc = thumb(it, px);
+          if (tc) { c.imageSmoothingEnabled = false; c.drawImage(tc, Math.round(sx), Math.round(sy), q.s, q.s); }
+          else R(c, ["#dc2626", "#1d4ed8", "#eab308", "#15803d", "#9333ea", "#f97316"][hk(it.handle) % 6], sx, sy, q.s, q.s);
+          R(c, "#fbbf24", sx + q.s - 3 * u, sy + q.s - u, 3 * u, 2 * u);   // the price sticker
+        }
+      } else {
+        const sl = shopSlots(w, h, u, 12), last = sl[sl.length - 1];
+        const bx = x + 6 * u, by = y + (sl[0]?.y ?? h * 0.1), bw = Math.max(40 * u, (last ? last.x + last.s : w * 0.5) - 6 * u), bh = Math.max(9 * u, (last ? last.y + last.s : h * 0.3) - (sl[0]?.y ?? 0));
+        R(c, "#120c08", bx, by, bw, bh);
+        if (st.state === "loading") R(c, "#2a1e14", bx + u, by + u, bw - 2 * u, bh - 2 * u);
+        else {
+          R(c, "#e8d36a", bx + bw * 0.08, by + bh * 0.3, bw * 0.84, bh * 0.4);   // the taped notice
+          text(c, "CLOSED FOR INVENTORY", bx + bw / 2, by + bh * 0.5 - 1.6 * u, 3.2 * u, "#3a2a0a", "center");
+        }
+      }
+      // spines on the lower shelf, where the racks leave room for it
       const cols = ["#dc2626", "#1d4ed8", "#eab308", "#15803d", "#9333ea", "#f97316", "#111827", "#e5e7eb"];
-      for (let k = 0, sx = x + 6 * u; sx < x + w * 0.72; k++, sx += 6 * u) R(c, cols[(k * 5) % 8], sx, y + h * 0.28 - 5 * u, 5 * u, 5 * u);
-      // spines on the lower shelf
-      R(c, "#3a2414", x + 4 * u, y + h * 0.44, w - 8 * u, u);
-      for (let k = 0, sx = x + 6 * u; sx < x + w - 6 * u; k++, sx += 1.6 * u) R(c, cols[(k * 3 + (k >> 2)) % 8], sx, y + h * 0.44 - 4 * u - (k % 3 === 0 ? u : 0), u, 4 * u + (k % 3 === 0 ? u : 0));
+      const rb = shopSlots(w, h, u, wallOpen(st) ? st.items.length : 12).reduce((m, q) => Math.max(m, q.y + q.s + 2 * u), 0);
+      if (rb + 6 * u <= h * 0.46) R(c, "#3a2414", x + 4 * u, y + h * 0.46, w - 8 * u, u);
+      if (rb + 6 * u <= h * 0.46) for (let k = 0, sx = x + 6 * u; sx < x + w - 6 * u; k++, sx += 1.6 * u) R(c, cols[(k * 3 + (k >> 2)) % 8], sx, y + h * 0.46 - 4 * u - (k % 3 === 0 ? u : 0), u, 4 * u + (k % 3 === 0 ? u : 0));
       text(c, "EB SHOP", x + w - 4 * u, y + 3 * u, 2.8 * u, "#f472b6", "right");
       text(c, "SHOP.ELECTRICBASEMENT.TV", x + w - 4 * u, y + 6.6 * u, 1.8 * u, "#67e8f9", "right");
     },
@@ -312,16 +344,26 @@ export function withTv(LIVE) {
 // shop, the stage EBTV, the arcade floor the cabinet list. -> [{spec, box: [x0, y0, x1, y1]}]
 // in room px, the room itself first (so a cabinet, then a person, drawn later, win the tap).
 const ROOM_SPEC = { "eb-shop": { kind: "shop", campaign: "eb-shop" }, "studio-row": { kind: "ebtv", campaign: "ebtv-station" }, arcade: { kind: "arcade" } };
-export function funnelRoomHits(pid, plan, side = 0.3) {
+// u (the room's pixel, as drawRoom was given it): the shop's racks answer too, each its product.
+export function funnelRoomHits(pid, plan, side = 0.3, u = null) {
   const out = [];
   if (ROOM_SPEC[pid]) out.push({ spec: ROOM_SPEC[pid], box: [0, 0, plan.w, plan.h] });
+  const shop = pid === "eb-shop" && wallOpen() ? shopState().items : null;
+  if (shop && u) for (const q of shopSlots(plan.w, plan.h, u, shop.length)) out.push({ spec: { kind: "shop", campaign: "eb-shop", item: shop[q.i].handle }, box: [q.x - u, q.y - u, q.x + q.s + u, q.y + q.s + 2 * u] });
   for (const row of plan.rows) {
     const p = (plan.sw * row.s) / 32;
     for (const it of row.items) {
+      if (shop && it.prop === "shopCounter") { const f = featured(); if (f) { const b = turntableBox(it.x0, row.y, it.x1 - it.x0, p); out.push({ spec: { kind: "shop", campaign: "eb-shop", item: f.handle }, box: [b[0] - p, b[1] - p, b[2] + p, b[3] + p] }); } }
       const slug = cabinetGame(it.prop);
       if (!slug) continue;
       out.push({ spec: { kind: "game", slug, campaign: CAMPAIGN_OF_PLACE[pid] || "city", place: pid, ...(pid === "arcade" ? { back: { kind: "arcade" } } : {}) }, box: cabinetBox(it, row.y, p, side) });
     }
   }
   return out;
+}
+// What a tap at room-relative (x, y) opens: the frontmost hit (people are the caller's), or null.
+export function funnelTapAt(pid, plan, x, y, u = null, side = 0.3) {
+  const hits = funnelRoomHits(pid, plan, side, u);
+  for (let i = hits.length - 1; i >= 0; i--) { const b = hits[i].box; if (x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) return hits[i].spec; }
+  return null;
 }

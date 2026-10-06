@@ -32,7 +32,7 @@ import { funnelButtons } from "./funnels.js";
 import { storeLabel, tramAt, drawTram } from "./storefrontDraw.js";   // THE MALL: the storefronts' names, THE TRAM CAR
 import { nightLine } from "./nightlife.js";   // THE NIGHTLIFE QUARTERS: hours, tonight's bill, the rope
 import { storeButtons, openBusiness } from "./EnterprisePanel.jsx";
-import { openFunnel } from "./FunnelOverlay.jsx";
+import { openFunnel, ShopWallLinks } from "./FunnelOverlay.jsx";
 import { takeTvBoxes, watchHref, ebtvLabel } from "./ebtvFrame.js";
 import { COAST_LOTS, COAST_PLACES, terrainH, onTerrain, TERRAIN } from "./coastGeo.js";
 import { drawCoastLot, drawCoastGround, drawPod, coastLabel, coastLine } from "./coastDraw.js";
@@ -1224,7 +1224,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       for (const p of people) { const i = at.get(p.key); if (i != null) byAnchor[i] = p; }
       if (live && byAnchor.length > 1) greet(rk, byAnchor.filter(Boolean).map(p => ({ s: p.s, sheet: sheetFor(p.s) })), now);   // friends who just met wave (rigReact)
       // the funnels (funnelProps.js): a cabinet opens its game, the shop floor the shop, the stage EBTV
-      if (live) for (const h of funnelRoomHits(pid, plan)) V.hits.push({ kind: "funnel", panel: true, spec: h.spec, box: [rx + h.box[0], ry + h.box[1], rx + h.box[2], ry + h.box[3]] });
+      if (live) for (const h of funnelRoomHits(pid, plan, 0.3, u)) V.hits.push({ kind: "funnel", panel: true, spec: h.spec, box: [rx + h.box[0], ry + h.box[1], rx + h.box[2], ry + h.box[3]] });
       drawRoom(ctx, pid, rx, ry, rw, rh, u, {
         t: now, hour, plan, lit: true,
         people: (row) => {
@@ -1684,6 +1684,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
       <TouchGate label="TAP TO EXPLORE" hint="DRAG · PINCH">
         <canvas ref={canvasRef} tabIndex={0} className="hvi-city-canvas" role="img"
           aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag or use the arrow keys to move, pinch or plus and minus to zoom, Q and E to turn. Tap a building, or press ] and [ to step through the buildings in view, to open its cutaway: every floor and room, and who is in it; Enter goes inside. The list under the city says what is happening now, and the district directory lists every district." />
+        {b?.id === "eb-shop" && <ShopWallLinks />}
         <a ref={tvLinkRef} className="sr-only hvi-city-tvlink" href={watchHref()} target="_blank" rel="noopener" aria-label={ebtvLabel()}>Electric Basement TV, live</a>
       </TouchGate>
       <div className={`hvi-city-zoom${peek && !b ? " peeking" : ""}`} role="toolbar" aria-label="City view controls">
