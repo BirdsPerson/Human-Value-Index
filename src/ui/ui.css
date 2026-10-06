@@ -101,19 +101,19 @@ a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-of
 .tb.dbl { border-width: 6px; }
 :is(.ui-frame, .tb) :is(.ui-frame, .tb) { box-shadow: none; margin-right: 0; }
 .ui-frame-ttl, .tb-top { position: absolute; top: calc(-0.75em - 2px); left: var(--s2); right: var(--s2); display: flex; align-items: center; gap: var(--s2);
-  pointer-events: none; font-size: var(--t-xs); line-height: 1.5; letter-spacing: 0.08em; white-space: nowrap; }
+  pointer-events: none; font-size: var(--t-xs); line-height: 1.5; letter-spacing: 0.08em; white-space: nowrap; z-index: 2; }
 .ui-frame-ttl > *, .tb-top > * { background: var(--panel); padding: 0 0.5ch; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ui-frame-ttl .b, .tb-box { flex: none; color: var(--accent); letter-spacing: 0; }
 .ui-frame-ttl .t, .tb-top .tb-title { color: var(--tone, var(--fg)); font-weight: 700; flex: 0 1 auto; margin: 0 auto; }
 .ui-frame-ttl .m, .tb-top .tb-right { color: var(--fg-mute); font-weight: 400; flex: 0 1000 auto; margin: 0; }
 .ui-frame-ttl > span:empty { display: none; }
-.ui-frame.flush { padding: 0; }
+.ui-frame.flush { padding: var(--s3) 0 0; }
 .tb-body { min-width: 0; }
-.tb:has(> .tb-body.flush) { padding: 0; }
+.tb:has(> .tb-body.flush) { padding: var(--s3) 0 0; }
 @media (max-width: 640px) { .tb-top .tb-right { display: none; } }
 @media (max-width: 420px) {
   .ui-frame, .tb { padding-left: var(--s2); padding-right: var(--s2); box-shadow: 6px 6px 0 var(--shadow); margin-right: 6px; }
-  .tb:has(> .tb-body.flush) { padding: 0; }
+  .tb:has(> .tb-body.flush) { padding: var(--s3) 0 0; }
 }
 
 /* ---------- Command (row) ---------- */

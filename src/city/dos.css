@@ -1,0 +1,65 @@
+/* The city page's DEPARTMENT OS pieces (2026-10-05): the header window and NOW IN THE
+   SUBSTRATE's tiles (NowWindows.jsx). The city canvases are not styled here.
+   Tokens only (src/ui/tokens.css). Nothing under 14px on a phone. */
+
+/* ---------- header window ---------- */
+.hvi-city-headwin .hvi-city-clock { font-size: var(--t-l); }
+.hvi-city-headwin { margin-top: var(--s4); }
+
+/* ---------- NOW IN THE SUBSTRATE ---------- */
+.hvi-now { margin: var(--s6) 0 var(--s4); }
+.hvi-now-tiles { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.hvi-now-tiles > .ui-frame { margin-top: var(--s5); margin-bottom: var(--s3); }
+.hvi-now-wait { min-height: 640px; }
+@media (min-width: 900px) {
+  .hvi-now-tiles { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 0 var(--s5); }
+  .hvi-now-tiles .nw-map { grid-row: span 3; }
+  .hvi-now-tiles .nw-gossip, .hvi-now-tiles .nw-bull { grid-column: 1 / -1; }
+  .hvi-now-wait { min-height: 520px; }
+}
+
+/* the mosaic map: one button per district, its blocks lit by occupancy */
+.nw-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+@media (min-width: 560px) { .nw-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.nw-cell { position: relative; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; width: 100%;
+  min-height: 72px; padding: 0; background: var(--bg); border: 1px solid var(--line-hi); border-radius: 0; color: var(--fg);
+  font: inherit; font-size: var(--t-xs); line-height: 1.2; text-align: left; cursor: pointer; overflow: hidden; --lit: var(--fg-mute); }
+.nw-blk { position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); }
+.nw-blk .off { fill: var(--line); opacity: 0.55; }
+.nw-blk .on { fill: var(--lit); }
+.nw-cell .nm, .nw-cell .ct { position: relative; background: var(--bg); padding: 1px 4px; }
+.nw-cell .nm { font-weight: 700; overflow-wrap: anywhere; max-width: 100%; }
+.nw-cell .ct { align-self: flex-end; color: var(--lit); font-weight: 700; }
+.lv0 { --lit: var(--fg-ghost); } .lv1 { --lit: var(--fg-mute); } .lv2 { --lit: var(--accent-dim); }
+.lv3 { --lit: var(--accent); } .lv4 { --lit: var(--warn); } .lv5 { --lit: var(--harm); }
+.nw-cell.lv0 .ct { color: var(--fg-mute); }
+.nw-cell.lv4, .nw-cell.lv5 { border-color: var(--lit); }
+@media (hover: hover) { .nw-cell:hover { border-color: var(--fg); } .nw-cell:hover .nm { text-decoration: underline; text-underline-offset: 3px; } }
+.nw-cell:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.nw-legend { list-style: none; margin: var(--s3) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); font-size: var(--t-xs); color: var(--fg-dim); }
+.nw-legend li { display: flex; align-items: center; gap: 1ch; }
+.nw-legend i { width: 14px; height: 14px; background: var(--lit); flex: none; }
+.nw-legend i.lv0 { background: none; border: 1px solid var(--line-hi); }
+.nw-busy, .nw-note { margin: var(--s2) 0 0; font-size: var(--t-xs); color: var(--fg-dim); }
+
+/* the Loop monitor */
+.nw-big { margin: 0; font-size: var(--t-l); font-weight: 700; color: var(--eb-cyan); line-height: 1.3; }
+.nw-big span { font-size: var(--t-s); font-weight: 400; color: var(--fg-dim); }
+.nw-trains { list-style: none; margin: var(--s3) 0 0; padding: 0; font-size: var(--t-xs); }
+.nw-trains li { display: grid; grid-template-columns: minmax(0, 11ch) minmax(0, 1fr) 4ch; gap: 1ch; align-items: center; padding: 2px 0; }
+.nw-trains .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.nw-trains .b { display: flex; gap: 2px; height: 12px; border-top: 3px double var(--eb-cyan); padding-top: 2px; }
+.nw-trains .b i { flex: 0 0 calc((100% - 38px) / 20); height: 7px; background: var(--eb-cyan); }
+.nw-trains .v { text-align: right; font-weight: 700; color: var(--fg); }
+
+/* the Assembly box */
+.nw-asm-l { margin: 0; color: var(--fg); }
+.nw-read { margin: var(--s2) 0 0; padding: 0 0 0 2ch; color: var(--fg-dim); font-size: var(--t-xs); }
+.nw-asm .ui-btn-row { margin-bottom: 0; }
+.nw-asm .ui-btn.push { flex: 1 1 120px; }
+
+/* gossip + bulletin */
+.nw-log { list-style: none; margin: 0; padding: 0; }
+.nw-log li { padding: var(--s2) 0; border-bottom: 1px solid var(--line); color: var(--fg); }
+.nw-log li:last-child { border-bottom: 0; }
+.nw-bull .hvi-city-now-paper { margin: var(--s3) 0 0; }

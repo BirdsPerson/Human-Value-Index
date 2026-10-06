@@ -70,7 +70,8 @@ function injectSocialStyles() {
 
 // Memoized: it takes no props, so the city's per-second census never re-renders it.
 export default memo(SocialPanel);
-function SocialPanel() {
+// gossip={false}: the city page shows the gossip in NOW IN THE SUBSTRATE's GOSSIP.LOG window.
+function SocialPanel({ gossip = true }) {
   useEffect(() => { injectSocialStyles(); }, []);
   const d = useSocial();
   const [filter, setFilter] = useState("all");
@@ -89,12 +90,12 @@ function SocialPanel() {
   const focusName = focus && pairs.find(p => p.a === focus || p.b === focus);
   return (
     <>
-      <Frame title="GOSSIP" meta={`${(d.events || []).length} NOTED`}>
+      {gossip && <Frame title="GOSSIP" meta={`${(d.events || []).length} NOTED`}>
         <ul className="hvi-gossip">
           {(d.events || []).slice(0, 4).map((e, i) => <li key={`${e.h}-${i}`}>{e.text}</li>)}
           {!(d.events || []).length && <li>NOTHING WORTH REPEATING. YET.</li>}
         </ul>
-      </Frame>
+      </Frame>}
       {/* the web is a deep cut: folded until asked for, so the page under the city stays short */}
       <Disclosure className="hvi-city-disc" title="WHO GETS ALONG // THE LEDGER OF ASSOCIATION" meta={`${(d.counts?.friends ?? 0) + (d.counts?.rivals ?? 0)} TIES`}>
         <p className="hvi-web-note">NOBODY ARRANGED ANY OF THIS. SUBJECTS WHO SHARE A ROOM EITHER CLICK OR THEY DO NOT. FRIENDS DRIFT TO EACH OTHER'S USUAL ROOMS. RIVALS LEAVE FIRST.</p>

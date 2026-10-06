@@ -5,6 +5,8 @@ import { SPRITE_W, SPRITE_H } from "../sprites.js";
 import { sheetFor } from "./spriteBank.js";
 import { jobLine } from "./simApi.js";
 import { FAMILY_COLOR } from "./cityKit.js";
+import { Frame } from "../ui/components.jsx";
+import "./dos.css";   // DEPARTMENT OS: the header window, NOW IN THE SUBSTRATE
 
 export const FONT = "'Fira Mono', ui-monospace, Menlo, monospace";
 
@@ -240,7 +242,7 @@ export function injectCityStyles() {
 // seconds, so it is not a live region (the census would talk over everything).
 export function CityHeader({ clockText, right, pa, find = null }) {
   return (
-    <>
+    <Frame title="CLOCK.SYS // CENSUS" className="hvi-city-headwin">
       <div className="hvi-city-head">
         <span className="hvi-city-clock" aria-live="off">{clockText}</span>
         <span className="hvi-city-census">{right}</span>
@@ -249,7 +251,7 @@ export function CityHeader({ clockText, right, pa, find = null }) {
         <span className="tag">PA&gt;</span><Typed key={pa} as="span" text={pa} cps={45} />
       </div>
       {find}
-    </>
+    </Frame>
   );
 }
 

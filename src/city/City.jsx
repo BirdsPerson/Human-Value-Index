@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pad, padL } from "../term.jsx";
 import { Frame, Button, ButtonRow, Disclosure, ListRow } from "../ui/index.js";
 import { SubjectCard, injectPenStyles } from "../Pen.jsx";
@@ -39,6 +39,7 @@ import { buildIndex, bySlug, findHref } from "./find.js";
 import { useQuests, QuestCardPanel } from "../QuestLog.jsx";
 import { questsFor } from "../quests.js";
 import SocialPanel from "./SocialPanel.jsx";
+const NowWindows = lazy(() => import("./NowWindows.jsx"));   // NOW IN THE SUBSTRATE as tiled windows (DEPARTMENT OS)
 import { useSocial, ensureSocial } from "./socialClient.js";
 // THE MASTER PLAN (docs/planning/MASTER_PLAN.md): the Pit's card, the club's fixture, the Dept of Planning
 import PitPanel from "./PitPanel.jsx";
@@ -436,7 +437,7 @@ export default function City({ route }) {
               ? <City3D censusRef={censusRef} onDistrict={go} onOpen={open} onFloor={goBuilding} query={query} />
               : <CityMap censusRef={censusRef} onDistrict={go} onOpen={open} />}
       </Frame>
-      {!d && <NowList stats={stats} k={k} />}
+      {!d && <NowList stats={stats} k={k} asm={asm} events={social?.events} onDistrict={go} />}
       {iso && (
         <p className="hvi-city-help">
           DRAG TO LOOK AROUND. PINCH<span className="hvi-desk-only"> OR CLICK, THEN SCROLL,</span> TO ZOOM. TAP A BUILDING TO SEE INSIDE.
@@ -445,11 +446,11 @@ export default function City({ route }) {
       )}
       {!d && <MapKey />}
       {d && !b && <DistrictCivic districtId={d.id} onLeague={(e, sp) => { e.preventDefault(); window.location.hash = `#city/league${sp ? "/" + sp : ""}` + query; }} />}
-      {(!d || d.id === "commons") && <AssemblyRow asm={asm} />}
+      {d?.id === "commons" && <AssemblyRow asm={asm} />}
       {!b && <PitPanel districtId={d?.id || null} />}
       {d?.id === "finance" && <ExchangeRow />}
       {d && <ShopRow districtId={d.id} buildingId={b?.id || null} />}
-      {!d && !b && <SocialPanel />}
+      {!d && !b && <SocialPanel gossip={false} />}
       {!iso && <div className="hvi-city-help">
         {b
           ? b.id === "hq" ? "HEADQUARTERS RUNS ITS OWN SIMULATION. THE DEPARTMENT TRUSTS ONLY ITSELF." : "TAP A FLOOR TO FOCUS IT. HOVER A SUBJECT FOR ITS ASSIGNMENT; CLICK TO READ THE FILE. ON A PHONE: TAP TWICE."
@@ -507,13 +508,30 @@ function civicPa(view, mt) {
   }
   return lines;
 }
-function AssemblyRow({ asm }) {
+function assemblyLabel(asm) {
   const st = asm?.session?.state;
   if (!st) return null;
   const g = asm.tally?.votes?.golf || 0, f = asm.tally?.votes?.farm || 0;
-  const label = asm.session.id === "002"
+  return asm.session.id === "002"
     ? (st === "open" ? `THE ASSEMBLY IS IN SESSION // 002: THE RESORT PARCELS // ${asm.tally?.voters || 0} BALLOTS` : asm.result?.winners ? `THE ASSEMBLY HAS ALLOCATED THE PARCELS: ${ASM2_MOTIONS.map(m => ASM2_APPS[asm.result.winners[m.id]].short).join(", ")}` : "THE ASSEMBLY")
     : st === "open" ? `THE ASSEMBLY IS IN SESSION // GOLF ${g} // FARM ${f}` : asm.result ? `THE ASSEMBLY HAS DECIDED: ${ASM_APPS[asm.result.winner].proposal}` : "THE ASSEMBLY";
+}
+// The Assembly box on NOW IN THE SUBSTRATE: the session in one line, the motions to READ.
+function assemblyBox(asm) {
+  const label = assemblyLabel(asm);
+  if (!label) return null;
+  const open = asm.session.state === "open";
+  const v = asm.tally?.voters || 0;
+  const read = asm.session.id === "002"
+    ? ASM2_MOTIONS.map(m => `${m.parcel}, ${m.district}: ${m.choices.map(c => ASM2_APPS[c]?.short || c).join(" OR ")}.`)
+    : [];
+  return { open, label: open && asm.session.id === "002" ? "002: THE RESORT PARCELS" : label,
+    note: open ? `${v} BALLOT${v === 1 ? "" : "S"} CAST. THE MACHINE NOTES THE TURNOUT.` : null, read, key: `${label}|${v}` };
+}
+function AssemblyRow({ asm }) {
+  const st = asm?.session?.state;
+  const label = assemblyLabel(asm);
+  if (!label) return null;
   return (
     <div className="hvi-city-asm" style={{ margin: "0 0 var(--s4)" }}>
       <ListRow lead="0x6F08" label={label} tag={st === "open" ? "VOTE" : "RESULT"} href="#assembly"
@@ -527,7 +545,7 @@ function AssemblyRow({ asm }) {
 // Pit, the club, the race, the night, the Loop, the busiest districts. Never more than six lines.
 // The districts whose PA carries the air's lines (the depot, the pads, the heliport); the city view always does.
 const AIR_DISTRICTS = new Set(["works", "finance", "airport"]);
-const NowList = memo(function NowList({ stats, k }) {
+const NowList = memo(function NowList({ stats, k, asm, events, onDistrict }) {
   const mt = clockAt(Date.now()).mt;
   const lines = [];
   for (const id of Object.keys(GAMES)) { const g = gameAt(id, mt); if (g) lines.push(`${GAME_VENUE[id]}: ${g.name}, ${g.status}.`); }
@@ -544,17 +562,15 @@ const NowList = memo(function NowList({ stats, k }) {
   const A = airNow(mt), air = A && emergeNowLine(A.today, A.air);
   if (air) { if (air.startsWith("NEW:")) lines.unshift(air); else lines.push(air); }
   lines.splice(4);
-  lines.push(`${stats.transit} RIDING THE LOOP. ${stats.waiting} WAITING ON PLATFORMS.`);
-  const busy = stats.districts.slice().sort((a, b) => b.count - a.count).slice(0, 3).filter(x => x.count > 0);
-  if (busy.length) lines.push(`BUSIEST: ${busy.map(x => `${x.name} (${x.count})`).join(", ")}.`);
+  // The Loop and the busiest districts have their own windows (NowWindows.jsx).
   return (
-    <section className="hvi-city-nowbox" aria-labelledby="hvi-city-now-h">
-      <h2 id="hvi-city-now-h" className="hvi-city-now-h">NOW IN THE SUBSTRATE</h2>
-      <ul className="hvi-city-now">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
-      <p className="hvi-city-now-paper"><a href="#paper">READ TODAY'S PAPER: THE DAILY COMPLIANCE</a></p>
-    </section>
+    <Suspense fallback={<div className="hvi-now-wait" aria-hidden="true" />}>
+      <NowWindows lines={lines} stats={stats} asm={assemblyBox(asm)} events={events || []} onDistrict={onDistrict}>
+        <p className="hvi-city-now-paper"><a href="#paper">READ TODAY'S PAPER: THE DAILY COMPLIANCE</a></p>
+      </NowWindows>
+    </Suspense>
   );
-}, (a, b) => a.k === b.k && a.stats.sig === b.stats.sig);
+}, (a, b) => a.k === b.k && a.stats.sig === b.stats.sig && a.onDistrict === b.onDistrict);
 
 // The machine clock, ticking on its own so the rest of the page does not re-render with it.
 function LiveClock() {
