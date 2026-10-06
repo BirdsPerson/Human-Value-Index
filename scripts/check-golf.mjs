@@ -18,6 +18,12 @@
 //                ball barely moves in a bunker; the road is fast; tailwind carries further than
 //                headwind; a crosswind drifts the ball its way, less for a low (soft) shot
 //   putting      two taps: start, pace; left alone the stroke is called off, no stroke counted
+//   the mouse    (sim v3) a drag read as a swing (gesture.js): a straight push flies straight,
+//                drifting right slices (a right-hander), left hooks; a longer pull is more power,
+//                capped; the tempo's sweet band is pure, slow is fat (short), quick is thin; let go
+//                before pushing through and there is no stroke; a click is the meter's button; a
+//                click on the map aims there and picks the club; a round played by mouse replays
+//                tick for tick from its log; v1 and v2 fixture rounds replay unchanged
 // Run: node scripts/check-golf.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -25,13 +31,15 @@ import { COURSE, PAR, OPEN, COURSES, parOf, surfaceAt, inPoly, centroidOf, areaO
 import { OSM } from "../src/play/golf/holes/osm.js";
 import { replayRecord, versionOf } from "../src/play/golf/replay.js";
 import * as V1 from "../src/play/golf/v1/sim.js";
+import * as V2 from "../src/play/golf/v2/sim.js";
+import { readSwing, liveSwing, PULL_FULL, PULL_PUTT } from "../src/play/golf/gesture.js";
 import { FAMOUS } from "../src/play/golf/holes/famous.js";
-import { newRound, step, autoplay, replay, cardOf, toParText, BTN, CLUBS, RISE_PUTT, holeOf, MAX_STROKES, VERSION, predict, makeFlight, flightAt, solveShot, puttMark, puttPace, lineFor } from "../src/play/golf/sim.js";
+import { newRound, step, autoplay, replay, cardOf, toParText, BTN, CLUBS, RISE_PUTT, holeOf, MAX_STROKES, VERSION, predict, makeFlight, flightAt, solveShot, puttMark, puttPace, lineFor, act, logPush, logEvent, aimEvent, swingEvent, puttEvent, clubFor, planShot, dirOf, reachOf } from "../src/play/golf/sim.js";
 import { fnv } from "../src/play/golf/course.js";
 import { GOLFERS } from "../src/play/golf/roster.js";
 
 let n = 0;
-const ok = (c, m) => { assert.ok(c, m); n++; };
+const ok = (c, m) => { assert.ok(c, m); n++; if (process.env.V) console.log(m); };
 
 // ---- the course
 ok(COURSE.length === 18, "eighteen holes");
@@ -182,9 +190,25 @@ ok(ea.st.phase === "done" && ea.st.cfg.easy === true && !a.st.cfg.easy, "an easy
 ok(JSON.stringify(erp.result) === JSON.stringify(ea.st.result) && erp.tick === ea.st.tick, "an easy round replays tick for tick");
 
 
-// ---- versions: v2 is live; every v1 round recorded before it still replays on v1, exactly
-ok(VERSION === 2 && a.st.cfg.v === 2 && a.st.result.v === 2, "new rounds are sim v2 and say so in their cfg");
-ok(versionOf({ v: 1, cfg: { seed: 1 } }) === 1 && versionOf({ v: 2, cfg: { v: 2 } }) === 2 && versionOf({ cfg: {} }) === 1, "a record without a version is v1");
+// ---- versions: v3 is live; every v1 and v2 round recorded before it still replays on its own sim, exactly
+ok(VERSION === 3 && a.st.cfg.v === 3 && a.st.result.v === 3, "new rounds are sim v3 and say so in their cfg");
+ok(versionOf({ v: 1, cfg: { seed: 1 } }) === 1 && versionOf({ v: 2, cfg: { v: 2 } }) === 2 && versionOf({ v: 3, cfg: { v: 3 } }) === 3 && versionOf({ cfg: {} }) === 1, "a record without a version is v1");
+{ // a round of button bits plays the same on v3 as it did on v2 (the mouse only adds)
+  const v2a = V2.autoplay(cfg);
+  ok(JSON.stringify(v2a.log) === JSON.stringify(a.log) && JSON.stringify({ ...v2a.st.result, v: 3 }) === JSON.stringify(a.st.result), "bits only, v3 plays exactly as v2 did");
+}
+const FIX2 = JSON.parse(readFileSync(new URL("./fixtures/golf-v2-rounds.json", import.meta.url), "utf8"));
+const traceV2 = (cfg, log) => { const st = V2.newRound(cfg); let hh = 0x811c9dc5, ph = st.phase;
+  const run = (b) => { V2.step(st, b); st.ev.length = 0; if (st.phase !== ph) { ph = st.phase; if (ph === "rest") for (const P of st.players) hh = fnv(`${hh}|${P.x}|${P.y}|${P.strokes}`); } };
+  for (let i = 0; i < log.length && st.phase !== "done"; i += 2) for (let k = 0; k < log[i + 1] && st.phase !== "done"; k++) run(log[i]);
+  while (st.phase !== "done" && st.tick < 2e6) run(0);
+  return hh; };
+ok(FIX2.rounds.length >= 4 && FIX2.rounds.every(r => r.cfg.v === 2), "the v2 fixture rounds are on file");
+for (const rec of FIX2.rounds) {
+  const st = replayRecord(rec);
+  ok(st.v === 2 && JSON.stringify(st.result) === JSON.stringify(rec.result) && st.tick === rec.tick, `v2 round (${rec.cfg.course}, seed ${rec.cfg.seed}${rec.cfg.easy ? ", easy" : ""}) replays on v2 to the same result and tick`);
+  ok(traceV2(rec.cfg, rec.inputLog) === rec.trace, `v2 round (seed ${rec.cfg.seed}): every ball rests where it rested`);
+}
 const FIX = JSON.parse(readFileSync(new URL("./fixtures/golf-v1-rounds.json", import.meta.url), "utf8"));
 const traceV1 = (cfg, log) => { const st = V1.newRound(cfg); let hh = 0x811c9dc5, ph = st.phase;
   const run = (b) => { V1.step(st, b); st.ev.length = 0; if (st.phase !== ph) { ph = st.phase; if (ph === "rest") for (const P of st.players) hh = fnv(`${hh}|${P.x}|${P.y}|${P.strokes}`); } };
@@ -202,10 +226,10 @@ for (const rec of FIX.rounds) {
   const rec = FIX.rounds[0], v2 = replay({ ...rec.cfg, v: 2 }, rec.inputLog);
   ok(v2.tick !== rec.tick || JSON.stringify(v2.result) !== JSON.stringify(rec.result), "a v1 log on the v2 sim does not reproduce v1: replay.js must route by version");
 }
-{ // a v2 round, saved as Golf.jsx saves it, comes back through replay.js on v2
+{ // a v3 round, saved as Golf.jsx saves it, comes back through replay.js on v3
   const rec = { v: VERSION, seed: cfg.seed, cfg: a.st.cfg, inputLog: a.log, result: a.st.result };
   const st = replayRecord(rec);
-  ok(JSON.stringify(st.result) === JSON.stringify(a.st.result) && st.tick === a.st.tick, "a saved v2 round replays through replay.js tick for tick");
+  ok(JSON.stringify(st.result) === JSON.stringify(a.st.result) && st.tick === a.st.tick, "a saved v3 round replays through replay.js tick for tick");
 }
 
 // ---- greens: none is a circle; the open plays on OSM's shapes
@@ -295,6 +319,120 @@ ok(Math.abs(b7.roll) < 0.5 && Math.abs(bW.roll) < 0.5, `a ball in a bunker barel
   for (let i = 0; i < 30; i++) step(sw, 0);
   step(sw, BTN.A); step(sw, 0);
   ok(sw.phase === "meter" && sw.meter.stage === 2, "a full swing still asks for the third press");
+}
+
+// ---- THE MOUSE (sim v3): a drag read as a swing
+// a gesture in canvas px and ms: press at (160, 140), pull down `pull` over 300 ms, then push up
+// past the start in `ms`, drifting `drift` px sideways on the way through; `through: false` lets go
+// at the bottom
+const trail = (pull, drift = 0, ms = 150, through = true) => {
+  const S = [], x0 = 160, y0 = 140;
+  for (let i = 0; i <= 10; i++) S.push({ x: x0, y: y0 + (pull * i) / 10, t: i * 30 });
+  if (through) for (let i = 1; i <= 10; i++) S.push({ x: x0 + (drift * i) / 10, y: y0 + pull - ((pull + 6) * i) / 10, t: 300 + (ms * i) / 10 });
+  return S;
+};
+{
+  const sw = readSwing(trail(60, 0));
+  ok(sw.kind === "swing" && sw.a === 0 && sw.contact === 0, `a straight push at an easy tempo: straight, pure (${JSON.stringify(sw)})`);
+  const r = readSwing(trail(60, 14)), l = readSwing(trail(60, -14));
+  ok(r.a > 0.1 && l.a < -0.1 && Math.abs(r.a + l.a) < 1e-9, `drift right is a slice, left a hook (${r.a.toFixed(3)}, ${l.a.toFixed(3)})`);
+  ok(readSwing(trail(60, 1.5)).a === 0, "a small wobble is inside the dead zone: straight");
+  ok(readSwing(trail(60, 6)).a < r.a && readSwing(trail(60, 6)).a > 0, "a bigger drift is a bigger curve (scaled)");
+  ok(readSwing(trail(60, 14), { easy: true }).a < r.a, "EASY SWING forgives the same drift more");
+  const p1 = readSwing(trail(20)).power, p2 = readSwing(trail(45)).power, p3 = readSwing(trail(PULL_FULL)).power, p4 = readSwing(trail(PULL_FULL * 2)).power;
+  ok(p1 < p2 && p2 < p3 && p3 === 1 && p4 === 1, `a longer pull is more power, capped (${p1.toFixed(2)} < ${p2.toFixed(2)} < ${p3} = ${p4})`);
+  ok(readSwing(trail(60, 0, 900)).contact < -0.3 && readSwing(trail(60, 0, 25)).contact > 0.3, "too slow is fat, too quick is thin");
+  ok(readSwing(trail(60, 0, 150, false)).kind === "cancel", "let go before pushing through: called off");
+  ok(readSwing(trail(60, 0, 150, false), { done: false }).kind === "pending" && readSwing(trail(60, 0), { done: false }).kind === "swing", "the strike comes the moment the push goes through");
+  ok(readSwing([{ x: 100, y: 100, t: 0 }, { x: 101, y: 102, t: 90 }]).kind === "click", "a press that barely moves is a click: the classic meter");
+  const pt = readSwing(trail(36, 0, 150, false), { putt: true });
+  ok(pt.kind === "putt" && Math.abs(pt.m - 36 / PULL_PUTT) < 1e-9 && pt.off === 0, "a putt: drag back for pace, let go");
+  const pr = readSwing([...trail(36, 0, 150, false), { x: 180, y: 176, t: 400 }], { putt: true });
+  ok(pr.kind === "putt" && pr.off > 0 && pr.off <= 0.025, `a putt drawn back drifting right pushes the line a touch (${pr.off.toFixed(4)} rad)`);
+  const lv = liveSwing(trail(32, 0, 150, false));
+  ok(lv.stage === 1 && Math.abs(lv.m - 0.5) < 1e-9 && !lv.through, "half the pull shows half power on the meter");
+}
+// the strokes in the sim: same lie, calm, straight up a flat fairway
+const strokeAt = (ev, club = 4, lie = "fairway") => {
+  const st = at(0, 0, lie);
+  st.wind = { mph: 0, dir: 0, x: 0, y: 0 }; st.aim = 0; st.club = club;
+  for (let i = 0; i < 8; i++) step(st, 0);
+  const P = st.players[0], s0 = P.strokes;
+  act(st, ev);
+  while (st.phase === "flight" || st.phase === "roll") step(st, 0);
+  return { st, P, x: st.fl ? (st.ball.x) : null, y: st.ball?.y, stroked: P.strokes > s0, fl: st.fl };
+};
+{
+  const g = (pull, drift, ms) => swingEvent(readSwing(trail(pull, drift, ms)));
+  const s = strokeAt(g(64, 0)), r = strokeAt(g(64, 14)), l = strokeAt(g(64, -14));
+  ok(s.stroked && Math.abs(s.fl.curve) < 1e-9, "a straight push is a straight ball");
+  ok(r.fl.curve > 2 && r.fl.curve > s.fl.curve && l.fl.curve < -2, `drift right curves the ball right (a slice), left curves it left (${r.fl.curve.toFixed(1)}, ${l.fl.curve.toFixed(1)} yd)`);
+  const half = strokeAt(g(32, 0)), fat = strokeAt(g(64, 0, 900)), thin = strokeAt(g(64, 0, 25));
+  ok(half.fl.carry < s.fl.carry * 0.6, `half the pull, about half the carry (${half.fl.carry.toFixed(0)} v ${s.fl.carry.toFixed(0)})`);
+  ok(fat.fl.carry < s.fl.carry * 0.85 && thin.fl.apex < s.fl.apex * 0.8, `fat comes up short (${fat.fl.carry.toFixed(0)}), thin flies low (apex ${thin.fl.apex.toFixed(1)} v ${s.fl.apex.toFixed(1)})`);
+  const back = strokeAt(swingEvent(readSwing(trail(64)), { x: 0, y: -1 })), top = strokeAt(swingEvent(readSwing(trail(64)), { x: 0, y: 1 }));
+  ok(back.fl.spin > s.fl.spin && top.fl.spin < s.fl.spin, "struck under the ball: more backspin; over it: less");
+  const draw = strokeAt(swingEvent(readSwing(trail(64)), { x: -1, y: 0 })), fade = strokeAt(swingEvent(readSwing(trail(64)), { x: 1, y: 0 }));
+  ok(draw.fl.curve < -2 && fade.fl.curve > 2, "struck on the ball's left side: a draw; its right: a fade");
+  ok(JSON.stringify(makeFlight(COURSE[0], { x: 0, y: 0, lie: "fairway" }, 4, 0, 0.8, 0.3, { x: 3, y: 2 })) === JSON.stringify(makeFlight(COURSE[0], { x: 0, y: 0, lie: "fairway" }, 4, 0, 0.8, 0.3, { x: 3, y: 2 }, null)), "no mouse stroke: the v2 flight exactly");
+  // cancel: nothing reaches the sim, nothing happens; an event out of turn is ignored
+  const c0 = at(0, 0, "tee"); for (let i = 0; i < 8; i++) step(c0, 0);
+  ok(readSwing(trail(64, 0, 150, false)).kind === "cancel" && c0.phase === "aim" && c0.players[0].strokes === 0, "a called-off swing: no stroke");
+  c0.club = CLUBS.length - 1; act(c0, g(64, 0));
+  ok(c0.phase === "aim" && c0.players[0].strokes === 0, "a full-swing event with the putter in hand is ignored");
+  const c1 = at(0, 0, "tee"); c1.phase = "flight"; act(c1, aimEvent(10, 100));
+  ok(c1.target == null, "an aim event out of the aim phase is ignored");
+}
+{ // the map click: the aim swings to the spot, the club for the distance comes out of the bag
+  const h = COURSE[0], st = at(0, 0, "tee"); for (let i = 0; i < 8; i++) step(st, 0);
+  act(st, aimEvent(-20, 140));
+  const want = Math.atan2(-20, 140);
+  ok(st.target && st.aimTo != null && st.aim !== want, "a click on the map sets the target; the aim has not jumped");
+  let t = 0; while (st.aim !== want && t < 120) { step(st, 0); t++; }
+  ok(Math.abs(st.aim - Math.atan2(-2, 14)) < 1e-9 && t > 2 && t < 60, `the aim swings to it over ${t} ticks`);
+  ok(st.club === clubFor(st.players[0], Math.hypot(20, 140)) && reachOf(st.club, "tee") >= Math.hypot(20, 140) && reachOf(st.club + 1, "tee") < Math.hypot(20, 140), `and the club for ${Math.round(Math.hypot(20, 140))} yards: ${CLUBS[st.club].id}`);
+  act(st, aimEvent(5, 400)); ok(st.club === 0, "a target past every club: the driver off the tee");
+  step(st, BTN.D); step(st, 0); ok(st.club === 1, "the club is still the player's to change (wheel / down)");
+  ok(clubFor({ lie: "green" }, 8) === CLUBS.length - 1, "on the green: the putter");
+  void h;
+}
+{ // the putt by drag: the pace marker the two-tap meter would show, the same roll
+  const h = COURSE[2], mk = () => { const st = at(h.pin.x - 3, h.pin.y - 5, "green", 2); st.club = CLUBS.length - 1; st.aim = Math.atan2(3, 5); for (let i = 0; i < 8; i++) step(st, 0); return st; };
+  const a1 = mk(); act(a1, puttEvent({ m: 0.4, off: 0 }));
+  ok(a1.phase === "roll" && a1.players[0].strokes === 1 && Math.abs(a1.meter.pace - puttPace(0.4)) < 1e-12, "a drag putt strikes at the marker's pace: one stroke");
+  const a2 = mk(); act(a2, swingEvent({ power: 1, a: 0, contact: 0 }));
+  ok(a2.phase === "aim" && a2.players[0].strokes === 0, "a full-swing event on the green with the putter is ignored");
+}
+{ // a round played by mouse: aim clicks, drag swings, drag putts. It finishes; its log alone replays it
+  const mcfg = { seed: 0xc0ffee, course: "open", mode: "match", count: 9, start: 0, easy: true, player: { name: "MOUSE" }, cpu: { name: "X", rating: 60 } };
+  const st = newRound(mcfg), log = [];
+  let aimed = -1, events = 0;
+  const send = (e) => { logEvent(log, e); act(st, e); events++; };
+  while (st.phase !== "done" && st.tick < 2e6) {
+    const P = st.players[st.cur], key = `${st.hi}|${st.cur}|${P.strokes}`;
+    let b = 0;
+    if (st.phase === "intro" || st.phase === "holeEnd") b = st.t > 20 && !(st.prev & BTN.A) ? BTN.A : 0;
+    else if (st.phase === "aim" && P.kind === "human" && st.t >= 10) {
+      const h = holeOf(st), plan = planShot(h, P, st.wind), putt = CLUBS[clubFor(P, plan.d)].putt;
+      if (aimed !== key) {
+        aimed = key;
+        // aim at the caddie's spot, but where the solved line points (wind, break)
+        const sol = solveShot(h, P, clubFor(P, plan.d), plan.tx, plan.ty, st.wind, 1), [dx, dy] = dirOf(sol.aim);
+        send(aimEvent(P.x + dx * plan.d, P.y + dy * plan.d));
+      } else if (st.aimTo == null) {
+        const sol = solveShot(h, P, st.club, plan.tx, plan.ty, st.wind, 1);
+        if (putt) { const g = readSwing(trail(puttMark(sol.power) * PULL_PUTT, 0, 150, false), { putt: true, easy: true }); send(puttEvent(g)); }
+        else { const g = readSwing(trail(sol.power * PULL_FULL, 0, 150), { easy: true }); send(swingEvent(g)); }
+      }
+    }
+    logPush(log, b); step(st, b); st.ev.length = 0;
+  }
+  ok(st.phase === "done" && events > 30, `a mouse round finishes (${events} events, ${st.result.total[0]} strokes)`);
+  ok(st.result.total[0] <= 9 * 6, `and is playable: ${st.result.total[0]} over nine (${toParText(st.result.toPar[0])})`);
+  const rp = replay(mcfg, log), rr = replayRecord({ v: VERSION, cfg: st.cfg, inputLog: JSON.parse(JSON.stringify(log)) });
+  ok(JSON.stringify(rp.result) === JSON.stringify(st.result) && rp.tick === st.tick, "a mouse-played round replays from its log tick for tick");
+  ok(JSON.stringify(rr.result) === JSON.stringify(st.result) && rr.tick === st.tick, "... and through replay.js, after a trip through JSON (localStorage)");
+  ok(log.length < 4000, `the mouse round's log is compact (${log.length} entries)`);
 }
 
 // ---- the gallery and the end scene: read-only, deterministic

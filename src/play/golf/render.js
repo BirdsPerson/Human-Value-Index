@@ -13,7 +13,9 @@
 // with smoothing off (Golf.jsx).
 //
 // Reads the sim's state and changes nothing in it (a camera, a ball trail, the gallery's mood are
-// kept here, per round, for the picture only).
+// kept here, per round, for the picture only). THE MOUSE (Golf.jsx, gesture.js) asks it the other
+// way round: which world spot a pixel of the map or the view is (pipToWorld, screenToWorld), and
+// whether a press landed on the spin ball or the club chip; a drag in progress is drawn from opts.ui.
 import { surfaceAt, slopeAt, fnv, rngOf, inPoly } from "./course.js";
 import { CLUBS, LIE, ACC_ZONE, ACC_END, PUTT_MAX, holeOf, dirOf, cardOf, toParText, windRel, puttMark } from "./sim.js";
 import { drawText, textWidth, wrap } from "./font.js";
@@ -200,6 +202,7 @@ function mapIn(ctx, st, v, ox, oy, frame, small) {
     const n = Math.max(1, Math.round(Math.hypot(ex - bx, ey - by) / 2));
     for (let k = 1; k <= n; k++) if ((k + (frame >> 3)) % 2) px(ctx, bx + (ex - bx) * k / n, by + (ey - by) * k / n, 1, 1, PAL.white);
     if (!c.putt && (frame >> 4) % 2) { px(ctx, ex - 1, ey, 3, 1, PAL.red); px(ctx, ex, ey - 1, 1, 3, PAL.red); }
+    if (st.target) { const [gx, gy] = toPx(v, st.target.x, st.target.y, ox, oy); px(ctx, gx - 2, gy, 2, 1, PAL.gold); px(ctx, gx + 1, gy, 2, 1, PAL.gold); px(ctx, gx, gy - 2, 1, 2, PAL.gold); px(ctx, gx, gy + 1, 1, 2, PAL.gold); }
   }
   st.players.forEach((Q, i) => {
     if (Q.holed || (i === st.cur && st.ball)) return;
@@ -525,8 +528,10 @@ export function spectator(ctx, c, x, y, hh, mood, f) {
 }
 
 // ---- the golfer -------------------------------------------------------------------------------------
-function poseFor(st, frame, still) {
+function poseFor(st, frame, still, drag) {
   const putt = st.fl?.putt || (!st.fl && CLUBS[st.club]?.putt) || (st.phase !== "flight" && st.phase !== "roll" && st.phase !== "rest" && CLUBS[st.club]?.putt);
+  // a drag in progress: the club goes back as far as the pull, and comes down with the push
+  if (drag && st.phase === "aim") return poseOf("meter", { putt: Boolean(putt), m: drag.m, stage: 1, power: drag.m, still });
   const m = st.meter;
   const waggle = st.phase === "aim" && !still ? Math.sin(frame / 11) * 0.5 : 0;
   const mem = memOf(st);
@@ -537,7 +542,7 @@ function poseFor(st, frame, still) {
 }
 
 // The view itself.
-function behindView(ctx, st, frame, looks, still) {
+function behindView(ctx, st, frame, looks, still, ui) {
   const h = holeOf(st), cam = cameraOf(st, h), P = st.players[st.cur], mem = memOf(st);
   sky(ctx, st, h, cam, frame, still);
   floor(ctx, st, h, cam, frame, still);
@@ -607,7 +612,7 @@ function behindView(ctx, st, frame, looks, still) {
     const p = project(cam, cam.ox, cam.oy);
     if (p) {
       const k = Math.min(1, p[2] / (cam.F / cam.back)), look = looks?.[st.cur] || { shirt: P.color?.shirt, pants: P.color?.pants };
-      const pose = poseFor(st, frame, still), [bx, by] = ballPx(pose.putt);
+      const pose = poseFor(st, frame, still, ui?.drag), [bx, by] = ballPx(pose.putt);
       items.push({ d: p[3] + 0.05, f: () => {
         const sp = golferCanvas(pose, look), w = Math.round(GW * k), hh = Math.round(GH * k);
         const x0 = Math.round(p[0] - bx * k), y0 = Math.round(p[1] + 1 - by * k);
@@ -645,6 +650,10 @@ function aimLine(ctx, st, h, cam, frame) {
     const p = project(cam, P.x + dx * s, P.y + dy * s);
     if (p && p[1] < PANEL_Y) px(ctx, p[0] - 1, p[1], 2, 1, PAL.white);
   }
+  if (st.target && !c.putt) {   // the spot clicked on the map
+    const p = project(cam, st.target.x, st.target.y);
+    if (p && p[1] < PANEL_Y - 1) { const r = Math.max(2, Math.round(2 * p[2])); px(ctx, p[0] - r, p[1], r - 1, 1, PAL.gold); px(ctx, p[0] + 2, p[1], r - 1, 1, PAL.gold); px(ctx, p[0], p[1] - r, 1, r - 1, PAL.gold); }
+  }
   if (!c.putt) {
     const p = project(cam, P.x + dx * L, P.y + dy * L);
     if (p && (frame >> 4) % 2) { const r = Math.max(2, Math.round(3 * p[2])); px(ctx, p[0] - r, p[1], 2 * r + 1, 1, PAL.red); px(ctx, p[0], p[1] - Math.max(1, r >> 1), 1, 2 * Math.max(1, r >> 1) + 1, PAL.red); }
@@ -668,7 +677,7 @@ function slopeArrows(ctx, h, cam) {
 // ---- the HUD -------------------------------------------------------------------------------------------
 const MX = 6, MY = 184, MW = 120;
 const mPos = (m) => MX + Math.round(((m - ACC_END) / (1 - ACC_END)) * MW);
-function meter(ctx, st, h, P) {
+function meter(ctx, st, h, P, drag) {
   const putt = CLUBS[st.club]?.putt;
   px(ctx, MX - 1, MY - 1, MW + 3, 10, PAL.white);
   px(ctx, MX, MY, MW + 1, 8, PAL.black);
@@ -677,7 +686,7 @@ function meter(ctx, st, h, P) {
   // the putter's meter is pace only: a mark where a flat putt would just reach the cup
   // (the meter is finer at the short end: pace = marker^1.5, sim.js puttPace)
   if (putt) { const d = Math.hypot(h.pin.x - P.x, h.pin.y - P.y) / PUTT_MAX; if (d <= 1) px(ctx, mPos(puttMark(d)), MY + 1, 1, 6, PAL.lime); }
-  const m = st.meter;
+  const m = st.meter || (drag && st.phase === "aim" ? { stage: 1, m: drag.m, power: drag.power } : null);
   if (m) {
     const top = m.stage === 1 ? m.m : m.power;
     for (let x = mPos(0); x < mPos(top); x++) px(ctx, x, MY + 1, 1, 6, x & 1 ? "#f8b800" : (x - mPos(0)) > MW * 0.7 ? "#f86800" : "#f8d000");
@@ -712,7 +721,7 @@ function portrait(ctx, look, x, y) {
   if (hd) ctx.drawImage(hd, x + 16 - hd.width, y + 26 - hd.height * 2, hd.width * 2, hd.height * 2);
   else { px(ctx, x + 10, y + 6, 12, 14, look?.skin || PAL.skin); px(ctx, x + 10, y + 4, 12, 4, look?.hair || "#503000"); }
 }
-function hud(ctx, st, frame, looks) {
+function hud(ctx, st, frame, looks, ui) {
   const h = holeOf(st), P = st.players[st.cur], c = CLUBS[st.club];
   portrait(ctx, looks?.[st.cur], 4, 4);
   px(ctx, 38, 4, 150, h.name ? 44 : 34, PAL.black);
@@ -729,11 +738,13 @@ function hud(ctx, st, frame, looks) {
   px(ctx, 0, PANEL_Y + 1, W, 1, PAL.panel2);
   const carry = c.putt ? "" : yds(c.carry * (LIE[P.lie] ?? 1));
   drawText(ctx, `${c.id} ${carry}`, 4, 172, PAL.white);
+  // the club chip (the mouse): a click on it, or the wheel, changes the club
+  if (ui?.mouse && st.phase === "aim" && P.kind === "human") { const w = textWidth(`${c.id} ${carry}`) + 5; px(ctx, CLUB_CHIP.x, CLUB_CHIP.y, w, 1, PAL.dgrey); px(ctx, CLUB_CHIP.x, CLUB_CHIP.y + CLUB_CHIP.h - 1, w, 1, PAL.dgrey); px(ctx, CLUB_CHIP.x, CLUB_CHIP.y, 1, CLUB_CHIP.h, PAL.dgrey); px(ctx, CLUB_CHIP.x + w - 1, CLUB_CHIP.y, 1, CLUB_CHIP.h, PAL.dgrey); }
   const pin = Math.hypot(h.pin.x - P.x, h.pin.y - P.y), pinTxt = `PIN ${pin < 30 ? `${Math.round(pin * 3)}FT` : yds(pin)}`;
   drawText(ctx, pinTxt, 84, 172, PAL.white);
   const lie = `LIE ${P.lie === "path" ? "ROAD" : P.lie.toUpperCase()}${P.plug ? " PLUGGED" : ""}`;
   drawText(ctx, lie, W - 4 - textWidth(lie), 172, P.lie === "bunker" || P.lie === "trees" || P.plug ? PAL.gold : PAL.grey);
-  meter(ctx, st, h, P);
+  meter(ctx, st, h, P, ui?.drag);
   const aim = st.fl?.aim ?? st.aim;
   if (c.putt && st.phase !== "flight") {
     const mx = `PACE // MAX ${Math.round(PUTT_MAX * 3)}FT`;
@@ -744,7 +755,8 @@ function hud(ctx, st, frame, looks) {
     const ww = windWords(st.wind, aim);
     if (ww) drawText(ctx, ww, W - 4 - textWidth(ww), 184, PAL.grey);
   }
-  const hint = st.phase === "aim" ? (P.kind === "cpu" ? "THE FIGURE AIMS." : c.putt ? "PUTTER: A STARTS THE STROKE, A AGAIN SETS THE PACE." : "AIM LEFT/RIGHT. A TO SWING. X CHANGES CLUB.")
+  const hint = st.phase === "aim" && ui?.mouse && P.kind === "human" ? (ui.drag ? (c.putt ? "LET GO TO PUTT." : ui.drag.stage === 2 ? "PUSH UP THROUGH THE BALL." : "NOW PUSH UP TO SWING. LET GO TO CALL IT OFF.") : ui.hint || (c.putt ? "DRAG DOWN FOR PACE. LET GO TO PUTT." : "CLICK THE MAP TO AIM. DRAG DOWN, PUSH UP TO SWING."))
+    : st.phase === "aim" ? (P.kind === "cpu" ? "THE FIGURE AIMS." : c.putt ? "PUTTER: A STARTS THE STROKE, A AGAIN SETS THE PACE." : "AIM LEFT/RIGHT. A TO SWING. X CHANGES CLUB.")
     : st.phase === "meter" ? (P.kind === "cpu" ? "" : c.putt ? "A: SET THE PACE." : st.meter.stage === 1 ? "A: SET THE POWER." : "A: ON THE RED LINE.") : "";
   const msg = st.msg || hint;
   const tone = st.msg ? TONE[st.tone] || PAL.white : PAL.grey;
@@ -752,7 +764,42 @@ function hud(ctx, st, frame, looks) {
   void frame;
 }
 // the corner window: the hole from above (the green close up when putting or near it)
-const PIP = { x: W - 86, y: 4, w: 82, h: 104 };
+export const PIP = { x: W - 86, y: 4, w: 82, h: 104 };
+// the mouse's targets on the picture: the spin ball (under the window; full swings only) and the club chip
+export const SPIN = { x: W - 19, y: 118, r: 7 };
+export const CLUB_CHIP = { x: 1, y: 169, w: 78, h: 12 };
+export const showSpin = (st, ui) => Boolean(ui?.mouse) && st.phase === "aim" && st.players[st.cur].kind === "human" && !CLUBS[st.club]?.putt;
+export const onSpin = (gx, gy) => Math.hypot(gx - SPIN.x, gy - SPIN.y) <= SPIN.r + 4;
+export const onClubChip = (gx, gy) => gx >= CLUB_CHIP.x && gx < CLUB_CHIP.x + CLUB_CHIP.w && gy >= CLUB_CHIP.y - 2 && gy < CLUB_CHIP.y + CLUB_CHIP.h + 2;
+// a press on the spin ball -> where on the ball (-1..1 each way, y up; snapped to the centre near it)
+export function spinAt(gx, gy) {
+  let x = (gx - SPIN.x) / SPIN.r, y = -(gy - SPIN.y) / SPIN.r;
+  const n = Math.hypot(x, y);
+  if (n < 0.3) return { x: 0, y: 0 };
+  if (n > 1) { x /= n; y /= n; }
+  return { x: Math.round(x * 4) / 4, y: Math.round(y * 4) / 4 };
+}
+function spinBall(ctx, spin) {
+  const { x, y, r } = SPIN;
+  for (let dy = -r - 1; dy <= r + 1; dy++) for (let dx = -r - 1; dx <= r + 1; dx++) {
+    const d = Math.hypot(dx, dy);
+    if (d <= r + 1.2) px(ctx, x + dx, y + dy, 1, 1, d > r - 0.2 ? PAL.black : (dx + dy) > 4 ? PAL.grey : PAL.white);
+  }
+  px(ctx, x, y, 1, 1, PAL.dgrey);
+  px(ctx, x + Math.round((spin?.x || 0) * (r - 2)) - 1, y - Math.round((spin?.y || 0) * (r - 2)) - 1, 3, 3, PAL.red);
+}
+// a pixel of the picture -> a spot on the hole (yards), or null
+export function pipToWorld(st, gx, gy) {
+  if (gx < PIP.x + 1 || gy < PIP.y + 1 || gx >= PIP.x + PIP.w - 1 || gy >= PIP.y + PIP.h - 1) return null;
+  const v = pipView(st);
+  return { x: v.cx + (gx - (PIP.x + 1) - v.w / 2) * v.s, y: v.cy - (gy - (PIP.y + 1) - v.h / 2) * v.s };
+}
+export function screenToWorld(st, gx, gy) {
+  const h = holeOf(st), cam = cameraOf(st, h);
+  const yy = Math.max(cam.H0 + 1.5, Math.min(PANEL_Y - 1, gy));      // the sky: toward the horizon
+  const d = cam.K / (yy - cam.H0) ** 2, l = ((gx - CX) * d) / cam.F;
+  return { x: cam.x + cam.dx * d + cam.rx * l, y: cam.y + cam.dy * d + cam.ry * l, sky: gy <= cam.H0 + 1 };
+}
 export function pipView(st) {
   const h = holeOf(st), P = st.players[st.cur], iw = PIP.w - 2, ih = PIP.h - 2;
   const near = P.lie === "green" || CLUBS[st.club]?.putt || st.fl?.putt;
@@ -847,6 +894,8 @@ function trackGallery(st, frame) {
 
 // looks: per player {head, skin, hair, shirt, pants, cap, glove, card} (looks.js), or nothing yet
 // opts: {still (reduced motion: no sway, no shimmer; the end scene one frame)}
+// opts.ui (the mouse): {mouse (a pointer is in use), drag ({m, power, stage}: a swing being dragged),
+// spin ({x, y}), hint (the first-time line)}
 export function draw(ctx, st, frame, paused, looks, opts = {}) {
   ctx.imageSmoothingEnabled = false;
   px(ctx, 0, 0, W, H, PAL.black);
@@ -854,9 +903,10 @@ export function draw(ctx, st, frame, paused, looks, opts = {}) {
   trackGallery(st, frame);
   if (st.phase === "intro") { intro(ctx, st, frame, looks); }
   else {
-    behindView(ctx, st, frame, looks, Boolean(opts.still));
-    hud(ctx, st, frame, looks);
+    behindView(ctx, st, frame, looks, Boolean(opts.still), opts.ui);
+    hud(ctx, st, frame, looks, opts.ui);
     pip(ctx, st, frame);
+    if (showSpin(st, opts.ui)) spinBall(ctx, opts.ui.spin);
   }
   if (st.phase === "holeEnd") scorecard(ctx, st, `AFTER HOLE ${holeOf(st).n}`);
   if (paused) {

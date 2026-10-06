@@ -2227,7 +2227,8 @@ or any score.
   hole card and in the picker.
 - **Input**: keys (arrows, Space/Z swing, X club, Enter/Esc pause; a press shorter than a tick still
   counts), `src/city/gamepad.js` (d-pad/stick, A/cross swing, B/circle and RB shorter club, LB longer,
-  Start pauses), touch pad on phones (aim, CLUB, pause, SWING, 56 px).
+  Start pauses), touch pad on phones (aim, CLUB, pause, SWING, 56 px); behind a "+" since v3), and the mouse or a finger
+  on the picture (sim v3, below).
 - **Ways in**: `#golf`, `#golf?vs=<slug>` (offers the match), `#golf?course=open|links`; THE ASSEMBLY's APPLICATION 001 frame;
   THE LEAGUES hub (an exhibitions line).
 - Check: `scripts/check-golf.mjs` (course shape, the scripted round twice and its replay identical,
@@ -2283,6 +2284,39 @@ or any score.
   a club over the knee and the bag in the pond while the caddie drives off (terrible), and about
   one round in ten a goose takes the hot dog. Any button skips to the card; reduced motion shows
   one still frame; the caption is read out.
+- **Sim v3: THE MOUSE / A FINGER** (2026-10-05, Scott: "I definitely want to do mouse controls for
+  golf"; `VERSION = 3`). v2 is frozen in `src/play/golf/v2/sim.js` (it shares `course.js`: a change
+  to the course must freeze a copy first); `scripts/fixtures/golf-v2-rounds.json` holds four v2 rounds
+  that must replay exactly, and a bits-only round plays on v3 exactly as on v2. Keys and pads are
+  unchanged; the mouse coexists and is detected per stroke:
+  - **Aim**: click/tap a spot on the corner map (or on the ground ahead in the top half of the view;
+    the sky aims the direction at the club's reach). The aim swings there (0.035 rad a tick), a gold
+    cross marks the spot, and the club for the distance comes out (`clubFor`: the shortest that
+    reaches, the putter on the green). The wheel, or a click on the club box, still changes club.
+  - **Drag swing** (`gesture.js`, pure): press in the lower half, drag down (the pull is power, full
+    at 64 canvas px, capped; the meter and the golfer's backswing follow it), push up past where the
+    press began: the ball is struck at that moment. Drift off vertical on the way up is the line
+    (right slices, left hooks; a dead zone, then a ramp, so a wobble is a small curve); the forward
+    stroke's time is contact (70-280 ms pure, slower FAT and short, a flick THIN, low and running).
+    Let go before pushing through: called off, no stroke. EASY SWING widens the dead zone and the
+    band and keeps two fifths of a miss. A press that does not move is still the meter's button.
+  - **Spin**: a small ball under the map (full swings, mouse only): click where to strike it (low
+    backspin checks, high topspin runs, left side a draw, right a fade); back to the middle each shot.
+  - **Drag putt**: drag down for pace on the putter's own scale (the green mark shows where a flat
+    putt reaches) and let go; drifting sideways pushes the line by up to 0.025 rad.
+  - **Determinism**: the samples never reach the sim. A stroke is logged as ONE event of quantised
+    computed numbers between the button bits: `["a", x*10, y*10]` (aim), `["s", power, line,
+    contact, spinX, spinY]*1000` (swing), `["p", marker*1000, offset*1e5]` (putt), kept as
+    `[event, 0]` in the run-length log; `act(st, e)` plays them, only in the player's own aim phase.
+  - **UI**: the legend under the picture switches to MOUSE / TOUCH on pointer use (back to keys on
+    a key); the first three drag strokes carry the hint "DRAG DOWN TO TAKE IT BACK. PUSH UP TO
+    SWING."; the screen reader hears the aim ("AIM: 141 YARDS. 7I."), each stroke ("SWING: POWER 82
+    PERCENT, FADE, PURE.") and a called-off swing. On a phone the finger drags the same way, the
+    canvas takes the touch (`touch-action: none`), and the classic buttons wait behind a "+".
+  - Check (`check-golf.mjs`): straight push = straight ball; drift right = slice, left = hook,
+    scaled; a longer pull is more power, capped; fat short, thin low; called off = no stroke; a click
+    is the meter; events out of turn are ignored; the map click aims and picks the club; a nine-hole
+    match played entirely by mouse events finishes and replays from its log (and through JSON).
 - **Not yet**: a server that verifies a submitted log; the course in the city map.
 
 ### Basketball: THE COURTS (`#hoops`, 2026-10-05)

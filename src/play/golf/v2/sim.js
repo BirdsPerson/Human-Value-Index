@@ -1,13 +1,15 @@
+// FROZEN: the round at sim version 2 (v2 physics, OSM greens, two-tap putts; button bits only).
+// Never edit: saved v2 rounds ({v: 2, cfg, inputLog}) replay through this module tick for tick
+// (scripts/fixtures/golf-v2-rounds.json checks it). It shares ../course.js with the live sim: a
+// change to the course's shapes or surfaces must first freeze a copy of course.js here. The live
+// sim (v3: the mouse's logged strokes) is ../sim.js.
 // THE DEPARTMENT LINKS, the round: a pure, fixed-step (60 Hz) state machine. No DOM, no clock,
 // no Math.random: newRound(cfg) and the same per-tick button bits give the same round, tick for
 // tick, so a round is {cfg, inputLog} and can be replayed anywhere (scripts/check-golf.mjs does;
 // a server can later). The renderer (render.js) only reads the state.
 //
-// SIM VERSION 3: v2's ball and rules, plus THE MOUSE. A round's log may now carry, between its
-// button bits, a few EVENTS (act): a target clicked on the map, or a whole stroke read off a drag
-// (gesture.js) as one entry of computed numbers (power, line, contact, spin). Version 1 rounds
-// (circle greens, three-press putts) replay through the frozen ./v1/sim.js and version 2 rounds
-// (bits only) through the frozen ./v2/sim.js; ./replay.js picks by cfg.v.
+// SIM VERSION 2. Version 1 rounds (circle greens, three-press putts, the first flight and roll)
+// replay through the frozen ./v1/sim.js (./replay.js picks by version); cfg.v says which.
 //
 // A shot: AIM (left/right; B or down for a shorter club, up for a longer one), then the meter. A
 // full swing is the classic three presses: A starts the swing, A sets the power as the marker
@@ -15,9 +17,6 @@
 // is a shank). A PUTT IS TWO: A starts the stroke, A sets the pace; there is no accuracy press on
 // the green. Leave the putter's marker alone and it climbs, falls back, and the stroke is called
 // off (no stroke counted).
-// THE MOUSE (v3): a click on the map aims at the spot (the aim swings to it, the club for the
-// distance is picked); a drag down and back up is the swing, a drag down and let go is the putt
-// (gesture.js reads it; act() plays it). A click without a drag still presses A: the meter.
 //
 // The ball (v2):
 //   flight   carry, height and the landing angle are the club's; WIND acts in proportion to how
@@ -33,9 +32,9 @@
 //   hazards  water is a splash and a drop (+1), out of bounds is +1 and the shot again; a steep ball
 //            into a bunker can plug; the Road Hole's road is in play and fast
 
-import { COURSE, COURSES, surfaceAt, slopeAt, treeTop, lineDist, pointAlong, rngStep, fnv } from "./course.js";
+import { COURSE, COURSES, surfaceAt, slopeAt, treeTop, lineDist, pointAlong, rngStep, fnv } from "../course.js";
 
-export const VERSION = 3;
+export const VERSION = 2;
 export const HZ = 60;
 const DT = 1 / HZ;
 export const BTN = { L: 1, R: 2, U: 4, D: 8, A: 16, B: 32 };
@@ -93,15 +92,10 @@ export function windRel(wind, aim) {
 const exposure = (apex) => Math.max(0.35, Math.min(1.25, Math.sqrt(Math.max(0, apex) / 28)));
 
 // ---- the flight (pure): from a club, power, aim and lie to the curve through the air ------------
-// fx (the mouse's strokes only; absent, the v2 flight exactly): {contact (-1 fat .. 0 pure .. 1
-// thin), sx (-1 struck on the ball's left: a draw .. 1 its right: a fade), sy (-1 under it: more
-// backspin .. 1 over it: topspin, it runs)}
-export function makeFlight(h, P, club, aim, power, acc, wind, fx = null) {
+export function makeFlight(h, P, club, aim, power, acc, wind) {
   const c = CLUBS[club];
-  const ct = fx?.contact || 0, sx = fx?.sx || 0, sy = fx?.sy || 0;
-  // fat: the ground first, a third of the distance gone at worst; thin: a low runner, a little short
-  const carry0 = c.carry * lieFactor(club, P.lie, P.plug) * power * (ct < 0 ? 1 + 0.32 * ct : 1 - 0.1 * ct);
-  const apex0 = carry0 * c.loft * (ct > 0 ? 1 - 0.45 * ct : 1) * (1 - 0.12 * sy), ex = exposure(apex0);
+  const carry0 = c.carry * lieFactor(club, P.lie, P.plug) * power;
+  const apex0 = carry0 * c.loft, ex = exposure(apex0);
   const { tail, cross } = windRel(wind, aim);
   const carry = carry0 * (1 + (tail >= 0 ? 0.0048 : 0.0085) * tail * ex);
   const apex = apex0 * (1 - 0.006 * tail * ex);
@@ -109,10 +103,9 @@ export function makeFlight(h, P, club, aim, power, acc, wind, fx = null) {
   const T = flightT(carry), ticks = Math.max(20, Math.round(T * HZ));
   const a = acc;
   const vh = 0.11 * carry0 + 2;
-  const land = Math.min(70, Math.max(20, (c.land - 0.35 * tail * ex) * (ct > 0 ? 1 - 0.3 * ct : 1))) * (Math.PI / 180);
-  let s = c.spin * 2.2 * vh * (SPIN_LIE[P.lie] ?? 1) * (0.5 + 0.5 * power) * (P.lie === "bunker" && c.id === "SW" ? 1.3 : 1);
-  if (fx) s *= Math.max(0.15, 1 - 0.75 * sy) * (ct > 0 ? 1 - 0.5 * ct : 1);
-  return { ox: P.x, oy: P.y, aim: aim + a * 0.035, carry, carry0, ticks, T, apex, curve: (a + sx * 0.35) * carry0 * 0.17, drift, a, club, vh, vz: vh * Math.tan(land), spin: s, ex };
+  const land = Math.min(70, Math.max(20, c.land - 0.35 * tail * ex)) * (Math.PI / 180);
+  const s = c.spin * 2.2 * vh * (SPIN_LIE[P.lie] ?? 1) * (0.5 + 0.5 * power) * (P.lie === "bunker" && c.id === "SW" ? 1.3 : 1);
+  return { ox: P.x, oy: P.y, aim: aim + a * 0.035, carry, carry0, ticks, T, apex, curve: a * carry0 * 0.17, drift, a, club, vh, vz: vh * Math.tan(land), spin: s, ex };
 }
 // Where the ball is, f (0..1) of the way through its flight. The ball climbs to its apex 60% of
 // the way out and falls more steeply than it rose; it slows as it goes.
@@ -353,7 +346,7 @@ export function newRound(cfg) {
     v: VERSION, cfg: { v: VERSION, seed, course, mode, start, count, player: cfg.player || null, cpu: mode === "match" ? cfg.cpu : null, ...(cfg.easy ? { easy: true } : {}) },
     rng: fnv(`golf|${seed}`), mode, course, holes: Array.from({ length: count }, (_, i) => start + i), hi: 0,
     players, cur: 0, honor: players.map((_, i) => i), phase: "intro", t: 0, tick: 0, prev: 0, hold: 0,
-    aim: 0, aimTo: null, target: null, club: 0, meter: null, fl: null, ball: null, wind: null, msg: "", tone: "", ev: [], plan: null, result: null, shot: null,
+    aim: 0, club: 0, meter: null, fl: null, ball: null, wind: null, msg: "", tone: "", ev: [], plan: null, result: null, shot: null,
   };
   startHole(st);
   return st;
@@ -373,7 +366,7 @@ function startHole(st) {
 function startTurn(st) {
   const P = st.players[st.cur], h = holeOf(st);
   const plan = planShot(h, P, st.wind);
-  st.club = plan.club; st.phase = "aim"; st.t = 0; st.meter = null; st.fl = null; st.msg = ""; st.hold = 0; st.aimTo = null; st.target = null;
+  st.club = plan.club; st.phase = "aim"; st.t = 0; st.meter = null; st.fl = null; st.msg = ""; st.hold = 0;
   st.ball = { x: P.x, y: P.y, z: 0 };
   st.aim = plan.aim;
   st.plan = P.kind === "cpu" ? planCpu(st, h, P, plan) : null;
@@ -462,12 +455,7 @@ export function step(st, bits = 0) {
           st.hold = st.hold * Math.sign(st.hold) * dir > 0 ? st.hold + dir : dir;
           const fine = CLUBS[st.club].putt ? 0.0035 : 0.006;
           st.aim += dir * (Math.abs(st.hold) > 14 ? fine * 4 : fine);
-          st.aimTo = null;
         } else st.hold = 0;
-        if (st.aimTo != null && !dir) {   // a clicked target: the aim swings to it
-          const d = st.aimTo - st.aim;
-          if (Math.abs(d) <= AIM_SWING) { st.aim = st.aimTo; st.aimTo = null; } else st.aim += Math.sign(d) * AIM_SWING;
-        }
         if (pressed & (BTN.B | BTN.D)) { st.club = (st.club + 1) % CLUBS.length; st.ev.push("club"); }
         if (pressed & BTN.U) { st.club = (st.club + CLUBS.length - 1) % CLUBS.length; st.ev.push("club"); }
         if (A && st.t > 6) beginMeter(st);
@@ -528,13 +516,11 @@ function beginMeter(st) {
   st.ev.push("swing");
 }
 
-// The meter's reading (or the mouse's stroke, fx) -> the shot.
-function strike(st, fx = null) {
+// The meter's reading -> the shot.
+function strike(st) {
   const P = st.players[st.cur], h = holeOf(st), c = CLUBS[st.club], m = st.meter;
   // early (marker above the line): a < 0, a hook. EASY SWING keeps two fifths of the miss.
-  const ek = st.cfg.easy && P.kind === "human" ? 0.4 : 1;
-  const a = c.putt ? 0 : Math.max(-1.25, Math.min(1.25, (fx ? fx.a : -m.acc / ACC_ZONE) * ek));
-  if (fx) fx = { contact: fx.contact * (ek < 1 ? 0.5 : 1), sx: fx.sx, sy: fx.sy };
+  const a = c.putt ? 0 : Math.max(-1.25, Math.min(1.25, (-m.acc / ACC_ZONE) * (st.cfg.easy && P.kind === "human" ? 0.4 : 1)));
   P.prev = { x: P.x, y: P.y, lie: P.lie };
   P.strokes++;
   if (c.putt) P.putts++;
@@ -550,7 +536,7 @@ function strike(st, fx = null) {
     st.phase = "roll";
     return;
   }
-  st.fl = makeFlight(h, P, st.club, st.aim, m.power, a, st.wind, fx);
+  st.fl = makeFlight(h, P, st.club, st.aim, m.power, a, st.wind);
   P.plug = false;
   st.phase = "flight";
 }
@@ -678,73 +664,17 @@ function finish(st) {
   st.ev.push("done");
 }
 
-// ---- THE MOUSE (v3): events between the ticks ---------------------------------------------------------
-// An event is a short array of integers (the numbers already quantised, so a replay is exact):
-//   ["a", x*10, y*10]                       aim at (x, y) yards: the aim swings there, the club for it
-//   ["s", power, a, contact, sx, sy] *1000  a full swing read off a drag (gesture.js readSwing)
-//   ["p", marker*1000, offset*100000]       a putt: the pace marker, the line pushed (radians)
-// Played only in the aim phase on the player's own turn; anything else is ignored (and replays as
-// ignored). The log keeps one as [event, 0] between the [bits, count] pairs.
-export const AIM_SWING = 0.035;   // radians a tick the aim swings toward a clicked target
-const q = (v, k) => Math.round(v * k);
-export const aimEvent = (x, y) => ["a", q(x, 10), q(y, 10)];
-export const swingEvent = (g, spin = { x: 0, y: 0 }) => ["s", q(Math.max(0.02, Math.min(1, g.power)), 1000), q(g.a, 1000), q(g.contact, 1000), q(spin.x, 1000), q(spin.y, 1000)];
-export const puttEvent = (g) => ["p", q(Math.max(0.005, Math.min(1, g.m)), 1000), q(g.off, 100000)];
-// The club for a distance: the shortest that gets there (a caddie's reach, no wind); the putter on
-// the green (or the fringe, close)
-export function clubFor(P, dist) {
-  if (P.lie === "green" || (P.lie === "fringe" && dist < 14)) return PT;
-  const longest = P.lie === "tee" ? 0 : 1, plug = P.plug && P.lie === "bunker" ? 0.5 : 1;
-  for (let c = PT - 1; c > longest; c--) if (reachOf(c, P.lie) * plug >= dist) return c;
-  return longest;
-}
-const cl = (v, a, b) => Math.max(a, Math.min(b, v));
-export function act(st, e) {
-  if (!Array.isArray(e) || st.phase !== "aim") return st;
-  const P = st.players[st.cur];
-  if (P.kind !== "human") return st;
-  const c = CLUBS[st.club];
-  if (e[0] === "a") {
-    const x = e[1] / 10, y = e[2] / 10, dist = Math.hypot(x - P.x, y - P.y);
-    if (!(dist > 0.3)) return st;
-    const want = Math.atan2(x - P.x, y - P.y);
-    st.aimTo = st.aim + Math.atan2(Math.sin(want - st.aim), Math.cos(want - st.aim));
-    st.target = { x, y };
-    const club = clubFor(P, dist);
-    if (club !== st.club) { st.club = club; st.ev.push("club"); }
-  } else if (e[0] === "s" && !c.putt) {
-    if (st.aimTo != null) { st.aim = st.aimTo; st.aimTo = null; }
-    beginMeter(st);
-    const m = st.meter;
-    m.power = m.m = cl(e[1] / 1000, 0.02, 1); m.stage = 2; m.drag = true;
-    strike(st, { a: cl(e[2] / 1000, -1.2, 1.2), contact: cl(e[3] / 1000, -1, 1), sx: cl(e[4] / 1000, -1, 1), sy: cl(e[5] / 1000, -1, 1) });
-  } else if (e[0] === "p" && c.putt) {
-    if (st.aimTo != null) { st.aim = st.aimTo; st.aimTo = null; }
-    st.aim += cl(e[2] / 100000, -0.03, 0.03) * (st.cfg.easy ? 0.4 : 1);
-    beginMeter(st);
-    const m = st.meter;
-    m.power = m.m = cl(e[1] / 1000, 0.005, 1); m.pace = puttPace(m.power); m.acc = 0; m.drag = true;
-    strike(st);
-  }
-  return st;
-}
-
 // ---- the input log: run-length button bits, flat [bits, count, bits, count, ...] ----------------------
-// (v3: and [event, 0] pairs, act's, between them)
 export function logPush(log, bits) {
   const n = log.length;
   if (n && log[n - 2] === bits) log[n - 1]++;
   else log.push(bits, 1);
   return log;
 }
-export function logEvent(log, e) { log.push(e, 0); return log; }
-// Replay a v3 round from its config and log (./replay.js routes v1 and v2 records to their sims).
+// Replay a v2 round from its config and log (./replay.js routes a v1 record to ./v1/sim.js).
 export function replay(cfg, log, maxTicks = 2_000_000) {
   const st = newRound(cfg);
-  for (let i = 0; i < log.length && st.phase !== "done"; i += 2) {
-    if (typeof log[i] !== "number") { act(st, log[i]); continue; }
-    for (let k = 0; k < log[i + 1] && st.phase !== "done"; k++) { step(st, log[i]); st.ev.length = 0; }
-  }
+  for (let i = 0; i < log.length && st.phase !== "done"; i += 2) for (let k = 0; k < log[i + 1] && st.phase !== "done"; k++) { step(st, log[i]); st.ev.length = 0; }
   while (st.phase !== "done" && st.tick < maxTicks) { step(st, 0); st.ev.length = 0; }
   return st;
 }

@@ -4,8 +4,9 @@ import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { CLOTH } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
 import { COURSES, COURSE_NAME, parOf } from "./course.js";
-import { newRound, step, logPush, cardOf, toParText, botBits, BTN, VERSION, HZ, holeOf, CLUBS } from "./sim.js";
-import { draw, W, H, windWords } from "./render.js";
+import { newRound, step, logPush, logEvent, act, aimEvent, swingEvent, puttEvent, reachOf, cardOf, toParText, botBits, BTN, VERSION, HZ, holeOf, CLUBS } from "./sim.js";
+import { draw, W, H, windWords, pipToWorld, screenToWorld, showSpin, onSpin, spinAt, onClubChip } from "./render.js";
+import { liveSwing, readSwing, contactWord, lineWord } from "./gesture.js";
 import { reactionFor, holeReaction } from "./gallery.js";
 import { endScene, skipEnd, CAPTION, SCENE_SOUND, endFrame } from "./scenes.js";
 import { golfers, golferBySlug } from "./roster.js";
@@ -21,7 +22,9 @@ import "../pages.css";
 // (replay.js replays it tick for tick on the sim version it was played on) for the day a server
 // checks it. The gallery (gallery.js) reacts to each shot: a sound (../crowdAudio.js, under the
 // same mute), the crowd's arms (render.js) and a line for the screen reader. After the last hole,
-// a short scene (scenes.js), then the card.
+// a short scene (scenes.js), then the card. THE MOUSE / A FINGER (gesture.js): click the map to aim,
+// drag down and push up to swing, drag back and let go to putt; a plain click is still the meter's
+// button. Each mouse stroke goes into the round's log as one event (sim.js act).
 
 const KEEP = "hvi-golf-rounds";
 const MEMORY = [];   // this tab's rounds, kept even when storage is not
@@ -110,7 +113,7 @@ export default function Golf({ route }) {
         </>
       ) : (
         <>
-          <p className="pg-lede">GOLF ON FAMOUS HOLES, AGAINST THE COURSE OR A FIGURE ON FILE. LEFT AND RIGHT AIM. A FULL SWING IS THREE PRESSES OF SPACE (SWING ON A PHONE): START, POWER, THEN ON THE LINE. A PUTT IS TWO: START, THEN PACE. MIND THE WIND. SOUND IS OPTIONAL.</p>
+          <p className="pg-lede">GOLF ON FAMOUS HOLES, AGAINST THE COURSE OR A FIGURE ON FILE. WITH A MOUSE OR A FINGER: CLICK THE MAP TO AIM, DRAG DOWN TO TAKE THE CLUB BACK, PUSH UP TO SWING. WITH KEYS: LEFT AND RIGHT AIM, A FULL SWING IS THREE PRESSES OF SPACE (START, POWER, THEN ON THE LINE), A PUTT TWO. MIND THE WIND. SOUND IS OPTIONAL.</p>
           <div className="pg-start">
             <Button variant="primary" ref={playRef} onClick={() => begin(pre, false, pre ? {} : { course: "open", start: 0, count: 9, easy: true })}>{pre ? `PLAY ${pre.name}` : "PLAY NOW"}</Button>
             <span className="pg-sub">{pre ? `MATCH PLAY, ${count} HOLES${easy ? ", EASY SWING" : ""}.` : "THE FRONT NINE OF THE DEPARTMENT OPEN, EASY SWING ON."}</span>
@@ -174,6 +177,10 @@ export default function Golf({ route }) {
 function Controls() {
   return (
     <dl className="gf-keys">
+      <dt>MOUSE / TOUCH</dt><dd>CLICK (OR TAP) A SPOT ON THE MAP IN THE CORNER, OR ON THE GROUND AHEAD, TO AIM THERE: THE AIM SWINGS TO IT AND THE CLUB FOR THE DISTANCE COMES OUT. THE WHEEL, OR A CLICK ON THE CLUB BOX, CHANGES CLUB.</dd>
+      <dt>DRAG SWING</dt><dd>PRESS ANYWHERE IN THE LOWER HALF, DRAG DOWN TO TAKE IT BACK (FURTHER IS MORE POWER, SHOWN ON THE METER), THEN PUSH UP PAST WHERE YOU STARTED TO SWING THROUGH. STRAIGHT UP FLIES STRAIGHT; DRIFTING RIGHT SLICES, LEFT HOOKS. A SMOOTH PUSH IS PURE; TOO SLOW IS FAT, A FLICK IS THIN. LET GO BEFORE PUSHING THROUGH AND THE SWING IS CALLED OFF. A CLICK WITHOUT A DRAG IS STILL THE METER (CLICK, CLICK, CLICK).</dd>
+      <dt>SPIN</dt><dd>THE SMALL BALL UNDER THE MAP: CLICK WHERE ON IT TO STRIKE. LOW: BACKSPIN, IT CHECKS. HIGH: TOPSPIN, IT RUNS. LEFT SIDE: A DRAW. RIGHT: A FADE. THE MIDDLE: NONE.</dd>
+      <dt>DRAG PUTT</dt><dd>DRAG DOWN FOR PACE (THE GREEN MARK ON THE METER IS WHERE A FLAT PUTT REACHES THE CUP) AND LET GO. DRIFTING SIDEWAYS PUSHES THE LINE A TOUCH.</dd>
       <dt>AIM</dt><dd>LEFT / RIGHT (ARROWS, D-PAD, STICK, OR THE ARROW BUTTONS ON A PHONE). HOLD TO AIM FASTER.</dd>
       <dt>SWING</dt><dd>SPACE OR Z (PAD: A / CROSS; PHONE: SWING). PRESS TO START, PRESS FOR POWER, PRESS ON THE RED LINE. EARLY HOOKS, LATE SLICES.</dd>
       <dt>PUTT</dt><dd>TWO PRESSES: START, THEN PACE (NO RED LINE ON THE GREEN). THE GREEN MARK ON THE METER IS WHERE A FLAT PUTT REACHES THE CUP. LET THE MARKER FALL BACK AND THE PUTT IS CALLED OFF.</dd>
@@ -215,6 +222,8 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
   const [pad, setPad] = useState(null);
   const [say, setSay] = useState("");   // the screen reader's line: the hole, then each shot's verdict
   const coarse = useMemo(() => { try { return window.matchMedia("(pointer: coarse)").matches; } catch { return false; } }, []);
+  const [mode, setMode] = useState(coarse ? "pointer" : "keys");   // the legend follows the last input used
+  const [classic, setClassic] = useState(false);                     // a phone: the old buttons, on request
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
   const togglePause = () => { pausedRef.current = !pausedRef.current; setPaused(pausedRef.current); };
@@ -241,8 +250,111 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
     const keys = new Set();
     let raf = 0, last = performance.now(), acc = 0, frame = 0, prevStart = false, phase = st.phase, hi = st.hi, recorded = false, said = "";
     const ctx = canvas.current.getContext("2d");
+    // ---- the mouse / a finger: aim on the map, drag to swing (gesture.js), logged as events (sim.js act)
+    const cv = canvas.current;
+    const ui = { mouse: coarse, drag: null, spin: { x: 0, y: 0 }, hint: null };
+    const ptr = { id: null, mode: null, S: [], putt: false, aim: null, aimTick: -99, ev: [], sayAim: false };
+    const HINT = "hvi-golf-drag-hint";
+    let hints = 0;
+    try { hints = Number(localStorage.getItem(HINT)) || 0; } catch { /* storage off: hint every round */ }
+    const pointerOn = () => { if (!ui.mouse) { ui.mouse = true; setMode("pointer"); } };
+    const toGame = (e) => { const r = cv.getBoundingClientRect(); return { x: ((e.clientX - r.left) * W) / r.width, y: ((e.clientY - r.top) * H) / r.height, t: e.timeStamp }; };
+    const myAim = () => !demo && st.phase === "aim" && st.players[st.cur].kind === "human";
+    const reset = () => { ptr.id = null; ptr.mode = null; ptr.S = []; ui.drag = null; };
+    const aimAt = (g, view) => {
+      if (!view) return pipToWorld(st, g.x, g.y);
+      const w = screenToWorld(st, g.x, g.y), P = st.players[st.cur];
+      if (!w.sky) return w;
+      // the sky: the direction only, at the club in hand's reach
+      const dx = w.x - P.x, dy = w.y - P.y, n = Math.hypot(dx, dy) || 1, L = reachOf(st.club, P.lie);
+      return { x: P.x + (dx / n) * L, y: P.y + (dy / n) * L };
+    };
+    const stroked = (g) => {
+      setSay(g.kind === "putt" ? `PUTT: PACE ${Math.round(g.m * 100)} PERCENT.` : `SWING: POWER ${Math.round(g.power * 100)} PERCENT, ${lineWord(g.a)}, ${contactWord(g.contact)}.`);
+      hints++; try { localStorage.setItem(HINT, String(hints)); } catch { /* fine */ }
+      ui.spin = { x: 0, y: 0 };   // spin is per shot: back to the middle
+    };
+    const pd = (e) => {
+      if (e.button > 0) return;
+      pointerOn(); sfx.unlock();
+      if (pausedRef.current || demo) return;
+      e.preventDefault();
+      if (!myAim()) { latch.current |= BTN.A; return; }   // the meter, the hole card, the end: a click is A
+      const g = toGame(e);
+      if (showSpin(st, ui) && onSpin(g.x, g.y)) {
+        ui.spin = spinAt(g.x, g.y);
+        const { x, y } = ui.spin;
+        setSay(!x && !y ? "SPIN: NONE." : `SPIN: ${y > 0.2 ? "TOPSPIN" : y < -0.2 ? "BACKSPIN" : ""}${x && Math.abs(y) > 0.2 ? " AND " : ""}${x < -0.2 ? "A DRAW" : x > 0.2 ? "A FADE" : ""}.`);
+        return;
+      }
+      if (onClubChip(g.x, g.y)) { latch.current |= BTN.B; return; }
+      try { cv.setPointerCapture(e.pointerId); } catch { /* old browser */ }
+      ptr.id = e.pointerId;
+      const pw = pipToWorld(st, g.x, g.y);
+      if (pw) { ptr.mode = "pip"; ptr.aim = pw; return; }
+      if (g.y < H / 2) { ptr.mode = "view"; ptr.aim = aimAt(g, true); return; }
+      ptr.mode = "swing"; ptr.S = [g]; ptr.putt = Boolean(CLUBS[st.club].putt);
+    };
+    const pm = (e) => {
+      if (e.pointerId !== ptr.id || !ptr.mode) return;
+      const list = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [];
+      for (const ce of list.length ? list : [e]) {
+        const g = toGame(ce);
+        if (ptr.mode === "pip") { const w = aimAt(g, false); if (w) ptr.aim = w; continue; }
+        if (ptr.mode === "view") { ptr.aim = aimAt(g, true); continue; }
+        ptr.S.push(g);
+        const live = liveSwing(ptr.S, ptr.putt);
+        ui.drag = live.pull >= 3 ? live : null;
+        if (!ptr.putt) {
+          const r = readSwing(ptr.S, { easy: Boolean(cfg.easy), done: false });
+          if (r.kind === "swing") { ptr.ev.push(swingEvent(r, ui.spin)); stroked(r); reset(); return; }
+        }
+      }
+    };
+    const pu = (e) => {
+      if (e.pointerId !== ptr.id) return;
+      if (ptr.mode === "swing") {
+        if (e.type === "pointerup") ptr.S.push(toGame(e));
+        const r = readSwing(ptr.S, { putt: ptr.putt, easy: Boolean(cfg.easy), done: true });
+        if (e.type !== "pointerup") { /* cancelled by the browser: nothing */ }
+        else if (r.kind === "click") latch.current |= BTN.A;
+        else if (r.kind === "putt") { ptr.ev.push(puttEvent(r)); stroked(r); }
+        else if (r.kind === "swing") { ptr.ev.push(swingEvent(r, ui.spin)); stroked(r); }
+        else if (liveSwing(ptr.S).pull >= 6) setSay("SWING CALLED OFF. NO STROKE.");
+      } else if (ptr.mode) ptr.sayAim = true;
+      reset();
+    };
+    let wheelAcc = 0, wheelAt = 0;
+    const wh = (e) => {
+      if (!myAim() || pausedRef.current) return;
+      e.preventDefault(); pointerOn();
+      wheelAcc += e.deltaY;
+      if (Math.abs(wheelAcc) >= 40 && e.timeStamp - wheelAt > 120) { latch.current |= wheelAcc > 0 ? BTN.B : BTN.U; wheelAcc = 0; wheelAt = e.timeStamp; }
+    };
+    cv.addEventListener("pointerdown", pd);
+    cv.addEventListener("pointermove", pm);
+    cv.addEventListener("pointerup", pu);
+    cv.addEventListener("pointercancel", pu);
+    cv.addEventListener("wheel", wh, { passive: false });
+    // the mouse's events go into the round between the ticks (an aim at most every few ticks)
+    const pointerTick = () => {
+      if (st.phase !== "aim") { ptr.ev.length = 0; ptr.aim = null; return; }
+      if (ptr.aim && st.tick - ptr.aimTick >= 4) {
+        const e = aimEvent(ptr.aim.x, ptr.aim.y);
+        ptr.aim = null; ptr.aimTick = st.tick;
+        logEvent(log, e); act(st, e);
+      }
+      if (ptr.sayAim && !ptr.aim) {
+        ptr.sayAim = false;
+        const P = st.players[st.cur], T = st.target;
+        if (T) setSay(`AIM: ${Math.round(Math.hypot(T.x - P.x, T.y - P.y))} YARDS. ${CLUBS[st.club].id}.`);
+      }
+      if (ptr.ev.length) { const e = ptr.ev.shift(); logEvent(log, e); act(st, e); }
+    };
+
     const kd = (e) => {
       if (typing(e)) return;
+      if (ui.mouse && KEYMAP[e.key] != null) { ui.mouse = false; setMode("keys"); }
       if (e.key === "Enter" || e.key === "Escape") { if (!e.repeat) togglePause(); e.preventDefault(); return; }
       if (KEYMAP[e.key] != null) { if (!e.repeat) latch.current |= KEYMAP[e.key]; keys.add(e.key); e.preventDefault(); sfx.unlock(); }
     };
@@ -284,6 +396,7 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
           continue;
         }
         if (pausedRef.current) continue;
+        if (!demo) pointerTick();
         logPush(log, b);
         step(st, b);
         for (const e of st.ev) sfx.play(e);
@@ -299,7 +412,7 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
           setSay([st.msg, r?.say].filter(Boolean).join(" "));
         }
         if (phase === "holeEnd") { const r = holeReaction(st, holeOf(st), st.players[0]); if (r) sfx.crowd(r.kind); }
-        if (phase === "aim" && st.players[st.cur].kind === "human" && CLUBS[st.club].putt) setSay("PUTTER. TWO PRESSES: START, THEN PACE.");
+        if (phase === "aim" && st.players[st.cur].kind === "human" && CLUBS[st.club].putt) setSay(ui.mouse ? "PUTTER. DRAG DOWN FOR PACE, LET GO TO PUTT. A TAP STARTS THE TWO-PRESS METER." : "PUTTER. TWO PRESSES: START, THEN PACE.");
         if (phase === "intro") { const r = cardOf(st).rows[hi]; if (r) setSay(`HOLE ${r.n}. PAR ${r.par}. ${r.yards} YARDS. WIND ${st.wind?.mph ?? 0} MPH${st.wind?.mph ? `, ${windWords(st.wind, 0).replace(/HELP/g, "HELPING").replace(/L>R/g, "LEFT TO RIGHT").replace(/R>L/g, "RIGHT TO LEFT")}` : ""}.`); }
         if (phase === "holeEnd") { const c = cardOf(st); setSay(`HOLE DONE. THRU ${c.played}: ${toParText(c.toPar[0])}.`); }
         if (phase === "holeEnd" || phase === "done" || phase === "intro") setCard(cardOf(st));
@@ -315,12 +428,17 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
         for (const [k, at] of SCENE_SOUND[kind] || []) if (f >= at && endPlayed < at + 1) sfx.crowd(k);
         endPlayed = f + 1;
       }
-      draw(ctx, st, frame++, pausedRef.current, looks, { still });
+      const P = st.players[st.cur];
+      ui.hint = ui.mouse && hints < 3 && st.phase === "aim" && P.kind === "human" ? (CLUBS[st.club].putt ? "DRAG DOWN FOR PACE. LET GO TO PUTT." : "DRAG DOWN TO TAKE IT BACK. PUSH UP TO SWING.") : null;
+      draw(ctx, st, frame++, pausedRef.current, looks, { still, ui });
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     setCard(cardOf(st));
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); window.removeEventListener("blur", blur); };
+    return () => {
+      cancelAnimationFrame(raf); window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); window.removeEventListener("blur", blur);
+      cv.removeEventListener("pointerdown", pd); cv.removeEventListener("pointermove", pm); cv.removeEventListener("pointerup", pu); cv.removeEventListener("pointercancel", pu); cv.removeEventListener("wheel", wh);
+    };
   }, [cfg]);
 
   const hold = (bit) => ({
@@ -334,11 +452,15 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
     <div className="gf-play" ref={wrap}>
       <div className="gf-stage">
         <canvas ref={canvas} width={W} height={H} style={{ width: scale.css, height: (scale.css * H) / W }}
-          aria-label="Golf: the golfer from behind with the hole running away to the horizon, the hole from above in the corner window, the swing meter and the wind along the bottom." role="img" />
+          aria-label="Golf: the golfer from behind with the hole running away to the horizon, the hole from above in the corner window, the swing meter and the wind along the bottom. With a mouse or a finger: click the corner map to aim, drag down then push up in the lower half to swing; drag down and let go to putt." role="img" />
       </div>
-      <div className="gf-status">{pad ? `CONTROLLER: ${pad.toUpperCase()}` : coarse ? "\u25C0 \u25B6 AIM // SWING: THREE TAPS, PUTT: TWO // CLUB // II PAUSES" : "KEYS: ARROWS AIM // SPACE SWINGS (3 PRESSES, PUTTS 2) // X CLUB // ENTER PAUSES"}{muted ? " // MUTED" : ""}{cfg.easy ? " // EASY SWING" : ""}</div>
+      <div className="gf-status">{pad ? `CONTROLLER: ${pad.toUpperCase()}` : mode === "pointer" ? "MOUSE / TOUCH: TAP THE MAP TO AIM // DRAG DOWN, PUSH UP: SWING // DRAG BACK, LET GO: PUTT // TAPS: THE METER // WHEEL OR CLUB BOX: CLUB" : classic && coarse ? "\u25C0 \u25B6 AIM // SWING: THREE TAPS, PUTT: TWO // CLUB // II PAUSES" : "KEYS: ARROWS AIM // SPACE SWINGS (3 PRESSES, PUTTS 2) // X CLUB // ENTER PAUSES"}{muted ? " // MUTED" : ""}{cfg.easy ? " // EASY SWING" : ""}</div>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{say}</p>
-      <div className="gf-touch" aria-label="Touch controls">
+      <div className="gf-mini">
+        {!classic && <button type="button" className="gf-tb" aria-label={paused ? "Resume" : "Pause"} onClick={togglePause}>{paused ? "GO" : "II"}</button>}
+        <button type="button" className="gf-tb" aria-pressed={classic} aria-label={classic ? "Hide the classic buttons" : "Show the classic buttons"} onClick={() => setClassic(!classic)}>{classic ? "\u2212" : "+"}</button>
+      </div>
+      <div className={classic ? "gf-touch" : "gf-touch off"} aria-label="Touch controls">
         <button type="button" className="gf-tb" aria-label="Aim left" {...hold(BTN.L)}>&#9664;</button>
         <button type="button" className="gf-tb" aria-label="Aim right" {...hold(BTN.R)}>&#9654;</button>
         <button type="button" className="gf-tb" aria-label="Next club" {...hold(BTN.B)}>CLUB</button>

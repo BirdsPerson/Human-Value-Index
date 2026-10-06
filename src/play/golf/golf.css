@@ -1,5 +1,6 @@
 /* THE DEPARTMENT LINKS. The terminal's tokens around an NES frame: the canvas is black, pixelated,
-   scaled by whole device pixels (Golf.jsx). Touch buttons only on coarse pointers, 48px and up. */
+   scaled by whole device pixels (Golf.jsx). Touch buttons only on coarse pointers, 48px and up, and only on request (the plus): a finger
+   drags on the picture like a mouse (gesture.js). */
 .gf-p { margin: 0 0 var(--s3); }
 .gf-p.dim { color: var(--fg-mute); font-size: var(--t-xs); }
 .gf-opts { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0 0 var(--s3); }
@@ -18,11 +19,15 @@
 
 .gf-play { margin: 0 0 var(--s4); }
 .gf-stage { display: flex; justify-content: center; background: #000; border: var(--bw) solid var(--line); padding: var(--s2) 0; }
-.gf-stage canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+.gf-stage canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; touch-action: none; cursor: crosshair; -webkit-user-select: none; user-select: none; }
 .gf-status { margin: var(--s2) 0; font-size: var(--t-xs); color: var(--fg-mute); letter-spacing: 0.04em; text-align: center; }
 
-.gf-touch { display: none; }
+.gf-touch, .gf-mini { display: none; }
 @media (pointer: coarse), (max-width: 700px) {
+  /* a phone plays by dragging on the picture; the classic buttons wait behind the "+" */
+  .gf-mini { display: flex; justify-content: flex-end; gap: var(--s2); margin: 0 0 var(--s2); }
+  .gf-mini .gf-tb { min-width: 56px; min-height: 48px; }
+  .gf-touch.off { display: none; }
   .gf-touch { display: grid; grid-template-columns: repeat(4, 1fr) 1.6fr; gap: var(--s2); margin: 0 0 var(--s3); user-select: none; -webkit-user-select: none; }
   .gf-tb { min-height: 56px; font: inherit; font-weight: 700; letter-spacing: 0.04em; color: var(--fg); background: var(--panel); border: var(--bw) solid var(--line-hi); touch-action: none; -webkit-tap-highlight-color: transparent; }
   .gf-tb:active { background: var(--accent); color: var(--accent-ink); }
