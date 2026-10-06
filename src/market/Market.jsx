@@ -215,7 +215,7 @@ function Row({ r, mine, open, onToggle, wallet, busy, order, knobs, canTrade }) 
                   {wallet?.balance >= MIN_ORDER && <Button variant="secondary" onClick={() => setAmt(String(wallet.balance))} disabled={busy}>ALL {fmt(wallet.balance)}</Button>}
                   {mine && mine.units - (mine.reserved || 0) > 0 && <Button variant="secondary" onClick={sellAll} disabled={busy}>SELL {fmt(mine.units - (mine.reserved || 0))}</Button>}
                 </ButtonRow>
-                <p className="mk-fine">FILLS AT THE NEXT TICK, WITHIN 24 MINUTES, AT THAT TICK'S PRICE PLUS THE DEPARTMENT'S {Math.round((knobs?.spread ?? 0.0025) * 1000) / 10}%. HELD {knobs?.minHoldHours ?? 24} HOURS AFTER A PURCHASE.</p>
+                <p className="mk-fine">FILLS AT THE NEXT TICK, WITHIN 24 MINUTES, AT THAT TICK'S PRICE PLUS THE DEPARTMENT'S {Math.round((knobs?.spread ?? 0.0025) * 10000) / 100}%. HELD {knobs?.minHoldHours ?? 24} HOURS AFTER A PURCHASE.</p>
               </div>
             )}
             <button type="button" className="mk-more" aria-expanded={showMore} onClick={() => setShowMore(v => !v)}>{showMore ? "LESS" : "MORE"}</button>
@@ -242,7 +242,7 @@ function More({ r, d, mine }) {
       <dl className="mk-kv">
         <dt>FAIR VALUE</dt><dd>{fmtPrice(r.fair)} <span className="mk-dim">// WHAT THEIR RECORD IN THE CITY IS WORTH</span></dd>
         <dt>RECENT / RECORD</dt><dd>{r.recent.toFixed(2)} / {r.record.toFixed(2)} <span className="mk-dim">// 1.00 IS THE AVERAGE HUMAN</span></dd>
-        {t && <><dt>LAST MACHINE DAY</dt><dd>WORK {t.work} // SEEN {Math.round(t.crowd)} // SPORT {t.sport} // OUT {t.play}H{t.civic ? " // HOLDS A SEAT" : ""}</dd></>}
+        {t && <><dt>LAST MACHINE DAY</dt><dd>WORK {t.work} // SEEN BY {Math.round(t.crowd * 2)} // SPORT {t.sport} // OUT {t.play}H{t.civic ? " // HOLDS A SEAT" : ""}</dd></>}
         <dt>HELD</dt><dd>NPC INVESTORS {Math.round(r.npc * 100)}% // CITIZENS {Math.round(r.players * 100)}%</dd>
         {mine && <><dt>YOURS</dt><dd>{fmt(mine.units)} SHARES // COST {fmt(mine.basis)} // NOW {fmt(mine.value)} <span className={tone(mine.pl)}>({mine.pl >= 0 ? "+" : "−"}{fmt(Math.abs(mine.pl))})</span></dd></>}
       </dl>
@@ -263,7 +263,7 @@ function Floor({ board }) {
   const rooms = ["THE MEMBERS' CLUB", "UPPER TRADING FLOOR", "LOWER TRADING FLOOR"];
   const codes = { "THE MEMBERS' CLUB": "3F", "UPPER TRADING FLOOR": "2F", "LOWER TRADING FLOOR": "1F" };
   return (
-    <Frame title="THE FLOOR" meta="THE RESERVE TOWER, FINANCE">
+    <Disclosure title="THE FLOOR" meta={`${board.floor.length} NPC INVESTORS // THE RESERVE TOWER`}>
       <p className="mk-p">THE NPC INVESTORS DO NOT WORK. THEY LIVE OFF THE MARKET, EACH BY ITS NATURE. YOU TRADE AGAINST THE SAME PRICES THEY DO.</p>
       <div className="mk-tower">
         {rooms.map(room => {
@@ -293,6 +293,6 @@ function Floor({ board }) {
         </section>
       </div>
       <ButtonRow><Button variant="secondary" href="#city/finance/reserve-tower">SEE THE RESERVE TOWER IN THE CITY</Button></ButtonRow>
-    </Frame>
+    </Disclosure>
   );
 }

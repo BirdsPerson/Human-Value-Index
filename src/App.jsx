@@ -420,6 +420,7 @@ const GAMES = [
   { href: "#golf", label: "THE DEPARTMENT LINKS", sub: "NINE HOLES. THE COURSE THE ASSEMBLY DECLINED" },
   { href: "#chess", label: "PARK CHESS", sub: "SIT AT A STONE TABLE OPPOSITE A FIGURE ON FILE" },
   { href: "#casino", label: "HOUSE EDGE CASINO", sub: "PLAY CHIPS ONLY. THE HOUSE IS THE MACHINE" },
+  { href: "#market", label: "THE MARKET", sub: "SHARES IN HUMANS. PRICES MOVE WITH WHAT THEY DO IN THE CITY" },
   { href: "#city/league", label: "THE LEAGUES", sub: "WATCH THE CITY'S SEASONS. STANDINGS, BOX SCORES" },
 ];
 
