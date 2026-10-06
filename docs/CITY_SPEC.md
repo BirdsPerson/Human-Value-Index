@@ -2195,3 +2195,55 @@ or any score.
   names it and puts a one-line chip (name, head count, **OPEN**) in the control row; OPEN or a second
   tap opens its cutaway; a tap on the open building goes inside; a tap on empty ground clears it.
   A mouse click still opens the cutaway at once.
+## Tower cutaways (SimTower pass, 2026-10-05)
+
+Scott (2026-10-05): the property ladder runs assigned flat -> buy a flat -> **own a whole floor**
+-> building -> block; every room of a flat is its own thing, to be dressed later; **build the
+cutaways first**, no money or ownership yet. So every residential, office and mixed-use tower
+opens as a SimTower cross-section.
+
+- **Which buildings** (`tower.js isTower`): a tower style (the projects, brownstones, lofts, glass,
+  the seaside and alpine flats, tenements, terraces, walk-ups, shops-under-flats, offices, the
+  hotel), not HQ (the Holding Pen keeps its own simulation), three storeys or more: 32 today. Every
+  other building keeps the room view (`BuildingView` Floors).
+- **How tall**: as many storeys as the tower stands in the city (archGeo `rise`, mirrored in
+  `tower.js STOREYS` and held to it by the check). The sim's floors are the census's rooms: the
+  ground floor is storey 0, a PH / RF floor the top storey, the floors between share the storeys
+  between (a spread floor's storeys are renamed by level: "RESIDENCE LEVEL 3"); basements one each.
+- **Units and rooms**: the lobby at the street; flats by who lives in the style (the top tier two
+  five-room flats a floor and one penthouse flat, the middle three four-room flats, the bottom four
+  three-room flats: bedroom, kitchen, living room, + bath, + study); offices, shops (two units on a
+  shops-under-flats ground floor), venues and the vault from the floor's other places; the hotel's
+  upper floors three suites each. Every room has `purpose` and `furniture[]` ({item, x}), drawn
+  as pixel furniture (`Cutaway.jsx F`).
+- **IDs**: storey `<building>:L<level>`, unit `<storey>:<letter>`, room `<unit>:<purpose>`.
+  Every storey and unit has `owner` (THE DEPARTMENT). Golden ids in the check; change them only
+  with a migration once ownership rows exist.
+- **Who is where** (presentation only; whereAt still decides building, place and sim floor): a
+  resident's flat is hashed from their key on the sim floor `floorOf` gives them (the nameplate and
+  where they sleep agree); at home the room follows the clock (`homeRoom`: asleep in the bedroom,
+  the bathroom on waking, the kitchen at 07-08:30 / 12-13 / 18-19:30, otherwise the living room or
+  study); workers and visitors take a hashed storey, unit and room of their place; people walking in
+  or out stand in the lobby. Crowd stand-ins are not drawn (as RoomStage). Owls stay up past 00:54.
+- **The view** (`Cutaway.jsx`, a lazy chunk of ~10 KB gzip): one plain line on top ("A CROSS-SECTION
+  OF <BUILDING>. TAP A FLOOR.", then the focused floor; it is the live status); a floor index (44px
+  chips) above eight storeys; the roof (tank, antenna or chimneys), the storeys, the street, the
+  basements; the local shaft on the left with a car moving on deterministic legs (and an express
+  shaft on the right of towers of ten storeys or more, ground / middle / top). Rooms light by the
+  city clock: daylight panes by day, lit windows where someone is awake after dark, dark otherwise;
+  every unit its own paper and carpet. Tap a floor: it grows to fit its furniture, its plaque
+  (`code // name // HELD BY THE DEPARTMENT`) and each unit's nameplate (surnames, the business,
+  or VACANT) show: labels on the focused floor only. Tap a unit on it: a bottom sheet with its
+  rooms large (two rows above three rooms), sprites in the room the clock says (asleep on the bed,
+  a Z), who is present and the residents who are out (with where they are).
+- **Route**: `?floor=N` stays the sim's floor (3D view, MY APARTMENT links); `&storey=<level>` names
+  the storey drawn, for the breadcrumb and reloads.
+- **Access**: the stage is one focusable application: Up / Down floors, Left / Right units,
+  Enter opens, Escape closes the sheet (focus returns) or unfocuses the floor, Home / End top and
+  street. A screen-reader list of every floor, unit and who is in which room. Reduced motion parks
+  the cars and stills the sprites. 390px: 52px storeys, 44px chips, no horizontal scroll.
+- **Performance**: one canvas as tall as the tower; each frame clears and draws only the rows
+  inside the viewport (nothing when scrolled away); placement recomputed only on a new census.
+- Check: `scripts/check-cutaway.mjs` (storeys = massing, every sim floor drawn, stable and unique
+  ids, golden ids, placement order-independent and deterministic, nobody in two rooms or two towers,
+  everyone home in the flat on their nameplate, residents in bed at 03:00, workers at work).

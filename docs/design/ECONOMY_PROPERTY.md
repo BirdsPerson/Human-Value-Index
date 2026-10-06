@@ -1,6 +1,6 @@
 # ECONOMY + PROPERTY — design for review (2026-10-05)
 
-Status: **SLICE 1 BUILT (2026-10-05)**, see "As built: slice 1" at the end. Slices 2-4 are design. ROADMAP items 5 (Economy v1), b1c
+Status: **SLICE 1 BUILT (2026-10-05)**, see "As built: slice 1" at the end. Slices 2-4 are design. **Scott's ladder decisions (2026-10-05)** and the first build of slice 2 (the cutaways) are in "Slice 2: the floor tier and the cutaways" at the end. ROADMAP items 5 (Economy v1), b1c
 (THE MALL), b5 (civic machine), e (economy -> unrest). Inspired by Internet City (one shared city, a
 plot per player, centre dear and edge free, build and dress your building, the storefront carries
 your brand and links, idle harvest, leaderboards, rivals, a market), moved into the Substrate.
@@ -234,3 +234,23 @@ transfer, a free Supabase project for the ledger. Moguls, property, shops, uploa
   MARKET with the +-20% band, Prefect inspections and evictions, NPC moguls, the Assembly docket
   for big builds, the `prop` mood factor in the civic fold (the close publishing an `econ` block the
   next plan reads), and lifting the one-case-per-txn rule only for those formula-priced legs.
+
+## Slice 2: the floor tier and the cutaways (Scott, 2026-10-05)
+
+**Decided:**
+- **The ladder:** assigned flat -> buy a flat -> **own a whole FLOOR** -> building -> block. The
+  floor is the new tier and the flex: your name on the floor plaque and on the lift's panel.
+  Penthouse floors cost the most: a floor's price climbs with its height (a premium per storey,
+  the PH / top floor dearest), on top of RING x DEMAND. Numbers to be set with the ledger.
+- **Rooms:** every room of a flat is its own thing. Owners dress each room (a purpose and pixel
+  furniture from a catalog), visitors see it, and the citizen uses the rooms on the city clock.
+- **Build first:** SimTower cutaways of every tower, no money or ownership. **Built 2026-10-05**
+  (docs/CITY_SPEC.md "Tower cutaways"): every tower's storeys, flats and rooms, with stable ids
+  (`<building>:L<level>[:<unit>[:<purpose>]]`), an `owner` slot on every floor and unit (THE
+  DEPARTMENT), and rooms as `{purpose, furniture[]}`, so ownership and dressing are data only.
+
+**Next, for the ownership slice:** `properties` rows keyed by those ids (unit = flat, `:L<n>` =
+floor, the building id), the floor price (height premium) and the furniture catalog with prices;
+the plan reading owners and dressing from the close's `econ` block (the sim stays immutable);
+MY APARTMENT's unit (today `G-07`, a hash of 24) switched to the cutaway flat (`residentFlat`)
+so the file and the tower name the same door.
