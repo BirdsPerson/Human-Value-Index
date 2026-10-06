@@ -632,7 +632,7 @@ export default function Intake({ view = "intake" }) {
         </Frame>
         <div className="hvi-fw-side">
           {r.verdict && (
-            <Frame box title="VERDICT" tone="var(--eb-amber)" className="hvi-fw-verdict">
+            <Frame title="VERDICT" tone="var(--eb-amber)" className="hvi-fw-verdict ui-dialog">
               <p className="hvi-verdict-text as-typed">{r.verdict}</p>
               <ButtonRow>
                 <Button variant="push" tone="am" aria-pressed={acked} onClick={acknowledge}>{acked ? "ACKNOWLEDGED ✓" : "ACKNOWLEDGED"}</Button>

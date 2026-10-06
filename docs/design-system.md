@@ -17,6 +17,15 @@ frames and bands; the SNTX pair (`--duke`, `--revin`) appear **only** on large b
 Window chrome (the `[■]` close box, the frame) is decoration: aria-hidden; screen readers
 hear the title once. Everything is CSS: `src/ui/ui.css`, values in `tokens.css`.
 
+The span is DOS → Windows 3.x → 95/98/ME and System 7, blended, not costumed: the
+**logotype** is a Windows 3.x title-screen lockup (pixel-eye seal in a bevelled tile,
+"Human Value Index" in bold italic system serif, the DUKE/Revin/cyan/amber rule, DEPARTMENT
+EDITION // VERSION 3.1; `App.jsx` Logotype); `Frame className="ui-dialog"` is a System 7
+alert (pinstriped title bar, square close box) for NOTICE and VERDICT; `Button variant="push"
+tone="sec"` is a Windows 95 bevelled button; wide-screen title bars carry a `[↕]` size box;
+the menu bar's hotkeys show their access-key chord in a yellow Windows 95 tooltip; `Loading`
+draws a 9x block progress bar (still under reduced motion).
+
 ## Files
 
 | File | What |

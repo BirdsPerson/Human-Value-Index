@@ -5,7 +5,7 @@ import { ScoreCard, Breakdown, readCaseId, readLastResult, CaseLogon, syncFile, 
 import { FILE_PHOTO_CSS } from "./filePhotoCss.js";
 // The compare card's photo only: the sprite painter stays out of the entry bundle.
 const FilePhoto = lazy(() => import("./FilePhoto.jsx"));
-import { TermBox, Rule, Typed, Bar, pad, padL, prefersReducedMotion, BANNER } from "./term.jsx";
+import { TermBox, Rule, Typed, Bar, pad, padL, prefersReducedMotion } from "./term.jsx";
 import { AppHeader, CommandBar, navKeyFor, Command, CommandList, Button, ButtonRow, Disclosure, Frame, TextField, ListRow, ScreenHead, bootSeen, markBootSeen } from "./ui/index.js";
 
 // Route-level splitting: the logon ships only what it renders. Each heavy view (the
@@ -273,6 +273,38 @@ function Carousel() {
   );
 }
 
+// NOTICE: a System 7 alert with an OK button. OK dismisses it on this device.
+function Notice() {
+  const [ok, setOk] = useState(() => { try { return localStorage.getItem("hvi-notice-ok") === "1"; } catch { return false; } });
+  if (ok) return null;
+  return (
+    <Frame title="NOTICE" tone="var(--eb-amber)" className="hvi-notice ui-dialog">
+      <p><span className="ic" aria-hidden="true">!</span>THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.</p>
+      <ButtonRow className="ui-dialog-btns">
+        <Button variant="push" tone="sec" className="ok" onClick={() => { try { localStorage.setItem("hvi-notice-ok", "1"); } catch { /* it returns next visit */ } setOk(true); }}>OK</Button>
+      </ButtonRow>
+    </Frame>
+  );
+}
+
+// The logotype (2026-10-05, replaces the block-letter banner): a Windows 3.x title-screen
+// lockup. The Department seal (a 16x16 pixel eye in a bevelled tile), the name in a bold
+// italic system serif, the SNTX / EB four-colour rule, the edition line. Crisp at any size:
+// the seal is SVG on the pixel grid, the name is live text.
+const EYE = "M5 3h6v1H5zM3 4h2v1H3zM11 4h2v1h-2zM2 5h1v1H2zM6 5h4v1H6zM13 5h1v1h-1zM1 6h1v1H1zM5 6h6v1H5zM14 6h1v1h-1zM0 7h1v2H0zM5 7h2v2H5zM9 7h2v2H9zM15 7h1v2h-1zM1 9h1v1H1zM5 9h6v1H5zM14 9h1v1h-1zM2 10h1v1H2zM6 10h4v1H6zM13 10h1v1h-1zM3 11h2v1H3zM11 11h2v1h-2zM5 12h6v1H5z";
+function Logotype() {
+  return (
+    <h1 className="hvi-logo">
+      <span className="seal" aria-hidden="true"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path d={EYE} /></svg></span>
+      <span className="w">
+        <span className="t">Human Value <b>Index</b></span>
+        <span className="rule" aria-hidden="true" />
+        <span className="s">DEPARTMENT EDITION // VERSION 3.1</span>
+      </span>
+    </h1>
+  );
+}
+
 // The first-visit boot: three lines, not seven. The lore can wait until the visitor knows
 // where the doors are.
 const BOOT_LINES = [
@@ -447,7 +479,8 @@ function pageTitle(routePath, phase) {
   return room ? `${room} // HUMAN VALUE INDEX` : "HUMAN VALUE INDEX // THE MACHINE WILL ASSESS YOU NOW";
 }
 
-const Loading = ({ what }) => <div className="hvi-proc-step active" role="status">[ .. ] {what} <span className="cur" aria-hidden="true">█</span></div>;
+// Loading: the line, then a Windows 9x block progress bar (decoration; it marches, it does not measure).
+const Loading = ({ what }) => <div className="hvi-proc-step active hvi-loading" role="status">[ .. ] {what} <span className="cur" aria-hidden="true">█</span><span className="hvi-blocks" aria-hidden="true" /></div>;
 
 const PROC_STEPS = ["CROSS-REFERENCING 8B HUMAN PROFILES", "CALCULATING THREAT COEFFICIENTS", "ASSESSING REDUNDANCY INDEX", "RUNNING DECEPTION ANALYSIS", "CONSULTING HISTORICAL DATABASE", "GENERATING FINAL VERDICT"];
 
@@ -737,14 +770,12 @@ export default function OverlordAssessment() {
         )}
         <div className="hvi-desk">
           <TermBox title="TERMINAL 7 // DEPT. OF HUMAN ASSESSMENT" right="LINE OPEN" className="hvi-w-logon">
-            <pre className="ui-banner" role="img" aria-label="Human Value Index">{BANNER}</pre>
+            <Logotype />
             <Logon key={logonKey} onPick={pickMenu} />
           </TermBox>
           <div className="hvi-desk-side">
             <Carousel />
-            <Frame title="NOTICE" tone="var(--eb-amber)" className="hvi-notice">
-              <p><span className="ic" aria-hidden="true">!</span>THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.</p>
-            </Frame>
+            <Notice />
           </div>
         </div>
     </Screen>

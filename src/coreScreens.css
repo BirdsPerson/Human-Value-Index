@@ -91,6 +91,20 @@
 .hvi-judge-line { color: var(--fg-mute); font-size: var(--t-xs); }
 .hvi-cube-wait { display: flex; align-items: center; justify-content: center; color: var(--fg-mute); font-size: var(--t-xs); }
 
+/* ---------- the logotype: a Windows 3.x title-screen lockup (App.jsx Logotype) ---------- */
+.hvi-logo { display: flex; gap: var(--s4); align-items: center; margin: var(--s2) 0 var(--s4); font: inherit; }
+.hvi-logo .seal { flex: none; width: 56px; height: 56px; display: grid; place-items: center; background: var(--accent-ink);
+  border: 2px solid; border-color: var(--fg) var(--shadow) var(--shadow) var(--fg); box-shadow: inset -2px -2px 0 var(--line-hi), inset 2px 2px 0 var(--accent); }
+.hvi-logo .seal svg { width: 36px; height: 36px; fill: var(--accent); }
+.hvi-logo .w { min-width: 0; display: flex; flex-direction: column; }
+.hvi-logo .t { font: italic 700 clamp(28px, 8.4vw, 44px)/1 Georgia, "Times New Roman", "Noto Serif", serif; text-transform: none; color: var(--fg);
+  letter-spacing: -0.01em; text-shadow: 2px 2px 0 var(--shadow); }
+.hvi-logo .t b { color: var(--accent); font-weight: 700; }
+.hvi-logo .rule { height: 3px; margin: var(--s2) 0 6px;
+  background: linear-gradient(90deg, var(--duke) 0 25%, var(--revin) 25% 50%, var(--eb-cyan) 50% 75%, var(--eb-amber) 75%); }
+.hvi-logo .s { font-size: var(--t-xs); font-weight: 400; color: var(--fg-dim); letter-spacing: 0.06em; }
+@media (min-width: 721px) { .hvi-logo .seal { width: 64px; height: 64px; } .hvi-logo .seal svg { width: 40px; height: 40px; } }
+
 /* ---------- the logon desk (DEPARTMENT OS) ----------
    Phones: the logon window, then the ticker and the notice under it. Desktop: the logon
    window left, the small windows beside it. */

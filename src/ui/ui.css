@@ -111,6 +111,38 @@ a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-of
 .tb-body { min-width: 0; }
 .tb:has(> .tb-body.flush) { padding: var(--s3) 0 0; }
 @media (max-width: 640px) { .tb-top .tb-right { display: none; } }
+/* Wide screens: the title bar's size box on the right, Windows 3.x / Turbo Vision. */
+@media (min-width: 721px) {
+  .ui-frame-ttl::after, .tb-top::after { content: "[↕]"; flex: none; background: var(--panel); padding: 0 0.5ch; color: var(--accent); letter-spacing: 0; }
+}
+
+/* Dialog (System 7 alert): a single frame with a pinstriped title bar inside the top, the
+   title boxed in the stripes, a square close box. Frame className="ui-dialog". */
+.ui-frame.ui-dialog { border: 2px solid var(--tone, var(--fg-dim)); padding-top: 44px; box-shadow: 6px 6px 0 var(--shadow); }
+.ui-dialog > .ui-frame-ttl { top: 3px; left: 3px; right: 3px; height: 26px; justify-content: center;
+  background: repeating-linear-gradient(180deg, var(--tone, var(--fg-dim)) 0 2px, transparent 2px 4px); }
+.ui-dialog > .ui-frame-ttl > * { line-height: 26px; padding: 0 var(--s3); }
+.ui-dialog > .ui-frame-ttl .b { position: absolute; left: var(--s2); top: 5px; width: 16px; height: 16px; padding: 0; color: transparent;
+  border: 2px solid var(--tone, var(--fg-dim)); line-height: 1; overflow: hidden; }
+.ui-dialog > .ui-frame-ttl .t { margin: 0; }
+.ui-dialog > .ui-frame-ttl .m, .ui-dialog > .ui-frame-ttl::after { display: none; }
+.ui-dialog-btns { justify-content: flex-end; margin-bottom: 0; }
+
+/* Yellow tooltips (Windows 95): the menu bar's access-key chord, on hover or keyboard focus. */
+.ui-head-nav a { position: relative; }
+@media (min-width: 721px) {
+  .ui-head-nav a[data-tip]:is(:hover, :focus-visible)::after { content: attr(data-tip); position: absolute; top: calc(100% + 4px); left: var(--s2);
+    background: #ffffe1; color: #000; border: 1px solid #000; padding: 2px 6px; font-size: var(--t-xs); font-weight: 400; white-space: nowrap; z-index: 70;
+    box-shadow: 2px 2px 0 var(--shadow); pointer-events: none; }
+}
+
+/* Windows 9x progress: blocks marching in a sunken well. Decoration; reduced motion holds it still. */
+.hvi-blocks { display: block; width: min(240px, 100%); height: 18px; margin-top: var(--s2); padding: 2px; border: 2px solid;
+  border-color: var(--shadow) var(--fg-dim) var(--fg-dim) var(--shadow); background-color: var(--bg); background-clip: content-box; background-origin: content-box;
+  background-image: repeating-linear-gradient(90deg, var(--accent) 0 10px, transparent 10px 12px); background-repeat: no-repeat;
+  background-size: 0% 100%; animation: ui-blocks 3s steps(19) infinite; }
+@keyframes ui-blocks { to { background-size: 100% 100%; } }
+@media (prefers-reduced-motion: reduce) { .hvi-blocks { animation: none; background-size: 40% 100%; } }
 @media (max-width: 420px) {
   .ui-frame, .tb { padding-left: var(--s2); padding-right: var(--s2); box-shadow: 6px 6px 0 var(--shadow); margin-right: 6px; }
   .tb:has(> .tb-body.flush) { padding: var(--s3) 0 0; }
@@ -149,7 +181,11 @@ a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-of
 .ui-btn:is(.primary, .push) { font-weight: 700; justify-content: center; min-height: var(--hit); padding: var(--s2) var(--s4);
   background: var(--accent); color: var(--accent-ink); box-shadow: 6px 6px 0 var(--shadow); margin: 0 6px 6px 0; text-align: center; }
 .ui-btn:is(.primary, .push).am { background: var(--eb-amber); color: #2e1c03; }
-.ui-btn:is(.primary, .push).sec { background: var(--fg-dim); color: var(--accent-ink); }
+/* sec: a Windows 95 bevelled button (light top-left, dark bottom-right); pressed, the bevel inverts. */
+.ui-btn:is(.primary, .push).sec { background: var(--fg-dim); color: var(--accent-ink); border: 2px solid; border-color: var(--fg) var(--shadow) var(--shadow) var(--fg);
+  box-shadow: inset -2px -2px 0 var(--fg-mute), 3px 3px 0 var(--shadow); }
+.ui-btn:is(.primary, .push).sec:active { transform: none; border-color: var(--shadow) var(--fg) var(--fg) var(--shadow); box-shadow: inset 2px 2px 0 var(--fg-mute); }
+.ui-btn.push.ok { min-width: 12ch; outline: 2px solid var(--fg); outline-offset: 2px; }
 .ui-btn:is(.primary, .push):active { transform: translate(6px, 6px); box-shadow: none; }
 .ui-btn:is(.primary, .push):focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; background: var(--accent); color: var(--accent-ink); }
 .ui-btn:is(.primary, .push).am:focus-visible { background: var(--eb-amber); color: #2e1c03; }

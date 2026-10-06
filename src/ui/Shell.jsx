@@ -15,6 +15,8 @@ export const NAV = [
   { key: "play", label: "PLAY", glyph: "◈", href: "#play", fk: "F3", hot: "P" },
   { key: "file", label: "MY FILE", glyph: "▤", href: "#file", fk: "F4", hot: "F" },
 ];
+// The accesskey chord, for the yellow tooltip: Ctrl+Option on a Mac, Alt elsewhere.
+const KEY_HINT = (() => { try { return /Mac|iP/.test(navigator.platform) ? "CTRL+OPT+" : "ALT+"; } catch { return "ALT+"; } })();
 // LABEL with its hotkey letter marked: MY FILE -> MY <u>F</u>ILE. The letter is decoration;
 // the link's accessible name stays the plain label.
 const hotLabel = (n) => {
@@ -88,7 +90,7 @@ export function AppHeader({ banner = false, active = null, onNav }) {
           <a className="ui-head-mark" href="#" onClick={e => onNav?.("menu", e)} aria-label="Human Value Index, main menu"><span aria-hidden="true">≡{"\u00a0"}</span>HUMAN VALUE INDEX</a>
           <nav className="ui-head-nav" aria-label="Sections">
             {NAV.map(n => (
-              <a key={n.key} href={n.href} accessKey={n.hot.toLowerCase()} aria-label={n.label} aria-current={active === n.key ? "page" : undefined} onClick={e => onNav?.(n.key, e)}>{hotLabel(n)}</a>
+              <a key={n.key} href={n.href} accessKey={n.hot.toLowerCase()} data-tip={`${KEY_HINT}${n.hot}`} aria-label={n.label} aria-current={active === n.key ? "page" : undefined} onClick={e => onNav?.(n.key, e)}>{hotLabel(n)}</a>
             ))}
           </nav>
           <span className="ui-head-case">CASE <b>{caseId || "UNASSIGNED"}</b></span>
