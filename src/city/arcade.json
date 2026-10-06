@@ -31,6 +31,16 @@
     "self": true
   },
   {
+    "slug": "ward",
+    "title": "WARD",
+    "status": "dev",
+    "role": "Action",
+    "year": "2026",
+    "line": "A three-input timing duel: read the enemy a beat before they commit.",
+    "play": null,
+    "itch": null
+  },
+  {
     "slug": "imperium",
     "title": "Imperium / Elysium",
     "status": "dev",
