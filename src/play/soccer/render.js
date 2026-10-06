@@ -12,6 +12,8 @@
 // so a face reads at this size.
 import { PITCH as P_, SHOT_FULL } from "./sim.js";
 import { shrinkHead } from "../heads.js";
+import { slotsAt } from "../../ads/inventory.js";
+import { drawAdBoard } from "../../ads/boards.js";
 
 export const W = 320, H = 200;
 export const CAMS = {
@@ -118,7 +120,11 @@ function seats() {
   }
   return SEATS;
 }
-const BOARDS = ["HVI", "THE ESTATE PITCH", "THE DEPARTMENT OF LEISURE", "APPLAUSE IS MONITORED", "HVI", "OFFSIDE IS A STATE OF MIND", "STAY BEHIND THE LINE", "HVI", "YOUR SEAT IS ASSIGNED"];
+// The perimeter ring: the inventory's pitch-ring-* slots (src/ads/inventory.js), fifteen boards of
+// 15 m along the far touchline. A couple of Electric Basement house ads, the ground's name, and the
+// rest THIS SPACE AVAILABLE until someone buys it (docs/design/ADS.md).
+const RING = slotsAt("soccer").filter(s => s.surface === "stadium-perimeter");
+const FONT = { text, textW };
 function drawStand(ctx, cam, mood, t, reduced) {
   rect(ctx, 0, 0, W, H, PAL.bg);
   const rows = seats();
@@ -141,13 +147,11 @@ function drawStand(ctx, cam, mood, t, reduced) {
     }
   }
   // the boards along the far touchline
-  const by = P_.w + 3, [, bot] = proj(cam, 0, by, 0), top = bot - 8;
-  let x = -60;
-  BOARDS.concat(BOARDS).forEach((msg, i) => {
-    const wM = msg.length * 1.75 + 3, a = proj(cam, x, by, 0)[0], b = proj(cam, x + wM, by, 0)[0];
-    if (b > -2 && a < W + 2) { box(ctx, a, top, b - 1, bot, i % 2 ? PAL.boardAlt : PAL.board); text(ctx, msg, (a + b) / 2 - textW(msg) / 2, (top + bot) / 2 - 2, i % 2 ? PAL.boardInk : PAL.eye); }
-    x += wM + 0.4;
-  });
+  const [, bot] = proj(cam, 0, P_.w + 3, 0), top = bot - 10;
+  for (const slot of RING) {
+    const a = proj(cam, slot.at.x0, slot.at.y, 0)[0], b = proj(cam, slot.at.x1, slot.at.y, 0)[0];
+    if (b > -2 && a < W + 2) drawAdBoard(ctx, slot, a, top, b - a, bot - top, FONT, { board: PAL.board, ink: PAL.boardInk, dim: "#4f6b58" });
+  }
 }
 
 // ---- the pitch ------------------------------------------------------------------------------------------------

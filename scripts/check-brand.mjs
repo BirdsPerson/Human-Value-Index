@@ -65,7 +65,7 @@ walk(join(root, "src"));
 const used = new Set();
 for (const [p, src] of refs) {
   for (const m of src.matchAll(/(?:drawBrand|faceBrand|brandFits)\((?:[^,()]+,\s*){0,5}?"([a-z][a-z-]*)"/g)) used.add(`${m[1]}|${p}`);
-  for (const m of src.matchAll(/\b(?:mark|logo|sub):\s*"([a-z][a-z-]*)"/g)) if (/brand\.js/.test(src)) used.add(`${m[1]}|${p}`);
+  for (const m of src.matchAll(/\b(?:mark|logo|sub|boardMark):\s*"([a-z][a-z-]*)"/g)) if (/brand\.js|marks\.js/.test(src)) used.add(`${m[1]}|${p}`);
   // a sign's lettering mapped to its mark: { "EB SHOP": "ebshop-cart", ... }
   if (/brand\.js/.test(src)) for (const m of src.matchAll(/"[A-Z][A-Z !']*":\s*"([a-z][a-z-]*)"/g)) used.add(`${m[1]}|${p}`);
 }
@@ -98,8 +98,9 @@ ok(existsSync(join(root, "scripts/brand_atlas.py")), "the builder is in the repo
 const bb = await import("../src/city/billboards.js");
 const src = refs.get(join(root, "src/city/billboardDraw.js")) || "";
 const { BILLBOARD_ADS } = await import("../src/city/billboardDraw.js");
-for (const s of bb.BILLBOARD_SITES) ok(Boolean(BILLBOARD_ADS[s.id]), `billboard ${s.id} has an ad`);
-for (const [id, a] of Object.entries(BILLBOARD_ADS)) ok(new RegExp(`\\b${a.ad}: \\{ bg:`).test(src), `billboard ${id}: ad ${a.ad} is defined`);
+const { CREATIVES } = await import("../src/ads/inventory.js");
+for (const s of bb.BILLBOARD_SITES) ok(Boolean(BILLBOARD_ADS[s.id]), `billboard ${s.id} has an ad (or THIS SPACE AVAILABLE), from src/ads/inventory.js`);
+for (const [id, a] of Object.entries(BILLBOARD_ADS)) { const c = CREATIVES[a.ad]; ok(Boolean(c) && (c.kind === "available" || marks.has(c.mark)), `billboard ${id}: ad ${a.ad} is defined, and a house ad has a mark in the atlas`); }
 ok(/prefers-reduced-motion|steady|no flicker/.test(src), "billboards say they do not flicker");
 
 console.log(`check-brand: ${n - failed}/${n} passed`);

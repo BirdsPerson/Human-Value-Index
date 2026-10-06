@@ -13,6 +13,8 @@
 import { COURT, serverOfMatch, ptrOf, gestureShot, gestureServe } from "./sim.js";
 import { CHAIR, NET_JUDGE, JUDGES, REVIEW, BRAND } from "./show.js";
 import { shrinkHead } from "../heads.js";
+import { SLOT } from "../../ads/inventory.js";
+import { drawAdBoard } from "../../ads/boards.js";
 export { headFrom } from "../heads.js";
 
 export const W = 256, H = 240;
@@ -154,8 +156,9 @@ function courtLayer(sf) {
       const dd = sideX / aa, [, Y, Z] = at(dd);
       if (Z >= 0 && Z <= sideH && Y >= backY && dd < best) {
         best = dd;
-        // the side wall: a rim, and boards along it in the Department's two greens
-        col = Z > sideH - 0.18 ? BASE.rim : Z > 0.35 && Z < sideH - 0.4 ? (Math.floor((Y + 40) / 4.2) & 1 ? BASE.board : BASE.boardAlt) : BASE.wall;
+        // the side wall: a rim, and one quiet run of board along it (the inventory's tennis-side-*
+        // slots, src/ads/inventory.js: plain until sold), a dark seam every 4.2 m
+        col = Z > sideH - 0.18 ? BASE.rim : Z > 0.35 && Z < sideH - 0.4 ? (((Y + 40) / 4.2) % 1 < 0.04 ? BASE.wall : BASE.board) : BASE.wall;
       }
     }
     { const dd = dB, [X, , Z] = at(dd); if (Math.abs(X) <= sideX && Z >= 0 && Z <= backH && dd < best) { best = dd; col = Z > backH - 0.15 ? BASE.rim : BASE.wall; } }
@@ -165,20 +168,6 @@ function courtLayer(sf) {
     put(o, col);
   }
   ctx.putImageData(img, 0, 0);
-  // the back wall's boards: sponsor-free, the Department's own, two rows on the taller wall
-  const [bl, by0] = proj(-sideX, backY, backH), [br, by1] = proj(sideX, backY, 0);
-  const rows = [[["HVI", 1], ["THE DEPARTMENT OF LEISURE", 0], ["HVI", 1]], [["QUIET", 0], ["PLEASE", 1], ["QUIET", 0]]];
-  rows.forEach((row, ri) => {
-    const tw = row.reduce((s, [t]) => s + textW(t) + 6, 0) + 2 * (row.length - 1);
-    let bx = Math.round((bl + br) / 2 - tw / 2);
-    const yy = by0 + 2 + ri * Math.max(8, Math.floor((by1 - by0 - 2) / 2));
-    for (const [s, alt] of row) {
-      const w = textW(s) + 6;
-      rect(ctx, bx, yy, w, 7, alt ? BASE.boardAlt : BASE.board);
-      text(ctx, s, bx + 3, yy + 1, alt ? BASE.boardAltInk : BASE.boardInk);
-      bx += w + 2;
-    }
-  });
   const { hw, dhw, hl, sv } = COURT;
   for (const x of [-dhw, -hw, hw, dhw]) cline(ctx, x, -hl, x, hl);
   for (const y of [-hl, hl]) cline(ctx, -dhw, y, dhw, y);
@@ -187,6 +176,23 @@ function courtLayer(sf) {
   for (const y of [-hl, hl]) cline(ctx, 0, y, 0, y + (y < 0 ? 0.35 : -0.35));   // the centre marks
   LAYERS.set(sf, c);
   return c;
+}
+
+// The back wall's boards: three, from the ad inventory (src/ads/inventory.js, tennis-back-*), in
+// one row with the wall's dark showing round them. Today a small Electric Basement mark in the
+// middle and two plain boards; drawn each frame (not in the cached layer) so the mark appears the
+// moment the brand atlas lands.
+const BACK = ["tennis-back-left", "tennis-back-centre", "tennis-back-right"].map(id => SLOT[id]);
+const FONT = { text, textW };
+function drawBackBoards(ctx) {
+  const { sideX, backY, backH } = ARENA, gap = 0.6, span = BACK.reduce((a, b) => a + b.size.w, 0) + gap * (BACK.length - 1);
+  const [, top] = proj(0, backY, backH), [, bot] = proj(0, backY, 0), h = 10, y = Math.round((top + bot) / 2 - h / 2);
+  let m = -span / 2;
+  for (const slot of BACK) {
+    const [a] = proj(Math.max(-sideX, m), backY, 0), [b] = proj(Math.min(sideX, m + slot.size.w), backY, 0);
+    drawAdBoard(ctx, slot, a, y, b - a, h, FONT, { board: BASE.board, ink: BASE.boardInk, dim: BASE.boardAltInk });
+    m += slot.size.w + gap;
+  }
 }
 
 // ---- the crowd: every seat counted, every seat on the camera --------------------------------------
@@ -403,6 +409,7 @@ export function draw(ctx, st, looks, frame, show = null) {
   PAL = PALS.get(sf);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(courtLayer(sf), 0, 0);
+  drawBackBoards(ctx);
   drawMarks(ctx, trackMarks(st));
   const b = st.ball, S = show?.state;
   drawCrowd(ctx, show, b ? proj(b.x, b.y, b.z) : null);

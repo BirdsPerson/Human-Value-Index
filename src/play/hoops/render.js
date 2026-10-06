@@ -13,6 +13,8 @@
 // drawn a little large (0.5 m), the 16-bit habit, so a face reads at this size.
 import { COURT as C, TOP, FT_TOP, dirOf, greenOf, kindAt, LEVELS, contestOf } from "./sim.js";
 import { shrinkHead } from "../heads.js";
+import { slotsAt } from "../../ads/inventory.js";
+import { drawAdBoard, adGround } from "../../ads/boards.js";
 
 export const W = 256, H = 240;
 // The camera: a pinhole at (px, py, pz) turned by yaw (about the vertical, 0 = straight across the
@@ -138,7 +140,10 @@ function seats() {
   SEATS = rows;
   return rows;
 }
-const BOARDS = ["HVI", "THE COURTS", "PICKUP PERMITTED", "APPLAUSE IS MONITORED", "HVI", "THE DEPARTMENT OF LEISURE", "NO DUNKING ON STAFF", "HVI", "YOUR SEAT IS ASSIGNED"];
+// The far apron's boards: the inventory's courts-apron-* slots (src/ads/inventory.js), six of 9 m.
+// The ground's name, one small Electric Basement board, the rest AVAILABLE (some left bare).
+const APRON = slotsAt("hoops");
+const FONT = { text, textW };
 function drawStands(ctx, cam, fx, reduced) {
   const rows = seats(), mood = fx?.mood || "idle", t = fx?.t || 0;
   for (let i = rows.length - 1; i >= 0; i--) {
@@ -163,15 +168,15 @@ function drawStands(ctx, cam, fx, reduced) {
     }
   }
   // the front of the stand: the boards along the far apron
-  const by = C.w + 1.9;
-  let x = -27;
-  BOARDS.forEach((msg, i) => {
-    const wM = Math.max(3.2, msg.length * 0.55 + 1.2), a = proj(x, by, 0, cam), b = proj(x + wM, by, 0, cam), at = proj(x, by, 0.85, cam), bt = proj(x + wM, by, 0.85, cam);
-    const alt = i % 2 === 0;
-    poly(ctx, [at, bt, b, a], alt ? PAL.board : PAL.boardAlt);
-    text(ctx, msg, (a[0] + b[0]) / 2 - textW(msg) / 2, (at[1] + a[1] + bt[1] + b[1]) / 4 - 2, alt ? PAL.eye : PAL.boardInk);
-    x += wM + 0.3;
-  });
+  for (const slot of APRON) {
+    const { x0, x1, y } = slot.at, a = proj(x0, y, 0, cam), b = proj(x1, y, 0, cam), at = proj(x0, y, 0.85, cam), bt = proj(x1, y, 0.85, cam);
+    if (b[0] < -2 || a[0] > W + 2) continue;
+    const pal = { board: PAL.boardAlt, ink: PAL.boardInk, dim: "#4f8a62" };
+    poly(ctx, [at, bt, b, a], adGround(slot, pal));
+    // the content upright at the board's middle, as tall as its shorter end
+    const h = Math.min(a[1] - at[1], b[1] - bt[1]), cy = (at[1] + a[1] + bt[1] + b[1]) / 4;
+    drawAdBoard(ctx, slot, a[0], cy - h / 2, b[0] - a[0], h, FONT, pal, { ground: false });
+  }
 }
 
 // ---- the floor -----------------------------------------------------------------------------------

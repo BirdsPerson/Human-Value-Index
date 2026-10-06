@@ -12,30 +12,14 @@ import { BUILDING } from "./simApi.js";
 import { massingOf } from "./archGeo.js";
 import { rotRect, STOREY } from "./iso.js";
 import { drawBrand, brandReady } from "./brand.js";
+import { SLOTS, SLOT, creativeOf } from "../ads/inventory.js";
 
-// What each site carries. host: an EBSN host's face (hosts.png order: carol dale asuka hector joan vern).
-export const BILLBOARD_ADS = {
-  "bb-roof-hab-a": { ad: "ebtv", host: "carol" },
-  "bb-roof-lofts": { ad: "brainforest" },
-  "bb-roof-seaview": { ad: "jetsam" },
-  "bb-roof-dive": { ad: "ebsn", host: "vern" },
-  "bb-loop-arts-campus": { ad: "ebshop", host: "dale" },
-  "bb-loop-finance-strip": { ad: "beacon" },
-  "bb-loop-commons-works": { ad: "ebtv", host: "hector" },
-  "bb-loop-east": { ad: "ebshop", host: "asuka" },
-  "bb-boardwalk-west": { ad: "irenes" },
-  "bb-boardwalk-east": { ad: "ebtv", host: "joan" },
-};
-// Each ad: its ground, its mark, the line under it (the brands' own words, no claims).
-const AD = {
-  ebtv: { bg: "#06070b", mark: "eb-logo", neon: true, line: "ELECTRICBASEMENT.TV", ink: "#ffaa2d" },
-  ebshop: { bg: "#1b1f21", mark: "ebshop", neon: true, line: "SHOP.ELECTRICBASEMENT.TV", ink: "#51edda" },
-  ebsn: { bg: "#0f3f42", mark: "eb-bolt", neon: true, title: "EBSN", line: "AFTER DARK", ink: "#f472b6" },
-  jetsam: { bg: "#0f1c22", mark: "jetsam", sub: "iridescent", line: "AN IRIDESCENT PRODUCTION", ink: "#9fb8bc" },
-  irenes: { bg: "#f7f5ec", mark: "irenes", line: null, ink: "#8c1622", frame: "#8c1622" },
-  beacon: { bg: "#3d2b96", mark: "beacon", line: null, ink: "#f6f6fc" },
-  brainforest: { bg: "#0b1230", mark: "brainforest", title: "BRAINFOREST", line: "ANALYTICA", ink: "#a0c6ff", serif: true },
-};
+// What each site carries: the ad inventory's city-billboard slots (src/ads/inventory.js), where
+// the creatives live too, one table for every surface that sells space. A house ad (Scott's brands,
+// one brand once), or THIS SPACE AVAILABLE with the site's number. host: an EBSN host's face
+// (hosts.png order: carol dale asuka hector joan vern).
+export const BILLBOARD_ADS = Object.fromEntries(SLOTS.filter(s => s.surface === "city-billboard").map(s => [s.id, { ad: s.creative, ...(s.host ? { host: s.host } : {}) }]));
+const SITE_NO = Object.fromEntries(SLOTS.filter(s => s.surface === "city-billboard").map((s, i) => [s.id, String(i + 1).padStart(2, "0")]));
 const HOST_IDX = { carol: 0, dale: 1, asuka: 2, hector: 3, joan: 4, vern: 5 };
 const NORMAL = { s: [0, 1], n: [0, -1], e: [1, 0], w: [-1, 0] };
 
@@ -79,7 +63,7 @@ export function drawBillboard(G, it, env) {
     const A = Q(px - n[0] * 0.02, py - n[1] * 0.02, it.base), B = Q(px - n[0] * 0.02, py - n[1] * 0.02, x.h0);
     ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
   }
-  const ad = AD[(BILLBOARD_ADS[b.id] || {}).ad] || AD.ebtv, spec = BILLBOARD_ADS[b.id] || {};
+  const slot = SLOT[b.id], ad = creativeOf(slot), spec = { ...(BILLBOARD_ADS[b.id] || {}), site: SITE_NO[b.id] };
   const c = [(x.x0 + x.x1) / 2, (x.y0 + x.y1) / 2];
   // the box: its frame on every face the camera sees; the ad on the front
   let front = null;
@@ -102,7 +86,8 @@ export function drawBillboard(G, it, env) {
   ctx.save();
   ctx.transform((B[0] - A[0]) / W, (B[1] - A[1]) / W, (C[0] - A[0]) / H, (C[1] - A[1]) / H, A[0], A[1]);
   ctx.fillStyle = ad.bg; ctx.fillRect(0, 0, W, H);
-  if (brandReady()) adContent(ctx, ad, spec, W, H, env);
+  if (ad.kind === "available") available(ctx, ad, spec, W, H);
+  else if (brandReady()) adContent(ctx, ad, spec, W, H, env);
   // daylight sits on it; at night the floodlights keep it bright (no flicker)
   if (!env.night) { ctx.fillStyle = `rgba(255,255,255,${(0.08 * (1 - front.sh)).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
   ctx.restore();
@@ -153,6 +138,22 @@ function adContent(c, ad, spec, W, H, env) {
     c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = ad.ink;
     c.fillText(ad.line, lx, ly, W - x0 - pad);
   }
+}
+
+// THIS SPACE AVAILABLE: a quiet panel, a hairline inset, the words as large as fit, the site's
+// number under them (the way an outdoor company numbers its boards).
+function available(c, ad, spec, W, H) {
+  const pad = Math.max(1, Math.round(H * 0.1));
+  c.strokeStyle = ad.ink; c.globalAlpha = 0.5; c.lineWidth = 1;
+  c.strokeRect(pad + 0.5, pad + 0.5, W - 2 * pad - 1, H - 2 * pad - 1);
+  c.globalAlpha = 1;
+  const big = Math.round(H * 0.2), small = Math.round(H * 0.11);
+  if (big < 5) return;
+  c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = ad.ink;
+  c.font = `bold ${big}px 'Fira Mono', ui-monospace, monospace`;
+  c.fillText("THIS SPACE", W / 2, H * 0.36, W - 4 * pad);
+  c.fillText("AVAILABLE", W / 2, H * 0.58, W - 4 * pad);
+  if (small >= 5) { c.font = `${small}px 'Fira Mono', ui-monospace, monospace`; c.globalAlpha = 0.7; c.fillText(`SITE ${spec.site}`, W / 2, H * 0.8, W - 4 * pad); c.globalAlpha = 1; }
 }
 
 function shadeHex(hex, f) {
