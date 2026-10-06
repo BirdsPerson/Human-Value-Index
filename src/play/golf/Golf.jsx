@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Frame, Button, ButtonRow, ScreenHead } from "../../ui/index.js";
+import GameMenu from "../GameMenu.jsx";
 import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { CLOTH } from "../../avatar.js";
 import { readPad, deadzone } from "../../city/gamepad.js";
@@ -8,7 +9,7 @@ import { newRound, step, logPush, logEvent, act, aimEvent, swingEvent, puttEvent
 import { draw, W, H, windWords, pipToWorld, screenToWorld, viewCam, showSpin, onSpin, spinAt, onClubChip } from "./render.js";
 import { liveSwing, readSwing, stickSwing, liveStick, contactWord, lineWord } from "./gesture.js";
 import { reactionFor, holeReaction } from "./gallery.js";
-import { endScene, skipEnd, CAPTION, SCENE_SOUND, endFrame } from "./scenes.js";
+import { endScene, skipEnd, CAPTION, SCENE_SOUND, SCENE_LEN, endFrame } from "./scenes.js";
 import { golfers, golferBySlug } from "./roster.js";
 import { lookFor, paintCard } from "./looks.js";
 import * as sfx from "./audio.js";
@@ -97,7 +98,7 @@ export default function Golf({ route }) {
     const seed = (Math.floor(Math.random() * 0xfffffffe) + 1) >>> 0;
     const p = me();
     const c = { course, start, count, easy, ...o };
-    setGame({ key: seed, cfg: { seed, course: c.course, mode: g ? "match" : "stroke", start: c.start, count: c.count, ...(c.easy && !demo ? { easy: true, assist: 2 } : {}), player: demo ? { name: "THE CADDIE", color: { shirt: "#7c7c7c", pants: "#000000" } } : { name: p.name, color: p.color }, cpu: g ? { slug: g.slug, name: g.name, rating: g.rating, color: { shirt: g.shirt, pants: g.pants } } : null }, demo, looks: [demo ? lookFor({ hint: { skin: "light_tan", hair_style: "short", hair_color: "grey" }, shirt: "#7c7c7c", pants: "#000000" }) : lookOfMe(p), ...(g ? [lookOfGolfer(g)] : [])] });
+    setGame({ key: seed, args: [g, demo, o], cfg: { seed, course: c.course, mode: g ? "match" : "stroke", start: c.start, count: c.count, ...(c.easy && !demo ? { easy: true, assist: 2 } : {}), player: demo ? { name: "THE CADDIE", color: { shirt: "#7c7c7c", pants: "#000000" } } : { name: p.name, color: p.color }, cpu: g ? { slug: g.slug, name: g.name, rating: g.rating, color: { shirt: g.shirt, pants: g.pants } } : null }, demo, looks: [demo ? lookFor({ hint: { skin: "light_tan", hair_style: "short", hair_color: "grey" }, shirt: "#7c7c7c", pants: "#000000" }) : lookOfMe(p), ...(g ? [lookOfGolfer(g)] : [])] });
   };
   const done = (rec) => { saveRound(rec); setRounds(loadRounds()); };
   const toggleMute = () => { sfx.setMuted(!muted); setMuted(!muted); };
@@ -107,7 +108,10 @@ export default function Golf({ route }) {
       <ScreenHead title={COURSE_NAME[game?.cfg.course || course]} meta="EXHIBITION // COUNTS IN NO STANDINGS. THE DEPARTMENT COUNTS IT ANYWAY." />
       {game ? (
         <>
-          <Play key={game.key} cfg={game.cfg} demo={game.demo} lookP={game.looks} onDone={game.demo ? () => {} : done} muted={muted} />
+          <Play key={game.key} cfg={game.cfg} demo={game.demo} lookP={game.looks} onDone={game.demo ? () => {} : done} muted={muted} onMute={toggleMute}
+            onAgain={() => begin(...game.args)}
+            onNewCourse={() => { const [g, d, o] = game.args, next = (game.cfg.course === "open" ? "links" : "open"); setCourse(next); begin(g, d, { ...o, course: next }); }}
+            onSettings={() => setGame(null)} />
           <ButtonRow split stackOnMobile>
             <Button variant="back" onClick={() => setGame(null)}>Leave the course</Button>
             <Button variant="secondary" onClick={toggleMute}>{muted ? "SOUND: OFF" : "SOUND: ON"}</Button>
@@ -214,7 +218,8 @@ function Rounds({ rounds }) {
 const KEYMAP = { ArrowLeft: BTN.L, ArrowRight: BTN.R, ArrowUp: BTN.U, ArrowDown: BTN.D, " ": BTN.A, z: BTN.A, Z: BTN.A, x: BTN.B, X: BTN.B };
 const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); };
 
-function Play({ cfg, demo, lookP, onDone, muted }) {
+function Play({ cfg, demo, lookP, onDone, muted, onMute, onAgain, onNewCourse, onSettings }) {
+  const [endMenu, setEndMenu] = useState(false);   // the shared end menu (../GameMenu.jsx), once the card is up
   const canvas = useRef(null), wrap = useRef(null);
   const touch = useRef(0);
   const latch = useRef(0);   // a press shorter than a tick still counts: held for at least one tick
@@ -246,7 +251,7 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
   useEffect(() => {
     const st = newRound(cfg), log = [];
     const still = (() => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } })();
-    let endBits = 0, endPlayed = 0, endSaid = false;
+    let endBits = 0, endPlayed = 0, endSaid = false, cardAt = null, menuShown = false;
     // the golfers' looks arrive when their faces load; the picture uses whatever is here
     const looks = [];
     (lookP || []).forEach((p, i) => Promise.resolve(p).then(l => { if (l) { l.card = paintCard(l); looks[i] = l; } }).catch(() => {}));
@@ -414,7 +419,7 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
         const raw = input(), b = demo ? botBits(st) : raw;
         if (st.phase === "done") {
           // the end scene: any button goes to the card
-          if (raw & ~endBits & 63 && skipEnd(st)) setSay(`THE FINAL CARD. ${st.result?.line || ""}`);
+          if (raw & ~endBits & 63) { if (skipEnd(st)) { setSay(`THE FINAL CARD. ${st.result?.line || ""}`); cardAt = cardAt ?? frame; } else if (cardAt != null) setEndMenu(true); }
           endBits = raw;
           continue;
         }
@@ -450,6 +455,9 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
         if (!endSaid) { endSaid = true; setSay(CAPTION[kind]); }
         for (const [k, at] of SCENE_SOUND[kind] || []) if (f >= at && endPlayed < at + 1) sfx.crowd(k);
         endPlayed = f + 1;
+        // the card comes up (a press, the scene's end, or at once with reduced motion); the menu a moment later
+        if (cardAt == null && (still || f >= SCENE_LEN)) cardAt = frame;
+        if (cardAt != null && frame - cardAt >= 90 && !menuShown) { menuShown = true; setEndMenu(true); }
       }
       const P = st.players[st.cur];
       ui.hint = ui.mouse && hints < 3 && st.phase === "aim" && P.kind === "human" ? (CLUBS[st.club].putt ? "DRAG DOWN FOR PACE. LET GO TO PUTT." : "DRAG DOWN TO TAKE IT BACK. PUSH UP TO SWING.") : null;
@@ -491,6 +499,10 @@ function Play({ cfg, demo, lookP, onDone, muted }) {
         <button type="button" className="gf-tb swing" aria-label="Swing" {...hold(BTN.A)}>SWING</button>
       </div>
       {card && <Card card={card} cfg={cfg} />}
+      {paused && !endMenu && <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE DEPARTMENT WAITS." onBack={togglePause}
+        options={{ resume: togglePause, restart: onAgain, controls: <Controls />, sound: { on: !muted, onSelect: onMute }, quit: true }} />}
+      {endMenu && <GameMenu key="end" kind="end" title="ROUND FILED." summary={card?.played ? `${toParText(card.toPar[0])} TO PAR OVER ${card.played} HOLES.${cfg.cpu && card.won ? ` MATCH ${card.won[0]}-${card.won[1]}.` : ""}` : undefined} onBack={() => setEndMenu(false)}
+        options={{ again: demo ? false : onAgain, rematch: { label: "NEW COURSE", onSelect: onNewCourse }, settings: onSettings, play: true, city: true }} />}
     </div>
   );
 }

@@ -2402,8 +2402,12 @@ or any score.
   they replay. check-golf plays a casual first-timer (keys, a fifth of the wind read, ~100 ms timing
   sd, putts within 25% pace) over the Open's front nine: about +8 on easy (bogey golf), about +29
   without.
-- **Not yet**: a server that verifies a submitted log; the course in the city map; the shared end /
-  pause menu (`src/play/GameMenu.jsx`) once it lands.
+- **Not yet**: a server that verifies a submitted log; the course in the city map; a replay viewer.
+- **Menus**: the shared `src/play/GameMenu.jsx`. Pause (Enter / Esc / Start / II): RESUME, RESTART,
+  CONTROLS (the how-to legend), SOUND, QUIT TO PLAY; the sim and the input log stand still under it.
+  After the round, 90 frames after the card comes up: PLAY AGAIN (same settings, a new seed), NEW
+  COURSE (the other course), CHANGE SETTINGS (the setup screen), BACK TO PLAY, BACK TO THE CITY; B
+  closes it to look at the card.
 
 ### Basketball: THE COURTS (`#hoops`, 2026-10-05)
 
