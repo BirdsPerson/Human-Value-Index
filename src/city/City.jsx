@@ -22,6 +22,7 @@ import Street from "./Street.jsx";
 import CityIso from "./CityIso.jsx";
 import DistrictView from "./DistrictView.jsx";
 import BuildingView from "./BuildingView.jsx";
+import { isTower, towerPlan } from "./tower.js";
 import { buildingHref, parseCityRoute } from "./city3d.js";
 import { readCaseId } from "../caseFile.jsx";
 import CityFind from "./CityFind.jsx";
@@ -81,7 +82,7 @@ export default function City({ route }) {
   // The query minus the floor: what survives moving between views (?at=, ?stress=).
   const query = useMemo(() => {
     const q = new URLSearchParams(parsed.query.replace(/^\?/, ""));
-    q.delete("floor"); q.delete("find"); q.delete("control");
+    q.delete("floor"); q.delete("find"); q.delete("control"); q.delete("storey");
     const s = q.toString();
     return s ? "?" + s : "";
   }, [parsed.query]);
@@ -306,7 +307,17 @@ export default function City({ route }) {
   const go = useCallback((id) => { window.location.hash = (id ? `#city/${id}` : "#city") + query; }, [query]);
   const goBuilding = useCallback((d, bid, fl = null) => { window.location.hash = buildingHref(d, bid, fl, query); }, [query]);
   const onBuilding = useCallback((bid) => goBuilding(districtId, bid), [goBuilding, districtId]);
-  const onFloor = useCallback((fl) => { if (b) window.location.replace(buildingHref(b.districtId, b.id, fl, query)); }, [b, query]);
+  // a tower's cutaway (Cutaway.jsx) also names the storey: ?floor= is the sim's floor, &storey= the level drawn
+  const onFloor = useCallback((fl, lv = null) => {
+    if (!b) return;
+    const q = new URLSearchParams(query.replace(/^\?/, ""));
+    if (fl != null && lv != null) q.set("storey", String(lv));
+    const qs = q.toString();
+    window.location.replace(buildingHref(b.districtId, b.id, fl, qs ? "?" + qs : ""));
+  }, [b, query]);
+  const storeyLv = useMemo(() => { const v = new URLSearchParams(parsed.query.replace(/^\?/, "")).get("storey"); return v != null && v !== "" && Number.isFinite(+v) ? +v : null; }, [parsed.query]);
+  const tplan = b && isTower(b) ? towerPlan(b) : null;
+  const tst = tplan && floor != null ? tplan.storeys.find(x => x.level === storeyLv && x.simFloor === floor) || tplan.storeys.find(x => x.simFloor === floor) : null;
   const open = useCallback((s) => setCard({ ...s }), []);
   const close = useCallback(() => setCard(null), []);
   const [mode, setMode] = useCityViewMode();
@@ -347,7 +358,7 @@ export default function City({ route }) {
   const here = d && stats.districts.find(x => x.id === d.id);
   const bn = b ? stats.buildings[b.id] || 0 : 0;
   const right = b
-    ? b.id === "hq" ? `${b.addr} // 6F // CENSUS CLASSIFIED` : `${b.addr} // ${b.floors.length}F // ${bn} INSIDE`
+    ? b.id === "hq" ? `${b.addr} // 6F // CENSUS CLASSIFIED` : `${b.addr} // ${tplan ? tplan.storeys.length : b.floors.length}F // ${bn} INSIDE`
     : d
       ? d.id === "hq" ? `${d.addr} // HOLDING PEN B // CENSUS CLASSIFIED` : `${d.addr} // ${here?.count ?? 0} ON SITE // CAP ${districtCap(d.id)}`
       : `POP ${stats.pop ?? roster.length} // ABOARD ${stats.transit} // ON PLATFORMS ${stats.waiting}${census === "down" ? " // CENSUS OFFLINE" : ""}`;
@@ -360,7 +371,7 @@ export default function City({ route }) {
   if (enterprisePage) crumbs.push({ label: "THE SMALL BUSINESS REGISTER" });
   if (heightsPage) crumbs.push({ label: "THE HEIGHTS // TRAIL MAP" });
   if (b) crumbs.push({ label: b.name, go: () => goBuilding(d.id, b.id) });
-  if (b && floor != null) { const f = b.floors[floor]; crumbs.push({ label: `${f.code} ${f.name}` }); }
+  if (b && floor != null) { const f = tst || b.floors[floor]; crumbs.push({ label: `${f.code} ${f.name}` }); }
   const three = !d && mode === "stack";
   const street = !d && mode === "street";
   const iso = !d && mode === "city";

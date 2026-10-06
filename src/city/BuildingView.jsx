@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useMemo, useRef, useState } from "react";
 import Pen from "../Pen.jsx";
 import { DISTRICT, PLACES, BUILDING, placeName, placeKind, jobLine, roomIn } from "./simApi.js";
 import RoomStage, { ROOM_H } from "./RoomStage.jsx";
@@ -7,6 +7,9 @@ import { ListRow } from "../ui/index.js";
 import { funnelButtons } from "./funnels.js";
 import { openFunnel } from "./FunnelOverlay.jsx";
 import CasinoDoor from "../casino/CasinoDoor.jsx";
+import { isTower } from "./tower.js";
+// Towers (residential, office, mixed-use) open as a SimTower cutaway, its own chunk (Cutaway.jsx).
+const Cutaway = lazy(() => import("./Cutaway.jsx"));
 
 // #city/<district>/<building>[?floor=N]: one building in cross-section, SimTower-style.
 // Floors stacked top to bottom with the lift shaft down the left; each floor's rooms
@@ -41,7 +44,23 @@ function BuildingView({ buildingId, floor, censusRef, onOpen, onFloor }) {
       </div>
     );
   }
+  if (isTower(b)) {
+    return (
+      <Suspense fallback={<div className="hvi-city-note hvi-city-in">RAISING THE CROSS-SECTION. THE BUILDING DOES NOT CONSENT.</div>}>
+        {funnelButtons(b.id).length > 0 && <FunnelBar id={b.id} />}
+        <Cutaway key={b.id} b={b} floor={floor} censusRef={censusRef} onOpen={onOpen} onFloor={onFloor} />
+      </Suspense>
+    );
+  }
   return <Floors key={b.id} b={b} floor={floor} censusRef={censusRef} onOpen={onOpen} onFloor={onFloor} />;
+}
+
+function FunnelBar({ id }) {
+  return (
+    <div className="hvi-city-zoom" style={{ position: "static", justifyContent: "flex-start", flexWrap: "wrap", margin: "0 0 var(--s3)" }} role="toolbar" aria-label="What this building offers">
+      {funnelButtons(id).map(f => <button key={f.label} type="button" className="hvi-city-zb txt" aria-label={f.aria} onClick={() => openFunnel(f.spec)}>{f.label}</button>)}
+    </div>
+  );
 }
 
 function Floors({ b, floor, censusRef, onOpen, onFloor }) {
@@ -96,11 +115,7 @@ function Floors({ b, floor, censusRef, onOpen, onFloor }) {
       <div className="hvi-city-note hvi-city-in">
         {b.floors.length} FLOOR{b.floors.length === 1 ? "" : "S"}{below ? ` (${below} BELOW THE STREET)` : ""} // {total} PRESENT // {d?.name}. EVERY FLOOR IS OBSERVED. THE LIFT IS OBSERVED MOST OF ALL.
       </div>
-      {funnelButtons(b.id).length > 0 && (
-        <div className="hvi-city-zoom" style={{ position: "static", justifyContent: "flex-start", flexWrap: "wrap", margin: "0 0 var(--s3)" }} role="toolbar" aria-label="What this building offers">
-          {funnelButtons(b.id).map(f => <button key={f.label} type="button" className="hvi-city-zb txt" aria-label={f.aria} onClick={() => openFunnel(f.spec)}>{f.label}</button>)}
-        </div>
-      )}
+      {funnelButtons(b.id).length > 0 && <FunnelBar id={b.id} />}
       {b.id === "casino" && <CasinoDoor />}
       <RoomStage key={b.id} cells={cells} layout={layout} assign={assign} censusRef={censusRef} onOpen={onOpen} onPresent={setPresent} onCell={onCell} focusId={focusCell} focusScroll={focusScroll}
         ariaLabel={`${b.name}, in cross-section: ${b.floors.length} floors, ${total} subjects present. The floor directory below lists everyone by floor.`} />
