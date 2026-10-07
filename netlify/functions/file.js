@@ -18,7 +18,9 @@ export function currentFile(record) {
   const latest = last ? Object.fromEntries(FIELDS.filter(k => last[k] !== undefined).map(k => [k, last[k]])) : null;
   if (latest && latest.rubric === undefined) latest.rubric = 1;
   // Recalibrations (the Department's changes) are in the history but are not visits.
-  return { visits: visitCount(history), latest, avatar: record?.avatar || null, history: publicHistory(history) };
+  // profile.hand: "L" | "R", admin-set (scripts/set-hand.mjs); the games read it as their default hand.
+  const hand = record?.profile?.hand === "L" || record?.profile?.hand === "R" ? record.profile.hand : null;
+  return { visits: visitCount(history), latest, avatar: record?.avatar || null, history: publicHistory(history), ...(hand ? { profile: { hand } } : {}) };
 }
 
 export default async (req, context) => {
