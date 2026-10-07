@@ -109,7 +109,7 @@ export default function GameMenu({ kind = "end", title, summary, options, onBack
   const hint = family ? `D-PAD ▲▼ CHOOSE // ${g.act} SELECT${onBack || legend ? ` // ${g.back} BACK` : ""}` : `↑↓ CHOOSE // ENTER SELECTS${onBack || legend ? " // ESC BACK" : ""}`;
 
   return (
-    <div className="gm-scrim" onKeyDown={onKeyDown}>
+    <div className="gm-scrim" onKeyDown={onKeyDown} data-pad-own="gamemenu">
       <div className={`gm gm-${kind}`} role="dialog" aria-modal="true" aria-labelledby={tid} aria-describedby={summary ? sid : undefined}>
         <h2 className="gm-title" id={tid}>{title || (kind === "pause" ? "PAUSED." : "FILED.")}</h2>
         {summary && <p className="gm-sum" id={sid}>{summary}</p>}

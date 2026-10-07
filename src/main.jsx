@@ -4,6 +4,7 @@ import './ui/tokens.css'
 import './ui/ui.css'
 import './ui/themes.css'
 import App from './App.jsx'
+import './ui/padHook.js'   // the GAMEPAD LAYER's doorbell: loads src/ui/padLayer.js when a pad connects
 
 // ?rig=1: the animation rig's lab (src/city/RigLab.jsx), its own chunk; never linked
 const RigLab = /[?&]rig=1\b/.test(window.location.search) ? React.lazy(() => import('./city/RigLab.jsx')) : null

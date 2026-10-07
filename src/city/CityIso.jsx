@@ -1846,7 +1846,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
 
   const b = sel && BUILDING[sel];
   return (
-    <div className="hvi-city-stage" ref={wrapRef}>
+    <div className="hvi-city-stage" ref={wrapRef} data-pad-own="city">
       {found && (
         <div className="hvi-city-found">
           <span className="tag" aria-hidden="true">{found.following ? "TRACKING" : "FOUND"}</span>

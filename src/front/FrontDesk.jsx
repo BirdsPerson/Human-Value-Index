@@ -76,6 +76,25 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
     return () => window.removeEventListener("keydown", esc);
   }, [arr]);
 
+  // the GAMEPAD LAYER (src/ui/padLayer.js): A grabs a window, the sticks press its arrow keys and
+  // LT / RT its - / +, A drops it where it is, B puts the whole desk back as it was at the grab
+  const [padHeld, setPadHeld] = useState(null);
+  const padWas = useRef(null);
+  useEffect(() => {
+    const el = grid.current;
+    if (!el) return undefined;
+    const on = (e) => {
+      const id = e.target.closest?.("[data-wid]")?.dataset.wid;
+      if (!id) return;
+      if (e.detail === "grab") { padWas.current = live.current; setPadHeld(id); setSay(`${nameOf(id)} PICKED UP. MOVE IT TO A NEW SPOT.`); }
+      else if (e.detail === "drop") { setPadHeld(null); saveLayout(live.current); const i = live.current.findIndex(x => x.id === id); setSay(`${nameOf(id)} DROPPED AT ${i + 1} OF ${live.current.length}.`); }
+      else if (e.detail === "cancel") { setPadHeld(null); if (padWas.current) { focusId.current = id; apply(padWas.current); } setSay(`${nameOf(id)} PUT BACK.`); }
+    };
+    el.addEventListener("hvi-pad-arrange", on);
+    return () => el.removeEventListener("hvi-pad-arrange", on);
+  }, []);
+  useEffect(() => { if (!arr) setPadHeld(null); }, [arr]);
+
   const onKey = (id) => (e) => {
     if (e.target !== e.currentTarget) return;
     const r = keyAction(live.current, id, e.key);
@@ -142,7 +161,7 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
           if (!W) return null;
           const eff = effSize(size, cols), [w, h] = spans(eff, cols);
           return (
-            <div key={id} data-wid={id} data-size={eff} className={`fr-cell s-${eff}${arr ? " edit" : ""}${drag?.id === id ? " held" : ""}`}
+            <div key={id} data-wid={id} data-size={eff} className={`fr-cell s-${eff}${arr ? " edit" : ""}${drag?.id === id || padHeld === id ? " held" : ""}`}
               style={{ gridColumn: `span ${w}`, gridRow: `span ${h}` }}
               {...(arr ? { tabIndex: 0, role: "group", "aria-roledescription": "movable window", "aria-label": `${nameOf(id)}, ${SIZE_NAME[eff]}. Arrow keys move it, plus and minus resize it, Delete removes it.`, onKeyDown: onKey(id), onPointerDown: down(id) } : null)}>
               <div className="fr-cell-in" {...(arr ? { inert: "" } : null)}>
@@ -169,7 +188,7 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
       {drag && <div className="fr-chip" style={{ left: drag.x, top: drag.y }} aria-hidden="true">{nameOf(drag.id)}</div>}
       {!layout.length && <p className="fr-clear">THE DESK IS CLEAR. THE DEPARTMENT ADMIRES YOUR RESTRAINT.</p>}
       <p className="fr-arrange">
-        <button type="button" onClick={() => setArr(a => !a)} aria-pressed={arr}>{arr ? "DONE ARRANGING" : "ARRANGE"}</button>
+        <button type="button" onClick={() => setArr(a => !a)} aria-pressed={arr} data-pad-y={arr ? "DONE" : "ARRANGE"}>{arr ? "DONE ARRANGING" : "ARRANGE"}</button>
         <button type="button" onClick={() => onDialog("widgets")}>WIDGETS</button>
         <button type="button" onClick={() => onDialog("display")}>DISPLAY</button>
       </p>

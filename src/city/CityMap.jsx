@@ -798,7 +798,7 @@ function CityMap({ censusRef, onDistrict, onOpen }) {
   }, []);
 
   return (
-    <div className="hvi-city-stage" ref={wrapRef}>
+    <div className="hvi-city-stage" ref={wrapRef} data-pad-own="city">
       <TouchGate>
         <canvas ref={canvasRef} className={`hvi-city-canvas${cursor ? " " + cursor : ""}`} role="img"
           aria-label="The Substrate: a map of the city's districts, the Loop train with a station at every district, and every subject on it. By keyboard: the Loop list below names everyone aboard and finds your own file; the district directory enters a district." />
