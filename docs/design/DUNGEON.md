@@ -847,6 +847,21 @@ nothing in the design hangs on them.
    what the casual-beatable rule is for, and the harder levels pay more of a capped currency, which
    costs the economy nothing.
 
+**Scott's answers (2026-10-07).**
+- Q1: 300 a day shared is right *as the average*, but it must not be a ceiling on luck: "there should
+  always be a chance of finding rare items and valuable jewels down there that would exceed normal
+  averages." So: ordinary bounty (paper, coffee money, cabinet cash) mints under the shared 300/day
+  `BOUNTY_CAP`; **rare finds sit outside the cap**: jewels, heirlooms and rare salvage rolled by the
+  server inside `econ_salvage` (HMAC(server secret, runId, crateId), so no permit shopping), odds rising
+  with depth and level, values well above a day's cap (a jewel can be worth several days of bounty).
+  Jewels are items first (displayable at home, appraised at a fixed table value) and convert to CYCLES
+  only through a verified sale, so they stay play money, one-way, and auditable. Section 11 amended
+  per the recommendation ("no real-world prizes; play rewards only from server-verified play").
+  The expected value of rare finds per run is tuned so the *average* day stays near the cap; the tail
+  is the point.
+- Q2-Q4: not answered yet; D1 builds on the recommendations (lift stays unlocked; facing melee +
+  assisted tool; bounty factor by level), each flippable.
+
 Decided here, from the research and the rules, and not put to Scott: co-op loot is instanced and a
 dropped pack is owner-only (the no-transfer rule leaves no other reading); a shift that runs out is a
 loss.
