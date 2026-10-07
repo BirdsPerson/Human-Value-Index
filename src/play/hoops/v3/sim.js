@@ -1,54 +1,43 @@
+// FROZEN: hoops sim VERSION 3, exactly as shipped 2026-10-06 (the 2K-style game with the four
+// difficulty levels, cfg.level). Kept so a v3 record replays to its result (../replay.js picks the sim
+// by version; scripts/fixtures/hoops-v3-records.json holds games recorded on it). Never edit; the live
+// sim is ../sim.js.
 // THE COURTS, playable (docs/CITY_SPEC.md "PLAYABLE SPORTS", Basketball). The game itself: pure,
 // no DOM, no clock, no Math.random, no trig. A fixed 60 Hz step over a seeded generator, so a game
 // is a function of (version, seed, cfg, the human's input per frame): the browser plays it, and
 // anything holding the record plays it again to the same result (scripts/check-hoops.mjs does).
 // Only + - * / and sqrt touch the state, which IEEE 754 rounds the same everywhere.
 //
-// SIM VERSION 4 (2K20 conventions: lead passes thrown to where a moving receiver will be, bounce
-// passes and lobs on real arcs, deflections in the lane, catch-on-the-move; ICON PASSING (hold RB, a
-// face button passes to the teammate wearing it); the double-tap-Y alley-oop; positions and builds;
-// 3v3 and 1v1 on a half court under street rules, cfg.mode). Versions 1, 2 and 3 replay on the frozen
-// ./v1/, ./v2/ and ./v3/sim.js (./replay.js picks by version).
+// SIM VERSION 3 (the 2K-style game with 2K-style difficulty levels: ROOKIE, PRO, ALL-STAR, HALL OF
+// FAME, cfg.level; LEVELS below). Version 1 and 2 records replay on the frozen ./v1/sim.js and
+// ./v2/sim.js (./replay.js picks by version).
 //
 // The court is in metres, NBA lines: x along the length (the centre line at 0, the baselines at
 // +-14.325), y across it (the near sideline, the camera's, at 0; the far one at 15.24), z up. The
 // rims are 3.05 m up, 1.575 m in from each baseline. Team 0 is the viewer's and attacks +x all game;
-// team 1 attacks -x. Five a side: the league's own drafted fives. On a HALF COURT (cfg.mode "3v3",
-// "1v1") both sides attack the +x rim, x < 0 is out, and street rules hold: ones and twos, first to
-// 21 (or 11), check ball at the top of the key, clear it past the arc after a defensive rebound or a
-// steal, make-it-take-it if asked (cfg.mitt), no free throws (a foul gives the ball back).
+// team 1 attacks -x. Five a side: the league's own drafted fives.
 //
 // Control (2K conventions on a virtual pad, one bitmask a frame, BTN): the human steers one player
 // of team 0 (st.ctl): the ball carrier on offence; on defence the defender nearest the ball when it
 // changed hands, A switches. Offence: left stick moves, RT sprints, X held = the shot (let go at the
-// top: the release grade), A passes toward the stick, Y lobs (double-tap Y: an alley-oop to the
-// cutter nearest the rim), B bounce-passes, RB held puts a button over each teammate (A, B, X, Y) and
-// that button passes to him, LB calls a pick, LT posts up, the right stick does dribble moves (flick sideways:
+// top: the release grade), A passes toward the stick, Y lobs (an alley-oop to a cutting dunker),
+// B bounce-passes, LB calls a pick, LT posts up, the right stick does dribble moves (flick sideways:
 // crossover; back: stepback; toward the rim: drive; rotate: spin). A quick reversal of the left
 // stick is a dribble move too. Defence: X reaches for the steal, Y jumps (block, rebound), B takes a
 // charge, LT is intense D, A switches. Every other player is the CPU, from its ratings.
 
-export const VERSION = 4;
+export const VERSION = 3;
 export const HZ = 60;
 const DT = 1 / HZ, G = 9.8;
 export const COURT = { hx: 14.325, w: 15.24, cy: 7.62, rimX: 12.75, rimZ: 3.05, rimR: 0.23, boardX: 13.125, three: 7.24, corner: 6.71, cornerX: 10.055, laneHW: 2.44, ftX: 8.535, circle: 1.8, ra: 1.22 };
-export const BTN = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, X: 16, A: 32, Y: 64, B: 128, RT: 256, LT: 512, LB: 1024, RSU: 2048, RSD: 4096, RSL: 8192, RSR: 16384, SPIN: 32768, RB: 65536 };
+export const BTN = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, X: 16, A: 32, Y: 64, B: 128, RT: 256, LT: 512, LB: 1024, RSU: 2048, RSD: 4096, RSL: 8192, RSR: 16384, SPIN: 32768 };
 const RS = BTN.RSU | BTN.RSD | BTN.RSL | BTN.RSR;
 // foulOut: personal fouls that end a player's game (six over 48 minutes, scaled; three at least);
 // bonus: team fouls in a period after which every defensive foul shoots two.
 export const FORMATS = {
   quarters: { id: "quarters", name: "FOUR 2-MINUTE QUARTERS", periods: 4, len: 120, ot: 60, target: 0, foulOut: 3, bonus: 2 },
   to21: { id: "to21", name: "FIRST TO 21", periods: 0, len: 0, ot: 0, target: 21, foulOut: 3, bonus: 4 },
-  // the half court's game (3v3, 1v1): to cfg.to (21 or 11), no fouling out, no bonus, no free throws
-  street: { id: "street", name: "STREET RULES", periods: 0, len: 0, ot: 0, target: 21, foulOut: 99, bonus: 99 },
 };
-// The modes: five a side on the full court, three and one a side on a half court.
-export const MODES = { "5v5": { id: "5v5", n: 5, half: false, name: "5 ON 5" }, "3v3": { id: "3v3", n: 3, half: true, name: "3 ON 3" }, "1v1": { id: "1v1", n: 1, half: true, name: "1 ON 1" } };
-export const STREET_TO = [21, 11];
-// the check: the top of the key, past the arc
-export const TOP_SPOT = [COURT.rimX - 8.3, COURT.cy];
-// The icons over your teammates while RB is held: the four teammates in roster order wear A, B, X, Y.
-export const ICONS = ["A", "B", "X", "Y"];
 export const SHOT_CLOCKS = [24, 14];
 export const TOP = 20;            // frames from the gather to the top of the jump: the release to aim for
 export const FT_TOP = 24;         // the free throw's set shot: frames from the dip to the release
@@ -100,26 +89,11 @@ export function abilities(r, key = "", arch = null) {
   for (const s of SKILLS) S[s] = sk(R[s]);
   return { arch: a, R, S, k, spd: 4.9 + 2.5 * k + A.spd, leap: 0.4 + 0.45 * k + A.leap, dunker: R.dunk >= 75, h: 1.9 + 0.2 * k + A.h, def: (S.perD + S.intD) / 2 };
 }
-// Positions: from the roster's own (row [4]) when it has one, else from the archetype and height. The
-// build (bw, the width of the frame, 1 = a wing) follows the position; both are for telling players
-// apart on the floor and for the icons, and do not touch the ratings.
-export const POSITIONS = ["PG", "SG", "SF", "PF", "C"];
-export const BUILD = { PG: 0.82, SG: 0.88, SF: 0.95, PF: 1.08, C: 1.22 };
-export const POS_ARCH = { PG: "guard", SG: "guard", SF: "wing", PF: "slasher", C: "big" };
-export function positionOf(arch, h) {
-  if (arch === "guard") return h < 1.9 ? "PG" : "SG";
-  if (arch === "wing") return h < 1.99 ? "SG" : "SF";
-  if (arch === "slasher") return h < 2.02 ? "SF" : "PF";
-  return h < 2.2 ? "PF" : "C";
-}
-function mkPlayer(t, i, row, n = 5, half = false) {
-  const [key, name, r, arch0, pos0, hand] = row;
-  const arch = ARCHES[arch0] ? arch0 : POS_ARCH[pos0] || null;
-  const ab = abilities(r | 0, key, arch), pos = POSITIONS.includes(pos0) ? pos0 : positionOf(ab.arch, ab.h);
-  const d = half ? 1 : dirOf(t);
+function mkPlayer(t, i, row) {
+  const [key, name, r, arch] = row;
   return {
-    t, i, g: t * n + i, d, pos, bw: BUILD[pos], lefty: hand === "L", passF: -99, key: String(key), name: String(name), r: r | 0, ...ab,
-    x: 0, y: 0, z: 0, vz: 0, vx: 0, vy: 0, face: d, mv: 0, act: null, cool: 0, jx: 0, jy: 0, jt: 0, hold: 0, think: 0, plan: null, jumpAt: -1,
+    t, i, g: t * 5 + i, key: String(key), name: String(name), r: r | 0, ...abilities(r | 0, key, arch),
+    x: 0, y: 0, z: 0, vz: 0, vx: 0, vy: 0, face: dirOf(t), mv: 0, act: null, cool: 0, jx: 0, jy: 0, jt: 0, hold: 0, think: 0, plan: null, jumpAt: -1,
     sta: 1, pf: 0, still: 0, hands: 0, stumble: 0, screened: 0, burst: 0, heat: 0, moveCool: 0, caught: -999, lastMove: -999, sb: 0, cut: null, close: 0,
     streak: 0, hot: false, charge: 0, intense: false, sprint: false, post: false, ld: 0, ldEnd: -99, ldStart: -99,
   };
@@ -147,20 +121,11 @@ function mkPlayer(t, i, row, n = 5, half = false) {
 //             "poss" (only when possession changes; A switches)
 //   sta       your sprint's stamina drain; spd your speed; drive how much a defender in front slows
 //             your drive less; tip the jump ball
-//   reb       {team size: metres} added to your side's reach for a loose ball (the glass is where a
-//             casual player loses a small game: in 1v1 nobody else boxes out for you)
-//   street    {team size: {make, cpuMake}} the half court's own ease on top of make / cpuMake
-// v4 (lead passes made the offence better, the half court is new) re-measured every level in every
-// mode with the casual human (scripts/check-hoops.mjs "difficulty").
 export const LEVELS = {
-  rookie: { id: "rookie", name: "ROOKIE", green: 1, contest: 0.9, make: 0.97, ft: 1.06, cpuMake: 0.82, cpuSteal: 0.4, cpuBlock: 0.5, react: 6, help: 0.6, cut: 0.1, mateD: 1.4, lose: 0.3, ankle: 0.06, steal: 0.05, foul: 0.5, autoD: true, sw: "mark", sta: 0.6, spd: 1.06, drive: 0.2, tip: 0.1,
-    reb: { 1: 0.36, 3: 0.32, 5: 0.09 } },
-  pro: { id: "pro", name: "PRO", green: 1, contest: 0.95, make: 0.98, ft: 1.03, cpuMake: 0.87, cpuSteal: 0.65, cpuBlock: 0.8, react: 3, help: 0.8, cut: 0.06, mateD: 1.2, lose: 0.6, ankle: 0.03, steal: 0.025, foul: 0.75, autoD: true, sw: "mark", sta: 0.8, spd: 1.03, drive: 0.1, tip: 0.05,
-    reb: { 1: 0.25, 3: 0.26, 5: 0.06 }, street: { 1: { make: 1.05, cpuMake: 0.92 }, 3: { make: 1.03, cpuMake: 0.95 } } },
-  allstar: { id: "allstar", name: "ALL-STAR", green: 1, contest: 1, make: 1, ft: 1, cpuMake: 0.89, cpuSteal: 0.75, cpuBlock: 0.9, react: 1, help: 0.85, cut: 0.03, mateD: 1.12, lose: 0.75, ankle: 0.01, steal: 0.01, foul: 0.9, autoD: true, sw: "near", sta: 0.9, spd: 1, drive: 0.05, tip: 0,
-    reb: { 1: 0.25, 3: 0.15, 5: 0.05 }, street: { 1: { make: 1.03, cpuMake: 0.92 }, 3: { make: 1.02, cpuMake: 0.93 } } },
-  hof: { id: "hof", name: "HALL OF FAME", green: 0, contest: 1, make: 1, ft: 1, cpuMake: 0.95, cpuSteal: 1, cpuBlock: 1, react: 0, help: 1, cut: 0, mateD: 1, lose: 1, ankle: 0, steal: 0, foul: 1, autoD: false, sw: "poss", sta: 1, spd: 1, drive: 0, tip: 0,
-    reb: { 1: 0.25, 3: 0.22, 5: 0.06 }, street: { 1: { make: 1.02, cpuMake: 0.88 }, 3: { make: 1.02, cpuMake: 0.92 } } },
+  rookie: { id: "rookie", name: "ROOKIE", green: 1, contest: 0.9, make: 0.97, ft: 1.06, cpuMake: 0.82, cpuSteal: 0.4, cpuBlock: 0.5, react: 6, help: 0.6, cut: 0.1, mateD: 1.4, lose: 0.3, ankle: 0.06, steal: 0.05, foul: 0.5, autoD: true, sw: "mark", sta: 0.6, spd: 1.06, drive: 0.2, tip: 0.1 },
+  pro: { id: "pro", name: "PRO", green: 1, contest: 0.95, make: 0.98, ft: 1.03, cpuMake: 0.87, cpuSteal: 0.65, cpuBlock: 0.8, react: 3, help: 0.8, cut: 0.06, mateD: 1.2, lose: 0.6, ankle: 0.03, steal: 0.025, foul: 0.75, autoD: true, sw: "mark", sta: 0.8, spd: 1.03, drive: 0.1, tip: 0.05 },
+  allstar: { id: "allstar", name: "ALL-STAR", green: 1, contest: 1, make: 1, ft: 1, cpuMake: 0.91, cpuSteal: 0.75, cpuBlock: 0.9, react: 1, help: 0.85, cut: 0.03, mateD: 1.12, lose: 0.75, ankle: 0.01, steal: 0.01, foul: 0.9, autoD: true, sw: "near", sta: 0.9, spd: 1, drive: 0.05, tip: 0 },
+  hof: { id: "hof", name: "HALL OF FAME", green: 0, contest: 1, make: 1, ft: 1, cpuMake: 0.95, cpuSteal: 1, cpuBlock: 1, react: 0, help: 1, cut: 0, mateD: 1, lose: 1, ankle: 0, steal: 0, foul: 1, autoD: false, sw: "poss", sta: 1, spd: 1, drive: 0, tip: 0 },
 };
 // the game as rated, every dial at 1: what a CPU v CPU game plays (and v2's game without EASY MODE)
 const NEUTRAL = { id: "rated", green: 0, contest: 1, make: 1, ft: 1, cpuMake: 1, cpuSteal: 1, cpuBlock: 1, react: 0, help: 1, cut: 0, mateD: 1, lose: 1, ankle: 0, steal: 0, foul: 1, autoD: false, sw: "near", sta: 1, spd: 1, drive: 0, tip: 0 };
@@ -172,48 +137,41 @@ export const levelOf = (cfg = {}) => (LEVELS[cfg.level] ? cfg.level : cfg.assist
 const lv = (st) => st.lv;
 const you = (st, t) => t === 0 && !st.cfg.auto;
 
-// cfg: {mode: "5v5" | "3v3" | "1v1" (MODES), fmt: "quarters" | "to21" (5v5; a half court plays
-// "street"), to: 21 | 11 and mitt (make-it-take-it) on a half court, shot: 24 | 14, level (LEVELS; old
-// records: assist), home: [[key, name, r, arch?, pos?, hand?] x n], away, auto (team 0 played by the
-// CPU too: the checks and the attract mode)}. Rows are taken in the order given (the page sorts each
-// side best first: the best brings the ball up).
+// cfg: {fmt: "quarters" | "to21", shot: 24 | 14, level (LEVELS; old records: assist), home: [[key, name, r, arch?] x 5], away,
+// auto (team 0 played by the CPU too: the checks and the attract mode)}. Rows are taken in the
+// order given (the page sorts each five best first: the best brings the ball up).
 export function newGame(seed = 1, cfg = {}) {
-  const mode = MODES[cfg.mode] ? cfg.mode : "5v5", M = MODES[mode], n = M.n, half = M.half;
-  const fmt = half ? "street" : FORMATS[cfg.fmt] && cfg.fmt !== "street" ? cfg.fmt : "quarters";
+  const fmt = FORMATS[cfg.fmt] ? cfg.fmt : "quarters";
   const shot = SHOT_CLOCKS.includes(cfg.shot) ? cfg.shot : 24;
-  const to = half ? (STREET_TO.includes(cfg.to) ? cfg.to : 21) : FORMATS[fmt].target;
-  const rows = (r) => { const a = (Array.isArray(r) ? r : []).slice(0, n); while (a.length < n) a.push([`stand-in-${a.length}`, "A STAND-IN", 40]); return a; };
+  const rows = (r) => { const a = (Array.isArray(r) ? r : []).slice(0, 5); while (a.length < 5) a.push([`stand-in-${a.length}`, "A STAND-IN", 40]); return a; };
   const st = {
-    v: VERSION, seed: seed >>> 0, rng: seed | 0, frame: 0, n, half, target: to, clear: -1,
-    cfg: { mode, fmt, shot, level: levelOf(cfg), auto: Boolean(cfg.auto), ...(half ? { to, mitt: Boolean(cfg.mitt) } : {}) },
-    p: [...rows(cfg.home).map((r, i) => mkPlayer(0, i, r, n, half)), ...rows(cfg.away).map((r, i) => mkPlayer(1, i, r, n, half))],
+    v: VERSION, seed: seed >>> 0, rng: seed | 0, frame: 0,
+    cfg: { fmt, shot, level: levelOf(cfg), auto: Boolean(cfg.auto) },
+    p: [...rows(cfg.home).map((r, i) => mkPlayer(0, i, r)), ...rows(cfg.away).map((r, i) => mkPlayer(1, i, r))],
     ball: { st: "dead", own: -1, x: 0, y: C.cy, z: 1, vx: 0, vy: 0, vz: 0, f: 0, from: -1, to: -1, made: false, pts: 0, T: 0, kind: "", rim: false, air: false, sx: 0, sy: 0, fouled: null, pass: "", alley: false },
     phase: "tip", t: 0, deadFor: 0, after: null, afterTeam: -1, spot: null,
     q: 1, clock: FORMATS[fmt].len * HZ, shot: shot * HZ, score: [0, 0], poss: -1, tipWinner: -1, lastTouch: -1,
-    ctl: 0, ctlFor: null, lastRel: null, mask: 0, prev: 0, ev: [], note: null, buzzer: false, reset: null, pts: new Array(2 * n).fill(0),
+    ctl: 0, ctlFor: null, lastRel: null, mask: 0, prev: 0, ev: [], note: null, buzzer: false, reset: null, pts: new Array(10).fill(0),
     fga: [0, 0], fgm: [0, 0], tpa: [0, 0], tpm: [0, 0], rima: [0, 0], rimm: [0, 0], fta: [0, 0], ftm: [0, 0], fouls: [0, 0], tov: [0, 0],
-    tf: [0, 0], mark: Array.from({ length: 2 * n }, (_, g) => (g + n) % (2 * n)), pick: null, help: -1, ft: null, run: [-1, 0], out: [], gest: null, transT: 0,
-    iconOn: false, icons: [], yPend: null, lastCatch: null,
+    tf: [0, 0], mark: [5, 6, 7, 8, 9, 0, 1, 2, 3, 4], pick: null, help: -1, ft: null, run: [-1, 0], out: [], gest: null, transT: 0,
   };
   st.lv = st.cfg.auto ? NEUTRAL : LEVELS[st.cfg.level];
-  if (half) setupCheck(st); else setupTip(st);
+  setupTip(st);
   return st;
 }
 const human = (st, P) => P.t === 0 && !st.cfg.auto && P.i === st.ctl;
 const holder = (st) => (st.ball.st === "held" ? st.p[st.ball.own] : null);
 function say(st, k, P = null, extra = {}) { st.ev.push(k); st.note = { k, g: P ? P.g : -1, team: P ? P.t : -1, frame: st.frame, ...extra }; }
-// the rim a player's side attacks (both sides attack +x on a half court), and his distance from it
-const rimOf = (P) => P.d * C.rimX;
-const distRim = (P, Ref = P) => len(rimOf(Ref) - P.x, C.cy - P.y);
-const tdir = (st, t) => (st.half ? 1 : dirOf(t));
+const rimOf = (t) => dirOf(t) * C.rimX;
+const distRim = (P, t = P.t) => len(rimOf(t) - P.x, C.cy - P.y);
 const markerOf = (st, M) => st.p.find(Q => Q.t !== M.t && st.mark[Q.g] === M.g) || null;
 
 // ---- set pieces -------------------------------------------------------------------------------------
 function setupTip(st) {
-  const best = (t) => teamOf(st, t).reduce((a, P) => (P.h > a.h ? P : a));
+  const best = (t) => st.p.slice(t * 5, t * 5 + 5).reduce((a, P) => (P.h > a.h ? P : a));
   st.jumpers = [best(0).g, best(1).g];
   for (const P of st.p) {
-    const d = P.d, J = st.jumpers.includes(P.g);
+    const d = dirOf(P.t), J = st.jumpers.includes(P.g);
     const ring = [[-2.6, 2.2], [-2.6, -2.2], [-5.5, 3.6], [-5.5, -3.6]];
     if (J) { P.x = -d * 0.55; P.y = C.cy; } else {
       const others = st.p.filter(Q => Q.t === P.t && !st.jumpers.includes(Q.g)), k = others.indexOf(P), [ax, ay] = ring[k] || [-4, 0];
@@ -224,23 +182,11 @@ function setupTip(st) {
   Object.assign(st.ball, { st: "tip", own: -1, x: 0, y: C.cy, z: 1.6, vx: 0, vy: 0, vz: 0, f: 0 });
   st.phase = "tip"; st.t = 0; st.tipPress = -1;
 }
-// The street game's first ball: no tip; a coin flip for who checks it first at the top.
-function setupCheck(st) {
-  const first = rnd(st) < 0.5 ? 0 : 1;
-  for (const P of st.p) { P.x = C.rimX - 7 - P.t * 0.8 + P.i * 0.4; P.y = C.cy + (P.i - 1) * 2.5 + (P.t ? 1 : -1) * 0.7; }
-  st.tipWinner = first;
-  dead(st, 40, "inbound", first, TOP_SPOT);
-}
-const teamOf = (st, t) => st.p.filter(P => P.t === t);
 function giveBall(st, P) {
   const b = st.ball;
   Object.assign(b, { st: "held", own: P.g, f: 0, rim: false, air: false, x: P.x, y: P.y, z: 1, vx: 0, vy: 0, vz: 0, fouled: null, alley: false, cnt: null });
-  if (st.poss !== P.t) {
-    st.shot = st.cfg.shot * HZ; st.transT = st.half ? 0 : 150; st.pick = null; for (const Q of st.p) Q.cut = null;
-    // the street rule: a ball won on the floor (a defensive board, a steal) goes back past the arc first
-    if (st.half && st.phase === "live" && st.poss >= 0) st.clear = P.t;
-  }
-  st.poss = P.t; st.lastTouch = P.t; P.hold = 0; P.think = 8; P.caught = st.frame; P.post = false; P.drive = null; st.yPend = null;
+  if (st.poss !== P.t) { st.shot = st.cfg.shot * HZ; st.transT = 150; st.pick = null; for (const Q of st.p) Q.cut = null; }
+  st.poss = P.t; st.lastTouch = P.t; P.hold = 0; P.think = 8; P.caught = st.frame; P.post = false; P.drive = null;
   if (P.t === 0 && !st.cfg.auto) st.ctl = P.i;
   // the man who now has it is closed out on
   const M = markerOf(st, P);
@@ -249,14 +195,13 @@ function giveBall(st, P) {
 // A dead ball: everyone walks to their places for `frames`, then `after` ("inbound" to team T at
 // spot | "ft" | "period" | "over").
 function dead(st, frames, after, T = -1, spot = null) {
-  if (st.half && after === "inbound") spot = TOP_SPOT;
   st.phase = "dead"; st.t = 0; st.deadFor = frames; st.after = after; st.afterTeam = T; st.spot = spot;
   for (const P of st.p) { if (P.act && P.act.kind !== "dunk") P.act = null; P.jumpAt = -1; P.plan = null; P.cut = null; P.charge = 0; P.post = false; }
   st.pick = null; st.help = -1;
   // a man out on fouls leaves now; a stand-in takes his place and his number
   for (const g of st.out) {
     const P = st.p[g], keep = { x: P.x, y: P.y };
-    Object.assign(P, mkPlayer(P.t, P.i, [`stand-in-${g}`, "A STAND-IN", 40], st.n, st.half), keep, { pf: 0 });
+    Object.assign(P, mkPlayer(P.t, P.i, [`stand-in-${g}`, "A STAND-IN", 40]), keep, { pf: 0 });
     say(st, "standin", P);
   }
   st.out = [];
@@ -265,19 +210,16 @@ function dead(st, frames, after, T = -1, spot = null) {
 // The offence's spots, by the five: five out, or four out and one in when the five has a big.
 const FIVE_OUT = [[7.6, 0], [6.0, 4.9], [6.0, -4.9], [1.0, 6.95], [1.0, -6.95]];
 const FOUR_IN = [[7.6, 0], [6.0, 4.9], [6.0, -4.9], [1.0, -6.95], [1.6, 2.3]];
-// three a side: the top and both wings, or the top, a wing and a big on the block; one a side: the top
-const THREE_OUT = [[7.6, 0], [5.6, 5.4], [5.6, -5.4]], TWO_IN = [[7.6, 0], [5.8, -5.4], [1.6, 2.3]];
 function spotOf(st, t, i) {
-  const team = teamOf(st, t), big = team.find(P => P.arch === "big" && P.i !== 0);
-  const [OUT, IN] = st.n >= 5 ? [FIVE_OUT, FOUR_IN] : [THREE_OUT, TWO_IN];
-  const s = st.n === 1 ? OUT[0] : big ? (big.i === i ? IN[IN.length - 1] : IN[team.filter(P => P !== big).indexOf(team[i])]) : OUT[i];
-  const d = tdir(st, t);
+  const team = st.p.slice(t * 5, t * 5 + 5), big = team.find(P => P.arch === "big" && P.i !== 0);
+  const s = big ? (big.i === i ? FOUR_IN[4] : FOUR_IN[team.filter(P => P !== big).indexOf(team[i])]) : FIVE_OUT[i];
+  const d = dirOf(t);
   return [d * (C.rimX - s[0]), C.cy + s[1]];
 }
 function resetSpots(st, T, spot) {
-  const out = new Array(st.p.length);
+  const out = new Array(10);
   if (T < 0) { for (const P of st.p) out[P.g] = [P.x, P.y]; return out; }
-  const d = tdir(st, T), sp = spot || [-d * 11.2, C.cy - 1.5];
+  const d = dirOf(T), sp = spot || [-d * 11.2, C.cy - 1.5];
   const offence = st.p.filter(P => P.t === T);
   let inb = offence[0], bd = 1e9;
   if (spot) for (const P of offence) { const k = len(P.x - sp[0], P.y - sp[1]); if (k < bd) { bd = k; inb = P; } }
@@ -298,7 +240,7 @@ function resetSpots(st, T, spot) {
 // The free-throw line-up: the shooter at the line, two defenders nearest the rim, the shooter's
 // side next, the rest outside the arc.
 function ftSpots(st) {
-  const F = st.ft, S = st.p[F.g], d = S.d, rx = d * C.rimX, out = new Array(st.p.length);
+  const F = st.ft, S = st.p[F.g], d = dirOf(S.t), rx = d * C.rimX, out = new Array(10);
   const lane = (k, s) => [rx - d * (1.1 + k * 0.95), C.cy + s * (C.laneHW + 0.35)];
   const off = st.p.filter(P => P.t === S.t && P !== S), def = st.p.filter(P => P.t !== S.t);
   out[S.g] = [d * C.ftX, C.cy];
@@ -333,7 +275,7 @@ const TIMING = { GREEN: 1.38, "SLIGHTLY EARLY": 0.9, "SLIGHTLY LATE": 0.9, EARLY
 // How contested a shooter at (x, y) is: 0 (alone) .. 1 (smothered), from the nearest defenders'
 // distance, whether they are between him and the rim, their height, their hands, their defence.
 export function contestOf(st, S, x = S.x, y = S.y) {
-  const rx = rimOf(S), r = len(rx - x, C.cy - y) || 1, ux = (rx - x) / r, uy = (C.cy - y) / r;
+  const rx = rimOf(S.t), r = len(rx - x, C.cy - y) || 1, ux = (rx - x) / r, uy = (C.cy - y) / r;
   let c = 0, who = null;
   for (const D of st.p) {
     if (D.t === S.t) continue;
@@ -377,10 +319,7 @@ export function shotProb(st, P, o) {
   if (o.moving) p *= 0.93;
   if (P.sta < 0.5) p *= 0.85 + 0.3 * P.sta;
   if (P.hot) p *= 1.06;
-  // the half court's own ease (a level's street dials: one on one and three on three are harder on a
-  // casual player than five on five, where teammates carry some of it)
-  const SM = (st.half && L.street && L.street[st.n]) || null;
-  p *= mine ? L.make * (SM ? SM.make : 1) : st.cfg.auto ? 1 : L.cpuMake * (SM ? SM.cpuMake : 1);
+  p *= mine ? L.make : st.cfg.auto ? 1 : L.cpuMake;
   return clamp(p, 0.01, green && o.c < 0.3 ? 0.95 : 0.92);
 }
 // The chance of a free throw.
@@ -392,11 +331,10 @@ export function ftProb(st, P, grade) {
 }
 
 function release(st, P, e) {
-  const b = st.ball, d = P.d, rx = d * C.rimX;
+  const b = st.ball, d = dirOf(P.t), rx = d * C.rimX;
   if (b.st !== "held" || b.own !== P.g) { P.act = null; return; }
   const r = len(rx - P.x, C.cy - P.y), kind = kindAt(r, P.act?.post);
-  if (st.half && st.clear === P.t) { P.act = { kind: "follow", f: 0 }; noClear(st, P); return; }
-  const three = isThree(P.x, P.y, d), pts = st.half ? (three ? 2 : 1) : three ? 3 : 2;
+  const three = isThree(P.x, P.y, d), pts = three ? 3 : 2;
   const grade = gradeOf(e, greenOf(P, kind, human(st, P) ? lv(st).green : 0));
   const { c, D } = contestOf(st, P);
   const a = P.act || {};
@@ -433,13 +371,13 @@ function release(st, P, e) {
   if (fouled) foulCall(st, st.p[fouled.g], P, "shooting");
 }
 function countFga(st, P, pts, r) {
-  st.fga[P.t]++; if (pts === longPts(st)) st.tpa[P.t]++; if (r < 1.9) st.rima[P.t]++;
+  st.fga[P.t]++; if (pts === 3) st.tpa[P.t]++; if (r < 1.9) st.rima[P.t]++;
   st.ball.cnt = { pts, rim: r < 1.9 };
 }
 
 // Near the rim: a dunk for a dunker with a lane (or going hard, RT), else a layup (the jump, timed).
 function laneToRim(st, P) {
-  const rx = rimOf(P), ax = rx - P.x, ay = C.cy - P.y, L2 = ax * ax + ay * ay || 1;
+  const rx = rimOf(P.t), ax = rx - P.x, ay = C.cy - P.y, L2 = ax * ax + ay * ay || 1;
   for (const D of st.p) {
     if (D.t === P.t || D.stumble > 0) continue;
     const u = clamp(((D.x - P.x) * ax + (D.y - P.y) * ay) / L2, 0, 1.15), px = P.x + ax * u - D.x, py = P.y + ay * u - D.y;
@@ -448,7 +386,7 @@ function laneToRim(st, P) {
   return true;
 }
 function startShot(st, P, hard = false) {
-  const d = P.d, r = len(d * C.rimX - P.x, C.cy - P.y);
+  const d = dirOf(P.t), r = len(d * C.rimX - P.x, C.cy - P.y);
   P.face = d;
   if (P.dunker && r < 2.9 && !P.post && (laneToRim(st, P) || hard)) {
     P.act = { kind: "dunk", f: 0, x0: P.x, y0: P.y };
@@ -468,7 +406,7 @@ function startShot(st, P, hard = false) {
   for (const Q of st.p) if (Q.t !== P.t && len(Q.x - P.x, Q.y - P.y) < 2.6) Q.hands = 40;
 }
 function dunkStep(st, P) {
-  const a = P.act, d = P.d, tx = d * (C.rimX - 0.45), ty = C.cy, b = st.ball;
+  const a = P.act, d = dirOf(P.t), tx = d * (C.rimX - 0.45), ty = C.cy, b = st.ball;
   a.f++;
   const k = Math.min(1, a.f / 16);
   P.x = a.x0 + (tx - a.x0) * k; P.y = a.y0 + (ty - a.y0) * k;
@@ -489,31 +427,20 @@ function dunkStep(st, P) {
       else if (u < pBlock + pFoul + pStrip) { stripped(st, D, P); a.blocked = true; return; }
     }
   }
-  if (a.f === 12 && st.half && st.clear === P.t && b.own === P.g) { noClear(st, P); a.blocked = true; return; }
   if (a.f === 16 && !a.blocked && b.own === P.g) {
     const p = a.fouled != null ? 0.45 + 0.35 * P.S.dunk : a.contested ? 0.72 + 0.15 * P.S.dunk : 0.95 + 0.04 * P.S.dunk;
     st.lastTouch = P.t;
     const fouled = a.fouled != null ? { g: a.fouled } : null;
-    Object.assign(b, { st: "shot", own: -1, from: P.g, f: 0, kind: "dunk", pts: st.half ? 1 : 2, made: rnd(st) < p, rim: false, air: false, T: 4, sx: a.x0, sy: a.y0, x: d * C.rimX - d * 0.15, y: C.cy, z: C.rimZ + 0.35, vx: d * 0.4, vy: 0, vz: -2.5, fouled });
-    if (!fouled) countFga(st, P, st.half ? 1 : 2, 0.5);
+    Object.assign(b, { st: "shot", own: -1, from: P.g, f: 0, kind: "dunk", pts: 2, made: rnd(st) < p, rim: false, air: false, T: 4, sx: a.x0, sy: a.y0, x: d * C.rimX - d * 0.15, y: C.cy, z: C.rimZ + 0.35, vx: d * 0.4, vy: 0, vz: -2.5, fouled });
+    if (!fouled) countFga(st, P, 2, 0.5);
     say(st, "slam", P);
     if (fouled) foulCall(st, st.p[fouled.g], P, "shooting");
   }
   if (a.f >= 38) { P.act = null; P.z = 0; }
 }
-// a shot from past the arc: three, or two on the street
-const longPts = (st) => (st.half ? 2 : 3);
-// The street rule broken: a shot by a side that has not taken the ball back past the arc. The ball
-// goes over, checked at the top.
-function noClear(st, P) {
-  const b = st.ball;
-  b.st = "dead"; b.own = -1; st.tov[P.t]++; st.clear = -1;
-  say(st, "noclear", P);
-  dead(st, 70, "inbound", 1 - P.t, TOP_SPOT);
-}
 function blocked(st, D, S) {
-  const b = st.ball, d = S.d;
-  if (b.st === "shot" && !b.fouled) { /* the attempt stands */ } else if (b.st === "held") countFga(st, S, st.half ? 1 : 2, 0.5);
+  const b = st.ball, d = dirOf(S.t);
+  if (b.st === "shot" && !b.fouled) { /* the attempt stands */ } else if (b.st === "held") countFga(st, S, 2, 0.5);
   Object.assign(b, { st: "loose", own: -1, f: 0, rim: false, fouled: null, x: b.x, y: b.y, z: Math.max(1.5, b.z), vx: -d * (2.5 + rnd(st) * 2), vy: (rnd(st) - 0.5) * 5, vz: 1.5 + rnd(st) * 1.5 });
   st.lastTouch = D.t;
   if (S.act) S.act = { kind: "follow", f: 0 };
@@ -542,8 +469,6 @@ function foulCall(st, F, V, kind) {
   const b = st.ball;
   if (b.st === "held" && b.own >= 0) { const H = st.p[b.own]; if (H.act && H.act.kind !== "dunk") H.act = null; }
   b.st = "dead"; b.own = -1;
-  // the street: no free throws, no bonus; the ball back to the fouled side (a charge: over), checked
-  if (st.half) { if (kind === "charge") st.tov[F.t]++; dead(st, 80, "inbound", kind === "charge" ? 1 - F.t : V.t, TOP_SPOT); return; }
   if (kind === "charge") { st.tov[F.t]++; dead(st, 80, "inbound", 1 - F.t, sideSpot(F.x)); return; }
   if (st.tf[F.t] > Fm.bonus) { st.ev.push("bonus"); toLine(st, V, 2, 90); return; }
   const sc = Math.min(st.cfg.shot, 14) * HZ;
@@ -570,52 +495,24 @@ function passTarget(st, P, m) {
   }
   return best;
 }
-// The pass's speed (m/s along the floor), by type and distance: a longer pass is thrown harder, a
-// better passer throws it crisper; a bounce pass is a little slower, a lob much slower.
-export function passSpeed(P, kind, dist) {
-  const s = clamp(8.5 + 0.5 * dist, 9, 15.5) * (0.9 + 0.1 * P.k + 0.06 * P.S.pass);
-  return kind === "bounce" ? s * 0.8 : kind === "lob" ? s * 0.58 : s;
-}
-// The lead: when a receiver at (qx, qy) running at (vx, vy) meets a ball thrown from (px, py) at
-// speed sp: the positive root of |q + v t - p| = sp t. -> seconds.
-export function leadTime(px, py, qx, qy, vx, vy, sp) {
-  const dx = qx - px, dy = qy - py, a = vx * vx + vy * vy - sp * sp, b = 2 * (dx * vx + dy * vy), c = dx * dx + dy * dy;
-  const plain = len(dx, dy) / sp;
-  if (a > -1e-6) return plain;   // he outruns the ball: throw it at him
-  const disc = b * b - 4 * a * c;
-  if (disc < 0) return plain;
-  const r = Math.sqrt(disc), t1 = (-b - r) / (2 * a), t2 = (-b + r) / (2 * a);
-  const t = t1 > 0 && t2 > 0 ? Math.min(t1, t2) : t1 > 0 ? t1 : t2 > 0 ? t2 : plain;
-  return Math.min(t, 1.8);
-}
-// kind: "chest" | "bounce" (off the floor two-thirds of the way: slower, harder to pick off) | "lob"
-// (over the top; an alley-oop to a dunker going to the rim). Every pass leads its man: it is thrown to
-// where he will be (his running velocity and the pass's speed), short of the end of his cut and inside
-// the lines, and he keeps running onto it.
-function passTo(st, P, Q, kind = "chest", forceAlley = false) {
-  const b = st.ball, x0 = P.x + P.face * 0.3, y0 = P.y;
-  const vx = Q.ax || 0, vy = Q.ay || 0, rv = len(vx, vy);
-  let sp = passSpeed(P, kind, len(Q.x - x0, Q.y - y0));
-  let t = rv > 0.6 ? leadTime(x0, y0, Q.x, Q.y, vx, vy, sp) : len(Q.x - x0, Q.y - y0) / sp;
-  let tx = Q.x + vx * t, ty = Q.y + vy * t, tz = kind === "bounce" ? 0.85 : 1.2;
-  // a cutter stops at the end of his cut: no further than that
-  if (Q.cut && rv > 0.6) { const left = len(Q.cut.x - Q.x, Q.cut.y - Q.y); if (rv * t > left) { tx = Q.cut.x; ty = Q.cut.y; } }
-  tx = clamp(tx, st.half ? 0.6 : -C.hx + 0.4, C.hx - 0.5); ty = clamp(ty, 0.4, C.w - 0.4);
+// kind: "chest" | "bounce" (slower, harder to pick off) | "lob" (over the top; an alley-oop to a
+// dunker going to the rim)
+function passTo(st, P, Q, kind = "chest") {
+  const b = st.ball, sp = (11 + 4 * P.k) * (kind === "bounce" ? 0.8 : kind === "lob" ? 0.62 : 1);
+  const d0 = len(Q.x - P.x, Q.y - P.y), s = d0 / sp;
+  let tx = Q.x + Q.vx * s * 0.8, ty = Q.y + Q.vy * s * 0.8, tz = 1.25;
   const qr = distRim(Q);
-  const going = (vx * (rimOf(Q) - Q.x) + vy * (C.cy - Q.y)) > 0 || Boolean(Q.cut);
-  const alley = kind === "lob" && Q.dunker && qr < (forceAlley ? 7 : 5.5) && (going || forceAlley);
-  if (alley) { const d = Q.d; tx = d * (C.rimX - 0.7); ty = C.cy + (Q.y - C.cy) * 0.2; tz = 3.3; Q.cut = { x: tx, y: ty, until: st.frame + 90 }; }
-  else if (kind === "lob") tz = 2.1;
-  const dist = len(tx - x0, ty - y0);
-  const T = Math.max(kind === "lob" ? (alley ? 34 : 28) : kind === "bounce" ? 12 : 6, Math.round((dist / sp) * HZ));
-  Object.assign(b, { st: "pass", own: -1, from: P.g, to: Q.g, f: 0, x: x0, y: y0, z: 1.3, pass: kind, alley, T, tx, ty, tz, rv, leg: 1, tried: 0 });
-  if (kind === "bounce") { const k = 0.64, T1 = Math.max(4, Math.round(T * k)); b.T1 = T1; aim(b, x0 + (tx - x0) * k, y0 + (ty - y0) * k, 0, T1); }
-  else aim(b, tx, ty, tz, T);
-  P.hold = 0; P.passF = st.frame; st.lastTouch = P.t;
+  const alley = kind === "lob" && Q.dunker && qr < 5.5 && (Q.vx * (rimOf(Q.t) - Q.x) + Q.vy * (C.cy - Q.y)) > 0;
+  if (alley) { const d = dirOf(Q.t); tx = d * (C.rimX - 0.7); ty = C.cy + (Q.y - C.cy) * 0.2; tz = 3.3; Q.cut = { x: tx, y: ty, until: st.frame + 90 }; }
+  else if (kind === "lob") tz = 2.2;
+  const T = Math.max(kind === "lob" ? 26 : 6, Math.round((len(tx - P.x, ty - P.y) / sp) * HZ));
+  Object.assign(b, { st: "pass", own: -1, from: P.g, to: Q.g, f: 0, x: P.x + P.face * 0.3, y: P.y, z: 1.3, pass: kind, alley, T });
+  aim(b, tx, ty, tz, T);
+  P.hold = 0; st.lastTouch = P.t;
   if (Q.t === 0 && !st.cfg.auto) st.ctl = Q.i;
   // give and go: the passer cuts to the rim when his man is behind him or asleep
   const M = markerOf(st, P);
-  if (!alley && M && !human(st, P) && (st.frame & 1) === 0 && rnd(st) < 0.35 + (you(st, P.t) ? lv(st).cut * 1.5 : 0)) { const d = P.d; P.cut = { x: d * (C.rimX - 1.2), y: C.cy + (P.y > C.cy ? 0.8 : -0.8), until: st.frame + 70 }; }
+  if (!alley && M && !human(st, P) && (st.frame & 1) === 0 && rnd(st) < 0.35 + (you(st, P.t) ? lv(st).cut * 1.5 : 0)) { const d = dirOf(P.t); P.cut = { x: d * (C.rimX - 1.2), y: C.cy + (P.y > C.cy ? 0.8 : -0.8), until: st.frame + 70 }; }
   say(st, alley ? "lob" : "pass", P, { to: Q.g });
 }
 function stealTry(st, P) {
@@ -649,7 +546,7 @@ function startMove(st, P, kind, side = 0) {
   return true;
 }
 function moveStep(st, P) {
-  const a = P.act, d = P.d, rx = rimOf(P), r = len(rx - P.x, C.cy - P.y) || 1, ux = (rx - P.x) / r, uy = (C.cy - P.y) / r;
+  const a = P.act, d = dirOf(P.t), rx = rimOf(P.t), r = len(rx - P.x, C.cy - P.y) || 1, ux = (rx - P.x) / r, uy = (C.cy - P.y) / r;
   a.f++;
   const sp = P.spd;
   let vx = 0, vy = 0;
@@ -709,7 +606,7 @@ function pickStep(st) {
   if (st.phase !== "live" || holder(st) !== H) { if (K.ph !== "roll") { K.ph = "roll"; K.t = 0; } }
   K.t++;
   if (K.ph === "go") {
-    const rx = rimOf(H), r = len(rx - D.x, C.cy - D.y) || 1;
+    const rx = rimOf(H.t), r = len(rx - D.x, C.cy - D.y) || 1;
     K.x = D.x + ((rx - D.x) / r) * 0.15; K.y = D.y + K.side * 0.6;
     if (len(S.x - K.x, S.y - K.y) < 0.35 || K.t > 110) { K.ph = "set"; K.t = 0; K.x = S.x; K.y = S.y; }
   } else if (K.ph === "set") {
@@ -745,14 +642,14 @@ function goTo(P, tx, ty, frac = 1) {
 // The defender's place: between his man and the basket, closer to the man with the ball, sagging
 // into the lane off a man far from it.
 function markSpot(st, P) {
-  const M = st.p[st.mark[P.g]], b = st.ball, rx = M.d * C.rimX;
+  const M = st.p[st.mark[P.g]], b = st.ball, rx = dirOf(M.t) * C.rimX;
   const hasBall = b.st === "held" && b.own === M.g;
   let gap = hasBall ? 1.0 : 1.6;
   const far = len(M.x - b.x, M.y - b.y);
   const r = len(rx - M.x, C.cy - M.y) || 1;
   gap = Math.min(gap, r * 0.6);
   let tx = M.x + ((rx - M.x) / r) * gap, ty = M.y + ((C.cy - M.y) / r) * gap;
-  if (!hasBall && far > 6) { tx += (rx - M.d * 3 - tx) * 0.35; ty += (C.cy - ty) * 0.35; }
+  if (!hasBall && far > 6) { tx += (rx - dirOf(M.t) * 3 - tx) * 0.35; ty += (C.cy - ty) * 0.35; }
   return [tx, ty];
 }
 // Help: the ball is going to the rim past its man; the defender whose own man matters least steps in.
@@ -763,9 +660,9 @@ function helpStep(st) {
   const r = distRim(H);
   if (r > 6) return;
   const D = markerOf(st, H);
-  const beaten = !D || D.stumble > 0 || D.screened > 0 || distRim(D, H) > r + 0.3;
+  const beaten = !D || D.stumble > 0 || D.screened > 0 || distRim(D, H.t) > r + 0.3;
   if (!beaten) return;
-  const rx = rimOf(H), px = H.x + (rx - H.x) * 0.35, py = H.y + (C.cy - H.y) * 0.35;
+  const rx = rimOf(H.t), px = H.x + (rx - H.x) * 0.35, py = H.y + (C.cy - H.y) * 0.35;
   let best = null, bs = 1e9;
   for (const Q of st.p) {
     if (Q.t === H.t || Q === D || Q.stumble > 0) continue;
@@ -785,22 +682,13 @@ function cpuThink(st, P) {
   if (P.jumpAt >= 0 && st.frame >= P.jumpAt) { P.jumpAt = -1; hop(P); return; }
   if (b.st === "held" && b.own === P.g) { carrier(st, P); return; }
   const off = st.poss === P.t;
-  if (b.st === "pass" && b.to === P.g) { runOnto(st, P); return; }
+  if (b.st === "pass" && b.to === P.g) { if (b.alley && P.cut) goTo(P, P.cut.x, P.cut.y); else goTo(P, b.x + b.vx * 0.15, b.y + b.vy * 0.15); return; }
   if (b.st === "loose" || (b.st === "shot" && b.kind !== "dunk")) { rebound(st, P); return; }
   if (off) offBall(st, P);
   else onDefence(st, P);
 }
-// The receiver of a pass keeps running onto it: to the point it was thrown to, at the pace he had
-// (a cutter at his cut's pace), arriving as it does; a pass thrown at a standing man, he steps to it.
-function runOnto(st, P) {
-  const b = st.ball;
-  if (b.alley && P.cut) { goTo(P, P.cut.x, P.cut.y); P.sprint = true; return; }
-  const left = Math.max(1, b.T - b.f), d = len(b.tx - P.x, b.ty - P.y), need = (d / left) * HZ;
-  if (b.rv > 0.6 || d > 0.3) { P.sprint = need > P.spd; goTo(P, b.tx, b.ty, clamp(need / P.spd, 0.35, 1)); }
-  else goTo(P, b.x, b.y, 0.4);
-}
 function offBall(st, P) {
-  const K = st.pick, d = P.d, rx = rimOf(P);
+  const K = st.pick, d = dirOf(P.t), rx = rimOf(P.t);
   if (K && K.s === P.g) {
     if (K.ph === "go") { goTo(P, K.x, K.y); P.sprint = true; return; }
     if (K.ph === "set") return;
@@ -815,7 +703,7 @@ function offBall(st, P) {
   // a backdoor cut when his man is far off him (helping, ball-watching, beaten)
   const M = markerOf(st, P), think = (st.frame + P.g * 7) % 30 === 0;
   if (think && M && st.transT <= 0) {
-    const gap = len(M.x - P.x, M.y - P.y), lane = st.p.filter(Q => Q.t !== P.t && distRim(Q, P) < 2.2).length;
+    const gap = len(M.x - P.x, M.y - P.y), lane = st.p.filter(Q => Q.t !== P.t && distRim(Q, P.t) < 2.2).length;
     const want = (gap > 2.4 ? 0.12 : 0.015) + (you(st, P.t) ? lv(st).cut : 0);
     if (lane < 2 && distRim(P) > 3 && rnd(st) < want) { P.cut = { x: rx - d * 1.1, y: C.cy + (P.y > C.cy ? 0.9 : -0.9), until: st.frame + 60 }; say(st, "cut", P); return; }
   }
@@ -830,7 +718,7 @@ function onDefence(st, P) {
   const H = holder(st), M = st.p[st.mark[P.g]];
   // a help man in the path of a hard drive plants his feet for the charge, now and then
   if (P.charge > 0) { P.vx = 0; P.vy = 0; return; }
-  if (H && H.t !== P.t && st.help === P.g && len(H.vx, H.vy) > 4 && len(H.x - P.x, H.y - P.y) < 2.2 && distRim(P, H) > C.ra + 0.2 && rnd(st) < 0.03 * (0.5 + P.S.intD)) { P.charge = 30; P.still = 12; return; }
+  if (H && H.t !== P.t && st.help === P.g && len(H.vx, H.vy) > 4 && len(H.x - P.x, H.y - P.y) < 2.2 && distRim(P, H.t) > C.ra + 0.2 && rnd(st) < 0.03 * (0.5 + P.S.intD)) { P.charge = 30; P.still = 12; return; }
   if (st.help === P.g && st.helpAt) { const k = H && you(st, H.t) ? lv(st).help : 1; goTo(P, st.helpAt[0], st.helpAt[1], k); P.sprint = k >= 1; P.hands = 10; return; }
   let [tx, ty] = markSpot(st, P);
   if (P.close > 0 && H === M) {
@@ -854,9 +742,9 @@ function hop(P) { if (P.z > 0 || P.stumble > 0) return; P.vz = Math.sqrt(2 * G *
 // each side go for it, a big crashes, the rest get back or space out.
 function rebound(st, P) {
   const b = st.ball, sh = b.st === "shot";
-  const bx = sh ? b.x + (st.p[b.from].d * C.rimX - b.x) * 0.8 : b.x, by = sh ? b.y + (C.cy - b.y) * 0.8 : b.y;
+  const bx = sh ? b.x + (dirOf(st.p[b.from].t) * C.rimX - b.x) * 0.8 : b.x, by = sh ? b.y + (C.cy - b.y) * 0.8 : b.y;
   if (sh && st.poss !== P.t && b.f < b.T - 3) {
-    const M = st.p[st.mark[P.g]], rx = rimOf(M), r = len(rx - M.x, C.cy - M.y) || 1;
+    const M = st.p[st.mark[P.g]], rx = rimOf(M.t), r = len(rx - M.x, C.cy - M.y) || 1;
     if (r < 7) { goTo(P, M.x + ((rx - M.x) / r) * 0.55, M.y + ((C.cy - M.y) / r) * 0.55); P.boxing = 30; return; }
   }
   const mine = st.p.filter(Q => Q.t === P.t).map(Q => [len(Q.x - bx, Q.y - by) - (Q.arch === "big" ? 1 : 0), Q.g]).sort((a, c) => a[0] - c[0] || a[1] - c[1]);
@@ -872,26 +760,17 @@ function rebound(st, P) {
 // The CPU with the ball: drive, pull up, beat its man with a move, call a pick, kick it out to the
 // open man or the cutter, throw the lob, beat the shot clock.
 function expect(st, P, x = P.x, y = P.y) {
-  const d = P.d, r = len(d * C.rimX - x, C.cy - y), three = isThree(x, y, d), kind = kindAt(r);
+  const d = dirOf(P.t), r = len(d * C.rimX - x, C.cy - y), three = isThree(x, y, d), kind = kindAt(r);
   const { c } = contestOf(st, P, x, y);
   if (P.dunker && r < 2.9) return (c < 0.5 ? 0.9 : 0.7) * 2;
-  return shotProb(st, P, { kind, r, grade: "SLIGHTLY LATE", c, three }) * (st.half ? (three ? 2 : 1) * 2 : three ? 3 : 2) * 1.05;
+  return shotProb(st, P, { kind, r, grade: "SLIGHTLY LATE", c, three }) * (three ? 3 : 2) * 1.05;
 }
 function carrier(st, P) {
-  const d = P.d, rx = d * C.rimX, r = len(rx - P.x, C.cy - P.y);
+  const d = dirOf(P.t), rx = d * C.rimX, r = len(rx - P.x, C.cy - P.y);
   P.hold++;
   let D = null, c = 1e9;
   for (const Q of st.p) if (Q.t !== P.t) { const k = len(Q.x - P.x, Q.y - P.y); if (k < c) { c = k; D = Q; } }
-  const thinkNow = P.think-- <= 0;
-  if (thinkNow && st.half && st.clear === P.t) {
-    // the street: take it back past the arc first (or hit a man already out there)
-    P.think = 6;
-    const out = st.p.find(Q => Q.t === P.t && Q !== P && isThree(Q.x, Q.y, 1) && laneClear(st, P, Q));
-    if (out && P.hold > 12 && rnd(st) < 0.35) { passTo(st, P, out, "chest"); return; }
-    const k = (C.three + 1.1) / (r || 1);
-    P.plan = { x: Math.max(0.8, rx + (P.x - rx) * k), y: C.cy + (P.y - C.cy) * k };
-    P.sprint = false;
-  } else if (thinkNow) {
+  if (P.think-- <= 0) {
     P.think = 5 + Math.round((1 - P.k) * 8);
     const urgent = st.shot < 120 || (FORMATS[st.cfg.fmt].periods && st.clock < 120 && st.clock > 0);
     if (P.dunker && r < 2.9 && (laneToRim(st, P) || rnd(st) < 0.3)) { startShot(st, P, true); return; }
@@ -975,7 +854,7 @@ function proStick(st, P, m) {
   return null;
 }
 function resolveGesture(st, P, codes) {
-  const d = P.d;
+  const d = dirOf(P.t);
   if (new Set(codes).size >= 3) return ["spin", codeXY(codes[codes.length - 1])[1] || (P.y < C.cy ? 1 : -1)];
   const [x, y] = codeXY(codes[0]), along = x * d;
   if (y && along < 0) return ["btl", y];
@@ -983,20 +862,6 @@ function resolveGesture(st, P, codes) {
   if (y) return ["cross", y];
   if (along < 0) return ["stepback", 0];
   return ["drive", 0];
-}
-// The alley-oop's man: the teammate nearest the rim who is going there, a dunker first.
-const OOP_TAP = 12;   // frames for the second tap of Y
-function oopTarget(st, P) {
-  let best = null, bs = 1e9;
-  for (const Q of st.p) {
-    if (Q.t !== P.t || Q === P) continue;
-    const r = distRim(Q);
-    if (r > 8) continue;
-    const going = ((Q.ax || 0) * (rimOf(Q) - Q.x) + (Q.ay || 0) * (C.cy - Q.y)) > 0;
-    const sc = r - (Q.cut ? 1.5 : 0) - (going ? 1 : 0) - (Q.dunker ? 1.5 : 0);
-    if (sc < bs) { bs = sc; best = Q; }
-  }
-  return best;
 }
 function humanThink(st, P, m, press) {
   const b = st.ball;
@@ -1013,7 +878,7 @@ function humanThink(st, P, m, press) {
   }
   if (P.act) {
     if (P.act.kind === "jump" && (!(m & BTN.X) || P.act.f >= HOLD_MAX)) release(st, P, P.act.f - TOP);
-    if (P.act?.kind === "move" && P.act.f >= 6 && press & BTN.X && P.act.m === "stepback") { P.act = null; P.sb = 30; startShot(st, P); }
+    if (P.act.kind === "move" && P.act.f >= 6 && press & BTN.X && P.act.m === "stepback") { P.act = null; P.sb = 30; startShot(st, P); }
     return;
   }
   const dx = (m & BTN.RIGHT ? 1 : 0) - (m & BTN.LEFT ? 1 : 0), dy = (m & BTN.UP ? 1 : 0) - (m & BTN.DOWN ? 1 : 0);
@@ -1034,26 +899,11 @@ function humanThink(st, P, m, press) {
       }
       P.ldEnd = st.frame;
     }
-    // ICON PASSING: RB held puts a button over each teammate; that button passes to him (a lead pass)
-    st.iconOn = Boolean(m & BTN.RB) && st.n > 1;
-    if (st.iconOn) {
-      st.icons = teamOf(st, P.t).filter(Q => Q !== P).map((Q, k) => ({ g: Q.g, b: ICONS[k] }));
-      st.yPend = null;
-      for (const ic of st.icons) if (press & BTN[ic.b]) { passTo(st, P, st.p[ic.g], "chest"); say(st, "iconpass", P, { to: ic.g }); return; }
-    } else {
-      const gst = proStick(st, P, m) || (press & BTN.SPIN ? ["spin", dy || (P.y < C.cy ? 1 : -1)] : null);
-      if (gst && !P.post) { if (startMove(st, P, gst[0], gst[1])) return; }
-      // Y once: a lob toward the stick (after a beat, in case a second tap is coming); Y twice: the
-      // alley-oop to the cutter nearest the rim
-      if (st.yPend && st.frame - st.yPend.f > OOP_TAP) { const Q = passTarget(st, P, st.yPend.m); st.yPend = null; if (Q) { passTo(st, P, Q, "lob"); return; } }
-      if (press & BTN.X) { st.yPend = null; startShot(st, P, Boolean(m & BTN.RT)); return; }
-      if (press & BTN.Y) {
-        if (st.yPend) { st.yPend = null; const Q = oopTarget(st, P); if (Q) { passTo(st, P, Q, "lob", true); return; } }
-        else { st.yPend = { f: st.frame, m }; const Q = oopTarget(st, P); if (Q && !Q.cut && !human(st, Q)) Q.cut = { x: Q.d * (C.rimX - 1.0), y: C.cy + (Q.y > C.cy ? 0.7 : -0.7), until: st.frame + 75 }; }
-      }
-      if (press & (BTN.A | BTN.B) && st.n > 1) { st.yPend = null; const Q = passTarget(st, P, m); if (Q) passTo(st, P, Q, press & BTN.B ? "bounce" : "chest"); return; }
-      if (press & BTN.LB) callPick(st, P);
-    }
+    const gst = proStick(st, P, m) || (press & BTN.SPIN ? ["spin", dy || (P.y < C.cy ? 1 : -1)] : null);
+    if (gst && !P.post) { if (startMove(st, P, gst[0], gst[1])) return; }
+    if (press & BTN.X) { startShot(st, P, Boolean(m & BTN.RT)); return; }
+    if (press & (BTN.A | BTN.B | BTN.Y)) { const Q = passTarget(st, P, m); if (Q) passTo(st, P, Q, press & BTN.Y ? "lob" : press & BTN.B ? "bounce" : "chest"); return; }
+    if (press & BTN.LB) callPick(st, P);
   } else { st.gest = null; P.post = false; }
   if (dx || dy) {
     const n = dx && dy ? 0.70710678 : 1;
@@ -1064,14 +914,14 @@ function humanThink(st, P, m, press) {
   if (has) {
     if (P.post) {
       // backing down: toward the rim, shoulder into the man
-      const rx = rimOf(P), r = distRim(P) || 1, D = markerOf(st, P);
+      const rx = rimOf(P.t), r = distRim(P) || 1, D = markerOf(st, P);
       if (D && len(D.x - P.x, D.y - P.y) < 0.9) { const push = 0.35 * clamp(0.5 + (P.h - D.h) * 2 + (P.S.close - D.S.intD) * 0.5, 0.1, 1); D.x += ((rx - P.x) / r) * push * DT * 3; D.y += ((C.cy - P.y) / r) * push * DT * 3; }
-      P.face = -P.d;
+      P.face = -dirOf(P.t);
     }
     return;
   }
   // a pass coming to you: go and meet it unless you steer; on defence the easy assist guards for you
-  if (!dx && !dy && b.st === "pass" && b.to === P.g) runOnto(st, P);
+  if (!dx && !dy && b.st === "pass" && b.to === P.g) { if (b.alley && P.cut) goTo(P, P.cut.x, P.cut.y); else goTo(P, b.x + b.vx * 0.15, b.y + b.vy * 0.15); }
   else if (!dx && !dy && lv(st).autoD && st.poss === 1 && b.st === "held") { const [tx, ty] = markSpot(st, P); goTo(P, tx, ty); }
   if (st.poss === 1 || b.st === "loose") {
     P.intense = Boolean(m & BTN.LT) && P.sta > 0.05;
@@ -1094,7 +944,7 @@ function ftStep(st) {
   const F = st.ft, S = st.p[F.g], b = st.ball;
   F.t++;
   if (b.st === "held") {
-    b.x = S.x + S.d * 0.3; b.y = S.y; b.z = S.act?.kind === "ftshot" ? 1.2 + Math.min(1, S.act.f / FT_TOP) * 1.2 : 1.0;
+    b.x = S.x + dirOf(S.t) * 0.3; b.y = S.y; b.z = S.act?.kind === "ftshot" ? 1.2 + Math.min(1, S.act.f / FT_TOP) * 1.2 : 1.0;
     if (S.act?.kind === "ftshot") { S.act.f++; if (S.act.f > FT_TOP + 30) ftRelease(st, S, S.act.f - FT_TOP); }
     else if (!human(st, S) && F.t === 50) S.act = { kind: "ftshot", f: 0, rel: clamp(Math.round(FT_TOP + gauss(st) * (3 + 6 * (1 - S.S.ft))), 4, FT_TOP + 30) };
     if (S.act?.kind === "ftshot" && S.act.rel >= 0 && S.act.f >= S.act.rel) ftRelease(st, S, S.act.f - FT_TOP);
@@ -1107,7 +957,7 @@ function ftStep(st) {
   }
 }
 function ftRelease(st, S, e) {
-  const b = st.ball, d = S.d, rx = d * C.rimX;
+  const b = st.ball, d = dirOf(S.t), rx = d * C.rimX;
   const grade = gradeOf(e, greenOf(S, "ft", human(st, S) ? lv(st).green : 0));
   const p = ftProb(st, S, grade), made = rnd(st) < p;
   S.act = null;
@@ -1119,11 +969,12 @@ function ftRelease(st, S, e) {
   say(st, "ftshot", S, { grade });
 }
 function ftLand(st, S, made, violation = false) {
-  const F = st.ft, b = st.ball, d = S.d;
+  const F = st.ft, b = st.ball, d = dirOf(S.t);
   F.k++; F.res.push(made);
   if (made) { st.score[S.t]++; st.pts[S.g]++; st.ftm[S.t]++; say(st, "ftmade", S, { k: F.k, n: F.n }); }
   else say(st, violation ? "ftviolation" : "ftmiss", S, { k: F.k, n: F.n });
-  if (st.target && st.score[S.t] >= st.target) { st.ft = null; b.st = "dead"; dead(st, 150, "over"); return; }
+  const Fm = FORMATS[st.cfg.fmt];
+  if (Fm.target && st.score[S.t] >= Fm.target) { st.ft = null; b.st = "dead"; dead(st, 150, "over"); return; }
   if (F.k < F.n) { Object.assign(b, { st: "held", own: S.g, f: 0 }); F.t = 0; return; }
   st.ft = null;
   if (made || violation) { b.st = "through"; Object.assign(b, { x: d * C.rimX, y: C.cy, z: C.rimZ, vx: 0, vy: 0, vz: -1.5 }); if (violation) b.st = "dead"; endOrInbound(st, 1 - S.t); return; }
@@ -1137,7 +988,7 @@ function endOrInbound(st, T) {
 }
 
 // ---- the rules ------------------------------------------------------------------------------------
-const inBounds = (st, x, y) => (st.half ? x >= 0 && x <= C.hx : Math.abs(x) <= C.hx) && y >= 0 && y <= C.w;
+const inBounds = (x, y) => Math.abs(x) <= C.hx && y >= 0 && y <= C.w;
 function turnover(st, k, P, x, y) {
   const T = 1 - (P ? P.t : st.lastTouch);
   const sp = [clamp(x, -C.hx + 0.4, C.hx - 0.4), clamp(y, 0.3, C.w - 0.3)];
@@ -1149,17 +1000,16 @@ function turnover(st, k, P, x, y) {
 function scored(st, S, pts) {
   st.score[S.t] += pts; st.pts[S.g] += pts;
   const cnt = st.ball.cnt;
-  if (st.ball.fouled) { st.fga[S.t]++; if (pts === longPts(st) && (!st.half || st.ball.kind === "jump")) st.tpa[S.t]++; if (st.ball.kind === "dunk" || st.ball.kind === "lay") st.rima[S.t]++; }
-  st.fgm[S.t]++; if (pts === longPts(st) && (!st.half || st.ball.kind === "jump")) st.tpm[S.t]++;
+  if (st.ball.fouled) { st.fga[S.t]++; if (pts === 3) st.tpa[S.t]++; if (st.ball.kind === "dunk" || st.ball.kind === "lay") st.rima[S.t]++; }
+  st.fgm[S.t]++; if (pts === 3) st.tpm[S.t]++;
   if ((cnt && cnt.rim) || (st.ball.fouled && (st.ball.kind === "dunk" || st.ball.kind === "lay"))) st.rimm[S.t]++;
   // the run, and the hot hand
   if (st.run[0] === S.t) st.run[1] += pts; else st.run = [S.t, pts];
   S.streak = Math.max(0, S.streak) + 1;
   if (S.streak >= 3 && !S.hot) { S.hot = true; st.ev.push("hot"); }
-  say(st, st.ball.kind === "dunk" ? "dunk" : pts === longPts(st) && st.ball.kind === "jump" ? (st.half ? "streettwo" : "three") : st.half ? "one" : "two", S, { pts, run: st.run[1], andone: Boolean(st.ball.fouled) });
-  if (st.target && st.score[S.t] >= st.target) { st.ball.st = "dead"; dead(st, 150, "over"); return; }
-  // the street: the ball to the side scored on, or (make-it-take-it, or an and-one) back to the scorer
-  if (st.half) { const T = st.cfg.mitt || st.ball.fouled ? S.t : 1 - S.t; st.ball.fouled = null; dead(st, 75, "inbound", T, TOP_SPOT); st.ball.st = "through"; return; }
+  say(st, st.ball.kind === "dunk" ? "dunk" : pts === 3 ? "three" : "two", S, { pts, run: st.run[1], andone: Boolean(st.ball.fouled) });
+  const F = FORMATS[st.cfg.fmt];
+  if (F.target && st.score[S.t] >= F.target) { st.ball.st = "dead"; dead(st, 150, "over"); return; }
   if (st.ball.fouled) { const sh = st.ball.fouled; st.ball.st = "through"; st.ev.push("andone"); toLine(st, S, 1, 90); st.ball.fouled = null; void sh; return; }
   if (st.buzzer) { endPeriod(st); return; }
   dead(st, 75, "inbound", 1 - S.t, null);
@@ -1193,37 +1043,24 @@ function ballStep(st) {
   }
   if (b.st === "pass") {
     flight(b);
-    // the bounce: off the floor, up into his hands
-    if (b.pass === "bounce" && b.leg === 1 && (b.z <= 0 || b.f >= b.T1)) { b.z = Math.max(0.02, b.z); b.leg = 2; aim(b, b.tx, b.ty, b.tz, Math.max(2, b.T - b.f)); st.ev.push("bounce"); }
     const from = st.p[b.from];
-    // a defender in the lane gets one go at it: a deflection (loose) or a steal; a bounce pass is
-    // harder to get a hand on, a lob only by a tall man in the air
+    // a defender in the lane can pick it off (a lob only by a tall man in the air)
     for (const O of st.p) {
-      if (O.t === from.t || O.stumble > 0 || b.tried & (1 << O.g)) continue;
-      const reach = b.pass === "lob" ? O.z + O.h + 0.4 : 2.3 + O.z, k = len(O.x - b.x, O.y - b.y), arm = 0.5 + 0.2 * O.S.steal;
-      if (k > arm || b.z > reach || b.f < 4) continue;
-      b.tried |= 1 << O.g;
-      const p = (0.12 + 0.24 * O.S.steal) * (1 - 0.5 * k / arm) * (b.pass === "bounce" ? 0.6 : b.pass === "lob" ? 0.7 : 1) * (you(st, from.t) ? lv(st).cpuSteal : 1);
-      if (rnd(st) >= p) continue;
-      st.tov[from.t]++;
-      if (rnd(st) < 0.4 + 0.35 * O.S.steal) { giveBall(st, O); say(st, "intercept", O); return; }
-      Object.assign(b, { st: "loose", own: -1, f: 0, rim: false, alley: false, vx: b.vx * -0.25 + (rnd(st) - 0.5) * 4, vy: b.vy * -0.25 + (rnd(st) - 0.5) * 4, vz: 1 + rnd(st) * 1.5 });
-      st.lastTouch = O.t; say(st, "deflect", O);
-      return;
+      if (O.t === from.t || O.stumble > 0) continue;
+      const reach = b.pass === "lob" ? O.z + O.h + 0.4 : 2.3 + O.z;
+      if (len(O.x - b.x, O.y - b.y) < 0.55 && b.z < reach && rnd(st) < (0.06 + 0.12 * O.S.steal) * (b.pass === "bounce" ? 0.6 : 1) * (you(st, from.t) ? lv(st).cpuSteal : 1)) { st.tov[from.t]++; giveBall(st, O); say(st, "intercept", O); return; }
     }
     for (const Q of st.p) {
       if (Q.t !== from.t || Q.g === b.from) continue;
-      const tgt = Q.g === b.to, k = len(Q.x - b.x, Q.y - b.y);
-      const radius = tgt ? (b.alley ? 1.1 : b.f >= b.T - 1 ? 0.95 : 0.5) : 0.4;
-      if (k < radius && b.z < (b.alley ? 3.9 : 2.6) + Q.z && (!b.alley || b.f >= b.T - 6) && (b.pass !== "bounce" || b.leg === 2)) {
+      const tgt = Q.g === b.to;
+      if (len(Q.x - b.x, Q.y - b.y) < (tgt ? (b.alley ? 1.1 : 0.75) : 0.4) && b.z < (b.alley ? 3.9 : 2.6) + Q.z && (!b.alley || b.f >= b.T - 6)) {
         const alley = b.alley && tgt && b.z > 2.2;
-        if (tgt) st.lastCatch = { g: Q.g, d: k, miss: len(Q.x - b.tx, Q.y - b.ty), v: len(Q.ax || 0, Q.ay || 0), f: b.f, T: b.T, kind: b.pass, frame: st.frame };
         giveBall(st, Q);
         if (alley) { Q.act = { kind: "dunk", f: 6, x0: Q.x, y0: Q.y }; Q.cut = null; say(st, "alleyoop", Q, { from: from.g }); }
         return;
       }
     }
-    if ((b.z <= 0 && (b.pass !== "bounce" || b.leg === 2)) || b.f > PASS_MAX) { if (b.alley) st.tov[from.t]++; loose(st); }
+    if (b.z <= 0 || b.f > PASS_MAX) { if (b.alley) st.tov[from.t]++; loose(st); }
     return;
   }
   if (b.st === "shot") {
@@ -1241,16 +1078,16 @@ function ballStep(st) {
     if (b.f >= b.T) {
       const S = st.p[b.from];
       if (b.made) {
-        const d = S.d;
+        const d = dirOf(S.t);
         Object.assign(b, { x: d * C.rimX, y: C.cy, z: C.rimZ, vx: 0, vy: 0, vz: -1.5 });
         scored(st, S, b.pts);
         if (b.kind !== "dunk") st.ev.push("swish");
         return;
       }
       S.streak = Math.min(0, S.streak) - 1; if (S.streak <= -2) S.hot = false;
-      if (b.fouled) { const n = b.pts; b.fouled = null; b.st = "dead"; say(st, "miss", S); if (st.half) dead(st, 70, "inbound", S.t, TOP_SPOT); else toLine(st, S, n, 70); return; }
+      if (b.fouled) { const n = b.pts; b.fouled = null; b.st = "dead"; say(st, "miss", S); toLine(st, S, n, 70); return; }
       if (b.air) { say(st, "airball", S); b.st = "loose"; return; }
-      const d = S.d;
+      const d = dirOf(S.t);
       b.vx = -d * (1.2 + rnd(st) * 2.6); b.vy = (rnd(st) - 0.5) * 5; b.vz = 2.0 + rnd(st) * 2.4;
       b.st = "loose"; b.rim = true; st.shot = st.cfg.shot * HZ;
       say(st, b.kind === "dunk" ? "rimout" : "miss", S);
@@ -1264,7 +1101,7 @@ function ballStep(st) {
     if (b.z <= 0) {
       b.z = 0;
       if (b.vz < -0.8) { b.vz = -b.vz * 0.6; b.vx *= 0.85; b.vy *= 0.85; if (wasUp) st.ev.push("bounce"); } else { b.vz = 0; b.vx *= 0.96; b.vy *= 0.96; }
-      if (st.phase === "live" && !inBounds(st, b.x, b.y)) { turnover(st, "oob", null, b.x, b.y); return; }
+      if (st.phase === "live" && !inBounds(b.x, b.y)) { turnover(st, "oob", null, b.x, b.y); return; }
     }
     if (st.phase !== "live") return;
     // the nearest hand within reach takes it; inside position (the defence of a missed shot) and
@@ -1273,9 +1110,8 @@ function ballStep(st) {
     for (const P of st.p) {
       if (P.act?.kind === "jump" || P.act?.kind === "dunk" || P.stumble > 0) continue;
       const k = len(P.x - b.x, P.y - b.y);
-      const ext = you(st, P.t) ? lv(st).reb?.[st.n] || 0 : 0;   // the level's long arms for your side on the glass
-      if (k > 0.85 + ext || b.z >= P.z + P.h + 0.45 + ext * 0.5) continue;
-      const sc = k - ext - (b.rim && P.t !== st.poss ? 0.45 : 0) - 0.4 * (P.h - 2);
+      if (k > 0.85 || b.z >= P.z + P.h + 0.45) continue;
+      const sc = k - (b.rim && P.t !== st.poss ? 0.45 : 0) - 0.4 * (P.h - 2);
       if (sc < bd) { bd = sc; best = P; }
     }
     if (best) {
@@ -1309,7 +1145,7 @@ function contact(st) {
     if (d > 0.62 || (ox * H.vx + oy * H.vy) / (d * v || 1) < 0.65) continue;
     if (st.frame - (H.lastContact || -99) < 45) return;
     H.lastContact = st.frame;
-    const ra = distRim(D, H) < C.ra, set = D.still >= 12 || D.charge > 0 && D.still >= 4;
+    const ra = distRim(D, H.t) < C.ra, set = D.still >= 12 || D.charge > 0 && D.still >= 4;
     const u = rnd(st);
     if (set && !ra) { if (u < (D.charge > 0 ? 0.75 : 0.25)) { foulCall(st, H, D, "charge"); return; } }
     else if (!set) { if (u < 0.2 * (1.2 - D.S.perD * 0.6) * (you(st, D.t) ? lv(st).foul : 1)) { foulCall(st, D, H, "block"); return; } }
@@ -1321,8 +1157,7 @@ function contact(st) {
 
 // ---- one step ---------------------------------------------------------------------------------------
 export function step(st, mask = 0) {
-  st.ev = []; st.iconOn = false;
-  for (const P of st.p) { P.ox = P.x; P.oy = P.y; }
+  st.ev = [];
   const press = mask & ~st.prev;
   st.prev = mask; st.mask = mask; st.frame++;
   if (st.phase === "over") return st;
@@ -1416,7 +1251,7 @@ export function step(st, mask = 0) {
       // sealed off the glass: an attacker behind a defender boxing him out barely gets through
       if (st.ball.st === "shot" || (st.ball.st === "loose" && st.ball.rim)) for (const D of st.p) {
         if (D.t === P.t || !(D.boxing > 0) || st.poss !== P.t) continue;
-        if (len(D.x - P.x, D.y - P.y) < 0.75 && distRim(D, P) < distRim(P)) { P.vx *= 0.35; P.vy *= 0.35; break; }
+        if (len(D.x - P.x, D.y - P.y) < 0.75 && distRim(D, P.t) < distRim(P)) { P.vx *= 0.35; P.vy *= 0.35; break; }
       }
       const moving = P.vx || P.vy;
       let mul = 1;
@@ -1433,7 +1268,7 @@ export function step(st, mask = 0) {
     }
     P.x = clamp(P.x, -C.hx - 1.2, C.hx + 1.2); P.y = clamp(P.y, -1.2, C.w + 1.2);
   }
-  for (let i = 0; i < st.p.length; i++) for (let j = i + 1; j < st.p.length; j++) {
+  for (let i = 0; i < 10; i++) for (let j = i + 1; j < 10; j++) {
     const A = st.p[i], B = st.p[j];
     if (A.act?.kind === "dunk" || B.act?.kind === "dunk") continue;
     const dx = B.x - A.x, dy = B.y - A.y, d2 = dx * dx + dy * dy;
@@ -1443,17 +1278,13 @@ export function step(st, mask = 0) {
   }
   if (st.phase === "live") {
     const H = holder(st);
-    if (H && !human(st, H)) { H.x = clamp(H.x, st.half ? 0.3 : -C.hx + 0.2, C.hx - 0.2); H.y = clamp(H.y, 0.2, C.w - 0.2); }
+    if (H && !human(st, H)) { H.x = clamp(H.x, -C.hx + 0.2, C.hx - 0.2); H.y = clamp(H.y, 0.2, C.w - 0.2); }
   }
-  // how fast each man actually moved this frame (the lead passes read it)
-  for (const P of st.p) { const vx = (P.x - P.ox) * HZ, vy = (P.y - P.oy) * HZ, v = len(vx, vy), k = v > 9 ? 9 / v : 1; P.ax = vx * k; P.ay = vy * k; }
   if (st.phase === "ft") ftStep(st); else ballStep(st);
-  // the street: past the arc with the ball, it is cleared
-  if (st.half && st.clear >= 0 && st.phase === "live") { const H = holder(st); if (H && H.t === st.clear && isThree(H.x, H.y, 1)) { st.clear = -1; st.ev.push("cleared"); } }
 
   if (st.phase === "live") {
     const H = holder(st);
-    if (H && !inBounds(st, H.x, H.y)) turnover(st, "oob", H, H.x, H.y);
+    if (H && !inBounds(H.x, H.y)) turnover(st, "oob", H, H.x, H.y);
     else {
       if (b.st !== "shot" && b.st !== "dead" && b.st !== "through") {
         if (--st.shot <= 0) { const P = H || st.p[st.p.findIndex(Q => Q.t === st.poss)]; turnover(st, "shotclock", P, P.x, P.y); }
@@ -1485,7 +1316,7 @@ export function step(st, mask = 0) {
         giveBall(st, I);
         if (keep) st.shot = sc;
         st.keepShot = false;
-        if (st.half) { st.clear = -1; say(st, "check", I); } else st.ev.push("inbound");
+        st.ev.push("inbound");
       }
     }
   }
@@ -1524,7 +1355,6 @@ export function setUp(st, g, x, y, { shot = null, clock = null } = {}) {
   for (const Q of st.p) { Q.act = null; Q.z = 0; Q.vz = 0; Q.jumpAt = -1; Q.stumble = 0; Q.cool = 0; }
   P.x = x; P.y = y; st.phase = "live"; st.t = 0;
   giveBall(st, P);
-  st.clear = -1;
   P.caught = -999;
   if (shot != null) st.shot = shot;
   if (clock != null) st.clock = clock;

@@ -30,7 +30,7 @@ function blip(freq, dur, type = "square", vol = 0.05, slide = 0, at = 0) {
 }
 // The crowd's answer. mood: calls.js crowdFor ("cheer" | "stand" | "groan"); k: the event; buzzer:
 // the ball was in the air at the buzzer.
-const KIND = { dunk: "roar", three: "cheer", block: "cheer", two: "polite", steal: "thin", intercept: "thin", rimout: "ooh", airball: "groan", shotclock: "groan", ankles: "roar", alleyoop: "roar", ftmade: "polite", ftmiss: "aww" };
+const KIND = { dunk: "roar", three: "cheer", streettwo: "cheer", one: "polite", deflect: "thin", block: "cheer", two: "polite", steal: "thin", intercept: "thin", rimout: "ooh", airball: "groan", shotclock: "groan", ankles: "roar", alleyoop: "roar", ftmade: "polite", ftmiss: "aww" };
 // A boo: low voices on an "oo", sliding down (the shared crowd has none; made here, cheaply).
 function boo() {
   const a = ctx();
@@ -49,7 +49,7 @@ export function crowd(mood, muted, k = null, buzzer = false) {
   if (muted || !mood) return;
   if (mood === "boo") { CROWD.play("quiet"); boo(); return; }
   if (mood === "hush") { CROWD.play("quiet"); return; }
-  const kind = buzzer && (k === "two" || k === "three" || k === "dunk") ? "roar" : KIND[k] || { cheer: "cheer", stand: "polite", groan: "groan" }[mood];
+  const kind = buzzer && (k === "two" || k === "three" || k === "dunk" || k === "one" || k === "streettwo") ? "roar" : KIND[k] || { cheer: "cheer", stand: "polite", groan: "groan" }[mood];
   if (kind) CROWD.play(kind);
 }
 
@@ -70,7 +70,7 @@ export function play(ev, muted) {
     else if (e === "andone") CROWD.play("roar");
     else if (e === "ftset") CROWD.play("quiet");   // the hush at the line
     else if (e === "ftmade") blip(1200, 0.07, "triangle", 0.03, -400);
-    else if (e === "two" || e === "three" || e === "dunk") { blip(660, 0.07, "square", 0.04); blip(990, 0.1, "square", 0.04, 0, 0.08); }
+    else if (e === "two" || e === "three" || e === "dunk" || e === "one" || e === "streettwo") { blip(660, 0.07, "square", 0.04); blip(990, 0.1, "square", 0.04, 0, 0.08); }
     else if (e === "over") [523, 659, 784, 1047].forEach((f, i) => blip(f, 0.12, "square", 0.05, 0, 0.12 * i + 0.2));
   }
 }

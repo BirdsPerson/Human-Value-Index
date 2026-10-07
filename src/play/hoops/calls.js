@@ -30,7 +30,13 @@ const L = {
   ankles: ["{N} IS ON THE FLOOR. THE ANKLES HAVE BEEN REASSIGNED.", "{N} WENT THE WRONG WAY. THE CROWD NOTICED. SO DID WE."],
   lostball: ["{N} LOSES THE HANDLE. THE BALL HAS LEFT THE ARRANGEMENT."],
   strip: ["STRIPPED BY {N} AT THE RIM. THE DUNK IS DENIED A HEARING."],
-  alleyoop: ["ALLEY-OOP TO {N}. THE AIR SPACE WAS CLEARED IN ADVANCE."],
+  alleyoop: ["ALLEY-OOP TO {N}. THE AIR SPACE WAS CLEARED IN ADVANCE.", "{N} CATCHES IT AT THE RIM AND PUTS IT THROUGH. THE LOB WAS PRE-APPROVED."],
+  deflect: ["DEFLECTED BY {N}. THE PASS HAS BEEN INTERRUPTED.", "{N} GETS A HAND ON IT. THE BALL IS NOW EVERYONE'S."],
+  // the street game (3v3, 1v1, the half court)
+  one: ["{N}. ONE. THE STREET COUNTS IN ONES.", "A BUCKET FOR {N}. ONE POINT, FILED."],
+  streettwo: ["{N} FROM BEYOND THE ARC. TWO, ON THE STREET.", "TWO FOR {N}. DISTANCE IS DOUBLED HERE."],
+  noclear: ["{N} DID NOT TAKE IT BACK. THE BASKET IS DISALLOWED. THE ARC IS A BORDER.", "NOT CLEARED. {N} SHOT FROM THE WRONG SIDE OF THE RULES."],
+  check: ["CHECK BALL. {T} AT THE TOP.", "THE BALL IS CHECKED. {T} HAS IT."],
 };
 const KEYS = new Set(Object.keys(L));
 export const CALLED = KEYS;
@@ -50,7 +56,7 @@ export function crowdFor(k, team = -1) {
   if (FOULS.has(k)) return team === 0 ? "boo" : "stand";
   if (k === "ftset") return "hush";
   if (k === "dunk" || k === "three" || k === "block" || k === "ankles" || k === "alleyoop") return "cheer";
-  if (k === "two" || k === "steal" || k === "intercept") return "stand";
+  if (k === "two" || k === "one" || k === "streettwo" || k === "steal" || k === "intercept" || k === "deflect") return "stand";
   if (k === "airball" || k === "shotclock" || k === "rimout") return "groan";
   return null;
 }
