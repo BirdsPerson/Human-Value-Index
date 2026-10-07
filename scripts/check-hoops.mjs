@@ -1,9 +1,9 @@
-// THE COURTS, playable (src/play/hoops/): the engine (engine/, v4, the 2K20-style game), the rosters and the
+// THE COURTS, playable (src/play/hoops/): the engine (engine/, v5, the 2K20-style game), the rosters and the
 // calls, headless.
 //   purity       every file under engine*/ uses no clock, no Math.random, no trig, no DOM, and imports
 //                nothing from outside its engine directory (docs/design/BASKETBALL.md 4.2)
 //   rules        two inside the arc, three outside it and in the corners past 6.71 m; a forced make
-//                adds 2 or 3; the shot clock and stepping out turn the ball over; FIRST TO 21 ends at
+//                adds 2 or 3; the shot clock and stepping out (on purpose: v5 holds the stick in) turn the ball over; FIRST TO 21 ends at
 //                21; four quarters end untied
 //   calibration  CPU v CPU over many games of NBA-like fives: team FG%, 3P%, rim% and FT% inside
 //                realistic bands; an open GREEN three by a good shooter goes in 75%+; a heavily
@@ -19,9 +19,10 @@
 //                the right stick: sideways crossover, back stepback, toward drive, round spin; a
 //                good handler breaks a poor defender's ankles some of the time
 //   determinism  a bot's game replays from {version, seed, cfg, inputLog} to the same result, twice;
-//                a different seed differs; a doctored log does not reproduce; every v1, v2, v3 and v4
-//                record in scripts/fixtures/hoops-v{1,2,3,4}-records.json replays on its frozen sim
-//                (replay.js), and the v4 records on the live sim too while it is v4; a record's camera
+//                a different seed differs; a doctored log does not reproduce; every v1 to v5 record in
+//                scripts/fixtures/hoops-v{1..5}-records.json replays on its frozen sim (replay.js: v1-v4
+//                sim.js, engine-v5/), the v5 records on the live engine too while it is v5, and a v4
+//                tape on the v5 engine is another game (the router matters); a record's camera
 //                (metadata) changes nothing: a tape played under BASELINE replays as under 2K; a one on
 //                one game replays too
 //   hands        (S0, docs/design/BASKETBALL.md 4.8) the stick follows the camera (input.js): in every
@@ -30,10 +31,11 @@
 //                in BASELINE and DRIVE up on the stick runs up the screen (it ran sideways before); the
 //                map is held while the stick is held, kept across a camera cut until the stick is let
 //                go, 30 frames pass or the stick turns 45 degrees, then blended over 6 frames
-//   difficulty   a simulated casual human (noisy release about 100 ms either side of the top, a
-//                quarter-second late on defence, loose passes, random dribble moves, no pro stick),
-//                steering one man a possession like a person, against an equal side, 100 games a
-//                level in each mode (one worker per level and mode): 5v5 wins ROOKIE 65-75%, PRO
+//   difficulty   a simulated casual human (scripts/hoops-bots.mjs: noisy release about 100 ms either
+//                side of the top, a quarter-second late on defence, passes 30 degrees off, random
+//                dribble moves, no pro stick; v5: calls for the throw-in), steering one man a possession
+//                like a person, against an equal side, 400 games a level in each mode (one worker per
+//                level and mode): 5v5 wins ROOKIE 65-75%, PRO
 //                45-55%, ALL-STAR 30-40%, HALL OF FAME 15-25%, shoots 45-50% on ROOKIE, harder levels
 //                shoot worse and turn it over more; 3v3 and 1v1 (the half court) ROOKIE 65-75% and
 //                every level harder than the one before; a CPU v CPU game is the same at every level;
@@ -43,6 +45,19 @@
 //                arcs a metre and more over a chest pass; a defender in the lane gets hands on some;
 //                icon passing (RB + a face button) hits the teammate wearing that button; a double
 //                tap of Y throws the alley-oop to the cutter
+//   S1b (v5)     the possession (docs/design/BASKETBALL.md section 5, measured by scripts/hoops-iq.mjs, which
+//                reads the frozen v4 the same way for the "before"): the handler (BH1/BH2 by the all-five
+//                rule) carries it over half court after a make or a board 95 %+, a big who is not a
+//                handler 3 % or less, on all ten real rosters BH1 is a top-two handler; every make is
+//                followed by a throw-in from behind the end line; no press unless called (5 % or less),
+//                a press when called (90 %+); the pick-up point 7.5-9.5 m from the rim; no CPU holder
+//                steps out, no CPU 8-second / over-and-back / 5-second violation; nobody camps in the lane
+//                (2 % or less); the throw-in (you steer the handler, A calls for it, ROOKIE/PRO throw it
+//                after 3 s, ALL-STAR/HOF call five seconds, "I'm the inbounder"); the violations ladder;
+//                24 and 14 (a miss no longer resets the clock); first to 21 resets the bonus at 7 and
+//                14; a corner crossover stays in; stable icons; RS hands up and RB switch on defence; the
+//                open man at ROOKIE; the casual human steps out 0.2 times a game or less in every mode
+//                and level, and his pass goes to the man he meant 85 %+; a 5v5 game costs 400 ms or less
 //   street       (v4) the half court: ones and twos, the check at the top after a basket (the
 //                scorer's side again under make-it-take-it), a defensive rebound must be taken back
 //                past the arc (a shot before that is a turnover), out at the half line, no free
@@ -63,120 +78,27 @@ const R = await import("../src/play/hoops/roster.js");
 const K = await import("../src/play/hoops/calls.js");
 const { BTN, COURT: C } = S;
 
-// ---- difficulty: a casual human (Scott, 2026-10-06: "the basketball game is way too hard") ---------------
-// Plays the human's man the way a person new to the game does: picks a plan on the catch (drive, a spot
-// to shoot from, or look to pass), reads the OPEN tag but not always, lets go of X about 100 ms either
-// side of the top (sd 6 frames), flicks the right stick at random now and then, passes toward a
-// teammate with his thumb 30 degrees off; on defence chases where the ball was a quarter-second ago,
-// reaches now and then, jumps at shots late, and ball-watches with the stick let go.
-function casualHuman(seed) {
-  const { BTN, COURT: C } = S;
-  let s = seed >>> 0;
-  const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  const g = () => (rnd() + rnd() + rnd() + rnd() - 2) * 1.732;
-  const LAG = 15;                                                   // 250 ms on defence
-  const hist = [];
-  let prev = 0, plan = null, rel = 0, tipAt = -1, ftKey = "", ftRel = 0, rs = 0, rsT = 0, watch = 0, jumped = -99;
-  const stickTo = (P, tx, ty, slop = 0.35) => { const dx = tx - P.x, dy = ty - P.y; let m = 0; if (dx > slop) m |= BTN.RIGHT; else if (dx < -slop) m |= BTN.LEFT; if (dy > slop) m |= BTN.UP; else if (dy < -slop) m |= BTN.DOWN; return m; };
-  const press = (bit) => (prev & bit ? 0 : bit);
-  const out = (m) => { prev = m; return m; };
-  return (st) => {
-    const b = st.ball, P = st.p[st.ctl];
-    hist.push({ x: b.x, y: b.y, st: b.st, own: b.own, ot: b.own >= 0 ? st.p[b.own].t : -1, hx: b.own >= 0 ? st.p[b.own].x : b.x, hy: b.own >= 0 ? st.p[b.own].y : b.y, shooting: b.own >= 0 && st.p[b.own].act?.kind === "jump" });
-    if (hist.length > LAG + 1) hist.shift();
-    const seen = hist[0];
-    if (st.phase === "tip") { if (tipAt < 0) tipAt = S.TIP_JUMP + Math.round(g() * 9); return out(st.t === tipAt ? BTN.Y : 0); }
-    if (st.phase === "ft") {
-      if (!st.ft || st.ft.g !== P.g) return out(0);
-      const key = `${st.ft.g}|${st.frame - st.ft.t}|${st.ft.k}`;
-      if (key !== ftKey) { ftKey = key; ftRel = S.FT_TOP + Math.round(g() * 6); }
-      if (st.ft.t < 40 + (st.ft.k ? 0 : 10)) return out(0);
-      if (P.act?.kind === "ftshot") return out(P.act.f < ftRel - 1 ? BTN.X : 0);
-      return out(st.ball.st === "held" ? press(BTN.X) : 0);
-    }
-    if (st.phase !== "live") { plan = null; return out(0); }
-    const has = b.st === "held" && b.own === P.g, rx = C.rimX;
-    if (has) {
-      if (P.act?.kind === "jump") return out(P.act.f < rel - 1 ? BTN.X : 0);
-      if (P.act) return out(0);
-      if (!plan || plan.g !== P.g || plan.caught !== P.caught) {
-        const u = rnd();
-        const ang = (rnd() - 0.5) * 2.6, dist = rnd() < 0.5 ? 7.6 + rnd() * 0.6 : 4.8 + rnd() * 1.6;
-        plan = { g: P.g, caught: P.caught, kind: u < 0.4 ? "drive" : u < 0.85 || st.n === 1 ? "spot" : "swing", tx: rx - dist * Math.cos(ang), ty: C.cy + dist * Math.sin(ang), patience: 30 + Math.floor(rnd() * 90), passAt: 20 + Math.floor(rnd() * 40), think: 0 };
-      }
-      const r = Math.hypot(rx - P.x, C.cy - P.y), held = P.hold;
-      // the street: take it back past the arc first, as the tip says
-      if (st.half && st.clear === 0) return out(stickTo(P, rx - 8.4, C.cy + (P.y - C.cy) * 0.5));
-      if (rsT > 0) { rsT--; return out(rs); }
-      const shoot = () => { rel = S.TOP + Math.round(g() * 6); return out(BTN.X | (r < 2.6 && rnd() < 0.3 ? BTN.RT : 0)); };
-      if (prev & BTN.X) return out(0);
-      if (st.shot < 100 + rnd() * 60) return shoot();
-      if (r < 1.9 && rnd() < 0.2) return shoot();
-      let D = null, dd = 9;
-      for (const Q of st.p) if (Q.t === 1) { const k = Math.hypot(Q.x - P.x, Q.y - P.y); if (k < dd) { dd = k; D = Q; } }
-      if (dd < 1.6 && rnd() < 0.006) { rs = [BTN.RSU, BTN.RSD, BTN.RSL, BTN.RSR][Math.floor(rnd() * 4)]; rsT = 2; return out(rs); }
-      const c = S.contestOf(st, P).c;
-      if (--plan.think <= 0) {
-        plan.think = 8 + Math.floor(rnd() * 10);
-        const mates = st.p.filter(Q => Q.t === 0 && Q !== P);
-        if (plan.kind === "swing" && held > plan.passAt && mates.length) {
-          const Q = mates[Math.floor(rnd() * mates.length)];
-          const a = Math.atan2(Q.y - P.y, Q.x - P.x) + g() * 0.5, m = stickTo({ x: 0, y: 0 }, Math.cos(a), Math.sin(a), 0.38);
-          plan.kind = rnd() < 0.5 ? "spot" : "drive";
-          return out(press(BTN.A) | m);
-        }
-        if (plan.kind === "spot" && (Math.hypot(plan.tx - P.x, plan.ty - P.y) < 0.9 || held > plan.patience)) {
-          if (c < 0.46 || rnd() < 0.3) return shoot();
-          plan.kind = rnd() < 0.5 || !mates.length ? "drive" : "swing"; plan.passAt = held + 10;
-        }
-        if (plan.kind === "drive" && r < 4.5 && c > 0.66 && rnd() < 0.25) {
-          if (rnd() < 0.5 || !mates.length) return shoot();
-          plan.kind = "swing"; plan.passAt = held;
-        }
-        if (plan.kind === "drive" && r < 3.2 && rnd() < 0.5) return shoot();
-      }
-      const [tx, ty] = plan.kind === "drive" ? [rx - 0.6, C.cy + (P.y > C.cy ? 0.4 : -0.4)] : [plan.tx, plan.ty];
-      let m = stickTo(P, tx, ty);
-      if (rnd() < 0.04) m = [BTN.UP, BTN.DOWN, BTN.LEFT, BTN.RIGHT][Math.floor(rnd() * 4)];
-      if (plan.kind === "drive" && r > 3.5 && P.sta > 0.3) m |= BTN.RT;
-      return out(m);
-    }
-    plan = null;
-    if (b.st === "pass" && b.to === P.g) return out(0);
-    if (st.poss === 0 && b.st === "held") return out(0);
-    if (watch > 0) { watch--; return out(0); }
-    if (rnd() < 0.004) { watch = 30 + Math.floor(rnd() * 40); return out(0); }
-    let m = 0;
-    if (seen.st === "held" && seen.ot === 1) {
-      // between the man and the rim he attacks (-x on the full court, +x on a half court)
-      const orx = st.half ? C.rimX : -C.rimX, od = Math.hypot(orx - seen.hx, C.cy - seen.hy) || 1;
-      const tx = seen.hx + ((orx - seen.hx) / od) * 1.0, ty = seen.hy + ((C.cy - seen.hy) / od) * 1.0;
-      m = stickTo(P, tx, ty, 0.4);
-      const k = Math.hypot(seen.hx - P.x, seen.hy - P.y);
-      if (seen.shooting && k < 2.2 && st.frame - jumped > 40) { jumped = st.frame; return out(m | press(BTN.Y)); }
-      if (k < 1.1 && rnd() < 1 / 45) m |= press(BTN.X);
-      if (k > 4 && P.sta > 0.3) m |= BTN.RT;
-      return out(m);
-    }
-    m = stickTo(P, seen.x, seen.y, 0.3);
-    if (seen.st === "loose" && b.z > 2 && Math.hypot(b.x - P.x, b.y - P.y) < 1 && st.frame - jumped > 30) { jumped = st.frame; m |= press(BTN.Y); }
-    return out(m);
-  };
-}
-const DIFF_N = Number(process.env.HOOPS_DIFF_N) || 100;   // fewer only to iterate; the bands are for 100
+// ---- difficulty: a casual human (scripts/hoops-bots.mjs: the error model, published with the version) ----
+const B = await import("./hoops-bots.mjs");
+const IQ = await import("./hoops-iq.mjs");
+const casualHuman = (seed, stats = null) => B.casualHuman(S, seed, stats);
+const DIFF_N = Number(process.env.HOOPS_DIFF_N) || 400;   // fewer only to iterate; the bands are for N >= 400 (BASKETBALL.md 4.11)
 // equal sides: the same ratings and archetypes, and the human's side alternates between them; three
 // and one a side are drawn from the five in rotation (a guard, a wing, a slasher, a big)
 const five = (p, base) => [[p + "g", "G", base + 6, "guard"], [p + "w", "W", base + 3, "wing"], [p + "s", "S", base, "slasher"], [p + "w2", "W2", base - 2, "wing"], [p + "b", "B", base + 2, "big"]];
 const PICKS = { 1: [[0], [1], [2], [4]], 3: [[0, 1, 4], [0, 2, 3], [1, 2, 4]] };
 function measureLevel(mode, level, n) {
   const size = S.MODES[mode].n;
-  const t = { mode, level, n, w: 0, fga: 0, fgm: 0, tov: 0, pts: 0, opp: 0, ofga: 0, ofgm: 0 };
+  const t = { mode, level, n, w: 0, fga: 0, fgm: 0, tov: 0, pts: 0, opp: 0, ofga: 0, ofgm: 0, stats: {}, viol: {}, cpuViol: 0 };
   for (let k = 0; k < n; k++) {
     const pick = (p, b) => { const all = five(p, b); return size === 5 ? all : PICKS[size][k % PICKS[size].length].map(i => all[i]); };
     const A = pick("x" + k, 74 + (k % 5)), B = pick("y" + k, 74 + (k % 5));
     const st = S.newGame(9100 + k, { mode, level, home: k % 2 ? A : B, away: k % 2 ? B : A });
-    const bot = casualHuman(777 + k * 13);
-    for (let f = 0; st.phase !== "over" && f < 200000; f++) S.step(st, bot(st));
+    const bot = casualHuman(777 + k * 13, t.stats);
+    for (let f = 0; st.phase !== "over" && f < 200000; f++) {
+      S.step(st, bot(st));
+      for (const e of st.ev) if (["eightsec", "backcourt", "threesec", "fivesec"].includes(e)) { if (st.note?.team === 0) t.viol[e] = (t.viol[e] || 0) + 1; else t.cpuViol++; }
+    }
     if (st.score[0] > st.score[1]) t.w++;
     t.fga += st.fga[0]; t.fgm += st.fgm[0]; t.tov += st.tov[0]; t.pts += st.score[0]; t.opp += st.score[1]; t.ofga += st.fga[1]; t.ofgm += st.fgm[1];
   }
@@ -258,15 +180,25 @@ for (const [x, pts] of [[C.rimX - 8.2, 3], [C.rimX - 4.5, 2]]) {
   ok("shot clock");
 }
 {
+  // v5, line awareness: the stick held over the sideline walks him to it and stops him 0.1 m inside
+  const w = S.newGame(10, { home: STARS, away: CELEBS });
+  S.setUp(w, 0, 4, 0.6); clearDefence(w);
+  let wev = [];
+  until(w, s => { wev = wev.concat(s.ev); return s.phase !== "live"; }, BTN.DOWN, 120);
+  assert.equal(w.phase, "live", "the stick over the line does not walk him out");
+  assert.ok(wev.includes("line") && w.p[0].y >= 0.09 && w.p[0].y < 0.2, `he stops on the line, inside it (y ${w.p[0].y.toFixed(2)}) and the LINE cue shows`);
+  // stepping out on purpose (the stick over it with sprint held) is out; the throw-in comes from behind the line
   const st = S.newGame(10, { home: STARS, away: CELEBS });
-  S.setUp(st, 0, -4, 0.6); clearDefence(st);
+  S.setUp(st, 0, 4, 0.6); clearDefence(st);
   let ev = [];
-  until(st, s => { ev = ev.concat(s.ev); return s.phase === "dead"; }, BTN.DOWN, 60);
-  assert.ok(ev.includes("oob"), "walking over the sideline with the ball is out");
-  assert.ok(until(st, s => s.phase === "live", 0, 600));
+  until(st, s => { ev = ev.concat(s.ev); return s.phase === "dead"; }, BTN.DOWN | BTN.RT, 60);
+  assert.ok(ev.includes("oob"), "sprinting over the sideline with the ball is out");
+  assert.ok(until(st, s => s.phase === "throwin", 0, 600), "a throw-in");
   assert.equal(st.poss, 1, "out of bounds turns it over");
-  assert.ok(st.p[st.ball.own].y >= 0 && st.p[st.ball.own].y <= C.w, "the inbound is on the floor");
-  ok("out of bounds");
+  const I = st.p[st.ball.own];
+  assert.ok(I.y < 0 && st.ball.st === "held", `the inbounder stands behind the sideline (y ${I.y.toFixed(2)}), not on the floor (v4: 0.3 m inside)`);
+  assert.ok(until(st, s => s.phase === "live" && s.ball.st === "held", 0, 600) && st.p[st.ball.own].t === 1 && st.p[st.ball.own].y > 0, "and throws it in");
+  ok("out of bounds, line awareness");
 }
 {
   const st = S.newGame(11, { fmt: "to21", home: STARS, away: CELEBS, auto: true });
@@ -284,34 +216,7 @@ for (const [x, pts] of [[C.rimX - 8.2, 3], [C.rimX - 4.5, 2]]) {
 }
 
 // ---- determinism and the record ---------------------------------------------------------------------
-// A bot on the human's side: drives at the rim, holds X to the top of the jump, passes now and then,
-// shoots its free throws at the top of the meter; on defence chases the ball and reaches.
-function bot(mem) {
-  return (st) => {
-    const P = st.p[st.ctl], b = st.ball;
-    if (st.phase === "tip") return st.t >= S.TIP_JUMP - 1 && st.t <= S.TIP_JUMP + 1 ? BTN.Y : 0;
-    if (st.phase === "ft") { if (!st.ft || st.ft.g !== P.g || st.ft.t < 31) return 0; if (P.act?.kind === "ftshot") return P.act.f < S.FT_TOP - 1 ? BTN.X : 0; return BTN.X; }
-    if (st.phase !== "live") return 0;
-    let m = 0;
-    if (b.st === "held" && b.own === P.g) {
-      if (P.act?.kind === "jump") return P.act.f < S.TOP - 1 ? BTN.X : 0;
-      if (P.act) return 0;
-      const dx = C.rimX - P.x, dy = C.cy - P.y, r = Math.sqrt(dx * dx + dy * dy);
-      if (r < 6.5 || st.shot < 200) return mem.lastA === st.frame - 1 ? 0 : (mem.lastA = st.frame, BTN.X);
-      if (++mem.t % 97 === 50) return BTN.A;
-      if (mem.t % 151 === 70) return BTN.RSU;
-      m |= dx > 0.3 ? BTN.RIGHT : dx < -0.3 ? BTN.LEFT : 0;
-      m |= dy > 0.5 ? BTN.UP : dy < -0.5 ? BTN.DOWN : 0;
-      return m;
-    }
-    const dx = b.x - P.x, dy = b.y - P.y;
-    m |= dx > 0.3 ? BTN.RIGHT : dx < -0.3 ? BTN.LEFT : 0;
-    m |= dy > 0.3 ? BTN.UP : dy < -0.3 ? BTN.DOWN : 0;
-    if (dx * dx + dy * dy < 1.4 && st.frame % 40 === 0) m |= BTN.X;
-    if (b.st === "loose" && b.z > 2 && dx * dx + dy * dy < 1 && st.frame % 30 === 0) m |= BTN.Y;
-    return m;
-  };
-}
+const bot = (mem) => B.checkBot(S, mem);
 const LG = R.FALLBACK;
 const cfgA = { fmt: "quarters", shot: 24, level: "rookie", home: R.sortFive(LG.teams.hq), away: R.sortFive(LG.teams.works) };
 {
@@ -342,7 +247,7 @@ const cfgA = { fmt: "quarters", shot: 24, level: "rookie", home: R.sortFive(LG.t
   assert.ok(FIX.records.length >= 3, "the v1 fixture games are on file");
   for (const rec of FIX.records) assert.deepEqual(RP.replayRecord(rec), rec.result, `v1 record seed ${rec.seed} replays on v1`);
   assert.equal(RP.simOf(1).VERSION, 1);
-  assert.ok(S.VERSION >= 4, "the live sim is v4 or later");
+  assert.ok(S.VERSION >= 5, "the live engine is v5 or later");
   const FIX2 = JSON.parse(readFileSync(new URL("./fixtures/hoops-v2-records.json", import.meta.url), "utf8"));
   assert.ok(FIX2.records.length >= 3, "the v2 fixture games are on file");
   for (const rec of FIX2.records) assert.deepEqual(RP.replayRecord(rec), rec.result, `v2 record seed ${rec.seed} replays on v2`);
@@ -370,8 +275,19 @@ const cfgA = { fmt: "quarters", shot: 24, level: "rookie", home: R.sortFive(LG.t
     const V4 = RP.simOf(4), a = V4.newGame(rec.seed, rec.cfg), e = S.newGame(rec.seed, rec.cfg), masks = S.rleDecode(rec.inputLog);
     masks.forEach((m, f) => { V4.step(a, m); S.step(e, m); if (f % 120 === 0 || f === masks.length - 1) assert.equal(JSON.stringify(e), JSON.stringify(a), `seed ${rec.seed}: the engine's state equals the frozen v4's at frame ${f}`); });
   }
-  assert.equal(S.VERSION, 4);
-  ok("v1, v2, v3 and v4 replay; the camera is metadata");
+  // v5 (S1b): every v5 tape on the frozen engine-v5 and, while the live engine is v5, on the live one
+  const FIX5 = JSON.parse(readFileSync(new URL("./fixtures/hoops-v5-records.json", import.meta.url), "utf8"));
+  assert.ok(FIX5.records.length >= 6 && FIX5.records.every(r => r.version === 5), "the v5 fixture games are on file");
+  assert.deepEqual(new Set(FIX5.records.map(r => r.cfg.mode)), new Set(["5v5", "3v3", "1v1"]), "every mode has a v5 tape");
+  assert.ok(FIX5.records.some(r => r.cfg.inb === "me"), "a v5 tape where the human throws it in");
+  assert.equal(RP.simOf(5).VERSION, 5); assert.notEqual(RP.simOf(5), S, "v5 records replay on the frozen engine-v5");
+  for (const rec of FIX5.records) {
+    assert.deepEqual(RP.replayRecord(rec), rec.result, `v5 record seed ${rec.seed} replays on the frozen v5`);
+    if (S.VERSION === 5) assert.deepEqual(S.replay(rec), rec.result, `v5 record seed ${rec.seed} replays on the live engine`);
+  }
+  // a v4 tape on the v5 engine is another game (the proof the router matters)
+  assert.ok(FIX4.records.some(rec => JSON.stringify(S.replay({ ...rec, version: S.VERSION })) !== JSON.stringify(rec.result)), "v4 tapes play differently on v5: they must go to the frozen v4");
+  ok("v1, v2, v3, v4 and v5 replay; the camera is metadata");
 }
 
 // ---- the hands follow the camera (S0) -------------------------------------------------------------------
@@ -648,8 +564,9 @@ function reachFoul(bonus) {
 // ---- dribble moves --------------------------------------------------------------------------------------------
 function moveFrom(seq, { home = STARS, away = CELEBS, defender = true, seed = 11 } = {}) {
   const st = S.newGame(seed, { home, away });
-  S.setUp(st, 0, -2, C.cy); clearDefence(st);
-  if (defender) { const D = st.p[5]; D.x = -0.9; D.y = C.cy; }
+  // v5: in the frontcourt, at the pick-up line (in the backcourt his man no longer stands on him)
+  S.setUp(st, 0, C.rimX - 9, C.cy); clearDefence(st);
+  if (defender) { const D = st.p[5]; D.x = C.rimX - 7.9; D.y = C.cy; }
   let ev = [];
   for (const m of seq) { S.step(st, m); ev = ev.concat(st.ev); }
   return { st, ev };
@@ -833,6 +750,8 @@ const ONE = (p, r = 80, arch = "guard") => [[p, p.toUpperCase(), r, arch]];
   const o = S.newGame(150003, { mode: "1v1", home: ONE("a"), away: ONE("b") });
   S.setUp(o, 0, 0.6, C.cy); o.p[1].x = 10; let oev = [];
   until(o, s => { oev = oev.concat(s.ev); return s.phase === "dead"; }, BTN.LEFT, 80);
+  assert.ok(!oev.includes("oob") && o.p[0].x > 0, "the half line holds him in (line awareness)");
+  until(o, s => { oev = oev.concat(s.ev); return s.phase === "dead"; }, BTN.LEFT | BTN.RT, 80);
   assert.ok(oev.includes("oob"), "the half line is out");
   // no free throws: a shooting foul gives the ball back, checked
   let fouled = 0;
@@ -919,6 +838,194 @@ const ONE = (p, r = 80, arch = "guard") => [[p, p.toUpperCase(), r, arch]];
   ok("calls");
 }
 
+// ---- S1b (v5): the possession, the rules, the hands (docs/design/BASKETBALL.md section 5) ---------------------
+// Every target is measured CPU v CPU (NEUTRAL) on NBA-shaped fives and the ten real rosters (scripts/hoops-iq.mjs,
+// which reads the frozen v4 the same way: the "before" in the build log), or with the casual human; each can fail.
+{
+  // roles: the all-five rule. On every real roster BH1 is in his five's top two by handle; Larry Bird, not Taylor Swift, brings it up for THE DEPARTMENT; LeBron for THE INDEXED
+  for (const id of R.TEAM_IDS) {
+    const st = S.newGame(1, { home: IQ.realFive(R, id), away: IQ.realFive(R, "hq") });
+    const team = st.p.filter(P => P.t === 0), B1 = st.p[st.roles[0].bh1], byHandle = [...team].sort((a, b) => b.R.handle - a.R.handle);
+    assert.ok(byHandle.slice(0, 2).includes(B1), `${id}: BH1 ${B1.name} is in the top two by handle (${byHandle.slice(0, 2).map(P => P.name)})`);
+    // a centre brings it up only when nobody on the five handles it better (Kareem among celebrities), never
+    // because he is roster row 0 (v4: Jokić did, as the best-rated)
+    if (B1.pos === "C") assert.ok(team.every(P => P === B1 || S.handleScore(P) < S.handleScore(B1)), `${id}: the centre ${B1.name} brings it up only as the best handler`);
+    assert.notEqual(st.roles[0].inb, st.roles[0].bh1, `${id}: the inbounder is not the handler`);
+  }
+  const hq = S.newGame(1, { home: IQ.realFive(R, "hq"), away: IQ.realFive(R, "archive") });
+  assert.equal(hq.p[hq.roles[0].bh1].key, "larry-bird", "THE DEPARTMENT: Larry Bird brings it up");
+  assert.equal(hq.p[hq.roles[1].bh1].key, "lebron-james", "THE INDEXED: LeBron brings it up");
+  const arts = S.newGame(1, { home: IQ.realFive(R, "arts"), away: IQ.realFive(R, "hq") });
+  assert.equal(arts.p[arts.roles[0].bh1].key, "jalen-brunson", "Jokić (roster row 0) does not; Brunson does");
+  assert.equal(arts.p[arts.roles[0].bh2].key, "nikola-jokic", "Jokić is the second handler (the safety), as the all-five rule reads his passing");
+  for (const t of [0, 1]) { const I = arts.p[arts.roles[t].inb], bigs = arts.p.filter(P => P.t === t && S.isBig(P) && P.g !== arts.roles[t].bh1 && P.g !== arts.roles[t].bh2); assert.ok(!bigs.length || S.isBig(I), `a big throws it in (${I.name})`); }
+  ok("roles: the handler by the all-five rule on all ten rosters");
+}
+{
+  // the IQ of a CPU v CPU game (60 games: NBA-shaped fives and the ten real rosters)
+  const t = IQ.cpuIQ(S, R, 60), L = IQ.iqLine(t, 60), pc = (a, b) => (100 * a) / b;
+  if (process.env.VERBOSE) console.log("IQ", JSON.stringify(L));
+  assert.ok(t.carried > 300 && pc(t.carriedBH, t.carried) >= 95, `bring-up: BH1 or BH2 carries it over half court after a make or a board ${L.bringUpBH}% (95+)`);
+  assert.ok(pc(t.carriedBig, t.carried) <= 3, `bring-up: a big who is not a handler ${L.bringUpBig}% (3 or less)`);
+  assert.ok(t.throwIns > 0.8 * t.makes && t.throwBehind === t.throwIns, `throw-in: every make is followed by a throw-in from behind the end line (${t.throwBehind}/${t.throwIns}, ${t.makes} makes)`);
+  assert.ok(t.backPoss > 300 && pc(t.pressed, t.backPoss) <= 5, `press off: his man on the handler, deep in his backcourt for half a second, on ${L.pressedPoss}% of possessions (5 or less; v4 90)`);
+  const pu = IQ.median(t.pickUp);
+  assert.ok(pu >= 7.5 && pu <= 9.5, `pick-up: the handler's man first on him ${pu.toFixed(2)} m from the rim (median, 7.5-9.5)`);
+  assert.equal(t.oobCpuHolder, 0, "a CPU holder never steps out");
+  for (const k of ["eightsec0", "eightsec1", "backcourt0", "backcourt1", "fivesec0", "fivesec1", "threesec0", "threesec1"]) assert.ok(!t.viol[k], `the CPU commits no ${k.slice(0, -1)} (${t.viol[k]})`);
+  assert.ok(pc(t.campFrames, t.setFrames) <= 2, `spacing: an attacker in the lane 2.5 s or more on ${L.laneCamp}% of frontcourt frames (2 or less)`);
+  // the cost: a 5v5 game headless (BASKETBALL.md section 5: 400 ms or less, v4 ~190 on this machine unloaded).
+  // The difficulty workers share the machine while this runs, so it is timed against the frozen v4
+  // interleaved with it, and read as v4's 190 ms scaled by the ratio
+  const V4 = (await import("../src/play/hoops/replay.js")).simOf(4), tm = [0, 0];
+  for (let k = 0; k < 6; k++) for (const [i, E] of [[0, V4], [1, S]]) { const t0 = performance.now(), st = E.newGame(7200 + k, { auto: true, home: IQ.NBA5("c" + k, 76), away: IQ.NBA5("d" + k, 76) }); while (st.phase !== "over") E.step(st, 0); tm[i] += performance.now() - t0; }
+  const ms = 190 * tm[1] / tm[0];
+  assert.ok(ms <= 400, `a 5v5 game costs ${ms.toFixed(0)} ms headless (400 or less; ${(tm[1] / tm[0]).toFixed(2)} x v4)`);
+  ok(`IQ ${JSON.stringify(L)}, ${ms.toFixed(0)} ms a game (${(tm[1] / tm[0]).toFixed(2)} x v4)`);
+}
+{
+  // the press: called by the coach, it is a press (90 %+ of backcourt possessions); the CPU coach's rule
+  const ms = [];
+  for (let k = 0; k < 16; k++) {
+    const st = S.newGame(7300 + k, { auto: true, home: IQ.NBA5("p" + k, 76), away: IQ.NBA5("q" + k, 76) });
+    const M = IQ.iqMeter(st, { C: S.COURT });
+    for (let f = 0; st.phase !== "over" && f < 200000; f++) { st.press = [true, true]; S.step(st, 0); M.see(st); }
+    ms.push(M.read());
+  }
+  const t = IQ.sumMeters(ms);
+  assert.ok(t.backCalled > 100 && t.pressedCalled / t.backCalled >= 0.9, `a press when it is called: ${(100 * t.pressedCalled / t.backCalled).toFixed(1)}% of backcourt possessions (90+)`);
+  const g = S.newGame(1, { home: STARS, away: CELEBS });
+  g.q = 4; g.clock = 10 * 60; g.score = [40, 30];
+  assert.equal(S.pressCall(g, 1), true, "the CPU presses trailing by two possessions late");
+  g.score = [40, 38]; assert.equal(S.pressCall(g, 1), false, "not when it is close");
+  g.score = [40, 30]; g.q = 2; assert.equal(S.pressCall(g, 1), false, "not early");
+  g.q = 4; assert.equal(S.pressCall(g, 0), false, "never for your side");
+  ok(`press when called ${(100 * t.pressedCalled / t.backCalled).toFixed(1)}%`);
+}
+{
+  // the throw-in on your side: you steer the handler; A calls for it; ROOKIE and PRO throw it after 3 s
+  // anyway, ALL-STAR and HALL OF FAME call five seconds; "I'm the inbounder" puts you behind the line
+  const throwIn = (level, inb, act) => {
+    const st = S.newGame(21, { level, inb, home: IQ.realFive(R, "arts"), away: IQ.realFive(R, "hq") });
+    S.setUp(st, 5, C.rimX - 5, C.cy); clearDefence(st); S.forceShot(st, 5, true);
+    assert.ok(until(st, s => s.phase === "throwin", 0, 400), "a make: a throw-in");
+    const at = { ctl: st.ctl, own: st.ball.own, x: st.p[st.ball.own].x };
+    let ev = [], f = 0;
+    for (; f < 400 && st.phase === "throwin"; f++) { S.step(st, act(st, f)); ev = ev.concat(st.ev); }
+    return { st, at, ev, f };
+  };
+  const wait = throwIn("rookie", null, () => 0);
+  assert.equal(wait.at.ctl, wait.st.roles[0].bh1, "you steer the handler (Brunson), not the inbounder");
+  assert.equal(wait.at.own, wait.st.roles[0].inb, "the inbounder (a big, not a handler) has it");
+  assert.ok(wait.at.x < -C.hx, `behind the end line (x ${wait.at.x.toFixed(2)})`);
+  assert.ok(wait.f >= 178 && wait.f <= 182 && wait.ev.includes("throwin"), `ROOKIE: he throws it to you after 3 s (${wait.f} frames)`);
+  const call = throwIn("hof", null, (s, f) => (f === 40 ? BTN.A : 0));
+  assert.ok(call.ev.includes("callball") && call.f >= 40 && call.f <= 44, `A calls for it (${call.f} frames)`);
+  assert.ok(until(call.st, s => s.ball.st === "held", 0, 120) && call.st.p[call.st.ball.own].g === call.st.roles[0].bh1, "and the handler catches it");
+  const five = throwIn("allstar", null, () => 0);
+  assert.ok(five.ev.includes("fivesec") && five.st.afterTeam === 1, "ALL-STAR: five seconds without calling for it is a violation");
+  const me = throwIn("pro", "me", (s, f) => (f === 30 ? BTN.A | BTN.UP | BTN.RIGHT : 0));
+  assert.equal(me.at.ctl, me.st.roles[0].inb, "I'm the inbounder: you steer the big behind the line");
+  assert.ok(me.f <= 32 && me.ev.includes("throwin"), "and A throws it in");
+  // the shot clock waits for the touch inbounds
+  const sc = throwIn("hof", null, (s, f) => (f === 10 ? BTN.A : 0)), sc0 = sc.st.shot;
+  assert.equal(sc0, sc.st.cfg.shot * 60, "a full shot clock");
+  for (let k = 0; k < 3 && sc.st.ball.st === "pass"; k++) S.step(sc.st, 0);
+  assert.ok(sc.st.ball.st !== "pass" || sc.st.shot === sc0, "the shot clock waits while the throw-in is in the air");
+  ok("throw-ins: the big inbounds, you call for it");
+}
+{
+  // the violations ladder: ROOKIE the 8 seconds only; PRO + over-and-back; ALL-STAR + 3 seconds
+  const eight = (level) => { const st = S.newGame(31, { level, home: STARS, away: CELEBS }); S.setUp(st, 0, -8, C.cy); clearDefence(st); let ev = []; until(st, s => { ev = ev.concat(s.ev); return s.phase !== "live"; }, 0, 600); return ev; };
+  for (const lv of S.LEVEL_ORDER) assert.ok(eight(lv).includes("eightsec"), `${lv}: eight seconds in the backcourt is called`);
+  const back = (level) => {
+    const st = S.newGame(32, { level, home: STARS, away: CELEBS }); S.setUp(st, 0, 3, C.cy); clearDefence(st);
+    let ev = [];
+    S.step(st, 0); assert.ok(st.ps.fc, "over half court");
+    until(st, s => { ev = ev.concat(s.ev); return s.phase !== "live" || s.p[0].x < -1.5; }, BTN.LEFT | BTN.RT, 200);
+    return { ev, x: st.p[0].x };
+  };
+  assert.ok(!back("rookie").ev.includes("backcourt"), "ROOKIE: over-and-back is not called");
+  for (const lv of ["pro", "allstar", "hof"]) assert.ok(back(lv).ev.includes("backcourt"), `${lv}: over-and-back is called (sprinting back over)`);
+  // line awareness at the half line where it is called: walking (no sprint) back stops at the line
+  { const st = S.newGame(33, { level: "pro", home: STARS, away: CELEBS }); S.setUp(st, 0, 1.5, C.cy); clearDefence(st); S.step(st, 0); let ev = []; until(st, s => { ev = ev.concat(s.ev); return s.phase !== "live"; }, BTN.LEFT, 120); assert.ok(!ev.includes("backcourt") && st.p[0].x > 0, "PRO: walking at the half line stops at it"); }
+  const lane = (level) => { const st = S.newGame(34, { level, home: STARS, away: CELEBS }); S.setUp(st, 0, C.rimX - 2, C.cy + 1); clearDefence(st); let ev = []; until(st, s => { ev = ev.concat(s.ev); return s.phase !== "live"; }, 0, 400); return ev; };
+  assert.ok(!lane("pro").includes("threesec"), "PRO: three seconds is not called");
+  assert.ok(lane("allstar").includes("threesec") && lane("hof").includes("threesec"), "ALL-STAR and HALL OF FAME: three seconds in the lane is called");
+  ok("the violations ladder");
+}
+{
+  // the shot clock: 24 after a defensive board, 14 after an offensive one off the rim, and a miss does not reset it
+  const miss = (offBoard) => {
+    const st = S.newGame(41, { home: STARS, away: CELEBS }); S.setUp(st, 0, C.rimX - 5, C.cy, { shot: 9 * 60 }); clearDefence(st);
+    for (let f = 0; f < 30; f++) S.step(st, 0);
+    S.forceShot(st, 0, false);
+    until(st, s => s.ball.st === "loose", 0, 200);
+    const atMiss = st.shot;
+    const W = offBoard ? st.p[1] : st.p[6]; Object.assign(st.ball, { x: W.x, y: W.y, z: 1.0, vx: 0, vy: 0, vz: 0 });
+    until(st, s => s.ball.st === "held", 0, 60);
+    return { atMiss, after: st.shot, t: st.p[st.ball.own].t };
+  };
+  const o = miss(true), d = miss(false);
+  assert.ok(o.atMiss < 9 * 60 && o.atMiss > 8 * 60, `a miss keeps the clock running down (${(o.atMiss / 60).toFixed(1)} s at the miss; v4 reset it to 24)`);
+  assert.ok(o.t === 0 && o.after >= 14 * 60 - 2 && o.after <= 14 * 60, `the offence's board: 14 (${(o.after / 60).toFixed(1)})`);
+  assert.ok(d.t === 1 && d.after >= 24 * 60 - 2, `the defence's board: 24 (${(d.after / 60).toFixed(1)})`);
+  ok("the shot clock: 24 and 14");
+}
+{
+  // first to 21: team fouls reset at 7 and 14 (v4 kept the bonus on for good after the fourth)
+  const st = S.newGame(51, { fmt: "to21", home: STARS, away: CELEBS });
+  st.tf = [5, 5]; st.score = [6, 2];
+  S.setUp(st, 0, C.rimX - 5, C.cy); clearDefence(st); S.forceShot(st, 0, true);
+  let ev = []; until(st, s => { ev = ev.concat(s.ev); return s.score[0] > 6; }, 0, 200);
+  assert.ok(ev.includes("foulreset") && st.tf[0] === 0 && st.tf[1] === 0, "passing 7 resets the team fouls");
+  assert.equal(S.inPenalty(st, 1), false, "and the bonus with them");
+  st.tf[1] = 5; assert.equal(S.inPenalty(st, 1), true, "the fifth foul shoots again");
+  ok("first to 21: the bonus resets");
+}
+{
+  // a crossover from the corner spot stays in (v4: out 20 of 20); stable icons; the right stick on defence
+  let out = 0;
+  for (let s = 0; s < 20; s++) {
+    const st = S.newGame(61 + s, { home: STARS, away: CELEBS }); S.setUp(st, 0, C.rimX - 2, 0.67); clearDefence(st);
+    const seq = [BTN.RSD, BTN.RSD, BTN.RSD, ...Array(30).fill(0)]; let ev = [];
+    for (const m of seq) { S.step(st, m); ev = ev.concat(st.ev); }
+    if (ev.includes("oob")) out++;
+  }
+  assert.equal(out, 0, `a crossover from the corner never carries him out (${out}/20)`);
+  const ic = S.newGame(62, { home: STARS, away: CELEBS }); S.setUp(ic, 0, C.rimX - 8, C.cy); clearDefence(ic);
+  S.step(ic, BTN.RB); const before = Object.fromEntries(ic.icons.map(i => [i.g, i.b]));
+  S.step(ic, BTN.RB | BTN.B);   // to the man wearing B
+  const to = ic.ball.to; until(ic, s => s.ball.st === "held", 0, 120);
+  S.step(ic, BTN.RB); const after = Object.fromEntries(ic.icons.map(i => [i.g, i.b]));
+  assert.equal(after[0], "B", "the passer takes the catcher's letter");
+  for (const g of [1, 2, 3, 4]) if (g !== to) assert.equal(after[g], before[g], `nobody else's letter moves (${g})`);
+  // defence: RS held is hands up; RB + a letter switches to that man
+  const dd = S.newGame(63, { level: "hof", home: STARS, away: CELEBS }); S.setUp(dd, 5, -4, C.cy);
+  dd.ctl = 0; dd.ctlFor = 5; dd.p[0].hands = 0;
+  S.step(dd, BTN.RSU); assert.ok(dd.p[0].hands > 0, "RS on defence: hands up");
+  S.step(dd, BTN.RB); assert.ok(dd.iconOn && dd.icons.length === 4, "RB on defence: the letters are up");
+  const want = dd.icons.find(i => i.b === "X"); S.step(dd, BTN.RB | BTN.X);
+  assert.equal(dd.ctl, want.g, "RB + X: you steer the man wearing X (no reach)");
+  ok("lines on moves, stable icons, the right stick and RB on defence");
+}
+{
+  // pass to the right man (ROOKIE): two teammates in the stick's cone, one open, one covered: the open one
+  let open = 0, n = 0;
+  for (let s = 0; s < 200; s++) {
+    const st = S.newGame(70000 + s, { level: "rookie", home: STARS, away: CELEBS }); S.setUp(st, 0, C.rimX - 9, C.cy); clearDefence(st);
+    const a = (s % 7) * 0.12 - 0.36, A = st.p[1], Bm = st.p[2], D = st.p[6];
+    A.x = C.rimX - 9 + 5.5 * Math.cos(a + 0.35); A.y = C.cy + 5.5 * Math.sin(a + 0.35);
+    Bm.x = C.rimX - 9 + 6.0 * Math.cos(a - 0.35); Bm.y = C.cy + 6.0 * Math.sin(a - 0.35);
+    for (const Q of [st.p[3], st.p[4]]) { Q.x = C.rimX - 12; Q.y = 1 + Q.i * 3; }
+    const covered = s % 2 ? A : Bm, free = covered === A ? Bm : A; D.x = covered.x + 0.5; D.y = covered.y + 0.3;
+    S.step(st, BTN.RIGHT | BTN.A); n++;
+    if (st.ball.st === "pass" && st.ball.to === free.g) open++;
+  }
+  assert.ok(open / n >= 0.7, `ROOKIE: with two in the cone, the open man ${(100 * open / n).toFixed(0)}% (70+)`);
+  ok(`pass to the open man ${(100 * open / n).toFixed(0)}%`);
+}
+
 // ---- difficulty ---------------------------------------------------------------------------------------------
 {
   assert.deepEqual(S.LEVEL_ORDER, ["rookie", "pro", "allstar", "hof"]);
@@ -937,6 +1044,17 @@ const ONE = (p, r = 80, arch = "guard") => [[p, p.toUpperCase(), r, arch]];
   assert.ok(fg("rookie") >= 45 && fg("rookie") <= 50, `a casual human shoots ${fg("rookie").toFixed(1)}% on ROOKIE (45-50): ${line}`);
   assert.ok(fg("rookie") > fg("hof") && by.hof.tov > by.rookie.tov && by.hof.opp > by.rookie.opp, `HALL OF FAME is harder all round: ${line}`);
   ok(`difficulty 5v5 ${line}`);
+  // v5: the casual human's own out-of-bounds turnovers (v4: 1.18 a game on ROOKIE, 0.85 on HALL OF FAME), the
+  // violations each level calls on him (the ladder), none by the CPU, and the pass to the man he meant
+  const per = all.map(r => `${r.mode} ${S.LEVELS[r.level].name}: OOB ${((r.stats.oob || 0) / r.n).toFixed(2)}/game, ${Object.entries(r.viol).map(([k, v]) => `${k} ${(v / r.n).toFixed(2)}`).join(" ") || "no violations"}, meant-man ${pc(r.stats.hits || 0, r.stats.passes || 0).toFixed(0)}% of ${r.stats.passes || 0}`).join("; ");
+  if (process.env.VERBOSE) console.log(per);
+  for (const r of all) {
+    assert.ok((r.stats.oob || 0) / r.n <= 0.2, `${r.mode} ${r.level}: the casual human steps out ${((r.stats.oob || 0) / r.n).toFixed(2)} times a game (0.2 or less): ${per}`);
+    assert.equal(r.cpuViol, 0, `${r.mode} ${r.level}: the CPU commits no violations`);
+    for (const k of Object.keys(r.viol)) assert.ok(S.LEVELS[r.level].viol[k] || (k === "fivesec" && S.LEVELS[r.level].inbound === "call"), `${r.level} calls only its ladder (${k})`);
+    if (r.mode !== "1v1") assert.ok(r.stats.passes > 50 && r.stats.hits / r.stats.passes >= 0.85, `${r.mode} ${r.level}: the pass goes to the man the casual human meant (inside the stick's cone) ${pc(r.stats.hits, r.stats.passes).toFixed(0)}% (85+)`);
+  }
+  ok(`the casual human's hands: ${per}`);
   // the half court: ROOKIE wins 65-75% one on one and three on three too, and each level is harder
   for (const mode of ["3v3", "1v1"]) {
     const rs = all.filter(r => r.mode === mode), w = Object.fromEntries(rs.map(r => [r.level, pc(r.w, r.n)]));

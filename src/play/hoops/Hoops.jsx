@@ -4,7 +4,7 @@ import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
-import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, FORMATS, dirOf, LEVELS, LEVEL_ORDER, MODES, POS_ARCH } from "./engine/index.js";
+import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, FORMATS, dirOf, LEVELS, LEVEL_ORDER, MODES, POS_ARCH, inPenalty } from "./engine/index.js";
 import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortFive, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS, divisionsOf, divisionOf, difficultyOf, defaultLevelIndex, allClubs, ROLES, playerPool } from "./roster.js";
 import { draw, camFollow, camStart, camOf, proj, CAMS, CAM_ORDER, DEFAULT_CAM, ADJ_DEFAULT, headOf, skinOf, shade, W, H } from "./render.js";
 import HoopsGuide, { guideSeen, markGuideSeen, namesFor, PAD_GLYPHS } from "./Guide.jsx";
@@ -35,6 +35,9 @@ const parseRoute = (route) => {
   const id = (k) => (TEAM_IDS.includes(q.get(k)) ? q.get(k) : null);
   return { home: id("home"), vs: id("vs"), fmt: q.get("fmt") === "to21" ? "to21" : "quarters", shot: q.get("shot") === "14" ? 14 : 24, mode: MODES[q.get("mode")] ? q.get("mode") : null, to: q.get("to") === "11" ? 11 : 21, mitt: q.get("mitt") === "1", quick: q.get("quick") === "1" };
 };
+const INB_KEY = "hvi-hoops-inbounder";   // "me": you throw it in at your throw-ins (engine v5 cfg.inb)
+const readInb = () => { try { return localStorage.getItem(INB_KEY) === "me" ? "me" : "guard"; } catch { return "guard"; } };
+const writeInb = (v) => { try { localStorage.setItem(INB_KEY, v); } catch { /* the tab remembers */ } };
 const KEEP = "hvi-hoops-exhibitions", KEEP_N = 5, LEVEL_KEY = "hvi-hoops-level", TIPS_KEY = "hvi-hoops-tips2-done", LEGEND_KEY = "hvi-hoops-legend", CAM_KEY = "hvi-hoops-cam2", ADJ_KEY = "hvi-hoops-camadj", MODE_KEY = "hvi-hoops-mode", HANDS_KEY = "hvi-hoops-controls";
 // The difficulty: ROOKIE for a new player, then whatever was picked last; with the pyramid
 // (docs/design/PYRAMID.md section 7) a pick is remembered per division and the division sets the
@@ -46,10 +49,10 @@ const readLevel = (league = null, k = 0) => {
 };
 const writeLevel = (v, k = 0) => { try { localStorage.setItem(levelKey(k), v); } catch { /* the tab remembers */ } };
 const LEVEL_NOTES = {
-  rookie: "START HERE. A WIDER GREEN WINDOW, TEAMMATES WHO CUT AND GUARD TIGHT, YOUR MAN GUARDS FOR YOU WHEN YOU LET GO, FEW STEALS AND BLOCKS AGAINST YOU.",
-  pro: "A FAIR GAME. A LITTLE HELP ON THE METER AND ON DEFENCE; THE CPU STILL GAMBLES LESS THAN IT COULD.",
-  allstar: "THE CPU ROTATES, BLOCKS AND STEALS ALMOST AS RATED. YOUR MAN STILL GUARDS WHEN YOU LET GO.",
-  hof: "THE GAME AS RATED. A TIGHT GREEN WINDOW, FULL HELP DEFENCE, NO AUTO-GUARD, AND YOU SWITCH ON DEFENCE YOURSELF (A).",
+  rookie: "START HERE. A WIDER GREEN WINDOW, TEAMMATES WHO GUARD TIGHT, YOUR MAN GUARDS FOR YOU WHEN YOU LET GO, FEWER STEALS AND BLOCKS AGAINST YOU. ONLY THE EIGHT SECONDS ARE CALLED.",
+  pro: "A FAIR GAME. A LITTLE HELP ON DEFENCE; THE CPU STILL GAMBLES LESS THAN IT COULD. OVER-AND-BACK IS CALLED.",
+  allstar: "THE CPU PLAYS AS RATED: IT ROTATES, BLOCKS AND STEALS. YOUR MAN STILL GUARDS WHEN YOU LET GO. THREE SECONDS AND FIVE ON THE THROW-IN ARE CALLED.",
+  hof: "HARDER THAN RATED. A TIGHT GREEN WINDOW, FULL HELP DEFENCE, NO AUTO-GUARD, YOU SWITCH ON DEFENCE YOURSELF (A), AND EVERY VIOLATION IS CALLED.",
 };
 // The camera (2K by default) and its adjustments, remembered per camera: {id: {zoom, height, follow}} 0..10.
 const readCam = () => { try { const v = localStorage.getItem(CAM_KEY); return CAMS[v] ? v : DEFAULT_CAM; } catch { return DEFAULT_CAM; } };
@@ -134,13 +137,15 @@ export default function Hoops({ route }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [hands, setHandsS] = useState(readHands);
   const setHands = (v) => { writeHands(v); setHandsS(v); };
+  const [inb, setInbS] = useState(readInb);
+  const setInb = (v) => { writeInb(v); setInbS(v); };
   const setCamId = (v) => { writeCam(v); setCamIdS(v); };
   const setAdj = (id, k, v) => setAdjS(a => { const next = { ...a, [id]: { ...adjOf(a, id), [k]: Math.max(0, Math.min(10, v)) } }; writeAdj(next); return next; });
   const mine = teamOfCase(league, me.caseId);
   const launch = (g) => { if (!guideSeen()) { setGuide(g); setDone(null); setTape(null); setGame(null); } else { setDone(null); setTape(null); setGame(g); } };
   const start = (home, away, f = fmt, s = shot) => {
     SFX.unlock();
-    const cfg = { mode: "5v5", fmt: f, shot: s, level, home: fiveOf(league, home, me), away: fiveOf(league, away, me), div: divisionOf(league, home) };   // div: the pyramid's division, data the sim carries
+    const cfg = { mode: "5v5", fmt: f, shot: s, level, home: fiveOf(league, home, me), away: fiveOf(league, away, me), div: divisionOf(league, home), ...(inb === "me" ? { inb: "me" } : {}) };   // div: the pyramid's division, data the sim carries
     launch({ seed: seedNow(), n: Date.now(), home, away, cfg, tips: !readFlag(TIPS_KEY, false) });
   };
   // the street game: the picked players, a half court
@@ -178,7 +183,7 @@ export default function Hoops({ route }) {
     const ids = TEAM_IDS.filter(id => id !== game.home); start(game.home, ids[(ids.indexOf(game.away) + 1) % ids.length], game.cfg.fmt, game.cfg.shot);
   };
   const settings = () => { setDone(null); setGame(null); setTape(null); setMoreOpen(true); };
-  const camProps = { camId, setCamId, adj, setAdj, hands, setHands };
+  const camProps = { camId, setCamId, adj, setAdj, hands, setHands, inb, setInb };
   if (guide) body = <HoopsGuideGate street={guide.cfg.mode !== "5v5"} onDone={leaveGuide} />;
   else if (tape) body = <Match key={`tape${tape.rec.at}`} game={tape.game} me={me} tape={tape.rec} {...camProps} onDone={() => setTape(null)} onQuit={() => setTape(null)} />;
   else if (game && !done) body = <Match key={game.n} game={game} me={me} {...camProps} onDone={setDone} onQuit={() => setGame(null)} onRestart={again} />;
@@ -375,10 +380,10 @@ function Controls() { return <HoopsGuide mode="keys" family="generic" street com
 export function legendRows(mode, family) {
   if (mode === "pad") {
     const g = PAD_GLYPHS[family] || PAD_GLYPHS.generic;
-    return [["MOVE", "L STICK", `${g.rt} SPRINT`], ["SHOOT", `HOLD ${g.west}`, "LET GO AT THE TOP. ON D: STEAL."], ["PASS", `${g.south} / ${g.east} / ${g.north}`, `CHEST / BOUNCE / LOB. ${g.north} ${g.north}: ALLEY-OOP. ON D: SWITCH / CHARGE / BLOCK.`], ["ICON PASS", `HOLD ${g.rb}`, "THEN THE TEAMMATE'S BUTTON."], ["MOVES", "R STICK", "SIDE CROSS, BACK STEPBACK, ROUND SPIN."], ["PICK", g.lb, ""], ["POST", g.lt, "ON D: INTENSE D."], ["CAMERA", g.view, ""], ["PAUSE", g.start, ""]];
+    return [["MOVE", "L STICK", `${g.rt} SPRINT`], ["SHOOT", `HOLD ${g.west}`, "LET GO AT THE TOP. ON D: STEAL."], ["PASS", `${g.south} / ${g.east} / ${g.north}`, `CHEST / BOUNCE / LOB. ${g.north} ${g.north}: ALLEY-OOP. THROW-IN: ${g.south} CALLS FOR IT. ON D: SWITCH / CHARGE / BLOCK.`], ["ICON PASS", `HOLD ${g.rb}`, "THEN THE TEAMMATE'S BUTTON. ON D: SWITCH TO HIM."], ["MOVES", "R STICK", "SIDE CROSS, BACK STEPBACK, ROUND SPIN. ON D: HANDS UP."], ["PICK", g.lb, ""], ["POST", g.lt, "ON D: INTENSE D."], ["CAMERA", g.view, ""], ["PAUSE", g.start, ""]];
   }
   if (mode === "touch") return [["MOVE", "THE ROUND PAD", ""], ["SHOOT", "HOLD SHOOT", "LET GO AT THE TOP."], ["PASS", "PASS / LOB", "TOWARD THE PAD."], ["MOVES", "SWIPE THE COURT", "SIDE CROSS, BACK STEPBACK, CIRCLE SPIN."], ["SPRINT", "SPRINT", ""], ["DEFENCE", "STEAL / BLOCK / CHARGE / SWITCH", ""], ["PAUSE", "START", ""]];
-  return [["MOVE", "←↑↓→ / WASD", "SHIFT SPRINTS."], ["SHOOT", "HOLD Z / J / SPACE", "LET GO AT THE TOP. ON D: STEAL."], ["PASS", "X / K", "F BOUNCE, C LOB, C C ALLEY-OOP. ON D: X SWITCH, C BLOCK, F CHARGE."], ["ICON PASS", "HOLD G + 1-4", ""], ["MOVES", "Q + ARROW", "Q ALONE: SPIN."], ["PICK", "R", ""], ["POST", "E", "ON D: INTENSE D."], ["CAMERA", "V", ""], ["PAUSE", "ENTER / ESC", ""]];
+  return [["MOVE", "←↑↓→ / WASD", "SHIFT SPRINTS."], ["SHOOT", "HOLD Z / J / SPACE", "LET GO AT THE TOP. ON D: STEAL."], ["PASS", "X / K", "F BOUNCE, C LOB, C C ALLEY-OOP. THROW-IN: X CALLS FOR IT. ON D: X SWITCH, C BLOCK, F CHARGE."], ["ICON PASS", "HOLD G + 1-4", "ON D: SWITCH TO HIM."], ["MOVES", "Q + ARROW", "Q ALONE: SPIN. ON D: HANDS UP."], ["PICK", "R", ""], ["POST", "E", "ON D: INTENSE D."], ["CAMERA", "V", ""], ["PAUSE", "ENTER / ESC", ""]];
 }
 // The names of the shoot, pass and block buttons for the tips, by how you are playing.
 function keyNames(mode, family) {
@@ -432,7 +437,7 @@ function looksFor(cfg, home, away, me) {
 const lumOf = (h) => { const n = parseInt(h.slice(1), 16); return 0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255); };
 const paintOf = (kit) => shade(lumOf(kit[0]) < lumOf(kit[1]) ? kit[0] : kit[1], 0.62);
 const clockOf = (f) => { const s = Math.max(0, Math.ceil(f / 60)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
-function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, hands, setHands, onDone, onQuit, onRestart }) {
+function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, hands, setHands, inb, setInb, onDone, onQuit, onRestart }) {
   const { cfg, home, away, seed } = game;
   const canvasRef = useRef(null), wrapRef = useRef(null), inputRef = useRef(null);
   const [hud, setHud] = useState(null);
@@ -572,10 +577,13 @@ function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, hands, set
       const off = st.poss === 0, ctlP = st.p[st.ctl];
       const period = !F.periods ? `TO ${st.target || 21}` : st.q > F.periods ? `OT${st.q - F.periods > 1 ? st.q - F.periods : ""}` : `Q${st.q}`;
       const back = st.half && st.clear === 0 && st.phase === "live";
-      const key = `${st.score}|${period}|${Math.ceil(st.clock / 60)}|${Math.ceil(st.shot / 60)}|${off}|${st.ctl}|${st.phase}|${st.tf}|${ctlP.pf}|${back}`;
+      // v5: your throw-in (call for it, or throw it), the LINE cue when the line is holding you in
+      const ti = st.phase === "throwin" && st.ti && st.ti.t === 0 && !cfg.auto ? (st.ti.g === ctlP.g ? "throw" : st.ti.call < 0 ? "call" : "") : "";
+      const line = st.phase === "live" && st.frame - st.lineAt < 20;
+      const key = `${st.score}|${period}|${Math.ceil(st.clock / 60)}|${Math.ceil(st.shot / 60)}|${off}|${st.ctl}|${st.phase}|${st.tf}|${ctlP.pf}|${back}|${ti}|${line}`;
       if (key !== hudKey) {
         hudKey = key;
-        setHud({ score: [...st.score], period, clock: F.periods ? clockOf(st.clock) : "", shot: Math.max(0, Math.ceil(st.shot / 60)), off: off || (st.phase === "ft" && st.ft && st.p[st.ft.g].t === 0), poss: st.poss, ctl: cfg.auto ? "" : names[ctlP.g], pos: ctlP.pos || "", back, pf: ctlP.pf, has: H0 ? H0.t : -1, over: st.phase === "over", tf: [...st.tf], bonus: [st.tf[1] > F.bonus, st.tf[0] > F.bonus] });
+        setHud({ score: [...st.score], period, clock: F.periods ? clockOf(st.clock) : "", shot: Math.max(0, Math.ceil(st.shot / 60)), off: off || (st.phase === "ft" && st.ft && st.p[st.ft.g].t === 0), poss: st.poss, ctl: cfg.auto ? "" : names[ctlP.g], pos: ctlP.pos || "", back, pf: ctlP.pf, has: H0 ? H0.t : -1, over: st.phase === "over", tf: [...st.tf], bonus: [inPenalty(st, 1), inPenalty(st, 0)], ti, line });
       }
       const sk = `${st.score[0]}-${st.score[1]}`;
       if (sk !== scoreKey) { scoreKey = sk; setSr(`${shorts[0]} ${st.score[0]}, ${shorts[1]} ${st.score[1]}.`); }
@@ -602,11 +610,12 @@ function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, hands, set
           {tape && <div className="hp-tape">THE TAPE // {skipping ? "TO THE END" : "2X"}</div>}
         </div>
       </div>
-      {!tape && hud?.ctl && <p className="hp-ctl">YOU: <b>{hud.ctl}</b>{hud.pos ? ` (${hud.pos})` : ""} {hud.off ? "// ON OFFENCE" : "// ON DEFENCE"}{hud.pf && !street ? ` // ${hud.pf} FOUL${hud.pf > 1 ? "S" : ""}` : ""}{hud.back ? <b className="hp-back"> // TAKE IT BACK PAST THE ARC</b> : null}</p>}
+      {!tape && hud?.ctl && <p className="hp-ctl">YOU: <b>{hud.ctl}</b>{hud.pos ? ` (${hud.pos})` : ""} {hud.off ? "// ON OFFENCE" : "// ON DEFENCE"}{hud.pf && !street ? ` // ${hud.pf} FOUL${hud.pf > 1 ? "S" : ""}` : ""}{hud.back ? <b className="hp-back"> // TAKE IT BACK PAST THE ARC</b> : null}{hud.ti ? <b className="hp-back"> // {hud.ti === "throw" ? `THROW IT IN: ${keyNames(mode, pad).pass} TOWARD A MAN` : `${keyNames(mode, pad).pass}: CALL FOR THE BALL`}</b> : null}{hud.line ? <b className="hp-back"> // LINE</b> : null}</p>}
       {touch && !tape && <TouchPad input={inputRef} off={hud?.off} onStart={() => togglePause()} />}
       {paused && <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE DEPARTMENT HAS STOPPED THE CLOCK. IT DOES NOT USUALLY." onBack={() => togglePause(false)}
         options={{ resume: () => togglePause(false), restart: !tape && onRestart, camera: { label: `CAMERA: ${CAMS[camId].name}`, onSelect: cycleCam },
           hands: { label: `STICK: ${HANDS_NAME[hands]}`, hint: hands === "camera" ? "UP IS UP THE SCREEN" : "UP IS THE FAR SIDELINE", onSelect: () => setHands(hands === "camera" ? "court" : "camera") },
+          ...(street ? {} : { inbound: { label: `THROW-INS: ${inb === "me" ? "YOU THROW IT IN" : "THE BIG THROWS, YOU CALL FOR IT"}`, hint: "FROM THE NEXT GAME", onSelect: () => setInb(inb === "me" ? "guard" : "me") } }),
           ...Object.fromEntries(["zoom", "height", "follow"].map(k => [`cam${k}`, { label: `CAMERA ${k.toUpperCase()}: ${adjOf(adj, camId)[k]}`, hint: "+1", onSelect: () => setAdj(camId, k, (adjOf(adj, camId)[k] + 1) % 11) }])),
           controls: <HoopsGuide mode={mode} family={pad} street={street} compact />, sound: { on: !muted, onSelect: toggleMute }, quit: { label: tape ? "STOP THE TAPE" : "LEAVE THE COURT", onSelect: onQuit } }} />}
       {camPanel && <CamPanel camId={camId} setCamId={setCamId} adj={adj} setAdj={setAdj} hands={hands} setHands={setHands} />}

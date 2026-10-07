@@ -37,8 +37,14 @@ const L = {
   streettwo: ["{N} FROM BEYOND THE ARC. TWO, ON THE STREET.", "TWO FOR {N}. DISTANCE IS DOUBLED HERE."],
   noclear: ["{N} DID NOT TAKE IT BACK. THE BASKET IS DISALLOWED. THE ARC IS A BORDER.", "NOT CLEARED. {N} SHOT FROM THE WRONG SIDE OF THE RULES."],
   check: ["CHECK BALL. {T} AT THE TOP.", "THE BALL IS CHECKED. {T} HAS IT."],
+  // v5: the possession's violations
+  eightsec: ["EIGHT SECONDS. {N} DID NOT CROSS IN TIME. {T} BALL. THE HALF LINE HAS A DEADLINE.", "BACKCOURT VIOLATION: EIGHT SECONDS. THE DEPARTMENT COUNTED EVERY ONE."],
+  backcourt: ["OVER AND BACK. {N} RETURNED TO A HALF ALREADY LEFT. {T} BALL.", "BACKCOURT. ONCE ACROSS, ALWAYS ACROSS. THE DEPARTMENT ADMIRES COMMITMENT."],
+  threesec: ["THREE SECONDS IN THE LANE. {N} OVERSTAYED. {T} BALL.", "{N} LINGERED IN THE PAINT. LOITERING IS LOGGED. {T} BALL."],
+  fivesec: ["FIVE SECONDS. THE THROW-IN NEVER CAME. {T} BALL.", "FIVE-SECOND VIOLATION. NOBODY ASKED FOR THE BALL. THE BALL HAS BEEN REASSIGNED."],
 };
 const KEYS = new Set(Object.keys(L));
+const VIOL = new Set(["eightsec", "backcourt", "threesec", "fivesec"]);
 export const CALLED = KEYS;
 
 // note: {k, g, team}; names: [10] shown names; teams: [2] team names. -> string | null
@@ -46,7 +52,7 @@ export function callFor(note, names, teams, pick = 0) {
   if (!note || !KEYS.has(note.k)) return null;
   const pool = L[note.k], line = pool[Math.abs(pick | 0) % pool.length];
   const N = note.g >= 0 ? names[note.g] || "A PLAYER" : "A PLAYER";
-  const T = note.k === "oob" || note.k === "shotclock" ? teams[1 - (note.team >= 0 ? note.team : 0)] || "THE OTHER SIDE" : teams[note.team >= 0 ? note.team : 0] || "";
+  const T = note.k === "oob" || note.k === "shotclock" || VIOL.has(note.k) ? teams[1 - (note.team >= 0 ? note.team : 0)] || "THE OTHER SIDE" : teams[note.team >= 0 ? note.team : 0] || "";
   return line.replaceAll("{N}", N).replaceAll("{T}", T);
 }
 const FOULS = new Set(["shootfoul", "reachfoul", "blockfoul", "charge", "loosefoul"]);
@@ -57,7 +63,7 @@ export function crowdFor(k, team = -1) {
   if (k === "ftset") return "hush";
   if (k === "dunk" || k === "three" || k === "block" || k === "ankles" || k === "alleyoop") return "cheer";
   if (k === "two" || k === "one" || k === "streettwo" || k === "steal" || k === "intercept" || k === "deflect") return "stand";
-  if (k === "airball" || k === "shotclock" || k === "rimout") return "groan";
+  if (k === "airball" || k === "shotclock" || k === "rimout" || VIOL.has(k)) return "groan";
   return null;
 }
 // Every line, for the check (no quotation marks, no one speaking).

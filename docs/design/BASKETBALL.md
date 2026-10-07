@@ -749,3 +749,69 @@ All four are decided. The original options are kept below each answer.
   purity check now walks every file under `engine*/` and fails any import that leaves its engine
   directory. `check-ads.mjs` reads `COURT` from `engine/court.js`. Modules the map names but S1a has
   no code for yet (`ai/roles`, `ai/coach`, `input/assist`, the rules tables) arrive with S1b/S2.
+- **S1b, 2026-10-07 (engine v5).** The possession state machine of 4.3 on the full court: a dead ball
+  walks to a **throw-in** (`phase: "throwin"`): the inbounder stands behind the line (after a make: the
+  INBOUNDER, a big who is not a handler, behind his own end line beside the basket; otherwise the nearest
+  man who is not BH1, behind the sideline or end line at `outSpot`), the clocks wait until the pass is
+  touched inbounds (`st.inb`), five seconds are counted. Your side: you steer BH1 (Scott's pick) and A
+  calls for it; ROOKIE/PRO throw it to you after 3 s anyway (`inbound: "auto"`), ALL-STAR/HOF call five
+  seconds (`"call"`); `cfg.inb: "me"` (pause, THROW-INS) puts you behind the line instead. `st.ps` is the
+  possession: backcourt, the 8-second count from the touch, the frontcourt, over-and-back; your man's three
+  seconds in the lane (holding it counts; a shot or a dunk under way does not). The **ladder** is the
+  level's `viol` dial: ROOKIE 8 s; PRO + over-and-back; ALL-STAR + 3 s (+ 5 s on the throw-in); HALL OF
+  FAME everything. The CPU is held to 8 s, over-and-back and 5 s and never commits them; 3 s on the CPU
+  waits for S2's lane seconds. **24/14**: a miss off the rim stops the shot clock (v4 reset it to 24 at
+  the miss), the defence's board is 24, the offence's is 14 (or what was left, if more); a defensive
+  deflection out keeps the offence's time. `rules/tables.js` holds RULES (nba, hvi, to21, fiba, street);
+  the penalty reads `penaltyOn` (hvi: the third team foul shoots, as v4; to21: the fifth, as v4, reset at 7
+  and 14 — the permanent to21 bonus is fixed) and the late rule (the second foul in the last 20 s).
+  **Roles** (`ai/roles.js`): BH1/BH2 by `0.6 handle + 0.4 pass + PG 8 / SG 4` across all five; the slots
+  (BH1 the top, BH2 a wing, a big the block). On the ten real rosters: Brunson (not Jokić, roster row 0)
+  brings it up for THE CURATED and Jokić is BH2 by his passing; Larry Bird for THE DEPARTMENT; LeBron for
+  THE INDEXED; Kareem does for THE HOUSE EDGE, as the best handler on a five of celebrities (the check
+  allows a centre only when nobody on his five handles it better). The rebounder outlets to BH1/BH2
+  unless he can grab and go (handle within 10 of BH1's, or no handler within 6 m after 1.5 s); BH1/BH2
+  come to the ball; the other handler trails as the safety; after 4 s in the backcourt the handler only
+  goes forward. **No press**: `markSpot` picks the handler up at `PICK_UP` (7.24 + 1.0 m from the rim),
+  shadows him 1-3.5 m above it and never past half court, off-ball defenders wait inside the pick-up
+  line; the closeout and intense D fire only once he is picked up; a defender caught near the ball in the
+  handler's backcourt gets out of the way. `st.press[t]` is the press, called by the CPU coach only when
+  trailing by 4+ in the last 20 % of the final period (or the leader at 15+ in a game to 21), after its own
+  basket. **Lines** (`input/assist.js`): your holder within 0.5 m of a line with the stick over it walks,
+  stops 0.1 m inside, and the board says LINE; he steps out only with RT held into it for 8 frames; dribble
+  moves never carry anyone out; the half line holds once over-and-back is called on you. Spots and pass
+  landings: landings 1.0 m inside; the big's spot on the block (|dy| 2.9, outside the lane); the corners
+  0.87 m in (v4 0.67) — a corner three cannot sit a full metre in, its line is 0.91 m from the sideline —
+  and the wings up to (6.5, 4.75) so the corners do not crowd them. **Hands**: stable icons (a change of
+  the man you steer swaps two letters); your pass target is 2K's profile (`passAim`, direction /
+  distance / openness, 0.40/0.25/0.35 on ROOKIE to 0.55/0.40/0.05 on HOF) less a lane penalty, never a man
+  out of bounds; on defence RS held is hands up (a longer arm in the passing lane, a step slower), RS
+  flicked at a man rising to shoot is the contest lunge, RB + a letter switches you to that man.
+  Measured, CPU v CPU, 60 games (30 NBA-shaped fives, 30 real rosters), `scripts/hoops-iq.mjs` reading the
+  frozen v4 and the live v5 the same way: the handler carries it over half court after a make or a board
+  **59.4 % → 98.0 %**; a big who is not a handler **24.5 % → 1.5 %**; throw-ins from behind the end line
+  after a make **0 % → 100 %**; his man on him deep in his backcourt (2 m+, half a second, excluding the
+  scramble 1.5 s after any live-ball change of possession and other men running back past him) **89.5 %
+  → 0.9 %** of possessions (a press when called: 98 %); the pick-up point (his own man first on him, not by
+  his doing) **12.9 m → 8.3 m** from the rim (median); an attacker 2.5 s+ in the lane **15.2 % → 1.3 %** of
+  frontcourt frames; CPU holders out of bounds 0 → 0; CPU violations 0. Spacing (mean nearest teammate in
+  the frontcourt) **4.07 → 3.80 m**: worse, from the corners coming in and the safety trailing; S2's
+  spacing targets own it. The casual human's own OOB turnovers a game, 5v5: **1.18 (v4's bot, v4 engine),
+  0.45 (v5's bot, v4 engine) → 0.04-0.06**; 3v3 0.01, 1v1 0. Calibration CPU v CPU: FG 46.9 %, 3P 37.2 %,
+  rim 64.7 %, FT 75.2 %, 3PA share 43 %. Cost: ~1.07 x v4 a game (231 ms against 215 here).
+  **The bot was fixed first, then the dials moved** (4.11): v4's casual human read `P.hold`, a counter
+  only the CPU's carrier keeps, so it never passed and never ran out of patience at a spot. v5's
+  (`scripts/hoops-bots.mjs`, published with the version) counts from the catch, gives up on a spot after
+  30-120 frames once in range (8.6 m), calls for the throw-in 15-90 frames in (inbounding: throws 20-70
+  frames in, thumb 30° off). It is a better player: it won 88 % on v4's ROOKIE dials. Every level moved a
+  notch (ROOKIE = v4's PRO; PRO half-way from v4's PRO to HOF; ALL-STAR = v4's HOF with the CPU's shots as
+  rated; HOF your shots 0.87, the CPU's 1.04) and the half court's `street` ease re-measured. At N = 400 a
+  level a mode: 5v5 **70 / 54 / 37 / 20 %** (ROOKIE FG 47.2 %), 3v3 69 / 55 / 27 / 15, 1v1 70 / 49 / 28 /
+  14. The bot's pass goes to the man it meant (the only teammate in the stick's ±60° cone) 95-100 %; with
+  two in the cone at ROOKIE the open one 100 % (synthetic); its violations a game: over-and-back ≤ 0.01
+  (PRO+), 3 s ≤ 0.01 (ALL-STAR+), 8 s and 5 s 0. Frozen: `engine-v5/` and
+  `scripts/fixtures/hoops-v5-records.json` (8 tapes: both bots, every mode and level, one with the human
+  inbounding; `scripts/freeze-hoops.mjs`); `replay.js` sends v5 there, v4 to `v4/sim.js` (a v4 tape on the
+  v5 engine is another game, and the check proves it). Deferred: the end-line run after a make; three
+  seconds on the CPU and lane seconds (S2); spacing to 4.5 m (S2); the rolling per-frame tape hash; timeouts
+  and the nba/fiba tables (present, unused); the D-pad calls and the rest of the DEFENCE profile (S3/S4).
