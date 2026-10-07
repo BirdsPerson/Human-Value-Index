@@ -82,6 +82,20 @@ export const machineDay = (ms = Date.now()) => Math.floor(((ms - CITY_EPOCH) * C
 
 // A roster row's name for the board: no disambiguation in brackets, upper case.
 export const shownName = (name) => String(name || "").replace(/\s*\([^)]*\)\s*/g, " ").trim().toUpperCase();
+// Positions for the league's real basketball players, as they played (the sim builds the frame from
+// it: a centre is tall and heavy, a point guard small); everyone else gets one from an archetype and
+// height (sim.js positionOf).
+export const ROLES = {
+  "nikola-jokic": "C", "jalen-brunson": "PG", "kobe-bryant": "SG", "magic-johnson": "PG", "joel-embiid": "C", "kareem-abdul-jabbar": "C",
+  "jaylen-brown": "SF", "julius-erving": "SF", "larry-bird": "SF", "dennis-rodman": "PF", "lebron-james": "SF", "michael-jordan": "SG",
+  "stephen-curry": "PG", "phil-jackson": "PF", "allen-iverson": "PG", "tyrese-maxey": "PG",
+};
+// Every rostered player once, best first: [{key, name (shown), r, club}] (the street game's picker).
+export function playerPool(league) {
+  const seen = new Set(), out = [];
+  for (const id of allClubs(league)) for (const [k, n, r] of league.teams[id] || []) { if (seen.has(k)) continue; seen.add(k); out.push({ key: k, name: shownName(n), r: Number(r) || 40, club: id }); }
+  return out.sort((a, b) => b.r - a.r || (a.key < b.key ? -1 : 1));
+}
 // Best first: the best brings the ball up (sim.js plays the rows in the order given).
 export const sortFive = (rows) => [...(rows || [])].sort((a, b) => b[2] - a[2] || (a[0] < b[0] ? -1 : 1)).slice(0, 5);
 export const teamRating = (rows) => (rows?.length ? Math.round(rows.reduce((n, r) => n + r[2], 0) / rows.length) : 0);

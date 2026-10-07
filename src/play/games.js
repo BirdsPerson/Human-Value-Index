@@ -7,7 +7,7 @@
 export const GAMES = [
   { href: "#tennis", title: "TENNIS", name: "tennis", icon: "tennis", note: "EXHIBITIONS AGAINST THE FAMOUS. KEYS, TOUCH OR PAD" },
   { href: "#golf", title: "GOLF", name: "golf", icon: "golf", note: "NINE HOLES. THE COURSE THE ASSEMBLY DECLINED" },
-  { href: "#hoops", title: "BASKETBALL", name: "basketball", icon: "hoops", note: "FIVE ON FIVE, WITH THE LEAGUE'S OWN TEAMS" },
+  { href: "#hoops", title: "BASKETBALL", name: "basketball", icon: "hoops", note: "5 ON 5 WITH THE LEAGUE'S TEAMS; 3 ON 3 AND 1 ON 1 WITH ANY OF ITS PLAYERS" },
   { href: "#football", title: "FOOTBALL", name: "football", icon: "football", note: "THE GRIDIRON. THE LEAGUE'S OWN TEAMS" },
   { href: "#tecmo", title: "FOURTH AND LONG", name: "the arcade football cabinet", icon: "helmet", note: "ARCADE FOOTBALL. FOUR PLAYS, GUESS THEIRS. ONE OR TWO PLAYERS" },
   { href: "#soccer", title: "SOCCER", name: "soccer", icon: "soccer", note: "THE PITCH. THE LEAGUE'S OWN TEAMS" },

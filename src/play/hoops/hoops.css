@@ -100,3 +100,21 @@
 .hp-level .hp-small { margin: 0 0 var(--s1); }
 .hp-level-note { max-width: 70ch; }
 .hp-tip { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); max-width: calc(100% - 16px); padding: 3px 10px; background: rgba(10, 15, 10, 0.88); color: #ffe14a; border: 2px solid #ffe14a; font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.06em; text-align: center; pointer-events: none; }
+
+/* v4: the modes, the street picker, the camera's adjustments */
+.hp-modes { margin-bottom: var(--s3); }
+.hp-modes .hp-chip { font-weight: 700; }
+.hp-sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--s2) var(--s4); margin: 0 0 var(--s2); }
+.hp-slot small { color: inherit; opacity: 0.7; margin-left: 0.4em; }
+.hp-pool { list-style: none; margin: 0 0 var(--s3); padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px var(--s3); }
+.hp-player { display: flex; width: 100%; align-items: center; gap: var(--s2); min-height: 44px; padding: 2px var(--s1); color: var(--fg); background: none; border: var(--bw) solid transparent; font: inherit; text-align: left; cursor: pointer; }
+.hp-player:hover, .hp-player:focus-visible { border-color: var(--line-hi); background: var(--panel-hi); outline: none; }
+.hp-player.in { border-color: var(--accent); }
+.hp-player .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.hp-player .tag { display: block; font-size: var(--t-xs); color: var(--fg-mute); }
+.hp-player .rt { color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.hp-back { color: #ff6a5a !important; }
+.hp-cam { max-width: 640px; margin: var(--s2) auto; padding: var(--s2) var(--s3); border: var(--bw) solid var(--line-hi); background: var(--panel); }
+.hp-slider { display: grid; grid-template-columns: 6em 1fr 2ch; align-items: center; gap: var(--s2); font-size: var(--t-xs); color: var(--fg-dim); margin: var(--s1) 0; }
+.hp-slider input { width: 100%; accent-color: var(--accent); min-height: 32px; }
+.hp-slider b { color: var(--fg); font-variant-numeric: tabular-nums; text-align: right; }

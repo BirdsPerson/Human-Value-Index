@@ -171,11 +171,11 @@
     "status": "live",
     "role": "Basketball",
     "year": "",
-    "line": "THE LEAGUE'S OWN TEAMS, FIVE ON FIVE. THE HOOP IS REAL; THE BALL IS NOT.",
+    "line": "ONE ON ONE AGAINST ANYONE IN THE LEAGUE. THE HOOP IS REAL; THE BALL IS NOT.",
     "play": null,
     "itch": null,
     "house": true,
-    "route": "#hoops",
+    "route": "#hoops?mode=1v1&quick=1",
     "campaign": "house-hoops",
     "hs": {
       "fmt": "hoops",

@@ -216,7 +216,7 @@ for (const [pid, games] of Object.entries(F.CABINET_PLACES)) {
   const sync = await import("./sync-arcade.mjs");
   ok(sync.houseIn(readFileSync(join(ROOT, "src/city/arcade.json"), "utf8")).length === kept.length, "the sync keeps the house games it finds in arcade.json");
   ok(!F.GAMES.some(g => g.house) && F.OWN_GAMES.every(g => !g.house), "the house games stay off the studio's list (the works.json check is unchanged)");
-  for (const want of ["#golf", "#hunt", "#tennis", "#hoops", "#fish", "#bowling", "#tecmo", "#soccer", "#ski"]) ok(kept.some(g => g.route === want), `a house cabinet for ${want}`);
+  for (const want of ["#golf", "#hunt", "#tennis", "#hoops", "#fish", "#bowling", "#tecmo", "#soccer", "#ski"]) ok(kept.some(g => g.route.split("?")[0] === want), `a house cabinet for ${want}`);
   const live = HG.houseLive(routes), liveSet = new Set(live.map(g => g.slug));
   for (const g of live) ok(routes.has(g.route.split(/[/?]/)[0]), `${g.slug}: its route ${g.route} is served`);
   for (const g of kept.filter(g => !routes.has(g.route.split(/[/?]/)[0]))) ok(!liveSet.has(g.slug) && !HG.houseFor("union", liveSet).includes(g.slug), `${g.slug}: ${g.route} is not served yet, so the cabinet is hidden`);
