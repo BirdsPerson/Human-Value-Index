@@ -220,7 +220,7 @@ export function itemBoxes(furniture, hasLook, x, y, w, h, snap) {
     const it = pieceOf(p.item);
     if (!it) continue;
     const half = (it.footprint.w * s) / 2, cx = x + p.x * w;
-    out.push({ item: p.item, name: it.name, role: it.role, placed: !!p.placed, x0: cx - half, x1: cx + half, y0: it.wall ? ffy - Math.max(it.footprint.h, 24) * s : ffy - it.footprint.h * s, y1: it.wall ? ffy - 6 * s : ffy });
+    out.push({ item: p.item, name: p.label || it.name, role: it.role, placed: !!p.placed, x0: cx - half, x1: cx + half, y0: it.wall ? ffy - Math.max(it.footprint.h, 24) * s : ffy - it.footprint.h * s, y1: it.wall ? ffy - 6 * s : ffy });
   }
   return out;
 }

@@ -11,6 +11,9 @@ import { roomIn } from "../src/city/simApi.js";
 import { CATALOG, dressUnit, lookSig, TAG_PROPS } from "../src/city/furniture.js";
 import { TOWERS, isTower, towerPlan, storeysAbove, placeAll, residentFlat, homeRoom, flatOf, FURNISH, DEPT, TOWER_STYLES } from "../src/city/tower.js";
 import { proprietorOf } from "../src/city/proprietors.js";
+import { propsFor, residentProps, residentTags, splitTags, CURATED, VOCAB } from "../src/city/figureProps.js";
+import { furnishLook } from "../src/economy/shops.js";
+import BY_FIGURE from "../src/city/props-by-figure.json" with { type: "json" };
 import { worldOf, fitCam, clampCam, zoomRange, levelAt, focusAt, hitWorld, screenToWorld, worldToScreen, unitAt, roomAt, moveFocus, crumbs, parseLink, linkParams, itemBoxes, topBox, itemAction, stepCam, LEVELS, deeper, shallower, nextLevel, GEO } from "../src/city/zoomCam.js";
 
 let fails = 0;
@@ -178,6 +181,103 @@ ok(!isTower(null) && !isTower(BUILDINGS.find(b => b.id === "hq")), "HQ keeps the
   ok([...sigs].every(([id]) => { const st = mer.storeys.find(s => id.startsWith(s.id + ":")); const u = st.units.find(x => x.id === id); return fresh2.lookSig(fresh2.dressUnit(u, { band: mer.band, penthouse: st.code === "PH", tags: [] })) === sigs.get(id); }), "the Meridian dresses the same on a fresh build");
 }
 
+// 4b. SIGNATURE PROPS (figureProps.js, signatureProps.js): every figure 2-4 props from the catalog, the
+// curated table applied, JETSAM! rare, props fit their rooms, a player's own placements untouched.
+{
+  const ROLE_FOR = { bedroom: "bed", kitchen: "stove", living: "sofa", bath: "tub", study: "desk" };
+  const NEUTRAL_OK = new Set(["book-towers", "bonsai", "radio-set", "map-wall", "dartboard", "greenhouse"]);
+  const valid = (ids) => Array.isArray(ids) && ids.length >= 2 && ids.length <= 4 && new Set(ids).size === ids.length && ids.every(id => CATALOG[id]);
+  ok(Object.keys(CATALOG).filter(id => VOCAB[id]).length === Object.keys(VOCAB).length, "every prop the model may pick is in the catalog");
+  ok(Object.keys(VOCAB).length >= 40, `a catalog of at least 40 signature props (${Object.keys(VOCAB).length})`);
+  for (const [slug, ids] of Object.entries(CURATED)) ok(valid(ids), `curated ${slug}: 2-4 distinct catalog ids (${ids})`);
+  for (const [slug, ids] of Object.entries(BY_FIGURE)) ok(valid(ids) && ids.every(id => VOCAB[id]), `cached ${slug}: 2-4 ids from the vocabulary (${ids})`);
+  ok(Object.keys(CURATED).length >= 50, `at least 50 curated figures (${Object.keys(CURATED).length})`);
+  // everyone on file: 2-4 props from the catalog, deterministically
+  let figs = 0, jet = 0;
+  for (const f of FAMOUS_FIGURES) {
+    const s = { ...f, slug: slugify(f.name) }, a = propsFor(s);
+    figs++;
+    ok(valid(a) && JSON.stringify(a) === JSON.stringify(propsFor(s)), `${f.name}: 2-4 props, the same twice (${a})`);
+    if (a.includes("arcade")) jet++;
+  }
+  // the curated ones are applied
+  const by = (slug) => propsFor(FAMOUS_FIGURES.map(f => ({ ...f, slug: slugify(f.name) })).find(s => s.slug === slug) || { slug, name: slug });
+  ok(by("peter-thiel").includes("chess-table"), "Peter Thiel keeps a chess table");
+  ok(by("arthur-ashe").includes("tennis-console") && by("arthur-ashe").includes("tennis-rack"), "Arthur Ashe has the tennis game on his TV and a racket rack");
+  ok(by("john-lennon").includes("guitar-acoustic") && by("paul-mccartney").includes("guitar-wall") && by("prince").includes("guitar-wall"), "Lennon, McCartney and Prince keep their guitars");
+  ok(by("nikola-tesla").includes("tesla-coil") && by("albert-einstein").includes("chalkboard"), "Tesla has his coil, Einstein his chalkboard");
+  ok(!Object.values(CURATED).some(ids => ids.includes("arcade") && ids.length > 3), "curated JETSAM! is for documented gamers only");
+  // grave-harm figures get neutral props
+  for (const name of ["Jeffrey Epstein", "Ghislaine Maxwell", "Bernie Madoff", "Harvey Weinstein", "Pablo Escobar", "Adolf Hitler"]) {
+    const f = FAMOUS_FIGURES.find(x => x.name === name);
+    if (f) ok(propsFor({ ...f, slug: slugify(f.name) }).every(id => NEUTRAL_OK.has(id)), `${name}: neutral props only (${propsFor({ ...f, slug: slugify(f.name) })})`);
+  }
+  // the rules, on a thousand strangers: valid, and JETSAM! rare
+  let strangers = 0, jetS = 0;
+  for (let i = 0; i < 1000; i++) {
+    const s = { name: `Citizen ${i}`, slug: `citizen-${i}`, kind: "citizen", score: 500 + (i % 300), warmth: (i * 7) % 100, competence: (i * 13) % 100, breakdown: { care: (i * 3) % 100, alignment: (i * 5) % 100, utility: (i * 11) % 100, adaptability: (i * 17) % 100, legacy: (i * 19) % 100, network: (i * 23) % 100, physical: (i * 29) % 100, threat: (i * 31) % 40, redundancy: (i * 37) % 100 } };
+    const a = propsFor(s);
+    if (!valid(a)) ok(false, `${s.name}: rules gave ${a}`);
+    strangers++; if (a.includes("arcade")) jetS++;
+  }
+  ok(jetS / strangers <= 0.05, `JETSAM share among rule-dressed strangers <= 5% (${jetS}/${strangers} = ${(100 * jetS / strangers).toFixed(1)}%)`);
+  const all = [...Object.values(CURATED), ...Object.values(BY_FIGURE)], jetAll = all.filter(a => a.includes("arcade")).length;
+  ok(jetAll / all.length <= 0.05, `JETSAM share among assigned figures <= 5% (${jetAll}/${all.length})`);
+  // the props fit: width within the smallest room (22 units, 24 with the walls' slack), height within the room's 45
+  for (const id of Object.keys(VOCAB)) {
+    const it = CATALOG[id];
+    ok(it.footprint.w <= 24 && it.footprint.h <= 45 && it.rooms.length > 0 && it.tiers.length > 0, `prop ${id} fits a room (w ${it.footprint.w}, h ${it.footprint.h})`);
+  }
+  // dress every flat with four props each (cycling the whole vocabulary): right room, right tier, a cap on the floor pieces
+  const ids = Object.keys(VOCAB), flats = [];
+  for (const b of towers) { const p = towerPlan(b); for (const st of p.storeys) for (const u of st.units) if (u.kind === "flat" || u.kind === "suite") flats.push({ p, st, u }); }
+  let placedProps = 0, wantedProps = 0, bad = 0, crowded = 0, noLabel = 0;
+  flats.forEach(({ p, st, u }, n) => {
+    const band = st.code === "PH" ? 0 : u.kind === "suite" ? 1 : p.band;
+    const props = [0, 1, 2, 3].map(k => ({ id: ids[(n * 4 + k) % ids.length], owner: "TEST'S" }));
+    const L = dressUnit(u, { band, penthouse: st.code === "PH", tags: [], props });
+    ok(lookSig(L) === lookSig(dressUnit(u, { band, penthouse: st.code === "PH", tags: [], props })), `${u.id}: the same dressing with props twice`);
+    wantedProps += 4;
+    for (const r of u.rooms) {
+      const fur = L.rooms[r.id].furniture, sig = fur.filter(f => f.label);
+      placedProps += sig.length;
+      if (fur.length > 7) { crowded++; if (crowded < 4) console.log(`  crowded ${r.id}: ${fur.map(f => f.item)}`); }
+      if (sig.filter(f => !CATALOG[f.item].wall).length > 2) crowded++;
+      for (const f of fur) { const it = CATALOG[f.item]; if (!it.rooms.includes(r.purpose) || !it.tiers.includes(band)) bad++; }
+      if (sig.some(f => !/^TEST'S /.test(f.label))) noLabel++;
+    }
+    for (const r of u.rooms) if (ROLE_FOR[r.purpose] && !L.rooms[r.id].furniture.some(f => f.role === ROLE_FOR[r.purpose])) bad++;
+  });
+  ok(bad === 0 && crowded === 0 && noLabel === 0, `signature props: right rooms and tiers, no crowding, every one labelled with its owner (${bad} wrong, ${crowded} crowded, ${noLabel} unlabelled)`);
+  ok(placedProps >= wantedProps * 0.75, `most requested props find a room (${placedProps} of ${wantedProps})`);
+  // a tap names the owner: "PRINCE'S GUITAR WALL"
+  const pf = flats.find(({ u }) => u.rooms.some(r => r.purpose === "living")), pr = pf.u.rooms.find(r => r.purpose === "living");
+  const PL = dressUnit(pf.u, { band: pf.p.band, penthouse: pf.st.code === "PH", tags: [], props: [{ id: "guitar-wall", owner: "PRINCE'S" }] });
+  ok(itemBoxes(PL.rooms[pr.id].furniture, true, 0, 0, 300, 400, true).some(b => b.name === "PRINCE'S GUITAR WALL"), "a tap on the guitar wall reads PRINCE'S GUITAR WALL");
+  // the tennis game takes the place of the TV, and shows a court when lit
+  const tv = flats.find(({ u, p, st }) => { const L = dressUnit(u, { band: p.band, penthouse: st.code === "PH", tags: [] }); return u.rooms.some(r => r.purpose === "living" && L.rooms[r.id].furniture.some(f => f.role === "tv" && f.item !== "ebtv")); });
+  const TL = dressUnit(tv.u, { band: tv.p.band, penthouse: tv.st.code === "PH", tags: [], props: [{ id: "tennis-console", owner: "ASHE'S" }] });
+  const lr = tv.u.rooms.find(r => r.purpose === "living");
+  ok(TL.rooms[lr.id].furniture.some(f => f.item === "tennis-console") && TL.rooms[lr.id].furniture.filter(f => f.role === "tv").length === 1, "the tennis game replaces the living-room TV (one set)");
+  const painted = [];
+  CATALOG["tennis-console"].draw({ fillStyle: "", fillRect(x, y, w, h) { painted.push(this.fillStyle); } }, 50, 100, 2, { on: true });
+  ok(painted.includes("#2f7d3a") && painted.includes("#ffffff"), "the lit tennis set draws a green court and the ball");
+  // the tags string carries the props and back
+  const rt = splitTags(residentTags([{ name: "Prince Rogers", slug: "prince", breakdown: { care: 50 } }]));
+  ok(rt.props.length === 3 && rt.props[0].id === "guitar-wall" && rt.props[0].owner === "ROGERS'S", `the tag string carries the props and their owner (${JSON.stringify(rt.props[0])})`);
+  // a player's own placements are never overridden: the flat's placed pieces survive any dressing, props or none
+  const mine = flats.find(({ u }) => u.rooms.some(r => r.purpose === "living")), mr = mine.u.rooms.find(r => r.purpose === "living");
+  for (const props of [[], [{ id: "chess-table", owner: "X'S" }, { id: "guitar-wall", owner: "X'S" }, { id: "tennis-console", owner: "X'S" }]]) {
+    const base = dressUnit(mine.u, { band: mine.p.band, penthouse: mine.st.code === "PH", tags: [], props });
+    const FL = furnishLook(base, [{ room: mr.id, spot: "f2", item: "arcade" }]);
+    ok(FL.rooms[mr.id].furniture.some(f => f.item === "arcade" && f.placed), "a player's placed JETSAM! cabinet stays in the flat");
+    ok(FL.rooms[mr.id].furniture.filter(f => f.item === "arcade").length === 1, "the placed cabinet is the only one");
+  }
+  // vacant flats: JETSAM! about one in sixty, not one in fifteen
+  const vac = flats.filter(({ p, st, u }) => dressUnit(u, { band: p.band, penthouse: st.code === "PH", tags: [] }).rooms && Object.values(dressUnit(u, { band: p.band, penthouse: st.code === "PH", tags: [] }).rooms).some(r => r.furniture.some(f => f.item === "arcade"))).length;
+  ok(vac / flats.length <= 0.05, `JETSAM! in vacant flats is rare (${vac}/${flats.length})`);
+  console.log(`  props: ${figs} figures on file, ${Object.keys(CURATED).length} curated, ${Object.keys(BY_FIGURE).length} cached, ${placedProps}/${wantedProps} test props placed, JETSAM ${jetS}/${strangers} strangers, ${jetAll}/${all.length} assigned, ${vac}/${flats.length} vacant flats`);
+}
 // 7. DEEP ZOOM (zoomCam.js): BUILDING > FLOOR > FLAT > ROOM resolve for every room of every tower,
 // at a phone and a desktop viewport; deep links round-trip; every level hit-tests to what it shows.
 {

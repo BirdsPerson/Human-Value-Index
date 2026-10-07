@@ -16,6 +16,7 @@
 
 import { ebPiece } from "./ebPieces.js";
 import { trophyPiece } from "./trophyPieces.js";
+import { SIGNATURE_ITEMS } from "./signatureProps.js";   // the props that say who lives there (figureProps.js says who gets which)
 
 const h01 = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 const pick = (list, str) => list[Math.min(list.length - 1, Math.floor(h01(str) * list.length))];
@@ -310,6 +311,7 @@ const ITEMS = [
   { id: "stage-corner", name: "THE STAGE CORNER", rooms: ["snug"], tiers: [0, 1, 2], fw: 12,
     rects: [[-6, 0, 12, 1, "#8c1622"], [-0.3, 1, 0.6, 14, "#9ca3af"], [-1, 15, 2, 1.5, "#111111"], [2.5, 1, 4, 6, "#1f2937"], [3, 2, 3, 4, "#374151"]],
     after: (c, cx, fy, s) => word(c, "LIVE", cx, fy, 20, s, "#fde047", 2) },
+  ...SIGNATURE_ITEMS,
 ];
 const footprintOf = (rects) => {
   let top = 0;
@@ -371,7 +373,7 @@ const LAYOUTS = {
 // broadcast, tech, cook, hedonist. The prop each brings, best first.
 export const TAG_PROPS = {
   art: ["easel"], music: ["piano", "grand-piano", "record-player"], scholar: ["bookshelf", "books"],
-  athlete: ["weights", "trophies"], broadcast: ["ebtv"], tech: ["pc"], cook: ["pots"], hedonist: ["arcade"],
+  athlete: ["weights", "trophies"], broadcast: ["ebtv"], tech: ["pc"], cook: ["pots"], hedonist: ["record-player"],
 };
 const GENERIC_EXTRAS = ["record-player", "aquarium", "armchair", "books", "plant-tall", "cactus", null, null];
 
@@ -401,10 +403,12 @@ function choose(choices, purpose, band, key) {
   const ok = choices.filter(id => allowed(id, purpose, band));
   return ok.length ? pick(ok, key) : null;
 }
-function place(list, id, x, key) {
+function place(list, id, x, key, owner) {
   const it = CATALOG[id];
   const tint = it.tints ? pick(it.tints, `${key}|tint`) : null;
-  list.push({ item: id, x: Math.max(0.06, Math.min(0.94, x)), role: it.role, tint, flip: h01(`${key}|flip`) < 0.5 && !it.wall });
+  const f = { item: id, x: Math.max(0.06, Math.min(0.94, x)), role: it.role, tint, flip: h01(`${key}|flip`) < 0.5 && !it.wall };
+  if (owner) f.label = `${owner} ${it.name}`;   // a tap says whose it is: "PRINCE'S GUITAR WALL"
+  list.push(f);
 }
 // a free spot for one more piece: the widest gap between floor pieces
 function freeX(list) {
@@ -427,11 +431,16 @@ export function dressUnit(unit, ctx = {}) {
   const floorKind = ctx.penthouse ? "marble" : pick(FLOORS[band], `${id}|floor`);
   const floorCol = floorKind === "carpet" ? pick(CARPETS, `${id}|carpet`) : floorKind === "wood" || floorKind === "boards" ? pick(WOODS, `${id}|wood`) : floorKind === "marble" ? "#d8d4cc" : pick(["#8a8a7a", "#6a7a8a", "#8a6a5a", "#5a6a5a"], `${id}|lino`);
   // the personal touch: one prop per tag the residents carry, in the living room (or the study, or the bedroom)
+  // With residents on file the signature props (figureProps.js) replace the one-per-tag guess; a vacant
+  // flat keeps the old dressing, with a JETSAM! cabinet only about one flat in sixty.
+  const sigProps = ctx.props || [];
   const wants = [];
-  for (const t of tags) for (const p of TAG_PROPS[t] || []) if (!wants.includes(p)) { wants.push(p); break; }
-  if (!wants.includes("arcade") && h01(`${id}|arcade`) < 1 / 15) wants.push("arcade");
+  if (!sigProps.length) {
+    for (const t of tags) for (const p of TAG_PROPS[t] || []) if (!wants.includes(p)) { wants.push(p); break; }
+    if (!wants.includes("arcade") && h01(`${id}|arcade`) < 1 / 60) wants.push("arcade");
+  }
   if (band === 0 && h01(`${id}|tap`) < 0.2) wants.push("beer-tap");
-  const generic = pick(GENERIC_EXTRAS, `${id}|extra`);
+  const generic = sigProps.length ? null : pick(GENERIC_EXTRAS, `${id}|extra`);
   const purposes = unit.rooms.map(r => r.purpose);
   for (const r of unit.rooms) {
     const key = r.id, layouts = LAYOUTS[r.purpose];
@@ -475,7 +484,47 @@ export function dressUnit(unit, ctx = {}) {
       break;
     }
   }
+  placeSignature(look, unit, sigProps, band, purposes);
   return look;
+}
+
+// The signature props: each in the first room its use fits (instruments in the living room or the
+// study, the lab bench in the study), at most two floor pieces to a room, swapping out a plant, a lamp
+// or a poster when the room is full. A set that is a television (the tennis game) takes the place of the
+// room's own TV rather than standing beside it.
+const DECOR = new Set(["plant", "plant-tall", "cactus", "lamp", "poster", "painting"]);
+function placeSignature(look, unit, props, band, purposes) {
+  const floorCount = new Map(), done = new Set();
+  for (const { id: want, owner } of props) {
+    const pid = want === "piano" && band === 0 ? "grand-piano" : want === "grand-piano" && band > 0 ? "piano" : want;
+    const it = CATALOG[pid];
+    if (!it || !it.tiers.includes(band) || done.has(pid)) continue;
+    for (const p of it.rooms) {
+      if (!purposes.includes(p)) continue;
+      const r = unit.rooms.find(q => q.purpose === p), list = look.rooms[r.id].furniture, key = `${r.id}|sig|${pid}`;
+      if (!it.wall && (floorCount.get(r.id) || 0) >= 2) continue;
+      if (it.role === "tv") {
+        const k = list.findIndex(f => f.role === "tv" && f.item !== "ebtv" && !f.placed);
+        if (k < 0) continue;
+        const x = list[k].x;
+        list.splice(k, 1);
+        place(list, pid, x, key, owner);
+        floorCount.set(r.id, (floorCount.get(r.id) || 0) + 1);
+      } else {
+        while (list.length >= 6) { const k = list.findIndex(f => DECOR.has(f.item)); if (k < 0) break; list.splice(k, 1); }
+        if (list.length >= 7) continue;
+        if (it.wall) {
+          const walls = list.filter(f => CATALOG[f.item].wall).map(f => f.x);
+          const x = [0.5, 0.27, 0.73, 0.14, 0.86].find(c => !walls.some(w => Math.abs(w - c) < 0.2)) ?? 0.5;
+          for (let k = list.length - 1; k >= 0; k--) if (CATALOG[list[k].item].wall && DECOR.has(list[k].item) && Math.abs(list[k].x - x) < 0.3) list.splice(k, 1);
+          place(list, pid, x, key, owner);
+        } else place(list, pid, freeX(list), key, owner);
+        floorCount.set(r.id, (floorCount.get(r.id) || 0) + (it.wall ? 0 : 1));
+      }
+      done.add(pid);
+      break;
+    }
+  }
 }
 
 // A unit's signature (for the check): what a player would see repeat.

@@ -13,11 +13,12 @@ import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState
 import { createPortal } from "react-dom";
 import { towerPlan, placeAll, nameplate, PURPOSE_NAME, isDark } from "./tower.js";
 import { roomScale, parseLink } from "./zoomCam.js";
-import { keyOf, jobOf } from "./sim.js";
+import { keyOf } from "./sim.js";
 import { pieceOf, dressUnit, floorStyle } from "./furniture.js";
 import { roomIn, activityLine, clockAt } from "./simApi.js";
 import { sheetFor } from "./spriteBank.js";
 import { familyOf, FAMILY_COLOR } from "./cityKit.js";
+import { residentTags, splitTags } from "./figureProps.js";
 import { FONT, Occupant } from "./cityUi.jsx";
 import { ebtvFrame, drawFrame, tvBox, takeTvBoxes, watchHref, ebtvLabel } from "./ebtvFrame.js";
 import { openFunnel } from "./FunnelOverlay.jsx";
@@ -82,36 +83,16 @@ export function lookOf(plan, st, u, tags = "") {
   let L = LOOKS.get(k);
   if (!L) {
     if (LOOKS.size > 4000) LOOKS.clear();
-    L = dressUnit(u, { band: u.kind === "suite" ? 1 : plan.band, penthouse: st.code === "PH", tags: tags ? tags.split(",") : [] });
+    const sp = splitTags(tags);
+    L = dressUnit(u, { band: u.kind === "suite" ? 1 : plan.band, penthouse: st.code === "PH", tags: sp.tags, props: sp.props });
     if (pl) L = furnishLook(L, pl);
     LOOKS.set(k, L);
   }
   return L;
 }
-// What the residents' files put in the flat: their job, and the charm corner's taste for games.
-const JOB_TAGS = [
-  ["art", /pixel-renderer|culture-curator|museum-guide|fabricator/], ["music", /musician|singer|karaoke|cypher/],
-  ["scholar", /lecturer|philosopher|research|tutor|stacks-librarian|archivist|teacher|chronometrist|obituary|translator|guidance/],
-  ["athlete", /athlete|combat|footballer|coach|surf|ski-instructor|conditioning|lifeguard|patrol/],
-  ["broadcast", /broadcast|stage-performer|announcer|copywriter|night-editor/], ["tech", /engineer|latency|data-hall|product-manager|cache-custodian|mechanic/],
-  ["cook", /cook|chef|itamae|brewer|pizza/],
-];
-const TAGS = new WeakMap();
-export function tagsOf(list) {
-  if (!list || !list.length) return "";
-  const out = new Set();
-  for (const s of list) {
-    let t = TAGS.get(s);
-    if (t == null) {
-      t = [];
-      try { const j = jobOf(s).jobId; for (const [tag, re] of JOB_TAGS) if (re.test(j)) { t.push(tag); break; } } catch { /* no job on file */ }
-      if (familyOf(s).family === "charm") t.push("hedonist");
-      TAGS.set(s, t);
-    }
-    t.forEach(x => out.add(x));
-  }
-  return [...out].sort().join(",");
-}
+// What the residents' files put in the flat: their job tag and their signature props (figureProps.js:
+// the curated table, the cached model pass, then the rules). A string, so lookOf can key on it.
+export const tagsOf = residentTags;
 
 // Paper, as a repeating pattern per (paper, ink, scale): one fill per room.
 const PATTERNS = new Map();
