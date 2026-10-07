@@ -495,7 +495,7 @@ export function dressUnit(unit, ctx = {}) {
 const DECOR = new Set(["plant", "plant-tall", "cactus", "lamp", "poster", "painting"]);
 const SWAP = new Set([...DECOR, "bookshelf", "trophies"]);   // what a wall of guitars (or maps) may stand in front of
 function placeSignature(look, unit, props, band, purposes) {
-  const floorCount = new Map(), done = new Set();
+  const floorCount = new Map(), done = new Set(), bigWall = new Set();   // a room has room for one wide wall piece
   for (const { id: want, owner } of props) {
     const pid = want === "piano" && band === 0 ? "grand-piano" : want === "grand-piano" && band > 0 ? "piano" : want;
     const it = CATALOG[pid];
@@ -504,6 +504,7 @@ function placeSignature(look, unit, props, band, purposes) {
       if (!purposes.includes(p)) continue;
       const r = unit.rooms.find(q => q.purpose === p), list = look.rooms[r.id].furniture, key = `${r.id}|sig|${pid}`;
       if (!it.wall && (floorCount.get(r.id) || 0) >= 2) continue;
+      if (it.wall && it.footprint.w >= 16 && bigWall.has(r.id)) continue;
       if (it.role === "tv") {
         const k = list.findIndex(f => f.role === "tv" && f.item !== "ebtv" && !f.placed);
         if (k < 0) continue;
@@ -519,6 +520,7 @@ function placeSignature(look, unit, props, band, purposes) {
           const x = [0.5, 0.27, 0.73, 0.14, 0.86].find(c => !walls.some(w => Math.abs(w - c) < 0.2)) ?? 0.5;
           for (let k = list.length - 1; k >= 0; k--) if (SWAP.has(list[k].item) && !list[k].placed && Math.abs(list[k].x - x) < 0.3) list.splice(k, 1);
           place(list, pid, x, key, owner);
+          if (it.footprint.w >= 16) bigWall.add(r.id);
         } else place(list, pid, freeX(list), key, owner);
         floorCount.set(r.id, (floorCount.get(r.id) || 0) + (it.wall ? 0 : 1));
       }
