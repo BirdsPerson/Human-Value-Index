@@ -17,7 +17,7 @@ import { getCase, hitLimit } from "../lib/store.js";
 import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { makeJson, preflight, foreignOrigin, clientIp, FOREIGN_ORIGIN_LINE, LIMITER_DOWN_LINE } from "../lib/http.js";
 import { NO_SUCH_FILE } from "./case.js";
-import { putGame, getGame, dropGame, getRecord, updateRecord, postBoard, readBoard, Busy, GAME_TTL_MS, K_PLAYER, KEEP_GAMES, KEEP_HASHES } from "../lib/chess-store.js";
+import { putGame, getGame, dropGame, pruneGames, getRecord, updateRecord, postBoard, readBoard, Busy, GAME_TTL_MS, K_PLAYER, KEEP_GAMES, KEEP_HASHES } from "../lib/chess-store.js";
 import { verifyGame } from "../lib/chess-verify.js";
 import { figureCard, eloOf } from "../../src/chess/roster.js";
 
@@ -78,6 +78,7 @@ export default async (req, context) => {
       const side = body.side === "b" ? "b" : "w";
       const gameId = randomUUID().replace(/-/g, "").slice(0, 20), seed = randomInt(1, 2 ** 31 - 1);
       await putGame(gameId, { caseId, vs: card.slug, side, seed, at: Date.now() });
+      if (Math.random() < 0.1) await pruneGames().catch(() => {});   // one start in ten sweeps the void games
       return json(200, { gameId, seed, vs: card.slug, side }, noStore);
     }
 

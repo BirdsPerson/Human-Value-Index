@@ -16,6 +16,16 @@ export const newRecord = () => ({ v: 1, w: 0, d: 0, l: 0, rating: START_RATING, 
 export async function putGame(gameId, game) { await chess().setJSON(`g:${gameId}`, game); }
 export async function getGame(gameId) { return (await chess().get(`g:${gameId}`, { type: "json" })) || null; }
 export async function dropGame(gameId) { await chess().delete(`g:${gameId}`); }
+// Void games (dealt, never filed, past GAME_TTL_MS) are dead weight: delete up to `cap` of them.
+export async function pruneGames(now = Date.now(), cap = 200) {
+  const store = chess(), { blobs } = await store.list({ prefix: "g:" });
+  let n = 0;
+  for (const { key } of blobs.slice(0, cap)) {
+    const g = await store.get(key, { type: "json" });
+    if (!g || now - g.at > GAME_TTL_MS) { await store.delete(key); n++; }
+  }
+  return n;
+}
 
 export async function getRecord(caseId) { return (await chess().get(`c:${caseId}`, { type: "json" })) || null; }
 export class Busy extends Error {}

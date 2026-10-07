@@ -4,7 +4,7 @@
 // same pairings, the same move count and the same result at the same machine minute, computed
 // from the seed and the machine clock. Drawn by tableDraw.js; checked by scripts/check-chess.mjs.
 //
-//   TABLES       two at THE RECREATION GROUND (north-east lawn, beside the fountain's ring),
+//   TABLES       one at THE RECREATION GROUND (north-east lawn, beside the fountain's ring),
 //                a row of three along THE GREEN (the Commons), two beside the path through
 //                THE ESTATE GARDENS (the Sprawl; the master plan's new green). Placed from the
 //                lots' own rectangles, so they move with the ground.
@@ -50,9 +50,9 @@ export const TABLES = (() => {
   // THE RECREATION GROUND: the north-east lawn between the spoke and the trees (the groundskeeper
   // was moved round to the east lawn to make room)
   const G = REC.lot;
-  const r1 = [G.x + 4.25, G.y + 1.15], r2 = [G.x + 6.2, G.y + 1.4];
-  out.push(table("rec-ground", 1, ...r1, [[r1[0] - 0.78, r1[1] + 0.1], [r1[0] + 0.78, r1[1] - 0.15]]));
-  out.push(table("rec-ground", 2, ...r2, [[r2[0] - 0.8, r2[1] + 0.25], [r2[0] + 0.72, r2[1] + 0.05]]));
+  // (one table and one kibitzer: the ground reads cramped up close, the sprites stand taller than the tables)
+  const r1 = [G.x + 4.25, G.y + 1.15];
+  out.push(table("rec-ground", 1, ...r1, [[r1[0] - 0.78, r1[1] + 0.1]]));
   // THE GREEN: a row of three across its middle, the kibitzers either side of each
   const g = BUILDING["the-green"]?.rect;
   if (g) {

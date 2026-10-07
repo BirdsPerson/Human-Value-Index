@@ -37,7 +37,7 @@ export const ROOM_TYPE = {
   "block-a": "hab", "block-b": "hab", "block-c": "hab", "block-d": "hab", "the-street": "street",
   "the-drip": "cafe", "gallery-annex": "gallery", "members-club": "lounge", "the-lantern": "bar",
   "allotment": "allotment", "night-market": "market", "the-plaza": "street",
-  "ball-field": "ballfield", "courts": "courts", "rec-park": "picnic", "pitch": "soccer",
+  "ball-field": "ballfield", "courts": "courts", "rec-park": "recpark", "pitch": "soccer",
   "forum": "assembly", "dev-lot": "street",
   // THE COAST and THE HEIGHTS (2026-09-30)
   "beach": "picnic", "boardwalk": "market", "pier": "street", "surf": "park", "shore-lot": "street",
@@ -101,7 +101,7 @@ const LOOK = {
   lofts: ["#1c1a18", "#302c28"], line: ["#200f0f", "#381c1c"], reactor: ["#0f2014", "#1a3a24"], foundry: ["#26140c", "#442414"],
   racks: ["#0e1618", "#1a2a2e"], docks: ["#0f1a22", "#1a2e3a"], vats: ["#0f2014", "#1c3a22"], barracks: ["#1a1c16", "#2e3226"],
   cells: ["#181818", "#2a2a2a"], canteen: ["#221a12", "#3a2c1e"], hab: ["#18181a", "#2c2c30"], street: ["#101410", "#222822"],
-  ballfield: ["#10202a", "#2f6b2a"], courts: ["#141c24", "#3a4250"], picnic: ["#10202a", "#2a5a24"], soccer: ["#10202a", "#2e7a30"],
+  ballfield: ["#10202a", "#2f6b2a"], courts: ["#141c24", "#3a4250"], picnic: ["#10202a", "#2a5a24"], recpark: ["#10202a", "#2a5a24"], soccer: ["#10202a", "#2e7a30"],
 };
 Object.assign(LOOK, FUNNEL_LOOK);
 Object.assign(LOOK, LANES_LOOK);
@@ -318,6 +318,11 @@ const PLANS = {
     back: { unit: [M(A("stand", "stroll", "patron", 0, true), "tree", 2.2), M(A("seat", "read", "patron"), "parkBench", 1.25)] },
     front: { head: [M(A("stand", "rake", "staff", 1), "leafPile", 1.5, SIDE)], unit: [M(A("seat", "eat", "patron", 1), "picnicBench", 1.05), P("picnicTable", 0.62), M(A("seat", "talk", "patron", -1), "picnicBench", 1.05), P(null, 0.25), M(A("seat", "feed", "patron"), "parkBench", 1.25)] },
   },
+  // the recreation ground's lawn: the picnic plan plus the park chess table (src/chess/park.js), two seated, one kibitzer
+  recpark: {
+    back: { unit: [M(A("stand", "stroll", "patron", 0, true), "tree", 2.2), M(A("seat", "read", "patron"), "parkBench", 1.25)] },
+    front: { head: [M(A("stand", "rake", "staff", 1), "leafPile", 1.5, SIDE)], unit: [M(A("seat", "eat", "patron", 1), "picnicBench", 1.05), P("picnicTable", 0.62), M(A("seat", "talk", "patron", -1), "picnicBench", 1.05), P(null, 0.25), M(A("seat", "feed", "patron"), "parkBench", 1.25), M(A("seat", "sit", "patron", 1), "picnicBench", 1.05), P("chessTable", 0.62), M(A("seat", "sit", "patron", -1), "picnicBench", 1.05), M(A("stand", "watch", "patron"), null, 1.2)] },
+  },
   street: {
     back: { unit: [M(A("stand", "stroll", "any", 0, true), "lamppost", 2.2)] },
     front: { unit: [M(A("stand", "sweep", "staff", 0, true), null, 2.2), M(A("seat", "rest", "patron"), "streetBench", 1.25), M(A("stand", "loiter", "patron"), null, 1.2)] },
@@ -482,13 +487,13 @@ export const LEISURE_ACTS = new Set(["drink", "eat", "talk", "read", "write", "l
   "pitch", "bat", "ready", "catch", "shoot", "dribble", "defend", "feed",
   "snap", "stance", "throw", "receive", "wrap", "carry", "kick", "footwork", "kickball", "header", "keeper", "mark", "chase", ...FUNNEL_ACTS, ...LANES_ACTS]);
 // Rooms whose people take their places in order (a game needs its battery first).
-export const ORDERED_TYPES = new Set(["ballfield", "courts", "picnic", "gridiron", "soccer"]);
+export const ORDERED_TYPES = new Set(["ballfield", "courts", "picnic", "recpark", "gridiron", "soccer"]);
 const STAFF_ACT = {
   bar: "serve", cafe: "serve", diner: "serve", canteen: "serve", lounge: "serve", suite: "serve", market: "sell", casino: "deal",
   theatre: "perform", concert: "perform", lecture: "lecture", school: "lecture", library: "shelve", park: "rake", allotment: "dig",
   cells: "guard", chapel: "preach", gallery: "guide", assembly: "confer", tribunal: "confer", street: "sweep",
   hab: "tend", lofts: "tend", barracks: "drill", press: "type", vault: "count",
-  ballfield: "rake", courts: "whistle", picnic: "rake", gridiron: "rake", soccer: "rake",
+  ballfield: "rake", courts: "whistle", picnic: "rake", recpark: "rake", gridiron: "rake", soccer: "rake",
 };
 export function actAt(a, hour, role = null, type = null) {
   let act = a.kind === "bed" && a.act === "sleep" ? (isNight(hour) ? "sleep" : "rest") : a.act;
@@ -557,7 +562,7 @@ export function drawRoom(c, placeId, x, y, w, h, u = 2, o = {}) {
   R(c, o.lit === false ? "rgba(255,255,255,0.03)" : "rgba(255,220,150,0.05)", x, y, w, 2 * u);
   c.restore();
 }
-const OPEN_AIR = new Set(["ballfield", "courts", "picnic", "gridiron", "soccer"]);
+const OPEN_AIR = new Set(["ballfield", "courts", "picnic", "recpark", "gridiron", "soccer"]);
 const COLD = new Set(["lab", "office", "exchange", "vault", "reactor", "racks", "vats", "ward", "cells", "line", "docks", "clock"]);
 const NOOP = () => {};
 
@@ -783,6 +788,7 @@ const DRAW = {
     R(c, "#e5e7eb", x, y + h * 0.62, w, u);
     R(c, "#b45309", x + w * 0.04, y + h * 0.66, w * 0.26, h * 0.3);            // the key
   },
+  recpark(c, x, y, w, h, u, o) { DRAW.picnic(c, x, y, w, h, u, o); },
   picnic(c, x, y, w, h, u, o) {
     const dusk = (o.hour ?? 12) >= 19 || (o.hour ?? 12) < 6.5;
     R(c, dusk ? "#070d18" : "#1c3346", x, y, w, h * 0.5);
@@ -892,6 +898,7 @@ const LIVE = {
     repeat(3, k => R(c, (Math.floor(t / 4.2) % 3) > k ? "#4ade80" : "#14532d", bx + bw * 0.6 + k * 3 * u, y + 7 * u, 2 * u, 2 * u));
   },
   courts(c, x, y, w, h, u, { hour }) { if (hour >= 19 || hour < 6.5) across(x, w, 40 * u, lx => { R(c, "#fff7d6", lx - 2 * u, y + 2 * u, 4 * u, u); R(c, "rgba(255,247,214,0.05)", lx - 12 * u, y + 3 * u, 24 * u, h); }); },
+  recpark(c, x, y, w, h, u, o) { LIVE.picnic(c, x, y, w, h, u, o); },
   picnic(c, x, y, w, h, u, { t }) {
     const fx = x + w * 0.5;   // the fountain, running
     for (let k = 0; k < 4; k++) { const f = ((t * 0.9 + k / 4) % 1 + 1) % 1; R(c, `rgba(147,197,253,${(0.7 * (1 - f)).toFixed(2)})`, fx + (k % 2 ? 1 : -1) * f * 9 * u, y + h * 0.4 - Math.sin(f * Math.PI) * 5 * u + f * h * 0.14, u, u); }
@@ -1114,6 +1121,15 @@ export const PROP = {
       for (let k = 0; k < 6; k++) R(c, k % 2 ? "#f5f5f5" : "#dc2626", x - 10 * p + k * 3.4 * p, Y - 16 * p, 3.4 * p, 2 * p);   // the cloth, gingham
       R(c, "#a16207", x - 4 * p, Y - 21 * p, 7 * p, 5 * p); R(c, "#78350f", x - 3 * p, Y - 23 * p, 5 * p, p);           // the basket
       R(c, "#4ade80", x + 4 * p, Y - 19 * p, 2 * p, 3 * p);                                                                 // a regulation beverage
+    },
+  },
+  chessTable: {
+    back(c, X, Y, W, p) {
+      const x = X + W / 2;
+      R(c, "#6b7280", x - 7 * p, Y - 14 * p, 2 * p, 14 * p); R(c, "#6b7280", x + 5 * p, Y - 14 * p, 2 * p, 14 * p);                  // the stone legs
+      R(c, "#9ca3af", x - 9 * p, Y - 16 * p, 18 * p, 2 * p);                                                                          // the top
+      for (let k = 0; k < 4; k++) R(c, k % 2 ? "#e5e7eb" : "#1f2937", x - 4 * p + k * 2 * p, Y - 18 * p, 2 * p, 2 * p);                // the board
+      R(c, "#f5f5f5", x - 3 * p, Y - 20 * p, p, 2 * p); R(c, "#111827", x + 2 * p, Y - 20 * p, p, 2 * p);                             // a piece each
     },
   },
   // the gridiron and the estate pitch

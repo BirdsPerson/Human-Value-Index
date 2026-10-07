@@ -188,7 +188,7 @@ const ok = (c, m) => { checks++; assert.ok(c, m); };
 // ==== THE PARK ==========================================================================================
 {
   const inRect = (r, x, y, m = 0.2) => x >= r.x + m && x <= r.x + r.w - m && y >= r.y + m && y <= r.y + r.h - m;
-  ok(PK.TABLES.filter(t => t.lot === "rec-ground").length >= 2 && PK.TABLES.some(t => t.lot !== "rec-ground"), "tables at the recreation ground and at least one other green");
+  ok(PK.TABLES.filter(t => t.lot === "rec-ground").length === 1 && PK.TABLES.some(t => t.lot !== "rec-ground"), "tables at the recreation ground and at least one other green");
   for (const t of PK.TABLES) {
     const r = BUILDING[t.lot].rect;
     for (const [x, y] of [[t.x, t.y], ...t.seats, ...t.kib]) ok(inRect(r, x, y), `${t.id}: everything on its own ground`);
@@ -309,6 +309,11 @@ const ok = (c, m) => { checks++; assert.ok(c, m); };
   st = await call("POST", { caseId: A, action: "start", vs: "alan-turing", side: "w" });
   await seed("HVI-CHESSBBB", [{ score: 500, tier: "MONITORED CIVILIAN" }]);
   ok((await call("POST", { caseId: "HVI-CHESSBBB", action: "result", gameId: st.body.gameId, moves: [], resign: true })).status === 404, "another file's game cannot be filed on yours");
+  // void games (past the TTL, never filed) are swept; a live one stays
+  const CS = await import("../netlify/lib/chess-store.js");
+  await CS.putGame("voidone", { caseId: A, vs: "alan-turing", side: "w", seed: 1, at: Date.now() - CS.GAME_TTL_MS - 1000 });
+  await CS.putGame("liveone", { caseId: A, vs: "alan-turing", side: "w", seed: 1, at: Date.now() });
+  ok((await CS.pruneGames()) >= 1 && !store().has("g:voidone") && store().has("g:liveone"), "void games are pruned, live ones stay");
   // the purge takes the record and the board row with it
   const p = await call("POST", { caseId: A, confirm: A }, { path: "/api/purge", f: purge });
   ok(p.status === 200 && !store().has(`c:${A}`) && !(store().get("board")?.data.rows || []).length, "a purge deletes the chess record and the board row");

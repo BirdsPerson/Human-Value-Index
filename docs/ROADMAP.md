@@ -9,11 +9,6 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Backlog (priority order)
 
-- [next, small] Park chess polish (Claude's call 2026-09-30): the Recreation Ground reads cramped up
-  close (sprites taller than the tables): cut it to ONE stone table and fewer kibitzers there; add
-  the chess tables to the Recreation Ground's side-view cutaway (props.js picnic plan); prune void
-  chess game records older than 12 h (netlify/lib/chess-store.js).
-
 0. [in progress 2026-09-29, Scott's order: scale -> community -> HQ]
    a. [shipped 2026-09-29, see Done] **Scale.** Production sprite atlas + slim /api/pen.
    b. **Community + incidents.** Real-life ties from Wikidata (spouse, sibling, bandmates
@@ -245,6 +240,11 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
   ~/projects/organize/collect_reports.py.
 
 ## Done
+
+- 2026-10-07 Park chess polish: the Recreation Ground keeps ONE stone table and one kibitzer
+  (src/chess/park.js); its side-view cutaway has the chess table with two seated and a watcher
+  (new `recpark` plan in props.js, the picnic plan plus `chessTable`); void games past 12 h are
+  swept on one in ten starts (chess-store.js pruneGames). Check: check-chess.
 
 - 2026-09-30 STREET polish, pass 1 (item 9a): the STREET view now draws with the city's own
   drawers through a perspective kit (src/city/streetArch.js): every building's architecture
