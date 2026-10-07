@@ -185,9 +185,10 @@
 :root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"]) :is(.ui-frame-ttl, .tb-top) { background: var(--ttl-bg); }
 :root[data-theme="win30"] :is(.ui-frame-ttl .t, .tb-top .tb-title:not(.tb-right)) { margin: 0 auto; }
 :root[data-theme="win30"] :is(.ui-frame-ttl .m, .tb-top .tb-right) { margin-left: 0; }
+:root:is([data-theme="win95"], [data-theme="win98"]) .ui-frame-ttl .t:last-child { margin-right: auto; }
 :root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"]) .ui-dialog > .ui-frame-ttl::after { margin-left: auto; }
 /* a window on the desk's grid: the bar costs its height once, not twice */
-:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) .fr-cell .ui-frame:not(.ui-dialog) { padding-top: calc(var(--bar-h9) + var(--s2) + 4px); }
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) .fr-cell .ui-frame:not(.ui-dialog) { padding-top: calc(var(--bar-h9) + 4px); }
 
 /* 3.0: flat. A thick grey sizing frame between two black lines, no shadow; the system-menu box (a bar in a
    square) left, the ▼ ▲ boxes right, white and flat */
