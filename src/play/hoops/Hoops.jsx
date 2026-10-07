@@ -578,12 +578,12 @@ function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, hands, set
       const period = !F.periods ? `TO ${st.target || 21}` : st.q > F.periods ? `OT${st.q - F.periods > 1 ? st.q - F.periods : ""}` : `Q${st.q}`;
       const back = st.half && st.clear === 0 && st.phase === "live";
       // v5: your throw-in (call for it, or throw it), the LINE cue when the line is holding you in
-      const ti = st.phase === "throwin" && st.ti && st.ti.t === 0 && !cfg.auto ? (st.ti.g === ctlP.g ? "throw" : st.ti.call < 0 ? "call" : "") : "";
+      const tiHud = st.phase === "throwin" && st.ti && st.ti.t === 0 && !cfg.auto ? (st.ti.g === ctlP.g ? "throw" : st.ti.call < 0 ? "call" : "") : "";
       const line = st.phase === "live" && st.frame - st.lineAt < 20;
-      const key = `${st.score}|${period}|${Math.ceil(st.clock / 60)}|${Math.ceil(st.shot / 60)}|${off}|${st.ctl}|${st.phase}|${st.tf}|${ctlP.pf}|${back}|${ti}|${line}`;
+      const key = `${st.score}|${period}|${Math.ceil(st.clock / 60)}|${Math.ceil(st.shot / 60)}|${off}|${st.ctl}|${st.phase}|${st.tf}|${ctlP.pf}|${back}|${tiHud}|${line}`;
       if (key !== hudKey) {
         hudKey = key;
-        setHud({ score: [...st.score], period, clock: F.periods ? clockOf(st.clock) : "", shot: Math.max(0, Math.ceil(st.shot / 60)), off: off || (st.phase === "ft" && st.ft && st.p[st.ft.g].t === 0), poss: st.poss, ctl: cfg.auto ? "" : names[ctlP.g], pos: ctlP.pos || "", back, pf: ctlP.pf, has: H0 ? H0.t : -1, over: st.phase === "over", tf: [...st.tf], bonus: [inPenalty(st, 1), inPenalty(st, 0)], ti, line });
+        setHud({ score: [...st.score], period, clock: F.periods ? clockOf(st.clock) : "", shot: Math.max(0, Math.ceil(st.shot / 60)), off: off || (st.phase === "ft" && st.ft && st.p[st.ft.g].t === 0), poss: st.poss, ctl: cfg.auto ? "" : names[ctlP.g], pos: ctlP.pos || "", back, pf: ctlP.pf, has: H0 ? H0.t : -1, over: st.phase === "over", tf: [...st.tf], bonus: [inPenalty(st, 1), inPenalty(st, 0)], ti: tiHud, line });
       }
       const sk = `${st.score[0]}-${st.score[1]}`;
       if (sk !== scoreKey) { scoreKey = sk; setSr(`${shorts[0]} ${st.score[0]}, ${shorts[1]} ${st.score[1]}.`); }
