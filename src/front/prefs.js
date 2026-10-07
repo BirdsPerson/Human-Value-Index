@@ -8,11 +8,18 @@
 export const THEMES = [
   { id: "green", name: "DEPARTMENT GREEN", note: "THE ISSUED PHOSPHOR. DEFAULT.", sw: ["#0a0f0a", "#0d140d", "#c8f5d8", "#4ade80", "#2bc6de"] },
   { id: "amber", name: "AMBER MONITOR", note: "THE SAME TERMINAL, WARMER. NOT FRIENDLIER.", sw: ["#0c0904", "#130e05", "#ffdca8", "#ffb000", "#ffcf70"] },
+  { id: "dos", name: "MS-DOS", note: "BLUE TEXT MODE. GREY BARS. C:\\>", sw: ["#0000aa", "#0000aa", "#ffffff", "#aaaaaa", "#55ffff"] },
+  { id: "win30", name: "WINDOWS 3.0", note: "FLAT. THICK FRAMES. BEFORE THE BEVEL.", sw: ["#c0c0c0", "#ffffff", "#000000", "#0000a8", "#00505a"] },
   { id: "win31", name: "WIN 3.1", note: "TEAL DESKTOP. NAVY TITLE BARS. PROGRAM MANAGER.", sw: ["#5fb3b3", "#ffffff", "#000000", "#000080", "#006a78"] },
+  { id: "win95", name: "WINDOWS 95", note: "GREY BEVELS. NAVY TITLES. START HERE.", sw: ["#2a9d9d", "#c0c0c0", "#000000", "#000080", "#00505a"] },
+  { id: "win98", name: "WINDOWS 98", note: "GRADIENT TITLES. THE WEB, ON THE DESKTOP.", sw: ["#2a9d9d", "#c0c0c0", "#000000", "#1060b0", "#00505a"] },
+  { id: "sys7", name: "SYSTEM 7", note: "ONE BIT. BLACK ON WHITE. PINSTRIPES.", sw: ["#ffffff", "#ffffff", "#000000", "#000000", "#444444"] },
   { id: "platinum", name: "PLATINUM", note: "SYSTEM 7 GREY. A WHITE MENU BAR.", sw: ["#a8a8a8", "#eeeeee", "#000000", "#30308f", "#005f6b"] },
+  { id: "imac", name: "IMAC G3", note: "BONDI BLUE. MAC OS 9. TRANSLUCENT.", sw: ["#1aa3c2", "#eeeeee", "#000000", "#00627a", "#0095b6"] },
+  { id: "kidpix", name: "KID PIX", note: "LOUD. CHUNKY. UNDO GUY APPROVED.", sw: ["#ffffff", "#fff6c2", "#000000", "#d1006f", "#2b8cff"] },
   { id: "contrast", name: "HIGH CONTRAST", note: "BLACK, WHITE, YELLOW. NO SCANLINES.", sw: ["#000000", "#000000", "#ffffff", "#ffff00", "#00ffff"] },
 ];
-const THEME_BG = { green: "#0a0f0a", amber: "#0c0904", win31: "#5fb3b3", platinum: "#a8a8a8", contrast: "#000000" };
+const THEME_BG = { green: "#0a0f0a", amber: "#0c0904", dos: "#0000aa", win30: "#c0c0c0", win31: "#5fb3b3", win95: "#2a9d9d", win98: "#2a9d9d", sys7: "#ffffff", platinum: "#a8a8a8", imac: "#1aa3c2", kidpix: "#ffffff", contrast: "#000000" };
 
 export const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 export const put = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* this visit only */ } };

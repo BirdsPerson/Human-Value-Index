@@ -39,7 +39,7 @@
       html, body { background: #0a0f0a; }
     </style>
     <!-- DISPLAY (src/ui/themes.css): the saved theme, else the device's contrast or light preference, before the first paint -->
-    <script>try{var t=null;try{t=localStorage.getItem("hvi-theme")}catch(e){}if(!/^(green|amber|win31|platinum|contrast)$/.test(t||"")){t=matchMedia("(prefers-contrast: more)").matches?"contrast":"green"}if(t!=="green")document.documentElement.setAttribute("data-theme",t);var c={amber:"#0c0904",win31:"#5fb3b3",platinum:"#a8a8a8",contrast:"#000000"}[t];if(c){document.documentElement.style.background=c;document.querySelector('meta[name="theme-color"]').setAttribute("content",c)}}catch(e){}</script>
+    <script>try{var t=null;try{t=localStorage.getItem("hvi-theme")}catch(e){}if(!/^(green|amber|dos|win30|win31|win95|win98|sys7|platinum|imac|kidpix|contrast)$/.test(t||"")){t=matchMedia("(prefers-contrast: more)").matches?"contrast":"green"}if(t!=="green")document.documentElement.setAttribute("data-theme",t);var c={amber:"#0c0904",dos:"#0000aa",win30:"#c0c0c0",win31:"#5fb3b3",win95:"#2a9d9d",win98:"#2a9d9d",sys7:"#ffffff",platinum:"#a8a8a8",imac:"#1aa3c2",kidpix:"#ffffff",contrast:"#000000"}[t];if(c){document.documentElement.style.background=c;document.querySelector('meta[name="theme-color"]').setAttribute("content",c)}}catch(e){}</script>
   </head>
   <body>
     <div id="root"></div>

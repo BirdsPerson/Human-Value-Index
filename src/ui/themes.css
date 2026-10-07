@@ -1,5 +1,6 @@
 /* DISPLAY: the monitor, recoloured (src/front/DeskPrefs.jsx; docs/design-system.md "Themes").
-   Each theme is a token set on :root[data-theme]; nothing else changes. DEPARTMENT GREEN is
+   Each theme is a token set on :root[data-theme]; for the first five nothing else changes (the era themes
+   further down also carry their window chrome). DEPARTMENT GREEN is
    tokens.css itself (no attribute needed). index.html's boot line sets the attribute before the
    first paint: the visitor's saved pick, else HIGH CONTRAST under prefers-contrast: more, else
    PLATINUM under prefers-color-scheme: light, else green. scripts/check-themes.mjs holds every
@@ -52,9 +53,204 @@
   --desk-img: none; --focus: 3px solid #ffff00;
 }
 
+/* ---- THE ERA THEMES (Scott, 2026-10-07: "capture that period of early-internet PC computing") ----------------
+   Seven more, each a token set (held to AA by scripts/check-themes.mjs like the five above) and the window chrome
+   that sells it, scoped to its own data-theme so the five above are untouched. No fonts are fetched: the title
+   bars use each era's system face where the visitor has it (Tahoma / MS Sans Serif, Chicago / Charcoal / Geneva,
+   Comic Sans) and fall back to the plain system sans; every body line stays Fira Mono. The pictures (the desktop
+   patterns, the close boxes) are drawn in CSS gradients or tiny inline SVGs, a few hundred bytes each. */
+
+/* MS-DOS: EDIT.COM and Turbo Vision. Blue text mode, grey bars, the ░ desktop, box-drawn double frames, a yellow block cursor. */
+:root[data-theme="dos"] {
+  --bg: #0000aa; --desk: #0000aa; --panel: #0000aa; --panel-hi: #0000c4; --line: #5555ff; --line-hi: #ffffff;
+  --fg: #ffffff; --fg-dim: #c8c8c8; --fg-mute: #aaaaff; --fg-ghost: #3a3ad8;
+  --accent: #55ffff; --accent-ink: #000000; --accent-dim: #00aaaa; --warn: #ffff55; --harm: #ff8a8a;
+  --hot: #800000; --shadow: #000000; --desk-dot: #5555c8; --eb-cyan: #55ffff; --eb-amber: #ffff55;
+  --duke: #ff5555; --revin: #55ff55;
+  --bar: #aaaaaa; --bar-ink: #000000; --bar-cur: #ffffff; --bar-cur-bg: #000000; --bar-cur-hot: #ffff55; --door-n: #aa0000;
+  --ttl-bg: #0000aa; --ttl-fg: #ffffff; --ttl-mute: #c8c8c8;
+  --desk-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Crect width='1' height='1' fill='%235555c8'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%235555c8'/%3E%3Crect y='2' width='1' height='1' fill='%235555c8'/%3E%3Crect x='2' y='3' width='1' height='1' fill='%235555c8'/%3E%3C/svg%3E");
+  --focus: 2px solid #ffff55; --chrome-font: var(--mono);
+}
+
+/* WINDOWS 3.0 (1990): before 3.1's bevels. A grey desktop, white windows in a thick flat sizing frame, a flat navy
+   title bar between the system-menu bar and the minimise / maximise arrows. */
+:root[data-theme="win30"] {
+  --bg: #c0c0c0; --desk: #c0c0c0; --panel: #ffffff; --panel-hi: #e8e8e8; --line: #808080; --line-hi: #000000;
+  --fg: #000000; --fg-dim: #00007f; --fg-mute: #404040; --fg-ghost: #a0a0a0;
+  --accent: #0000a8; --accent-ink: #ffffff; --accent-dim: #0000d0; --warn: #5a4000; --harm: #a00000;
+  --hot: #a00000; --shadow: #000000; --desk-dot: #b0b0b0; --eb-cyan: #00505a; --eb-amber: #703800;
+  --duke: #a00000; --bar: #ffffff; --bar-ink: #000000; --bar-cur: #ffffff; --bar-cur-bg: #000080; --bar-cur-hot: #ffff55; --door-n: #ffff55;
+  --ttl-bg: #0000a8; --ttl-fg: #ffffff; --ttl-mute: #d6d6ff;
+  --desk-img: none; --focus: 2px solid #000000; --chrome-font: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Arial, sans-serif;
+  color-scheme: light;
+}
+
+/* WINDOWS 95: the teal desktop, grey bevelled windows, solid navy title bars, the ✕ box. */
+:root[data-theme="win95"] {
+  --bg: #2a9d9d; --desk: #2a9d9d; --panel: #c0c0c0; --panel-hi: #dfdfdf; --line: #808080; --line-hi: #000000;
+  --fg: #000000; --fg-dim: #1a1a50; --fg-mute: #262626; --fg-ghost: #8a8a8a;
+  --accent: #000080; --accent-ink: #ffffff; --accent-dim: #1010a0; --warn: #5a4000; --harm: #8b0000;
+  --hot: #800000; --shadow: #000000; --desk-dot: #2a9d9d; --eb-cyan: #00505a; --eb-amber: #703800;
+  --duke: #8b0000; --bar: #c0c0c0; --bar-ink: #000000; --bar-cur: #ffffff; --bar-cur-bg: #000080; --bar-cur-hot: #ffff55; --door-n: #ffff55;
+  --ttl-bg: #000080; --ttl-fg: #ffffff; --ttl-mute: #c0c0c0;
+  --desk-img: none; --focus: 1px dotted #000000; --chrome-font: Tahoma, "MS Sans Serif", "Microsoft Sans Serif", "Segoe UI", Arial, sans-serif;
+  color-scheme: light;
+}
+
+/* WINDOWS 98: 95's windows with the gradient title bars, flat toolbar buttons that rise under the pointer (IE4's
+   coolbar), and a little web-era sheen on the desktop. */
+:root[data-theme="win98"] {
+  --bg: #2a9d9d; --desk: #2a9d9d; --panel: #c0c0c0; --panel-hi: #dfdfdf; --line: #808080; --line-hi: #000000;
+  --fg: #000000; --fg-dim: #1a1a50; --fg-mute: #262626; --fg-ghost: #8a8a8a;
+  --accent: #000080; --accent-ink: #ffffff; --accent-dim: #1060b0; --warn: #5a4000; --harm: #8b0000;
+  --hot: #800000; --shadow: #000000; --desk-dot: #2a9d9d; --eb-cyan: #00505a; --eb-amber: #703800;
+  --duke: #8b0000; --bar: #c0c0c0; --bar-ink: #000000; --bar-cur: #ffffff; --bar-cur-bg: #000080; --bar-cur-hot: #ffff55; --door-n: #ffff55;
+  --ttl-bg: #000080; --ttl-fg: #ffffff; --ttl-mute: #d4d0c8;
+  --desk-img: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.16), transparent 60%);
+  --focus: 1px dotted #000000; --chrome-font: Tahoma, "MS Sans Serif", "Microsoft Sans Serif", "Segoe UI", Arial, sans-serif;
+  color-scheme: light;
+}
+
+/* SYSTEM 7: the classic Mac in 1-bit. Black on white, a pinstriped title bar with the close box, a one-pixel
+   shadow, the light-grey desktop pattern. Colour leaves: up and down are the arrows' shapes alone. */
+:root[data-theme="sys7"] {
+  --bg: #ffffff; --desk: #ffffff; --panel: #ffffff; --panel-hi: #e6e6e6; --line: #000000; --line-hi: #000000;
+  --fg: #000000; --fg-dim: #222222; --fg-mute: #444444; --fg-ghost: #bbbbbb;
+  --accent: #000000; --accent-ink: #ffffff; --accent-dim: #333333; --warn: #000000; --harm: #000000;
+  --hot: #000000; --shadow: #000000; --desk-dot: #000000; --eb-cyan: #000000; --eb-amber: #000000;
+  --duke: #000000; --revin: #000000;
+  --bar: #ffffff; --bar-ink: #000000; --bar-cur: #ffffff; --bar-cur-bg: #000000; --bar-cur-hot: #ffffff; --door-n: #ffffff;
+  --ttl-bg: #ffffff; --ttl-fg: #000000; --ttl-mute: #444444;
+  --desk-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Crect width='1' height='1' fill='%23000'/%3E%3C/svg%3E");
+  --focus: 2px solid #000000; --chrome-font: Chicago, ChicagoFLF, Charcoal, Geneva, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+
+/* KID PIX (1989): loud, chunky, playful. Confetti on white, thick black outlines, rainbow title bars, hard
+   coloured shadows that change from window to window. */
+:root[data-theme="kidpix"] {
+  --bg: #ffffff; --desk: #ffffff; --panel: #ffffff; --panel-hi: #fff6c2; --line: #000000; --line-hi: #000000;
+  --fg: #000000; --fg-dim: #3a0a6a; --fg-mute: #4a4a4a; --fg-ghost: #c8c8c8;
+  --accent: #d1006f; --accent-ink: #ffffff; --accent-dim: #e0007a; --warn: #7a5600; --harm: #c00000;
+  --hot: #a0005a; --shadow: #000000; --desk-dot: #ffd1ec; --eb-cyan: #0057b8; --eb-amber: #a34700;
+  --duke: #e0007a; --revin: #0057b8;
+  --bar: #ffe600; --bar-ink: #000000; --bar-cur: #ffffff; --bar-cur-bg: #0057b8; --bar-cur-hot: #ffe600; --door-n: #ffffff;
+  --ttl-bg: #ffffff; --ttl-fg: #000000; --ttl-mute: #4a4a4a;
+  --desk-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' shape-rendering='crispEdges'%3E%3Crect x='4' y='6' width='4' height='4' fill='%23ff3b3b'/%3E%3Crect x='30' y='4' width='6' height='2' fill='%232b8cff'/%3E%3Crect x='20' y='22' width='3' height='6' fill='%2322c55e'/%3E%3Crect x='40' y='30' width='4' height='4' fill='%23ffd400'/%3E%3Crect x='8' y='36' width='6' height='2' fill='%23c026d3'/%3E%3Crect x='34' y='42' width='2' height='4' fill='%23ff7a00'/%3E%3C/svg%3E");
+  --focus: 3px solid #0057b8; --chrome-font: "Comic Sans MS", "Chalkboard SE", "Comic Neue", "Marker Felt", cursive;
+  color-scheme: light;
+}
+
+/* iMAC G3 / MAC OS 9: Bondi blue plastic with its ribs, translucent; Platinum windows with pinstriped title bars
+   tinted the colour of the case. */
+:root[data-theme="imac"] {
+  --bg: #dddddd; --desk: #1aa3c2; --panel: #eeeeee; --panel-hi: #dddddd; --line: #8a8a8a; --line-hi: #3a3a3a;
+  --fg: #000000; --fg-dim: #1a2a4a; --fg-mute: #2a2a2a; --fg-ghost: #a8a8a8;
+  --accent: #00627a; --accent-ink: #ffffff; --accent-dim: #0095b6; --warn: #6b4f00; --harm: #9a0000;
+  --hot: #9a0000; --shadow: #00283a; --desk-dot: #1aa3c2; --eb-cyan: #00627a; --eb-amber: #8a4500;
+  --duke: #9a0000; --bar: #eeeeee; --bar-ink: #000000; --bar-cur: #ffffff; --bar-cur-bg: #00627a; --bar-cur-hot: #ffe27a; --door-n: #ffe27a;
+  --ttl-bg: #eeeeee; --ttl-fg: #000000; --ttl-mute: #333333;
+  --desk-img: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0 2px, rgba(0, 60, 90, 0.10) 2px 5px), linear-gradient(160deg, #3cc0dc, #0a7d9a);
+  --focus: 2px solid #000000; --chrome-font: Charcoal, Chicago, Geneva, "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+
 /* the desktop and the CRT: a theme with its own dither swaps it; the light themes and HIGH CONTRAST drop the scanlines */
 :root[data-theme] .hvi-app { background-color: var(--desk); background-image: var(--desk-img, none); }
-:root[data-theme="win31"] .hvi-app::after, :root[data-theme="platinum"] .hvi-app::after, :root[data-theme="contrast"] .hvi-app::after { display: none; }
+:root:is([data-theme="win31"], [data-theme="platinum"], [data-theme="contrast"], [data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) .hvi-app::after { display: none; }
 /* the light themes: tags and bands painted in the darkened legend colours take white ink */
-:root:is([data-theme="win31"], [data-theme="platinum"]) :is(.ui-tt.cy, .ui-tt.am, .ui-tt.du, .fr-line .tag, .ui-bar .ctx, .ui-btn.am, .fr-steps button[aria-pressed="true"], .fr-tkr .fr-h.dn) { color: #ffffff; }
+:root:is([data-theme="win31"], [data-theme="platinum"], [data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) :is(.ui-tt.cy, .ui-tt.am, .ui-tt.du, .fr-line .tag, .ui-bar .ctx, .ui-btn.am, .fr-steps button[aria-pressed="true"], .fr-tkr .fr-h.dn) { color: #ffffff; }
 :root[data-theme="contrast"] .fr-tkr .fr-h.dn { color: #000000; }
+
+/* ---- the era chrome ---------------------------------------------------------------------------------------------
+   A window is .ui-frame (Frame) or .tb (TermBox); its title row .ui-frame-ttl / .tb-top holds the [■] box (.b,
+   .tb-box), the title (.t, .tb-title), the meta (.m, .tb-right) and, on a wide screen, the [↕] box (::after). The
+   Turbo Vision title rides on the top border; every era below sets it inside the window as a bar of its own. */
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) :is(.ui-frame, .tb) {
+  --bar-h9: 20px; padding-top: calc(var(--bar-h9) + var(--s3) + 4px); }
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) :is(.ui-frame-ttl, .tb-top) {
+  top: 2px; left: 2px; right: 2px; height: var(--bar-h9); gap: 4px; padding: 0 2px; font: 700 12px/var(--bar-h9) var(--chrome-font); letter-spacing: 0.02em; text-transform: none; }
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) :is(.ui-frame-ttl, .tb-top) > * { background: none; padding: 0; line-height: var(--bar-h9); }
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) :is(.ui-frame-ttl .b, .tb-box) { width: 14px; height: 14px; flex: none; font-size: 0; box-sizing: border-box; align-self: center; }
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) :is(.ui-frame-ttl, .tb-top)::after {
+  content: ""; flex: none; width: 16px; height: 14px; padding: 0; box-sizing: border-box; align-self: center; font: 700 11px/10px var(--chrome-font); text-align: center; }
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) .ui-dialog > .ui-frame-ttl .b { position: static; border: 0; }
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) .ui-dialog > .ui-frame-ttl { justify-content: flex-start; }
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) .ui-dialog > .ui-frame-ttl::after { display: block; }
+
+/* WINDOWS (3.0, 95, 98): the title left, the meta beside it, the box at the right */
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"]) :is(.ui-frame-ttl .t, .tb-top .tb-title) { margin: 0; color: var(--ttl-fg); }
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"]) :is(.ui-frame-ttl .m, .tb-top .tb-right) { margin-left: auto; color: var(--ttl-mute); font-weight: 400; }
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"]) :is(.ui-frame-ttl, .tb-top) { background: var(--ttl-bg); }
+:root[data-theme="win30"] :is(.ui-frame-ttl .t, .tb-top .tb-title:not(.tb-right)) { margin: 0 auto; }
+:root[data-theme="win30"] :is(.ui-frame-ttl .m, .tb-top .tb-right) { margin-left: 0; }
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"]) .ui-dialog > .ui-frame-ttl::after { margin-left: auto; }
+/* a window on the desk's grid: the bar costs its height once, not twice */
+:root:is([data-theme="win30"], [data-theme="win95"], [data-theme="win98"], [data-theme="sys7"], [data-theme="kidpix"], [data-theme="imac"]) .fr-cell .ui-frame:not(.ui-dialog) { padding-top: calc(var(--bar-h9) + var(--s2) + 4px); }
+
+/* 3.0: flat. A thick grey sizing frame between two black lines, no shadow; the system-menu box (a bar in a
+   square) left, the ▼ ▲ boxes right, white and flat */
+:root[data-theme="win30"] :is(.ui-frame, .tb) { border: 4px solid #c0c0c0; box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #000; margin-right: 1px; }
+:root[data-theme="win30"] :is(.ui-frame-ttl, .tb-top) { top: 1px; left: 1px; right: 1px; padding: 0; border-bottom: 1px solid #000; }
+:root[data-theme="win30"] :is(.ui-frame-ttl .b, .tb-box) { width: var(--bar-h9); height: var(--bar-h9); background: #fff linear-gradient(#000, #000) center / 10px 3px no-repeat; border-right: 1px solid #000; box-shadow: inset 0 0 0 0 #000; }
+:root[data-theme="win30"] :is(.ui-frame-ttl, .tb-top)::after { content: "▼▲"; width: auto; height: var(--bar-h9); padding: 0 3px; line-height: var(--bar-h9); letter-spacing: 3px; background: #fff; color: #000; border-left: 1px solid #000; }
+
+/* 95 and 98: the bevel (white and light grey top-left, grey and black bottom-right), the app icon, the ✕ button */
+:root:is([data-theme="win95"], [data-theme="win98"]) :is(.ui-frame, .tb) { border: 2px solid; border-color: #dfdfdf #000 #000 #dfdfdf;
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #808080; margin-right: 0; }
+:root:is([data-theme="win95"], [data-theme="win98"]) :is(.ui-frame-ttl .b, .tb-box) { margin-left: 1px; border: 1px solid #000; background: linear-gradient(#000080 0 4px, #fff 4px); }
+:root:is([data-theme="win95"], [data-theme="win98"]) :is(.ui-frame-ttl, .tb-top)::after { content: "✕"; margin-right: 1px; background: #c0c0c0; color: #000;
+  border: 1px solid; border-color: #fff #000 #000 #fff; box-shadow: inset -1px -1px 0 #808080; font-size: 9px; line-height: 12px; }
+:root:is([data-theme="win95"], [data-theme="win98"]) .ui-head { border-bottom: 2px solid; border-color: #808080; box-shadow: inset 0 -1px 0 #fff; }
+:root:is([data-theme="win95"], [data-theme="win98"]) .ui-btn:is(.primary, .push) { border: 2px solid; border-color: #fff #000 #000 #fff; box-shadow: inset -1px -1px 0 #808080; }
+/* 98: the gradient title, and the coolbar buttons: flat until the pointer is over them */
+:root[data-theme="win98"] :is(.ui-frame-ttl, .tb-top) { background: linear-gradient(90deg, #000080, #1060b0); }
+:root[data-theme="win98"] .ui-dialog > .ui-frame-ttl { background: linear-gradient(90deg, #000080, #1060b0); }
+:root[data-theme="win98"] :is(.fr-arrange button, .fr-steps button, .fr-step button) { border-color: transparent; box-shadow: none; background: transparent; }
+@media (hover: hover) { :root[data-theme="win98"] :is(.fr-arrange button, .fr-steps button, .fr-step button):hover { border: 1px solid; border-color: #fff #808080 #808080 #fff; background: var(--panel); color: var(--fg); } }
+:root[data-theme="win98"] .fr-steps button[aria-pressed="true"] { border: 1px solid; border-color: #808080 #fff #fff #808080; background: #e0e0e0; color: #000; }
+:root:is([data-theme="win95"], [data-theme="win98"]) .ui-dialog > .ui-frame-ttl { background: var(--ttl-bg); }
+:root[data-theme="win30"] .ui-dialog > .ui-frame-ttl { background: var(--ttl-bg); }
+
+/* MAC (System 7, OS 9): the close box left, the pinstripes either side of the title, the title in its own white
+   (or Platinum) box in the middle; the zoom box right */
+:root:is([data-theme="sys7"], [data-theme="imac"]) :is(.ui-frame-ttl, .tb-top) { justify-content: center; background-clip: content-box; padding: 3px 4px; height: calc(var(--bar-h9) - 6px); }
+:root:is([data-theme="sys7"], [data-theme="imac"]) :is(.ui-frame-ttl, .tb-top) > * { line-height: calc(var(--bar-h9) - 6px); }
+:root:is([data-theme="sys7"], [data-theme="imac"]) :is(.ui-frame-ttl .t, .tb-top .tb-title) { margin: 0 auto; padding: 0 8px; background: var(--ttl-bg); color: var(--ttl-fg); }
+:root:is([data-theme="sys7"], [data-theme="imac"]) :is(.ui-frame-ttl .m, .tb-top .tb-right) { padding: 0 6px; background: var(--ttl-bg); color: var(--ttl-mute); font-weight: 400; }
+:root:is([data-theme="sys7"], [data-theme="imac"]) :is(.ui-frame-ttl .b, .tb-box) { width: 13px; height: 13px; margin-right: 6px; border: 1px solid #000; background: var(--ttl-bg); box-shadow: 0 0 0 2px var(--ttl-bg); }
+:root:is([data-theme="sys7"], [data-theme="imac"]) :is(.ui-frame-ttl, .tb-top)::after { width: 13px; height: 13px; margin-left: 6px; border: 1px solid #000; background: linear-gradient(#000, #000) 0 0 / 7px 1px no-repeat, linear-gradient(#000, #000) 6px 0 / 1px 7px no-repeat, var(--ttl-bg); box-shadow: 0 0 0 2px var(--ttl-bg); }
+:root[data-theme="sys7"] :is(.ui-frame, .tb) { border: 1px solid #000; box-shadow: 1px 1px 0 #000; margin-right: 1px; }
+:root[data-theme="sys7"] :is(.ui-frame-ttl, .tb-top) { top: 0; left: 0; right: 0; border-bottom: 1px solid #000; background-image: repeating-linear-gradient(180deg, #000 0 1px, #fff 1px 2px); }
+:root[data-theme="sys7"] .ui-dialog > .ui-frame-ttl { background-image: repeating-linear-gradient(180deg, #000 0 1px, #fff 1px 2px); }
+:root[data-theme="sys7"] :is(.ui-btn:is(.primary, .push), .fr-arrange button, .fr-steps button, .fr-step button) { border: 1px solid #000; border-radius: 6px; box-shadow: none; }
+:root[data-theme="sys7"] .ui-btn.push.ok { outline: 3px solid #000; outline-offset: 2px; border-radius: 6px; }
+:root[data-theme="imac"] :is(.ui-frame, .tb) { border: 1px solid #3a3a3a; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #9a9a9a, 4px 4px 0 rgba(0, 40, 58, 0.45); margin-right: 4px; }
+:root[data-theme="imac"] :is(.ui-frame-ttl, .tb-top) { top: 1px; left: 1px; right: 1px; background-image: repeating-linear-gradient(180deg, rgba(0, 149, 182, 0.45) 0 1px, rgba(255, 255, 255, 0.85) 1px 2px); background-color: #d8e6ea; border-bottom: 1px solid #9a9a9a; }
+:root[data-theme="imac"] .ui-dialog > .ui-frame-ttl { background-image: repeating-linear-gradient(180deg, rgba(0, 149, 182, 0.45) 0 1px, rgba(255, 255, 255, 0.85) 1px 2px); }
+:root[data-theme="imac"] :is(.ui-frame-ttl .b, .tb-box, .ui-frame-ttl::after, .tb-top::after) { border-color: #3a3a3a; background-color: #e4e4e4; }
+:root[data-theme="imac"] .ui-btn:is(.primary, .push) { border-radius: 4px; border: 1px solid #00283a; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 2px 2px 0 rgba(0, 40, 58, 0.45); }
+
+/* KID PIX: three-pixel outlines, a rainbow title bar with the title in a white sticker, a hard shadow whose colour
+   steps from window to window */
+:root[data-theme="kidpix"] :is(.ui-frame, .tb) { --bar-h9: 24px; border: 3px solid #000; box-shadow: 6px 6px 0 var(--kp, #e0007a); }
+:root[data-theme="kidpix"] .fr-cell:nth-child(4n + 2) :is(.ui-frame, .tb) { --kp: #2b8cff; }
+:root[data-theme="kidpix"] .fr-cell:nth-child(4n + 3) :is(.ui-frame, .tb) { --kp: #22c55e; }
+:root[data-theme="kidpix"] .fr-cell:nth-child(4n) :is(.ui-frame, .tb) { --kp: #ffd400; }
+:root[data-theme="kidpix"] .hvi-w-logon { --kp: #ffd400; }
+:root[data-theme="kidpix"] :is(.ui-frame-ttl, .tb-top) { top: 0; left: 0; right: 0; padding: 2px 4px; border-bottom: 3px solid #000; font-size: 13px;
+  background: repeating-linear-gradient(90deg, #ff3b3b 0 16px, #ff9a00 16px 32px, #ffe600 32px 48px, #22c55e 48px 64px, #2b8cff 64px 80px, #c026d3 80px 96px); }
+:root[data-theme="kidpix"] .ui-dialog > .ui-frame-ttl { background: repeating-linear-gradient(90deg, #ff3b3b 0 16px, #ff9a00 16px 32px, #ffe600 32px 48px, #22c55e 48px 64px, #2b8cff 64px 80px, #c026d3 80px 96px); }
+:root[data-theme="kidpix"] :is(.ui-frame-ttl .t, .tb-top .tb-title, .ui-frame-ttl .m, .tb-top .tb-right) { background: #fff; border: 2px solid #000; padding: 0 6px; line-height: 16px; border-radius: 10px; color: #000; }
+:root[data-theme="kidpix"] :is(.ui-frame-ttl .t, .tb-top .tb-title) { margin: 0 auto; }
+:root[data-theme="kidpix"] :is(.ui-frame-ttl .b, .tb-box) { width: 16px; height: 16px; border: 2px solid #000; border-radius: 50%; background: #fff; }
+:root[data-theme="kidpix"] :is(.ui-frame-ttl, .tb-top)::after { content: "✕"; width: 18px; height: 18px; border: 2px solid #000; border-radius: 50%; background: #fff; color: #000; line-height: 14px; font-size: 10px; }
+:root[data-theme="kidpix"] :is(.ui-btn:is(.primary, .push), .fr-arrange button, .fr-steps button, .fr-step button) { border: 3px solid #000; border-radius: 12px; box-shadow: 3px 3px 0 #000; font-weight: 700; }
+
+/* DOS: no new frame (Turbo Vision already is one); the title in the frame's own colours, the F-key strip grey,
+   the block cursor yellow */
+:root[data-theme="dos"] :is(.ui-frame-ttl .t, .tb-top .tb-title) { color: #ffffff; }
+:root[data-theme="dos"] :is(input, textarea) { caret-color: #ffff55; }
+:root[data-theme="dos"] .cur { color: #ffff55; }
+:root[data-theme="dos"] .ui-frame-ttl .b, :root[data-theme="dos"] .tb-box { color: #55ff55; }

@@ -67,5 +67,12 @@ if (listed !== ids) { console.error(`FAIL src/front/prefs.js THEMES (${listed}) 
 const boot = read("index.html").match(/\^\(([\w|]+)\)\$/)?.[1].split("|").sort().join(",");
 if (boot !== ids) { console.error(`FAIL index.html boot line (${boot}) != themes.css (${ids})`); bad++; }
 
+// the era chrome (2026-10-07) is scoped to the era themes: the first five stay tokens only
+const chrome = bare(read("src/ui/themes.css").split("---- the era chrome")[1] || "");
+if (!chrome) { console.error("FAIL themes.css has no era chrome section"); bad++; }
+for (const sel of chrome.split("}").filter(b => b.includes("{")).map(b => b.split("{").slice(-2)[0].trim()).filter(Boolean)) {
+  const s2 = sel.replace(/^@media[^{]*\{/, "").trim();
+  if (!/data-theme="/.test(s2) || /data-theme="(green|amber|win31|platinum|contrast)"/.test(s2)) { console.error(`FAIL era chrome rule reaches beyond the era themes: ${s2.slice(0, 90)}`); bad++; }
+}
 if (bad) process.exit(1);
 console.log(`check-themes ok: ${Object.keys(themes).length} themes, AA on every pair`);

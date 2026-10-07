@@ -1,7 +1,7 @@
 // The desk's two control panels, opened from MORE ROOMS (DISPLAY, WIDGETS) or the desk's own
 // ARRANGE line. Windows 3.1's Control Panel / the Mac's Control Panels folder: a modal dialog
 // (a native <dialog>: focus stays inside, Escape closes), a list, OK and CANCEL.
-//   DISPLAY   the five colour schemes (src/ui/themes.css). Picking one previews it at once;
+//   DISPLAY   the twelve colour schemes (src/ui/themes.css), a name and a tiny window each. Picking one previews it at once;
 //             CANCEL puts the old one back; FOLLOW MY DEVICE forgets the pick.
 //   WIDGETS   a checkbox per window and ▲ ▼ to order them; RESET is today's four; ARRANGE keeps the
 //             ticks and opens the desk's drag-and-resize mode (FrontDesk.jsx, layout.js).
@@ -42,7 +42,7 @@ function Display({ dlg, onClose }) {
   return (
     <Frame title="DISPLAY" meta="CONTROL PANEL" className="ui-dialog fr-dlg-w">
       <h2 id="fr-dlg-t" className="fr-dlg-h">COLOR SCHEMES</h2>
-      <p className="fr-dlg-p">THE DEPARTMENT ISSUES FIVE. YOUR CHOICE IS KEPT ON THIS DEVICE.{savedTheme() ? "" : " NONE CHOSEN YET: THIS ONE FOLLOWS YOUR DEVICE."}</p>
+      <p className="fr-dlg-p">THE DEPARTMENT ISSUES TWELVE: ITS OWN TERMINALS, AND THE MACHINES THE SUBJECTS GREW UP ON. YOUR CHOICE IS KEPT ON THIS DEVICE.{savedTheme() ? "" : " NONE CHOSEN YET: THIS ONE FOLLOWS YOUR DEVICE."}</p>
       <ul className="fr-themes" role="radiogroup" aria-labelledby="fr-dlg-t">
         {THEMES.map(t => (
           <li key={t.id}>
