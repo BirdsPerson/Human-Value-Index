@@ -1,5 +1,5 @@
 #!/opt/homebrew/bin/python3
-"""The share card (public/og-image.png, 1200x630): the city at district zoom, the logo, and
+"""(SUPERSEDED 2026-10: public/og-image.png now comes from iridescent-site/scripts/cards.py; running this overwrites it.) The share card (public/og-image.png, 1200x630): the city at district zoom, the logo, and
 five scores read live from src/figures.js so the numbers match the site on the day it is drawn.
 
   python3 scripts/og-card.py CITY.png FONT_DIR [OUT]
