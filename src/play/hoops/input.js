@@ -1,5 +1,5 @@
 // THE COURTS, playable: the hands. Keys, a controller and the touch pad, folded into the sim's one
-// bitmask a frame (sim.js BTN: a virtual pad laid out like 2K's), plus START (pause) and CAMERA on
+// bitmask a frame (engine BTN: a virtual pad laid out like 2K's), plus START (pause) and CAMERA on
 // their own, which never reach the sim or the record.
 //   pad    left stick / d-pad move; the face buttons by position (west X: shoot / steal; south A:
 //          pass / switch; north Y: lob / block; east B: bounce pass / take a charge); RT sprint;
@@ -26,7 +26,7 @@
 // stick returns to centre, 30 frames pass, or the stick itself turns more than 45 degrees; then the
 // two maps blend over 6 frames. controls "court" is the old behaviour (stick up = the far sideline).
 import { familyOf, deadzone, DEADZONE } from "../../city/gamepad.js";
-import { BTN } from "./sim.js";
+import { BTN } from "./engine/index.js";
 
 const KEYMAP = {
   ArrowUp: BTN.UP, KeyW: BTN.UP, ArrowDown: BTN.DOWN, KeyS: BTN.DOWN, ArrowLeft: BTN.LEFT, KeyA: BTN.LEFT, ArrowRight: BTN.RIGHT, KeyD: BTN.RIGHT,

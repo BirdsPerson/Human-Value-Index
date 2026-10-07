@@ -738,4 +738,14 @@ All four are decided. The original options are kept below each answer.
   edge-on far from the camera: the eight-way frame's limit until the analog frame). The record
   carries `cam: {id, adj, controls, changes}`. A STICK setting (pause menu and the camera panel)
   keeps the old court reading.
-- **S1a** (pure split): see the commit that follows S0.
+- **S1a, 2026-10-07.** `sim.js` is gone; the engine is `src/play/hoops/engine/` (VERSION still 4):
+  `court`, `state` (the seeded generator and the who-is-human / who-holds / event helpers),
+  `levels`, `players` (ratings, positions, the player record), `rules/index` (today's phase
+  machine, unchanged), `physics`, `shot`, `pass`, `moves` (dribble moves), `ai/{index, offence,
+  defence, rebound, carrier}`, `input/{intents, controls}`, `record`, `game`, and `index.js` (the
+  v4 public API). The split was mechanical: every top-level declaration moved whole, nothing
+  edited but `export` and the imports. Proof: all seven v4 tapes replay on the engine, and for every
+  tape the engine's whole state equals the frozen v4's (`JSON.stringify`) every 120 frames. The
+  purity check now walks every file under `engine*/` and fails any import that leaves its engine
+  directory. `check-ads.mjs` reads `COURT` from `engine/court.js`. Modules the map names but S1a has
+  no code for yet (`ai/roles`, `ai/coach`, `input/assist`, the rules tables) arrive with S1b/S2.

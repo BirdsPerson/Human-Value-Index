@@ -1,6 +1,7 @@
-// THE COURTS, playable (src/play/hoops/): the game sim (v4, the 2K20-style game), the rosters and the
+// THE COURTS, playable (src/play/hoops/): the engine (engine/, v4, the 2K20-style game), the rosters and the
 // calls, headless.
-//   purity       sim.js uses no clock, no Math.random, no trig
+//   purity       every file under engine*/ uses no clock, no Math.random, no trig, no DOM, and imports
+//                nothing from outside its engine directory (docs/design/BASKETBALL.md 4.2)
 //   rules        two inside the arc, three outside it and in the corners past 6.71 m; a forced make
 //                adds 2 or 3; the shot clock and stepping out turn the ball over; FIRST TO 21 ends at
 //                21; four quarters end untied
@@ -52,10 +53,12 @@
 //   calls        no line quotes anyone or has anyone speak
 // Run: node scripts/check-hoops.mjs
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 
-const S = await import("../src/play/hoops/sim.js");
+const S = await import("../src/play/hoops/engine/index.js");
 const R = await import("../src/play/hoops/roster.js");
 const K = await import("../src/play/hoops/calls.js");
 const { BTN, COURT: C } = S;
@@ -186,9 +189,25 @@ let n = 0;
 const ok = (msg) => { n++; if (process.env.VERBOSE) console.log("ok", msg); };
 
 // ---- purity ------------------------------------------------------------------------------------------
+// every file under engine*/ (the live engine and, from v5, each frozen engine-vN/): no clock, no
+// Math.random, no trig, no DOM; and imports only from inside its own engine directory
 {
-  const src = readFileSync(new URL("../src/play/hoops/sim.js", import.meta.url), "utf8").replace(/\/\/.*$/gm, "");
-  for (const bad of ["Math.random", "Date.now", "performance", "Math.sin", "Math.cos", "Math.tan", "Math.atan", "Math.hypot", "Math.pow", "Math.exp", "Math.log", "document", "window"]) assert.ok(!src.includes(bad), `sim.js uses ${bad}`);
+  const hoops = fileURLToPath(new URL("../src/play/hoops/", import.meta.url));
+  const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".js") ? [join(d, e.name)] : []));
+  const roots = readdirSync(hoops).filter(n => /^engine(-v\d+)?$/.test(n)).map(n => join(hoops, n));
+  assert.ok(roots.length >= 1, "the engine directory is there");
+  let files = 0;
+  for (const root of roots) for (const f of walk(root)) {
+    files++;
+    const raw = readFileSync(f, "utf8"), src = raw.replace(/\/\/.*$/gm, ""), name = relative(hoops, f);
+    for (const bad of ["Math.random", "Date.now", "performance", "Math.sin", "Math.cos", "Math.tan", "Math.atan", "Math.hypot", "Math.pow", "Math.exp", "Math.log", "document", "window", "import("]) assert.ok(!src.includes(bad), `${name} uses ${bad}`);
+    for (const m of src.matchAll(/\bfrom\s+"([^"]+)"/g)) {
+      assert.ok(m[1].startsWith("."), `${name} imports a package (${m[1]})`);
+      const to = resolve(dirname(f), m[1]);
+      assert.ok(to.startsWith(root + sep), `${name} imports from outside its engine directory (${m[1]})`);
+    }
+  }
+  assert.ok(files >= 10, "the engine is split into modules");
   ok("purity");
 }
 
@@ -346,6 +365,11 @@ const cfgA = { fmt: "quarters", shot: 24, level: "rookie", home: R.sortFive(LG.t
     assert.deepEqual(under("baseline"), under("2k"), `seed ${rec.seed}: BASELINE and 2K replay alike`);
   }
   assert.ok(FIX4.records.every(r => r.cam && r.cam.id), "the v4 tapes carry their camera");
+  // the split engine (S1a) against the frozen v4, frame by frame: the whole state, every 120 frames, every tape
+  if (S.VERSION === 4) for (const rec of FIX4.records) {
+    const V4 = RP.simOf(4), a = V4.newGame(rec.seed, rec.cfg), e = S.newGame(rec.seed, rec.cfg), masks = S.rleDecode(rec.inputLog);
+    masks.forEach((m, f) => { V4.step(a, m); S.step(e, m); if (f % 120 === 0 || f === masks.length - 1) assert.equal(JSON.stringify(e), JSON.stringify(a), `seed ${rec.seed}: the engine's state equals the frozen v4's at frame ${f}`); });
+  }
   assert.equal(S.VERSION, 4);
   ok("v1, v2, v3 and v4 replay; the camera is metadata");
 }

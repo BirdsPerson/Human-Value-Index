@@ -11,7 +11,7 @@
 // on the court (DRIVE, LOW) without the floor exploding. The camera eases toward where its preset
 // wants it each frame (render-only; the sim never sees it). The heads are drawn a little large
 // (0.5 m), the 16-bit habit, so a face reads at this size.
-import { COURT as C, TOP, FT_TOP, dirOf, greenOf, kindAt, LEVELS, contestOf } from "./sim.js";
+import { COURT as C, TOP, FT_TOP, dirOf, greenOf, kindAt, LEVELS, contestOf } from "./engine/index.js";
 import { shrinkHead } from "../heads.js";
 import { slotsAt } from "../../ads/inventory.js";
 import { drawAdBoard, adGround } from "../../ads/boards.js";

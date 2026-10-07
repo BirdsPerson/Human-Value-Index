@@ -4,7 +4,7 @@ import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
-import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, FORMATS, dirOf, LEVELS, LEVEL_ORDER, MODES, POS_ARCH } from "./sim.js";
+import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, FORMATS, dirOf, LEVELS, LEVEL_ORDER, MODES, POS_ARCH } from "./engine/index.js";
 import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortFive, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS, divisionsOf, divisionOf, difficultyOf, defaultLevelIndex, allClubs, ROLES, playerPool } from "./roster.js";
 import { draw, camFollow, camStart, camOf, proj, CAMS, CAM_ORDER, DEFAULT_CAM, ADJ_DEFAULT, headOf, skinOf, shade, W, H } from "./render.js";
 import HoopsGuide, { guideSeen, markGuideSeen, namesFor, PAD_GLYPHS } from "./Guide.jsx";

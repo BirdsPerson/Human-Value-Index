@@ -51,7 +51,7 @@ for (const v of venues) {
 // ---- play area ----
 const { PITCH } = await import("../src/play/soccer/sim.js");
 const { makeCam } = await import("../src/play/soccer/render.js");
-const { COURT: HC } = await import("../src/play/hoops/sim.js");
+const { COURT: HC } = await import("../src/play/hoops/engine/court.js");
 const { COURT: TC } = await import("../src/play/tennis/sim.js");
 const { ARENA } = await import("../src/play/tennis/render.js");
 const along = (v, minY) => {
