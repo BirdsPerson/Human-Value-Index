@@ -174,17 +174,28 @@ function Screen({ ch, body, snow }) {
   );
 }
 
-// one prepared layout per size: S the remote (what is on, and the buttons), M a small set beside
-// its buttons, L the big screen with the buttons under it
-const Ctl = ({ t }) => (
-  <div className="fr-steps tv-ctl">
-    <button type="button" onClick={() => t.tune(-1)} aria-label="Channel down">CH ▼</button>
-    <button type="button" onClick={() => t.tune(1)} aria-label="Channel up">CH ▲</button>
+// one prepared layout per size: S a pocket set (the screen, ▼ ▲ AUTO), M a small set beside its buttons,
+// T the screen over the buttons and the channel guide, L the big screen with the buttons under it
+const Ctl = ({ t, small = false }) => (
+  <div className={`fr-steps tv-ctl${small ? " sm" : ""}`}>
+    <button type="button" onClick={() => t.tune(-1)} aria-label="Channel down">{small ? "▼" : "CH ▼"}</button>
+    <button type="button" onClick={() => t.tune(1)} aria-label="Channel up">{small ? "▲" : "CH ▲"}</button>
     <button type="button" onClick={() => t.setAuto(a => !a)} aria-pressed={t.auto}>AUTO</button>
   </div>
 );
 const VIEWS_set = {
-  S: (t) => <div className="fr-set-s"><span className="big">CH {String(t.ch.n).padStart(2, "0")}</span><span className="ln1"><span className="n">{t.ch.name}</span></span><Ctl t={t} /></div>,
+  // S: a pocket set: the screen (AUTO surfs the channels) over CH ▼ CH ▲
+  S: (t) => <div className="fr-set-s"><Screen ch={t.ch} body={t.body} snow={t.snow} /><Ctl t={t} small /></div>,
+  // T: the screen, the buttons, and the channel guide to jump straight to one
+  T: (t) => (
+    <div className="fr-set-t">
+      <Screen ch={t.ch} body={t.body} snow={t.snow} />
+      <Ctl t={t} />
+      <ul className="tv-guide" aria-label="Channels">
+        {CHANNELS.map((c, k) => <li key={c.id}><button type="button" aria-pressed={t.ch.id === c.id} onClick={() => t.pick(k)}><span className="k">{String(c.n).padStart(2, "0")}</span>{c.name}</button></li>)}
+      </ul>
+    </div>
+  ),
   M: (t) => <div className="fr-set-m"><Screen ch={t.ch} body={t.body} snow={t.snow} /><div className="side"><span className="big">CH {String(t.ch.n).padStart(2, "0")}</span><span className="ln1"><span className="n">{t.ch.name}</span></span><Ctl t={t} /></div></div>,
   L: (t) => <><Screen ch={t.ch} body={t.body} snow={t.snow} /><Ctl t={t} /></>,
 };
@@ -198,20 +209,20 @@ export default function TheSet({ size = "M" }) {
   const ch = CHANNELS[ci];
   const tune = (k) => {
     setCi(v => (v + k + CHANNELS.length) % CHANNELS.length);
-    if (!rm && size !== "S") { setSnow(true); setTimeout(() => setSnow(false), STATIC_MS); }
+    if (!rm) { setSnow(true); setTimeout(() => setSnow(false), STATIC_MS); }
   };
+  const pick = (k) => { setCi(k); if (!rm) { setSnow(true); setTimeout(() => setSnow(false), STATIC_MS); } };
   useEffect(() => {
     if (!auto || hold) return undefined;
     const t = setTimeout(() => { if (!document.hidden) tune(1); }, SURF_MS);
     return () => clearTimeout(t);
   });   // eslint-disable-line react-hooks/exhaustive-deps
-  // the small remote never loads a channel: nothing is fetched for a picture nobody sees
-  const body = size === "S" ? null : { snn: <Snn day={day} />, tour: <Suspense fallback={<NoSignal />}><TourneyChannel /></Suspense>, sports: <Sports />, markets: <Markets />, weather: <Weather />, ebtv: <Ebtv />, watch: <Surveillance embedded /> }[ch.id];
+  const body = { snn: <Snn day={day} />, tour: <Suspense fallback={<NoSignal />}><TourneyChannel /></Suspense>, sports: <Sports />, markets: <Markets />, weather: <Weather />, ebtv: <Ebtv />, watch: <Surveillance embedded /> }[ch.id];
   const V = VIEWS_set[size] || VIEWS_set.M;
   return (
     <Frame title="THE SET" meta={`CH ${ch.n} // ${ch.name}`} tone="var(--eb-amber)" className={`fr-set v-${size}`}>
       <div className="fr-set-w" onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)} onFocus={() => setHold(true)} onBlur={() => setHold(false)}>
-        <V ch={ch} body={body} snow={snow} tune={tune} auto={auto} setAuto={setAuto} />
+        <V ch={ch} body={body} snow={snow} tune={tune} pick={pick} auto={auto} setAuto={setAuto} />
         <p className="sr-only" aria-live="polite">CHANNEL {ch.n}, {ch.name}.</p>
       </div>
     </Frame>

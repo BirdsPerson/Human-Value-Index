@@ -9,6 +9,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Frame } from "../ui/index.js";
 import Sparkline from "../ui/Sparkline.jsx";
+import { Step } from "./cycle.jsx";
 
 const FilePhoto = lazy(() => import("../FilePhoto.jsx"));
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
@@ -68,7 +69,7 @@ export default function Surveillance({ embedded = false, size = "M" }) {
   }, [n, total, rm, seen]);
   // the cut
   useEffect(() => {
-    if (!seen || hold || list.length < 2) return undefined;
+    if (!seen || hold || list.length < 2 || (rm && size === "S" && !embedded)) return undefined;   // a S window under reduced motion: ◀ ▶ only
     const t = setTimeout(() => {
       if (document.hidden) return;
       if (rm) { setI(v => v + 1); return; }
@@ -102,6 +103,7 @@ export default function Surveillance({ embedded = false, size = "M" }) {
   // L the big picture and the whole file, W the picture beside the whole file; E is THE SET's channel
   const VIEWS_watch = {
     S: () => <><span className="rec s" aria-hidden="true"><span className="dot" />REC</span>{pr(0, 4, false)}</>,
+    T: () => <>{cam()}{pr(0, 6)}</>,
     M: () => <>{cam()}{pr(1, 4, false)}</>,
     L: () => <>{cam()}{pr(0, 6)}</>,
     W: () => <>{cam()}{pr(0, 6)}</>,
@@ -115,6 +117,7 @@ export default function Surveillance({ embedded = false, size = "M" }) {
           <V />
         </a>
       ) : <p className="fr-dim">THE CAMERAS ARE WARMING UP. EVERYONE IS STILL BEING WATCHED.</p>}
+      {s && size === "S" && !embedded && <Step c={{ i: i % list.length, n: list.length, go: (k) => setI(v => (v + k + list.length) % list.length) }} what="subject" />}
       {s && <p className="sr-only" aria-live="off">{lines.map(([k, v]) => `${k}: ${v}.`).join(" ")}</p>}
     </div>
   );

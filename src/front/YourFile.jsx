@@ -63,11 +63,24 @@ const Rows = ({ mine, tier }) => (
 );
 const Photo = ({ me }) => <span className="ph" aria-hidden="true"><Suspense fallback={<span className="ph-wait" />}><FilePhoto subject={me} scale={2} compact /></Suspense></span>;
 const VIEWS_file = {
-  S: ({ id, mine, tier }) => (
-    <a className="fr-glance" href="#file" aria-label={`Your file: score ${mine.score}, ${mine.tier || tier.label}. Open your file.`}>
+  // S: a dense readout: the score, the tier, the cubrant, the movement and the mail
+  S: ({ id, mine, tier, mail }) => (
+    <a className="fr-glance" href="#file" aria-label={`Your file: score ${mine.score}, ${mine.tier || tier.label}. ${mail ? `${mail} unread.` : ""} Open your file.`}>
       <span className="big">{mine.score}<span className="of">/1000</span></span>
       <span className="ln1"><i className="sq" style={{ background: tier.color }} aria-hidden="true" /><span className="n">{mine.tier || tier.label}</span></span>
+      <span className="ln2">{cubePlace(mine) || "CUBRANT PENDING"}</span>
+      <span className="ln2 row" aria-hidden="true"><Sparkline s={{ you: true, score: mine.score, history: mine.history }} />{mail ? <span>✉ {mail}</span> : null}</span>
     </a>
+  ),
+  T: ({ id, mine, tier, me, mail, fdDone }) => (
+    <>
+      <Link id={id} mine={mine} tier={tier}><Photo me={me} /></Link>
+      <Rows mine={mine} tier={tier} />
+      <ul className="fr-file-lines">
+        <li><a href="#mail">MAIL: {mail == null ? "…" : mail ? `${mail} UNREAD` : "NOTHING UNREAD"}</a></li>
+        <li><a href="#">{fdDone ? "FIRST DAY: COMPLETE." : "FIRST DAY: OPEN."}</a></li>
+      </ul>
+    </>
   ),
   M: ({ id, mine, tier, me }) => <Link id={id} mine={mine} tier={tier}><Photo me={me} /><Rows mine={mine} tier={tier} /></Link>,
   L: ({ id, mine, tier, me, mail, fdDone }) => (

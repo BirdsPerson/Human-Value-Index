@@ -1,12 +1,13 @@
 // LEADERBOARD (Scott, 2026-10-06): who leads the tournament on now (golf, bowling, the Sunday derby), or the last one
 // finished. /api/tournament for the calendar and each event's top five; the L size also asks ?id= for the whole
 // board, both divisions, with arrows for who moved since the last look (kept on this device, at least five minutes
-// old before it counts). One prepared layout per size: S the leader and the score, M the top five, T seven in a
+// old before it counts). One prepared layout per size: S the top five in turn (cycle.jsx), M the top five, T seven in a
 // column, L the full board, W a stepping board, one entrant at a time. The pure half is board.js.
 import { useEffect, useRef, useState } from "react";
 import { Frame, Chip, Chips } from "../ui/index.js";
 import { pickEvent, leadersOf, scoreText, holder, moves, snapshot, arrowOf, whenText, DIVS } from "./board.js";
 import { get, put } from "./prefs.js";
+import { useCycle, Cyc } from "./cycle.jsx";
 
 const getJSON = (u) => fetch(u).then(r => (r.ok ? r.json() : null)).catch(() => null);
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
@@ -45,6 +46,7 @@ function useBoard(full) {
   return d;
 }
 
+const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "TH" : ["TH", "ST", "ND", "RD"][n % 10] || "TH"}`;
 const Arrow = ({ d }) => { const a = arrowOf(d); return <span className={`ar ${a.cls}`} role="img" aria-label={a.word} title={a.word}>{a.ch}</span>; };
 const nm = (r, short) => (short ? holder(r).replace(/^SUBJECT /, "") : holder(r));   // a narrow window: 7Q2X, not SUBJECT 7Q2X
 const Row = ({ ev, r, mv, i, short }) => (
@@ -62,15 +64,17 @@ const Foot = ({ ev }) => <a className="fr-go" href={ev.href || "#play"}>THE FULL
 const NoCards = () => <p className="fr-dim">NO CARDS IN YET. THE BOARD IS YOURS TO TAKE.</p>;
 
 const VIEWS_board = {
-  S: ({ ev, rows }) => {
-    const l = rows[0];
-    return (
-      <a className="fr-glance" href={ev.href || "#play"}>
-        <span className="big">{l ? scoreText(ev, l) : "OPEN"}</span>
+  // S: the top five in turn, the place and the score big, who under it, the event at the foot
+  S: function BoardS({ ev, rows }) {
+    const top = rows.slice(0, 5), c = useCycle(top.length), l = top[c.i];
+    const link = (
+      <a className="fr-glance" href={ev.href || "#play"} aria-label={l ? `${ev.name}: ${ordinal(l.pos)}, ${holder(l)}, ${scoreText(ev, l)}. The full board.` : `${ev.name}: no cards yet.`}>
+        <span className="big">{l ? <><span className="ps">{ordinal(l.pos)}</span> {scoreText(ev, l)}</> : "OPEN"}</span>
         <span className="ln1"><span className="n">{l ? nm(l, true) : "NO CARDS YET"}</span></span>
-        <span className="c">{ev.name}</span>
+        <span className="ln2">{ev.name}</span>
       </a>
     );
+    return l ? <Cyc c={c} what="place">{link}</Cyc> : link;
   },
   M: ({ ev, rows }) => (rows.length ? <><List ev={ev} rows={rows} n={5} /><Foot ev={ev} /></> : <NoCards />),
   T: ({ ev, rows }) => (rows.length ? <><List ev={ev} rows={rows} n={7} cls="tall" short /><Foot ev={ev} /></> : <NoCards />),

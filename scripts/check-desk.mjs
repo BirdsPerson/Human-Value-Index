@@ -45,33 +45,44 @@ for (const id of ids) {
   for (const k of sizes) assert.ok(new RegExp(`\\b${k}:`).test(table[1]), `${id}: no renderer for size ${k}`);
 }
 assert.deepEqual(Object.keys(L.SIZES_OF).sort(), ids.slice().sort(), "SIZES_OF lists exactly the widgets");
-assert.deepEqual(L.DEFAULT_LAYOUT.map(x => `${x.id}:${x.size}`), ["market:M", "wire:W", "watch:L", "set:M", "notice:S"], "the default grid");
+assert.deepEqual(L.DEFAULT_LAYOUT.map(x => `${x.id}:${x.size}:${x.zone}`), ["market:M:rail", "watch:L:rail", "wire:W:main", "set:M:main", "notice:M:main"], "the default desk: MARKET and SURVEILLANCE in the column, the rest under it");
 assert.ok(L.DEFAULT_LAYOUT.every(x => L.SIZES_OF[x.id].includes(x.size)), "default sizes are ones the widget has");
-// columns: 4 wide, 3 mid, 2 phone; W is the whole row on 3 and a M on a phone
+// columns: 4 wide, 3 mid, 2 on a phone; W is the whole row on 3 and a M on a phone
 assert.deepEqual([320, 358, 480, 640, 700, 1008].map(L.colsFor), [2, 2, 3, 3, 4, 4]);
 assert.equal(L.effSize("W", 2), "M"); assert.equal(L.effSize("W", 4), "W"); assert.equal(L.effSize("L", 2), "L");
 assert.deepEqual(L.spans("W", 4), [4, 1]); assert.deepEqual(L.spans("W", 3), [3, 1]); assert.deepEqual(L.spans("L", 2), [2, 2]);
-// persistence: nothing saved is the default; a save round-trips; a bad size or id is repaired
+// persistence: nothing saved is the default; a save round-trips; a bad size or id is repaired; every saved item carries its zone
 assert.deepEqual(L.loadLayout(), L.DEFAULT_LAYOUT, "nothing saved: the default desk");
-const mine = L.normalize([{ id: "cam", size: "L" }, { id: "paper", size: "S" }, { id: "market", size: "T" }]);
+const mine = L.normalize([{ id: "cam", size: "L" }, { id: "paper", size: "S" }, { id: "market", size: "T", zone: "main" }]);
 L.saveLayout(mine);
 assert.deepEqual(L.loadLayout(), mine, "layout round-trips through storage");
 assert.deepEqual(mine.map(x => x.order), [0, 1, 2]);
+assert.ok(JSON.parse(store.get("hvi-layout")).every(x => x.zone === "rail" || x.zone === "main"), "every saved item carries its zone");
 store.set("hvi-layout", JSON.stringify([{ id: "market", size: "Z", order: 1 }, { id: "ghost", size: "M", order: 0 }, { id: "market", size: "M", order: 2 }, { id: "notice", size: "L", order: 3 }]));
-assert.deepEqual(L.loadLayout(), [{ id: "market", size: "M", order: 0 }, { id: "notice", size: "S", order: 1 }], "unknown ids, repeats and sizes a widget lacks are repaired");
+assert.deepEqual(L.loadLayout(), [{ id: "market", size: "M", zone: "main", order: 0 }, { id: "notice", size: "M", zone: "main", order: 1 }], "unknown ids, repeats and sizes a widget lacks are repaired");
 store.set("hvi-layout", "{not json"); assert.deepEqual(L.loadLayout(), L.DEFAULT_LAYOUT, "garbled storage: defaults");
-// migration: the old saved id list (hvi-widgets) becomes the grid, order kept
-store.clear(); store.set("hvi-widgets", JSON.stringify(["cam", "bogus", "market", "cam", "league"]));
-assert.deepEqual(L.loadLayout(), [{ id: "cam", size: "M", order: 0 }, { id: "market", size: "M", order: 1 }, { id: "league", size: "M", order: 2 }], "the saved order migrates into the grid");
+// MIGRATION (2026-10-07): a desk saved before the column took M and L had a zone only on items that were moved;
+// the rest sat by size (S and T beside the panel, the others in main). It loads exactly where it was, written down.
+const before = [{ id: "market", size: "M", order: 0 }, { id: "notice", size: "S", order: 1 }, { id: "board", size: "T", order: 2 }, { id: "paper", size: "S", order: 3, zone: "main" }, { id: "watch", size: "L", order: 4, zone: "main" }, { id: "cups", size: "S", order: 5, zone: "rail" }];
+store.clear(); store.set("hvi-layout", JSON.stringify(before));
+const after = L.loadLayout();
+assert.deepEqual(after.map(x => `${x.id}:${x.size}:${x.zone}`), ["market:M:main", "notice:S:rail", "board:T:rail", "paper:S:main", "watch:L:main", "cups:S:rail"], "an old desk keeps every window, its size, its order and its side");
+assert.deepEqual(after.map(L.zoneOf), before.map(x => (x.zone || (x.size === "S" || x.size === "T" ? "rail" : "main"))), "the old placement rule, applied once and saved");
+L.saveLayout(after); assert.deepEqual(L.loadLayout(), after, "and stays put");
+// the older id list (hvi-widgets) becomes the grid with the sizes it drew at, order kept
+store.clear(); store.set("hvi-widgets", JSON.stringify(["cam", "bogus", "notice", "cam", "league"]));
+assert.deepEqual(L.loadLayout(), [{ id: "cam", size: "M", zone: "main", order: 0 }, { id: "notice", size: "S", zone: "rail", order: 1 }, { id: "league", size: "M", zone: "main", order: 2 }], "the saved order migrates into the grid");
 store.clear(); store.set("hvi-widgets", "[]"); assert.deepEqual(L.loadLayout(), [], "a deliberately empty desk stays empty");
-// the edits and the keyboard (a pure function: FrontDesk only draws what it returns)
-const g = L.DEFAULT_LAYOUT;
+store.clear();
+// the edits and the keyboard (a pure function: FrontDesk only draws what it returns), on the old default desk
+const g = L.normalize([{ id: "market", size: "M" }, { id: "wire", size: "W" }, { id: "watch", size: "L" }, { id: "set", size: "M" }, { id: "notice", size: "S" }]);
 assert.deepEqual(L.moveTo(g, "market", 3).map(x => x.id), ["wire", "watch", "set", "market", "notice"]);
 assert.deepEqual(L.moveTo(g, "notice", 0).map(x => x.order), [0, 1, 2, 3, 4], "moves renumber");
-assert.deepEqual(L.fromIds(g, ["notice", "cam", "market"]).map(x => `${x.id}:${x.size}`), ["notice:S", "cam:M", "market:M"], "the WIDGETS dialog keeps sizes and adds new ones at their default");
+assert.deepEqual(L.fromIds(g, ["notice", "cam", "market"]).map(x => `${x.id}:${x.size}:${x.zone}`), ["notice:S:rail", "cam:M:main", "market:M:main"], "the WIDGETS dialog keeps sizes and sides, and adds new ones at their default in main");
+assert.equal(L.addId(g, "cups").find(x => x.id === "cups").zone, "main");
 let r = L.keyAction(g, "wire", "ArrowRight");
 assert.deepEqual(r.layout.map(x => x.id), ["market", "watch", "wire", "set", "notice"]); assert.match(r.say, /WIRE\.TKR MOVED TO 3 OF 5/);
-assert.match(L.keyAction(g, "notice", "ArrowUp").say, /ALREADY FIRST/, "first in the rail: stays");
+assert.match(L.keyAction(g, "notice", "ArrowUp").say, /ALREADY FIRST/, "first in the column: stays");
 assert.equal(L.keyAction(g, "notice", "ArrowUp").layout, g);
 assert.match(L.keyAction(g, "set", "ArrowDown").say, /ALREADY LAST/, "last in the main grid: stays");
 r = L.keyAction(g, "market", "+"); assert.equal(r.layout[0].size, "T"); assert.match(r.say, /TALL, 1 BY 2/);
@@ -89,29 +100,39 @@ assert.match(css, /\.fr-ed \{[^}]*dashed/, "edit mode: dashed outline");
 assert.ok(/onPointerDown/.test(desk) && /pointermove/.test(desk) && /pointercancel/.test(desk) && /380\)/.test(desk), "pointer events, with a long press for touch");
 assert.ok(/onKeyDown: onKey\(id\)/.test(desk) && /role="status"/.test(desk) && /ADD WIDGET/.test(desk) && /DONE/.test(desk), "keys, announcements, ADD WIDGET and DONE");
 assert.ok(/onArrange/.test(src("src/front/DeskPrefs.jsx")), "the WIDGETS dialog opens ARRANGE");
-// ---- zones: the rail beside the panel, the main grid under it --------------------------------------------------
-assert.deepEqual(g.map(L.zoneOf), ["main", "main", "main", "main", "rail"], "S and T sit in the rail until put somewhere; the rest in main");
-assert.deepEqual([L.zoneOf({ size: "S", zone: "main" }), L.zoneOf({ size: "M", zone: "rail" })], ["main", "rail"], "a saved zone wins");
-assert.deepEqual(["S", "T", "M", "L", "W"].map(k => L.fitRail("market", k)), ["S", "T", "S", "T", "S"], "too-big windows snap to a size that fits the rail");
-assert.equal(L.fitRail("notice", "M"), "S"); assert.equal(L.fitRail("file", "L"), "S", "a widget with no T takes its S");
-assert.deepEqual([300, 329, 330, 600].map(L.railCols), [1, 1, 2, 2]); assert.deepEqual([899, 900].map(L.railBeside), [false, true], "the rail needs 900px; a phone merges it");
+// ---- zones: THE COLUMN beside the panel (S M T L), the main grid under both ----------------------------------------
+assert.deepEqual(g.map(L.zoneOf), ["main", "main", "main", "main", "rail"], "an old desk: S and T beside the panel, the rest in main");
+assert.deepEqual([L.zoneOf({ size: "S", zone: "main" }), L.zoneOf({ size: "M", zone: "rail" }), L.zoneOf({ size: "L", zone: "rail" }), L.zoneOf({ size: "W", zone: "rail" })], ["main", "rail", "rail", "main"], "a saved side wins; the column holds S M T L, never W");
+assert.deepEqual(L.COLUMN_SIZES, ["S", "M", "T", "L"]);
+assert.deepEqual(["S", "T", "M", "L", "W"].map(k => L.fitRail("market", k)), ["S", "T", "M", "L", "M"], "two tracks: everything but W fits; W becomes a M");
+assert.deepEqual(["S", "T", "M", "L", "W"].map(k => L.fitRail("market", k, 1)), ["S", "T", "S", "T", "T"], "one track: S and T only");
+assert.equal(L.fitRail("notice", "M"), "M"); assert.equal(L.fitRail("flat", "L", 1), "S", "a widget with no T takes its S in one track");
+assert.deepEqual([300, 311, 312, 600].map(L.colTracks), [1, 1, 2, 2], "two tracks from 312px (two 150px tracks and the gap)"); assert.deepEqual([899, 900].map(L.railBeside), [false, true], "the column needs 900px; a phone folds it in");
+assert.deepEqual([L.sizesIn("rail"), L.sizesIn("rail", 1), L.sizesIn("main")], [["S", "M", "T", "L"], ["S", "T"], ["S", "M", "T", "L", "W"]]);
+assert.equal(L.colWide([{ size: "S" }, { size: "T" }]), false); assert.equal(L.colWide([{ size: "S" }, { size: "L" }]), true, "a M or L widens the column");
 let z = L.toZone(g, "market", "rail");
-assert.deepEqual([z.find(x => x.id === "market").size, z.find(x => x.id === "market").zone], ["S", "rail"], "market M dragged into the rail becomes a S there");
-assert.equal(L.toZone(g, "notice", "rail", "market")[0].id, "notice", "dropped before a window of that zone"); // renumbered
+assert.deepEqual([z.find(x => x.id === "market").size, z.find(x => x.id === "market").zone], ["M", "rail"], "market M dragged into the column stays a M");
+assert.deepEqual(L.toZone(g, "wire", "rail").find(x => x.id === "wire").size, "M", "a W dragged into the column becomes a M");
+assert.equal(L.toZone(g, "watch", "rail", null, 1).find(x => x.id === "watch").size, "T", "a one-track column fits a L as a T");
+assert.equal(L.toZone(g, "notice", "rail", "market")[0].id, "notice", "dropped before a window of that zone");
 z = L.toZone(g, "wire", "main", "set"); assert.deepEqual(z.map(x => x.id), ["market", "watch", "wire", "set", "notice"]);
 z = L.toZone(g, "notice", "main"); assert.equal(z.find(x => x.id === "notice").zone, "main"); assert.equal(L.zoneOf(z.find(x => x.id === "notice")), "main", "S put in main stays in main");
-// zone survives storage; a rail window bigger than the rail is repaired; unsaved zones stay out of the saved list
 L.saveLayout(z); assert.equal(L.loadLayout().find(x => x.id === "notice").zone, "main");
-assert.ok(!("zone" in L.normalize(g)[0]), "no zone is written until one is chosen");
-assert.equal(L.normalize([{ id: "market", size: "L", zone: "rail" }])[0].zone, undefined, "a rail holds only S and T");
-// growing a rail window past the rail graduates it
-r = L.keyAction(L.toZone(g, "market", "rail"), "market", "+"); assert.equal(r.layout.find(x => x.id === "market").size, "M"); assert.equal(L.zoneOf(r.layout.find(x => x.id === "market")), "main", "S to M leaves the rail");
-assert.equal(L.zoneOf(L.resize(L.toZone(g, "market", "rail"), "market", "T").find(x => x.id === "market")), "rail", "a T stays");
-// the keys cross the edge: down past the rail's end goes into main, up past main's start into the rail (fitted)
+assert.equal(L.normalize([{ id: "market", size: "L", zone: "rail" }])[0].zone, "rail", "the column keeps a L");
+assert.equal(L.normalize([{ id: "market", size: "W", zone: "rail" }])[0].zone, "main", "a W is never in the column");
+// growing in the column: S, M, T, L stay; W graduates to main
+let col = L.resize(L.toZone(g, "market", "rail"), "market", "S");
+const mk = (l) => { const x = l.find(y => y.id === "market"); return [x.size, L.zoneOf(x)]; };
+r = L.keyAction(col, "market", "+"); assert.deepEqual(mk(r.layout), ["M", "rail"], "a M stays in the column");
+r = L.keyAction(r.layout, "market", "+"); assert.deepEqual(mk(r.layout), ["T", "rail"]);
+r = L.keyAction(r.layout, "market", "+"); assert.deepEqual(mk(r.layout), ["L", "rail"], "a L stays in the column");
+r = L.keyAction(r.layout, "market", "+"); assert.deepEqual([r.layout.find(x => x.id === "market").size, L.zoneOf(r.layout.find(x => x.id === "market"))], ["W", "main"], "W leaves the column"); assert.match(r.say, /OUT OF THE COLUMN/);
+// the keys cross the edge: down past the column's end goes into main, up past main's start into the column (fitted)
 r = L.keyAction(L.toZone(g, "market", "rail", "notice"), "market", "ArrowDown");
-assert.equal(L.zoneOf(r.layout.find(x => x.id === "market")), "rail", "stepping down in the rail passes the next window");
-r = L.keyAction(r.layout, "market", "ArrowDown"); assert.equal(L.zoneOf(r.layout.find(x => x.id === "market")), "main", "past the rail's end it crosses into main"); assert.match(r.say, /MAIN GRID/);
-r = L.keyAction(g, "market", "ArrowUp"); assert.equal(L.zoneOf(r.layout.find(x => x.id === "market")), "rail", "up from the start of main crosses into the rail"); assert.equal(r.layout.find(x => x.id === "market").size, "S"); assert.match(r.say, /RAIL/);
+assert.equal(L.zoneOf(r.layout.find(x => x.id === "market")), "rail", "stepping down in the column passes the next window");
+r = L.keyAction(r.layout, "market", "ArrowDown"); assert.equal(L.zoneOf(r.layout.find(x => x.id === "market")), "main", "past the column's end it crosses into main"); assert.match(r.say, /MAIN GRID/);
+r = L.keyAction(g, "market", "ArrowUp"); assert.equal(L.zoneOf(r.layout.find(x => x.id === "market")), "rail", "up from the start of main crosses into the column"); assert.equal(r.layout.find(x => x.id === "market").size, "M"); assert.match(r.say, /COLUMN/);
+r = L.keyAction(L.moveTo(g, "wire", 0), "wire", "ArrowUp"); assert.equal(r.layout.find(x => x.id === "wire").size, "M", "a W crossing into the column fits as a M");
 // ---- drag-to-resize: the pointer's travel is cells; the cells snap to the nearest prepared size ------------------
 const M = { col: 190, row: 196, gap: 12 };
 assert.deepEqual(L.cellsAt(100, 100, M, 4), { w: 1, h: 1 }); assert.deepEqual(L.cellsAt(400, 200, M, 4), { w: 2, h: 1 }); assert.deepEqual(L.cellsAt(400, 420, M, 4), { w: 2, h: 2 });
@@ -120,13 +141,31 @@ const sn = (id, w, h, c = 4, zone) => L.snapSize(id, w, h, c, zone);
 assert.deepEqual([sn("market", 1, 1), sn("market", 2, 1), sn("market", 1, 2), sn("market", 2, 2), sn("market", 4, 1)], ["S", "M", "T", "L", "W"], "each cell shape lands on its own size");
 assert.equal(sn("market", 3, 1), "M", "3x1 is nearer 2x1 than 4x1: ties go to the smaller"); assert.equal(sn("market", 2, 3), "L", "a tall drag: the largest that is near");
 assert.equal(sn("market", 4, 1, 2), "M", "a phone has no W"); assert.equal(sn("market", 4, 1, 3), "W");
-assert.equal(sn("notice", 4, 4), "M", "a widget with S and M only: the nearest it has"); assert.equal(sn("file", 1, 2), "S", "no T: S (the nearest of S M L)");
-assert.deepEqual([sn("market", 2, 2, 2, "rail"), sn("market", 1, 1, 2, "rail"), sn("market", 1, 3, 2, "rail")], ["T", "S", "T"], "in the rail only S and T are offered");
-for (const id of ids) for (const k of L.SIZES_OF[id]) { const [w, h] = L.SIZE[k]; assert.equal(sn(id, Math.min(w, 4), h, 4), k, `${id}: its own ${k} cells snap back to ${k}`); }
+assert.equal(sn("notice", 4, 4), "M", "a widget with S and M only: the nearest it has"); assert.equal(sn("flat", 1, 2), "S", "no T: S (the nearest of S M L)");
+assert.deepEqual([sn("market", 2, 2, 2, "rail"), sn("market", 1, 1, 2, "rail"), sn("market", 1, 3, 2, "rail"), sn("market", 2, 1, 2, "rail")], ["L", "S", "T", "M"], "the column offers S M T L");
+assert.deepEqual([sn("market", 2, 2, 1, "rail"), sn("market", 2, 1, 1, "rail")], ["T", "S"], "a one-track column: S and T");
+for (const id of ids) for (const k of L.SIZES_OF[id]) { const [w, h] = L.SIZE[k]; assert.equal(sn(id, Math.min(w, 4), h, 4), k, `${id}: its own ${k} cells snap back to ${k}`); if (k !== "W") assert.equal(sn(id, w, h, 2, "rail"), k, `${id}: ${k} in the column`); }
 assert.match(desk, /className="fr-rz"/, "the grip is in the cell's edit overlay"); assert.match(desk, /fr-rz-prev/, "an outline previews the size");
 assert.match(css, /\.fr-rz \{[^}]*nwse-resize/, "Win98 corner grip"); assert.match(desk, /aria-pressed=\{size === k\}/, "the S M T L W buttons stay for the keyboard");
-assert.ok(/data-zone="rail"/.test(desk) && /railBeside/.test(desk), "the rail beside the panel, merged on a phone");
-assert.match(src("src/coreScreens.css"), /\.hvi-desk-side \{ display: contents; \}/, "the rail and the main grid are the logon grid's own children");
+assert.ok(/data-zone="rail"/.test(desk) && /railBeside/.test(desk) && /data-wide=\{colWide\(railItems\)/.test(desk), "the column beside the panel, widened for a M or L, folded on a phone");
+const core = src("src/coreScreens.css");
+assert.match(core, /\.hvi-desk-side \{ display: contents; \}/, "the column and the main grid are the logon grid's own children");
+assert.match(core, /minmax\(440px, 640px\) minmax\(var\(--col-min\), 1fr\)/, "the panel gives way to the column");
+assert.match(core, /\.hvi-desk:has\(\.fr-rail\[data-wide\]\) \{ --col-min: 340px; \}/, "two 150px tracks and the gap once it holds a M or L");
+assert.match(core, /\.hvi-wrap\.wide:has\(> \.hvi-desk\) \{ max-width: 1400px; \}/, "the logon page is wider than the rooms");
+// ---- every S earns its space (Scott, 2026-10-07): it cycles live data, slowly, or it is a dense readout -------------
+const C = src("src/front/cycle.jsx");
+assert.ok(/CYCLE_MS = (\d+)/.test(C) && +C.match(/CYCLE_MS = (\d+)/)[1] >= 6000, "slow: six seconds or more an item");
+assert.ok(/prefers-reduced-motion: reduce/.test(C) && /useState\(reduced\)/.test(C) && /if \(still \|\| hold/.test(C), "reduced motion: static, stepped by hand");
+assert.ok(/onMouseEnter/.test(C) && /onFocus/.test(C) && /document\.hidden/.test(C), "held while hovered or focused; idle in a hidden tab");
+assert.ok(/aria-label=\{`Previous \$\{what\}`\}/.test(C) && /aria-label=\{`Next \$\{what\}`\}/.test(C), "the steps are labelled buttons");
+const S_VIEW = { market: ["FrontDesk.jsx", /function MarketS[\s\S]*?useCycle/], wire: ["FrontDesk.jsx", /S: \(w\) => [^\n]*<Step /], cam: ["FrontDesk.jsx", /function CamS[\s\S]*?useCycle/], notice: ["FrontDesk.jsx", /function NoticeS[\s\S]*?useCycle/],
+  paper: ["Smalls.jsx", /function PaperS[\s\S]*?useCycle/], cups: ["Smalls.jsx", /function CupsS[\s\S]*?useCycle/], board: ["Leaderboard.jsx", /function BoardS[\s\S]*?useCycle/], set: ["TheSet.jsx", /S: \(t\) => <div className="fr-set-s"><Screen /],
+  watch: ["Surveillance.jsx", /size === "S" && !embedded && <Step /], league: ["Smalls.jsx", /S: \(\{ cup \}\) => \(\s*<a className="fr-dense"/], file: ["YourFile.jsx", /S: \(\{ id, mine, tier, mail \}\)[\s\S]*?cubePlace[\s\S]*?Sparkline/], flat: ["YourFlat.jsx", /S: <a className="fr-glance"[^\n]*buildingName[^\n]*home/] };
+assert.deepEqual(Object.keys(S_VIEW).sort(), ids.slice().sort(), "every widget's S is accounted for");
+for (const [id, [f, re]] of Object.entries(S_VIEW)) assert.match(src(`src/front/${f}`), re, `${id}: its S cycles or reads densely`);
+assert.match(desk, /CAM_TOUR = \[\[null, "THE WHOLE CITY"\]/); { const { DISTRICT } = await import("../src/city/sim.js"); for (const [, d] of desk.match(/CAM_TOUR = (\[[^\n]*\]);/)[1].matchAll(/\["([a-z]+)"/g)) assert.ok(DISTRICT[d], `the cam tour's ${d} is a district`); }
+assert.ok(/if \(still \|\| hold \|\| n < 2\)/.test(C), "nothing cycles a list of one");
 
 // ---- LEADERBOARD: its views per size (the VIEWS_board table is checked with the others), the pure half ------------
 const B = await import("../src/front/board.js");
@@ -159,4 +198,4 @@ const srv = src("netlify/functions/tournament.js");
 assert.ok(/leaderLog/.test(srv) && /putLog/.test(srv) && !/cid|caseId/.test(srv.slice(srv.indexOf("export async function leaderLog"), srv.indexOf("export default"))), "the leader's log is served by place, with no case id");
 const ch = src("src/front/TheSet.jsx"); assert.match(ch, /n: 3, id: "tour", name: "THE TOURNAMENT"/, "CH 3 is THE TOURNAMENT");
 assert.ok(/import\("\.\.\/play\/golf\/render\.js"\)/.test(src("src/front/TourneyChannel.jsx")) && !/from "\.\.\/play\/golf\/render/.test(src("src/front/TourneyChannel.jsx")), "the golf renderer is lazy");
-console.log(`check-desk ok: ${ids.length} widgets, ${w.subjects.length} watched, all public and clean, ${ids.length} widgets x sizes, grid + layout + keys`);
+console.log(`check-desk ok: ${ids.length} widgets, ${w.subjects.length} watched, all public and clean, ${ids.length} widgets x sizes, grid + column + migration + keys, every S cycles or reads densely`);

@@ -111,8 +111,14 @@
    window left, the small windows beside it. */
 .hvi-desk { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
 .hvi-desk > .tb { margin-top: var(--s4); }
+/* The COLUMN beside the panel (2026-10-07) takes S M T L windows: the logon page widens to 1400px, the panel gives
+   way down to 440px, and the column is at least 220px (one track), 340px once it holds a M or a L (two tracks:
+   src/front/layout.js colTracks, FrontDesk's data-wide). */
 @media (min-width: 900px) {
-  .hvi-desk { grid-template-columns: minmax(0, 640px) minmax(0, 1fr); gap: 0 var(--s6); }
+  .hvi-desk { --col-min: 220px; grid-template-columns: minmax(440px, 640px) minmax(var(--col-min), 1fr); gap: 0 var(--s6); }
+  .hvi-desk:has(.fr-rail[data-wide]) { --col-min: 340px; }
+  .hvi-wrap.wide:has(> .hvi-desk) { max-width: 1400px; }
+  .hvi-app:has(.hvi-desk) .ui-head-line { max-width: 1400px; }
   .hvi-desk-side { display: contents; }   /* the rail sits beside the panel, the main grid under both (src/front/FrontDesk.jsx) */
   .fr-deskwrap { display: contents; }
 }

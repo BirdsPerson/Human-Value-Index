@@ -13,16 +13,17 @@
 // Since 2026-10-06 the visitor picks the windows (WIDGETS, src/front/prefs.js) and, as on a phone's
 // home screen, drags them into spots and picks a size for each (the grid: src/front/layout.js;
 // ARRANGE under the desk). Every widget has a prepared layout per size, its VIEWS_<id> table:
-// S a glance, M, T tall, L richer, W four columns wide. Each widget past the first four is its own
+// S one item (a slow cycle, or a dense readout), M, T tall, L richer, W four columns wide. Each widget past the first four is its own
 // lazy chunk, fetched only when it is on the desk. MORE ROOMS' DISPLAY and WIDGETS open their
 // dialogs here (DeskPrefs.jsx).
-// Two zones on a wide screen (layout.js): a RAIL of S and T windows beside the logon panel and the MAIN grid under
-// it; drag a window between them in ARRANGE. A grip in a window's bottom-right corner resizes it, snapping to the
+// Two zones on a wide screen (layout.js): the COLUMN beside the logon panel (S, M, T and L; it widens itself for a
+// M or a L) and the MAIN grid under both; drag a window between them in ARRANGE. A grip in a window's bottom-right corner resizes it, snapping to the
 // nearest prepared size with an outline preview; the S M T L W buttons stay for the keyboard.
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Frame, Chip, Chips, Button, ButtonRow } from "../ui/index.js";
 import { WIDGETS } from "./prefs.js";
-import { SIZE, SIZE_NAME, SIZES_OF, colsFor, effSize, spans, loadLayout, saveLayout, DEFAULT_LAYOUT, moveTo, resize, removeId, fromIds, keyAction, zoneOf, toZone, snapSize, cellsAt, railCols, railBeside } from "./layout.js";
+import { SIZE, SIZE_NAME, SIZES_OF, colsFor, effSize, spans, loadLayout, saveLayout, DEFAULT_LAYOUT, moveTo, resize, removeId, fromIds, keyAction, zoneOf, toZone, snapSize, cellsAt, colTracks, railBeside, colWide, sizesIn } from "./layout.js";
+import { useCycle, Cyc, Step } from "./cycle.jsx";
 import { FAMOUS_FIGURES, getTier, displayName } from "../figures.js";
 import Sparkline from "../ui/Sparkline.jsx";   // the MOVEMENT LOG beside a name (src/ui/spark.js)
 import "./front.css";
@@ -56,12 +57,14 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
   const [arr, setArr] = useState(false);      // ARRANGE: the edit mode
   const [say, setSay] = useState("");
   const [cols, setCols] = useState(4);
-  const [rcols, setRcols] = useState(1);      // the rail's columns (1 or 2)
+  const [rcols, setRcols] = useState(2);      // the column's tracks (1 or 2)
   const [beside, setBeside] = useState(() => { try { return railBeside(window.innerWidth); } catch { return true; } });
   const [rz, setRz] = useState(null);         // { id, size, w, h, m } while a window's corner is dragged
   const [drag, setDrag] = useState(null);     // { id, x, y } while a window is held
   const grid = useRef(null), railEl = useRef(null), wrap = useRef(null), live = useRef(layout), focusId = useRef(null);
   live.current = layout;
+  const rcolsRef = useRef(2);
+  rcolsRef.current = rcols;
   const apply = (l, keep = true) => { live.current = l; setLayout(l); if (keep) saveLayout(l); };
 
   useLayoutEffect(() => {
@@ -83,7 +86,7 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
   useLayoutEffect(() => {
     const el = railEl.current;
     if (!el || typeof ResizeObserver === "undefined") return undefined;
-    const fit = () => setRcols(railCols(el.clientWidth));
+    const fit = () => setRcols(colTracks(el.clientWidth));
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
@@ -151,12 +154,12 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
       setDrag({ id, x: ev.clientX, y: ev.clientY });
       const hit = document.elementFromPoint(ev.clientX, ev.clientY), over = hit?.closest("[data-wid]")?.dataset.wid, zoneAt = hit?.closest("[data-zone]")?.dataset.zone;
       const me = live.current.find(x => x.id === id);
-      if (!over && zoneAt && me && zoneAt !== zoneOf(me)) { last = null; apply(toZone(live.current, id, zoneAt), false); setSay(`${nameOf(id)} OVER THE ${zoneAt === "rail" ? "RAIL" : "MAIN GRID"}.`); return; }   // an empty patch of the other zone
+      if (!over && zoneAt && me && zoneAt !== zoneOf(me)) { last = null; apply(toZone(live.current, id, zoneAt, null, rcolsRef.current), false); setSay(`${nameOf(id)} OVER THE ${zoneAt === "rail" ? "COLUMN" : "MAIN GRID"}.`); return; }   // an empty patch of the other zone
       if (!over || over === id) { if (over === id) last = null; return; }
       if (over === last) return;   // one move per cell entered, so equal-sized neighbours do not trade back and forth
       last = over;
       const oz = zoneOf(live.current.find(x => x.id === over) || me);
-      if (me && oz !== zoneOf(me)) apply(toZone(live.current, id, oz, over), false);   // into the other zone: a rail takes only a size that fits
+      if (me && oz !== zoneOf(me)) apply(toZone(live.current, id, oz, over, rcolsRef.current), false);   // into the other zone: the column takes only a size that fits
       else apply(moveTo(live.current, id, live.current.findIndex(x => x.id === over)), false);
     }
     function up() { done(); }
@@ -170,7 +173,7 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
     const was = zoneOf(live.current.find(x => x.id === id) || {});
     const n = resize(live.current, id, size);
     apply(n);
-    setSay(`${nameOf(id)} NOW ${SIZE_NAME[size]}, ${SIZE[size][0]} BY ${SIZE[size][1]}${was === "rail" && zoneOf(n.find(x => x.id === id)) === "main" ? ", MOVED OUT OF THE RAIL INTO THE MAIN GRID" : ""}.`);
+    setSay(`${nameOf(id)} NOW ${SIZE_NAME[size]}, ${SIZE[size][0]} BY ${SIZE[size][1]}${was === "rail" && zoneOf(n.find(x => x.id === id)) === "main" ? ", MOVED OUT OF THE COLUMN INTO THE MAIN GRID" : ""}.`);
   };
   // the corner grip: the pointer's travel from the window's top-left is cells; the nearest prepared size is the
   // outline, applied on release (the layout does not jump while it is held)
@@ -208,7 +211,7 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
     return (
       <div key={id} data-wid={id} data-size={eff} data-zone={zone} className={`fr-cell s-${eff}${arr ? " edit" : ""}${drag?.id === id || padHeld === id ? " held" : ""}`}
         style={{ gridColumn: `span ${w}`, gridRow: `span ${h}` }}
-        {...(arr ? { tabIndex: 0, role: "group", "aria-roledescription": "movable window", "aria-label": `${nameOf(id)}, ${SIZE_NAME[eff]}, ${zone === "rail" ? "in the rail beside the panel" : "in the main grid"}. Arrow keys move it, plus and minus resize it, Delete removes it.`, onKeyDown: onKey(id), onPointerDown: down(id) } : null)}>
+        {...(arr ? { tabIndex: 0, role: "group", "aria-roledescription": "movable window", "aria-label": `${nameOf(id)}, ${SIZE_NAME[eff]}, ${zone === "rail" ? "in the column beside the panel" : "in the main grid"}. Arrow keys move it, plus and minus resize it, Delete removes it.`, onKeyDown: onKey(id), onPointerDown: down(id) } : null)}>
         <div className="fr-cell-in" {...(arr ? { inert: "" } : null)}>
           <Suspense fallback={null}><W size={eff} /></Suspense>
         </div>
@@ -219,10 +222,13 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
               <button type="button" className="fr-x" onClick={() => take(id)} aria-label={`Remove ${nameOf(id)}`}>✕</button>
             </div>
             <div className="fr-ed-sz" role="group" aria-label={`Size of ${nameOf(id)}`}>
-              {SIZES_OF[id].map(k => (
-                <button key={k} type="button" aria-pressed={size === k} disabled={k === "W" && gcols < 3} onClick={() => sizeTo(id, k)}
-                  aria-label={`${SIZE_NAME[k]}, ${SIZE[k][0]} by ${SIZE[k][1]}${k === "W" && gcols < 3 ? " (needs a wider screen)" : ""}`} title={`${SIZE_NAME[k]} ${SIZE[k][0]}×${SIZE[k][1]}`}>{k}</button>
-              ))}
+              {SIZES_OF[id].map(k => {
+                const out = zone === "rail" && !sizesIn("rail").includes(k), off = (k === "W" && !out && gcols < 3) || (zone === "rail" && gcols < 2 && (k === "M" || k === "L"));
+                return (
+                  <button key={k} type="button" aria-pressed={size === k} disabled={off} onClick={() => sizeTo(id, k)}
+                    aria-label={`${SIZE_NAME[k]}, ${SIZE[k][0]} by ${SIZE[k][1]}${out ? " (moves it to the main grid)" : off ? " (needs a wider screen)" : ""}`} title={`${SIZE_NAME[k]} ${SIZE[k][0]}×${SIZE[k][1]}${out ? ": THE MAIN GRID" : ""}`}>{k}</button>
+                );
+              })}
             </div>
             <span className="fr-rz" aria-hidden="true" title="Drag to resize" onPointerDown={grip(id, zone, gcols)} />
           </div>
@@ -234,7 +240,7 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
       </div>
     );
   };
-  // beside the panel: S and T windows in the rail, the rest in main; merged (a phone): one column, rail first
+  // beside the panel: the column's windows, the rest in main; folded (a phone): one column, the column's windows first
   const inRail = layout.filter(x => zoneOf(x) === "rail"), inMain = layout.filter(x => zoneOf(x) !== "rail");
   const railItems = beside ? inRail : [], mainItems = beside ? inMain : [...inRail, ...inMain];
 
@@ -242,7 +248,7 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
     <div ref={wrap} className="fr-deskwrap">
       {arr && (
         <div className="fr-bar" role="group" aria-label="Arranging the desk">
-          <p>ARRANGING: DRAG A WINDOW BY ITS HANDLE TO MOVE IT, EVEN BETWEEN THE RAIL AND THE GRID. DRAG THE CORNER TO RESIZE. S M T L W RESIZE IT TOO. ✕ REMOVES IT. KEYS: ARROWS MOVE, + AND − RESIZE, DELETE REMOVES.</p>
+          <p>ARRANGING: DRAG A WINDOW BY ITS HANDLE TO MOVE IT, EVEN BETWEEN THE COLUMN BESIDE THE PANEL AND THE GRID UNDER IT. DRAG THE CORNER TO RESIZE. S M T L W RESIZE IT TOO (THE COLUMN TAKES S, M, T AND L). ✕ REMOVES IT. KEYS: ARROWS MOVE, + AND − RESIZE, DELETE REMOVES.</p>
           <ButtonRow className="fr-bar-btns">
             <Button variant="secondary" onClick={() => onDialog("widgets")}>ADD WIDGET</Button>
             <Button variant="secondary" onClick={() => { apply(DEFAULT_LAYOUT.map(x => ({ ...x }))); setSay("THE DESK IS BACK TO THE DEPARTMENT'S ARRANGEMENT."); }}>RESET</Button>
@@ -251,9 +257,9 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
         </div>
       )}
       {beside && (railItems.length > 0 || arr) && (
-        <div ref={railEl} className={`fr-grid fr-rail${arr ? " arr" : ""}`} data-zone="rail" style={{ "--cols": rcols }} aria-label="Small windows beside the panel">
+        <div ref={railEl} className={`fr-grid fr-rail${arr ? " arr" : ""}`} data-zone="rail" data-wide={colWide(railItems) ? "" : undefined} style={{ "--cols": rcols }} aria-label="Windows beside the panel">
           {railItems.map(x => cell(x, "rail", rcols))}
-          {arr && !railItems.length && <p className="fr-rail-hint">THE RAIL. DROP SMALL WINDOWS HERE.</p>}
+          {arr && !railItems.length && <p className="fr-rail-hint">THE COLUMN. DROP WINDOWS HERE: S, M, T OR L.</p>}
         </div>
       )}
       <div ref={grid} data-zone="main" className={`fr-grid fr-main${arr ? " arr" : ""}`} style={{ "--cols": cols }}>
@@ -277,19 +283,33 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
 }
 
 // ---- NOTICE: a System 7 alert with an OK button. OK dismisses it on this device. ----------------
+// S cycles the standing notice and the Department's own notices (what it installed, THE DAILY COMPLIANCE's
+// DEPARTMENT NOTICES, /api/paper), one at a time.
+export const STANDING = "THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.";
+export const noticeLines = (ed) => [STANDING, ...((ed?.notices || []).map(n => String(n.text || "").split(":")[0].trim()).filter(t => t && t.length <= 90))].slice(0, 9);
 function Notice({ size }) {
   const [ok, setOk] = useState(() => { try { return localStorage.getItem("hvi-notice-ok") === "1"; } catch { return false; } });
+  const [lines, setLines] = useState([STANDING]);
+  useEffect(() => {
+    if (size !== "S" || ok) return undefined;
+    let off = false;
+    import("./Smalls.jsx").then(m => m.paperNow()).then(ed => { if (!off) setLines(noticeLines(ed)); }).catch(() => {});
+    return () => { off = true; };
+  }, [size, ok]);
   if (ok) return null;
   const OK = <Button variant="push" tone="sec" className="ok" onClick={() => { try { localStorage.setItem("hvi-notice-ok", "1"); } catch { /* it returns next visit */ } setOk(true); }}>OK</Button>;
   const V = VIEWS_notice[size] || VIEWS_notice.M;
   return (
     <Frame title="NOTICE" tone="var(--eb-amber)" className="hvi-notice ui-dialog">
-      <V ok={OK} />
+      <V ok={OK} lines={lines} />
     </Frame>
   );
 }
 const VIEWS_notice = {
-  S: ({ ok }) => <div className="fr-nt-s"><p>THE OVERLORD DOES NOT REQUIRE YOUR CONSENT.</p>{ok}</div>,
+  S: function NoticeS({ ok, lines }) {
+    const c = useCycle(lines.length);
+    return <Cyc c={c} what="notice" className="fr-nt-s"><p>{lines[c.i]}</p>{ok}</Cyc>;
+  },
   M: ({ ok }) => <><p><span className="ic" aria-hidden="true">!</span>THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.</p><ButtonRow className="ui-dialog-btns">{ok}</ButtonRow></>,
 };
 
@@ -321,16 +341,22 @@ function MoverLines({ up, dn, nu, nd, spark = false }) {
   );
   return <ul className="fr-movers fr-mlines">{up.slice(0, nu).map(r => row(r, "up"))}{dn.slice(0, nd).map(r => row(r, "dn"))}</ul>;
 }
-const topMover = (mv) => [mv.up[0], mv.down[0]].filter(Boolean).sort((a, b) => Math.abs(b.chg) - Math.abs(a.chg))[0];
+// the movers in the order a S window shows them: up and down interleaved, each side biggest first
+export const moversInTurn = (mv) => { const out = []; for (let k = 0; k < Math.max(mv.up.length, mv.down.length); k++) { if (mv.up[k]) out.push(mv.up[k]); if (mv.down[k]) out.push(mv.down[k]); } return out; };
 const VIEWS_market = {
-  S: ({ mv, hvi }) => {
-    const t = topMover(mv);
+  // S: every mover in turn, the biggest first, risers and fallers interleaved; the index under each
+  S: function MarketS({ mv, hvi }) {
+    const all = moversInTurn(mv), c = useCycle(all.length), t = all[c.i];
+    if (!t) return null;
+    const dir = t.chg > 0 ? "up" : "dn";
     return (
-      <a className="fr-glance" href="#market">
-        {hvi && <span className="big">HVI {hvi.level.toFixed(1)}</span>}
-        {t && <span className="ln1"><span className={t.chg > 0 ? "up" : "dn"} aria-hidden="true">{arrow(t.chg)}</span> <span className="n">{t.name}</span></span>}
-        {t && <span className={`c ${t.chg > 0 ? "up" : "dn"}`}>{fmtPct(t.chg)}</span>}
-      </a>
+      <Cyc c={c} what="mover">
+        <a className="fr-glance" href={`#market/${t.slug}`} aria-label={`${t.name}, ${price(t.price)}, ${fmtPct(t.chg)} today. Open them on the market.`}>
+          <span className={`big ${dir}`}><span aria-hidden="true">{arrow(t.chg)}</span>{fmtPct(t.chg)}</span>
+          <span className="ln1 two"><span className="n">{t.name}</span></span>
+          <span className="ln2">{price(t.price)}{hvi ? ` · HVI ${hvi.level.toFixed(1)}` : ""}</span>
+        </a>
+      </Cyc>
     );
   },
   M: ({ mv }) => <><MoverLines up={mv.up} dn={mv.down} nu={2} nd={2} /><a className="go" href="#market">OPEN THE MARKET ›</a></>,
@@ -406,7 +432,17 @@ const WireSteps = ({ w }) => (
 );
 const Quiet = () => <p className="fr-line dim">NOTHING ON THE WIRE. THE DEPARTMENT FINDS THIS RESTFUL.</p>;
 const VIEWS_wire = {
-  S: (w) => (w.it ? <Line it={w.it} /> : <Quiet />),
+  // S: the stepper alone; ◀ ▶ step it (it holds still under reduced motion)
+  S: (w) => (w.it ? <div className="fr-cyc"><div className="fr-cyc-it"><Line it={w.it} /></div><Step c={{ i: w.i, n: w.n, go: w.go }} what="item" /></div> : <Quiet />),
+  // T: the tabs and a column of headlines
+  T: (w) => (
+    <>
+      <WireTabs tab={w.tab} setTab={w.setTab} />
+      <ul className="fr-wl-list tall">
+        {w.items.slice(0, 7).map((x, k) => <li key={k}><a href={x.href}><span className="tag">{x.tag}</span><span className="tx">{x.text}</span></a></li>)}
+      </ul>
+    </>
+  ),
   M: (w) => (
     <>
       <WireTabs tab={w.tab} setTab={w.setTab} />
@@ -422,9 +458,13 @@ const VIEWS_wire = {
       </ul>
     </>
   ),
+  // W: the line, large, with the next two under it; the tabs and the steps beside
   W: (w) => (
     <div className="fr-ww">
-      {w.it ? <Line it={w.it} /> : <Quiet />}
+      <div className="fr-ww-main">
+        {w.it ? <Line it={w.it} /> : <Quiet />}
+        {w.n > 2 && <ul className="fr-ww-next" aria-hidden="true">{[1, 2].map(k => { const x = w.items[(w.i + k) % w.n]; return <li key={k}><span className="tag">{k === 1 ? "NEXT" : "THEN"}</span>{x.text}</li>; })}</ul>}
+      </div>
       <div className="fr-ww-ctl"><WireTabs tab={w.tab} setTab={w.setTab} />{w.n > 1 && <WireSteps w={w} />}</div>
     </div>
   ),
@@ -446,7 +486,7 @@ function WireTkr({ size }) {
   const n = items.length;
   useEffect(() => { setI(0); }, [tab]);
   useEffect(() => {
-    if (paused || hold || n < 2 || size === "L") return undefined;
+    if (paused || hold || n < 2 || size === "L" || size === "T") return undefined;
     const t = setTimeout(() => { if (!document.hidden) setI(v => (v + 1) % n); }, STEP_MS);
     return () => clearTimeout(t);
   }, [paused, hold, n, i, size]);
@@ -455,9 +495,9 @@ function WireTkr({ size }) {
   const go = (k) => setI(v => (v + k + n) % n);
   const V = VIEWS_wire[size] || VIEWS_wire.M;
   return (
-    <Frame title="WIRE.TKR" meta={n && size !== "L" ? `${(i % n) + 1}/${n}` : ""} tone="var(--eb-amber)" className={`fr-wire v-${size}`}>
-      <div onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)} onFocus={() => setHold(true)} onBlur={() => setHold(false)}>
-        <V tab={tab} setTab={setTab} it={it} items={items} n={n} go={go} paused={paused} setPaused={setPaused} />
+    <Frame title="WIRE.TKR" meta={n && size !== "L" && size !== "T" ? `${(i % n) + 1}/${n}` : ""} tone="var(--eb-amber)" className={`fr-wire v-${size}`}>
+      <div className="fr-wire-in" onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)} onFocus={() => setHold(true)} onBlur={() => setHold(false)}>
+        <V tab={tab} setTab={setTab} it={it} i={i % Math.max(1, n)} items={items} n={n} go={go} paused={paused} setPaused={setPaused} />
         <ul className="sr-only" aria-label={tab === "news" ? "All news items" : "Everyone trending"}>
           {items.map((x, k) => <li key={k}><a href={x.href} tabIndex={-1}>{x.tag}: {x.text}</a></li>)}
         </ul>
@@ -477,7 +517,21 @@ const camPic = (go, note) => ({ m, linkRef }) => (
     {go && <span className="go" aria-hidden="true">VISIT THE CITY ›</span>}
   </a>
 );
-const VIEWS_cam = { S: camPic(false), M: camPic(true), T: camPic(false, "THE CITY, FROM ABOVE"), L: camPic(true, "THE WHOLE CITY AT THE MACHINE HOUR: DISTRICTS, THE LOOP, EVERY TRAIN") };
+// S: a tour of the districts, one tight view at a time (the crop SURVEILLANCE uses, /api/cam?at=), the whole city first
+export const CAM_TOUR = [[null, "THE WHOLE CITY"], ["hq", "DEPT HQ"], ["finance", "FINANCE"], ["strip", "THE STRIP"], ["sprawl", "THE SPRAWL"], ["coast", "THE COAST"], ["oldtown", "THE OLD TOWN"]];
+export const CAM_TOUR_MS = 15_000;
+function CamS({ m, linkRef }) {
+  const c = useCycle(CAM_TOUR.length, CAM_TOUR_MS), [at, name] = CAM_TOUR[c.i];
+  return (
+    <Cyc c={c} what="district">
+      <a href="#city" ref={linkRef} className="fr-cam-link" aria-label={`The city's live view: ${name}. Opens the city.`}>
+        {m != null ? <img src={`/api/cam?m=${m}${at ? `&at=${at}` : ""}`} width="396" height="408" alt="" decoding="async" /> : <span className="fr-cam-wait" />}
+        <span className="cap" aria-hidden="true">{name}</span>
+      </a>
+    </Cyc>
+  );
+}
+const VIEWS_cam = { S: CamS, M: camPic(true), T: camPic(false, "THE CITY, FROM ABOVE"), L: camPic(true, "THE WHOLE CITY AT THE MACHINE HOUR: DISTRICTS, THE LOOP, EVERY TRAIN") };
 function SubstrateCam({ size }) {
   const ref = useRef(null);
   const [m, setM] = useState(null);   // the real minute asked for; null until the window is seen

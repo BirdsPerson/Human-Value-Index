@@ -11,7 +11,7 @@
   .fr-deskwrap > .fr-bar, .fr-deskwrap > .fr-main, .fr-deskwrap > .fr-arrange, .fr-deskwrap > .fr-clear { margin-top: var(--s4); }
   .hvi-desk > .fr-deskwrap > .fr-rail ~ * { margin-top: var(--s4); }
 }
-.fr-rail.arr { min-height: 120px; border: 2px dashed var(--line-hi); padding: var(--s2); box-sizing: border-box; }
+.fr-rail.arr { min-height: var(--row); border: 2px dashed var(--line-hi); padding: var(--s2); box-sizing: border-box; }
 .fr-rail-hint { grid-column: 1 / -1; margin: 0; align-self: center; text-align: center; color: var(--fg-dim); font-size: var(--t-xs); letter-spacing: 0.06em; }
 
 /* MARKET.TKR: risers and fallers */
@@ -218,7 +218,7 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
    4 columns on a wide desk, 3 mid, 2 on a phone (the grid's own width decides, FrontDesk sets --cols);
    rows are one --row tall, packing is dense. A window spans 1x1 (S), 2x1 (M), 1x2 (T), 2x2 (L) or
    4x1 (W, wide only). Each size has its own prepared layout; the window keeps its title bar. */
-.fr-grid { --row: 196px; display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); grid-auto-rows: var(--row); grid-auto-flow: row dense; gap: var(--s5) var(--s3); padding-top: var(--s4); }
+.fr-grid { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); grid-auto-rows: var(--row); grid-auto-flow: row dense; gap: var(--g-row) var(--g-col); padding-top: var(--s4); }
 .fr-cell { position: relative; min-width: 0; min-height: 0; padding: 0 8px 8px 0; }
 .fr-cell:not(.edit):has(> .fr-cell-in:empty) { display: none; }
 .fr-cell-in { height: 100%; min-height: 0; }
@@ -234,7 +234,7 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
 
 /* the S layout: a glance. One big thing, one line under it. */
 .fr-glance { display: flex; flex-direction: column; justify-content: center; gap: 3px; height: 100%; min-width: 0; color: inherit; text-decoration: none; }
-.fr-glance .big { font-family: var(--tall); font-size: 28px; line-height: 1; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fr-glance .big { font-family: var(--tall); font-size: var(--w-big); line-height: 1; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fr-glance .big .of { font-family: inherit; font-size: var(--t-xs); color: var(--fg-mute); margin-left: 2px; }
 .fr-glance .ln1 { display: flex; align-items: center; gap: 1ch; min-width: 0; font-size: var(--t-xs); color: var(--fg); }
 .fr-glance .ln1 .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -260,7 +260,6 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
 .fr-wl-list .tx { min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 @media (hover: hover) { .fr-wl-list a:hover .tx { text-decoration: underline; text-underline-offset: 3px; } }
 .fr-ww { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s4); align-items: center; }
-.fr-ww .fr-line { font-size: var(--t-m, 1rem); }
 .fr-ww-ctl { display: flex; flex-direction: column; gap: var(--s2); align-items: flex-start; }
 .fr-ww-ctl .fr-tabs { margin: 0; }
 .fr-ww .fr-steps .all { display: none; }
@@ -294,11 +293,21 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
 /* THE SET: S the remote, M a small set beside its buttons, L the big screen. The picture is laid out at 288x216 and scaled. */
 .fr-set .scr-in { position: absolute; left: 0; top: 0; width: 288px; height: 216px; transform-origin: 0 0; }
 .fr-set-w { height: 100%; }
-.fr-set-s { display: flex; flex-direction: column; justify-content: center; gap: 3px; height: 100%; }
-.fr-set-s .big, .fr-set-m .big { font-family: var(--tall); font-size: 28px; line-height: 1; color: var(--fg); }
-.fr-set-s .ln1, .fr-set-m .ln1 { font-size: var(--t-xs); color: var(--fg); }
-.fr-set-s .tv-ctl, .fr-set-m .tv-ctl { margin-top: var(--s1); }
-.fr-set-s .tv-ctl button, .fr-set-m .tv-ctl button { min-height: 30px; min-width: 0; }
+.fr-set-s, .fr-set-t { display: flex; flex-direction: column; gap: var(--s1); height: 100%; min-height: 0; }
+.fr-set-m .big { font-family: var(--tall); font-size: var(--w-big); line-height: 1; color: var(--fg); }
+.fr-set-m .ln1 { font-size: var(--t-xs); color: var(--fg); }
+.fr-set-s .tv, .fr-set-t .tv { flex: 1 1 0; min-height: 0; border-width: 5px; align-self: center; max-width: 100%; aspect-ratio: 4 / 3; }
+.fr-set-t .tv { flex: 0 0 auto; width: 100%; height: auto; }
+.fr-set-s .tv-ctl, .fr-set-m .tv-ctl, .fr-set-t .tv-ctl { margin-top: 0; flex: none; }
+.fr-set-s .tv-ctl button, .fr-set-m .tv-ctl button, .fr-set-t .tv-ctl button { min-height: 30px; min-width: 0; }
+.fr-set-s .tv-ctl { justify-content: center; gap: var(--s1); }
+.fr-set-s .osd { font-size: 16px; top: 2px; right: 4px; }
+.tv-guide { list-style: none; margin: 0; padding: 0; flex: 1 1 0; min-height: 0; overflow: hidden auto; border-top: var(--bw) solid var(--line); }
+.tv-guide button { display: flex; gap: 1ch; width: 100%; min-height: 28px; padding: 2px 0; background: none; border: 0; border-bottom: 1px dotted var(--line); color: var(--fg); font: inherit; font-size: var(--t-xs); text-align: left; cursor: pointer; }
+.tv-guide .k { color: var(--fg-mute); }
+.tv-guide button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.tv-guide button[aria-pressed="true"] .k { color: var(--accent-ink); }
+.tv-guide button:focus-visible { outline: var(--focus); outline-offset: -2px; }
 .fr-set-m { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s3); height: 100%; align-items: center; }
 .fr-set-m .tv { height: 100%; aspect-ratio: 4 / 3; border-width: 6px; }
 .fr-set-m .side { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -372,3 +381,92 @@ html.fr-dragging .fr-rz { cursor: nwse-resize; }
 .tv-tour .lb .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tv-tour .lb li.on { color: #ffd75e; font-weight: 700; }
 .tv-tour .lb .when { color: #9fb3c8; justify-content: flex-end; }
+
+/* ---- THE DESK'S DESIGN SYSTEM (2026-10-07; docs/design-system.md "The desk") -----------------------------
+   One grid for both zones. Tokens, set once here and read everywhere above:
+     --row     a row's height: 196px; a T or L is two rows and the gap between
+     --g-row   the gap between rows (24px: a title bar rides 10px above its frame)
+     --g-col   the gap between columns (12px; a cell keeps 8px more on its right and bottom for the hard shadow)
+   Per size, each cell sets the type its view scales to:
+     --w-big   the one number or name a view leads with (VT323): S 26px, M and T 30px, L and W 36px
+     --w-ln    the lines under it: S and T the small step (--t-xs), M L W the body step (--t-s)
+   What each size carries: S one item (a cycle with ◀ n/N ▶ under it, or a dense readout of four or five
+   short lines), M three to five rows, T seven or eight rows or a picture over rows, L the whole thing with its
+   headings, W one line or two lists side by side. */
+.fr-deskwrap { --row: 196px; --g-row: var(--s5); --g-col: var(--s3); }
+.fr-cell { --w-big: 30px; --w-ln: var(--t-s); }
+.fr-cell.s-S { --w-big: 26px; --w-ln: var(--t-xs); }
+.fr-cell.s-T { --w-ln: var(--t-xs); }
+.fr-cell.s-L, .fr-cell.s-W { --w-big: 36px; }
+
+/* THE COLUMN beside the panel: S M T L. Its own grid, 1 or 2 tracks (FrontDesk counts them, layout.js colTracks) */
+.fr-rail { align-content: start; }
+
+/* the cycle (cycle.jsx): the item, then ◀ n/N ▶ pinned to the foot */
+.fr-cyc { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: var(--s1); }
+.fr-cyc-it { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.fr-cyc-it > * { flex: 1 1 auto; min-height: 0; }
+.fr-step { flex: none; display: flex; align-items: center; gap: var(--s1); font-size: var(--t-xs); color: var(--fg-mute); }
+.fr-step .ix { min-width: 5ch; text-align: center; font-variant-numeric: tabular-nums; }
+.fr-step button { min-width: 32px; min-height: 28px; padding: 0 var(--s1); background: var(--panel-hi); color: var(--fg); font: inherit; font-size: var(--t-xs); cursor: pointer;
+  border: 2px solid; border-color: var(--fg-dim) var(--shadow) var(--shadow) var(--fg-dim); }
+.fr-step button:active { border-color: var(--shadow) var(--fg-dim) var(--fg-dim) var(--shadow); }
+.fr-step button:focus-visible { outline: var(--focus); outline-offset: 1px; }
+.fr-sv > .fr-step { margin-top: var(--s1); }
+
+/* the S lines: .ln1 the name (two lines with .two), .ln2 the quiet line under it */
+.fr-glance .ln1.two .n { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; line-height: 1.3; }
+.fr-glance .ln2 { min-width: 0; font-size: var(--t-xs); color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-glance .ln2.row { display: flex; align-items: center; gap: 1ch; }
+.fr-glance .big.up { color: var(--accent); } .fr-glance .big.dn { color: var(--harm); }
+.fr-glance .big .ps { color: var(--fg-dim); }
+.fr-cyc .fr-glance { justify-content: flex-start; }
+.fr-nt-s.fr-cyc p { flex: 1 1 0; min-height: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+.fr-nt-s .fr-cyc-it { gap: var(--s2); }
+.fr-nt-s .fr-cyc-it .ok { flex: none; min-height: 32px; min-width: 8ch; padding: 0 var(--s3); }
+.fr-cell.s-S .ui-frame.ui-dialog { padding-top: 36px; padding-bottom: var(--s2); }
+
+/* a dense S readout: four or five short lines, label, name, value */
+.fr-dense { display: block; height: 100%; color: inherit; text-decoration: none; }
+.fr-dense ol { list-style: none; margin: 0; padding: 0; font-size: var(--t-xs); line-height: 1.35; }
+.fr-dense li { display: flex; gap: 1ch; border-bottom: 1px dotted var(--line); padding: 1px 0; }
+.fr-dense .k { flex: none; min-width: 2ch; color: var(--fg-mute); text-align: right; }
+.fr-dense .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.fr-dense .v { flex: none; font-weight: 700; color: var(--fg); }
+.fr-dense:focus-visible { outline: var(--focus); outline-offset: 2px; }
+@media (hover: hover) { .fr-dense:hover .n { text-decoration: underline; text-underline-offset: 3px; } }
+
+/* CAM S: the district tour, its name on a caption band */
+.fr-cam.v-S .fr-cyc-it .fr-cam-link { position: relative; }
+.fr-cam .cap { position: absolute; left: 0; bottom: 0; max-width: 100%; padding: 1px 6px; background: rgba(0, 0, 0, 0.72); color: #f2f2f2; font-size: 11px; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* T views: the tall lists */
+.fr-wl-list.tall a { min-height: 0; padding: 3px 0; }
+.fr-wl-list.tall .tx { -webkit-line-clamp: 2; }
+.fr-file.v-T .fr-file-link { justify-content: center; }
+.fr-file.v-T .rows { margin-top: var(--s2); }
+.fr-sv.v-T, .fr-sv.v-T .fr-sv-link { height: 100%; }
+.fr-sv.v-T .fr-sv-link { grid-template-rows: auto minmax(0, 1fr); }
+.fr-sv.v-T .cam { aspect-ratio: 4 / 3; }
+.fr-paper.v-T .fr-paper-lead .h { font-size: 22px; }
+.fr-paper.v-S .fr-paper-lead.s .h { -webkit-line-clamp: 4; }
+.fr-board .fr-glance .ln2 { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.fr-wire-in { height: 100%; }
+.fr-sv.v-S { display: flex; flex-direction: column; height: 100%; }
+.fr-sv.v-S .fr-sv-link { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.fr-paper-lead.s .dk { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.fr-ww-main { min-width: 0; }
+.fr-ww .fr-line { font-size: var(--t-l); min-height: 0; }
+.fr-ww-next { list-style: none; margin: var(--s2) 0 0; padding: 0; font-size: var(--t-xs); color: var(--fg-dim); }
+.fr-ww-next li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 2px 0; border-top: 1px dotted var(--line); }
+.fr-ww-next .tag { margin-right: 1ch; color: var(--fg-mute); }
+
+/* DISPLAY: twelve schemes, two to a row where the dialog has the width */
+@media (min-width: 600px) {
+  .fr-themes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fr-themes li + li { border-top: 0; }
+  .fr-themes li { border-bottom: var(--bw) solid var(--line); }
+  .fr-themes li:nth-child(odd) { border-right: var(--bw) solid var(--line); }
+  .fr-theme { min-height: 52px; }
+  .fr-theme .sw { width: 52px; height: 36px; padding: 4px 5px; }
+}

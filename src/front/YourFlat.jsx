@@ -71,7 +71,8 @@ export default function YourFlat({ size = "L" }) {
   // S: who is home, in words; M: the cutaway small; L: the cutaway, the address, who is home
   const pic = apt?.flat ? <canvas ref={cv} className="cut" width={ROOM_W * 3} height={ROOM_H} aria-hidden="true" /> : <span className="cut wait" aria-hidden="true" />;
   const VIEWS_flat = {
-    S: <a className="fr-glance" href={apt?.href || "#file"} aria-label={label}><span className="big">{apt?.unit ? `FLAT ${apt.unit}` : "YOUR FLAT"}</span><span className="ln1"><span className="n">{home ? home.replace(/^HOME: /, "") : "ASKING…"}</span></span>{apt?.flat && <canvas ref={cv} className="cut" width={ROOM_W * 3} height={ROOM_H} hidden />}</a>,
+    // S: a dense readout: the flat, the building and district, who is home now
+    S: <a className="fr-glance" href={apt?.href || "#file"} aria-label={label}><span className="big">{apt?.unit ? `FLAT ${apt.unit}` : "YOUR FLAT"}</span><span className="ln2">{[apt?.buildingName, apt?.districtName].filter(Boolean).join(", ") || "ASKING THE HOUSING OFFICE…"}</span><span className="ln1 two"><span className="n">{home ? home.replace(/^HOME: /, "") : "ASKING…"}</span></span>{apt?.flat && <canvas ref={cv} className="cut" width={ROOM_W * 3} height={ROOM_H} hidden />}</a>,
     M: <a className="fr-flat-link" href={apt?.href || "#file"} aria-label={label}>{pic}{home && <span className="ln home" aria-hidden="true">{home}</span>}</a>,
     L: <a className="fr-flat-link" href={apt?.href || "#file"} aria-label={label}>{pic}<span className="ln" aria-hidden="true">{where || "ASKING THE HOUSING OFFICE…"}</span>{home && <span className="ln home" aria-hidden="true">{home}</span>}<span className="fr-go" aria-hidden="true">GO HOME ›</span></a>,
   };
