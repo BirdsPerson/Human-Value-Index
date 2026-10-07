@@ -18,9 +18,17 @@
 //                the right stick: sideways crossover, back stepback, toward drive, round spin; a
 //                good handler breaks a poor defender's ankles some of the time
 //   determinism  a bot's game replays from {version, seed, cfg, inputLog} to the same result, twice;
-//                a different seed differs; a doctored log does not reproduce; every v1, v2 and v3
-//                record in scripts/fixtures/hoops-v{1,2,3}-records.json replays on its frozen sim
-//                (replay.js); a one on one game replays too
+//                a different seed differs; a doctored log does not reproduce; every v1, v2, v3 and v4
+//                record in scripts/fixtures/hoops-v{1,2,3,4}-records.json replays on its frozen sim
+//                (replay.js), and the v4 records on the live sim too while it is v4; a record's camera
+//                (metadata) changes nothing: a tape played under BASELINE replays as under 2K; a one on
+//                one game replays too
+//   hands        (S0, docs/design/BASKETBALL.md 4.8) the stick follows the camera (input.js): in every
+//                camera, for a man anywhere on the floor, each of the eight stick directions picks the
+//                court direction nearest it on the screen, never worse than the old court-axis reading;
+//                in BASELINE and DRIVE up on the stick runs up the screen (it ran sideways before); the
+//                map is held while the stick is held, kept across a camera cut until the stick is let
+//                go, 30 frames pass or the stick turns 45 degrees, then blended over 6 frames
 //   difficulty   a simulated casual human (noisy release about 100 ms either side of the top, a
 //                quarter-second late on defence, loose passes, random dribble moves, no pro stick),
 //                steering one man a possession like a person, against an equal side, 100 games a
@@ -323,9 +331,87 @@ const cfgA = { fmt: "quarters", shot: 24, level: "rookie", home: R.sortFive(LG.t
   const FIX3 = JSON.parse(readFileSync(new URL("./fixtures/hoops-v3-records.json", import.meta.url), "utf8"));
   assert.ok(FIX3.records.length >= 3, "the v3 fixture games are on file");
   for (const rec of FIX3.records) assert.deepEqual(RP.replayRecord(rec), rec.result, `v3 record seed ${rec.seed} replays on v3`);
-  assert.equal(RP.simOf(3).VERSION, 3); assert.equal(RP.simOf(4).VERSION, S.VERSION);
+  assert.equal(RP.simOf(3).VERSION, 3); assert.equal(RP.simOf(4).VERSION, 4);
+  // v4: bot and casual-human tapes in all three modes (S0), on the frozen v4 sim and, while the live
+  // sim is still v4, on the live one: the proof that a refactor changed nothing
+  const FIX4 = JSON.parse(readFileSync(new URL("./fixtures/hoops-v4-records.json", import.meta.url), "utf8"));
+  assert.ok(FIX4.records.length >= 6, "the v4 fixture games are on file");
+  assert.deepEqual(new Set(FIX4.records.map(r => r.cfg.mode)), new Set(["5v5", "3v3", "1v1"]), "every mode has a v4 tape");
+  assert.notEqual(RP.simOf(4), S, "v4 records replay on the frozen copy, not the live sim");
+  for (const rec of FIX4.records) {
+    assert.deepEqual(RP.replayRecord(rec), rec.result, `v4 record seed ${rec.seed} replays on the frozen v4`);
+    if (S.VERSION === 4) assert.deepEqual(S.replay(rec), rec.result, `v4 record seed ${rec.seed} replays on the live sim`);
+    // the camera is metadata: the same tape under BASELINE and under 2K plays the same game
+    const under = (id) => RP.replayRecord({ ...rec, cam: { ...(rec.cam || {}), id } });
+    assert.deepEqual(under("baseline"), under("2k"), `seed ${rec.seed}: BASELINE and 2K replay alike`);
+  }
+  assert.ok(FIX4.records.every(r => r.cam && r.cam.id), "the v4 tapes carry their camera");
   assert.equal(S.VERSION, 4);
-  ok("v1, v2 and v3 replay");
+  ok("v1, v2, v3 and v4 replay; the camera is metadata");
+}
+
+// ---- the hands follow the camera (S0) -------------------------------------------------------------------
+{
+  const RN = await import("../src/play/hoops/render.js"), IN = await import("../src/play/hoops/input.js");
+  const deg = (a, b) => Math.abs(Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1])) * 180 / Math.PI;
+  const onScreen = (J, v) => [J[0][0] * v[0] + J[0][1] * v[1], J[1][0] * v[0] + J[1][1] * v[1]];
+  const STICKS = [[0, 1], [1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1]];
+  const F5 = (p) => Array.from({ length: 5 }, (_, i) => [p + i, "P" + i, 70]);
+  const worst = {};
+  for (const mode of ["5v5", "3v3"]) for (const id of RN.CAM_ORDER) for (const [x, y] of [[-10, 2], [-4, 7.6], [0, 13], [6, 3], [11, 1.5], [12, 12], [9, 7.6]]) for (const side of [0, 1]) {
+    if (mode !== "5v5" && (x < 0.5 || side)) continue;
+    const st = S.newGame(5, { mode, home: F5("h"), away: F5("a") });
+    S.setUp(st, side ? st.n : 0, x, y);
+    let cam = RN.camStart(id); for (let k = 0; k < 400; k++) cam = RN.camFollow(cam, st);
+    const k = RN.camOf(cam), J = IN.floorJ(RN.proj, k, x, y), w = (worst[id] ||= { now: 0, was: 0, up: 0, upWas: 0 });
+    for (const s of STICKS) {
+      const now = deg(onScreen(J, IN.vecOfBits(IN.dir8(J, s[0], s[1]))), s), was = deg(onScreen(J, IN.vecOfBits(IN.dir8(IN.IDENTITY, s[0], s[1]))), s);
+      assert.ok(now <= was + 1e-9, `${id} at (${x}, ${y}): the stick is never further off on the screen than it was`);
+      w.now = Math.max(w.now, now); w.was = Math.max(w.was, was);
+      if (!s[0]) { w.up = Math.max(w.up, now); w.upWas = Math.max(w.upWas, was); }
+    }
+  }
+  if (process.env.VERBOSE) console.log(worst);
+  for (const id of ["baseline", "drive"]) {
+    assert.ok(worst[id].upWas > 60, `${id}: up on the stick used to run sideways (${worst[id].upWas.toFixed(0)} degrees off)`);
+    assert.ok(worst[id].up <= 35, `${id}: up on the stick runs up the screen (${worst[id].up.toFixed(0)} degrees off at worst, eight ways)`);
+    assert.ok(worst[id].now <= 35, `${id}: every stick direction within ${worst[id].now.toFixed(0)} degrees`);
+  }
+  for (const id of ["2k", "broadcast", "steady", "high", "skybox"]) assert.ok(worst[id].now <= 35, `${id}: every stick direction within 35 degrees (${worst[id].now.toFixed(0)})`);
+  // keys and the d-pad read the same way; court mode is the old reading (up = the far sideline, +y)
+  assert.equal(IN.dir8(IN.IDENTITY, 0, 1), BTN.UP); assert.equal(IN.dir8(IN.IDENTITY, 1, 1), BTN.UP | BTN.RIGHT); assert.equal(IN.dir8(IN.IDENTITY, -1, 0, BTN.RSU, BTN.RSD, BTN.RSL, BTN.RSR), BTN.RSL);
+  // BASELINE behind the +x rim looks back down the court: up the screen is -x, right on the screen +y
+  {
+    const st = S.newGame(5, { home: F5("h"), away: F5("a") }); S.setUp(st, 0, 4, 5);
+    let cam = RN.camStart("baseline"); for (let k = 0; k < 400; k++) cam = RN.camFollow(cam, st);
+    const J = IN.floorJ(RN.proj, RN.camOf(cam), 4, 5);
+    assert.equal(IN.dir8(J, 0, 1), BTN.LEFT, "BASELINE: up is up the screen, away from the camera (-x)");
+    assert.equal(IN.dir8(J, 1, 0), BTN.UP, "BASELINE: right is right on the screen (+y)");
+    assert.equal(IN.dir8(J, 0, -1), BTN.RIGHT, "BASELINE: down runs at the camera and the rim (+x)");
+  }
+  // the hold, and the cut: a 180-degree swing while the stick is held keeps the old map, then blends
+  {
+    const A = [[2, 0.3], [0.1, 1]], A2 = [[2.2, 0.4], [0.1, 0.9]], B = [[-2, 0], [0, -1]], m = IN.createCamMap();
+    assert.equal(m.map(null, A, 0), null, "centred: nothing");
+    assert.deepEqual(m.map([0, 1], A, 0), A, "the first push samples the map");
+    assert.deepEqual(m.map([0, 1], A2, 0.05), A, "held: the map he started with, though the picture drifted");
+    for (let f = 0; f < 6; f++) m.map([0, 1], B, Math.PI * (f + 1) / 6);
+    assert.ok(m.cutting, "a camera turning 180 degrees in six frames is a cut");
+    let J = A, held = 0;
+    while (held < 40 && (J = m.map([0, 1], B, Math.PI)) === A) held++;
+    assert.ok(held >= 24 && held <= 26, `across the cut the old map holds while the stick is held, 30 frames from the cut (${held} after the swing)`);
+    assert.ok(J[0][0] < 2 && J[0][0] > -2, "then it blends");
+    for (let f = 0; f < 6; f++) J = m.map([0, 1], B, Math.PI);
+    assert.deepEqual(J, B, "and lands on the new camera's map");
+    assert.ok(!m.cutting);
+    const m2 = IN.createCamMap();
+    m2.map([0, 1], A, 0); for (let f = 0; f < 6; f++) m2.map([0, 1], B, Math.PI * (f + 1) / 6);
+    J = m2.map([1, 0], B, Math.PI);
+    assert.ok(J !== A, "the stick turning 45 degrees ends the hold early");
+    m2.map(null, B, Math.PI);
+    assert.deepEqual(m2.map([0, 1], B, Math.PI), B, "let go and pushed again: the camera on screen now");
+  }
+  ok("the hands follow the camera");
 }
 
 // ---- calibration -------------------------------------------------------------------------------------

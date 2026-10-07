@@ -702,22 +702,40 @@ version policy, the v4 fixture, the stage split and the camera map. All four are
 
 ---
 
-## 9. Open questions for Scott (four)
+## 9. Open questions for Scott: answered 2026-10-07
 
-1. **Which camera were you in when the controls felt wrong?** Options: the default 2K camera
-   (then the fix is the perspective slant: a straight push runs straight) / BASELINE or DRIVE
-   (then the fix is the end-on map) / both. Recommend: S0 ships both maps regardless, and the
-   tape now records the camera so this never needs asking again.
-2. **Who throws it in after a made basket on your side?** Options: the CPU big throws it in and
-   you control the guard who receives it, pressing A to call for it (2K's feel) / you are the
-   inbounder and throw it with A toward the stick (auto-inbound after 3 s on ROOKIE and PRO) /
-   both, as a setting. Recommend: the first as the default, the second as a setting.
-3. **Which violations get called on you, and when?** Options: everything from S1b (8 seconds,
-   over-and-back, 3 seconds at every level) / a ladder by level (ROOKIE 8 s only; PRO adds
-   over-and-back; ALL-STAR adds 3 s; HALL OF FAME everything), each step measured by the casual
-   bot. Recommend: the ladder.
-4. **When does the engine leave the HVI repo?** Options: now, as its own package the second
-   game installs / a directory boundary now (`engine/`, zero outside imports, enforced by a
-   check) and the package after S4 when the second game's adapter exists to pull against.
-   Recommend: the directory now, the package after S4 — a package with one consumer is a
-   version number nobody needs yet.
+All four are decided. The original options are kept below each answer.
+
+1. **Which camera were you in when the controls felt wrong?** **Answer: the BASELINE / end-on
+   views** (up on the stick went sideways). S0 shipped the map for every camera anyway: the 2K side
+   cam's perspective slant goes through the same floor-to-screen `J`, and every tape records its
+   camera. *(Options were: the default 2K camera / BASELINE or DRIVE / both.)*
+2. **Who throws it in after a made basket on your side?** **Answer: a CPU big inbounds and the
+   human controls the guard, pressing A to call for it. Being the inbounder is a setting.** This is
+   the S1b default (section 4.5 offence, section 6 S1b). *(Options were: the CPU big inbounds, you
+   control the receiver / you inbound with A toward the stick / both, as a setting.)*
+3. **Which violations get called on you, and when?** **Answer: the ladder by level.** ROOKIE calls
+   the 8-second count only; PRO adds over-and-back; ALL-STAR adds 3 seconds; HALL OF FAME calls
+   everything. Each step is measured by the casual bot (section 4.11, the `violations` dial).
+   *(Options were: everything from S1b at every level / the ladder.)*
+4. **When does the engine leave the HVI repo?** **Answer: it stays a directory now
+   (`src/play/hoops/engine/`, zero outside imports, enforced by the purity and import checks) and
+   becomes a package after S4.** *(Options were: now, as its own package / a directory now and the
+   package after S4.)*
+
+## 10. Build log
+
+- **S0, 2026-10-07.** `v4/sim.js` frozen; `scripts/fixtures/hoops-v4-records.json` holds seven
+  tapes (the check bot and the casual human; 5v5 quarters and to 21, 3v3, 1v1; every level);
+  `replay.js` sends v4 records to the frozen copy. `input.js` reads every stick, key, d-pad, touch
+  pad and swipe as a screen direction and turns it into a court direction through `J` at the
+  controlled player, choosing the one of the eight court directions **nearest the stick on the
+  screen** (rounding `J⁻¹ · stick` on the court would let a screen diagonal round to straight up
+  the court, because the floor is foreshortened); `J` is held while the stick is held, with the
+  cut detector and blend of 4.8. Measured worst screen error over seven floor spots, eight stick
+  directions, both ends: BASELINE 31° (was 125°), DRIVE 18° (was 108°), 2K 25°, BROADCAST 28°,
+  STEADY 32°, HIGH 16°, SKYBOX 3°; LOW is 58° at worst for both readings (its floor is nearly
+  edge-on far from the camera: the eight-way frame's limit until the analog frame). The record
+  carries `cam: {id, adj, controls, changes}`. A STICK setting (pause menu and the camera panel)
+  keeps the old court reading.
+- **S1a** (pure split): see the commit that follows S0.

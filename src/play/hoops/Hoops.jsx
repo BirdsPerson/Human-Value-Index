@@ -6,13 +6,13 @@ import { DEFAULT_SPEC } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
 import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, FORMATS, dirOf, LEVELS, LEVEL_ORDER, MODES, POS_ARCH } from "./sim.js";
 import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortFive, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS, divisionsOf, divisionOf, difficultyOf, defaultLevelIndex, allClubs, ROLES, playerPool } from "./roster.js";
-import { draw, camFollow, camStart, CAMS, CAM_ORDER, DEFAULT_CAM, ADJ_DEFAULT, headOf, skinOf, shade, W, H } from "./render.js";
+import { draw, camFollow, camStart, camOf, proj, CAMS, CAM_ORDER, DEFAULT_CAM, ADJ_DEFAULT, headOf, skinOf, shade, W, H } from "./render.js";
 import HoopsGuide, { guideSeen, markGuideSeen, namesFor, PAD_GLYPHS } from "./Guide.jsx";
 import { profileHand, usePlayMode } from "../guideKit.jsx";
 import GameMenu from "../GameMenu.jsx";
 import { sheetHints } from "../heads.js";
 import { callFor, crowdFor } from "./calls.js";
-import { createInput } from "./input.js";
+import { createInput, floorJ, headingOf } from "./input.js";
 import * as SFX from "./audio.js";
 import CSS from "./hoops.css?inline";
 import "../pages.css";
@@ -35,7 +35,7 @@ const parseRoute = (route) => {
   const id = (k) => (TEAM_IDS.includes(q.get(k)) ? q.get(k) : null);
   return { home: id("home"), vs: id("vs"), fmt: q.get("fmt") === "to21" ? "to21" : "quarters", shot: q.get("shot") === "14" ? 14 : 24, mode: MODES[q.get("mode")] ? q.get("mode") : null, to: q.get("to") === "11" ? 11 : 21, mitt: q.get("mitt") === "1", quick: q.get("quick") === "1" };
 };
-const KEEP = "hvi-hoops-exhibitions", KEEP_N = 5, LEVEL_KEY = "hvi-hoops-level", TIPS_KEY = "hvi-hoops-tips2-done", LEGEND_KEY = "hvi-hoops-legend", CAM_KEY = "hvi-hoops-cam2", ADJ_KEY = "hvi-hoops-camadj", MODE_KEY = "hvi-hoops-mode";
+const KEEP = "hvi-hoops-exhibitions", KEEP_N = 5, LEVEL_KEY = "hvi-hoops-level", TIPS_KEY = "hvi-hoops-tips2-done", LEGEND_KEY = "hvi-hoops-legend", CAM_KEY = "hvi-hoops-cam2", ADJ_KEY = "hvi-hoops-camadj", MODE_KEY = "hvi-hoops-mode", HANDS_KEY = "hvi-hoops-controls";
 // The difficulty: ROOKIE for a new player, then whatever was picked last; with the pyramid
 // (docs/design/PYRAMID.md section 7) a pick is remembered per division and the division sets the
 // default (the top flight HALL OF FAME, the bottom division ROOKIE).
@@ -57,6 +57,11 @@ const writeCam = (v) => { try { localStorage.setItem(CAM_KEY, v); } catch { /* t
 const readAdj = () => { try { const j = JSON.parse(localStorage.getItem(ADJ_KEY) || "{}"); return j && typeof j === "object" ? j : {}; } catch { return {}; } };
 const writeAdj = (j) => { try { localStorage.setItem(ADJ_KEY, JSON.stringify(j)); } catch { /* the tab remembers */ } };
 export const adjOf = (all, id) => ({ ...ADJ_DEFAULT, ...(all?.[id] || {}) });
+// The hands: "camera" (the stick follows the camera: up is up the screen, input.js) or "court" (the
+// old way: up is the far sideline whatever the camera shows).
+const readHands = () => { try { return localStorage.getItem(HANDS_KEY) === "court" ? "court" : "camera"; } catch { return "camera"; } };
+const writeHands = (v) => { try { localStorage.setItem(HANDS_KEY, v); } catch { /* the tab remembers */ } };
+const HANDS_NAME = { camera: "FOLLOWS THE CAMERA", court: "FIXED TO THE COURT" };
 const readMode = () => { try { const v = localStorage.getItem(MODE_KEY); return MODES[v] ? v : "5v5"; } catch { return "5v5"; } };
 const writeMode = (v) => { try { localStorage.setItem(MODE_KEY, v); } catch { /* the tab remembers */ } };
 export function loadRecords() { try { const j = JSON.parse(localStorage.getItem(KEEP) || "[]"); return Array.isArray(j) ? j : []; } catch { return []; } }
@@ -127,6 +132,8 @@ export default function Hoops({ route }) {
   const [camId, setCamIdS] = useState(readCam);
   const [adj, setAdjS] = useState(readAdj);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [hands, setHandsS] = useState(readHands);
+  const setHands = (v) => { writeHands(v); setHandsS(v); };
   const setCamId = (v) => { writeCam(v); setCamIdS(v); };
   const setAdj = (id, k, v) => setAdjS(a => { const next = { ...a, [id]: { ...adjOf(a, id), [k]: Math.max(0, Math.min(10, v)) } }; writeAdj(next); return next; });
   const mine = teamOfCase(league, me.caseId);
@@ -171,7 +178,7 @@ export default function Hoops({ route }) {
     const ids = TEAM_IDS.filter(id => id !== game.home); start(game.home, ids[(ids.indexOf(game.away) + 1) % ids.length], game.cfg.fmt, game.cfg.shot);
   };
   const settings = () => { setDone(null); setGame(null); setTape(null); setMoreOpen(true); };
-  const camProps = { camId, setCamId, adj, setAdj };
+  const camProps = { camId, setCamId, adj, setAdj, hands, setHands };
   if (guide) body = <HoopsGuideGate street={guide.cfg.mode !== "5v5"} onDone={leaveGuide} />;
   else if (tape) body = <Match key={`tape${tape.rec.at}`} game={tape.game} me={me} tape={tape.rec} {...camProps} onDone={() => setTape(null)} onQuit={() => setTape(null)} />;
   else if (game && !done) body = <Match key={game.n} game={game} me={me} {...camProps} onDone={setDone} onQuit={() => setGame(null)} onRestart={again} />;
@@ -425,7 +432,7 @@ function looksFor(cfg, home, away, me) {
 const lumOf = (h) => { const n = parseInt(h.slice(1), 16); return 0.3 * ((n >> 16) & 255) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255); };
 const paintOf = (kit) => shade(lumOf(kit[0]) < lumOf(kit[1]) ? kit[0] : kit[1], 0.62);
 const clockOf = (f) => { const s = Math.max(0, Math.ceil(f / 60)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
-function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, onDone, onQuit, onRestart }) {
+function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, hands, setHands, onDone, onQuit, onRestart }) {
   const { cfg, home, away, seed } = game;
   const canvasRef = useRef(null), wrapRef = useRef(null), inputRef = useRef(null);
   const [hud, setHud] = useState(null);
@@ -442,7 +449,8 @@ function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, onDone, on
   const modeRef = useRef("keys"), padRef = useRef(null);
   const [camPanel, setCamPanel] = useState(false);
   const pausedRef = useRef(false), mutedRef = useRef(muted), skipRef = useRef(false), camRef = useRef(camStart(camId, adjOf(adj, camId))), camIdRef = useRef(camId), adjRef = useRef(adj);
-  camIdRef.current = camId; adjRef.current = adj;
+  const handsRef = useRef(hands);
+  camIdRef.current = camId; adjRef.current = adj; handsRef.current = hands;
   const street = cfg.mode && cfg.mode !== "5v5";
   const cycleCam = () => { const id = CAM_ORDER[(CAM_ORDER.indexOf(camIdRef.current) + 1) % CAM_ORDER.length]; setCamId(id); };
   mutedRef.current = muted;
@@ -475,6 +483,10 @@ function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, onDone, on
     const fx = { mood: "idle", t: 0, dunk: null, shake: 0, paint: paintOf(kitsFor(home, away)[0]) };
     const ctx = canvasRef.current.getContext("2d");
     let raf, last = performance.now(), acc = 0, hudKey = "", ended = false, scoreKey = "0-0", noteSeen = -1;
+    // the camera the game was played in, for the record (metadata: it never reaches the sim): the
+    // camera, its adjustments and the hands at the start, then every change [frame, camera, hands]
+    const cam0 = { id: camIdRef.current, adj: adjOf(adjRef.current, camIdRef.current), controls: handsRef.current, changes: [] };
+    let camSeen = `${cam0.id}|${cam0.controls}`;
     // first-game tips: shoot, pass, icon passing, the alley-oop, defend, the line; each until it is
     // done (or it has had its time)
     const tips = game.tips && !tape && !cfg.auto ? { stage: 0, shown: 0, shownIcon: 0, shownOop: 0, key: "" } : null;
@@ -505,7 +517,7 @@ function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, onDone, on
     const finish = () => {
       ended = true;
       if (tape) { setTimeout(() => onDone(null), 1500); return; }
-      const rec = { version: VERSION, seed, cfg, home, away, inputLog: rleEncode(log), result: resultOf(st), at: Date.now() };
+      const rec = { version: VERSION, seed, cfg, home, away, cam: cam0, inputLog: rleEncode(log), result: resultOf(st), at: Date.now() };
       let verified = false;
       try { verified = JSON.stringify(replay(rec)) === JSON.stringify(rec.result); } catch { verified = false; }
       saveRecord(rec);
@@ -515,7 +527,12 @@ function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, onDone, on
       raf = requestAnimationFrame(tick);
       let dt = (now - last) / 1000; last = now;
       if (dt > 0.25) dt = 0.25;
-      const inp = input.sample();
+      // the hands follow the camera: the floor-to-screen map at the man you steer, in the picture on screen now
+      let view = null;
+      if (handsRef.current === "camera" && !tape) { const k = camOf(camRef.current), P = st.p[st.ctl]; view = { J: floorJ(proj, k, P.x, P.y), heading: headingOf(k) }; }
+      const inp = input.sample(view);
+      const cs = `${camIdRef.current}|${handsRef.current}`;
+      if (cs !== camSeen && !tape) { camSeen = cs; cam0.changes.push([st.frame, camIdRef.current, handsRef.current]); }
       if (inp.pad !== undefined) setPad(p => (p === inp.pad ? p : inp.pad));
       if (inp.start && !ended) togglePause();
       if (inp.camera) cycleCam();
@@ -589,9 +606,10 @@ function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, onDone, on
       {touch && !tape && <TouchPad input={inputRef} off={hud?.off} onStart={() => togglePause()} />}
       {paused && <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE DEPARTMENT HAS STOPPED THE CLOCK. IT DOES NOT USUALLY." onBack={() => togglePause(false)}
         options={{ resume: () => togglePause(false), restart: !tape && onRestart, camera: { label: `CAMERA: ${CAMS[camId].name}`, onSelect: cycleCam },
+          hands: { label: `STICK: ${HANDS_NAME[hands]}`, hint: hands === "camera" ? "UP IS UP THE SCREEN" : "UP IS THE FAR SIDELINE", onSelect: () => setHands(hands === "camera" ? "court" : "camera") },
           ...Object.fromEntries(["zoom", "height", "follow"].map(k => [`cam${k}`, { label: `CAMERA ${k.toUpperCase()}: ${adjOf(adj, camId)[k]}`, hint: "+1", onSelect: () => setAdj(camId, k, (adjOf(adj, camId)[k] + 1) % 11) }])),
           controls: <HoopsGuide mode={mode} family={pad} street={street} compact />, sound: { on: !muted, onSelect: toggleMute }, quit: { label: tape ? "STOP THE TAPE" : "LEAVE THE COURT", onSelect: onQuit } }} />}
-      {camPanel && <CamPanel camId={camId} setCamId={setCamId} adj={adj} setAdj={setAdj} />}
+      {camPanel && <CamPanel camId={camId} setCamId={setCamId} adj={adj} setAdj={setAdj} hands={hands} setHands={setHands} />}
       {!tape && <Legend mode={mode} family={pad} open={legendOpen} onToggle={toggleLegend} />}
       <ButtonRow>
         <Button onClick={() => togglePause()}>{paused ? "Resume" : "Pause"}</Button>
@@ -607,7 +625,7 @@ function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, onDone, on
 }
 
 // The camera's adjustments, 2K's: ZOOM, HEIGHT, FOLLOW, 0 to 10 for each camera, remembered.
-function CamPanel({ camId, setCamId, adj, setAdj }) {
+function CamPanel({ camId, setCamId, adj, setAdj, hands, setHands }) {
   const a = adjOf(adj, camId);
   return (
     <section className="hp-cam" aria-label="Camera settings">
@@ -620,14 +638,17 @@ function CamPanel({ camId, setCamId, adj, setAdj }) {
           <b>{a[k]}</b></label>
       ))}
       <button type="button" className="hp-chip" onClick={() => { setAdj(camId, "zoom", ADJ_DEFAULT.zoom); setAdj(camId, "height", ADJ_DEFAULT.height); setAdj(camId, "follow", ADJ_DEFAULT.follow); }}>RESET {CAMS[camId].name}</button>
+      <div className="hp-chips" role="radiogroup" aria-label="The stick">
+        {["camera", "court"].map(v => <button key={v} type="button" role="radio" aria-checked={hands === v} className={`hp-chip${hands === v ? " on" : ""}`} onClick={() => setHands(v)}>STICK {HANDS_NAME[v]}</button>)}
+      </div>
     </section>
   );
 }
 // The labels over your teammates while you hold the icon button, as your hands know them.
 function iconLabels(mode, family) { return namesFor(mode === "touch" ? "keys" : mode, family).icons; }
 
-// A swipe on the court: a dribble move that way (screen right = toward the right-hand rim), a circle
-// = a spin.
+// A swipe on the court: a dribble move that way on the screen (input.js turns it into a court direction
+// through the camera, like the sticks), a circle = a spin.
 function swipeHandlers(input) {
   let path = null;
   return {
@@ -645,10 +666,8 @@ function swipeHandlers(input) {
       path = null;
       if (Math.abs(turn) > 4) { input.current?.swipe(0, true); return; }
       if (Math.hypot(dx, dy) < 24) return;
-      let bits = 0;
-      if (dx > Math.abs(dy) * 0.45) bits |= BTN.RSR; else if (-dx > Math.abs(dy) * 0.45) bits |= BTN.RSL;
-      if (dy > Math.abs(dx) * 0.45) bits |= BTN.RSD; else if (-dy > Math.abs(dx) * 0.45) bits |= BTN.RSU;
-      input.current?.swipe(bits);
+      const m = Math.hypot(dx, dy);
+      input.current?.swipe([dx / m, -dy / m]);   // [right, up] on the screen
     },
     onPointerCancel: () => { path = null; },
   };
