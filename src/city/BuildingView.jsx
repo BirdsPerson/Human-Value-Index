@@ -56,6 +56,7 @@ function BuildingView({ buildingId, floor, censusRef, onOpen, onFloor }) {
     return (
       <div>
         <div className="hvi-city-note hvi-city-in">DEPARTMENT HEADQUARTERS. SIX FLOORS, THREE OF THEM BELOW THE STREET, WHICH IS WHERE THE DEPARTMENT KEEPS WHAT IT DOES NOT DISCUSS. THIS BUILDING RUNS ITS OWN SIMULATION: THE HOLDING PEN. THE CITY'S CENSUS DOES NOT APPLY INSIDE. NOTHING DOES.</div>
+        <div className="hvi-city-note hvi-city-in">BELOW B3, A SERVICE LIFT GOES TO FLOORS THE BUILDING DOES NOT ADMIT TO: <a href="#basements">THE SUB-BASEMENTS, B4 AND BELOW</a>.</div>
         <Pen embedded cardProps={embeddedCard} />
       </div>
     );

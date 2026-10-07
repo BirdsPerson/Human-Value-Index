@@ -34,6 +34,7 @@ const Fish = lazy(() => import("./play/fish/Fish.jsx"));   // #fish: THE WATERS 
 const Aquarium = lazy(() => import("./play/fish/Aquarium.jsx"));   // #aquarium: THE AQUARIUM (replay-checked donations)
 const Hunt = lazy(() => import("./play/hunt/Hunt.jsx"));   // #hunt: TAGGED OUT, the light-gun bar cabinet (src/play/hunt/)
 const Ski = lazy(() => import("./play/ski/Ski.jsx"));   // #ski: THE MOUNTAIN, skiable (src/play/ski/)
+const Crawl = lazy(() => import("./play/crawl/Crawl.jsx"));   // #basements: THE SUB-BASEMENTS, the dungeon under HQ (src/play/crawl/)
 const Cards = lazy(() => import("./play/cards/Cards.jsx"));   // #cards: THE CARD ROOM (hearts, spades; solitaire and spider at home)
 const Skate = lazy(() => import("./play/skate/Skate.jsx"));   // #skate: THE PARK, skateable (src/play/skate/)
 const Economy = lazy(() => import("./economy/Economy.jsx"));
@@ -447,7 +448,7 @@ function Screen({ nav, wide = false, banner = false, children }) {
 const TITLES = {
   "#intake": "GET EVALUATED", "#file": "MY FILE", "#arrivals": "INTAKE", "#cube": "THE CUBE", "#city": "THE CITY",
   "#assembly": "THE ASSEMBLY", "#elections": "COUNCIL ELECTIONS", "#docket": "THE DOCKET", "#casino": "HOUSE EDGE CASINO",
-  "#economy": "THE TREASURY", "#shop": "THE SHOPS", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS", "#football": "THE BOWL", "#tecmo": "FOURTH AND LONG", "#soccer": "THE ESTATE PITCH", "#fish": "THE WATERS", "#aquarium": "THE AQUARIUM", "#bowling": "THE LANES", "#hunt": "TAGGED OUT",
+  "#economy": "THE TREASURY", "#shop": "THE SHOPS", "#market": "THE MARKET", "#chess": "PARK CHESS", "#tennis": "THE TENNIS CLUB", "#golf": "THE DEPARTMENT LINKS", "#hoops": "THE COURTS", "#basketball": "THE COURTS", "#football": "THE BOWL", "#tecmo": "FOURTH AND LONG", "#soccer": "THE ESTATE PITCH", "#fish": "THE WATERS", "#aquarium": "THE AQUARIUM", "#bowling": "THE LANES", "#hunt": "TAGGED OUT", "#basements": "THE SUB-BASEMENTS",
   "#ski": "THE MOUNTAIN", "#cards": "THE CARD ROOM",
   "#skate": "THE PARK",
   "#play": "THE GAMES", "#scores": "THE SCORES", "#about": "ABOUT", "#privacy": "PRIVACY", "#terms": "TERMS", "#dispute": "DISPUTE A SCORE",
@@ -753,6 +754,13 @@ export default function OverlordAssessment() {
   if (routePath === "#aquarium") return (
     <Screen nav={nav} wide>
       <Suspense fallback={<Loading what="FILLING THE TANKS" />}><Aquarium /></Suspense>
+    </Screen>
+  );
+
+  // #basements: THE SUB-BASEMENTS under Department Headquarters, B4 and below (src/play/crawl/, docs/design/DUNGEON.md)
+  if (routePath === "#basements") return (
+    <Screen nav={nav} wide>
+      <Suspense fallback={<Loading what="CALLING THE SERVICE LIFT" />}><Crawl route={route} /></Suspense>
     </Screen>
   );
 

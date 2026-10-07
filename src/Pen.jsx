@@ -142,6 +142,9 @@ const penStyles = `
   @media (hover: hover) { .hvi-pen-howto .ui-btn:hover { color: var(--accent-ink); } }
   .hvi-pen-help #hvi-pen-help-body { margin-top: var(--s1); }
   .hvi-pen-floors { margin: 0 0 var(--s1); }
+  .hvi-pen-lift { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); margin: var(--s2) 0; font-size: var(--t-xs); color: var(--fg-mute); letter-spacing: 0.04em; }
+  .hvi-pen-lift a { color: var(--warn); font-weight: 700; min-height: var(--hit-min); display: inline-flex; align-items: center; border: var(--bw) solid var(--warn); padding: 0 var(--s3); text-decoration: none; }
+  .hvi-pen-lift a:hover, .hvi-pen-lift a:focus-visible { background: var(--warn); color: #000; outline: none; }
   .hvi-pen-floors .ui-chipstrip { justify-content: space-between; }
   .hvi-pen-registry { margin-bottom: var(--s5); }
   .hvi-pen-registry .ui-field { margin-top: 0; }
@@ -1487,6 +1490,8 @@ export default function Pen({ embedded = false, cardProps = null } = {}) {
         </div>
         <div role="status" className="sr-only">{srStatus}</div>
       </Frame>
+      {/* B3, beside the PROCESSING door: the service lift to the floors that do not exist (docs/design/DUNGEON.md 1.1) */}
+      <p className="hvi-pen-lift"><a href="#basements">▼ SERVICE LIFT: B4 AND BELOW</a><span>B3, BESIDE PROCESSING. STAFF ONLY. EVERYONE IS STAFF.</span></p>
       {!embedded && (
         <div className="hvi-pen-help">
           {helpSeen && (

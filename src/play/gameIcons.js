@@ -18,6 +18,7 @@ export const ICONS = {
   bowling: ["............", "..f.....f...", ".fff...fff..", ".fhf...fhf..", "..f.....f...", ".fff...fff..", ".fff..dddd..", ".fff.dmddmd.", ".fff.dddddd.", "..f..dddddd.", "......dddd..", "aaaaaaaaaaaa"],
   cards: [".ffffff.....", ".f....f.....", ".f.ffffff...", ".f.f....f...", ".f.f.d..f...", ".f.f.ddd.f..", ".fff.ddd.f..", "...f..d..f..", "...f.....f..", "...fffffff..", "............", "............"],
   skate: ["............", "............", "......hh....", ".....hhhh...", "......ff....", ".....ffff...", "....f.ff.f..", "......ff....", ".....f..f...", "a..........a", ".aaaaaaaaaa.", "..dd....dd.."],
+  basement: ["aaa.........", "..a.........", "..aaa.......", "....a.......", "....aaa.....", "......a.....", ".w....aaa...", ".w......a...", ".w......aaa.", "www.......a.", ".w..ffffffff", "....f......f"],
   trophy: [".wwwwwwwwww.", "ww.wwwwww.ww", "w..wwwwww..w", "ww.wwwwww.ww", ".wwwwwwwwww.", "...wwwwww...", "....wwww....", ".....ww.....", ".....ww.....", "...wwwwww...", "...dddddd...", "..dddddddd.."],
 };
 const INK = { f: "--fg", d: "--fg-dim", m: "--fg-mute", a: "--accent", w: "--warn", h: "--harm" };

@@ -3,7 +3,7 @@
 //   { href: "#route", title: "SHORT TITLE", name: "plain name", icon: "<key in gameIcons.js>", note: "ONE LINE" }
 // The tile's accessible name is "Play <name>". A tile whose route App.jsx does not serve yet
 // renders dim, "COMING SOON" (routesIn() reads App.jsx at build; vite.config.js defines it).
-// Icons already drawn: tennis golf hoops football helmet soccer fish tank rook card market joystick trophy ski bowling cards skate.
+// Icons already drawn: tennis golf hoops football helmet soccer fish tank rook card market joystick trophy ski bowling cards skate basement.
 export const GAMES = [
   { href: "#tennis", title: "TENNIS", name: "tennis", icon: "tennis", note: "EXHIBITIONS AGAINST THE FAMOUS. KEYS, TOUCH OR PAD" },
   { href: "#golf", title: "GOLF", name: "golf", icon: "golf", note: "NINE HOLES. THE COURSE THE ASSEMBLY DECLINED" },
@@ -15,6 +15,7 @@ export const GAMES = [
   { href: "#skate", title: "SKATE", name: "skateboarding", icon: "skate", note: "THE PARK, THE VERT RAMP, THE PLAZA. TWO-MINUTE RUNS" },
   { href: "#bowling", title: "BOWLING", name: "bowling", icon: "bowling", note: "THE LANES, ON THE STRIP. TEN PINS, ONE TO FOUR BOWLERS" },
   { href: "#fish", title: "FISHING", name: "fishing", icon: "fish", note: "FISH THE PIER AND THE RIVER" },
+  { href: "#basements", title: "THE SUB-BASEMENTS", name: "the sub-basements: a dungeon under Department Headquarters", icon: "basement", note: "B4 AND BELOW. BREAK, FILE, DESCEND. THE LIFT AT B8 KEEPS WHAT YOU CARRY" },
   { href: "#hunt", title: "TAGGED OUT", name: "the light-gun hunting cabinet", icon: "hunt", note: "THE BAR CABINET. BUCKS ONLY. A VIDEO GAME" },
   { href: "#aquarium", title: "AQUARIUM", name: "the aquarium", icon: "tank", note: "THE TANKS. EVERY DONATION CHECKED BY REPLAY" },
   { href: "#chess", title: "CHESS", name: "chess", icon: "rook", note: "A STONE TABLE OPPOSITE A FIGURE ON FILE" },

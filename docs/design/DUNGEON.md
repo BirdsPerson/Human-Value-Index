@@ -868,4 +868,50 @@ loss.
 
 ## 10. Build log
 
-(Empty until D1 ships.)
+### D1, 2026-10-07: THE SUB-BASEMENTS B4-B8, solo, engine v1
+
+**Shipped.** `src/play/crawl/engine/` (rng, grid, gen/{plan, rooms, path, accrete, machines, populate,
+verify}, entities, ai/{brain, archetypes}, combat, items, loot, rules/{run, floor, levels},
+themes/{index, subbasements}, input/{word, seats}, game, record), frozen as `engine-v1/` with
+`scripts/fixtures/crawl-v1-records.json` (10 tapes: the first-timer at every level with both endings, a
+circling seat the Auditor files, a two-seat party) by `scripts/freeze-crawl.mjs`. The adapter: `Crawl.jsx`
+(lobby with the four levels, hand, aim help, the NOTICE, records and replays; the run on a fixed 60 Hz
+step), `render.js` (rectangles and glyphs, the 24 x 14 window, minimap, telegraphs, render-only shake and
+sparks), `input.js` (right- and left-handed pad presets, keys, touch mirrored), `audio.js`, `records.js`,
+`replay.js` (v1 -> engine-v1), `api.js` (the permit seam: a local cfg in the permit's exact shape,
+`SERVER_FILING = false`, nothing filed, no ledger touched), `calls.js` (memos for the lobby only),
+`Guide.jsx` (guideKit HowTo + PadSketch, first-run tips). Doors: `#basements` on THE GAMES (icon
+`basement`), the SERVICE LIFT: B4 AND BELOW line under the Pen's cross-section (B3, beside PROCESSING),
+one line in BuildingView's HQ branch. `scripts/check-crawl.mjs` holds every section 5 row that needs no
+server; `scripts/crawlBot.mjs` is the first-timer with its parameters fixed in `BOT`.
+
+**Calibration, engine v1, N = 400 a level, first-timer bot, reach of the B8 lift:** INTERN 76.0 %,
+CLERK 46.5 %, OFFICER 35.3 %, DIRECTOR 18.5 %. INTERN is inside 70-80 and the bands are monotone (the
+gates); OFFICER and DIRECTOR land inside their intended bands, CLERK sits 3.5 points under its 50-60.
+The level dials are the table's, unchanged; the measured knobs were the theme's numbers (damage, speed,
+groups a floor). Engine cost: ~11 us a frame with one seat and 40 entities, ~16 us with four; a 72,000-frame
+shift ~0.35 s of engine time; generation ~0.4 ms a floor, chain retries 0.2 % of 10,000 seeds.
+
+**Decided while building (each one a constant, flippable):**
+- The roll travels **3.5 tiles** over its 18 frames, not section 4's 10: ten tiles crosses most band-1
+  rooms in a third of a second, so every roll ended in a wall. `ROLL_TILES` in combat.js.
+- The hatch chance per kill is shared by a group: a FORM 27-B body rolls 15 % / 6 and a FERAL DATA family
+  shares one 15 % across its seven bodies. Per body, a swarm opened a hatch on nearly every floor and
+  the route stopped mattering. Containers keep the 2 % -> 25 % curve as written.
+- B4 is the quiet floor (3 groups, no copier); the copier appears from B5. Lifts: B8's descent room is the
+  lift lobby; the B4 car is the service lift you came down in and only goes down (B4 is not a lift floor).
+- A lift is "reached" when a seat walks into its lobby (recorded at once, kept on a loss, 9.2's default);
+  calling it ends the run with exit "lift". The lobby lists it; it opens as an entrance with the Stacks (D2).
+- The d-pad moves on both presets; the slot is RB (right hand) / B (left hand) and keys 1-9, 0, -, =.
+  The left-handed preset runs on full stick only, because LT is its INTERACT. Touch: a tray tap selects
+  and uses; holding HIT is the aim lock.
+- Monsters stop at contact instead of standing inside the player; the file cart bumps (an 18-frame
+  windup) when it is on you; a swarm body never steps or is knocked onto a tile that holds two; once
+  chasing, a monster keeps you in sight out to the 14-tile leash. A corner slide steers a mover through a
+  one-tile doorway when it is pushed straight at the jamb.
+- `cfg.controls` ("assist" | "manual") is read by the sim (the snap), so it is part of the record; `hand`
+  is not. The run's seed folds in `cfg.day` and `cfg.cleared` so either changes the floor.
+- Deferred, as the doc stages them: capture.js (D3; the stapler damages FERAL DATA in D1), elites and
+  affixes (OFFICER / DIRECTOR, D2), the daily condition (D2), the server permit and filing, salvage and
+  bounty landing (D2: the crate says "OPENED ON THE NEXT RELEASE", bounty is recorded x the level's factor
+  in this browser only), the full remap under CONTROLS (D2), mouse and right-stick aim.
