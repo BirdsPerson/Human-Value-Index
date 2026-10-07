@@ -272,7 +272,11 @@ function Logotype() {
         <h1 className="t">Human Value <b>Index</b></h1>
         <span className="rule" aria-hidden="true" />
         <span className="s">DEPARTMENT EDITION // VERSION 3.1</span>
-        <a className="cr" href="https://iridescent-studio.netlify.app" target="_blank" rel="noopener"><img src="/brand/iridescent-mark.svg" width="14" height="14" alt="" />AN IRIDESCENT GAME</a>
+        <span className="crs">
+          <a className="cr" href="https://iridescent-studio.netlify.app" target="_blank" rel="noopener"><img src="/brand/iridescent-mark.svg" width="14" height="14" alt="" />IRIDESCENT STUDIO</a>
+          <a className="cr" href="https://electricbasement.tv" target="_blank" rel="noopener"><img className="px" src="/brand/eb-bolt-16.png" width="21" height="16" alt="" />ELECTRIC BASEMENT</a>
+          <span className="cr"><img className="px" src="/brand/brainforest-16.png" width="18" height="16" alt="" />BRAINFOREST ANALYTICA</span>
+        </span>
       </span>
     </div>
   );
