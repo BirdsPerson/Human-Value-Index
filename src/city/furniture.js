@@ -493,6 +493,7 @@ export function dressUnit(unit, ctx = {}) {
 // or a poster when the room is full. A set that is a television (the tennis game) takes the place of the
 // room's own TV rather than standing beside it.
 const DECOR = new Set(["plant", "plant-tall", "cactus", "lamp", "poster", "painting"]);
+const SWAP = new Set([...DECOR, "bookshelf", "trophies"]);   // what a wall of guitars (or maps) may stand in front of
 function placeSignature(look, unit, props, band, purposes) {
   const floorCount = new Map(), done = new Set();
   for (const { id: want, owner } of props) {
@@ -516,7 +517,7 @@ function placeSignature(look, unit, props, band, purposes) {
         if (it.wall) {
           const walls = list.filter(f => CATALOG[f.item].wall).map(f => f.x);
           const x = [0.5, 0.27, 0.73, 0.14, 0.86].find(c => !walls.some(w => Math.abs(w - c) < 0.2)) ?? 0.5;
-          for (let k = list.length - 1; k >= 0; k--) if (CATALOG[list[k].item].wall && DECOR.has(list[k].item) && Math.abs(list[k].x - x) < 0.3) list.splice(k, 1);
+          for (let k = list.length - 1; k >= 0; k--) if (SWAP.has(list[k].item) && !list[k].placed && Math.abs(list[k].x - x) < 0.3) list.splice(k, 1);
           place(list, pid, x, key, owner);
         } else place(list, pid, freeX(list), key, owner);
         floorCount.set(r.id, (floorCount.get(r.id) || 0) + (it.wall ? 0 : 1));
