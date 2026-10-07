@@ -6,6 +6,7 @@
 //     opened; play: a game loaded; out: a link out followed), per destination host. Anonymous:
 //     no IP, no id, no path, nothing about who.
 import { getStore } from "@netlify/blobs";
+import { tagsOf, NPC_CAP, NPC_CAMPAIGNS } from "../../src/city/npcTags.js";
 
 export const STORE = "funnels";
 export const SHOP = "https://shop.electricbasement.tv";
@@ -15,7 +16,7 @@ export const SHOP_MAX = 24;                       // items shown
 const CANDIDATES = 36;                            // newest in stock, read for their turntable videos
 export const CAMPAIGNS = new Set(["the-arcade", "eb-shop", "ebtv-station", "the-dive", "the-diner", "casino", "union-lounge", "the-boardwalk", "departures-hall", "internet-city-cabinet", "city",
   // the house games (src/city/houseGames.js): each cabinet counts as itself, wherever it stands; the outfitter
-  "house-golf", "house-hunt", "house-bowling", "house-tennis", "house-hoops", "house-football", "house-soccer", "house-fish", "house-ski", "the-outfitter"]);
+  "house-golf", "house-hunt", "house-bowling", "house-tennis", "house-hoops", "house-football", "house-soccer", "house-fish", "house-ski", "the-outfitter", ...NPC_CAMPAIGNS]);   // NPC_CAMPAIGNS: each storefront trade counts as itself (npc-games, npc-video...)
 export const KINDS = new Set(["open", "play", "out"]);
 export const HOSTS = new Set(["play-jetsam.netlify.app", "anamnesis-eb.netlify.app", "birdsperson.itch.io", "shop.electricbasement.tv", "electricbasement.tv", "live.electricbasement.tv", "iridescent-studio.netlify.app", "internetcitygame.com"]);
 
@@ -45,7 +46,7 @@ async function getJson(fetchFn, url, ms) {
 
 // Read the storefront: the newest products in stock, each with its turntable video where it
 // has one (videos first). -> [{handle, title, price, image, video, type}]
-export async function readShop(fetchFn = fetch) {
+async function listProducts(fetchFn) {
   const list = [];
   for (let page = 1; page <= 3; page++) {
     const j = await getJson(fetchFn, `${SHOP}/products.json?limit=250&page=${page}`, 6000);
@@ -54,6 +55,10 @@ export async function readShop(fetchFn = fetch) {
     if (ps.length < 250) break;
   }
   if (!list.length) throw new Error("the storefront listed nothing");
+  return list;
+}
+export async function readShop(fetchFn = fetch) {
+  const list = await listProducts(fetchFn);
   // the shop's own listings first (vendor EBShop: the ones with turntable videos), newest first
   const own = (p) => /^eb ?shop$/i.test(String(p.vendor || "").trim());
   const fresh = list.filter(inStock).sort((a, b) => (own(b) - own(a)) || String(b.published_at).localeCompare(String(a.published_at))).slice(0, CANDIDATES);
@@ -124,4 +129,32 @@ export async function clickStats(days = 30, { now = Date.now(), st = store() } =
     }
   }
   return out;
+}
+
+// ---- the NPC shops' stock ---------------------------------------------------------------------
+// The storefront trades in the city (src/city/npcTags.js) sell real EB Shop stock: the in-stock
+// products grouped by tag, newest first, NPC_CAP each. -> {tags: {tag: [{handle, title, price, image, type}]}}
+export async function readNpc(fetchFn = fetch) {
+  const fresh = (await listProducts(fetchFn)).filter(inStock).sort((a, b) => String(b.published_at).localeCompare(String(a.published_at)));
+  const tags = {};
+  for (const p of fresh) {
+    const it = { handle: p.handle, title: String(p.title || "").slice(0, 140), price: priceOf(p), type: p.product_type || "", image: sized(p.images?.[0]?.src, 360) };
+    if (!it.price || !it.image) continue;
+    for (const t of tagsOf(it.type, it.title)) { const a = (tags[t] ||= []); if (a.length < NPC_CAP) a.push(it); }
+  }
+  return tags;
+}
+// -> {tags, at, stale?} or {closed: true}; kept in Blobs like the shop (fresh 15 min, stale up to a day)
+export async function npcListing({ fetchFn = fetch, now = Date.now(), st = store() } = {}) {
+  let cached = null;
+  try { cached = await st.get("shopnpc", { type: "json" }); } catch { /* read through to Shopify */ }
+  if (cached && now - cached.at < SHOP_TTL) return { tags: cached.tags, at: cached.at };
+  try {
+    const tags = await readNpc(fetchFn);
+    try { await st.setJSON("shopnpc", { at: now, tags }); } catch { /* served, just not kept */ }
+    return { tags, at: now };
+  } catch {
+    if (cached && now - cached.at < SHOP_STALE) return { tags: cached.tags, at: cached.at, stale: true };
+    return { closed: true };
+  }
 }

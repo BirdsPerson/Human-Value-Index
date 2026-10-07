@@ -90,7 +90,7 @@ const CSS = `
 .hvi-shopwall a:focus,.hvi-shopwall button:focus{left:8px;top:8px;width:auto;height:auto;max-width:calc(100% - 16px);z-index:5;background:var(--bg,#0a0f0a);color:var(--accent,#4ade80);border:1px solid var(--accent,#4ade80);padding:8px 10px;font:12px var(--mono);letter-spacing:.04em;outline:2px solid var(--accent);outline-offset:2px;white-space:nowrap;text-overflow:ellipsis}
 @media (max-width:640px){.hvi-fn-head .meta{display:none}.hvi-fn-veil{padding:0}.hvi-fn{max-height:100dvh;height:100dvh;border:0}.hvi-fn-detail{grid-template-columns:1fr}.hvi-fn-crt{padding:10px 10px 22px;border-radius:12px}.hvi-fn-crt iframe,.hvi-fn-crt video{height:62dvh}.hvi-fn-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 `;
-function injectStyles() {
+export function injectStyles() {
   let el = document.getElementById("hvi-funnel-styles");
   if (!el) { el = document.createElement("style"); el.id = "hvi-funnel-styles"; document.head.appendChild(el); }
   if (el.textContent !== CSS) el.textContent = CSS;
@@ -144,7 +144,7 @@ function Overlay({ spec, setSpec, close, now }) {
   if (spec.kind === "game") ({ title, meta, body } = gameView(spec, setSpec));
   else if (spec.kind === "outfitter") ({ title, meta, body } = { title: OUTFITTER.title, meta: "THE FOOTHILLS", body: <Outfitter /> });
   else if (spec.kind === "arcade") ({ title, meta, body } = { title: "THE ARCADE // CABINET FLOOR", meta: `${GAMES.length} CABINETS`, body: <ArcadeFloor setSpec={setSpec} /> });
-  else if (spec.kind === "shop") ({ title, meta, body } = { title: "EB SHOP // LIVE STOCK", meta: "SHOP.ELECTRICBASEMENT.TV", body: <Shop key={`${spec.item || "all"}|${spec.pitch?.line || ""}|${spec.room ? 1 : 0}`} campaign={spec.campaign || "eb-shop"} item={spec.item || null} pitch={spec.pitch || null} room={Boolean(spec.room)} /> });
+  else if (spec.kind === "shop") ({ title, meta, body } = { title: spec.npc ? `${spec.npc.sign} // EB SHOP STOCK` : "EB SHOP // LIVE STOCK", meta: "SHOP.ELECTRICBASEMENT.TV", body: <Shop key={`${spec.item || "all"}|${spec.pitch?.line || ""}|${spec.room ? 1 : 0}|${spec.campaign}`} npc={spec.npc || null} setSpec={setSpec} campaign={spec.campaign || "eb-shop"} item={spec.item || null} pitch={spec.pitch || null} room={Boolean(spec.room)} /> });
   else ({ title, meta, body } = { title: "ELECTRIC BASEMENT TV", meta: "LIVE", body: <Ebtv campaign={spec.campaign || "ebtv-station"} now={now} /> });
   return (
     <div className="hvi-fn-veil" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
@@ -164,7 +164,7 @@ function Overlay({ spec, setSpec, close, now }) {
 // ---- a game in its cabinet -------------------------------------------------------------------
 function gameView(spec, setSpec) {
   const g = GAME[spec.slug];
-  const campaign = campaignFor(spec.slug, spec.campaign || "the-arcade");
+  const campaign = spec.shopCampaign || campaignFor(spec.slug, spec.campaign || "the-arcade");
   if (g?.neighbour) return neighbourView(g, campaign);
   if (g?.house) return houseView(g, spec);
   if (!g) return { title: "CABINET UNPLUGGED", meta: "", body: <p className="hvi-fn-note">THIS CABINET HAS BEEN REMOVED FROM THE FLOOR. THE DEPARTMENT KEEPS THE COINS.</p> };
@@ -318,13 +318,15 @@ const cabColor = (slug) => ({ jetsam: "#22d3ee", anamnesis: "#4ade80", "human-va
 
 // ---- the EB SHOP ------------------------------------------------------------------------------
 // The shop's stock, as this page holds it (shopStock.js: one fetch, shared with the walls).
-export function useShop() {
+export function useShop(on = true) {
   const [st, setSt] = useState(shopState());
-  useEffect(() => { const off = onShop(setSt); loadShop(); setSt(shopState()); return off; }, []);
+  useEffect(() => { if (!on) return undefined; const off = onShop(setSt); loadShop(); setSt(shopState()); return off; }, [on]);
   return st;
 }
-function Shop({ campaign, item, pitch, room: room0 = false }) {
-  const raw = useShop();
+function Shop({ campaign, item, pitch, room: room0 = false, npc = null, setSpec = null }) {
+  // an NPC shop (npcShops.jsx) sells its trade's slice of the same stock: its own items, not the whole shelf
+  const eb = useShop(!npc);
+  const raw = npc ? { state: npc.items.length ? "open" : "closed", items: npc.items, stale: false } : eb;
   const [room, setRoom] = useState(room0);
   const st = raw.state === "idle" ? { state: "loading" } : raw;
   const [pickH, setPick] = useState(item);
@@ -362,7 +364,18 @@ function Shop({ campaign, item, pitch, room: room0 = false }) {
   }
   return (
     <>
-      <p className="hvi-fn-note">LIVE FROM THE ELECTRIC BASEMENT'S SHELVES.{st.stale ? " (STOCK AS LAST COUNTED.)" : ""} TAP AN ITEM TO SEE IT TURN.</p>
+      <p className="hvi-fn-note">{npc ? `${npc.sign}: STOCKED FROM THE ELECTRIC BASEMENT'S REAL SHELVES. THE OWNER STILL RUNS THE SHOP. THE STOCK IS NOT HIS.` : "LIVE FROM THE ELECTRIC BASEMENT'S SHELVES."}{st.stale ? " (STOCK AS LAST COUNTED.)" : ""} TAP AN ITEM TO SEE IT TURN.</p>
+      {npc?.boxes?.length > 0 && (
+        <div className="hvi-fn-grid" aria-label="Boxed games, made by Iridescent">
+          {npc.boxes.map(slug => (
+            <button key={slug} type="button" className="hvi-fn-cab live" onClick={() => setSpec?.({ kind: "game", slug, campaign, shopCampaign: campaign, place: "arcade" })} aria-label={`${GAME[slug].title}, an Iridescent game${GAME[slug].status === "dev" ? ", coming soon" : ""}`}>
+              <span className="mq" style={{ background: cabColors(slug)[0] }}>{GAME[slug].title}</span>
+              <span className={`hvi-fn-tag ${GAME[slug].status === "dev" ? "dev" : "live"}`} style={{ alignSelf: "flex-start" }}>{GAME[slug].status === "dev" ? "COMING SOON" : "IRIDESCENT: PLAY"}</span>
+              <span style={{ fontSize: 12, color: "#9ca3af" }}>{GAME[slug].line}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="hvi-fn-grid">
         {st.items.map(it => (
           <button key={it.handle} type="button" className="hvi-fn-item" onClick={() => setPick(it.handle)} aria-label={`${it.title}, $${it.price}${it.video ? ", turntable video" : ""}`}>

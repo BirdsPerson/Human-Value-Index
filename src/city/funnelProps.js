@@ -14,6 +14,7 @@ import { HOUSE_PLACES, HOUSE_PLACE_TYPES, houseFor, houseScreen, houseExtras, lo
 import { ebtvFrame, drawFrame, drawBug, tvBox } from "./ebtvFrame.js";
 import { drawBrand } from "./brand.js";
 import { machineClock } from "./sim.js";
+import { NPC } from "./npcHook.js";
 import { shopState, wallOpen, loadShop, shopSlots, thumb, shopFocus } from "./shopStock.js";
 import { HOSTS as CAST, shiftAt, chatterAt, pitching } from "./hostsLive.js";
 import { CAFE_ID, CAFE_HREF } from "./terminal.js";   // THE TERMINAL: a tap on a public PC opens DEPARTMENT MAIL
@@ -564,6 +565,7 @@ const ROOM_SPEC = { "eb-shop": { kind: "shop", campaign: "eb-shop" }, "studio-ro
 export function funnelRoomHits(pid, plan, side = 0.3, u = null) {
   const out = [];
   if (ROOM_SPEC[pid]) out.push({ spec: ROOM_SPEC[pid], box: [0, 0, plan.w, plan.h] });
+  if (NPC.hits) out.push(...NPC.hits(pid, plan, u));   // a storefront unit's shelves (npcShops.jsx): none for any other room
   const shop = pid === "eb-shop" && wallOpen() ? shopState().items : null;
   if (shop && u) for (const q of shopSlots(plan.w, plan.h, u, shop.length)) out.push({ spec: { kind: "shop", campaign: "eb-shop", item: shop[q.i].handle }, box: [q.x - u, q.y - u, q.x + q.s + u, q.y + q.s + 2 * u] });
   for (const row of plan.rows) {

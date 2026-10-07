@@ -34,10 +34,10 @@ export function setShop(j) { ST = j == null ? { state: "idle" } : readShop(j); L
 // ---- the racks ------------------------------------------------------------------------------
 // Framed thumbnails on the shop floor's back wall, two racks above the record shelf, left of
 // the shop's sign. Room-relative px: [{i, x, y, s}] (s: the square's side). u: the room's pixel.
-export function shopSlots(w, h, u, n) {
+export function shopSlots(w, h, u, n, right = 0.68) {
   const s = Math.max(4 * u, Math.min(14 * u, Math.round((h * 0.17) / u) * u));
   const gap = Math.max(u, Math.round(s * 0.28 / u) * u);
-  const x0 = 6 * u, x1 = w * 0.68;
+  const x0 = 6 * u, x1 = w * right;
   const fit = Math.max(0, Math.floor((x1 - x0 + gap) / (s + gap)));
   const tops = [Math.round(h * 0.09), Math.round(h * 0.09) + s + gap + u];
   const rows = tops.filter(y0 => y0 + s <= h * 0.5).length;
@@ -51,8 +51,8 @@ export function shopSlots(w, h, u, n) {
   return out;
 }
 // The topmost item at a room-relative point, or null.
-export function slotAt(w, h, u, items, x, y) {
-  const sl = shopSlots(w, h, u, items.length);
+export function slotAt(w, h, u, items, x, y, right = 0.68) {
+  const sl = shopSlots(w, h, u, items.length, right);
   for (const q of sl) if (x >= q.x - u && x <= q.x + q.s + u && y >= q.y - u && y <= q.y + q.s + 2 * u) return items[q.i];
   return null;
 }

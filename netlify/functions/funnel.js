@@ -1,10 +1,11 @@
 // The funnels' one endpoint (netlify/lib/funnels.js):
 //   GET  /api/funnel?shop=1   the EB SHOP's stock (Shopify at most every 15 minutes; the CDN
 //                             holds the answer as long, so most visits never reach this code)
+//   GET  /api/funnel?shop=npc the same stock grouped for the storefront trades (npcListing)
 //   GET  /api/funnel?stats=1  the click counts, last 30 days (anonymous totals only)
 //   POST /api/funnel          {c: building, k: open|play|out, to: host}: one click counted.
 //                             Sent with sendBeacon; nothing about the sender is kept.
-import { shopListing, countClick, clickStats } from "../lib/funnels.js";
+import { shopListing, npcListing, countClick, clickStats } from "../lib/funnels.js";
 import { allowedOrigin } from "../lib/http.js";
 
 const json = (status, body, cache = "no-store", extra = {}) => new Response(JSON.stringify(body), {
@@ -14,7 +15,7 @@ const json = (status, body, cache = "no-store", extra = {}) => new Response(JSON
 export default async (req) => {
   const u = new URL(req.url);
   if (req.method === "GET" && u.searchParams.has("shop")) {
-    const r = await shopListing();
+    const r = u.searchParams.get("shop") === "npc" ? await npcListing() : await shopListing();
     // an open shop is held at the edge for 15 minutes; a closed one for one, then asked again
     const edge = r.closed ? "public, s-maxage=60" : "public, durable, s-maxage=900, stale-while-revalidate=300";
     return json(200, r, "public, max-age=60", { "Netlify-CDN-Cache-Control": edge });

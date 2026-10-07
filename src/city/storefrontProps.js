@@ -10,7 +10,8 @@
 import { UNIT_SET } from "./storefrontSim.js";
 import { PLAZA_SHELLS } from "./shorePlaza.js";
 import { unitView } from "./enterpriseClient.js";
-import { drawBrand } from "./brand.js";   // Goodnight Irene's real lockup over the bar
+import { drawBrand } from "./brand.js";
+import { NPC, ensureNpc } from "./npcHook.js";   // the shelves of real EB Shop stock (npcShops.jsx, loaded on first draw)   // Goodnight Irene's real lockup over the bar
 
 export const STORE_ROOM_TYPE = {
   ...Object.fromEntries([...UNIT_SET].map(id => [id, "shopfront"])),
@@ -156,7 +157,7 @@ export function storeRoomDrawers() {
   const DRAW = {};
   const wainscot = (c, x, y, w, h, u, col) => R(c, col, x, y + h * 0.62, w, 2 * u);
   for (const g of GROUPS) {
-    DRAW[`shop-${g}`] = (c, x, y, w, h, u) => {
+    DRAW[`shop-${g}`] = (c, x, y, w, h, u, o) => {
       wainscot(c, x, y, w, h, u, "#00000055");
       // the trade on the back wall: boards hung, sleeves pinned, frames, a mirror, a price list (no prices)
       const n = Math.max(2, Math.floor(w / (18 * u)));
@@ -169,6 +170,8 @@ export function storeRoomDrawers() {
         else if (g === "stage") { R(c, "#fde047", sx - u, y + h * 0.08, 2 * u, 3 * u); R(c, "#fde04733", sx - 6 * u, y + h * 0.08 + 3 * u, 12 * u, h * 0.4); }
         else R(c, "#00000033", sx - 6 * u, y + h * 0.14, 12 * u, 8 * u);
       }
+      ensureNpc();
+      if (NPC.draw && o?.pid) NPC.draw(c, o.pid, x, y, w, h, u);   // the trade's real stock over the wall, when this shop has some
     };
   }
   DRAW.shopfront = (c, x, y, w, h, u) => {

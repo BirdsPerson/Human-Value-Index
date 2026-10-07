@@ -35,6 +35,8 @@ import { storeLabel, tramAt, drawTram } from "./storefrontDraw.js";   // THE MAL
 import { nightLine } from "./nightlife.js";   // THE NIGHTLIFE QUARTERS: hours, tonight's bill, the rope
 import { storeButtons, openBusiness } from "./EnterprisePanel.jsx";
 import { openFunnel, ShopWallLinks } from "./FunnelOverlay.jsx";
+import NpcShopLinks from "./NpcShopLinks.jsx";
+import { UNIT_SET } from "./storefrontSim.js";
 import { takeTvBoxes, watchHref, ebtvLabel } from "./ebtvFrame.js";
 import { COAST_LOTS, COAST_PLACES, terrainH, onTerrain, TERRAIN } from "./coastGeo.js";
 import { drawCoastLot, drawCoastGround, drawPod, coastLabel, coastLine } from "./coastDraw.js";
@@ -1874,6 +1876,7 @@ function CityIso({ censusRef, onOpen, onEnter, find = null, onFindEnd, self = nu
         <canvas ref={canvasRef} tabIndex={0} className="hvi-city-canvas" role="img"
           aria-label="The Substrate from above, SimCity-style: solid buildings with lit windows, the Loop train on its deck, subjects in the streets. Drag or use the arrow keys to move, pinch or plus and minus to zoom, Q and E to turn. Tap a building, or press ] and [ to step through the buildings in view, to open its cutaway: every floor and room, and who is in it; Enter goes inside. With a game controller: the left stick moves a cursor that names what it is over, A opens, B backs out, the right stick pans, the triggers zoom, the bumpers turn, X finds, Y names everything. The list under the city says what is happening now, and the district directory lists every district." />
         {b?.id === "eb-shop" && <ShopWallLinks />}
+        {b && UNIT_SET.has(b.id) && <NpcShopLinks pid={b.id} />}
         <a ref={tvLinkRef} className="sr-only hvi-city-tvlink" href={watchHref()} target="_blank" rel="noopener" aria-label={ebtvLabel()}>Electric Basement TV, live</a>
       </TouchGate>
       <div className={`hvi-city-zoom${peek && !b ? " peeking" : ""}`} role="toolbar" aria-label="City view controls">

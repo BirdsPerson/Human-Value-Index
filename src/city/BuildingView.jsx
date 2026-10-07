@@ -6,6 +6,8 @@ import { Occupant } from "./cityUi.jsx";
 import { ListRow } from "../ui/index.js";
 import { funnelButtons } from "./funnels.js";
 import { openFunnel, ShopWallLinks } from "./FunnelOverlay.jsx";
+import NpcShopLinks from "./NpcShopLinks.jsx";
+import { UNIT_SET } from "./storefrontSim.js";
 import CasinoDoor from "../casino/CasinoDoor.jsx";
 import { isTower } from "./tower.js";
 import { PLAZA_ID } from "./shorePlaza.js";
@@ -135,6 +137,7 @@ function Floors({ b, floor, censusRef, onOpen, onFloor }) {
       {funnelButtons(b.id).length > 0 && <FunnelBar id={b.id} />}
       {b.id === "casino" && <CasinoDoor />}
       {b.id === "eb-shop" && <ShopWallLinks />}
+      {UNIT_SET.has(b.id) && <NpcShopLinks pid={b.id} />}
       {WATERS_DOOR[b.id] && <div className="hvi-city-note hvi-city-in">{WATERS_DOOR[b.id][0]} // <a href={WATERS_DOOR[b.id][1]}>{WATERS_DOOR[b.id][2]}</a></div>}
       <RoomStage key={b.id} cells={cells} layout={layout} assign={assign} censusRef={censusRef} onOpen={onOpen} onPresent={setPresent} onCell={onCell} focusId={focusCell} focusScroll={focusScroll}
         ariaLabel={`${b.name}, in cross-section: ${b.floors.length} floors, ${total} subjects present. The floor directory below lists everyone by floor.`} />
