@@ -20,7 +20,13 @@
 // whenever anything carries data-pad-own (GameMenu). The cursor hides when a real mouse or finger
 // moves and comes back on the next stick push. The hint strip and keyboard are aria-hidden;
 // focus is real focus, so a screen reader hears what it always hears.
-// Pure parts (ownerOf, pickNeighbour, backAction, OSK) are checked in scripts/check-padlayer.mjs.
+//   A on a <select>  picks it up: left / right (or up / down) change the choice as it lies, A confirms, B puts it back.
+//   The keyboard     types capitals by itself in a case-number field (autocapitalize=characters, or a field named
+//                    for the case); CAPS holds capitals for any field, SHIFT is one letter.
+//   The focused control is scrolled to the middle of the screen, and the hint strip hops to the top when it
+//   would cover it. List rows (data-pad-row) are magnetic like buttons however wide they are.
+// Pure parts (ownerOf, pickNeighbour, backAction, OSK, scrollBlock, hintSide, selectStep, wantsUpper) are checked
+// in scripts/check-padlayer.mjs.
 
 import { readPad, pressedSince, GLYPHS } from "../city/gamepad.js";
 import { stepCursor, stickStep } from "../city/padBrowse.js";
@@ -83,7 +89,7 @@ export const OSK_ROWS = [
   [..."QWERTYUIOP'"].map(k => [k, 1]),
   [..."ASDFGHJKL-@"].map(k => [k, 1]),
   [..."ZXCVBNM,./?"].map(k => [k, 1]),
-  [["SHIFT", 3], ["SPACE", 4], ["ENTER", 2], ["DONE", 2]],
+  [["SHIFT", 2], ["CAPS", 2], ["SPACE", 3], ["ENTER", 2], ["DONE", 2]],
 ];
 const centre = (row, i) => { let u = 0; for (let k = 0; k < i; k++) u += OSK_ROWS[row][k][1]; return u + OSK_ROWS[row][i][1] / 2; };
 // {r, c} one key over -> {r, c}: left / right wrap in the row, up / down land on the key nearest
@@ -98,15 +104,28 @@ export function oskMove(p, dir) {
 }
 // A key pressed on text t with the caret at `at` -> {t, at, shift, done, enter}.
 export function oskPress(s, key) {
-  const { t = "", at = t.length, shift = false } = s;
-  const put = (ch) => ({ t: t.slice(0, at) + ch + t.slice(at), at: at + ch.length, shift: false });
-  if (key === "⌫") return at > 0 ? { t: t.slice(0, at - 1) + t.slice(at), at: at - 1, shift } : { t, at, shift };
+  const { t = "", at = t.length, shift = false, caps = false } = s;
+  const put = (ch) => ({ t: t.slice(0, at) + ch + t.slice(at), at: at + ch.length, shift: false, caps });
+  if (key === "⌫") return at > 0 ? { t: t.slice(0, at - 1) + t.slice(at), at: at - 1, shift, caps } : { t, at, shift, caps };
   if (key === "SPACE") return put(" ");
-  if (key === "SHIFT") return { t, at, shift: !shift };
-  if (key === "DONE") return { t, at, shift, done: true };
-  if (key === "ENTER") return { t, at, shift, done: true, enter: true };
-  return put(shift || !t.trim() ? key : key.toLowerCase());   // capitalised at the start, like a phone
+  if (key === "SHIFT") return { t, at, shift: !shift, caps };
+  if (key === "CAPS") return { t, at, shift, caps: !caps };
+  if (key === "DONE") return { t, at, shift, caps, done: true };
+  if (key === "ENTER") return { t, at, shift, caps, done: true, enter: true };
+  return put(shift || caps || !t.trim() ? key : key.toLowerCase());   // capitalised at the start, like a phone; CAPS holds capitals
 }
+// a case-number field types capitals by itself: autocapitalize=characters, or a field named for the case, or the HVI-XXXXXXXX hint
+export const wantsUpper = (a = {}) => String(a.autocapitalize || "").toLowerCase() === "characters" || /case/i.test(`${a.label || ""} ${a.name || ""} ${a.id || ""}`) || /^[A-Z]{2,}-X{3,}/.test(String(a.placeholder || ""));
+// scrolling the focused control to the middle: its block, "start" for one taller than most of the screen
+export const scrollBlock = (rect, vh) => (rect.height > vh * 0.6 ? "start" : "center");
+// the hint strip lives at the bottom; where a control sits behind it, it hops to the top (unless it would cover it there too)
+export function hintSide(rect, vh, hintH = 34, margin = 8) {
+  if (!rect) return "bottom";
+  const atBottom = rect.bottom > vh - margin - hintH && rect.top < vh - margin, atTop = rect.top < margin + hintH && rect.bottom > margin;
+  return atBottom && !atTop ? "top" : "bottom";
+}
+// a <select> held by the pad: left / up one back, right / down one on, stopping at the ends
+export const selectStep = (i, n, dir) => (n <= 0 ? -1 : Math.max(0, Math.min(n - 1, i + (dir === "left" || dir === "up" ? -1 : dir === "right" || dir === "down" ? 1 : 0))));
 
 // ---- the page ----------------------------------------------------------------------------------
 const FOCUSABLE = "a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex='-1']),[role=button],[role=tab],[role=option],[role=menuitem],[role=link],[contenteditable=true]";
@@ -188,7 +207,7 @@ export function start() {
   const restack = () => { for (const d of els) if (!d.hidden && d.popover) { try { d.hidePopover(); d.showPopover(); } catch { /* fine */ } } };
 
   const P = { on: false, prev: null, last: 0, x: innerWidth / 2, y: innerHeight / 2, t: 0, emph: "cursor", src: "cursor", rep: { dir: null, t: 0 }, rep2: { dir: null, t: 0 }, rep3: { dir: null, t: 0 },
-    hover: null, hot: null, osk: null, grab: null, lt: 0, rt: 0, family: "generic", hops: 0, topM: null, targets: [], tAt: 0, hintKey: "", active: false };
+    hover: null, hot: null, osk: null, grab: null, sel: null, lt: 0, rt: 0, family: "generic", hops: 0, topM: null, targets: [], tAt: 0, hintKey: "", active: false };
   addEventListener("hashchange", () => { P.hops++; });
   const off = (e) => { if (!e.isTrusted || !P.on) return; if (e.type === "pointermove" && !(Math.abs(e.movementX) + Math.abs(e.movementY))) return; P.on = false; paint(); };
   addEventListener("pointermove", off, true); addEventListener("pointerdown", off, true); addEventListener("touchstart", off, { capture: true, passive: true });
@@ -215,7 +234,7 @@ export function start() {
     const now = performance.now();
     if (now - P.tAt > 300) {
       P.tAt = now;
-      P.targets = [...scopeEl().querySelectorAll(FOCUSABLE)].map(e => e.getBoundingClientRect()).filter(r => r.width > 0 && r.width < 320 && r.height < 160 && r.bottom > 0 && r.top < innerHeight);
+      P.targets = [...scopeEl().querySelectorAll(FOCUSABLE)].map(e => [e.getBoundingClientRect(), e.matches("[data-pad-row]")]).filter(([r, row]) => r.width > 0 && (row || r.width < 320) && r.height < 160 && r.bottom > 0 && r.top < innerHeight).map(([r]) => r);
     }
     let best = null, bd = 28;
     for (const r of P.targets) {
@@ -229,7 +248,7 @@ export function start() {
   function candidates() { return [...scopeEl().querySelectorAll(FOCUSABLE)].filter(seen); }
   function focusEl(el) {
     try { el.focus({ preventScroll: true }); } catch { /* not focusable */ }
-    el.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    el.scrollIntoView?.({ block: scrollBlock(el.getBoundingClientRect(), innerHeight), inline: "nearest" });
     const r = box(el);
     P.x = r.left + Math.min(r.width / 2, 24); P.y = r.top + r.height / 2;
     P.src = "focus"; P.t = 0;
@@ -259,9 +278,9 @@ export function start() {
     const f = el.closest?.(FOCUSABLE) || el;
     if (isText(f)) { focusEl(f); openOsk(f); return; }
     if (f.tagName === "SELECT") {
+      if (P.sel?.el === f) { P.sel = null; return; }   // A again: that is the choice
       focusEl(f);
-      const n = f.options.length;
-      if (n) { f.selectedIndex = (f.selectedIndex + 1) % n; f.dispatchEvent(new Event("input", { bubbles: true })); f.dispatchEvent(new Event("change", { bubbles: true })); }
+      P.sel = { el: f, orig: f.selectedIndex };
       return;
     }
     if (viaCursor) {
@@ -277,12 +296,16 @@ export function start() {
   const cellOf = () => (P.grab ? document.querySelector(`[data-wid="${CSS.escape(P.grab)}"]`) : null);
   function grab(cell) { P.grab = cell.dataset.wid; cell.dispatchEvent(new CustomEvent("hvi-pad-arrange", { detail: "grab", bubbles: true })); try { cell.focus({ preventScroll: true }); } catch { /* fine */ } }
   function grabDo(what) { const c = cellOf(); if (c) c.dispatchEvent(new CustomEvent("hvi-pad-arrange", { detail: what, bubbles: true })); if (what !== "grab") P.grab = null; }
+  function selectTo(i) {
+    const el = P.sel?.el; if (!el || i < 0 || i === el.selectedIndex) return;
+    el.selectedIndex = i; el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
   const ARROWS = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" };
 
   // ---- the keyboard
   let keyEls = [];
   function openOsk(input) {
-    P.osk = { input, r: 1, c: 0, shift: false };
+    P.osk = { input, r: 1, c: 0, shift: false, caps: wantsUpper({ autocapitalize: input.getAttribute("autocapitalize"), label: input.getAttribute("aria-label"), name: input.name, id: input.id, placeholder: input.placeholder }) };
     osk.innerHTML = `<div class="t"><span>KEYBOARD</span><span>${(input.getAttribute("aria-label") || input.placeholder || input.name || "").toUpperCase().slice(0, 40)}</span></div><div class="k"></div><div class="g"></div>`;
     const k = osk.querySelector(".k");
     keyEls = OSK_ROWS.map((row, r) => row.map(([label, w], c) => {
@@ -301,8 +324,8 @@ export function start() {
     const o = P.osk; if (!o) return;
     const el = o.input;
     let at = el.value.length; try { if (el.selectionStart != null) at = el.selectionStart; } catch { /* no caret */ }
-    const r = oskPress({ t: el.value, at, shift: o.shift }, label);
-    o.shift = r.shift;
+    const r = oskPress({ t: el.value, at, shift: o.shift, caps: o.caps }, label);
+    o.shift = r.shift; o.caps = r.caps;
     if (r.t !== el.value) {
       if (el.maxLength > 0 && r.t.length > el.maxLength) return;
       setValue(el, r.t, r.at);
@@ -313,9 +336,9 @@ export function start() {
   function closeOsk() { P.osk = null; show(osk, false); }
   function paintOsk() {
     const o = P.osk; if (!o) return;
-    keyEls.forEach((row, r) => row.forEach((b, c) => { b.classList.toggle("on", r === o.r && c === o.c); if (OSK_ROWS[r][c][0] === "SHIFT") b.classList.toggle("sh", o.shift); }));
+    keyEls.forEach((row, r) => row.forEach((b, c) => { b.classList.toggle("on", r === o.r && c === o.c); if (OSK_ROWS[r][c][0] === "SHIFT") b.classList.toggle("sh", o.shift); if (OSK_ROWS[r][c][0] === "CAPS") b.classList.toggle("sh", o.caps); }));
     const g = GLYPHS[P.family] || GLYPHS.generic;
-    osk.querySelector(".g").textContent = `${g.act} TYPE · ${g.find} DELETE · ${g.labels} SPACE · ${g.turnL} SHIFT · ${g.start} DONE · ${g.back} CLOSE`;
+    osk.querySelector(".g").textContent = `${g.act} TYPE · ${g.find} DELETE · ${g.labels} SPACE · ${g.turnL} SHIFT/CAPS · ${g.start} DONE · ${g.back} CLOSE`;
   }
 
   // ---- B
@@ -392,12 +415,16 @@ export function start() {
       const g = GLYPHS[P.family] || GLYPHS.generic;
       const y = [...scopeEl().querySelectorAll("[data-pad-y]")].find(seen);
       const yl = y ? (y.getAttribute("data-pad-y") || y.textContent || "").trim().toUpperCase().slice(0, 18) : "";
-      const parts = P.grab ? [[g.lstick, "MOVE"], [`${g.zoomOut}/${g.zoomIn}`, "SIZE"], [g.act, "DROP"], [g.back, "CANCEL"]]
+      const parts = P.sel ? [[g.lstick, "CHOOSE"], [g.act, "OK"], [g.back, "CANCEL"]] : P.grab ? [[g.lstick, "MOVE"], [`${g.zoomOut}/${g.zoomIn}`, "SIZE"], [g.act, "DROP"], [g.back, "CANCEL"]]
         : [[g.act, "SELECT"], ...(P.noBack ? [] : [[g.back, "BACK"]]), ...(yl ? [[g.labels, yl]] : []), [g.start, "MENU"], [g.select, P.emph === "cursor" ? "FOCUS" : "CURSOR"]];
       hk = `<span class="pad">PAD</span>` + parts.map(([b, t]) => `<span><b>${b}</b>${t}</span>`).join("");
     }
     if (hk !== P.hintKey) { P.hintKey = hk; hint.innerHTML = hk; }
     show(hint, Boolean(hk));
+    if (hk) {   // the strip hops to the top when the focused control sits behind it
+      const f = P.grab ? cellOf() : focused(), top = hintSide(f ? box(f) : null, innerHeight) === "top";
+      hint.style.top = top ? "8px" : "auto"; hint.style.bottom = top ? "auto" : "8px";
+    }
   }
 
   // ---- the loop
@@ -408,7 +435,7 @@ export function start() {
     const dt = P.last ? Math.min(0.1, (now - P.last) / 1000) : 0;
     P.last = now;
     if (!pad.connected) {
-      if (P.on) { P.on = false; P.osk = null; P.grab = null; paint(); }
+      if (P.on) { P.on = false; P.osk = null; P.grab = null; P.sel = null; paint(); }
       cancelAnimationFrame(raf); raf = 0; P.prev = null; P.last = 0;
       return;
     }
@@ -419,7 +446,7 @@ export function start() {
     const ms = modals(), top = ms[ms.length - 1] || null;
     const own = ownerOf({ route: location.hash, owns: [...document.querySelectorAll("[data-pad-own]")].filter(seen).map(e => e.getAttribute("data-pad-own") || "own"), modal: Boolean(top) });
     P.noBack = own.noBack;
-    if (!own.active) { if (P.active) { P.active = false; P.osk = null; if (P.grab) grabDo("cancel"); paint(false); } return; }
+    if (!own.active) { if (P.active) { P.active = false; P.osk = null; P.sel = null; if (P.grab) grabDo("cancel"); paint(false); } return; }
     P.active = true;
     if (top !== P.topM) { P.topM = top; restack(); }
     const busy = Object.values(pp).some(Boolean) || pad.lmag > 0 || pad.rmag > 0 || pad.lt > 0.05 || pad.rt > 0.05;
@@ -432,7 +459,7 @@ export function start() {
     // directions: the d-pad, the right stick, and (in the keyboard and a held window) the left stick
     const d1 = stickStep(P.rep, pad.dx, pad.dy, dt); P.rep = d1.rep;
     const d2 = stickStep(P.rep2, pad.rx, pad.ry, dt); P.rep2 = d2.rep;
-    const modal = P.osk || P.grab;
+    const modal = P.osk || P.grab || P.sel;
     const d3 = modal ? stickStep(P.rep3, pad.lx, pad.ly, dt) : { rep: { dir: null, t: 0 }, dir: null }; P.rep3 = d3.rep;
     const dir = d1.dir || d2.dir || d3.dir;
 
@@ -443,9 +470,18 @@ export function start() {
       if (pp.act) press(OSK_ROWS[o.r][o.c][0]);
       else if (pp.find) press("⌫");
       else if (pp.labels) press("SPACE");
-      else if (pp.turnL || pp.turnR) press("SHIFT");
+      else if (pp.turnL) press("SHIFT");
+      else if (pp.turnR) press("CAPS");
       else if (pp.start) press("DONE");
       else if (pp.back) back();
+      paint(); return;
+    }
+    if (P.sel) {
+      const el = P.sel.el;
+      if (!document.contains(el) || el.disabled) { P.sel = null; paint(); return; }
+      if (dir) selectTo(selectStep(el.selectedIndex, el.options.length, dir));
+      if (pp.act) P.sel = null;
+      else if (pp.back) { selectTo(P.sel.orig); P.sel = null; }
       paint(); return;
     }
     if (P.grab) {

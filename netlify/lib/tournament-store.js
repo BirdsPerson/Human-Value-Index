@@ -88,7 +88,7 @@ export function rowsOf(board, ev) {
     if (!pick) continue;
     const a = pick.a, legs = a.legs;
     const tb = legs.length === 1 ? legs[0].tb || [] : [Math.min(...legs.map(l => (l.tb || [0])[0])), legs.reduce((s, l) => s + ((l.tb || [])[1] || 0), 0)];
-    rows.push({ k: e.k, holder: e.holder, div: e.div, total: pick.total, par: legs.reduce((s, l) => (l.par == null ? s : (s ?? 0) + l.par), null), tb, legs: legs.length, of: ev.legs, done: a.done, doneAt: a.doneAt || null, detail: legs.length === 1 ? legs[0].detail : legs.map(l => l.total) });
+    rows.push({ k: e.k, n: a.n, holder: e.holder, div: e.div, total: pick.total, par: legs.reduce((s, l) => (l.par == null ? s : (s ?? 0) + l.par), null), tb, legs: legs.length, of: ev.legs, done: a.done, doneAt: a.doneAt || null, detail: legs.length === 1 ? legs[0].detail : legs.map(l => l.total) });
   }
   return rows;
 }
@@ -150,8 +150,24 @@ export function scrubBoard(board, k) {
   for (const a of b.final?.awards || []) if (a.k === k) { a.holder = PURGED; a.cid = null; }
   return b;
 }
+// A golf card's verified input log, kept so THE SET's tournament channel can replay the leaders
+// (src/front/TourneyChannel.jsx): l:<event>:<k>:<attempt> -> {v, hand, inputLog}. Served only through
+// the leader's place (tournament.js ?log=1), never by key or case number; the purge deletes it.
+export const MAX_LOG_BYTES = 300_000;
+export const logKey = (id, k, n) => `l:${id}:${k}:${n}`;
+export async function putLog(id, k, n, rec) {
+  const body = JSON.stringify(rec);
+  if (body.length > MAX_LOG_BYTES) return false;
+  await ts().set(logKey(id, k, n), body);
+  return true;
+}
+export const getLog = async (id, k, n) => (await ts().get(logKey(id, k, n), { type: "json" })) || null;
 export async function deleteTournaments(caseId) {
   const rec = await getRecord(caseId), k = holderKey(caseId);
+  for (const id of rec?.ids || []) {
+    const e = (await readBoard(id).catch(() => null))?.entries?.[k];
+    for (const a of e?.att || []) await ts().delete(logKey(id, k, a.n)).catch(() => {});
+  }
   for (const id of rec?.ids || []) await updateBoard(id, (b) => { const s = scrubBoard(b, k); return s ? { data: s } : { out: null }; });
   await ts().delete(`c:${caseId}`);
 }

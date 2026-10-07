@@ -47,6 +47,7 @@ export const WIDGETS = [
   { id: "set", name: "THE SET", note: "A LITTLE TELEVISION. SIX CHANNELS, ALL LOCAL" },
   { id: "paper", name: "TODAY'S PAPER", note: "THE DAILY COMPLIANCE'S FRONT PAGE" },
   { id: "cups", name: "TOURNAMENTS", note: "WHAT IS OPEN NOW, AND WHO LEADS" },
+  { id: "board", name: "LEADERBOARD", note: "WHO LEADS THE TOURNAMENT ON NOW, OR THE LAST ONE FINISHED" },
   { id: "league", name: "LEAGUE TABLE", note: "THE DEPARTMENTAL CUP, TOP FIVE" },
 ];
 export const DEFAULT_WIDGETS = ["market", "wire", "watch", "set", "notice"];

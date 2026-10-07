@@ -5,7 +5,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { transformSync } from "esbuild";
-import { ownerOf, pickNeighbour, backAction, oskMove, oskPress, OSK_ROWS } from "../src/ui/padLayer.js";
+import { ownerOf, pickNeighbour, backAction, oskMove, oskPress, OSK_ROWS, wantsUpper, scrollBlock, hintSide, selectStep } from "../src/ui/padLayer.js";
 
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.error("FAIL " + m); } };
@@ -72,6 +72,32 @@ ok(JSON.stringify(oskMove({ r: 1, c: 10 }, "right")) === JSON.stringify({ r: 1, 
 const sp = oskMove({ r: 3, c: 5 }, "down");
 ok(OSK_ROWS[sp.r][sp.c][0] === "SPACE", `down from N lands on SPACE (${OSK_ROWS[sp.r][sp.c][0]})`);
 ok(oskMove({ r: 0, c: 0 }, "up").r === OSK_ROWS.length - 1, "up wraps to the bottom row");
+
+// 4b. the front 3 fixes (Scott, 2026-10-06)
+// the case-number field types capitals by itself; any field can hold CAPS; SHIFT stays one letter
+ok(wantsUpper({ autocapitalize: "characters" }) && wantsUpper({ label: "Case number" }) && wantsUpper({ placeholder: "HVI-XXXXXXXX" }), "case-number fields want capitals");
+ok(!wantsUpper({ autocapitalize: "off", label: "Search the figures", placeholder: "a name on record" }) && !wantsUpper({}), "other fields do not");
+s = { t: "", at: 0, caps: true };
+for (const k of ["H", "V", "I", "-", "7", "Q"]) s = oskPress(s, k);
+ok(s.t === "HVI-7Q" && s.caps, `caps: letters stay capitals, not just the first (${s.t})`);
+s = oskPress({ t: "ab", at: 2 }, "CAPS"); ok(s.caps === true, "CAPS turns capitals on");
+s = oskPress(s, "C"); ok(s.t === "abC", "capital C with caps on");
+s = oskPress(oskPress({ t: "ab", at: 2, caps: true }, "CAPS"), "d"); ok(s.t === "abd" && !s.caps, "CAPS toggles off again");
+ok(oskPress({ t: "ab", at: 2, caps: true }, "SHIFT").caps === true, "SHIFT leaves CAPS alone");
+ok(OSK_ROWS[4].some(([k]) => k === "CAPS") && OSK_ROWS[4].some(([k]) => k === "SHIFT"), "the keyboard has SHIFT and CAPS");
+// A on a <select> picks it up; the stick steps through the options, stopping at the ends
+ok([selectStep(0, 4, "right"), selectStep(3, 4, "right"), selectStep(0, 4, "left"), selectStep(2, 4, "up"), selectStep(1, 4, "down"), selectStep(0, 0, "right")].join() === "1,3,0,1,2,-1", "a held select steps and stops at the ends");
+// the focused control goes to the middle of the screen; a tall one to its top
+ok(scrollBlock({ height: 40 }, 800) === "center" && scrollBlock({ height: 600 }, 800) === "start", "scroll to the centre, a tall control to its start");
+// the hint strip hops to the top when it would cover the focused control
+ok(hintSide({ top: 780, bottom: 810 }, 820) === "top", "a control at the bottom edge: the strip goes to the top");
+ok(hintSide({ top: 300, bottom: 340 }, 820) === "bottom" && hintSide(null, 820) === "bottom", "otherwise it stays at the bottom");
+ok(hintSide({ top: 0, bottom: 820 }, 820) === "bottom", "a control behind both ends: stays put");
+const padSrc = readFileSync(new URL("../src/ui/padLayer.js", import.meta.url), "utf8");
+ok(/scrollIntoView\?\.\(\{ block: scrollBlock/.test(padSrc), "focus scrolls to the centre");
+ok(/P\.sel = \{ el: f/.test(padSrc) && !/selectedIndex \+ 1\) % n/.test(padSrc), "A on a select picks it up instead of cycling it blind");
+ok(/hint\.style\.top/.test(padSrc) && /hintSide\(/.test(padSrc), "the hint strip moves");
+ok(/\[data-pad-row\]/.test(padSrc) && /data-pad-row/.test(readFileSync(new URL("../src/market/Market.jsx", import.meta.url), "utf8")), "the market MOVERS rows are list rows the layer holds on to");
 
 // 5. the entry script carries only the doorbell
 const hook = readFileSync(new URL("../src/ui/padHook.js", import.meta.url), "utf8");

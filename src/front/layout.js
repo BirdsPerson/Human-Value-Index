@@ -6,7 +6,12 @@
 //            A widget lists the sizes it has a prepared layout for (SIZES_OF); each size is its own
 //            version in the widget's VIEWS_<id> table, never one layout stretched.
 //   COLUMNS  4 on a wide desk, 3 mid, 2 on a phone (colsFor); rows are automatic, packing is dense.
-//   LAYOUT   [{ id, size, order }] kept on this device (hvi-layout). The old hvi-widgets id list
+//   ZONES    two on a wide desk (Scott, 2026-10-06): the RAIL beside the logon panel (1-2 columns, S and T
+//            windows only) and the MAIN grid under it. An item's `zone` ("rail" | "main") is saved only
+//            once it has been put somewhere; before that S and T sit in the rail and the rest in main
+//            (zoneOf). A phone merges the rail into the one column. Dragging a window's corner snaps to
+//            the nearest prepared size (snapSize); a window made bigger than the rail graduates to main.
+//   LAYOUT   [{ id, size, order, zone? }] kept on this device (hvi-layout). The old hvi-widgets id list
 //            migrates into it once.
 import { WIDGETS, DEFAULT_WIDGETS, loadWidgets, get, put } from "./prefs.js";
 
@@ -16,13 +21,41 @@ export const SIZE_ORDER = ["S", "M", "T", "L", "W"];   // what + and - walk thro
 export const SIZES_OF = {
   market: ["S", "M", "T", "L", "W"], wire: ["S", "M", "L", "W"], cam: ["S", "M", "T", "L"], notice: ["S", "M"],
   file: ["S", "M", "L"], flat: ["S", "M", "L"], watch: ["S", "M", "L", "W"], set: ["S", "M", "L"],
-  paper: ["S", "M", "L"], cups: ["S", "M", "L"], league: ["S", "M", "L"],
+  paper: ["S", "M", "L"], cups: ["S", "M", "L"], league: ["S", "M", "L"], board: ["S", "M", "T", "L", "W"],
 };
 export const DEFAULT_SIZE = { market: "M", wire: "W", watch: "L", set: "M", notice: "S" };
 export const sizeOf = (id) => DEFAULT_SIZE[id] || "M";
 export const DEFAULT_LAYOUT = DEFAULT_WIDGETS.map((id, order) => ({ id, size: sizeOf(id), order }));
 const KNOWN = new Set(WIDGETS.map(w => w.id));
 const nameOf = (id) => WIDGETS.find(w => w.id === id)?.name || id;
+
+// ---- the two zones ----------------------------------------------------------------------------------
+export const RAIL_SIZES = ["S", "T"];
+export const zoneOf = (it) => (it.zone === "rail" || it.zone === "main" ? it.zone : RAIL_SIZES.includes(it.size) ? "rail" : "main");
+// a size that fits the rail: S and T stay; M and L become the T (or the S) the widget has, W an S
+export function fitRail(id, size) {
+  if (RAIL_SIZES.includes(size)) return size;
+  const has = SIZES_OF[id] || [];
+  return size === "L" && has.includes("T") ? "T" : has.includes("S") ? "S" : has.includes("T") ? "T" : size;
+}
+export const railCols = (px) => (px >= 330 ? 2 : 1);
+export const railBeside = (px) => px >= 900;   // beside the panel from here; merged into the one column below
+
+const spansFor = (k, cols) => { const [w, h] = SIZE[k]; return [Math.min(w, cols), h]; };
+// a drag's size: from the cells the pointer has covered (w across, h down) to the nearest prepared size the
+// widget has. cols: the grid's columns; zone "rail" only offers S and T. Ties go to the smaller.
+export function snapSize(id, w, h, cols, zone = "main") {
+  let has = (SIZES_OF[id] || []).filter(k => !(k === "W" && cols < 3) && (zone !== "rail" || RAIL_SIZES.includes(k)));
+  if (!has.length) has = SIZES_OF[id] || ["M"];
+  let best = has[0], bd = Infinity;
+  for (const k of has) {
+    const [sw, sh] = spansFor(k, cols), d = (sw - w) ** 2 + (sh - h) ** 2 + (SIZE[k][0] * SIZE[k][1]) / 1000;
+    if (d < bd - 1e-9) { bd = d; best = k; }
+  }
+  return best;
+}
+// pointer travel from the window's top-left to whole cells: m = {col, row, gap} (a cell's width and height, the gap)
+export const cellsAt = (dx, dy, m, cols) => ({ w: Math.max(1, Math.min(cols, Math.round((dx + m.gap) / (m.col + m.gap)))), h: Math.max(1, Math.min(4, Math.round((dy + m.gap) / (m.row + m.gap)))) });
 
 export const colsFor = (px) => (px >= 700 ? 4 : px >= 480 ? 3 : 2);
 // W is the whole row on a wide desk; a phone's two columns get a M
@@ -36,7 +69,8 @@ export function normalize(list) {
     if (!x || !KNOWN.has(x.id) || seen.has(x.id)) continue;
     seen.add(x.id);
     const ok = SIZES_OF[x.id]?.includes(x.size);
-    out.push({ id: x.id, size: ok ? x.size : sizeOf(x.id) });
+    const size = ok ? x.size : sizeOf(x.id);
+    out.push({ id: x.id, size, ...(x.zone === "main" || (x.zone === "rail" && RAIL_SIZES.includes(size)) ? { zone: x.zone } : null) });   // a rail holds only S and T
   }
   return out.map((x, order) => ({ ...x, order }));
 }
@@ -59,7 +93,20 @@ export function moveTo(l, id, to) {
   n.splice(Math.max(0, Math.min(n.length, to)), 0, it);
   return normalize(n.map((x, order) => ({ ...x, order })));   // normalize sorts by `order`: renumber first
 }
-export const resize = (l, id, size) => normalize(l.map(x => (x.id === id && SIZES_OF[id]?.includes(size) ? { ...x, size } : x)));
+// a window in the rail made bigger than the rail graduates to the main grid
+export const resize = (l, id, size) => normalize(l.map(x => (x.id === id && SIZES_OF[id]?.includes(size) ? { ...x, size, ...(zoneOf(x) === "rail" && !RAIL_SIZES.includes(size) ? { zone: "main" } : null) } : x)));
+// put a window in a zone (a drag, or the keys crossing the edge): into the rail it snaps to a size that fits.
+// `before`: the id it goes in front of, else the zone's end
+export function toZone(l, id, zone, before = null) {
+  const it = l.find(x => x.id === id);
+  if (!it) return l;
+  const moved = { ...it, zone, size: zone === "rail" ? fitRail(id, it.size) : it.size };
+  const rest = l.filter(x => x.id !== id);
+  let at = before ? rest.findIndex(x => x.id === before) : -1;
+  if (at < 0) { const last = rest.map(zoneOf).lastIndexOf(zone); at = last < 0 ? (zone === "rail" ? 0 : rest.length) : last + 1; }
+  const n = rest.slice(); n.splice(at, 0, moved);
+  return normalize(n.map((x, order) => ({ ...x, order })));
+}
 export function step(l, id, dir) {
   const it = l.find(x => x.id === id);
   if (!it) return l;
@@ -76,10 +123,17 @@ export const fromIds = (l, ids) => normalize(ids.map((id, order) => ({ ...(l.fin
 export function keyAction(l, id, key) {
   const i = l.findIndex(x => x.id === id), name = nameOf(id);
   if (i < 0) return null;
+  // arrows walk the window through its zone; past the end of the rail it crosses into main, past the start
+  // of main it crosses into the rail (and fits it)
   const move = (k) => {
-    const j = i + k;
-    if (j < 0 || j >= l.length) return { layout: l, say: `${name} IS ALREADY ${k < 0 ? "FIRST" : "LAST"}.` };
-    return { layout: moveTo(l, id, j), say: `${name} MOVED TO ${j + 1} OF ${l.length}.` };
+    const z = zoneOf(l[i]), mine = l.filter(x => zoneOf(x) === z), at = mine.findIndex(x => x.id === id), nb = mine[at + k];
+    if (nb) { const j = l.findIndex(x => x.id === nb.id); return { layout: moveTo(l, id, j), say: `${name} MOVED TO ${j + 1} OF ${l.length}.` }; }
+    if (z === "rail" && k > 0 && l.some(x => zoneOf(x) === "main")) return { layout: toZone(l, id, "main", l.find(x => zoneOf(x) === "main").id), say: `${name} MOVED DOWN INTO THE MAIN GRID.` };
+    if (z === "main" && k < 0) {
+      const n = toZone(l, id, "rail"), s = n.find(x => x.id === id).size;
+      return { layout: n, say: `${name} MOVED INTO THE RAIL BESIDE THE PANEL, NOW ${SIZE_NAME[s]}.` };
+    }
+    return { layout: l, say: `${name} IS ALREADY ${k < 0 ? "FIRST" : "LAST"}.` };
   };
   const grow = (k) => {
     const n = step(l, id, k), s = n.find(x => x.id === id).size;

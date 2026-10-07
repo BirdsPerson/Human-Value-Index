@@ -5,22 +5,25 @@
 //   2  SNN, the Substrate News Network: an anchor desk reading THE DAILY COMPLIANCE's own
 //      headlines ("GOOD EVENING. <headline>."). Anchors are figures on file who have DIED and
 //      carry no harm finding; a living person never speaks here. No quotes, no real-world news.
+//   3  THE TOURNAMENT: while a golf tournament is open, its leaders' verified cards re-played on the real
+//      renderer with a score bug and the leaderboard; between events the last champion's round (TourneyChannel.jsx)
 //   4  SPORTS: the leagues' latest results, the Cup's top three, the open tournaments
 //   6  MARKETS: the index and the day's risers and fallers, with the because
 //   8  WEATHER: the city clock and the paper's weather (the city has no other)
 //   9  EBTV: the live frame every TV in the city shows, with the real channel bug; tap to watch
 //   11 SURVEILLANCE: the desk's surveillance feed (Surveillance.jsx)
 // Reduced motion: no static, no flicker, AUTO starts off.
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Frame } from "../ui/index.js";
 import { FAMOUS_FIGURES, slugify } from "../figures.js";
 import { paperNow, cupsNow, openCups, getOnce } from "./Smalls.jsx";
 import Surveillance from "./Surveillance.jsx";
 
+const TourneyChannel = lazy(() => import("./TourneyChannel.jsx"));
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
 export const SURF_MS = 10_000, STATIC_MS = 380;
 export const CHANNELS = [
-  { n: 2, id: "snn", name: "SNN" }, { n: 4, id: "sports", name: "SPORTS" }, { n: 6, id: "markets", name: "MARKETS" },
+  { n: 2, id: "snn", name: "SNN" }, { n: 3, id: "tour", name: "THE TOURNAMENT" }, { n: 4, id: "sports", name: "SPORTS" }, { n: 6, id: "markets", name: "MARKETS" },
   { n: 8, id: "weather", name: "WEATHER" }, { n: 9, id: "ebtv", name: "EBTV" }, { n: 11, id: "watch", name: "SURVEILLANCE" },
 ];
 // SNN's anchors: dead, no harm finding. The desk rotates daily; the pair reads in turn.
@@ -203,7 +206,7 @@ export default function TheSet({ size = "M" }) {
     return () => clearTimeout(t);
   });   // eslint-disable-line react-hooks/exhaustive-deps
   // the small remote never loads a channel: nothing is fetched for a picture nobody sees
-  const body = size === "S" ? null : { snn: <Snn day={day} />, sports: <Sports />, markets: <Markets />, weather: <Weather />, ebtv: <Ebtv />, watch: <Surveillance embedded /> }[ch.id];
+  const body = size === "S" ? null : { snn: <Snn day={day} />, tour: <Suspense fallback={<NoSignal />}><TourneyChannel /></Suspense>, sports: <Sports />, markets: <Markets />, weather: <Weather />, ebtv: <Ebtv />, watch: <Surveillance embedded /> }[ch.id];
   const V = VIEWS_set[size] || VIEWS_set.M;
   return (
     <Frame title="THE SET" meta={`CH ${ch.n} // ${ch.name}`} tone="var(--eb-amber)" className={`fr-set v-${size}`}>

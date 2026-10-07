@@ -4,6 +4,9 @@
 //   GET                          the calendar around now: every event open, upcoming (a week) and just
 //                                closed (three days), each with its leaders by division
 //   GET  ?id=<event>             one event and its boards (projected while open, final after)
+//   GET  ?id=<event>&log=1&div=open|assisted&pos=<n>
+//                                a golf leader's verified card for THE SET's tournament channel: {cfg, v, inputLog,
+//                                holder, total, par, pos}. Read-only, by place; no case id or key is ever served
 //   GET  ?caseId=                the file's own: its events, places and honours
 //   POST {caseId, action: "enter", id, div}
 //                                an entry permit for the file's official attempt (the same permit again
@@ -24,7 +27,7 @@ import { holderName, isDiv, golfCfg, bowlCfg, fishCfg } from "../../src/tourname
 import { adapterOf } from "../lib/tournament-verify.js";
 import {
   signPermit, readPermit, enter, fileLeg, legStart, standings, publicStandings, placeOf, readBoard, updateBoard,
-  getRecord, noteEntered, holderKey, Busy, PERMIT_TTL_MS,
+  getRecord, noteEntered, holderKey, Busy, PERMIT_TTL_MS, putLog, getLog,
 } from "../lib/tournament-store.js";
 
 export const ACTIONS = ["enter", "submit"];
@@ -44,6 +47,19 @@ export async function calendarView(nowMs) {
     const s = publicStandings(standings(boards.get(e.id), e, nowMs), 5);
     return { ...p, entrants: s.entrants, final: s.final, leaders: s.divisions };
   });
+}
+
+// A golf leader's card, by place (never by key): the event's own cfg and the stored log, so the browser can
+// re-play it on the pure sim. {none: true} when the game keeps no log, the place is empty or the card
+// pre-dates the log.
+export async function leaderLog(ev, s, div, pos) {
+  const d = isDiv(div) ? div : "open", i = Math.max(1, Math.min(10, Number(pos) || 1)) - 1;
+  const row = ev.game === "golf" ? (s.divisions[d] || [])[i] : null;
+  if (!row || row.n == null) return { none: true };
+  const rec = await getLog(ev.id, row.k, row.n).catch(() => null);
+  if (!rec || !Array.isArray(rec.inputLog)) return { none: true };
+  const hand = rec.hand === "L" ? "L" : "R";
+  return { cfg: { ...golfCfg(ev, d, { name: row.holder }, { hand }), v: rec.v || 3 }, v: rec.v || 3, inputLog: rec.inputLog, holder: row.holder, total: row.total, par: row.par, pos: i + 1, div: d, done: Boolean(row.done) };
 }
 
 export default async (req, context) => {
@@ -66,6 +82,7 @@ export default async (req, context) => {
         const ev = ID_RE.test(id) ? eventById(id) : null;
         if (!ev) return json(404, { error: "NO SUCH EVENT ON THE CALENDAR." });
         const s = standings(await readBoard(ev.id), ev, now);
+        if (url.searchParams.get("log")) return json(200, await leaderLog(ev, s, url.searchParams.get("div"), url.searchParams.get("pos")), { "Cache-Control": "public, max-age=60" });
         return json(200, { now, event: pubEvent(ev, now), board: publicStandings(s, 100) }, { "Cache-Control": "public, max-age=15" });
       }
       if (!cq) return json(200, { now, events: await calendarView(now) }, { "Cache-Control": "public, max-age=30" });
@@ -143,6 +160,7 @@ export default async (req, context) => {
       out = await updateBoard(sev.id, (b) => { const r = fileLeg(b, sev, { k, n: p.n, leg, result: v.leg, nowMs: now }); return r.error ? { out: r } : { data: r.board, out: r }; });
     } catch (e) { if (e instanceof Busy) return json(409, { error: "The scorers are filing another card. Try again." }); throw e; }
     if (out.out.error) return json(out.out.status, { error: out.out.error }, noStore);
+    if (sev.game === "golf") await putLog(sev.id, k, p.n, { v: Number(body.v) || 3, hand: body.opts?.hand === "L" ? "L" : "R", inputLog: body.inputLog }).catch(() => {});
     const s = standings(out.data, sev, now), place = placeOf(s, k);
     return json(200, { filed: { leg, total: v.leg.total, par: v.leg.par ?? null, ticks: v.leg.ticks }, done: Boolean(out.out.entry.att.find(a => a.n === p.n)?.done), standing: place ? { pos: place.pos, of: place.of, div: place.div, total: place.row.total, par: place.row.par, legs: place.row.legs, done: place.row.done } : null, final: s.final }, noStore);
   } catch (err) {

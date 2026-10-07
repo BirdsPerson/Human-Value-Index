@@ -1,7 +1,18 @@
 /* THE FRONT PAGE's small windows (src/front/FrontDesk.jsx). DEPARTMENT OS: windows, teletext
    sub-bands, plain readable lines. Nothing scrolls sideways; nothing moves under reduced motion. */
 .hvi-desk-side > * + * { margin-top: var(--s5); }
-.hvi-desk-side > .fr-grid + * { margin-top: var(--s4); }
+.fr-deskwrap > * + * { margin-top: var(--s5); }
+.fr-deskwrap > .fr-grid + * { margin-top: var(--s4); }
+.fr-deskwrap > .fr-main:empty { display: none; }
+/* wide: the rail is the logon panel's neighbour (one row), the bar, the main grid and the desk's own line span both columns */
+@media (min-width: 900px) {
+  .fr-deskwrap > * { grid-column: 1 / -1; margin-top: 0; }
+  .fr-deskwrap > .fr-rail { grid-column: 2; grid-row: 1; align-self: start; padding-top: 0; }
+  .fr-deskwrap > .fr-bar, .fr-deskwrap > .fr-main, .fr-deskwrap > .fr-arrange, .fr-deskwrap > .fr-clear { margin-top: var(--s4); }
+  .hvi-desk > .fr-deskwrap > .fr-rail ~ * { margin-top: var(--s4); }
+}
+.fr-rail.arr { min-height: 120px; border: 2px dashed var(--line-hi); padding: var(--s2); box-sizing: border-box; }
+.fr-rail-hint { grid-column: 1 / -1; margin: 0; align-self: center; text-align: center; color: var(--fg-dim); font-size: var(--t-xs); letter-spacing: 0.06em; }
 
 /* MARKET.TKR: risers and fallers */
 .fr-tkr .fr-h { margin: 0 0 2px; padding: 1px var(--s2); font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.06em; }
@@ -306,7 +317,7 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
 .fr-cell.held { opacity: 0.4; }
 .fr-ed { position: absolute; left: 0; top: 0; right: 8px; bottom: 8px; pointer-events: none; outline: 2px dashed var(--accent); outline-offset: 3px; }
 .fr-ed-top { position: absolute; left: 4px; right: 4px; top: 20px; display: flex; justify-content: space-between; align-items: center; }
-.fr-ed-sz { position: absolute; left: 4px; right: 4px; bottom: 4px; display: flex; flex-wrap: wrap; gap: 3px; }
+.fr-ed-sz { position: absolute; left: 4px; right: 28px; bottom: 4px; display: flex; flex-wrap: wrap; gap: 3px; }
 .fr-grip, .fr-ed button { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; font: inherit; font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.04em; color: var(--fg); background: var(--panel-hi); border: 2px solid; border-color: var(--fg-dim) var(--shadow) var(--shadow) var(--fg-dim); cursor: pointer; }
 .fr-grip { padding: 0 8px; cursor: grab; touch-action: none; }
 .fr-ed button { min-width: 30px; padding: 0 4px; }
@@ -321,3 +332,43 @@ html.fr-dragging, html.fr-dragging * { cursor: grabbing !important; user-select:
 .fr-tkr.v-L .fr-movers a { padding: 1px 0; min-height: 0; }
 .fr-tkr.v-L .fr-h.dn { margin-top: var(--s2); }
 .fr-wire.v-M .fr-line { min-height: 0; }
+
+/* the resize grip, Win98 style: diagonal ridges in the bottom-right corner; and the outline of the size it will snap to */
+.fr-rz { position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; pointer-events: auto; cursor: nwse-resize; touch-action: none; box-sizing: border-box;
+  border: 2px solid; border-color: var(--fg-dim) var(--shadow) var(--shadow) var(--fg-dim);
+  background: linear-gradient(135deg, transparent 0 46%, var(--fg) 46% 52%, transparent 52% 62%, var(--fg) 62% 68%, transparent 68% 78%, var(--fg) 78% 84%, transparent 84%), var(--panel-hi); }
+.fr-rz:hover { background-color: var(--accent); }
+.fr-rz-prev { position: absolute; left: 0; top: 0; z-index: 5; box-sizing: border-box; border: 3px dashed var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); pointer-events: none; display: flex; align-items: flex-end; justify-content: flex-start; }
+.fr-rz-prev span { margin: 4px; padding: 1px 6px; background: var(--accent); color: var(--accent-ink); font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.06em; }
+html.fr-dragging .fr-rz { cursor: nwse-resize; }
+
+/* LEADERBOARD */
+.fr-lb { list-style: none; margin: 0; padding: 0; font-size: var(--t-s); }
+.fr-lb li { display: flex; gap: 1ch; align-items: baseline; padding: 3px 0; border-bottom: 1px dotted var(--line); min-height: 1.6em; }
+.fr-lb .pos { flex: none; min-width: 2.2ch; text-align: right; color: var(--fg-mute); }
+.fr-lb .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.fr-lb .sc { flex: none; font-weight: 700; text-align: right; }
+.fr-lb .sc i { font-style: normal; font-weight: 400; color: var(--fg-mute); font-size: var(--t-xs); }
+.fr-lb li.lead .n, .fr-lb li.lead .pos { color: var(--accent); font-weight: 700; }
+.fr-lb .ar { flex: none; font-size: var(--t-xs); }
+.fr-lb .ar.up { color: var(--accent); } .fr-lb .ar.dn { color: var(--harm); } .fr-lb .ar.flat, .fr-lb .ar.new { color: var(--fg-mute); }
+.fr-lb.big li { font-size: var(--t-m, 1.1em); padding: var(--s2) 0; }
+.fr-lb-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
+.fr-lb-cols .fr-h { margin: 0 0 2px; padding: 1px var(--s2); background: var(--accent); color: var(--accent-ink); font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.06em; }
+.fr-board .fr-ww-ctl { margin-top: var(--s2); }
+.fr-board.v-T .fr-lb li { font-size: var(--t-xs); }
+
+/* THE SET, CH 3: the tournament (a golf card on the game's own 320x224 canvas, scaled; the bug and the board over it) */
+.tv-tour { position: absolute; inset: 0; background: #050807; }
+.tv-tour canvas { position: absolute; left: 0; top: 0; width: 100%; height: calc(100% - 20px); object-fit: contain; image-rendering: pixelated; display: block; }
+.tv-tour-card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 12px 98px 12px 12px; color: #c8d0c8; font-size: 10px; }
+.tv-tour-card .big { font-family: var(--tall); font-size: 22px; color: #fff; margin: 0 0 4px; }
+.tv-tour .tag { position: absolute; left: 0; top: 0; max-width: 62%; background: #0a6a2a; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.06em; padding: 1px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-tour .bug { position: absolute; left: 0; right: 0; bottom: 0; height: 20px; box-sizing: border-box; background: #08183a; color: #fff; font-size: 10px; line-height: 16px; font-weight: 700; padding: 2px 8px; border-left: 4px solid #ffd75e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.04em; }
+.tv-tour .bug b { color: #ffd75e; margin-right: 1ch; }
+.tv-tour .lb { position: absolute; right: 0; bottom: 22px; width: 92px; margin: 0; padding: 2px 4px; list-style: none; background: rgba(0, 0, 0, 0.72); color: #f0f0f0; font-size: 9px; line-height: 1.35; }
+.tv-tour .lb.off { display: none; }
+.tv-tour .lb li { display: flex; gap: 4px; }
+.tv-tour .lb .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tv-tour .lb li.on { color: #ffd75e; font-weight: 700; }
+.tv-tour .lb .when { color: #9fb3c8; justify-content: flex-end; }

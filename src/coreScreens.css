@@ -113,14 +113,8 @@
 .hvi-desk > .tb { margin-top: var(--s4); }
 @media (min-width: 900px) {
   .hvi-desk { grid-template-columns: minmax(0, 640px) minmax(0, 1fr); gap: 0 var(--s6); }
-  .hvi-desk-side { padding-top: var(--s5); }
-}
-/* the desk is a home-screen grid (src/front/layout.js): 4 columns need the page's width, so from
-   1100px up it sits under the logon, full width, instead of in the narrow column beside it */
-@media (min-width: 1100px) {
-  .hvi-desk { grid-template-columns: minmax(0, 1fr); }
-  .hvi-desk > .hvi-w-logon { max-width: 640px; }
-  .hvi-desk-side { padding-top: var(--s2); }
+  .hvi-desk-side { display: contents; }   /* the rail sits beside the panel, the main grid under both (src/front/FrontDesk.jsx) */
+  .fr-deskwrap { display: contents; }
 }
 .hvi-tkr-link { display: block; color: inherit; text-decoration: none; }
 .hvi-tkr ul { list-style: none; margin: 0; padding: 0; font-size: var(--t-xs); }

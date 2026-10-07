@@ -16,10 +16,13 @@
 // S a glance, M, T tall, L richer, W four columns wide. Each widget past the first four is its own
 // lazy chunk, fetched only when it is on the desk. MORE ROOMS' DISPLAY and WIDGETS open their
 // dialogs here (DeskPrefs.jsx).
+// Two zones on a wide screen (layout.js): a RAIL of S and T windows beside the logon panel and the MAIN grid under
+// it; drag a window between them in ARRANGE. A grip in a window's bottom-right corner resizes it, snapping to the
+// nearest prepared size with an outline preview; the S M T L W buttons stay for the keyboard.
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Frame, Chip, Chips, Button, ButtonRow } from "../ui/index.js";
 import { WIDGETS } from "./prefs.js";
-import { SIZE, SIZE_NAME, SIZES_OF, colsFor, effSize, spans, loadLayout, saveLayout, DEFAULT_LAYOUT, moveTo, resize, removeId, fromIds, keyAction } from "./layout.js";
+import { SIZE, SIZE_NAME, SIZES_OF, colsFor, effSize, spans, loadLayout, saveLayout, DEFAULT_LAYOUT, moveTo, resize, removeId, fromIds, keyAction, zoneOf, toZone, snapSize, cellsAt, railCols, railBeside } from "./layout.js";
 import { FAMOUS_FIGURES, getTier, displayName } from "../figures.js";
 import Sparkline from "../ui/Sparkline.jsx";   // the MOVEMENT LOG beside a name (src/ui/spark.js)
 import "./front.css";
@@ -42,6 +45,7 @@ const LAZY = {
   paper: named(smalls, "PaperWidget"),
   cups: named(smalls, "CupsWidget"),
   league: named(smalls, "LeagueWidget"),
+  board: lazy(() => import("./Leaderboard.jsx")),
 };
 const DeskPrefs = lazy(() => import("./DeskPrefs.jsx"));
 const NOW = { market: MarketTkr, wire: WireTkr, cam: SubstrateCam, notice: Notice };
@@ -52,8 +56,11 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
   const [arr, setArr] = useState(false);      // ARRANGE: the edit mode
   const [say, setSay] = useState("");
   const [cols, setCols] = useState(4);
+  const [rcols, setRcols] = useState(1);      // the rail's columns (1 or 2)
+  const [beside, setBeside] = useState(() => { try { return railBeside(window.innerWidth); } catch { return true; } });
+  const [rz, setRz] = useState(null);         // { id, size, w, h, m } while a window's corner is dragged
   const [drag, setDrag] = useState(null);     // { id, x, y } while a window is held
-  const grid = useRef(null), live = useRef(layout), focusId = useRef(null);
+  const grid = useRef(null), railEl = useRef(null), wrap = useRef(null), live = useRef(layout), focusId = useRef(null);
   live.current = layout;
   const apply = (l, keep = true) => { live.current = l; setLayout(l); if (keep) saveLayout(l); };
 
@@ -67,8 +74,23 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  // the rail beside the panel needs the width (900px); under that it merges into the one column
+  useEffect(() => {
+    const on = () => setBeside(railBeside(window.innerWidth));
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  useLayoutEffect(() => {
+    const el = railEl.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const fit = () => setRcols(railCols(el.clientWidth));
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [beside]);
   // a keyed reorder moves the node and drops its focus: give it back
-  useEffect(() => { if (focusId.current) { grid.current?.querySelector(`[data-wid="${focusId.current}"]`)?.focus({ preventScroll: true }); focusId.current = null; } });
+  useEffect(() => { if (focusId.current) { wrap.current?.querySelector(`[data-wid="${focusId.current}"]`)?.focus({ preventScroll: true }); focusId.current = null; } });
   useEffect(() => {
     if (!arr) return undefined;
     const esc = (e) => { if (e.key === "Escape" && !document.querySelector("dialog[open]")) setArr(false); };
@@ -81,7 +103,7 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
   const [padHeld, setPadHeld] = useState(null);
   const padWas = useRef(null);
   useEffect(() => {
-    const el = grid.current;
+    const el = wrap.current;
     if (!el) return undefined;
     const on = (e) => {
       const id = e.target.closest?.("[data-wid]")?.dataset.wid;
@@ -117,7 +139,7 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
       window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up); window.removeEventListener("touchmove", stop);
       document.documentElement.classList.remove("fr-dragging");
-      if (held) { setDrag(null); saveLayout(live.current); const i = live.current.findIndex(x => x.id === id); setSay(`${nameOf(id)} DROPPED AT ${i + 1} OF ${live.current.length}.`); }
+      if (held) { setDrag(null); apply(live.current); saveLayout(live.current); const i = live.current.findIndex(x => x.id === id); setSay(`${nameOf(id)} DROPPED AT ${i + 1} OF ${live.current.length}.`); }
     };
     const begin = () => { held = true; setDrag({ id, ...from }); setSay(`${nameOf(id)} PICKED UP. MOVE IT TO A NEW SPOT.`); document.documentElement.classList.add("fr-dragging"); };
     const stop = (ev) => { if (held) ev.preventDefault(); };
@@ -127,11 +149,15 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
         return;
       }
       setDrag({ id, x: ev.clientX, y: ev.clientY });
-      const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest("[data-wid]")?.dataset.wid;
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY), over = hit?.closest("[data-wid]")?.dataset.wid, zoneAt = hit?.closest("[data-zone]")?.dataset.zone;
+      const me = live.current.find(x => x.id === id);
+      if (!over && zoneAt && me && zoneAt !== zoneOf(me)) { last = null; apply(toZone(live.current, id, zoneAt), false); setSay(`${nameOf(id)} OVER THE ${zoneAt === "rail" ? "RAIL" : "MAIN GRID"}.`); return; }   // an empty patch of the other zone
       if (!over || over === id) { if (over === id) last = null; return; }
       if (over === last) return;   // one move per cell entered, so equal-sized neighbours do not trade back and forth
       last = over;
-      apply(moveTo(live.current, id, live.current.findIndex(x => x.id === over)), false);
+      const oz = zoneOf(live.current.find(x => x.id === over) || me);
+      if (me && oz !== zoneOf(me)) apply(toZone(live.current, id, oz, over), false);   // into the other zone: a rail takes only a size that fits
+      else apply(moveTo(live.current, id, live.current.findIndex(x => x.id === over)), false);
     }
     function up() { done(); }
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
@@ -140,14 +166,83 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
     else if (e.target.closest(".fr-grip")) begin();
   };
 
-  const sizeTo = (id, size) => { apply(resize(live.current, id, size)); setSay(`${nameOf(id)} NOW ${SIZE_NAME[size]}, ${SIZE[size][0]} BY ${SIZE[size][1]}.`); };
+  const sizeTo = (id, size) => {
+    const was = zoneOf(live.current.find(x => x.id === id) || {});
+    const n = resize(live.current, id, size);
+    apply(n);
+    setSay(`${nameOf(id)} NOW ${SIZE_NAME[size]}, ${SIZE[size][0]} BY ${SIZE[size][1]}${was === "rail" && zoneOf(n.find(x => x.id === id)) === "main" ? ", MOVED OUT OF THE RAIL INTO THE MAIN GRID" : ""}.`);
+  };
+  // the corner grip: the pointer's travel from the window's top-left is cells; the nearest prepared size is the
+  // outline, applied on release (the layout does not jump while it is held)
+  const grip = (id, zone, gcols) => (e) => {
+    if (e.button !== 0) return;
+    e.stopPropagation(); e.preventDefault();
+    const cell = e.currentTarget.closest("[data-wid]"), gridEl = cell.parentElement, cs = getComputedStyle(gridEl);
+    const gap = parseFloat(cs.columnGap) || 12, rowGap = parseFloat(cs.rowGap) || gap, row = parseFloat(cs.gridAutoRows) || 196;
+    const col = (gridEl.clientWidth - gap * (gcols - 1)) / gcols, m = { col, row, gap, rowGap };
+    const rect = cell.getBoundingClientRect(), was = live.current.find(x => x.id === id)?.size;
+    let size = was;
+    document.documentElement.classList.add("fr-dragging");
+    const show = (ev) => {
+      const { w, h } = cellsAt(ev.clientX - rect.left, ev.clientY - rect.top, { col, row, gap: (gap + rowGap) / 2 }, gcols);
+      size = snapSize(id, w, h, gcols, zone);
+      setRz({ id, size, m, gcols });
+    };
+    const mv = (ev) => show(ev);
+    const stop = (ev) => ev.preventDefault();
+    const up = () => {
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); window.removeEventListener("touchmove", stop);
+      document.documentElement.classList.remove("fr-dragging");
+      setRz(null);
+      if (size && size !== was) sizeTo(id, size);
+    };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up); window.addEventListener("touchmove", stop, { passive: false });
+    show(e);
+  };
   const take = (id) => { apply(removeId(live.current, id)); setSay(`${nameOf(id)} REMOVED FROM THE DESK.`); };
 
+  const cell = ({ id, size }, zone, gcols) => {
+    const W = NOW[id] || LAZY[id];
+    if (!W) return null;
+    const eff = effSize(size, gcols), [w, h] = spans(eff, gcols), pv = rz?.id === id ? rz : null;
+    return (
+      <div key={id} data-wid={id} data-size={eff} data-zone={zone} className={`fr-cell s-${eff}${arr ? " edit" : ""}${drag?.id === id || padHeld === id ? " held" : ""}`}
+        style={{ gridColumn: `span ${w}`, gridRow: `span ${h}` }}
+        {...(arr ? { tabIndex: 0, role: "group", "aria-roledescription": "movable window", "aria-label": `${nameOf(id)}, ${SIZE_NAME[eff]}, ${zone === "rail" ? "in the rail beside the panel" : "in the main grid"}. Arrow keys move it, plus and minus resize it, Delete removes it.`, onKeyDown: onKey(id), onPointerDown: down(id) } : null)}>
+        <div className="fr-cell-in" {...(arr ? { inert: "" } : null)}>
+          <Suspense fallback={null}><W size={eff} /></Suspense>
+        </div>
+        {arr && (
+          <div className="fr-ed">
+            <div className="fr-ed-top">
+              <span className="fr-grip" aria-hidden="true" title="Drag to move">⠿ DRAG</span>
+              <button type="button" className="fr-x" onClick={() => take(id)} aria-label={`Remove ${nameOf(id)}`}>✕</button>
+            </div>
+            <div className="fr-ed-sz" role="group" aria-label={`Size of ${nameOf(id)}`}>
+              {SIZES_OF[id].map(k => (
+                <button key={k} type="button" aria-pressed={size === k} disabled={k === "W" && gcols < 3} onClick={() => sizeTo(id, k)}
+                  aria-label={`${SIZE_NAME[k]}, ${SIZE[k][0]} by ${SIZE[k][1]}${k === "W" && gcols < 3 ? " (needs a wider screen)" : ""}`} title={`${SIZE_NAME[k]} ${SIZE[k][0]}×${SIZE[k][1]}`}>{k}</button>
+              ))}
+            </div>
+            <span className="fr-rz" aria-hidden="true" title="Drag to resize" onPointerDown={grip(id, zone, gcols)} />
+          </div>
+        )}
+        {pv && (() => {
+          const [pw, ph] = spans(effSize(pv.size, gcols), gcols), m = pv.m;
+          return <div className="fr-rz-prev" aria-hidden="true" style={{ width: pw * m.col + (pw - 1) * m.gap, height: ph * m.row + (ph - 1) * (m.rowGap || m.gap) }}><span>{SIZE_NAME[pv.size]} {SIZE[pv.size][0]}×{SIZE[pv.size][1]}</span></div>;
+        })()}
+      </div>
+    );
+  };
+  // beside the panel: S and T windows in the rail, the rest in main; merged (a phone): one column, rail first
+  const inRail = layout.filter(x => zoneOf(x) === "rail"), inMain = layout.filter(x => zoneOf(x) !== "rail");
+  const railItems = beside ? inRail : [], mainItems = beside ? inMain : [...inRail, ...inMain];
+
   return (
-    <>
+    <div ref={wrap} className="fr-deskwrap">
       {arr && (
         <div className="fr-bar" role="group" aria-label="Arranging the desk">
-          <p>ARRANGING: DRAG A WINDOW BY ITS HANDLE TO MOVE IT. S M T L W RESIZE IT. ✕ REMOVES IT. KEYS: ARROWS MOVE, + AND − RESIZE, DELETE REMOVES.</p>
+          <p>ARRANGING: DRAG A WINDOW BY ITS HANDLE TO MOVE IT, EVEN BETWEEN THE RAIL AND THE GRID. DRAG THE CORNER TO RESIZE. S M T L W RESIZE IT TOO. ✕ REMOVES IT. KEYS: ARROWS MOVE, + AND − RESIZE, DELETE REMOVES.</p>
           <ButtonRow className="fr-bar-btns">
             <Button variant="secondary" onClick={() => onDialog("widgets")}>ADD WIDGET</Button>
             <Button variant="secondary" onClick={() => { apply(DEFAULT_LAYOUT.map(x => ({ ...x }))); setSay("THE DESK IS BACK TO THE DEPARTMENT'S ARRANGEMENT."); }}>RESET</Button>
@@ -155,35 +250,14 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
           </ButtonRow>
         </div>
       )}
-      <div ref={grid} className={`fr-grid${arr ? " arr" : ""}`} style={{ "--cols": cols }}>
-        {layout.map(({ id, size }) => {
-          const W = NOW[id] || LAZY[id];
-          if (!W) return null;
-          const eff = effSize(size, cols), [w, h] = spans(eff, cols);
-          return (
-            <div key={id} data-wid={id} data-size={eff} className={`fr-cell s-${eff}${arr ? " edit" : ""}${drag?.id === id || padHeld === id ? " held" : ""}`}
-              style={{ gridColumn: `span ${w}`, gridRow: `span ${h}` }}
-              {...(arr ? { tabIndex: 0, role: "group", "aria-roledescription": "movable window", "aria-label": `${nameOf(id)}, ${SIZE_NAME[eff]}. Arrow keys move it, plus and minus resize it, Delete removes it.`, onKeyDown: onKey(id), onPointerDown: down(id) } : null)}>
-              <div className="fr-cell-in" {...(arr ? { inert: "" } : null)}>
-                <Suspense fallback={null}><W size={eff} /></Suspense>
-              </div>
-              {arr && (
-                <div className="fr-ed">
-                  <div className="fr-ed-top">
-                    <span className="fr-grip" aria-hidden="true" title="Drag to move">⠿ DRAG</span>
-                    <button type="button" className="fr-x" onClick={() => take(id)} aria-label={`Remove ${nameOf(id)}`}>✕</button>
-                  </div>
-                  <div className="fr-ed-sz" role="group" aria-label={`Size of ${nameOf(id)}`}>
-                    {SIZES_OF[id].map(k => (
-                      <button key={k} type="button" aria-pressed={size === k} disabled={k === "W" && cols < 3} onClick={() => sizeTo(id, k)}
-                        aria-label={`${SIZE_NAME[k]}, ${SIZE[k][0]} by ${SIZE[k][1]}${k === "W" && cols < 3 ? " (needs a wider screen)" : ""}`} title={`${SIZE_NAME[k]} ${SIZE[k][0]}×${SIZE[k][1]}`}>{k}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+      {beside && (railItems.length > 0 || arr) && (
+        <div ref={railEl} className={`fr-grid fr-rail${arr ? " arr" : ""}`} data-zone="rail" style={{ "--cols": rcols }} aria-label="Small windows beside the panel">
+          {railItems.map(x => cell(x, "rail", rcols))}
+          {arr && !railItems.length && <p className="fr-rail-hint">THE RAIL. DROP SMALL WINDOWS HERE.</p>}
+        </div>
+      )}
+      <div ref={grid} data-zone="main" className={`fr-grid fr-main${arr ? " arr" : ""}`} style={{ "--cols": cols }}>
+        {mainItems.map(x => cell(x, zoneOf(x), cols))}
       </div>
       {drag && <div className="fr-chip" style={{ left: drag.x, top: drag.y }} aria-hidden="true">{nameOf(drag.id)}</div>}
       {!layout.length && <p className="fr-clear">THE DESK IS CLEAR. THE DEPARTMENT ADMIRES YOUR RESTRAINT.</p>}
@@ -198,7 +272,7 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
           <DeskPrefs which={dialog} ids={layout.map(x => x.id)} onIds={(v) => apply(fromIds(live.current, v))} onArrange={() => setArr(true)} onClose={() => onDialog(null)} />
         </Suspense>
       )}
-    </>
+    </div>
   );
 }
 
@@ -225,7 +299,7 @@ function MoverRows({ rows, dir, n = 3 }) {
     <ul className="fr-movers">
       {rows.slice(0, n).map(r => (
         <li key={r.slug}>
-          <a href={`#market/${r.slug}`}>
+          <a href={`#market/${r.slug}`} data-pad-row>
             <span className="l1"><span className="n">{r.name}</span><Sparkline s={r} /><span className="p">{price(r.price)}</span>
               <span className={`c ${dir}`}><span aria-hidden="true">{arrow(r.chg)}</span>{fmtPct(r.chg)}</span></span>
             {r.why && <span className="why">{r.why}</span>}
@@ -239,7 +313,7 @@ function MoverRows({ rows, dir, n = 3 }) {
 function MoverLines({ up, dn, nu, nd, spark = false }) {
   const row = (r, dir) => (
     <li key={r.slug}>
-      <a href={`#market/${r.slug}`} className="fr-mrow">
+      <a href={`#market/${r.slug}`} className="fr-mrow" data-pad-row>
         <span className={dir} aria-hidden="true">{arrow(r.chg)}</span><span className="n">{r.name}</span>
         {spark && <Sparkline s={r} />}<span className={`c ${dir}`}>{fmtPct(r.chg)}</span>
       </a>

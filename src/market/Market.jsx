@@ -194,7 +194,7 @@ function Movers({ movers, onPick }) {
       <ol className="mk-mv">
         {rows.map(r => (
           <li key={r.slug}>
-            <button type="button" onClick={() => onPick(r.slug)}>
+            <button type="button" data-pad-row onClick={() => onPick(r.slug)}>
               <span className="l1"><span className="nm">{r.name.toUpperCase()}</span><Sparkline s={r} /><span>{fmtPrice(r.price)}</span><span className={tone(r.chg)}>{arrow(r.chg)} {fmtPct(r.chg)}</span></span>
               {r.why && <span className="mk-dim why">{r.why}</span>}
             </button>
