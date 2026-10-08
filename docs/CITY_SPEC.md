@@ -3451,3 +3451,16 @@ Code: `src/city/terminal.js` (the place, the day, the staff, the pull), `termina
   then SERVER RACK. A tap opens its desktop (`#mail?at=home`): DEPARTMENT MAIL, THE PAPER, THE MARKET,
   SOLITAIRE when the file owns a deck, SHUT DOWN.
 - **MY FILE** carries DEPARTMENT MAIL's line (the unread count, OPEN MAIL): no new nav tab, no pop-ups.
+
+## GROUPS: named friendship cliques (Community slice 2, 2026-10-08)
+
+`src/city/groups.js`, pure. Every social publish (netlify/lib/social-tick.js) reads the ledger's friend
+ties (affinity >= 30) and finds cliques by label propagation (6 rounds, keys in sorted order, so the same
+ledger always gives the same groups). A group has 3 to 12 members (an oversize one keeps its best-tied 12),
+one group per subject. The Overlord names it from the sorted member keys ("THE QUIET TABLE"; a name already
+taken gets a numeral), so a group keeps its name while it keeps its core. Its HOME hangout is the place
+where its members' pairs most often met (meetings-weighted). Published: `pub.groups` (top 30) on /api/social,
+and `group` on each member's shard (/api/social/<slug>); the file's ASSOCIATES shows
+"GROUP: THE QUIET TABLE // 4 ON FILE // HOME: THE DIVE WITH ...". Actions only, nobody quoted.
+Left in Community: group outings (the group walking to its hangout together), odd cross-group pairs as
+gossip, then the incidents half (fire, reactor overload, vat flood, power cut). Check: check-groups.

@@ -11,7 +11,8 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 0. [in progress 2026-09-29, Scott's order: scale -> community -> HQ]
    a. [shipped 2026-09-29, see Done] **Scale.** Production sprite atlas + slim /api/pen.
-   b. **Community + incidents.** Real-life ties from Wikidata (spouse, sibling, bandmates
+   b. [slice 2 shipped 2026-10-08: named cliques + home hangout, docs/CITY_SPEC.md "GROUPS"; left: group
+      outings, cross-group gossip, incidents] **Community + incidents.** Real-life ties from Wikidata (spouse, sibling, bandmates
       /member of, teammates, partners) raise affinity so real friends gravitate together;
       ties carry a sign from the public record where it exists (documented friendships warm, documented feuds/estrangements cold; Scott 2026-09-29: 'whatever's available'), then evolve freely in the sim; friendship cliques become named groups (Overlord-named) with a home hangout and group
       outings; odd cross-group pairs logged as gossip. Fallout Shelter incidents: a fire,
