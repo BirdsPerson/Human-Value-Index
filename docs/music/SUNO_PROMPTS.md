@@ -4,8 +4,8 @@ Paste **Style** into Suno's "Style of Music" box and **Lyrics** into the lyrics 
 Generate 2-4 takes of each; keep the best one or two. No artist names (Suno rejects them). Paid plan =
 commercial rights, same as JETSAM.
 
-Naming when you download: `hvi-<slug>-<take>.mp3` (e.g. `hvi-day-shift-a.mp3`). Drop them in
-`~/projects/human-value-index/music/incoming/` and tell me; I wire them in.
+Downloading: put the track's name from this book (e.g. "Terminal") in Suno's Title box, then leave the
+downloads in ~/Downloads and tell me. I'll file and rename them.
 
 How they get used:
 - **Substrate theme**: the player picks one in settings (like JETSAM's music modes), or PLAYLIST to rotate all.
