@@ -230,6 +230,38 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 12. **Holding Cells with meaning:** subjects under Review (arraignment/summons, appeals under hearing, harm reviews, news re-scores) walk into a holding cell until their case is heard at the Tribunal, then are released ("RELEASED. FILE AMENDED."). Driven by real events; visible "who is in trouble" board.
 
+## Standing tracks (Scott, 2026-10-09: "mostly self-improving ... I can check in and see how the place is growing")
+
+The nightly build rotates through these by weekday unless an open bug is marked P0 or DESK_ANSWERS.md
+holds an unacted answer (those go first). Take the next unshipped slice in that track, one night's work,
+built well (research first for new systems, reusable engines, checks that can fail). Record the track
+in the Shipped bullet. If a track has nothing shippable tonight, take the next weekday's track.
+
+- **Mon: THE OCEAN, the coast and the clubs.** Order: the marina + public pier on the southwest coast;
+  boats as transport and leisure; the YACHT CLUB and the GOLF & COUNTRY CLUB proposed through the
+  Assembly as wealth concentrates (vault backlog "THE OCEAN, the clubs and the strata"); public
+  alternatives always exist; THE SANCTIONED offshore last.
+- **Tue: SURFING, then the other open games.** Surfing mini-game at THE COAST's break (vault backlog
+  "Surfing mini-game": paddle, catch, carve, cutbacks, tubes, wipeouts, combos, casual bot, cabinet).
+  When surfing ships, this day takes: the dungeon's next stage (docs/design/DUNGEON.md), football
+  playtest notes (vault backlog "Football playtest notes"), basketball S2 (docs/design/BASKETBALL.md).
+- **Wed: THE CITY, more real.** docs/CITY_SPEC.md + item 6 above: more places per district,
+  day/night, weather, news into the city, realistic layouts, NPC routines.
+- **Thu: DATA ANALYTICS.** The analytics view: field/era backfill (item 8), better charts, region
+  and field breakdowns, trends over time, plain-English readings; every number traceable.
+- **Fri: PEOPLE FROM ALL OVER THE WORLD.** Keep the intake flowing: if the newest
+  docs/roster/diversity-*.json has fewer than 150 figures left to file, research and write the next
+  list (docs/roster/diversity-YYYY-MM-DD.json, same shape) aimed at the regions and fields most
+  under-represented vs UN population share (analytics WHO IS ON FILE); living people never get
+  invented crimes; grave-harm exclusions stay. The daily com.hvi.roster-queue job files from the
+  newest list automatically.
+- **Sat/Sun:** the existing playtest (Sat) and calibration (Sun) jobs run; the build takes the top
+  ROADMAP item.
+
+Every Monday's report adds a "## How the place is growing" section: figures on file (and added this
+week, by region), editions printed, games played and new players if the data exists, what shipped per
+track, and what is next per track. Plain English, no internal codes.
+
 ## Guardrails (the loop must obey)
 
 - One item per night; stop at the time budget and report partial work honestly.
