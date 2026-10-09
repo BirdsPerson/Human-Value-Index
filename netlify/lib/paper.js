@@ -23,15 +23,15 @@ import * as SIM from "../../src/city/sim.js";
 import * as L from "../../src/city/leagues.js";
 import { moodWord } from "../../src/city/civic.js";
 import { PREFECT, DIRECTIVES } from "../../src/city/prefectData.js";
-import { lineupFor } from "../../src/city/nightlifeSim.js";
+import { lineupFor, PERFORMERS } from "../../src/city/nightlifeSim.js";
 import { weatherOn as mountainWeather } from "../../src/city/mountainGeo.js";
 import { weatherOn as watersWeather, SPECIES_BY } from "../../src/play/fish/data.js";
 import { RIVER_DAY, NAME as RIVER_NAME, MOTTO as RIVER_MOTTO } from "../../src/city/river.js";
 import { PLAZA_DAY } from "../../src/city/shorePlaza.js";
 import { PROPRIETORS, proprietorLine } from "../../src/city/proprietors.js";
-import { raceEvents } from "../../src/city/race.js";
-import { pitEvents } from "../../src/city/pit.js";
-import { tennisEvents } from "../../src/city/tennis.js";
+import { raceEvents, RACERS } from "../../src/city/race.js";
+import { pitEvents, FIGHTERS } from "../../src/city/pit.js";
+import { tennisEvents, TENNIS_ON_FILE } from "../../src/city/tennis.js";
 import { MOTIONS } from "../../src/assembly/content002.js";
 import arcade from "../../src/city/arcade.json" with { type: "json" };
 import { sportsSection, aquariumRecords } from "./paper-sports.js";
@@ -39,9 +39,14 @@ import { scoreText, DIV_NAME } from "../../src/tournament/rules.js";
 import { comicFor, CAST } from "./paper-comic.js";
 import { paperDate, PAPER_TZ } from "./paper-notices.js";
 import { splitSentences } from "./factCheck.js";
+import { FAMOUS_FIGURES, displayName, slugify } from "../../src/figures.js";
 
 export { paperDate, PAPER_TZ };
-export const PAPER_V = 1;
+// v1 (2026-10-05..09): ALL CAPS strings, links on the listings only. v2 (2026-10-09): the same
+// shape plus ents (every name printed, with where it goes: a figure's file, a district, a venue),
+// and listings that point at the place in the city (a venue's building, a district, a seat
+// holder's file). The reader (src/paper/read.js) renders both; a printed edition never changes.
+export const PAPER_V = 2;
 export const PAPER_NAME = "THE DAILY COMPLIANCE";
 export const PAPER_MOTTO = "ALL THE NEWS THAT IS PERMITTED. ESTABLISHED BY ORDER.";
 export const PAPER_EPOCH = "2026-10-05";   // edition No. 1
@@ -56,8 +61,26 @@ export const editionNo = (date) => Math.round((Date.parse(`${date}T12:00:00Z`) -
 export const ROUTES = ["#paper", "#city", "#city/league", "#city/league/baseball", "#city/league/basketball", "#city/league/football",
   "#city/league/soccer", "#city/league/tennis", "#city/league/pit", "#city/league/cup", "#heights", "#prefects", "#enterprise",
   "#market", "#economy", "#assembly", "#docket", "#elections", "#arrivals", "#file", "#fish", "#aquarium", "#tennis", "#golf",
-  "#hoops", "#chess", "#casino", "#play", "#shop", "#city/strip/the-arcade"];
-export const validHref = (h) => typeof h === "string" && (ROUTES.includes(h) || /^#market\/[a-z0-9-]+$/.test(h) || /^#paper\/\d{4}-\d{2}-\d{2}$/.test(h) || /^#(golf|bowling|fish)\?t=[a-z0-9-]{6,32}$/.test(h));
+  "#hoops", "#chess", "#casino", "#play", "#shop", "#city/strip/the-arcade", "#bowling", "#cards", "#football", "#soccer", "#ski", "#skate"];
+const LEAGUE_SPORTS = ["baseball", "basketball", "football", "soccer", "tennis", "pit", "cup"];
+// #city/<district>[/<building>[?floor=n]] is answered only where the city has that district and building
+const cityHrefOk = (h) => {
+  const m = /^#city\/([a-z0-9-]+)(?:\/([a-z0-9-]+)(?:\?floor=(\d+))?)?$/.exec(h);
+  if (!m || !SIM.DISTRICT[m[1]]) return false;
+  if (!m[2]) return !m[3];
+  const b = SIM.BUILDING[m[2]];
+  return Boolean(b && (b.districtId || b.district) === m[1]);
+};
+export const validHref = (h) => typeof h === "string" && (ROUTES.includes(h) || /^#market\/[a-z0-9-]+$/.test(h) || /^#paper\/\d{4}-\d{2}-\d{2}$/.test(h) || /^#(golf|bowling|fish)\?t=[a-z0-9-]{6,32}$/.test(h)
+  || /^#city\?find=[a-z0-9-]{1,80}$/.test(h) || /^#shop\/[a-z0-9-]{1,40}$/.test(h)
+  || (/^#city\/league\/([a-z]+)(\?div=\d)?$/.test(h) && LEAGUE_SPORTS.includes(h.split("/")[2].split("?")[0])) || cityHrefOk(h));
+// a place in the city (SIM.PLACES id) -> its building, on its floor
+export const placeHref = (id) => {
+  const p = SIM.PLACES[id];
+  if (!p?.building || !p.district) return null;
+  const h = `#city/${p.district}/${p.building}${Number.isInteger(p.floors?.[0]) && p.floors[0] > 0 ? `?floor=${p.floors[0]}` : ""}`;
+  return validHref(h) ? h : null;
+};
 
 // check-no-death-labels' markers (scripts/check-no-death-labels.mjs), for printed text.
 export const DEATH_MARKERS = [/DECEASED/, /\bDIED\b/, /\bTHE DEAD\b/, /\bGHOSTS?\b/, /PAST TENSE/, /POSTHUMOUS/, /\b(OBITUARY|Obituary)\b/,
@@ -119,8 +142,10 @@ export async function gather(io, nowMs, prev = null) {
       acts: (proposals.acts || []).slice(-6).map(a => ({ no: a.no, type: a.type, title: a.title, targetName: a.targetName, at: a.at })) } : null,
     arrivals: arrivals ? { today: arrivals.today, releaseNextAt: arrivals.releaseNextAt, pending: (arrivals.pending || []).length,
       released: (arrivals.released || []).slice(0, 12).map(a => ({ name: a.name, slug: a.slug, tier: a.tier, kind: a.kind, harm: Boolean(a.harm), noDangle: Boolean(a.noDangle) })) } : null,
-    gossip: social?.events ? social.events.filter(e => e.text && e.kind !== "grievance").slice(0, 8).map(e => ({ h: e.h, kind: e.kind, text: e.text })) : [],
+    gossip: social?.events ? social.events.filter(e => e.text && e.kind !== "grievance").slice(0, 8).map(e => ({ h: e.h, kind: e.kind, text: e.text, ...(e.a ? { a: e.a } : {}), ...(e.b ? { b: e.b } : {}) })) : [],
     tanks: aquarium?.tanks || {},
+    // every listed name and its slug, so a printed name links to its file (v2 ents)
+    names: b ? (b.rows || []).filter(r => r?.name && r?.slug).map(r => [String(r.name), String(r.slug)]) : [],
     ebtv: ebtv ? { title: ebtv.title || null, upNext: ebtv.upNext || null, at: ebtv.at || null } : null,
     notices: { yesterday: notices?.days?.[yesterday] || [], today: notices?.days?.[date] || [] },
     tournaments: (tourney?.events || []).map(e => ({ id: e.id, game: e.game, kind: e.kind, name: e.name, venue: e.venue, format: e.format, opens: e.opens, closes: e.closes, legs: e.legs,
@@ -194,7 +219,7 @@ export function buildEdition(I) {
   const closed = (ent?.closed || []).filter(x => Number(x.closedOn ?? x.closed ?? x.day ?? -1) >= day0 || !Number.isFinite(Number(x.closedOn ?? x.closed ?? x.day))).slice(0, 4);
   const shopLine = (x) => `${up(x.sign || x.label)}, ${up(x.label || x.type)}${x.units?.[0] ? `, ${placeName(x.units[0])}` : ""}${x.status ? ` (${up(x.status)})` : ""}.`;
   const districts = civic?.districts ? Object.entries(civic.districts).filter(([, d]) => Number.isFinite(d?.mood?.s)).map(([id, d]) => ({
-    id, name: districtName(id), mood: d.mood.s, word: up(moodWord(d.mood.s)),
+    id, name: districtName(id), mood: d.mood.s, word: up(moodWord(d.mood.s)), href: `#city/${id}`,
     shops: d.biz ? `${d.biz.open || 0} OPEN` : null,
   })).sort((a, b) => a.mood - b.mood) : [];
   const arrivals = I.arrivals ? {
@@ -205,18 +230,18 @@ export function buildEdition(I) {
   const city = {
     href: "#city",
     districts,
-    opened: opened.map(x => ({ text: shopLine(x), href: "#enterprise" })).filter(x => printable(x.text)),
-    closed: closed.map(x => ({ text: `${up(x.sign || x.label || "A SHOP")} HAS CLOSED${x.reason ? ` ON ${up(x.reason)}` : ""}. THE UNIT IS TO LET.`, href: "#enterprise" })).filter(x => printable(x.text)),
+    opened: opened.map(x => ({ text: shopLine(x), href: placeHref(x.units?.[0]) || "#enterprise" })).filter(x => printable(x.text)),
+    closed: closed.map(x => ({ text: `${up(x.sign || x.label || "A SHOP")} HAS CLOSED${x.reason ? ` ON ${up(x.reason)}` : ""}. THE UNIT IS TO LET.`, href: placeHref(x.units?.[0]) || "#enterprise" })).filter(x => printable(x.text)),
     trading: (ent?.biz || []).length,
     gossip: lines(I.gossip.map(g => up(g.text))).slice(0, 5),
     arrivals,
     // the city's businesses with a subject on record as proprietor (src/city/proprietors.js)
-    proprietors: Object.keys(PROPRIETORS).map(id => ({ text: `${placeName(id)}, THE SHORE PLAZA. ${proprietorLine(id)}.`, href: "#city" })).filter(x => printable(x.text)),
+    proprietors: Object.keys(PROPRIETORS).map(id => ({ text: `${placeName(id)}, THE SHORE PLAZA. ${proprietorLine(id)}.`, href: placeHref(id) || "#city" })).filter(x => printable(x.text)),
   };
-  if (opened[0]) heads.push(head("shop", 22, `NOW OPEN: ${opened[0].sign || opened[0].label}`, `${up(opened[0].label)} IN ${placeName(opened[0].units?.[0] || "")}. THE DEPARTMENT HAS ISSUED A LICENCE AND AN EXPIRY DATE.`, "#enterprise", { trade: opened[0].label, district: SIM.PLACES[opened[0].units?.[0]]?.district ? districtName(SIM.PLACES[opened[0].units[0]].district) : "THE MALL" }));
+  if (opened[0]) heads.push(head("shop", 22, `NOW OPEN: ${opened[0].sign || opened[0].label}`, `${up(opened[0].label)} IN ${placeName(opened[0].units?.[0] || "")}. THE DEPARTMENT HAS ISSUED A LICENCE AND AN EXPIRY DATE.`, placeHref(opened[0].units?.[0]) || "#enterprise", { trade: opened[0].label, district: SIM.PLACES[opened[0].units?.[0]]?.district ? districtName(SIM.PLACES[opened[0].units[0]].district) : "THE MALL" }));
   const relN = arrivals?.released?.length || 0;
   if (relN) heads.push(head("arrivals", 15 + relN, `${relN} NEW FILE${relN === 1 ? "" : "S"} THROUGH INTAKE`, "PROCESSED, HOUSED AND EMPLOYED. NOBODY WAS ASKED.", "#arrivals", { arrivals: relN }));
-  if (districts[0] && districts[0].mood <= -25) heads.push(head("mood", 28, `${districts[0].name} IS ${districts[0].word}`, `THE DISTRICT'S MOOD STANDS AT ${districts[0].mood}. THE PREFECT HAS BEEN INFORMED. THE PREFECT WAS ALREADY THERE.`, "#city"));
+  if (districts[0] && districts[0].mood <= -25) heads.push(head("mood", 28, `${districts[0].name} IS ${districts[0].word}`, `THE DISTRICT'S MOOD STANDS AT ${districts[0].mood}. THE PREFECT HAS BEEN INFORMED. THE PREFECT WAS ALREADY THERE.`, `#city/${districts[0].id}`, { district: districts[0].name }));
   if (RIVER_DAY > day0 - 1 && RIVER_DAY <= day + 60) {
     const open = day >= RIVER_DAY;
     heads.push(head("river", open && RIVER_DAY >= day0 ? 88 : 30, open ? `${RIVER_NAME} IS OPEN` : `${RIVER_NAME} OPENS ON DAY ${RIVER_DAY}`, `${RIVER_MOTTO} FISHING SPOTS ARE MARKED. THE WATER IS NOT RESPONSIBLE FOR YOU.`, "#fish"));
@@ -259,11 +284,12 @@ export function buildEdition(I) {
   }
   if (civic?.districts) {
     for (const [id, d] of Object.entries(civic.districts)) {
-      if (d.seat?.status === "HELD" && d.seat.name) politics.council.push({ district: districtName(id), name: up(d.seat.name), key: d.seat.holder || null, by: d.seat.by ? up(d.seat.by) : null });
+      if (d.seat?.status === "HELD" && d.seat.name) politics.council.push({ district: districtName(id), name: up(d.seat.name), key: d.seat.holder || null, by: d.seat.by ? up(d.seat.by) : null,
+        ...(d.seat.holder && validHref(`#market/${d.seat.holder}`) ? { href: `#market/${d.seat.holder}` } : {}), dhref: `#city/${id}` });
       const pf = d.prefect, P1 = PREFECT[id];
       if (pf?.directive && P1) {
         const dline = P1.lines?.[pf.directive];
-        politics.prefects.push({ district: districtName(id), prefect: P1.name, code: P1.code, directive: DIRECTIVES[pf.directive]?.name || up(pf.directive), line: printable(dline) ? dline : null, cast: `prefect:${id}` });
+        politics.prefects.push({ district: districtName(id), dhref: `#city/${id}`, prefect: P1.name, code: P1.code, directive: DIRECTIVES[pf.directive]?.name || up(pf.directive), line: printable(dline) ? dline : null, cast: `prefect:${id}` });
       }
     }
     politics.council.sort((a, b) => (a.district < b.district ? -1 : 1));
@@ -285,7 +311,7 @@ export function buildEdition(I) {
   // ---- ARTS & NIGHTLIFE
   const night = (day0 < day ? day : day);
   const hNow = T - (day - 1) * 24;
-  const bill = lineupFor(hNow < 6 ? day - 1 : night).map(g => ({ venue: placeName(g.venue), text: `${up(g.name)}, ${g.word}, ${hhmm(g.from)}.`, href: "#city" })).filter(x => printable(x.text));
+  const bill = lineupFor(hNow < 6 ? day - 1 : night).map(g => ({ venue: placeName(g.venue), text: `${up(g.name)}, ${g.word}, ${hhmm(g.from)}.`, href: placeHref(g.venue) || "#city" })).filter(x => printable(x.text));
   const arts = {
     nightlife: bill.slice(0, 8),
     ebtv: I.ebtv?.title ? { now: up(I.ebtv.title), next: I.ebtv.upNext ? up(I.ebtv.upNext) : null } : null,
@@ -301,7 +327,7 @@ export function buildEdition(I) {
   const hiring = (ent?.biz || []).filter(x => (x.status === "THRIVING" || x.status === "NEW") && (x.staff?.length || 0) < 4).slice(0, 4);
   const classifieds = [
     { cat: "SITUATIONS VACANT", title: "LEAGUE ROSTER SPOTS, ALL FOUR LEAGUES AND THE TENNIS LADDER", text: `ENTER YOUR CITIZEN FROM MY FILE. ENTRIES CLOSE ON MACHINE DAY ${closeDay}; THE DRAFT IS DAY ${draftDay}. TWO SPORTS AT MOST. TALENT IS OPTIONAL. ATTENDANCE IS NOT.`, href: "#file", act: "ENTER A LEAGUE" },
-    ...hiring.map(x => ({ cat: "SITUATIONS VACANT", title: `STAFF WANTED AT ${up(x.sign || x.label)}`, text: `${up(x.label)}, ${placeName(x.units?.[0] || "")}. ${up(x.status)} AND SHORT-HANDED. THE OWNER HIRES FROM THE DISSATISFIED. BE DISSATISFIED.`, href: "#enterprise", act: "SEE THE REGISTER" })),
+    ...hiring.map(x => ({ cat: "SITUATIONS VACANT", title: `STAFF WANTED AT ${up(x.sign || x.label)}`, text: `${up(x.label)}, ${placeName(x.units?.[0] || "")}. ${up(x.status)} AND SHORT-HANDED. THE OWNER HIRES FROM THE DISSATISFIED. BE DISSATISFIED.`, href: placeHref(x.units?.[0]) || "#enterprise", act: placeHref(x.units?.[0]) ? "SEE THE SHOP" : "SEE THE REGISTER" })),
     E ? { cat: "PUBLIC OFFICE", title: E.state === "open" ? "THE COUNCIL POLLS ARE OPEN" : "COUNCIL SEATS, NEXT CYCLE", text: E.state === "open" ? `CYCLE ${E.cycle}: VOTE, OR WRITE IN A NAME, BEFORE THE POLLS CLOSE AT ${realTime(E.closeAt)} ON ${realDay(E.closeAt)}.` : `CYCLE ${E.next?.cycle ?? E.cycle + 1} OPENS ${E.next?.openAt ? `${realDay(E.next.openAt)}, ${realTime(E.next.openAt)}` : "IN DUE COURSE"}. STAND, VOTE, OR WRITE IN WHOEVER THE DEPARTMENT DID NOT EXPECT.`, href: "#elections", act: E.state === "open" ? "VOTE" : "SEE THE COUNCIL" } : null,
     A?.session?.state === "open" ? { cat: "PUBLIC NOTICES", title: `THE ASSEMBLY SITS: SESSION ${A.session.id}`, text: `THE BALLOT IS OPEN UNTIL ${realTime(A.session.closeAt)} ON ${realDay(A.session.closeAt)}. ONE CITIZEN, ONE VOTE, UP TO THREE REASONS. SPITE IS A REASON.`, href: "#assembly", act: "VOTE" } : null,
     { cat: "PUBLIC NOTICES", title: "FILE A PROPOSAL", text: "BUILD, POLICY, RENAME OR EVENT. ONE FILING A DAY PER FILE. CO-SIGNED PROPOSALS GO TO THE FLOOR.", href: "#docket", act: "FILE ONE" },
@@ -368,7 +394,60 @@ export function buildEdition(I) {
     notices: noticeList.length ? noticeList : [{ text: "THE DEPARTMENT INSTALLED NOTHING YESTERDAY. THE DEPARTMENT WAS RESTING ITS CASE." }],
     sources: { summaryDay: I.summaryDay, marketDay: I.market?.rd ?? null },
   };
+  edition.ents = entsOf(edition, I);
   return JSON.parse(JSON.stringify(edition));   // undefined dropped: the stored form
+}
+
+// ---- ents (v2): every name the edition prints, and where it goes ----------------------------------
+// {UPPER NAME: {h: href, n: the name as written}}: a figure's file (#market/<slug>), a district, a
+// venue's building. Only names that occur in a printed string, whole-word; the longest wins where
+// one name holds another. The reader links and cases with it (src/paper/read.js).
+const NAME_INDEX = (() => {
+  const out = [];
+  for (const f of FAMOUS_FIGURES) {
+    const h = `#market/${slugify(f.name)}`;
+    out.push([up(displayName(f)), h, displayName(f)]);
+    if (displayName(f) !== f.name) out.push([up(f.name), h, f.name]);
+  }
+  for (const p of Object.values(SIM.PLACES)) out.push([up(p.name), null, null, p.id]);
+  for (const id of Object.keys(SIM.DISTRICT)) out.push([districtName(id), `#city/${id}`, null]);
+  return out;
+})();
+const HARMED = new Set(FAMOUS_FIGURES.filter(f => f.harm).map(f => slugify(f.name)));
+const wordAt = (text, k) => {
+  for (let i = text.indexOf(k); i >= 0; i = text.indexOf(k, i + 1)) {
+    const a = text[i - 1] || " ", b = text[i + k.length] || " ";
+    if (!/[A-Z0-9]/.test(a) && !/[A-Z0-9]/.test(b)) return true;
+  }
+  return false;
+};
+export function entsOf(edition, I = {}) {
+  const parts = [];
+  (function walk(o, k) { if (typeof o === "string") { if (k !== "href" && k !== "dhref" && k !== "arcadeHref") parts.push(up(o)); } else if (Array.isArray(o)) o.forEach(x => walk(x)); else if (o && typeof o === "object") for (const [kk, v] of Object.entries(o)) if (kk !== "ents" && kk !== "sources") walk(v, kk); })(edition);
+  const text = parts.join("\n");
+  const out = {};
+  // p: the reader may draw this person's file sprite in a wire photo (listed on the board, no harm
+  // finding on file); anyone else is named and linked, never pictured
+  const listed = new Map((I.names || []).map(([n, s]) => [s, n]));
+  const add = (k, h, n) => {
+    if (!k || k.length < 3 || out[k] || !h || !validHref(h) || !wordAt(text, k)) return;
+    const slug = h.startsWith("#market/") ? h.slice(8) : null;
+    out[k] = { h, ...(n ? { n } : {}), ...(slug && listed.has(slug) && !HARMED.has(slug) ? { p: 1 } : {}) };
+  };
+  const bare = (n) => String(n).replace(/\s*\([^)]*\)\s*$/, "");
+  for (const [n, s] of I.names || []) add(up(n), `#market/${s}`, n);
+  for (const [n, s] of I.names || []) if (bare(n) !== n) add(up(bare(n)), `#market/${s}`, bare(n));   // JACK WHITE, printed without his bracket
+  // tonight's bill and the gossip's pairs: a listed name goes to the file, else to the city to find them
+  for (const [slug, name] of PERFORMERS) add(up(name), listed.has(slug) ? `#market/${slug}` : `#city?find=${slug}`, listed.get(slug) && bare(listed.get(slug)));
+  // the Pit's fighters, the mountain's racers, the club's players: a listed name goes to the file,
+  // anyone else to the venue that keeps their record
+  for (const [slug, name] of FIGHTERS) add(up(name), listed.has(slug) ? `#market/${slug}` : "#city/league/pit", listed.get(slug) && bare(listed.get(slug)));
+  for (const [slug, name] of RACERS) add(up(name), listed.has(slug) ? `#market/${slug}` : "#heights", listed.get(slug) && bare(listed.get(slug)));
+  for (const [slug, name] of TENNIS_ON_FILE) add(up(name), listed.has(slug) ? `#market/${slug}` : "#city/league/tennis", listed.get(slug) && bare(listed.get(slug)));
+  for (const g of I.gossip || []) for (const sl of [g.a, g.b]) if (sl && listed.has(sl)) add(up(listed.get(sl)), `#market/${sl}`, listed.get(sl));
+  for (const a of I.arrivals?.released || []) if (!a.harm && a.slug) add(up(a.name), `#market/${a.slug}`, a.name);
+  for (const [k, h, n, place] of NAME_INDEX) add(k, place ? placeHref(place) : h, n);
+  return out;
 }
 
 // ---- the leader ---------------------------------------------------------------------------------

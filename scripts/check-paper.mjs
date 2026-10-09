@@ -143,5 +143,94 @@ const log = ["2026-10-05T23:30:00-04:00\x1fTHE WATERS: playable fishing (#fish)"
 const days = noticesFromLog(log);
 ok(days["2026-10-05"]?.length === 1 && days["2026-10-06"]?.length === 1, "notices fall on New York's day");
 
+// 9. reading (v2, docs/PAPER.md "Reading"): every name printed is linked, every link is routed, the
+// copy reads in sentence case, a v1 edition still renders, and the pictures stay inside the rules
+const R = await import("../src/paper/read.js");
+const WP = await import("../src/paper/wirephoto.js");
+const { PERFORMERS } = await import("../src/city/nightlifeSim.js");
+const { FIGHTERS } = await import("../src/city/pit.js");
+const { RACERS } = await import("../src/city/race.js");
+const { TENNIS_ON_FILE } = await import("../src/city/tennis.js");
+const { slugify, displayName } = await import("../src/figures.js");
+const names = [...new Map([...FAMOUS_FIGURES.map(f => [displayName(f), slugify(f.name)]), ...(input.market?.movers?.up || []).concat(input.market?.movers?.down || []).map(x => [x.name, x.slug]),
+  ...(input.arrivals?.released || []).filter(x => !x.harm).map(x => [x.name, x.slug])]).entries()];
+const v2 = buildEdition({ ...structuredClone(input), names });
+ok(v2.v === 2 && v2.ents && Object.keys(v2.ents).length > 10, `a v2 edition carries its names (${Object.keys(v2.ents || {}).length})`);
+for (const [k, e] of Object.entries(v2.ents)) ok(validHref(e.h), `ents ${k} links to a routed page (${e.h})`);
+for (const [p, h] of (function* walk(o, path = "") { if (Array.isArray(o)) for (let i = 0; i < o.length; i++) yield* walk(o[i], `${path}[${i}]`); else if (o && typeof o === "object") for (const [k, v] of Object.entries(o)) { if (k === "dhref") yield [`${path}.${k}`, v]; else yield* walk(v, `${path}.${k}`); } })(v2)) ok(validHref(h), `${p} links to a routed page (${h})`);
+for (const [k, e] of Object.entries(R.GLOSSARY)) if (e.h && !e.h.startsWith("http")) ok(validHref(e.h), `the reader's glossary links ${k} to a routed page (${e.h})`);
+for (const h of ["#city/league/pit", "#city/sprawl", "#city/uptown/aurum", "#city?find=madonna", "#shop/closet"]) ok(validHref(h), `validHref answers ${h}`);
+for (const h of ["#city/nowhere", "#city/sprawl/aurum", "#city/league/chess", "#market/../x"]) ok(!validHref(h), `validHref refuses ${h}`);
+const onFile = new Set([...names.map(([n]) => n.toUpperCase()), ...PERFORMERS.map(x => x[1]), ...FIGHTERS.map(x => x[1]), ...RACERS.map(x => x[1]), ...TENNIS_ON_FILE.map(x => x[1])]);
+const SKIP = new Set(["ents", "sources", "comics", "name", "motto", "dateline", "price", "printedAt", "kind", "href", "dhref", "arcadeHref", "key", "cast", "code"]);
+function* printed(o, path = "") {
+  if (typeof o === "string") yield [path, o];
+  else if (Array.isArray(o)) for (let i = 0; i < o.length; i++) yield* printed(o[i], `${path}[${i}]`);
+  else if (o && typeof o === "object") for (const [k, v] of Object.entries(o)) if (!SKIP.has(k)) yield* printed(v, `${path}.${k}`);
+}
+const wordIn = (U, n) => { for (let i = U.indexOf(n); i >= 0; i = U.indexOf(n, i + 1)) if (!/[\p{L}\d]/u.test(U[i - 1] || " ") && !/[\p{L}\d]/u.test(U[i + n.length] || " ")) return true; return false; };
+const rm = R.matcherOf(R.entsOf({ edition: v2 }));
+let named = 0, caseBad = 0;
+for (const [p, s] of printed(v2)) {
+  const segs = R.segments(s, rm, new Set());
+  const linked = segs.filter(x => x.h).map(x => x.t.toUpperCase());
+  for (const n of onFile) {
+    if (!wordIn(s.toUpperCase(), n)) continue;
+    named++;
+    ok(linked.some(t => t === n || t.includes(n) || n.includes(t.replace(/^THE /, ""))), `${p} names ${n} with a link`);
+  }
+  const t = R.textOf(segs);
+  if (R.shouty(s) && s.length > 40 && R.shouty(t)) { caseBad++; ok(false, `${p} still reads in capitals: ${t.slice(0, 60)}`); }
+}
+ok(named > 5, `figures named across the edition are checked (${named})`);
+// the brief: three to five lines, each with one next step to a routed page
+const brief = R.briefOf(v2, rm);
+ok(brief.length >= 3 && brief.length <= 5 && brief.every(x => x.text && x.act && validHref(x.h)), `TODAY IN 30 SECONDS: ${brief.length} lines, each one tap`);
+for (const h of [v2.front.lead, ...v2.front.stories]) ok(validHref(R.nextOf(h, v2).h), `${h.kind}: one next step, routed`);
+// a v1 edition (printed before ents) still reads: names from its own listings, sentence case
+const v1 = { ...structuredClone(a), v: 1 }; delete v1.ents;
+const m1 = R.matcherOf(R.entsOf({ edition: v1 }));
+ok(R.briefOf(v1, m1).length >= 3 && R.textOf(R.segments(v1.front.lead.deck || "THE CITY IS CONTROLLED.", m1)) !== (v1.front.lead.deck || "THE CITY IS CONTROLLED."), "a v1 edition still renders, re-cased");
+ok(R.textOf(R.segments("THE PIT: MUHAMMAD ALI OVER JACK JOHNSON. THE DEPARTMENT WAS THERE ON FRIDAY.", R.matcherOf({ "MUHAMMAD ALI": { h: "#market/muhammad-ali", n: "Muhammad Ali" }, "THE PIT": { h: "#city/league/pit" } })))
+  === "The Pit: Muhammad Ali over jack johnson. The department was there on Friday.", "sentence case: names restored, sentences capitalised, days kept");
+// the pictures: deterministic, only drawable people, never anyone the ents do not mark drawable
+for (const h of [v2.front.lead, ...v2.front.stories, { kind: "movers", text: "m" }, { kind: "table", rows: v2.sports.leagues[0].table, sign: "BASEBALL" }]) {
+  const s1 = WP.sceneOf(h, v2, rm), s2 = WP.sceneOf(h, v2, rm);
+  ok(JSON.stringify(s1) === JSON.stringify(s2), `${h.kind}: the same picture every time`);
+  for (const w of (s1?.who || []).filter(Boolean)) ok(Object.values(v2.ents).some(e => e.p && e.h === `#market/${w.slug}`), `${h.kind}: ${w.slug} is drawable (listed, no harm finding)`);
+  if (s1) ok(/^Department illustration\./.test(s1.caption), `${h.kind}: captioned as a Department illustration`);
+}
+const harmed = FAMOUS_FIGURES.find(f => f.harm);
+if (harmed) {
+  const e3 = buildEdition({ ...structuredClone(input), names: [...names, [harmed.name, slugify(harmed.name)]], gossip: [{ h: 1, kind: "again", text: `${harmed.name.toUpperCase()} AND BILL HADER SHARED A TABLE.` }] });
+  const k3 = Object.entries(e3.ents).find(([, e]) => e.h === `#market/${slugify(harmed.name)}`);
+  ok(k3 && !k3[1].p, `a figure with a harm finding is linked but never drawable (${harmed.name})`);
+}
+// contrast: every text colour the paper's stylesheet uses is listed, and every listed pair holds AA in every theme
+const paperSrc = readFileSync(root + "src/paper/Paper.jsx", "utf8");
+const used = new Set([...paperSrc.matchAll(/(?<![-\w])color:\s*"?var\((--[\w-]+)\)/g)].map(x => x[1]));
+for (const t of used) ok(R.PAPER_PAIRS.some(([x]) => x === t), `the paper's text colour ${t} is in PAPER_PAIRS (held to AA)`);
+const bareCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
+const tokensCss = bareCss(readFileSync(root + "src/ui/tokens.css", "utf8")), themesCss = bareCss(readFileSync(root + "src/ui/themes.css", "utf8"));
+const decls = (body) => Object.fromEntries([...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(x => [x[1], x[2].trim()]));
+const baseT = decls(tokensCss.match(/:root\s*{([\s\S]*?)\n}/)[1]);
+const themeSets = { green: {} };
+for (const x of themesCss.matchAll(/:root\[data-theme="([\w-]+)"\]\s*{([\s\S]*?)\n}/g)) themeSets[x[1]] = decls(x[2]);
+const resolveT = (set, n, d = 0) => { const v = set[n]; if (v == null || d > 8) return null; const r = v.match(/^var\((--[\w-]+)\)$/); return r ? resolveT(set, r[1], d + 1) : v; };
+const rgbT = (hx) => { const h = String(hx || "").replace("#", ""); if (!/^[0-9a-f]{6}$/i.test(h)) return null; return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+const lumT = ([r, g, b]) => { const c = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * c(r) + 0.7152 * c(g) + 0.0722 * c(b); };
+let lowest = 99;
+for (const [nm, over] of Object.entries(themeSets)) {
+  const set = { ...baseT, ...over };
+  for (const [t, sfc] of R.PAPER_PAIRS) {
+    const A = rgbT(resolveT(set, t)), B = rgbT(resolveT(set, sfc));
+    if (!A || !B) { ok(false, `${nm}: ${t} on ${sfc} is not a plain colour`); continue; }
+    const [x, y] = [lumT(A), lumT(B)].sort((p, q) => q - p), r = (x + 0.05) / (y + 0.05);
+    lowest = Math.min(lowest, r);
+    ok(r >= 4.5, `${nm}: the paper's ${t} on ${sfc} is ${r.toFixed(2)}:1 (AA needs 4.5)`);
+  }
+}
+ok(Object.keys(themeSets).length >= 12, `every theme is checked (${Object.keys(themeSets).length})`);
+
 if (bad) { console.error(`check-paper: ${bad} failure(s)`); process.exit(1); }
-console.log(`check-paper: ok (edition No. ${a.no}, ${nHref} links, lead: ${a.front.lead.text}; ${seen.size} strip templates over 400 days)`);
+console.log(`check-paper: ok (edition No. ${a.no}, ${nHref} links, ${Object.keys(v2.ents).length} names linked, ${named} figure mentions checked, lowest paper contrast ${lowest.toFixed(2)}:1; lead: ${a.front.lead.text}; ${seen.size} strip templates over 400 days)`);

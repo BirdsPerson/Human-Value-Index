@@ -7,7 +7,7 @@
 // instance) and gets the latest printed one meanwhile.
 import { getStore } from "@netlify/blobs";
 import { paperStore } from "../lib/paper-store.js";
-import { paperDate, wireOf, DATE_RE } from "../lib/paper.js";
+import { paperDate, wireOf, DATE_RE, entsOf } from "../lib/paper.js";
 import { tickSecret, TICK_HEADER, publicCached } from "../lib/social-store.js";
 import { readBoard } from "../lib/market.js";
 import { machineClock } from "../../src/city/sim.js";
@@ -38,6 +38,14 @@ export async function wire() {
   return wireOf({ mt: machineClock(now).mt, board, social, tourney });
 }
 
+// A v1 edition (printed before ents, 2026-10-05..09) is read with its names looked up now: the
+// listed names on the board and the city's places, beside the edition, never written into it.
+async function withEnts(ed) {
+  if (!ed || ed.ents) return {};
+  const board = await readBoard().catch(() => null);
+  return { ents: entsOf(ed, { names: (board?.rows || []).filter(r => r?.name && r?.slug).map(r => [r.name, r.slug]) }) };
+}
+
 export default async (req, context) => {
   if (req.method !== "GET") return json(405, { error: "THE PAPER IS READ, NOT WRITTEN TO." });
   const url = new URL(req.url), store = paperStore();
@@ -48,7 +56,7 @@ export default async (req, context) => {
       if (!DATE_RE.test(date)) return json(400, { error: "NO SUCH DATE. THE DEPARTMENT KEEPS A CALENDAR." });
       const ed = await store.edition(date);
       if (!ed) return json(404, { error: "NO EDITION WAS PRINTED THAT DAY." }, "public, max-age=60");
-      return json(200, { edition: ed }, "public, max-age=31536000, immutable");
+      return json(200, { edition: ed, ...(await withEnts(ed)) }, "public, max-age=31536000, immutable");
     }
     if (url.searchParams.get("index")) return json(200, { editions: (await store.index())?.editions || [] }, "public, max-age=120");
     if (url.searchParams.get("wire")) return json(200, { wire: await wire() }, "public, max-age=60");
@@ -59,7 +67,7 @@ export default async (req, context) => {
       await wake(base);
       ed = idx[0] ? await store.edition(idx[0].date) : null;
     }
-    return json(200, { today, edition: ed, wire: await wire(), index: idx.slice(0, 30).map(({ date, no, headline }) => ({ date, no, headline })) }, "public, max-age=60");
+    return json(200, { today, edition: ed, ...(await withEnts(ed)), wire: await wire(), index: idx.slice(0, 30).map(({ date, no, headline }) => ({ date, no, headline })) }, "public, max-age=60");
   } catch (err) {
     console.error("paper read failed", err?.message);
     return json(503, { error: "THE PRESSES ARE STOPPED. THE DEPARTMENT IS LOOKING INTO IT. IT IS NOT HURRYING." });
