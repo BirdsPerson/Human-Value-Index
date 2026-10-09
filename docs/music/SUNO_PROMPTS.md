@@ -16,6 +16,56 @@ How they get used:
 
 ---
 
+## 0. THE LAST FOUR DOWNLOADS (until Suno resets, ~2026-11-09)
+
+Generating doesn't use downloads, so make as many takes as you like and download only the winner.
+These four were picked because nothing we already have can stand in for them:
+
+1. **The Sub-Basements** (dungeon theme, section 2). The only dark, tense piece; the crawl is
+   long play sessions and everything else we have is sunny.
+2. **Stinger Pack** (below). Seven cues in ONE download; I cut it into separate sounds.
+3. **Leagues / Draft Night** (section 2). The sports broadcast theme: leagues screen, SNN sports
+   on THE SET, draft night. Nothing else sounds like a broadcast.
+4. **The Dive: Last Call Again** (jukebox, section 3). The first real song for the bar jukeboxes
+   (with Compliance, that's two, enough to switch the jukebox on).
+
+### Stinger Pack (one download, seven cues)
+Style: `8-bit chiptune, NES sound chip, video game sound effects pack, seven separate very short jingles, each followed by silence, dry, no reverb`
+Exclude styles: `synthwave, orchestral, pads, vocals, long melody`
+Lyrics:
+```
+[Instrumental]
+[Jingle: victory fanfare, 3 seconds]
+[Silence]
+[Jingle: sad descending defeat, 2 seconds]
+[Silence]
+[Jingle: bright morning chime, 3 seconds]
+[Silence]
+[Jingle: gavel and official fanfare, 3 seconds]
+[Silence]
+[Jingle: ominous computer processing beeps, 3 seconds]
+[Silence]
+[Jingle: slot machine jackpot, 4 seconds]
+[Silence]
+[Jingle: triumphant crowd roar fanfare, 4 seconds]
+[End]
+```
+If takes come out as one long song instead of separate cues, keep generating; pick the take with
+the clearest gaps.
+
+### Covered without a download (reusing tracks we have)
+- Fishing → Low Power Mode (lo-fi, calm)
+- Casino → Department Lobby take b (bossa vibraphone muzak, close to lounge)
+- Chess → Department Lobby take a
+- The Assembly → Compliance (instrumental stretch) until it gets its own march
+- Tagged Out → Fourth and Long / Gridiron spare take
+- Golf's 19th Hole is done.
+
+Already in (18 files): Day Shift x2, Night Shift, Department Lobby x2, Low Power Mode, Compliance,
+tennis, golf, 19th Hole, basketball, football x2, Fourth and Long, soccer, skate, bowling, skiing.
+
+---
+
 ## 1. Substrate themes (pick-one or playlist)
 
 ### 1a. Day Shift (the default)
