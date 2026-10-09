@@ -4,6 +4,8 @@ import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { GLYPHS, readPad } from "../../city/gamepad.js";
 import { machineClock } from "../../city/sim.js";
 import GameMenu from "../GameMenu.jsx";
+import TitleScreen from "../TitleScreen.jsx";
+import { cycleOf } from "../titleLogic.js";
 import { newGame, step, warp, challengeNear, rleEncode, rleDecode, replay, resultOf, speedKmh, unpack, VERSION } from "./sim.js";
 import { RUNS, POI, SHOP, warmTiles, weatherOn, lightsOn, FILES, LIFT_W, inPipe, waterAt } from "./world.js";
 import { CHALLENGES, CHALLENGE, RUNNABLE, MEDAL_NAME, fieldTimes, PIPE_LIMIT } from "./challenges.js";
@@ -61,6 +63,9 @@ const TUTORIAL = [
   { id: "poles", text: { keys: "AT THE TOP: PICK A TRAIL, THEN FOLLOW ITS POLES DOWN. GREEN IS EASIEST", pad: "AT THE TOP: PICK A TRAIL, THEN FOLLOW ITS POLES DOWN. GREEN IS EASIEST", touch: "AT THE TOP: PICK A TRAIL, THEN FOLLOW ITS POLES DOWN. GREEN IS EASIEST" } },
 ];
 
+// The title's four colours: night sky, snow, the lift's blue, the trail-map flag's orange.
+const COLORS = ["#000000", "#fcfcfc", "#3cbcfc", "#f87858"];
+
 export default function Ski({ route }) {
   useEffect(() => { injectStyles(); }, []);
   const opts = useMemo(() => parseRoute(route), [route]);
@@ -71,7 +76,11 @@ export default function Ski({ route }) {
   const rookie = prog.rookie !== false, goofy = prog.goofy ?? profileHand() === "L";
   const setPref = (k, v) => setProg(p => { const q = { ...p, [k]: v }; saveProgress(q); return q; });
   const [play, setPlay] = useState(null);   // {n, at | ch, tape?}
+  const [front, setFront] = useState(() => ({ at: false, n: 0 }));   // the title screen: where it opens (false: the title)
+  const [runs, setRuns] = useState(() => loadRuns());
+  const [muted, setMuted] = useState(() => SFX.isMuted());
   const caseId = useMemo(() => readCaseId(), []);
+  // ?at= / ?ch=: a link to a place or a flag goes straight onto the mountain, past the title
   useEffect(() => {
     if (opts.at || opts.ch) {
       setProg(p => { const q = { ...p, found: [...new Set([...p.found, ...(opts.at ? [opts.at] : [])])] }; saveProgress(q); return q; });
@@ -79,125 +88,68 @@ export default function Ski({ route }) {
     }
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   const toggleBoard = () => setBoard(b => { const v = !b; setProg(p => { const q = { ...p, board: v }; saveProgress(q); return q; }); return v; });
-  let body;
-  if (play) body = <Play key={play.n} start={play} board={play.tape ? Boolean(play.tape.board) : board} rookie={rookie} goofy={goofy} time={time} caseId={caseId} prog={prog} setProg={setProg} onQuit={() => { setPlay(null); setProg(loadProgress()); }} />;
-  else body = <Home prog={prog} board={board} toggleBoard={toggleBoard} rookie={rookie} goofy={goofy} setPref={setPref} time={time} setTime={setTime} caseId={caseId} onPlay={(s) => { SFX.unlock(); setPlay({ n: Date.now(), ...s }); }} />;
+  const go = (s) => { SFX.unlock(); setPlay({ n: Date.now(), ...s }); };
+  const toFront = (at = true) => { setPlay(null); setProg(loadProgress()); setRuns(loadRuns()); setFront(f => ({ at, n: f.n + 1 })); };
+
+  const found = new Set(prog.found);
+  let files = 0; for (const F of FILES) if (prog.files & (1 << F.i)) files++;
+  const chFound = CHALLENGES.filter(c => c.start && found.has(`ch:${c.id}`)).length;
+  const rows = {
+    play: () => go({ at: "base" }),
+    modes: [
+      { id: "free", label: "FREE SKI", hint: "FROM THE BASE", note: GOAL_LINE, onSelect: () => go({ at: "base" }) },
+      { id: "challenges", label: "CHALLENGES", hint: `${chFound} OF ${RUNNABLE.length} FOUND`, items: CHALLENGES.map(c => {
+        const m = prog.medals[c.id], ok = c.start ? found.has(`ch:${c.id}`) : true;
+        return { id: c.id, label: ok ? c.name : "?? NOT FOUND YET", value: c.id === "files" ? `${files}/${FILES.length}` : m ? `${["", "B", "S", "G"][m.medal || 0]} ${fmtValue(c, m.best)}` : "",
+          note: ok ? c.note : "SOMEWHERE ON THE MOUNTAIN. LOOK FOR A TALL ORANGE FLAG.", disabled: !ok || !c.start, onSelect: ok && c.start ? () => go({ at: "base", ch: c.id }) : undefined };
+      }) },
+      { id: "places", label: "START FROM A PLACE", hint: `${[...found].filter(id => POI[id]).length} FOUND`, items: [...found].filter(id => POI[id]).slice(0, 40).map(id => ({ id, label: POI[id].name, onSelect: () => go({ at: id }) })) },
+      { id: "runs", label: "SAVED RUNS", hint: String(runs.length), items: runs.map(r => ({ id: String(r.at), label: r.name, value: r.res?.value != null ? fmtValue(CHALLENGE[r.ch] || { unit: "" }, r.res.value) : "", items: [
+        { id: "watch", label: "WATCH", onSelect: () => go({ at: "base", tape: r }) },
+        r.ch && found.has(`ch:${r.ch}`) ? { id: "again", label: "RUN IT AGAIN", onSelect: () => go({ at: "base", ch: r.ch }) } : null,
+        { id: "delete", label: "DELETE", onSelect: () => { deleteRun(r.at); setRuns(loadRuns()); setFront(f => ({ at: "modes", n: f.n + 1 })); } },
+      ].filter(Boolean) })) },
+      rd(TUT_KEY, "") === "done" ? { id: "lesson", label: "THE FIRST-RUN LESSON AGAIN", onSelect: () => { wr(TUT_KEY, ""); go({ at: "base" }); } } : null,
+    ].filter(Boolean),
+    settings: [
+      { id: "kit", label: "RIDE", value: board ? "SNOWBOARD" : "SKIS", note: board ? "ONE BOARD, SIDEWAYS. GRABS ARE INDY, MELON, STALEFISH; RAILS CAN BE BOARDSLID." : "TWO SKIS. GRABS ARE MUTE, SAFETY, JAPAN.", cycle: toggleBoard },
+      board ? { id: "stance", label: "STANCE", value: goofy ? "GOOFY" : "REGULAR", note: goofy ? "RIGHT FOOT FORWARD." : "LEFT FOOT FORWARD.", cycle: () => setPref("goofy", !goofy) } : null,
+      { id: "rookie", label: "ROOKIE HELP", value: rookie ? "ON" : "OFF", note: rookie ? "THE GREEN TRAILS KEEP YOUR SPEED STEADY, FALLS ARE SHORT, TREES AND LANDINGS FORGIVE MORE. CHALLENGES ARE THE SAME FOR EVERYONE." : "THE MOUNTAIN AS IT IS.", cycle: () => setPref("rookie", !rookie) },
+      { id: "time", label: "TIME OF DAY", value: TIMES[time], note: "MIDDAY IS THE EASIEST TO SEE. THE CITY'S HOUR BRINGS THE CITY'S WEATHER. THE LOWER TRAILS LIGHT UP AT DUSK.", cycle: (d) => setTime(cycleOf(Object.keys(TIMES), time, d)) },
+      { id: "sound", label: "SOUND", value: muted ? "OFF" : "ON", cycle: () => { const m = !muted; setMuted(m); SFX.setMuted(m); if (!m) SFX.unlock(); } },
+    ].filter(Boolean),
+    boards: { label: "THE VERIFIED BOARDS", legend: <Boards caseId={caseId} /> },
+    controls: <Controls />,
+    back: true,
+  };
   return (
     <div className="sk">
-      <ScreenHead title="THE MOUNTAIN" meta="SKIING // EXHIBITION // OPEN SLOPE. THE LIFTS RUN FOR YOU. EVERYTHING IS RECORDED." />
-      {body}
+      <ScreenHead title="THE MOUNTAIN" meta="SKIING // EXHIBITION" />
+      {play
+        ? <Play key={play.n} start={play} board={play.tape ? Boolean(play.tape.board) : board} rookie={rookie} goofy={goofy} time={time} caseId={caseId} prog={prog} setProg={setProg} onQuit={() => toFront(true)} />
+        : <TitleScreen key={front.n} game="ski" title="SKIING" sub={`THE MOUNTAIN // ${board ? "SNOWBOARD" : "SKIS"} // ${found.size} PLACES, ${files} OF ${FILES.length} FILES`} colors={COLORS} at={front.at} rows={rows} note={NOTICE} />}
     </div>
   );
 }
 
-// ---- the start ------------------------------------------------------------------------------------------
-function Home({ prog, board, toggleBoard, rookie, goofy, setPref, time, setTime, caseId, onPlay }) {
-  const found = new Set(prog.found), playRef = useRef(null);
-  const [runs, setRuns] = useState(() => loadRuns());
+// THE VERIFIED BOARDS, fetched when opened from the front menu.
+function Boards({ caseId }) {
   const [boards, setBoards] = useState(null);
-  useEffect(() => { playRef.current?.focus({ preventScroll: true }); }, []);
-  useEffect(() => {
-    let raf, prev = null;
-    const tick = () => { raf = requestAnimationFrame(tick); const p = readPad(); if (p.connected && prev && ((p.held.act && !prev.act) || (p.held.start && !prev.start))) onPlay({ at: "base" }); prev = p.connected ? p.held : null; };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  });
-  let files = 0; for (const F of FILES) if (prog.files & (1 << F.i)) files++;
-  const medals = CHALLENGES.filter(c => c.start).reduce((n, c) => n + ((prog.medals[c.id]?.medal || 0) === 3 ? 1 : 0), 0);
+  useEffect(() => { fetchBoards(caseId).then(setBoards).catch(err => setBoards({ error: err.message })); }, [caseId]);
   return (
-    <>
-      <p className="sk-goal">{GOAL_LINE}</p>
-      <p className="pg-lede">DOWN THE HILL IS ALWAYS DOWN THE SCREEN. A YELLOW ARROW POINTS TO WHERE TO GO NEXT. THE COLOURED POLES MARK THE TRAILS: GREEN IS EASY, BLUE IS HARDER, BLACK IS HARD. THE FIRST RUN TEACHES THE REST IN HALF A MINUTE.</p>
-      <div className="pg-start">
-        <Button variant="primary" ref={playRef} onClick={() => onPlay({ at: "base" })}>PLAY NOW</Button>
-        <span className="pg-sub">FROM THE BASE ON {board ? `A SNOWBOARD (${goofy ? "GOOFY" : "REGULAR"})` : "SKIS"}, {rookie ? "ROOKIE HELP ON" : "NO HELP (PRO)"}. {found.size} PLACES FOUND, {files} OF {FILES.length} FILES, {medals} GOLD.</span>
-      </div>
-      <div className="sk-row" role="group" aria-label="Settings">
-        <button type="button" className="pg-toggle" aria-pressed={rookie} onClick={() => setPref("rookie", !rookie)}>ROOKIE HELP</button>
-        <span className="sk-small">{rookie ? "ON: THE GREEN TRAILS KEEP YOUR SPEED STEADY, FALLS ARE SHORT, TREES AND LANDINGS FORGIVE MORE. (CHALLENGES ARE ALWAYS THE SAME FOR EVERYONE.)" : "OFF: THE MOUNTAIN AS IT IS."}</span>
-      </div>
-      <div className="sk-row" role="group" aria-label="Skis or snowboard">
-        <button type="button" className="pg-toggle" aria-pressed={board} onClick={toggleBoard}>SNOWBOARD</button>
-        {board && <span className="sk-chips" role="radiogroup" aria-label="Stance" style={{ margin: 0 }}>
-          <button type="button" role="radio" aria-checked={!goofy} className={`sk-chip${!goofy ? " on" : ""}`} onClick={() => setPref("goofy", false)}>REGULAR (LEFT FOOT FORWARD)</button>
-          <button type="button" role="radio" aria-checked={goofy} className={`sk-chip${goofy ? " on" : ""}`} onClick={() => setPref("goofy", true)}>GOOFY (RIGHT FOOT FORWARD)</button>
-        </span>}
-        {!board && <span className="sk-small">SKIS. TURN ON SNOWBOARD TO RIDE ONE (AND PICK YOUR STANCE).</span>}
-      </div>
-      {rd(TUT_KEY, "") === "done" && <p className="sk-small"><button type="button" className="sk-chip" onClick={() => { wr(TUT_KEY, ""); onPlay({ at: "base" }); }}>PLAY THE FIRST-RUN LESSON AGAIN</button></p>}
-      <details className="pg-more">
-        <summary>CHALLENGES ({CHALLENGES.filter(c => c.start && found.has(`ch:${c.id}`)).length} OF {RUNNABLE.length} FOUND)</summary>
-        <div className="pg-more-body">
-          <p className="sk-small">A CHALLENGE STARTS AT ITS FLAG ON THE MOUNTAIN (STAND BY IT, PRESS R OR Y). ONCE FOUND, START IT FROM HERE OR THE MAP. MEDALS: BRONZE, SILVER, GOLD.</p>
-          <ul className="sk-chs">
-            {CHALLENGES.map(c => {
-              const m = prog.medals[c.id], ok = c.start ? found.has(`ch:${c.id}`) : true;
-              return (
-                <li key={c.id}>
-                  <button type="button" className="sk-ch" disabled={!ok || !c.start} onClick={() => onPlay({ at: "base", ch: c.id })} aria-label={`${c.name}. ${ok ? (m ? `Best ${fmtValue(c, m.best)}, ${MEDAL_NAME[m.medal]}` : "Not yet run") : "Not found yet"}.${c.start && ok ? " Start it." : ""}`}>
-                    <span className={`sk-medal m${m?.medal || 0}`} aria-hidden="true">{["·", "B", "S", "G"][m?.medal || 0]}</span>
-                    <span className="nm"><b>{ok ? c.name : "?? NOT FOUND YET"}</b><span className="why">{ok ? c.note : "SOMEWHERE ON THE MOUNTAIN. LOOK FOR A TALL ORANGE FLAG."}</span></span>
-                    <span className="rt">{c.id === "files" ? `${files}/${FILES.length}` : m ? fmtValue(c, m.best) : ""}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+    <div>
+      <p className="sk-small">A RUN IS FILED FROM ITS INPUT LOG; THE SERVER SKIS IT AGAIN BEFORE IT BELIEVES YOU.{caseId ? "" : " FILING NEEDS A CASE NUMBER: GET ONE FROM THE INTAKE."}</p>
+      {!boards ? <p className="sk-small">FETCHING THE BOARDS...</p> : boards.error ? <p className="sk-small">{boards.error}</p> : (
+        <div className="sk-boards">
+          {BOARDED.map(id => (
+            <table key={id} aria-label={`${CHALLENGE[id].name} board`}>
+              <caption>{CHALLENGE[id].name}</caption>
+              <tbody>{(boards.boards?.[id] || []).slice(0, 10).map((e, i) => <tr key={i}><td>{i + 1}</td><td>{e.holder}</td><td>{fmtValue(CHALLENGE[id], e.value)}</td></tr>)}{!(boards.boards?.[id] || []).length && <tr><td colSpan={3}>NOBODY YET.</td></tr>}</tbody>
+            </table>
+          ))}
         </div>
-      </details>
-      <details className="pg-more">
-        <summary>TIME OF DAY, WHERE TO START</summary>
-        <div className="pg-more-body">
-          <p className="sk-small">{board ? "ONE BOARD, SIDEWAYS. GRABS ARE INDY, MELON, STALEFISH; RAILS CAN BE BOARDSLID." : "TWO SKIS. GRABS ARE MUTE, SAFETY, JAPAN."}</p>
-          <div className="sk-chips" role="radiogroup" aria-label="Time of day">
-            {Object.entries(TIMES).map(([k, v]) => <button key={k} type="button" role="radio" aria-checked={time === k} className={`sk-chip${time === k ? " on" : ""}`} onClick={() => setTime(k)}>{v}</button>)}
-          </div>
-          <p className="sk-small">MIDDAY BY DEFAULT: THE EASIEST TO SEE. THE CITY'S HOUR BRINGS THE CITY'S WEATHER (THE MOUNTAIN'S DAY RUNS AT A SIXTH OF THE CITY'S CLOCK WHILE YOU SKI). THE LIGHTS ON THE LOWER TRAILS COME ON AT DUSK.</p>
-          <p className="sk-small">START FROM A PLACE FOUND:</p>
-          <div className="sk-chips">
-            {[...found].filter(id => POI[id]).slice(0, 40).map(id => <button key={id} type="button" className="sk-chip" onClick={() => onPlay({ at: id })}>{POI[id].name}</button>)}
-          </div>
-        </div>
-      </details>
-      <details className="pg-more" onToggle={(e) => { if (e.currentTarget.open && !boards) fetchBoards(caseId).then(setBoards).catch(err => setBoards({ error: err.message })); }}>
-        <summary>THE VERIFIED BOARDS</summary>
-        <div className="pg-more-body">
-          <p className="sk-small">THREE CHALLENGES KEEP A BOARD: {BOARDED.map(id => CHALLENGE[id].name).join(", ")}. A RUN IS FILED FROM ITS INPUT LOG; THE SERVER SKIS IT AGAIN BEFORE IT BELIEVES YOU. FILING NEEDS A CASE NUMBER{caseId ? "" : " (YOU HAVE NONE IN THIS BROWSER: GET ONE FROM THE INTAKE)"}.</p>
-          {!boards ? <p className="sk-small">FETCHING THE BOARDS...</p> : boards.error ? <p className="sk-small">{boards.error}</p> : (
-            <div className="sk-boards">
-              {BOARDED.map(id => (
-                <table key={id} aria-label={`${CHALLENGE[id].name} board`}>
-                  <caption>{CHALLENGE[id].name}</caption>
-                  <tbody>{(boards.boards?.[id] || []).slice(0, 10).map((e, i) => <tr key={i}><td>{i + 1}</td><td>{e.holder}</td><td>{fmtValue(CHALLENGE[id], e.value)}</td></tr>)}{!(boards.boards?.[id] || []).length && <tr><td colSpan={3}>NOBODY YET.</td></tr>}</tbody>
-                </table>
-              ))}
-            </div>
-          )}
-        </div>
-      </details>
-      <details className="pg-more">
-        <summary>SAVED RUNS ({runs.length})</summary>
-        <div className="pg-more-body">
-          {!runs.length ? <p className="sk-small">NONE YET. A CHALLENGE'S BEST IS KEPT BY ITSELF; ANY RUN CAN BE KEPT FROM THE PAUSE MENU (SAVE THIS RUN).</p> : (
-            <ul className="sk-runs">
-              {runs.map(r => (
-                <li key={r.at}>
-                  <span>{r.name}{r.res?.value != null ? ` // ${fmtValue(CHALLENGE[r.ch] || { unit: "" }, r.res.value)}` : ""} // {new Date(r.at).toLocaleDateString()}</span>
-                  <button type="button" className="sk-chip" onClick={() => onPlay({ at: "base", tape: r })}>WATCH</button>
-                  {r.ch && found.has(`ch:${r.ch}`) && <button type="button" className="sk-chip" onClick={() => onPlay({ at: "base", ch: r.ch })}>RUN IT AGAIN</button>}
-                  <button type="button" className="sk-chip" onClick={() => { deleteRun(r.at); setRuns(loadRuns()); }}>DELETE</button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </details>
-      <details className="pg-more">
-        <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><Controls /></div>
-      </details>
-      <p className="sk-notice"><b>EXHIBITION.</b> {NOTICE} THE SHAUN WHITE SHOP AT THE FOOT SELLS NOTHING YET. THE CITY'S SKIERS ON THE SLOPES ARE ON THEIR OWN ROUNDS; THEY DO NOT TALK.</p>
-    </>
+      )}
+    </div>
   );
 }
 
@@ -460,13 +412,12 @@ function Play({ start, board, rookie, goofy, time, caseId, prog, setProg, onQuit
             {hud.air && <div className="sk-pop air">{hud.air}</div>}
             {!hud.air && popOn && <div className={`sk-pop ${pop.kind}`} key={pop.t}>{pop.text}</div>}
             {hud.big && !hud.count && <div className={`sk-big p-${hud.phase}`}>{hud.big}</div>}
-            {!hud.big && hud.shop && <div className="sk-bottom">SHAUN WHITE // BOARDS AND SKIS. NOTHING ON SALE YET.</div>}
             {hud.replay && <div className="sk-tape">REPLAY</div>}
           </div>
         )}
         {hud && !hud.replay && (intro || tut != null) && (
           <div className="sk-coach">
-            {intro && <p className="sk-intro">{GOAL_LINE}</p>}
+            {intro && tut == null && <p className="sk-intro">{GOAL_LINE}</p>}{/* the first-run lesson says it step by step */}
             {tut != null && hud.tutText && <div className="sk-tut" role="status"><span className="n">FIRST RUN {tut + 1}/{TUTORIAL.length}</span><b>{hud.tutText}</b><button type="button" className="sk-chip" onClick={() => api.skipTut?.()}>SKIP THE LESSON</button></div>}
           </div>
         )}
@@ -479,13 +430,10 @@ function Play({ start, board, rookie, goofy, time, caseId, prog, setProg, onQuit
       <ButtonRow>
         <Button onClick={() => api.pause?.()}>Pause</Button>
         <Button onClick={() => api.map?.()}>Map</Button>
-        {inCh ? <Button onClick={() => api.restartCh?.()}>Retry</Button> : <Button onClick={() => inputRef.current?.push("retry")}>Start challenge</Button>}
-        <Button onClick={() => api.instant?.()}>Replay</Button>
-        <Button onClick={toggleMute}>{muted ? "Sound on" : "Mute"}</Button>
-        <Button variant="back" onClick={onQuit}>Leave the mountain</Button>
+        {/* the challenge button only when there is one: in it (retry) or standing by its flag (start) */}
+        {inCh ? <Button onClick={() => api.restartCh?.()}>Retry</Button> : hud?.near ? <Button onClick={() => inputRef.current?.push("retry")}>Start: {hud.near}</Button> : null}
       </ButtonRow>
-      {!touch && <details className="pg-more sk-legend-wrap"><summary>CONTROLS // {mode === "pad" ? `CONTROLLER (${String(family || "pad").toUpperCase()})` : "KEYBOARD"}</summary><div className="pg-more-body">{legend}</div></details>}
-      <p className="sk-small">{NOTICE}</p>
+      {/* replay, sound, controls and leaving: the pause menu */}
       {menu === "pause" && (
         <GameMenu kind="pause" title="PAUSED." summary="THE MOUNTAIN WAITS. THE LIFTS DO NOT, BUT THEY WILL FOR YOU." onBack={() => api.resume?.()}
           options={{ resume: () => api.resume?.(), lesson: tut != null ? { label: "SKIP THE FIRST-RUN LESSON", onSelect: () => { api.skipTut?.(); api.resume?.(); } } : null, restart: inCh ? { label: "RETRY CHALLENGE", onSelect: () => api.restartCh?.() } : null, map: { label: "FAST TRAVEL (THE MAP)", onSelect: () => { setMenu(null); api.map?.(); } }, replay: { label: "INSTANT REPLAY", onSelect: () => api.instant?.() }, save: { label: "SAVE THIS RUN", onSelect: () => { api.saveThis?.(); } }, leave: inCh ? { label: "LEAVE THE CHALLENGE", onSelect: () => api.leaveCh?.() } : null, controls: legend, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "LEAVE THE MOUNTAIN", onSelect: onQuit } }} />
