@@ -21,7 +21,7 @@ export const SIZE = { S: [1, 1], M: [2, 1], T: [1, 2], L: [2, 2], W: [4, 1] };
 export const SIZE_NAME = { S: "SMALL", M: "MEDIUM", T: "TALL", L: "LARGE", W: "WIDE" };
 export const SIZE_ORDER = ["S", "M", "T", "L", "W"];   // what + and - walk through
 export const SIZES_OF = {
-  market: ["S", "M", "T", "L", "W"], wire: ["S", "M", "T", "L", "W"], cam: ["S", "M", "T", "L"], notice: ["S", "M"],
+  market: ["S", "M", "T", "L", "W"], wire: ["S", "M", "T", "L", "W"], cam: ["S", "M", "T", "L"], notice: ["S", "M", "T"],
   file: ["S", "M", "T", "L"], flat: ["S", "M", "L"], watch: ["S", "M", "T", "L", "W"], set: ["S", "M", "T", "L"],
   paper: ["S", "M", "T", "L"], cups: ["S", "M", "T", "L"], league: ["S", "M", "T", "L"], board: ["S", "M", "T", "L", "W"],
 };

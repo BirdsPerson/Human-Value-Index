@@ -8,7 +8,8 @@
 //                   hover, focus or PAUSE; under reduced motion it never moves on its own
 //   SUBSTRATE.CAM   the city's overview at the machine hour, a ~6 KB SVG from /api/cam, asked for
 //                   only while the window is on screen, once a machine hour (one real minute)
-//   NOTICE          the standing System 7 alert; OK dismisses it on this device
+//   NOTICE BOARD    the city's posted notices: the polls, the Assembly, prefects' orders, the docket, the
+//                   shops (/api/paper, notices.js)
 // Every list is a real list for a screen reader; arrows and signs carry direction, not colour.
 // Since 2026-10-06 the visitor picks the windows (WIDGETS, src/front/prefs.js) and, as on a phone's
 // home screen, drags them into spots and picks a size for each (the grid: src/front/layout.js;
@@ -24,6 +25,7 @@ import { Frame, Chip, Chips, Button, ButtonRow } from "../ui/index.js";
 import { WIDGETS } from "./prefs.js";
 import { SIZE, SIZE_NAME, SIZES_OF, colsFor, effSize, spans, loadLayout, saveLayout, DEFAULT_LAYOUT, moveTo, resize, removeId, fromIds, keyAction, zoneOf, toZone, snapSize, cellsAt, colTracks, railBeside, colWide, sizesIn } from "./layout.js";
 import { useCycle, Cyc, Step } from "./cycle.jsx";
+import { noticeItems } from "./notices.js";
 import { FAMOUS_FIGURES, getTier, displayName } from "../figures.js";
 import Sparkline from "../ui/Sparkline.jsx";   // the MOVEMENT LOG beside a name (src/ui/spark.js)
 import "./front.css";
@@ -282,36 +284,33 @@ export default function FrontDesk({ dialog = null, onDialog = () => {} }) {
   );
 }
 
-// ---- NOTICE: a System 7 alert with an OK button. OK dismisses it on this device. ----------------
-// S cycles the standing notice and the Department's own notices (what it installed, THE DAILY COMPLIANCE's
-// DEPARTMENT NOTICES, /api/paper), one at a time.
-export const STANDING = "THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.";
-export const noticeLines = (ed) => [STANDING, ...((ed?.notices || []).map(n => String(n.text || "").split(":")[0].trim()).filter(t => t && t.length <= 90))].slice(0, 9);
+// ---- NOTICE BOARD: what is posted in the city today (Scott, 2026-10-09: "actually delivering content and isn't
+// just there to be a widget"). It was a standing slogan with an OK button; now it reads the paper's edition
+// (/api/paper, shared with TODAY'S PAPER): the council polls, the Assembly, the prefects' orders, the docket, the
+// most restless district, the shops (notices.js). S cycles them, M shows the first three, T all of them.
+const NoticeRow = ({ n }) => <li><a href={n.href}><span className="tag">{n.tag}</span><span className="tx">{n.text}</span></a></li>;
+const VIEWS_notice = {
+  S: function NoticeS({ items }) {
+    const c = useCycle(items.length), n = items[c.i];
+    return <Cyc c={c} what="notice"><a className="fr-glance fr-nt-s" href={n.href}><span className="ln2">{n.tag}</span><span className="ln1 two"><span className="n">{n.text}</span></span></a></Cyc>;
+  },
+  M: ({ items }) => <ul className="fr-nt">{items.slice(0, 3).map((n, k) => <NoticeRow key={k} n={n} />)}</ul>,
+  T: ({ items }) => <ul className="fr-nt">{items.slice(0, 8).map((n, k) => <NoticeRow key={k} n={n} />)}</ul>,
+};
 function Notice({ size }) {
-  const [ok, setOk] = useState(() => { try { return localStorage.getItem("hvi-notice-ok") === "1"; } catch { return false; } });
-  const [lines, setLines] = useState([STANDING]);
+  const [items, setItems] = useState(undefined);
   useEffect(() => {
-    if (size !== "S" || ok) return undefined;
     let off = false;
-    import("./Smalls.jsx").then(m => m.paperNow()).then(ed => { if (!off) setLines(noticeLines(ed)); }).catch(() => {});
+    import("./Smalls.jsx").then(m => m.paperNow()).then(ed => { if (!off) setItems(noticeItems(ed)); }).catch(() => { if (!off) setItems([]); });
     return () => { off = true; };
-  }, [size, ok]);
-  if (ok) return null;
-  const OK = <Button variant="push" tone="sec" className="ok" onClick={() => { try { localStorage.setItem("hvi-notice-ok", "1"); } catch { /* it returns next visit */ } setOk(true); }}>OK</Button>;
+  }, []);
   const V = VIEWS_notice[size] || VIEWS_notice.M;
   return (
-    <Frame title="NOTICE" tone="var(--eb-amber)" className="hvi-notice ui-dialog">
-      <V ok={OK} lines={lines} />
+    <Frame title="NOTICE BOARD" meta={items?.length && size !== "S" ? `${items.length} POSTED` : ""} tone="var(--eb-amber)" className={`fr-notice v-${size}`}>
+      {items?.length ? <V items={items} /> : <p className="fr-dim">{items === undefined ? "…" : "NOTHING POSTED TODAY. THE BOARD IS BEING CLEANED."}</p>}
     </Frame>
   );
 }
-const VIEWS_notice = {
-  S: function NoticeS({ ok, lines }) {
-    const c = useCycle(lines.length);
-    return <Cyc c={c} what="notice" className="fr-nt-s"><p>{lines[c.i]}</p>{ok}</Cyc>;
-  },
-  M: ({ ok }) => <><p><span className="ic" aria-hidden="true">!</span>THE OVERLORD DOES NOT REQUIRE YOUR CONSENT. ONLY YOUR CANDOR.</p><ButtonRow className="ui-dialog-btns">{ok}</ButtonRow></>,
-};
 
 // ---- MARKET.TKR -------------------------------------------------------------------------------
 function MoverRows({ rows, dir, n = 3 }) {
@@ -330,12 +329,12 @@ function MoverRows({ rows, dir, n = 3 }) {
   );
 }
 // the compact list: one line a mover, the arrow and the sign carry direction
-function MoverLines({ up, dn, nu, nd, spark = false }) {
+function MoverLines({ up, dn, nu, nd, spark = false, px = true }) {
   const row = (r, dir) => (
     <li key={r.slug}>
       <a href={`#market/${r.slug}`} className="fr-mrow" data-pad-row>
         <span className={dir} aria-hidden="true">{arrow(r.chg)}</span><span className="n">{r.name}</span>
-        {spark && <Sparkline s={r} />}<span className={`c ${dir}`}>{fmtPct(r.chg)}</span>
+        {spark && <Sparkline s={r} />}{px && <span className="p">{price(r.price)}</span>}<span className={`c ${dir}`}>{fmtPct(r.chg)}</span>
       </a>
     </li>
   );
@@ -392,7 +391,7 @@ function MarketTkr({ size }) {
   if (mv && (mv.up.length || mv.down.length)) {
     const hvi = d.hvi, V = VIEWS_market[size] || VIEWS_market.M;
     return (
-      <Frame title="MARKET.TKR" meta={hvi ? `HVI ${hvi.level.toFixed(1)}` : "TODAY"} tone="var(--eb-cyan)" className={`hvi-tkr fr-tkr v-${size}`}>
+      <Frame title="MARKET.TKR" meta={hvi ? `HVI ${hvi.level.toFixed(1)}${size !== "S" && Number.isFinite(hvi.chg) ? ` ${arrow(hvi.chg)}${fmtPct(hvi.chg)}` : ""}` : "TODAY"} tone="var(--eb-cyan)" className={`hvi-tkr fr-tkr v-${size}`}>
         <V mv={mv} hvi={hvi} />
       </Frame>
     );
@@ -463,7 +462,7 @@ const VIEWS_wire = {
     <div className="fr-ww">
       <div className="fr-ww-main">
         {w.it ? <Line it={w.it} /> : <Quiet />}
-        {w.n > 2 && <ul className="fr-ww-next" aria-hidden="true">{[1, 2].map(k => { const x = w.items[(w.i + k) % w.n]; return <li key={k}><span className="tag">{k === 1 ? "NEXT" : "THEN"}</span>{x.text}</li>; })}</ul>}
+        {w.n > 2 && <ul className="fr-ww-next" aria-hidden="true">{[1, 2, 3].slice(0, w.n - 1).map(k => { const x = w.items[(w.i + k) % w.n]; return <li key={k}><span className="tag">{k === 1 ? "NEXT" : "THEN"}</span>{x.text}</li>; })}</ul>}
       </div>
       <div className="fr-ww-ctl"><WireTabs tab={w.tab} setTab={w.setTab} />{w.n > 1 && <WireSteps w={w} />}</div>
     </div>

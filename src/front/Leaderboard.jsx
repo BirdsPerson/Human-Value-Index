@@ -1,11 +1,12 @@
 // LEADERBOARD (Scott, 2026-10-06): who leads the tournament on now (golf, bowling, the Sunday derby), or the last one
-// finished. /api/tournament for the calendar and each event's top five; the L size also asks ?id= for the whole
+// finished (and while the live one has no cards yet, the last finished board, with the live one named at its foot:
+// board.js pickBoard). /api/tournament for the calendar and each event's top five; the L size also asks ?id= for the whole
 // board, both divisions, with arrows for who moved since the last look (kept on this device, at least five minutes
 // old before it counts). One prepared layout per size: S the top five in turn (cycle.jsx), M the top five, T seven in a
 // column, L the full board, W a stepping board, one entrant at a time. The pure half is board.js.
 import { useEffect, useRef, useState } from "react";
 import { Frame, Chip, Chips } from "../ui/index.js";
-import { pickEvent, leadersOf, scoreText, holder, moves, snapshot, arrowOf, whenText, DIVS } from "./board.js";
+import { pickBoard, leadersOf, scoreText, holder, moves, snapshot, arrowOf, whenText, DIVS } from "./board.js";
 import { get, put } from "./prefs.js";
 import { useCycle, Cyc } from "./cycle.jsx";
 
@@ -29,7 +30,7 @@ function useBoard(full) {
     const load = async () => {
       const cal = await getJSON("/api/tournament");
       if (off) return;
-      const pick = cal?.events ? pickEvent(cal.events) : null;
+      const pick = cal?.events ? pickBoard(cal.events) : null;
       if (!pick) { setD(null); return; }
       let boards = Object.fromEntries(DIVS.map(div => [div, pick.ev.leaders?.[div] || []]));
       if (full) {
@@ -60,7 +61,10 @@ const Row = ({ ev, r, mv, i, short }) => (
 const List = ({ ev, rows, n, mv, cls = "", short }) => (
   <ol className={`fr-lb ${cls}`}>{rows.slice(0, n).map((r, i) => <Row key={r.holder + i} ev={ev} r={r} i={i} short={short} mv={mv ? mv[r.holder] : undefined} />)}</ol>
 );
-const Foot = ({ ev }) => <a className="fr-go" href={ev.href || "#play"}>THE FULL BOARD ›</a>;
+// the foot: the full board, or (a finished board shown because the live event has no cards yet) the live one
+const Foot = ({ ev, waiting }) => (waiting
+  ? <a className="fr-go" href={waiting.href || "#play"}>NOW OPEN, NO CARDS YET: {waiting.name} ›</a>
+  : <a className="fr-go" href={ev.href || "#play"}>THE FULL BOARD ›</a>);
 const NoCards = () => <p className="fr-dim">NO CARDS IN YET. THE BOARD IS YOURS TO TAKE.</p>;
 
 const VIEWS_board = {
@@ -76,8 +80,8 @@ const VIEWS_board = {
     );
     return l ? <Cyc c={c} what="place">{link}</Cyc> : link;
   },
-  M: ({ ev, rows }) => (rows.length ? <><List ev={ev} rows={rows} n={5} /><Foot ev={ev} /></> : <NoCards />),
-  T: ({ ev, rows }) => (rows.length ? <><List ev={ev} rows={rows} n={7} cls="tall" short /><Foot ev={ev} /></> : <NoCards />),
+  M: ({ ev, rows, waiting }) => (rows.length ? <><List ev={ev} rows={rows} n={5} /><Foot ev={ev} waiting={waiting} /></> : <NoCards />),
+  T: ({ ev, rows, waiting }) => (rows.length ? <><List ev={ev} rows={rows} n={7} cls="tall" short /><Foot ev={ev} waiting={waiting} /></> : <NoCards />),
   L: ({ ev, boards, mv }) => (
     <div className="fr-lb-cols">
       {DIVS.map(div => (
@@ -124,7 +128,7 @@ export default function Leaderboard({ size = "M" }) {
   const rows = d ? leadersOf(d.ev) : [];
   return (
     <Frame title={size === "S" ? "BOARD" : size === "T" ? "LEADERS" : "LEADERBOARD"} meta={d && size !== "S" && size !== "T" ? `${d.ev.name} · ${whenText(d.ev, d.live)}` : ""} tone="var(--accent)" className={`fr-board v-${size}`}>
-      {d ? <V ev={d.ev} rows={rows} boards={d.boards} mv={d.mv} />
+      {d ? <V ev={d.ev} rows={rows} boards={d.boards} mv={d.mv} waiting={d.waiting} />
         : <p className="fr-dim">{d === undefined ? "…" : "NO TOURNAMENT HAS BEEN HELD. THE DEPARTMENT IS PREPARING ONE."}</p>}
     </Frame>
   );
