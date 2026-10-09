@@ -5,6 +5,8 @@ import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
 import GameMenu from "../GameMenu.jsx";
+import TitleScreen from "../TitleScreen.jsx";
+import { liveItems, cycleOf } from "../titleLogic.js";
 import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, LEVELS, DEFAULT_LEVEL, FORMATIONS, LENGTHS, SHOT_FULL, att, minuteOf, lineUp } from "./sim.js";
 import { TEAM_IDS, teamName, teamShort, teamCode, kitsFor, keeperKits, FALLBACK, loadLeague, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, shirtName, divisionsOf, divisionOf, difficultyOf, defaultLevelIndex, allClubs } from "./roster.js";
 import { draw, makeCam, camFollow, CAMS, W, H, shade } from "./render.js";
@@ -72,6 +74,9 @@ function elevenOf(league, id, me) {
   return (league.teams[id] || []).slice(0, 11).map(([k, n, r]) => [k, k === mine ? me.name : shownName(n), r]);
 }
 
+// The title's four colours: night, white letters, the pitch's green, the ball's yellow.
+const COLORS = ["#000000", "#fcfcfc", "#00a844", "#f8d878"];
+
 export default function Soccer({ route }) {
   useEffect(() => { injectStyles(); }, []);
   const opts = useMemo(() => parseRoute(route), [route]);
@@ -86,13 +91,22 @@ export default function Soccer({ route }) {
   const [lock, setLock] = useState(Boolean(prefs0.lock));
   const [level, setLevelS] = useState(() => readLevel());
   const setLevel = (v, k = 0) => { setLevelS(v); writeLevel(v, k); };
-  const levelFor = (k) => setLevelS(readLevel(league, k));   // the division's remembered or default level
+  const [muted, setMuted] = useState(() => SFX.isMuted());
   const [guide, setGuide] = useState(null);   // [home, away]: the controls guide, before the first match
   useEffect(() => { writePrefs({ half, form, cam, ko, lock }); }, [half, form, cam, ko, lock]);
   const [game, setGame] = useState(null);
   const [done, setDone] = useState(null);
   const [tape, setTape] = useState(null);
+  const [front, setFront] = useState(() => ({ at: opts.home ? true : false, n: 0 }));   // the title screen: where it opens (false: the title)
   const mine = teamOfCase(league, me.caseId);
+  // your side: a ?home= link, else your own team, else the PLAY NOW pairing's home
+  const [home0] = playNowPair(league, mine);
+  const [homePick, setHome] = useState(opts.home || null);
+  const home = homePick || mine || home0;
+  const away = opts.vs && opts.vs !== home ? opts.vs : playNowPair(league, home)[1];
+  // THE PYRAMID: the division you play in sets the difficulty's default (a pick is remembered per division)
+  const divs = divisionsOf(league), k = divisionOf(league, home), diff = difficultyOf(league, k), dflt = defaultLevelIndex(league, k, LEVELS.length);
+  useEffect(() => { setLevelS(readLevel(league, k)); }, [k, league.day]);   // eslint-disable-line react-hooks/exhaustive-deps
   const start = (home, away) => {
     SFX.unlock();
     const H11 = elevenOf(league, home, me), A11 = elevenOf(league, away, me);
@@ -106,12 +120,46 @@ export default function Soccer({ route }) {
   // the first match shows the controls guide first (skippable, remembered)
   const play = (home, away) => { if (!guideSeen()) { SFX.unlock(); setGuide([home, away]); } else start(home, away); };
   const leaveGuide = () => { markGuideSeen(); const g = guide; setGuide(null); if (g) start(g[0], g[1]); };
+  const toFront = (at = true) => { setDone(null); setGame(null); setTape(null); setFront(f => ({ at, n: f.n + 1 })); };
+  // ?vs=<district>: a link to one fixture goes straight onto the pitch, past the title
+  useEffect(() => { if (opts.vs) play(home, away); }, [opts.vs]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const clubs = allClubs(league);
+  const cyc = (list, cur, set) => (d) => set(cycleOf(list, cur, d));
+  const clubItem = (id, onSelect, kit) => {
+    const xi = league.teams[id] || [], kd = divisionOf(league, id);
+    return { id, label: `${teamName(id)}${id === mine ? " (YOURS)" : ""}`, value: teamRating(xi), onSelect,
+      note: `${[...xi].sort((a, b) => b[2] - a[2]).slice(0, 3).map(r => shownName(r[1])).join(", ")}${league.pos[id] ? `. ${ordinal(league.pos[id])} IN ${divs.length > 1 ? difficultyOf(league, kd).short : "THE LEAGUE"}.` : "."}`,
+      art: <i className="sw" style={{ display: "block", width: 12, height: 24, background: kit[0], border: `3px solid ${kit[1]}` }} /> };
+  };
+  const rosterNote = `ROSTERS: SEASON ${league.season || "?"}, MACHINE DAY ${league.day}${league.live ? ", AS DRAFTED" : ". THE LIVE LEAGUE DID NOT ANSWER; THESE ARE THE ROSTERS ON FILE"}. THE LOWEST RATED KEEPS GOAL.`;
+  const rows = {
+    play: () => play(home, away),
+    modes: [
+      { id: "draw", label: "EXHIBITION", hint: ko ? "" : "CHOSEN", note: "A DRAW STANDS.", onSelect: () => { setKo(false); return "team"; } },
+      { id: "ko", label: "KNOCKOUT", hint: ko ? "CHOSEN" : "", note: "LEVEL AT FULL TIME: EXTRA TIME, THEN PENALTIES.", onSelect: () => { setKo(true); return "team"; } },
+    ],
+    // your side, then (a list inside it) who to play; the match starts at once
+    team: { label: "TEAM SELECT", note: rosterNote, items: clubs.map(id => ({ ...clubItem(id, undefined, kitsFor(id, playNowPair(league, id)[1])[0]),
+      items: clubs.filter(x => x !== id).map(x => ({ ...clubItem(x, () => { setHome(id); play(id, x); }, kitsFor(id, x)[1]), label: `V ${teamName(x)}` })) })) },
+    live: liveItems("soccer"),
+    settings: [
+      { id: "level", label: "DIFFICULTY", value: LEVELS[level].name, note: `${LEVEL_LINES[level]}${divs.length > 1 ? ` ${diff.name} DEFAULTS TO ${LEVELS[dflt].name}. REMEMBERED FOR THIS DIVISION.` : ""}`, cycle: (d) => setLevel(cycleOf(LEVELS.map((_, i) => i), level, d), k) },
+      { id: "half", label: "HALVES", value: `${half} MIN`, cycle: cyc(LENGTHS, half, setHalf) },
+      { id: "form", label: "FORMATION", value: FORMATIONS[form].name, cycle: cyc(Object.keys(FORMATIONS), form, setForm) },
+      { id: "cam", label: "CAMERA", value: CAMS[cam].name, cycle: cyc(Object.keys(CAMS), cam, setCam) },
+      mine ? { id: "lock", label: "PLAYER LOCK", value: lock ? "ON" : "OFF", note: lock ? "YOU PLAY AS YOURSELF ONLY: A CALLS FOR THE BALL, Y CALLS FOR IT IN BEHIND." : `YOU ARE ON ${teamName(mine)} THIS SEASON. OFF: YOU CONTROL THE WHOLE SIDE.`, cycle: () => setLock(!lock) } : null,
+      { id: "sound", label: "SOUND", value: muted ? "OFF" : "ON", cycle: () => { const m = !muted; setMuted(m); SFX.setMuted(m); if (!m) SFX.unlock(); } },
+    ].filter(Boolean),
+    controls: <Controls />,
+    back: true,
+  };
   let body;
   if (guide) body = <ControlsGuide mode={guideMode()} family={guideFamily()} onDone={leaveGuide} />;
   else if (tape) body = <Match key={`tape${tape.rec.at}`} game={tape.game} me={me} tape={tape.rec} onDone={() => setTape(null)} onQuit={() => setTape(null)} onRestart={() => {}} />;
-  else if (game && !done) body = <Match key={game.n} game={game} me={me} onDone={setDone} onQuit={() => setGame(null)} onRestart={() => start(game.home, game.away)} />;
-  else if (done) body = <Done done={done} game={game} onAgain={() => start(game.home, game.away)} onNew={() => start(game.home, playNowPair({ ...league, teams: Object.fromEntries(Object.entries(league.teams).filter(([k]) => k !== game.away)) }, game.home)[1])} onTape={() => setTape({ rec: done.rec, game })} onPick={() => { setDone(null); setGame(null); }} />;
-  else body = <Picker league={league} me={me} mine={mine} pre={opts} {...{ half, setHalf, form, setForm, cam, setCam, ko, setKo, lock, setLock, level, setLevel, levelFor }} onStart={play} />;
+  else if (game && !done) body = <Match key={game.n} game={game} me={me} onDone={setDone} onQuit={() => toFront(true)} onRestart={() => start(game.home, game.away)} />;
+  else if (done) body = <Done done={done} game={game} onAgain={() => start(game.home, game.away)} onNew={() => toFront("team")} onTape={() => setTape({ rec: done.rec, game })} onPick={(at) => toFront(at === true ? true : "settings")} />;
+  else body = <TitleScreen key={front.n} game="soccer" title="SOCCER" colors={COLORS} at={front.at} rows={rows}
+    sub={`THE ESTATE PITCH // ${teamShort(home)} V ${teamShort(away)} // ${LEVELS[level].name}`} note={NOTICE} />;
   return (
     <div className="sc">
       <ScreenHead title="THE ESTATE PITCH" meta="SOCCER // EXHIBITION // ELEVEN A SIDE. THE BALL IS ROUND. THE RECORD IS NOT." />
@@ -120,89 +168,6 @@ export default function Soccer({ route }) {
   );
 }
 
-// ---- choosing ----------------------------------------------------------------------------------------
-function Chips({ label, value, set, items }) {
-  return (
-    <div className="sc-chips" role="radiogroup" aria-label={label}>
-      {items.map(([v, name]) => <button key={String(v)} type="button" role="radio" aria-checked={value === v} className={`sc-chip${value === v ? " on" : ""}`} onClick={() => set(v)}>{name}</button>)}
-    </div>
-  );
-}
-function Picker({ league, me, mine, pre, half, setHalf, form, setForm, cam, setCam, ko, setKo, lock, setLock, level, setLevel, levelFor, onStart }) {
-  const [home0] = playNowPair(league, mine);
-  const [home, setHome] = useState(pre.home || home0);
-  useEffect(() => { if (!pre.home) setHome(mine || home0); }, [mine, home0]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const away = pre.vs && pre.vs !== home ? pre.vs : playNowPair(league, home)[1];
-  // THE PYRAMID: the division you play in sets the difficulty's default (a pick is remembered per division)
-  const divs = divisionsOf(league), k = divisionOf(league, home), diff = difficultyOf(league, k), dflt = defaultLevelIndex(league, k, LEVELS.length);
-  useEffect(() => { levelFor(k); }, [k, league.day]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const clubs = allClubs(league);
-  const playRef = useRef(null);
-  const quick = () => onStart(home, away);
-  useEffect(() => { playRef.current?.focus({ preventScroll: true }); }, []);
-  useEffect(() => {
-    let raf, prev = null;
-    const tick = () => { raf = requestAnimationFrame(tick); const p = readPad(); if (p.connected && prev && ((p.held.act && !prev.act) || (p.held.start && !prev.start))) quick(); prev = p.connected ? p.held : null; };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  });
-  return (
-    <>
-      <p className="pg-lede">ELEVEN A SIDE, WITH THE CITY'S OWN LEAGUE TEAMS. YOU STEER THE PLAYER ON THE BALL; ON DEFENCE, THE ONE YOU PICK. THE BUTTONS ARE EA SPORTS FC'S DEFAULTS: ON A CONTROLLER A PASSES, B SHOOTS (HOLD FOR POWER), Y PLAYS IT THROUGH, X CROSSES, RT SPRINTS. ON A KEYBOARD, FC 27'S LAYOUT: WASD MOVES, L PASSES, ; SHOOTS, O THROUGH, K CROSSES, P SPRINTS. PHONES GET A PAD.</p>
-      <div className="pg-start">
-        <Button variant="primary" ref={playRef} onClick={quick}>PLAY NOW</Button>
-        <span className="pg-sub">{teamName(home)}{home === mine ? " (YOUR TEAM)" : ""} V {teamName(away)}. TWO HALVES OF {half} MINUTES{ko ? ", EXTRA TIME AND PENALTIES IF LEVEL" : ""}. {divs.length > 1 ? `${diff.name.toUpperCase()}. ` : ""}DIFFICULTY: {LEVELS[level].name}.</span>
-      </div>
-      <div className="sc-level">
-        <Chips label="Difficulty" value={level} set={(v) => setLevel(v, k)} items={LEVELS.map((L, i) => [i, L.name])} />
-        <span className="sc-small">{LEVEL_LINES[level]}{divs.length > 1 ? ` ${diff.name} DEFAULTS TO ${LEVELS[dflt].name}${k === 0 ? ": THE TOP FLIGHT IS THE HARDEST" : k === divs.length - 1 ? ": THE BOTTOM DIVISION IS THE EASIEST" : ""}. A PICK IS REMEMBERED FOR THIS DIVISION.` : ""}</span>
-      </div>
-      {mine ? (
-        <p className="sc-you">
-          <button type="button" className="pg-toggle" aria-pressed={lock} onClick={() => setLock(!lock)}>PLAYER LOCK</button>
-          <span>YOU ARE ON {teamName(mine)} THIS SEASON. {lock ? "YOU PLAY AS YOURSELF ONLY: A CALLS FOR THE BALL, Y CALLS FOR IT IN BEHIND." : "YOU CONTROL THE WHOLE SIDE; YOU ARE IN IT, AT YOUR RATING."}</span>
-        </p>
-      ) : me.caseId ? <p className="sc-you sc-dim">YOUR FILE IS NOT ON A SOCCER ROSTER THIS SEASON. ENTRIES ARE MADE FROM <a href="#file">MY FILE</a>.</p> : null}
-      <details className="pg-more">
-        <summary>+ TEAMS, FORMATION, LENGTH, CAMERA</summary>
-        <div className="pg-more-body">
-          <p className="sc-small">LENGTH:</p>
-          <Chips label="Half length" value={half} set={setHalf} items={LENGTHS.map(n => [n, `${n}-MINUTE HALVES`])} />
-          <Chips label="Knockout" value={ko} set={setKo} items={[[false, "A DRAW STANDS"], [true, "EXTRA TIME + PENALTIES"]]} />
-          <p className="sc-small">YOUR FORMATION:</p>
-          <Chips label="Formation" value={form} set={setForm} items={Object.entries(FORMATIONS).map(([k, f]) => [k, f.name])} />
-          <p className="sc-small">CAMERA:</p>
-          <Chips label="Camera" value={cam} set={setCam} items={Object.values(CAMS).map(c => [c.id, c.name])} />
-          <p className="sc-small">YOUR TEAM{divs.length > 1 ? " (ANY DIVISION; THE DIVISION SETS THE DEFAULT DIFFICULTY)" : ""}:</p>
-          {divs.length > 1
-            ? divs.map((ids, i) => <div key={i}><p className="sc-small">{difficultyOf(league, i).name}:</p><Chips label={`Your team, ${difficultyOf(league, i).name}`} value={home} set={setHome} items={ids.filter(id => league.teams[id]?.length).map(id => [id, `${teamShort(id)}${id === mine ? " (YOURS)" : ""}`])} /></div>)
-            : <Chips label="Your team" value={home} set={setHome} items={clubs.map(id => [id, `${teamShort(id)}${id === mine ? " (YOURS)" : ""}`])} />}
-          <p className="sc-small">THEN PICK WHO TO PLAY; THE MATCH STARTS AT ONCE. PACE, PASSING, FINISHING AND DEFENDING FOLLOW EACH PLAYER'S LEAGUE RATING; SKILL MOVES NEED THE STARS (ONE PER TEN POINTS OVER 50).</p>
-          <ul className="sc-teams">
-            {clubs.filter(id => id !== home).map(id => {
-              const xi = league.teams[id] || [], kd = divisionOf(league, id);
-              return (
-                <li key={id}>
-                  <button type="button" className="sc-team" onClick={() => onStart(home, id)} aria-label={`Play ${teamName(id)}, rated ${teamRating(xi)}`}>
-                    <i className="sw" style={{ background: kitsFor(home, id)[1][0], borderColor: kitsFor(home, id)[1][1] }} aria-hidden="true" />
-                    <span className="nm">{teamName(id)}<span className="tag">{[...xi].sort((a, b) => b[2] - a[2]).slice(0, 3).map(r => shownName(r[1])).join(", ")}{league.pos[id] ? ` // ${ordinal(league.pos[id])} IN ${divs.length > 1 ? difficultyOf(league, kd).short : "THE LEAGUE"}` : ""}</span></span>
-                    <span className="rt">{teamRating(xi)}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </details>
-      <details className="pg-more">
-        <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><Controls /></div>
-      </details>
-      <p className="sc-notice"><b>EXHIBITION.</b> {NOTICE} NOT IN THE STANDINGS, NOT IN THE CUP, NOT ON YOUR FILE. THE DEPARTMENT KEEPS THE TAPE ANYWAY.</p>
-      <p className="sc-small">ROSTERS: SEASON {league.season || "?"}, MACHINE DAY {league.day}{league.live ? ", AS DRAFTED" : ". THE LIVE LEAGUE DID NOT ANSWER; THESE ARE THE ROSTERS ON FILE"}. THE LOWEST RATED KEEPS GOAL, AS IN THE LEAGUE.</p>
-    </>
-  );
-}
 const LEVEL_LINES = [
   "THE EASIEST. A SLOWER GAME, HELP WITH PASSING, SHOOTING AND DEFENDING, A TEAMMATE PRESSES WITH YOU. START HERE.",
   "A LITTLE SLOWER, STILL HELPED. THE CPU IS FORGIVING.",
@@ -291,7 +256,7 @@ function Match({ game, me, tape = null, onDone, onQuit, onRestart }) {
   const [scale, setScale] = useState(1);
   const [pad, setPad] = useState(null);
   const [touch, setTouch] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer: coarse)").matches));
-  const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, !touch));
+  const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, false));   // folded: the guide before the first match taught it
   const [camId, setCamId] = useState(game.cam || "broadcast");
   const [skipping, setSkipping] = useState(false);
   const [tip, setTip] = useState("");
@@ -483,15 +448,14 @@ function Match({ game, me, tape = null, onDone, onQuit, onRestart }) {
       {!tape && <Legend mode={mode} family={pad} off={hud?.off ?? true} open={legendOpen} onToggle={toggleLegend} />}
       <ButtonRow>
         <Button onClick={() => togglePause()}>{paused ? "Resume" : "Pause"}</Button>
-        <Button onClick={toggleMute}>{muted ? "Sound on" : "Mute"}</Button>
-        <Button onClick={nextCam}>Camera: {CAMS[camId].name}</Button>
+        {tape && <Button onClick={nextCam}>Camera: {CAMS[camId].name}</Button>}
         {tape && <Button onClick={() => { skipRef.current = true; setSkipping(true); }}>Skip to the end</Button>}
-        <Button variant="back" onClick={onQuit}>{tape ? "Stop the tape" : "Leave the pitch"}</Button>
+        {tape && <Button variant="back" onClick={onQuit}>Stop the tape</Button>}
       </ButtonRow>
-      <p className="sc-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{NOTICE}</p>
+      {/* sound, camera and leaving the pitch: the pause menu */}
       {paused && !tape && (
         <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE CLOCK IS STOPPED." onBack={() => togglePause(false)}
-          options={{ resume: () => togglePause(false), restart: onRestart, controls: <ControlsGuide mode={mode} family={pad} compact tab0={hud?.off === false ? "defend" : "attack"} />, sound: { on: !muted, onSelect: toggleMute }, quit: true }} />
+          options={{ resume: () => togglePause(false), restart: onRestart, controls: <ControlsGuide mode={mode} family={pad} compact tab0={hud?.off === false ? "defend" : "attack"} />, sound: { on: !muted, onSelect: toggleMute }, cam: { label: `CAMERA: ${CAMS[camId].name}`, onSelect: nextCam }, quit: { label: "LEAVE THE PITCH", onSelect: onQuit } }} />
       )}
     </div>
   );
@@ -566,7 +530,7 @@ function Done({ done, game, onAgain, onNew, onTape, onPick }) {
       </Frame>
       {menu && (
         <GameMenu key="end" kind="end" title="FULL TIME." summary={line} onBack={() => setMenu(false)}
-          options={{ again: onAgain, rematch: onNew, settings: onPick, replay: onTape, play: true, city: { label: "BACK TO THE PITCH", href: "#city" } }} />
+          options={{ again: onAgain, rematch: onNew, settings: onPick, front: { label: "THE SOCCER MENU", onSelect: () => onPick(true) }, replay: onTape, play: true, city: { label: "BACK TO THE PITCH", href: "#city" } }} />
       )}
     </>
   );
