@@ -36,6 +36,7 @@ a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-of
 .ui-head :focus-visible { outline: 2px solid var(--bar-ink, var(--accent-ink)); outline-offset: -4px; }
 .ui-head-case { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding-right: var(--s2); }
 .ui-head-case b { color: var(--bar-ink, var(--accent-ink)); font-weight: 700; }
+.ui-head-beta { flex: none; font-size: .75em; letter-spacing: .08em; padding: 0 .4em; border: 1px solid currentColor; opacity: .8; white-space: nowrap; }
 .ui-head-ok { color: var(--bar-ink, var(--accent-ink)); flex: none; display: none; padding-right: var(--s2); }
 /* The balance chip: an inverse cell on the light bar, so the amber still reads. */
 .ui-head-econ { flex: none; color: var(--warn); background: var(--bar-cur-bg, var(--accent-ink)); text-decoration: none; white-space: nowrap; padding: 2px var(--s2); }

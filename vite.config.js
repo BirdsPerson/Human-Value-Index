@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { buildAtlas } from './scripts/sprite-atlas.mjs'
 import { FAMOUS_FIGURES } from './src/figures.js'
 import { readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { routesIn } from './src/play/games.js'
 
 const SPRITES = fileURLToPath(new URL('./public/sprites/', import.meta.url))
@@ -43,9 +44,18 @@ function shareScores() {
   return { name: 'hvi-share-scores', transformIndexHtml: html => html.replaceAll('%HVI_SHARE_SCORES%', line) }
 }
 
+function gitSha() {
+  try { return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() } catch { return '' }
+}
+
 export default defineConfig({
   // #play greys out a game tile whose route App.jsx does not serve yet (src/play/games.js).
-  define: { __HVI_ROUTES__: JSON.stringify(routesIn(readFileSync(new URL('./src/App.jsx', import.meta.url), 'utf8'))) },
+  define: {
+    __HVI_ROUTES__: JSON.stringify(routesIn(readFileSync(new URL('./src/App.jsx', import.meta.url), 'utf8'))),
+    // The header's BETA tag: package.json version + the commit it was built from.
+    __HVI_VERSION__: JSON.stringify(JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version),
+    __HVI_BUILD__: JSON.stringify(gitSha()),
+  },
   plugins: [react(), spriteAtlas(), shareScores()],
   // Dev only: /api/* goes to `netlify functions:serve --port 9999` (local Blobs sandbox).
   // The functions' same-origin check sees the functions host, so the proxy presents it.

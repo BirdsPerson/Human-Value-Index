@@ -79,6 +79,10 @@ function useEconomyChip(caseId) {
 
 // onNav(key, event): called before the link navigates; preventDefault() to take over
 // (the app does, for MENU, which is a phase rather than a route).
+/* global __HVI_VERSION__, __HVI_BUILD__ */
+const VERSION = typeof __HVI_VERSION__ !== "undefined" ? __HVI_VERSION__ : "dev";
+const BUILD = typeof __HVI_BUILD__ !== "undefined" ? __HVI_BUILD__ : "";
+
 export function AppHeader({ banner = false, active = null, onNav }) {
   const caseId = useCaseId();
   const chip = useEconomyChip(caseId);
@@ -88,6 +92,7 @@ export function AppHeader({ banner = false, active = null, onNav }) {
       <header className="ui-head">
         <div className="ui-head-line">
           <a className="ui-head-mark" href="#" onClick={e => onNav?.("menu", e)} aria-label="Human Value Index, main menu"><span aria-hidden="true">≡{"\u00a0"}</span>HUMAN VALUE INDEX</a>
+          <span className="ui-head-beta" title={BUILD ? `Build ${BUILD}` : undefined}>BETA v{VERSION}</span>
           <nav className="ui-head-nav" aria-label="Sections">
             {NAV.map(n => (
               <a key={n.key} href={n.href} accessKey={n.hot.toLowerCase()} data-tip={`${KEY_HINT}${n.hot}`} aria-label={n.label} aria-current={active === n.key ? "page" : undefined} onClick={e => onNav?.(n.key, e)}>{hotLabel(n)}</a>
