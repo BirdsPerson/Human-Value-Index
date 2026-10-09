@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, ButtonRow, ScreenHead } from "../../ui/index.js";
+import { ScreenHead } from "../../ui/index.js";
+import TitleScreen from "../TitleScreen.jsx";
 import { readPad } from "../../city/gamepad.js";
 import { newRun, step, resultOf, rleEncode, rleDecode, VERSION, LEVELS, LEVEL_ORDER, DEFAULT_LEVEL, THEMES, T } from "./engine/index.js";
 import { draw, palette, VIEW_W, VIEW_H } from "./render.js";
@@ -24,6 +25,9 @@ const TH = THEMES.subbasements;
 const REDUCED = () => { try { return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches); } catch { return false; } };
 const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); };
 
+// The title's four colours: the lift shaft's black, fluorescent white, the filing-cabinet blue, the warning amber.
+const COLORS = ["#000000", "#fcfcfc", "#0058f8", "#f8b800"];
+
 export default function Crawl() {
   const [progress, setProgress] = useState(loadProgress);
   const [level, setLevel] = useState(() => (LEVELS[loadProgress().level] ? loadProgress().level : DEFAULT_LEVEL));
@@ -31,97 +35,77 @@ export default function Crawl() {
   const [controls, setControls] = useState(() => loadProgress().controls || "assist");
   const [run, setRun] = useState(null);   // {key, cfg, replay?: rec}
   const [runs, setRuns] = useState(loadRuns);
-  const [howto, setHowto] = useState(false);
+  const [howto, setHowto] = useState(null);   // the first-run guide, then this level's descent
+  const [front, setFront] = useState(() => ({ at: false, n: 0 }));   // the title screen: where it opens (false: the title)
+  const [muted, setMuted] = useState(sfx.isMuted());
   const { mode, family } = usePlayMode();
-  const goRef = useRef(null);
   const day = Math.floor(Date.now() / 86400000);
-  useEffect(() => { if (!run) goRef.current?.focus({ preventScroll: true }); }, [run]);
   const remember = (patch) => { const p = { ...loadProgress(), ...patch }; saveProgress(p); setProgress(p); };
 
-  const descend = async () => {
+  const descend = async (lv = level) => {
     sfx.unlock();
-    const { cfg } = await getPermit({ level, entry: TH.entry, hand, controls });
+    const { cfg } = await getPermit({ level: lv, entry: TH.entry, hand, controls });
     setRun({ key: cfg.runId, cfg });
   };
+  // the first descent shows the guide first (skippable, remembered)
+  const go = (lv = level) => { if (guideSeen(GUIDE_KEY)) descend(lv); else { sfx.unlock(); setHowto({ lv }); } };
   const watch = (rec) => { sfx.unlock(); setRun({ key: `replay-${rec.cfg.runId}-${Date.now()}`, cfg: rec.cfg, replay: rec }); };
   const onFiled = (res, rec) => {
     const p = recordRun(loadProgress(), res); saveProgress(p); setProgress(p);
     saveRun({ at: Date.now(), rec, res }); setRuns(loadRuns());
     fileRun(rec, res);
   };
+  const toFront = (at = true) => { setRun(null); setFront(f => ({ at, n: f.n + 1 })); };
 
   if (run) {
     return (
       <div className="cr">
         <Play key={run.key} cfg={run.cfg} replay={run.replay} hand={hand} onFiled={onFiled}
-          onAgain={descend} onLobby={() => setRun(null)} onWatch={watch} />
+          onAgain={() => descend(run.cfg.level)} onLobby={() => toFront(true)} onWatch={watch} />
+      </div>
+    );
+  }
+  if (howto) {
+    return (
+      <div className="cr">
+        <ScreenHead title="THE SUB-BASEMENTS" meta="B4 AND BELOW" />
+        <div className="cr-howto">
+          <CrawlGuide mode={mode} family={family} hand={hand} onDone={() => { markGuideSeen(GUIDE_KEY); const lv = howto.lv; setHowto(null); descend(lv); }} />
+        </div>
       </div>
     );
   }
   const lifts = progress.lifts.length ? progress.lifts.map(f => `B${f}`).join(", ") : "NONE YET";
+  const setLv = (id) => { setLevel(id); remember({ level: id }); };
+  const rows = {
+    play: { label: `DESCEND: ${LEVELS[level].name}`, onSelect: () => go() },
+    // the levels are the shifts on offer: each its own floors, threat and bounty
+    modes: { label: "SHIFTS", items: LEVEL_ORDER.map(id => ({ id, label: `${LEVELS[id].name}${id === DEFAULT_LEVEL ? " (DEFAULT)" : ""}`, value: `BOUNTY x${LEVELS[id].bounty}`, note: LEVEL_LINES[id], onSelect: () => { setLv(id); go(id); } })) },
+    record: { label: "YOUR RECORD", items: [
+      { id: "deepest", label: "DEEPEST", value: progress.deepest ? `B${progress.deepest}` : "-" },
+      { id: "shifts", label: "SHIFTS", value: `${progress.runs} (${progress.lifted} BY LIFT, ${progress.lost} LOST)` },
+      { id: "lifts", label: "LIFTS REACHED", value: lifts, note: progress.lifts.includes(8) ? "THE B8 LIFT TAKES YOU DOWN WHEN THE STACKS OPEN, NEXT RELEASE." : undefined },
+      { id: "carried", label: "CARRIED UP", value: `${progress.crates.length} CRATE${progress.crates.length === 1 ? "" : "S"}`, note: `SALVAGE CRATES ARE SEALED: THEY OPEN NEXT RELEASE. BOUNTY ${progress.bounty} RECORDED, NOT YET PAID.` },
+    ] },
+    replays: runs.length ? { label: "WATCH A SHIFT AGAIN", items: runs.map(r => ({
+      id: String(r.at),
+      label: `${new Date(r.at).toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()} ${LEVELS[r.res.level]?.name || r.res.level} B${r.res.depth}`,
+      value: r.res.exit === "lift" ? "BY LIFT" : r.res.why === "shift" ? "SHIFT OVER" : "LOST",
+      ...(r.rec.v === VERSION ? { onSelect: () => watch(r.rec) } : { disabled: true, note: "PLAYED ON AN OLDER BUILD: IT NO LONGER REPLAYS." }),
+    })) } : null,
+    settings: [
+      { id: "hand", label: "HAND", value: hand === -1 ? "LEFT" : "RIGHT", note: "LEFT: THE PAD SWINGS ON THE SHOULDER BUTTONS AND THE TOUCH CONTROLS MIRROR. REMEMBERED.", cycle: () => { const h = hand === -1 ? 1 : -1; setHand(h); remember({ hand: h }); } },
+      { id: "aim", label: "AIM HELP", value: controls === "assist" ? "ON" : "OFF", note: "ON: A SWING TURNS TO THE NEAREST THING IN FRONT OF YOU WITHIN SIX TILES. REMEMBERED.", cycle: () => { const c = controls === "assist" ? "manual" : "assist"; setControls(c); remember({ controls: c }); } },
+      { id: "sound", label: "SOUND", value: muted ? "OFF" : "ON", cycle: () => { sfx.setMuted(!muted); setMuted(!muted); if (muted) sfx.unlock(); } },
+    ],
+    controls: <CrawlGuide mode={mode} family={family} hand={hand} compact />,
+    back: true,
+  };
   return (
     <div className="cr">
       <ScreenHead title="THE SUB-BASEMENTS" meta="B4 AND BELOW. DEPARTMENT HEADQUARTERS. AUTHORISED STAFF ONLY. EVERYONE IS AUTHORISED." />
-      <div className="cr-notice" role="note" aria-label="Notice">
-        <b>NOTICE</b>
-        <p>{memoFor(day)}</p>
-        <button type="button" className="cr-ok" onClick={() => {}}>OK</button>
-      </div>
-      <p className="pg-lede">TAKE THE SERVICE LIFT FROM B3 TO B4. FIND THE WAY DOWN ON EVERY FLOOR: THE STAIRWELL IS ALWAYS THERE, AND A HATCH SOMETIMES OPENS WHERE YOU BREAK THINGS. BREAK CABINETS, FILE WHAT ATTACKS YOU, CARRY WHAT YOU FIND. CALL THE LIFT AT B8 TO KEEP IT. FALL DOWN, OR RUN OUT THE SHIFT, AND THE NIGHT CLEANERS KEEP YOUR PACK.</p>
-      <div className="pg-start">
-        <Button variant="primary" ref={goRef} onClick={() => (guideSeen(GUIDE_KEY) ? descend() : setHowto(true))}>DESCEND: {LEVELS[level].name}</Button>
-        <span className="pg-sub">A PRACTICE SHIFT: THIS RUN STAYS IN THIS BROWSER. {SERVER_FILING ? "" : "FILING TO YOUR FILE OPENS NEXT RELEASE."}</span>
-      </div>
-      {howto && (
-        <div className="cr-howto">
-          <CrawlGuide mode={mode} family={family} hand={hand} onDone={() => { markGuideSeen(GUIDE_KEY); setHowto(false); descend(); }} />
-        </div>
-      )}
-      <div className="cr-levels" role="group" aria-label="Level">
-        {LEVEL_ORDER.map(id => (
-          <button key={id} type="button" className="cr-level" aria-pressed={level === id} onClick={() => { setLevel(id); remember({ level: id }); }}>
-            <b>{LEVELS[id].name}{id === DEFAULT_LEVEL ? " (DEFAULT)" : ""}</b>
-            <span>{LEVEL_LINES[id]}</span>
-            <span className="dim">BOUNTY x{LEVELS[id].bounty}</span>
-          </button>
-        ))}
-      </div>
-      <div className="cr-opts">
-        <span>HAND</span>
-        <button type="button" className="cr-chip" aria-pressed={hand === 1} onClick={() => { setHand(1); remember({ hand: 1 }); }}>RIGHT</button>
-        <button type="button" className="cr-chip" aria-pressed={hand === -1} onClick={() => { setHand(-1); remember({ hand: -1 }); }}>LEFT</button>
-        <span className="sep">AIM HELP</span>
-        <button type="button" className="cr-chip" aria-pressed={controls === "assist"} onClick={() => { setControls("assist"); remember({ controls: "assist" }); }}>ON</button>
-        <button type="button" className="cr-chip" aria-pressed={controls === "manual"} onClick={() => { setControls("manual"); remember({ controls: "manual" }); }}>OFF</button>
-      </div>
-      <dl className="cr-rec">
-        <div><dt>DEEPEST</dt><dd>{progress.deepest ? `B${progress.deepest}` : "-"}</dd></div>
-        <div><dt>SHIFTS</dt><dd>{progress.runs} ({progress.lifted} BY LIFT, {progress.lost} LOST)</dd></div>
-        <div><dt>LIFTS REACHED</dt><dd>{lifts}{progress.lifts.includes(8) ? ". THE B8 LIFT TAKES YOU DOWN WHEN THE STACKS OPEN, NEXT RELEASE." : ""}</dd></div>
-        <div><dt>CARRIED UP</dt><dd>{progress.crates.length} SALVAGE CRATE{progress.crates.length === 1 ? "" : "S"} (SEALED: THEY OPEN NEXT RELEASE). BOUNTY {progress.bounty} RECORDED, NOT YET PAID.</dd></div>
-      </dl>
-      {runs.length > 0 && (
-        <details className="pg-more">
-          <summary>YOUR LAST SHIFTS (WATCH AGAIN)</summary>
-          <div className="pg-more-body">
-            <ul className="cr-runs">
-              {runs.map(r => (
-                <li key={r.at}>
-                  <span>{new Date(r.at).toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()} // {LEVELS[r.res.level]?.name || r.res.level} // B{r.res.depth} // {r.res.exit === "lift" ? "BY LIFT" : r.res.why === "shift" ? "SHIFT OVER" : "LOST"}</span>
-                  {r.rec.v === VERSION && <Button variant="secondary" onClick={() => watch(r.rec)}>WATCH</Button>}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </details>
-      )}
-      <details className="pg-more">
-        <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><CrawlGuide mode={mode} family={family} hand={hand} compact /></div>
-      </details>
-      <ButtonRow>
-        <Button variant="back" onClick={() => { window.location.hash = "#play"; }}>Back to the games</Button>
-      </ButtonRow>
+      <TitleScreen key={front.n} game="crawl" title="THE SUB-BASEMENTS" sub={`B4 AND BELOW // ${LEVELS[level].name}`} colors={COLORS} at={front.at} rows={rows}
+        note={`NOTICE: ${memoFor(day)} ${SERVER_FILING ? "" : "PRACTICE SHIFTS: RUNS STAY IN THIS BROWSER."}`} />
     </div>
   );
 }
@@ -299,7 +283,7 @@ function Play({ cfg, replay, hand, onFiled, onAgain, onLobby, onWatch }) {
   return (
     <div className="cr-play">
       <div className="cr-bar">
-        <span>{replay ? "REPLAY // " : ""}THE SUB-BASEMENTS // {levelName}</span>
+        <span>{replay ? "REPLAY // " : ""}{levelName}</span>
         <span className="cr-bar-btns">
           {replay && <button type="button" className="cr-chip" onClick={() => { L.speed = L.speed === 1 ? 3 : 1; }}>SPEED</button>}
           <button type="button" className="cr-chip" aria-label="Pause" onClick={() => !L.ended && setP(true)}>II PAUSE</button>
@@ -313,11 +297,11 @@ function Play({ cfg, replay, hand, onFiled, onAgain, onLobby, onWatch }) {
       {!replay && <TouchPad input={input} hand={hand} pack={packView} />}
       {paused && !ended && (
         <GameMenu kind="pause" title="PAUSED." onBack={() => setP(false)}
-          options={{ resume: () => setP(false), restart: replay ? null : restart, controls: <CrawlGuide mode={L.inputMode || mode} family={L.family} hand={hand} compact />, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "BACK TO THE LOBBY", onSelect: onLobby } }} />
+          options={{ resume: () => setP(false), restart: replay ? null : restart, controls: <CrawlGuide mode={L.inputMode || mode} family={L.family} hand={hand} compact />, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "LEAVE THE SHIFT", onSelect: onLobby } }} />
       )}
       {ended && (
         <GameMenu key="end" kind="end" title={replay ? "REPLAY OVER." : res.exit === "lift" ? "SHIFT FILED: BY LIFT." : "SHIFT FILED: LOST."} summary={summary}
-          options={{ again: { label: "DESCEND AGAIN", onSelect: onAgain }, replay: !replay && ended.rec ? () => onWatch(ended.rec) : null, settings: { label: "BACK TO THE LOBBY", onSelect: onLobby }, play: true, city: { label: "BACK TO HQ", href: "#city" } }}
+          options={{ again: { label: "DESCEND AGAIN", onSelect: onAgain }, replay: !replay && ended.rec ? () => onWatch(ended.rec) : null, settings: { label: "THE SUB-BASEMENTS MENU", onSelect: onLobby }, play: true, city: { label: "BACK TO HQ", href: "#city" } }}
           onBack={onLobby} />
       )}
     </div>
