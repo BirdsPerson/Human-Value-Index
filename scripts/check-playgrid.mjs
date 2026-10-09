@@ -23,6 +23,6 @@ const routes = new Set(routesIn(app));
 ok(["#tennis", "#golf", "#hoops", "#chess", "#casino", "#fish", "#city", "#play"].every(r => routes.has(r)), "routesIn reads the route table");
 ok(!isLive({ href: "#nowhere-yet" }, routes) && isLive({ href: "#city/league" }, routes), "an unserved room is COMING SOON; a served one is a link");
 for (const g of GAMES) ok(isLive(g, routes) === routes.has(roomOf(g.href)), `${g.href}: live iff routed`);
-ok(/define: \{ __HVI_ROUTES__/.test(readFileSync(new URL("../vite.config.js", import.meta.url), "utf8")), "the build defines the route table");
+ok(/define: \{\s*__HVI_ROUTES__/.test(readFileSync(new URL("../vite.config.js", import.meta.url), "utf8")), "the build defines the route table");
 
 console.log(`check-playgrid: ${checks} checks passed`);
