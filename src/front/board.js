@@ -14,7 +14,19 @@ export function pickEvent(events, now = Date.now(), game = null) {
   const done = evs.filter(e => e.status === "closed" && e.leaders).sort((a, b) => b.closes - a.closes);
   return done[0] ? { ev: done[0], live: false } : null;
 }
-export const leadersOf = (ev, div = "open") => (ev?.leaders?.[div]?.length ? ev.leaders[div] : ev?.leaders?.[div === "open" ? "assisted" : "open"]) || [];
+// THE LEADERBOARD's pick (2026-10-09): as pickEvent, but a live event nobody has entered yet does not blank the
+// board. A live event with cards first; else the last one finished with a result, naming the empty live one
+// (`waiting`) so the window can say it is open; else whatever pickEvent gives.
+const hasCards = (ev) => DIVS.some(d => ev?.leaders?.[d]?.length);
+export function pickBoard(events, now = Date.now()) {
+  const p = pickEvent(events, now);
+  if (!p || !p.live || hasCards(p.ev)) return p;
+  const lived = pickEvent((events || []).filter(e => e.status !== "open" || hasCards(e)), now);
+  if (lived?.live) return { ...lived, waiting: p.ev };
+  const done = (events || []).filter(e => e.status === "closed" && hasCards(e)).sort((a, b) => b.closes - a.closes)[0];
+  return done ? { ev: done, live: false, waiting: p.ev } : p;
+}
+export const leadersOf =(ev, div = "open") => (ev?.leaders?.[div]?.length ? ev.leaders[div] : ev?.leaders?.[div === "open" ? "assisted" : "open"]) || [];
 
 // a row's score as the board prints it: golf to par, bowling pins, the derby's weight
 export function scoreText(ev, row) {

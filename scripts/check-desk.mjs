@@ -88,7 +88,7 @@ assert.match(L.keyAction(g, "set", "ArrowDown").say, /ALREADY LAST/, "last in th
 r = L.keyAction(g, "market", "+"); assert.equal(r.layout[0].size, "T"); assert.match(r.say, /TALL, 1 BY 2/);
 r = L.keyAction(r.layout, "market", "+"); assert.equal(r.layout[0].size, "L");
 r = L.keyAction(L.keyAction(g, "market", "-").layout, "market", "-"); assert.equal(r.layout[0].size, "S"); assert.match(L.keyAction(r.layout, "market", "-").say, /SMALLEST/);
-assert.match(L.keyAction(L.keyAction(g, "notice", "+").layout, "notice", "+").say, /LARGEST/, "NOTICE has two sizes; + stops at M");
+assert.match(L.keyAction(L.keyAction(L.keyAction(g, "notice", "+").layout, "notice", "+").layout, "notice", "+").say, /LARGEST/, "the NOTICE BOARD has three sizes; + stops at T");
 r = L.keyAction(g, "set", "Delete"); assert.deepEqual(r.layout.map(x => x.id), ["market", "wire", "watch", "notice"]); assert.match(r.say, /REMOVED/);
 assert.equal(L.keyAction(g, "set", "q"), null); assert.equal(L.keyAction(g, "nope", "+"), null);
 assert.ok(L.keyAction(g, "set", "Backspace").layout.length === 4 && L.addId(L.removeId(g, "set"), "set").length === 5, "remove, then add back");
@@ -198,4 +198,29 @@ const srv = src("netlify/functions/tournament.js");
 assert.ok(/leaderLog/.test(srv) && /putLog/.test(srv) && !/cid|caseId/.test(srv.slice(srv.indexOf("export async function leaderLog"), srv.indexOf("export default"))), "the leader's log is served by place, with no case id");
 const ch = src("src/front/TheSet.jsx"); assert.match(ch, /n: 3, id: "tour", name: "THE TOURNAMENT"/, "CH 3 is THE TOURNAMENT");
 assert.ok(/import\("\.\.\/play\/golf\/render\.js"\)/.test(src("src/front/TourneyChannel.jsx")) && !/from "\.\.\/play\/golf\/render/.test(src("src/front/TourneyChannel.jsx")), "the golf renderer is lazy");
+// ---- content, not furniture (Scott, 2026-10-09): the NOTICE BOARD reads the edition, THE LEAGUES carries scores,
+// the LEADERBOARD does not blank on a live event nobody has entered while a finished one has a result ------------
+{
+  const { buildEdition } = await import("../netlify/lib/paper.js");
+  const { noticeItems } = await import("../src/front/notices.js");
+  const ed = buildEdition(JSON.parse(src("scripts/fixtures/paper-input.json")));
+  const nt = noticeItems(ed, Date.parse(ed.printedAt || "2026-10-06T12:00:00Z"));
+  assert.ok(nt.length >= 4, `the notice board posts the edition's notices (${nt.length})`);
+  assert.ok(nt.some(n => n.tag === "ORDER") && nt.some(n => n.tag === "ASSEMBLY" || n.tag === "POLLS"), "orders and civic notices");
+  const rooms = new Set(["#elections", "#assembly", "#prefects", "#docket", "#city", "#enterprise"]);
+  assert.ok(nt.every(n => rooms.has(n.href) && n.text === n.text.toUpperCase() && n.text.length <= 140), "each notice: plain caps, a room the app answers");
+  assert.ok(!/OVERLORD DOES NOT REQUIRE/.test(desk) && !/hvi-notice-ok/.test(desk), "no standing slogan with an OK button");
+  assert.deepEqual(noticeItems(null), [], "no edition, no notices");
+  const sm = src("src/front/Smalls.jsx");
+  assert.ok(/export const latestOf/.test(sm) && /<Latest rows=\{latest\} \/>/.test(sm), "THE LEAGUES shows the latest score in each league");
+  const t0 = Date.UTC(2026, 9, 9), evs = [
+    { id: "live", status: "open", closes: t0 + 3.6e6, major: true, leaders: { open: [], assisted: [] } },
+    { id: "old", status: "closed", closes: t0 - 3.6e6, leaders: { open: [{ pos: 1, holder: "SUBJECT 7AUZ", total: 662 }] } },
+  ];
+  const pb = B.pickBoard(evs, t0);
+  assert.ok(pb.ev.id === "old" && !pb.live && pb.waiting.id === "live", "an empty live event gives way to the last result, and is named");
+  evs.push({ id: "busy", status: "open", closes: t0 + 7.2e6, leaders: { open: [{ pos: 1, holder: "SUBJECT 1", total: 3 }] } });
+  assert.ok(B.pickBoard(evs, t0).ev.id === "busy" && B.pickBoard(evs, t0).live, "a live event with cards first");
+  assert.equal(B.pickBoard([evs[0]], t0).ev.id, "live", "nothing finished: the live event, empty");
+}
 console.log(`check-desk ok: ${ids.length} widgets, ${w.subjects.length} watched, all public and clean, ${ids.length} widgets x sizes, grid + column + migration + keys, every S cycles or reads densely`);

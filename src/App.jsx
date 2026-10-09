@@ -803,7 +803,7 @@ export default function OverlordAssessment() {
 
   // INTRO: the logon
   // The logon window, then (beside it on a desktop, under it on a phone) the market's
-  // ticker and the standing notice, as small windows on the desk.
+  // ticker, the wire, the city's notice board and the rest, as small windows on the desk (src/front/).
   if (phase === "intro") return (
     <Screen nav={nav} banner wide>
         {routePath && routePath !== "#" && (

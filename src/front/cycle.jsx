@@ -3,7 +3,15 @@
 // at a time: slow (CYCLE_MS), held still while the pointer is over it or focus is inside it, and never on its
 // own under prefers-reduced-motion (it starts paused; ◀ ▶ step it by hand). Off screen or in a hidden tab it
 // does not tick. Step is the small ◀ 2/9 ▶ row every cycling S view carries.
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+
+// THE SET's caption (TheSet.jsx): the channel on the air says, in one readable line, what it is showing (the
+// headline being read, the latest score, who the camera follows), so a small set reads beside its picture
+export const SetNow = createContext(null);
+export function useSetNow(text) {
+  const say = useContext(SetNow);
+  useEffect(() => { if (say) say(text || ""); }, [say, text]);
+}
 
 export const CYCLE_MS = 8000;
 export const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };

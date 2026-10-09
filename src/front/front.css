@@ -162,6 +162,22 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
 .fr-table td { padding: 4px; color: var(--fg); border-bottom: 1px dotted var(--line); }
 .fr-table td:first-child, .fr-table th:first-child { width: 4ch; }
 .fr-table td:last-child, .fr-table th:last-child { text-align: right; width: 5ch; font-weight: 700; }
+.fr-table td:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0; }
+.fr-tbl-link { display: block; color: inherit; text-decoration: none; min-width: 0; }
+@media (hover: hover) { .fr-tbl-link:hover td:nth-child(2) { text-decoration: underline; text-underline-offset: 3px; } }
+.fr-tbl-link:focus-visible { outline: var(--focus); outline-offset: 2px; }
+/* THE LEAGUES: the table beside the scores (M, L), one score a row, its sport as a label */
+.fr-lg2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--s3); align-items: start; }
+.fr-sc { list-style: none; margin: var(--s2) 0 0; padding: 0; }
+.fr-lg2 .fr-sc { margin-top: 0; }
+.fr-sc li + li { border-top: 1px dotted var(--line); }
+.fr-sc a { display: flex; gap: 1ch; align-items: baseline; padding: 3px 0; color: var(--fg); font-size: var(--t-xs); line-height: 1.35; text-decoration: none; }
+.fr-sc .k { flex: none; width: 10ch; color: var(--eb-cyan); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-sc .tx { min-width: 0; overflow-wrap: anywhere; }
+@media (hover: hover) { .fr-sc a:hover .tx { text-decoration: underline; text-underline-offset: 3px; } }
+.fr-sc a:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.fr-league { container-type: inline-size; }
+@container (max-width: 420px) { .fr-lg2 { grid-template-columns: minmax(0, 1fr); } }
 
 /* THE SET: a small CRT. The screen is its own dark world in every theme. */
 .fr-set .tv { position: relative; aspect-ratio: 4 / 3; background: #050807; border: 10px solid #2b2b2b; outline: 2px solid var(--line-hi);
@@ -224,13 +240,17 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
 .fr-cell-in { height: 100%; min-height: 0; }
 .fr-cell .ui-frame { margin: 0; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
 .fr-cell .ui-frame > :last-child { flex: 1; min-height: 0; overflow: hidden auto; }
-.fr-cell .ui-frame.ui-dialog { padding-top: 40px; }
-.fr-cell .hvi-notice .ic { margin-right: 1ch; }
-.fr-nt-s { display: flex; flex-direction: column; gap: var(--s2); font-size: var(--t-xs); }
-.fr-nt-s p { margin: 0; line-height: 1.3; }
-.fr-cell.s-S .hvi-notice .ic { display: none; }
-.fr-cell.s-S .ui-frame.ui-dialog { padding-left: var(--s2); padding-right: var(--s2); }
-.fr-nt-s .ok { align-self: flex-start; }
+
+/* NOTICE BOARD: one posted notice a row, its kind as a tag */
+.fr-nt { list-style: none; margin: 0; padding: 0; }
+.fr-nt li + li { border-top: 1px dotted var(--line); }
+.fr-nt a { display: flex; gap: 1ch; align-items: baseline; padding: 5px 0; min-height: 32px; box-sizing: border-box; color: var(--fg); font-size: var(--t-xs); line-height: 1.35; text-decoration: none; }
+.fr-nt .tag { flex: none; width: 9ch; color: var(--eb-amber); font-weight: 700; letter-spacing: 0.04em; }
+.fr-nt .tx { min-width: 0; overflow-wrap: anywhere; }
+@media (hover: hover) { .fr-nt a:hover .tx { text-decoration: underline; text-underline-offset: 3px; } }
+.fr-nt a:focus-visible { outline: var(--focus); outline-offset: 2px; }
+.fr-notice { container-type: inline-size; }
+@container (max-width: 420px) { .fr-nt a { display: block; padding: 3px 0; } .fr-nt .tag { display: inline; margin-right: 1ch; } }
 
 /* the S layout: a glance. One big thing, one line under it. */
 .fr-glance { display: flex; flex-direction: column; justify-content: center; gap: 3px; height: 100%; min-width: 0; color: inherit; text-decoration: none; }
@@ -250,6 +270,8 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
 .fr-mw { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
 .fr-mw .fr-h { margin-bottom: 0; }
 .fr-tkr.v-M .go, .fr-tkr.v-T .go { display: flex; align-items: center; min-height: 32px; }
+.fr-tkr.v-M .fr-mrow { min-height: 28px; padding: 2px 0; }
+.fr-tkr.v-M .go { min-height: 28px; }
 
 /* WIRE: S line only, L a list, W a wide line with its controls beside */
 .fr-wire.v-S .fr-line .tx { -webkit-line-clamp: 4; }
@@ -289,13 +311,17 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
 .fr-sv.v-L .fr-sv-link { grid-template-rows: minmax(0, 1fr) auto; }
 .fr-sv.v-L .cam { aspect-ratio: auto; height: 100%; min-height: 0; }
 .fr-sv.v-L .pr { gap: 1px; }
+/* a wide L: the picture beside the whole file, so the file reads at once instead of under a tall empty crop */
+@container (min-width: 440px) {
+  .fr-sv.v-L .fr-sv-link { grid-template-columns: minmax(0, 50%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: var(--s3); }
+  .fr-sv.v-L .pr { gap: 6px; align-self: center; }
+  .fr-sv.v-L .ln { grid-template-columns: 1fr; gap: 0; }
+}
 
 /* THE SET: S the remote, M a small set beside its buttons, L the big screen. The picture is laid out at 288x216 and scaled. */
 .fr-set .scr-in { position: absolute; left: 0; top: 0; width: 288px; height: 216px; transform-origin: 0 0; }
 .fr-set-w { height: 100%; }
 .fr-set-s, .fr-set-t { display: flex; flex-direction: column; gap: var(--s1); height: 100%; min-height: 0; }
-.fr-set-m .big { font-family: var(--tall); font-size: var(--w-big); line-height: 1; color: var(--fg); }
-.fr-set-m .ln1 { font-size: var(--t-xs); color: var(--fg); }
 .fr-set-s .tv, .fr-set-t .tv { flex: 1 1 0; min-height: 0; border-width: 5px; align-self: center; max-width: 100%; aspect-ratio: 4 / 3; }
 .fr-set-t .tv { flex: 0 0 auto; width: 100%; height: auto; }
 .fr-set-s .tv-ctl, .fr-set-m .tv-ctl, .fr-set-t .tv-ctl { margin-top: 0; flex: none; }
@@ -310,7 +336,9 @@ dialog.fr-dlg::backdrop { background: rgba(0, 0, 0, 0.55); }
 .tv-guide button:focus-visible { outline: var(--focus); outline-offset: -2px; }
 .fr-set-m { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s3); height: 100%; align-items: center; }
 .fr-set-m .tv { height: 100%; aspect-ratio: 4 / 3; border-width: 6px; }
-.fr-set-m .side { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fr-set-m .side { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; height: 100%; justify-content: space-between; }
+.fr-set-m .ch { font-size: var(--t-xs); color: var(--eb-amber); font-weight: 700; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fr-set-m .now { flex: 1 1 0; min-height: 0; margin: 0; font-size: var(--t-xs); line-height: 1.4; color: var(--fg); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .fr-set.v-L .fr-set-w { display: flex; flex-direction: column; align-items: center; }
 .fr-set.v-L .tv { flex: 1 1 0; min-height: 0; max-width: 100%; aspect-ratio: 4 / 3; }
 .fr-set.v-L .tv-ctl { flex: none; align-self: stretch; }
@@ -421,10 +449,8 @@ html.fr-dragging .fr-rz { cursor: nwse-resize; }
 .fr-glance .big.up { color: var(--accent); } .fr-glance .big.dn { color: var(--harm); }
 .fr-glance .big .ps { color: var(--fg-dim); }
 .fr-cyc .fr-glance { justify-content: flex-start; }
-.fr-nt-s.fr-cyc p { flex: 1 1 0; min-height: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
-.fr-nt-s .fr-cyc-it { gap: var(--s2); }
-.fr-nt-s .fr-cyc-it .ok { flex: none; min-height: 32px; min-width: 8ch; padding: 0 var(--s3); }
-.fr-cell.s-S .ui-frame.ui-dialog { padding-top: 36px; padding-bottom: var(--s2); }
+.fr-glance.fr-nt-s .ln2 { color: var(--eb-amber); font-weight: 700; }
+.fr-glance.fr-nt-s .ln1.two .n { -webkit-line-clamp: 5; }
 
 /* a dense S readout: four or five short lines, label, name, value */
 .fr-dense { display: block; height: 100%; color: inherit; text-decoration: none; }

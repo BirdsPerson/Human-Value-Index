@@ -47,15 +47,15 @@ export const WIDGETS = [
   { id: "market", name: "MARKET.TKR", note: "TOP RISERS AND FALLERS, WITH THE BECAUSE" },
   { id: "wire", name: "WIRE.TKR", note: "NEWS AND TRENDING, ONE LINE AT A TIME" },
   { id: "cam", name: "SUBSTRATE.CAM", note: "THE CITY FROM ABOVE, THE MACHINE HOUR" },
-  { id: "notice", name: "NOTICE", note: "THE STANDING NOTICE. OK DISMISSES IT" },
+  { id: "notice", name: "NOTICE BOARD", note: "THE POLLS, THE ASSEMBLY, PREFECTS' ORDERS, NEW SHOPS" },
   { id: "file", name: "YOUR FILE", note: "YOUR SCORE, TIER, MAIL AND FIRST DAY" },
   { id: "flat", name: "YOUR FLAT", note: "A CUTAWAY OF YOUR FLAT AND WHO IS HOME" },
   { id: "watch", name: "SURVEILLANCE", note: "FOLLOWS ONE PUBLIC FIGURE, THEN ANOTHER" },
-  { id: "set", name: "THE SET", note: "A LITTLE TELEVISION. SIX CHANNELS, ALL LOCAL" },
+  { id: "set", name: "THE SET", note: "A LITTLE TELEVISION. SEVEN CHANNELS, ALL LOCAL" },
   { id: "paper", name: "TODAY'S PAPER", note: "THE DAILY COMPLIANCE'S FRONT PAGE" },
   { id: "cups", name: "TOURNAMENTS", note: "WHAT IS OPEN NOW, AND WHO LEADS" },
   { id: "board", name: "LEADERBOARD", note: "WHO LEADS THE TOURNAMENT ON NOW, OR THE LAST ONE FINISHED" },
-  { id: "league", name: "LEAGUE TABLE", note: "THE DEPARTMENTAL CUP, TOP FIVE" },
+  { id: "league", name: "THE LEAGUES", note: "THE CUP TABLE, THE LATEST SCORES, THE PIT" },
 ];
 export const DEFAULT_WIDGETS = ["market", "wire", "watch", "set", "notice"];
 const KNOWN = new Set(WIDGETS.map(w => w.id));

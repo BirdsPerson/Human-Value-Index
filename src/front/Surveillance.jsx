@@ -9,7 +9,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Frame } from "../ui/index.js";
 import Sparkline from "../ui/Sparkline.jsx";
-import { Step } from "./cycle.jsx";
+import { Step, useSetNow } from "./cycle.jsx";
 
 const FilePhoto = lazy(() => import("../FilePhoto.jsx"));
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
@@ -59,6 +59,7 @@ export default function Surveillance({ embedded = false, size = "M" }) {
   const list = d?.subjects || [];
   const s = list.length ? list[i % list.length] : null;
   const lines = s ? fileLines(s) : [];
+  useSetNow(embedded && s ? `WATCHING ${s.name}: ${s.activity}` : "");
   const total = lines.reduce((t, [, v]) => t + String(v).length, 0);
   // the keying
   useEffect(() => { setN(rm ? Infinity : 0); }, [s?.slug, rm]);
@@ -79,18 +80,19 @@ export default function Surveillance({ embedded = false, size = "M" }) {
     return () => clearTimeout(t);
   }, [seen, hold, list.length, i, rm]);
 
-  let left = n;
-  // the keyed printout: a line's characters appear as `left` allows
-  const pr = (from, to, move = true) => (
+  // the keyed printout: a line's characters appear as `left` allows. `left` is counted inside each call, so a
+  // second render of the same view (React's StrictMode does one in dev) prints the same thing, not blanks
+  // `pick`: which lines (indices into fileLines), all of them by default
+  const pr = (pick = null, move = true) => { let left = n; return (
     <span className="pr" aria-hidden="true">
       {lines.map(([k, v], x) => {
         const str = String(v), shown = str.slice(0, Math.max(0, left));
         left -= str.length;
-        return x >= from && x < to ? <span key={k} className="ln"><span className="k">{k}</span><span className="v">{shown}{shown.length < str.length && shown.length > 0 ? <span className="cur">█</span> : null}</span></span> : null;
+        return !pick || pick.includes(x) ? <span key={k} className="ln"><span className="k">{k}</span><span className="v">{shown}{shown.length < str.length && shown.length > 0 ? <span className="cur">█</span> : null}</span></span> : null;
       })}
       {move && <span className="ln"><span className="k">MOVEMENT</span><span className="v">{left >= 0 ? <Sparkline s={{ slug: s.slug, name: s.name, score: s.score }} /> : null}</span></span>}
     </span>
-  );
+  ); };
   const cam = () => (
     <span className="cam" aria-hidden="true">
       <img src={`/api/cam?m=${d.m}&at=${encodeURIComponent(s.district || "")}`} alt="" width="288" height="216" decoding="async" />
@@ -99,15 +101,17 @@ export default function Surveillance({ embedded = false, size = "M" }) {
       <span className="ts">CAM {String(((i % list.length) + 1) * 7).padStart(3, "0")} // DAY {d.clock.day} {pad2(d.clock.hour)}:{pad2(d.clock.minute)}</span>
     </span>
   );
-  // one prepared layout per size: S who and doing what (no picture), M the picture and three lines,
-  // L the big picture and the whole file, W the picture beside the whole file; E is THE SET's channel
+  // one prepared layout per size: S who, their score, what they are doing and where (no picture), M the picture
+  // beside the same four lines, L the picture beside the whole file (stacked when narrow), W the picture beside
+  // the whole file; E is THE SET's channel
+  const WHO_NOW = [0, 1, 4, 5];
   const VIEWS_watch = {
-    S: () => <><span className="rec s" aria-hidden="true"><span className="dot" />REC</span>{pr(0, 4, false)}</>,
-    T: () => <>{cam()}{pr(0, 6)}</>,
-    M: () => <>{cam()}{pr(1, 4, false)}</>,
-    L: () => <>{cam()}{pr(0, 6)}</>,
-    W: () => <>{cam()}{pr(0, 6)}</>,
-    E: () => <>{cam()}{pr(0, 6)}</>,
+    S: () => <><span className="rec s" aria-hidden="true"><span className="dot" />REC</span>{pr(WHO_NOW, false)}</>,
+    T: () => <>{cam()}{pr()}</>,
+    M: () => <>{cam()}{pr(WHO_NOW, false)}</>,
+    L: () => <>{cam()}{pr()}</>,
+    W: () => <>{cam()}{pr()}</>,
+    E: () => <>{cam()}{pr()}</>,
   };
   const V = VIEWS_watch[embedded ? "E" : size] || VIEWS_watch.M;
   const body = (

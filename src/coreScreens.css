@@ -107,7 +107,7 @@
 @media (min-width: 721px) { .hvi-logo .seal { width: 64px; height: 64px; } .hvi-logo .seal svg { width: 40px; height: 40px; } }
 
 /* ---------- the logon desk (DEPARTMENT OS) ----------
-   Phones: the logon window, then the ticker and the notice under it. Desktop: the logon
+   Phones: the logon window, then the desk's windows under it. Desktop: the logon
    window left, the small windows beside it. */
 .hvi-desk { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
 .hvi-desk > .tb { margin-top: var(--s4); }
@@ -131,8 +131,6 @@
 .hvi-tkr .go { display: flex; align-items: center; min-height: var(--hit-min); color: var(--eb-cyan); font-size: var(--t-xs); }
 @media (hover: hover) { .hvi-tkr-link:hover .go { text-decoration: underline; text-underline-offset: 4px; } }
 .hvi-tkr-link:focus-visible { outline: var(--focus); outline-offset: 4px; }
-.hvi-notice p { display: flex; gap: var(--s3); align-items: flex-start; margin: 0; color: var(--fg); }
-.hvi-notice .ic { flex: none; width: 40px; height: 40px; border: 2px solid var(--eb-amber); color: var(--eb-amber); display: grid; place-items: center; font-weight: 700; font-size: 20px; }
 
 /* ---------- the five doors: push-buttons with a 16x16 icon (HyperCard, Kare-style) ---------- */
 .hvi-logon .hvi-doors { border-top: 0; margin: var(--s4) 0 var(--s3); }
