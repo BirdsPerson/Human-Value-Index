@@ -87,7 +87,7 @@ for (const g of GAMES) {
   const p = new URL(`../src/play/${g}`, import.meta.url);
   if (!existsSync(p)) { ok(false, `${g} missing`); continue; }
   const src = readFileSync(p, "utf8");
-  if (!/<TitleScreen\b/.test(src)) { console.log(`  (not yet wired: ${g})`); continue; }
+  if (!/<TitleScreen\b/.test(src)) { ok(false, `${g}: no TitleScreen`); continue; }
   const t = /<TitleScreen[^>]*?\btitle="([^"]+)"/s.exec(src)?.[1];
   ok(t, `${g}: a literal title`);
   for (const ch of String(t || "")) ok(hasGlyph(ch), `${g}: "${ch}" in the pixel font`);
