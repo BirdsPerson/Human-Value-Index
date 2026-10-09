@@ -100,7 +100,7 @@ export default function TitleScreen({ game, title, sub, colors = ["#000000", "#f
       case "run": { const next = it.onSelect(); if (typeof next === "string" && live.current.items.some(x => x.id === next && x.items)) { setPath([next]); setFocus(fs => [fs[0] ?? 0, 0]); } break; }
       case "link": window.location.hash = it.href.replace(/^#/, ""); break;
       case "open": setPath(p => [...p, it.id]); setFocus(fs => [...fs.slice(0, live.current.path.length + 1), 0]); break;
-      case "legend": setLegend(it.legend); break;
+      case "legend": setLegend(it.id); break;   // the id: the element is re-read from the rows each render, so it never goes stale
       case "cycle": it.cycle(1); break;
       default: break;
     }
@@ -173,7 +173,7 @@ export default function TitleScreen({ game, title, sub, colors = ["#000000", "#f
           {head && <p className="ts-head" aria-hidden="true">{head.label}</p>}
           {legend ? (
             <div className="ts-legend">
-              {legend}
+              {list.find(x => x.id === legend)?.legend}
               <button type="button" className="ts-row on" ref={backEl} onClick={() => setLegend(null)}><span className="ts-caret" aria-hidden="true">▶</span><span>BACK</span></button>
             </div>
           ) : (
