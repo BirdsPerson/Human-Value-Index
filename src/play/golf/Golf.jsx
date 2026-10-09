@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Frame, Button, ButtonRow, ScreenHead } from "../../ui/index.js";
 import GameMenu from "../GameMenu.jsx";
+import TitleScreen from "../TitleScreen.jsx";
+import { liveItems, cycleOf } from "../titleLogic.js";
 import { readCaseId, readLastResult } from "../../caseFile.jsx";
 import { CLOTH } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
@@ -29,6 +31,8 @@ import "../pages.css";
 // drag down and push up to swing, drag back and let go to putt; a plain click is still the meter's
 // button. Each mouse stroke goes into the round's log as one event (sim.js act).
 
+// The title's four colours: night, white letters, fairway green, the flag's yellow.
+const COLORS = ["#000000", "#fcfcfc", "#00a800", "#f8d878"];
 const KEEP = "hvi-golf-rounds";
 const EASY_KEY = "hvi-golf-easy";
 const HAND_KEY = "hvi-golf-hand";   // "L" | "R", the player's choice here; unset, the profile's hand, else right
@@ -109,8 +113,6 @@ export default function Golf({ route }) {
   const field = useMemo(() => golfers(), []);
   const holes = COURSES[course], par = parOf(holes), yards = holes.reduce((a, h) => a + h.yards, 0);
   const pre = vs ? golferBySlug(vs) : null;
-  const playRef = useRef(null);
-  useEffect(() => { if (!game && !pre) playRef.current?.focus({ preventScroll: true }); }, [game, pre]);
 
   // demo: the Department's caddie plays the SUBJECT's side with perfect timing (an attract mode).
   // o: overrides for PLAY NOW (the open's front nine, easy swing).
@@ -143,89 +145,57 @@ export default function Golf({ route }) {
   // mouse's drag swing first, the trackball's feel
   useEffect(() => { if (cab && !game) begin(null, false, { course: "open", start: 0, count: 9 }); }, [cab]);   // eslint-disable-line react-hooks/exhaustive-deps
   const toggleMute = () => { sfx.setMuted(!muted); setMuted(!muted); };
+  // the title screen: where it opens next (false: the title; true: the menu; "settings" / "team")
+  const [front, setFront] = useState(() => ({ at: pre ? true : false, n: 0 }));
+  const toFront = (at = true) => { setGame(null); setFront(f => ({ at, n: f.n + 1 })); };
+  const cyc = (list, cur, set) => (d) => set(cycleOf(list, cur, d));
+  const NINES = [["0-9", "FRONT NINE"], ["9-9", "BACK NINE"], ["0-18", "18 HOLES"]];
+  const nine = `${start}-${count}`;
+  const quick = () => begin(pre, false, pre ? {} : { course: "open", start: 0, count: 9 });
+  const courseNote = course === "open"
+    ? `THE OPEN: EIGHTEEN OF THE WORLD'S MOST FAMOUS HOLES, PAR ${par.front + par.back}, ${yards.toLocaleString("en-US")} YARDS.`
+    : `THE LINKS: THE COURSE THE ASSEMBLY DECLINED FOR THE FARM. PAR ${par.front + par.back}, ${yards.toLocaleString("en-US")} YARDS.`;
+  const rows = {
+    play: { label: pre ? `PLAY ${pre.name}` : "PLAY", onSelect: quick },
+    modes: [
+      { id: "stroke", label: "STROKE PLAY, ALONE", hint: `${COURSE_NAME[course]}, ${NINES.find(n => n[0] === nine)[1]}`, onSelect: () => begin(null) },
+      { id: "match", label: "MATCH PLAY V A FIGURE", hint: `${field.length} ON FILE`, onSelect: () => "team" },
+      { id: "caddie", label: "WATCH THE CADDIE PLAY", onSelect: () => begin(null, true) },
+    ],
+    team: { label: "PLAYER SELECT", items: field.map(g => ({ id: g.slug, label: g.name, value: g.rating, art: <GolfCard g={g} />, onSelect: () => begin(g) })) },
+    live: home ? null : liveItems("golf"),
+    settings: [
+      { id: "course", label: "COURSE", value: course === "open" ? "THE OPEN" : "THE LINKS", note: courseNote, cycle: cyc(["open", "links"], course, setCourse) },
+      { id: "holes", label: "HOLES", value: NINES.find(n => n[0] === nine)[1], cycle: (d) => { const [s, c] = cycleOf(NINES, nine, d).split("-").map(Number); setStart(s); setCount(c); } },
+      { id: "easy", label: "EASY SWING", value: easy ? "ON" : "OFF", note: "A METER AT NEARLY HALF SPEED, A MISSED LINE CURVES A QUARTER AS MUCH AND NEVER SHANKS, AND THE CUP IS KINDER. YOUR SIDE ONLY.", cycle: () => setEasy(!easy) },
+      { id: "hand", label: "HAND", value: hand === "L" ? "LEFT" : "RIGHT", cycle: () => setHand(hand === "L" ? "R" : "L") },
+      { id: "sound", label: "SOUND", value: muted ? "OFF" : "ON", cycle: toggleMute },
+    ],
+    rounds: rounds.length ? { label: "YOUR ROUNDS", items: rounds.map((r, i) => ({ id: `r${i}`, label: `${new Date(r.at).toISOString().slice(5, 10)} ${r.cfg?.course === "open" ? "OPEN" : "LINKS"} ${r.result.holes.length}${r.result.mode === "match" ? ` V ${r.cfg.cpu?.name}` : ""}`, value: `${r.result.total[0]} (${toParText(r.result.toPar[0])})` })) } : null,
+    controls: <Controls />,
+    back: true,
+  };
 
   return (
     <div className="gf" style={home ? { border: home.frame, padding: 6 } : undefined}>
       <ScreenHead title={home ? home.title : COURSE_NAME[game?.cfg.course || course]} meta={home ? `${COURSE_NAME[game?.cfg.course || course]} // AT HOME` : game?.tour ? `${game.tour.ev.name} // ${game.tour.official ? "OFFICIAL ROUND" : "PRACTICE"} // ${DIV_NAME[game.tour.div]}` : "EXHIBITION // COUNTS IN NO STANDINGS. THE DEPARTMENT COUNTS IT ANYWAY."} />
-      {home && <p className="pg-lede">{home.line}</p>}
       {game ? (
+        <Play key={game.key} trackball={cab || preset === "cabinet"} cfg={game.cfg} demo={game.demo} lookP={game.looks} onDone={game.demo ? () => {} : done} muted={muted} onMute={toggleMute}
+          tour={game.tour} tourLine={tourLine}
+          onAgain={() => (game.tour ? beginTour({ ...game.tour, official: false }) : begin(...game.args))}
+          onNewCourse={() => { const [g, d, o] = game.args, next = (game.cfg.course === "open" ? "links" : "open"); setCourse(next); begin(g, d, { ...o, course: next }); }}
+          onSettings={() => (game.tour ? setGame(null) : toFront("settings"))} onLeave={() => (game.tour ? setGame(null) : toFront(true))} />
+      ) : tourId && !home ? (
         <>
-          <Play key={game.key} trackball={cab || preset === "cabinet"} cfg={game.cfg} demo={game.demo} lookP={game.looks} onDone={game.demo ? () => {} : done} muted={muted} onMute={toggleMute}
-            tour={game.tour} tourLine={tourLine}
-            onAgain={() => (game.tour ? beginTour({ ...game.tour, official: false }) : begin(...game.args))}
-            onNewCourse={() => { const [g, d, o] = game.args, next = (game.cfg.course === "open" ? "links" : "open"); setCourse(next); begin(g, d, { ...o, course: next }); }}
-            onSettings={() => setGame(null)} />
-          <ButtonRow split stackOnMobile>
-            <Button variant="back" onClick={() => setGame(null)}>Leave the course</Button>
-            <Button variant="secondary" onClick={toggleMute}>{muted ? "SOUND: OFF" : "SOUND: ON"}</Button>
-          </ButtonRow>
+          {/* #golf?t=<event>: the tournament's own desk, past the title */}
+          <TournamentDesk game="golf" id={tourId} onStart={beginTour} refresh={tourRefresh} />
+          <ButtonRow><Button variant="back" href="#golf">The golf menu</Button></ButtonRow>
         </>
       ) : (
-        <>
-          {tourId && !home && <TournamentDesk game="golf" id={tourId} onStart={beginTour} refresh={tourRefresh} />}
-          <p className="pg-lede">GOLF ON FAMOUS HOLES, AGAINST THE COURSE OR A FIGURE ON FILE. WITH A MOUSE OR A FINGER: CLICK THE MAP TO AIM, DRAG DOWN TO TAKE THE CLUB BACK, PUSH UP TO SWING. WITH KEYS: LEFT AND RIGHT AIM, A FULL SWING IS THREE PRESSES OF SPACE (START, POWER, THEN ON THE LINE), A PUTT TWO. MIND THE WIND. SOUND IS OPTIONAL.</p>
-          <div className="pg-start">
-            <Button variant="primary" ref={playRef} onClick={() => begin(pre, false, pre ? {} : { course: "open", start: 0, count: 9 })}>{pre ? `PLAY ${pre.name}` : "PLAY NOW"}</Button>
-            <span className="pg-sub">{pre ? `MATCH PLAY, ${count} HOLES${easy ? ", EASY SWING" : ""}${hand === "L" ? ", LEFT-HANDED" : ""}.` : `THE FRONT NINE OF THE DEPARTMENT OPEN${easy ? ", EASY SWING ON" : ""}${hand === "L" ? ", LEFT-HANDED" : ""}.`}</span>
-          </div>
-          {!tourId && !home && <TournamentDesk game="golf" onStart={beginTour} refresh={tourRefresh} />}
-          <details className="pg-more" open={Boolean(pre)}>
-            <summary>COURSE, HOLES AND EASY SWING</summary>
-            <div className="pg-more-body">
-              <div className="gf-opts" role="group" aria-label="Course">
-                {["open", "links"].map(k => (
-                  <button key={k} type="button" className="gf-opt" aria-pressed={course === k} onClick={() => setCourse(k)}>{COURSE_NAME[k]}</button>
-                ))}
-              </div>
-              {course === "open"
-                ? <p className="gf-p">EIGHTEEN OF THE WORLD'S MOST FAMOUS HOLES, RE-SURVEYED BY THE DEPARTMENT FROM THE PUBLIC RECORD: PAR {par.front + par.back}, {yards.toLocaleString("en-US")} YARDS. THE CLIFFS, THE CREEKS AND THE ISLAND ARE WHERE THEY ARE.</p>
-                : <p className="gf-p">APPLICATION 001 PROPOSED A GOLF COURSE FOR LOT 0x6F07. THE ASSEMBLY VOTED FOR THE FARM. THE DEPARTMENT KEPT THE DRAWINGS: PAR {par.front + par.back}, {yards.toLocaleString("en-US")} YARDS. PLAY THEM HERE, WHERE THEY DO NOT EXIST.</p>}
-              <div className="gf-opts" role="group" aria-label="Holes">
-                {[[0, 9, "FRONT NINE"], [9, 9, "BACK NINE"], [0, 18, "18 HOLES"]].map(([s, c, l]) => (
-                  <button key={l} type="button" className="gf-opt" aria-pressed={start === s && count === c} onClick={() => { setStart(s); setCount(c); }}>{l}</button>
-                ))}
-              </div>
-              <div className="gf-opts">
-                <button type="button" className="pg-toggle" aria-pressed={easy} onClick={() => setEasy(!easy)}>EASY SWING</button>
-                <span className="gf-p dim">A METER AT NEARLY HALF SPEED, A MISSED LINE CURVES A QUARTER AS MUCH AND NEVER SHANKS, A FAT OR THIN STRIKE COSTS LESS, AND THE CUP IS KINDER. ON UNTIL YOU TURN IT OFF. YOUR SIDE ONLY.</span>
-              </div>
-              <div className="gf-opts" role="group" aria-label="Handedness">
-                {[["R", "RIGHT-HANDED"], ["L", "LEFT-HANDED"]].map(([k, l]) => (
-                  <button key={k} type="button" className="gf-opt" aria-pressed={hand === k} onClick={() => setHand(k)}>{l}</button>
-                ))}
-                <span className="gf-p dim">A LEFT-HANDER STANDS ON THE OTHER SIDE OF THE BALL; EARLY STILL HOOKS AND LATE STILL SLICES, THE WAY A LEFTY'S DO. REMEMBERED.</span>
-              </div>
-              <ButtonRow>
-                <Button variant="primary" onClick={() => begin(null)}>STROKE PLAY, ALONE</Button>
-                <Button variant="secondary" onClick={() => begin(null, true)}>WATCH THE CADDIE PLAY</Button>
-              </ButtonRow>
-            </div>
-          </details>
-          <details className="pg-more" open={Boolean(pre)}>
-            <summary>PLAY A MATCH AGAINST A FIGURE ({field.length} ON FILE)</summary>
-            <div className="pg-more-body">
-              <p className="gf-p">HOLE BY HOLE; THE LOWER SCORE TAKES THE HOLE. STRENGTH FOLLOWS THE FIGURE'S GOLF RATING. THE FIGURES PLAY IN SILENCE. THE HOLES AND EASY SWING ABOVE APPLY.</p>
-              <ul className="gf-opps">
-                {field.map(g => (
-                  <li key={g.slug}>
-                    <button type="button" className="gf-opp" onClick={() => begin(g)} aria-label={`Play ${g.name}, golf rating ${g.rating}`}>
-                      <GolfCard g={g} />
-                      <span className="nm"><b>{g.name}</b><span className="why">{g.why}</span></span>
-                      <span className="rt">{g.rating}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </details>
-          <Rounds rounds={rounds} />
-          <p className="gf-p dim">EXHIBITIONS COUNT NOWHERE AND THE CARD STAYS IN THIS BROWSER. TOURNAMENT ROUNDS (THE DESK ABOVE) ARE RE-PLAYED BY THE DEPARTMENT AND RANKED.</p>
-        </>
+        <TitleScreen key={front.n} game="golf" title="GOLF" sub={home ? home.line : `THE DEPARTMENT LINKS // ${COURSE_NAME[course]}${easy ? " // EASY SWING" : ""}${hand === "L" ? " // LEFT-HANDED" : ""}`}
+          colors={COLORS} at={front.at} rows={rows}
+          note="EXHIBITIONS COUNT NOWHERE. TOURNAMENT ROUNDS (LIVE) ARE RE-PLAYED BY THE DEPARTMENT AND RANKED." />
       )}
-      <details className="pg-more">
-        <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><Controls /></div>
-      </details>
       <p className="gf-p dim">THE OPEN'S GREENS, FAIRWAYS, BUNKERS AND WATER: MAP DATA &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OPENSTREETMAP CONTRIBUTORS</a> (ODBL), TURNED AND SCALED BY THE DEPARTMENT.</p>
     </div>
   );
@@ -255,24 +225,11 @@ function Controls() {
   );
 }
 
-function Rounds({ rounds }) {
-  if (!rounds.length) return null;
-  return (
-    <Frame title="YOUR ROUNDS" meta="THIS BROWSER ONLY">
-      <ul className="gf-rounds">
-        {rounds.map((r, i) => (
-          <li key={i}>{new Date(r.at).toISOString().slice(0, 16).replace("T", " ")} // {r.cfg?.course === "open" ? "OPEN" : "LINKS"} {r.result.holes.length} HOLES // {r.result.mode === "match" ? `V ${r.cfg.cpu?.name}: ` : ""}{r.result.total[0]} ({toParText(r.result.toPar[0])}){r.result.mode === "match" ? ` // ${r.result.winner === 0 ? "WON" : r.result.winner === 1 ? "LOST" : "HALVED"} ${r.result.won[0]}-${r.result.won[1]}` : ""}</li>
-        ))}
-      </ul>
-    </Frame>
-  );
-}
-
 // ---- the game: canvas, the fixed-step loop, input ------------------------------------------------------
 const KEYMAP = { ArrowLeft: BTN.L, ArrowRight: BTN.R, ArrowUp: BTN.U, ArrowDown: BTN.D, " ": BTN.A, z: BTN.A, Z: BTN.A, x: BTN.B, X: BTN.B };
 const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); };
 
-function Play({ trackball = false, cfg, demo, lookP, onDone, muted, onMute, onAgain, onNewCourse, onSettings, tour = null, tourLine = null }) {
+function Play({ trackball = false, cfg, demo, lookP, onDone, muted, onMute, onAgain, onNewCourse, onSettings, onLeave, tour = null, tourLine = null }) {
   const [endMenu, setEndMenu] = useState(false);   // the shared end menu (../GameMenu.jsx), once the card is up
   const canvas = useRef(null), wrap = useRef(null);
   const touch = useRef(0);
@@ -555,7 +512,8 @@ function Play({ trackball = false, cfg, demo, lookP, onDone, muted, onMute, onAg
         <canvas ref={canvas} width={W} height={H} style={{ width: scale.css, height: (scale.css * H) / W }}
           aria-label="Golf: the golfer from behind with the hole running away to the horizon, the hole from above in the corner window, the swing meter and the wind along the bottom. With a mouse or a finger: click the corner map to aim, drag down then push up in the lower half to swing; drag down and let go to putt." role="img" />
       </div>
-      <div className="gf-status">{pad ? `CONTROLLER: ${pad.toUpperCase()} // RIGHT STICK: PULL BACK, PUSH THROUGH // A: THE METER // Y: PRACTICE SWINGS` : mode === "pointer" ? "MOUSE / TOUCH: TAP THE MAP TO AIM // DRAG DOWN, PUSH UP: SWING // DRAG BACK, LET GO: PUTT // TAPS: THE METER // WHEEL OR CLUB BOX: CLUB" : classic && coarse ? "\u25C0 \u25B6 AIM // SWING: THREE TAPS, PUTT: TWO // CLUB // II PAUSES" : "KEYS: ARROWS AIM // SPACE SWINGS (3 PRESSES, PUTTS 2) // X CLUB // ENTER PAUSES"}{muted ? " // MUTED" : ""}{cfg.easy ? " // EASY SWING" : ""}</div>
+      {/* one short line; the whole legend is CONTROLS in the pause menu */}
+      <div className="gf-status">{pad ? "RIGHT STICK: PULL BACK, PUSH THROUGH // START PAUSES" : mode === "pointer" ? "TAP THE MAP TO AIM // DRAG DOWN, PUSH UP TO SWING // II PAUSES" : classic && coarse ? "\u25C0 \u25B6 AIM // SWING: THREE TAPS, PUTT: TWO // II PAUSES" : "ARROWS AIM // SPACE SWINGS // ENTER PAUSES"}</div>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{say}</p>
       <div className="gf-mini">
         {!classic && <button type="button" className="gf-tb" aria-label={paused ? "Resume" : "Pause"} onClick={togglePause}>{paused ? "GO" : "II"}</button>}
@@ -570,7 +528,7 @@ function Play({ trackball = false, cfg, demo, lookP, onDone, muted, onMute, onAg
       </div>
       {card && <Card card={card} cfg={cfg} />}
       {paused && !endMenu && <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE ROUND WAITS." onBack={togglePause}
-        options={{ resume: togglePause, restart: onAgain, controls: <Controls />, sound: { on: !muted, onSelect: onMute }, quit: true }} />}
+        options={{ resume: togglePause, restart: onAgain, controls: <Controls />, sound: { on: !muted, onSelect: onMute }, quit: onLeave ? { label: "LEAVE THE COURSE", onSelect: onLeave } : true }} />}
       {endMenu && <GameMenu key="end" kind="end" title={tour ? (tour.official ? "CARD SUBMITTED." : "PRACTICE OVER.") : "ROUND OVER."} summary={card?.played ? `${toParText(card.toPar[0])} TO PAR OVER ${card.played} HOLES.${cfg.cpu && card.won ? ` MATCH ${card.won[0]}-${card.won[1]}.` : ""}${tourLine ? ` ${tourLine}` : ""}` : undefined} onBack={() => setEndMenu(false)}
         options={tour
           ? { board: { label: "THE LEADERBOARD", onSelect: onSettings }, again: { label: "PRACTICE THIS SETUP", onSelect: onAgain }, play: true, city: true }
