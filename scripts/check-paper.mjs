@@ -138,6 +138,7 @@ ok(w.length >= 2 && w.every(x => printable(x.text) && validHref(x.href)), "the w
 // 8. notices from git: the city's changes, never the workshop
 ok(noticeOf("THE WATERS: playable fishing (#fish) and THE AQUARIUM (#aquarium)")?.href === "#fish", "a notice links to the room it installed");
 ok(/^THE DEPARTMENT HAS INSTALLED THE WATERS: playable fishing and THE AQUARIUM\.$/.test(noticeOf("THE WATERS: playable fishing (#fish) and THE AQUARIUM (#aquarium)").text), "a notice reads in-world");
+for (const s of ["Community slice 2: friendship cliques become named groups", "Side quests (b): a vouch adds +2", "Hoops S1b: throw-ins"]) ok(!/SLICE|\(B\)|S1B/.test(noticeOf(s)?.text || ""), `workshop labels stripped: ${s}`);
 for (const s of ["Docs: tower cutaways", "check-civic: the leagues block", "DRIVES: record Scott's approval", "Sprites: Gemini API backend", "Tennis: the Williamses' faces while their likenesses are pending", "Fix typo in README.md"]) ok(noticeOf(s) === null, `workshop subject dropped: ${s}`);
 const log = ["2026-10-05T23:30:00-04:00\x1fTHE WATERS: playable fishing (#fish)", "2026-10-06T00:30:00-04:00\x1fGolf v2: a caddie that reads putts", "2026-10-06T01:00:00-04:00\x1fDocs: nothing"].join("\n");
 const days = noticesFromLog(log);

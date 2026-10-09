@@ -33,8 +33,12 @@ export function noticeOf(subject) {
   const href = (s.match(ROUTE) || [])[1] || null;
   const m = s.match(/^([^:]{2,48}):\s*(.+)$/);
   let text;
+  // workshop labels in a head ("Community slice 2", "Side quests (b)", "Hoops S1b", "D1") never print
+  const label = (h) => h.replace(/\b(slice|stage|phase|part|step)\s*[\w.]+/gi, "").replace(/\s*\([a-z0-9]\)/gi, "")
+    .replace(/\b[A-Z]\d+[a-z]?\b/g, "").replace(/\bv\d+(\.\d+)*\b/gi, "").replace(/\s+/g, " ").trim();
+  if (m && !label(m[1])) { const body = clean(m[2]); return body ? { text: `NOTICE: ${body}.`, big: false } : null; }
   if (m) {
-    const head = clean(m[1]).toUpperCase(), body = clean(m[2]);
+    const head = clean(label(m[1])).toUpperCase(), body = clean(m[2]);
     if (!body) return null;
     text = /^THE\s|^[A-Z0-9 '!&-]+$/.test(m[1].trim()) && m[1].trim() === m[1].trim().toUpperCase()
       ? `THE DEPARTMENT HAS INSTALLED ${head}: ${body}.`
