@@ -5,6 +5,8 @@ import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC } from "../../avatar.js";
 import { readPad } from "../../city/gamepad.js";
 import GameMenu from "../GameMenu.jsx";
+import TitleScreen from "../TitleScreen.jsx";
+import { cycleOf } from "../titleLogic.js";
 import { headFrom, sheetHints } from "../heads.js";
 import { newGame, step, rleEncode, resultOf, verify, VERSION, DIFF_IDS, goalsFor } from "./sim.js";
 import { LEVELS, LEVEL_IDS } from "./levels.js";
@@ -54,12 +56,16 @@ function profileHand() {
 const readStance = () => rd(STANCE_KEY, v => v === "goofy" || v === "regular", null) || (profileHand() === "L" ? "goofy" : "regular");
 const usedPrompts = () => { try { const j = JSON.parse(localStorage.getItem(PROMPT_KEY) || "[]"); return Array.isArray(j) ? j : []; } catch { return []; } };
 
+// The title's four colours: night, white letters, deck red, the tape's yellow.
+const COLORS = ["#000000", "#fcfcfc", "#d82800", "#f8b800"];
+
 export default function Skate({ route }) {
   useEffect(() => { injectStyles(); }, []);
   const opts = useMemo(() => parseRoute(route), [route]);
   const [diff, setDiffS] = useState(() => rd(DIFF_KEY, v => DIFF_IDS.includes(v), "rookie"));
   const [stance, setStanceS] = useState(readStance);
   const [speed, setSpeedS] = useState(() => Number(rd(SPEED_KEY, v => SPEEDS.some(x => String(x[1]) === v), "1")));
+  const [muted, setMuted] = useState(() => SFX.isMuted());
   const setDiff = (v) => { setDiffS(v); wr(DIFF_KEY, v); };
   const setStance = (v) => { setStanceS(v); wr(STANCE_KEY, v); };
   const setSpeed = (v) => { setSpeedS(v); wr(SPEED_KEY, String(v)); };
@@ -68,18 +74,49 @@ export default function Skate({ route }) {
   const [guided, setGuided] = useState(false);   // the controls guide, once, before the first run
   const [skater, setSkaterS] = useState(() => { try { return SKATER[localStorage.getItem(SKATER_KEY)] ? localStorage.getItem(SKATER_KEY) : "you"; } catch { return "you"; } });
   const setSkater = (k) => { setSkaterS(k); try { localStorage.setItem(SKATER_KEY, k); } catch { /* */ } };
+  // the title screen: where it opens next (false: the title; true: the menu; "modes", "settings")
+  const [front, setFront] = useState(() => ({ at: false, n: 0 }));
+  const toFront = (at = true) => { setPlay(null); setFront(f => ({ at, n: f.n + 1 })); };
   useEffect(() => { if (opts.lvl) setPlay(mk(opts.lvl, opts.mode)); }, [opts]);   // eslint-disable-line react-hooks/exhaustive-deps   // a link into a level
   const start = (level, mode) => { SFX.unlock(); setPlay(mk(level, mode)); };
   const gate = play && !guided && !guideSeen();
   const leaveGuide = () => { markGuideSeen(); setGuided(true); };
+  const prog = useMemo(() => readProgress(), [front.n]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const results = useMemo(() => readResults(), [front.n]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const P0 = (id) => prog[progKey(id, diff)] || { goals: [], best: 0 };
+  const levelNote = (id) => {
+    const D = LEVELS[id], P = P0(id);
+    return `${D.blurb} GOALS: ${goalsFor(id, diff).map(g => `${P.goals?.includes(g.id) ? "■" : "□"} ${g.name}`).join(", ")}.`;
+  };
+  const cyc = (list, cur, set) => (d) => set(cycleOf(list, cur, d));
+  const rows = {
+    play: () => start("park", "run"),
+    modes: LEVEL_IDS.flatMap(id => [
+      { id: `${id}-run`, label: `RUN: ${LEVELS[id].name}`, hint: P0(id).best ? `BEST ${comma(P0(id).best)}` : "2:00", note: levelNote(id), onSelect: () => start(id, "run") },
+      { id: `${id}-free`, label: `FREE SKATE: ${LEVELS[id].name}`, hint: "NO CLOCK", note: `${LEVELS[id].blurb} NO CLOCK, NO GOALS.`, onSelect: () => start(id, "free") },
+    ]),
+    team: { label: "SKATER SELECT", items: SKATERS.map(s => ({ id: s.key, label: s.name, hint: skater === s.key ? "CHOSEN" : "", note: s.key === "you" ? "YOU SKATE WITH YOUR OWN FILE'S FACE. EVERYONE GETS THE SAME BOARD AND THE SAME LEGS." : undefined, onSelect: () => { setSkater(s.key); return "modes"; } })) },
+    settings: [
+      { id: "diff", label: "DIFFICULTY", value: diff.toUpperCase(), note: DIFF_NOTE[diff], cycle: cyc(DIFF_IDS, diff, setDiff) },
+      { id: "stance", label: "STANCE", value: stance.toUpperCase(), cycle: () => setStance(stance === "goofy" ? "regular" : "goofy") },
+      { id: "speed", label: "SPEED", value: SPEEDS.find(x => x[1] === speed)?.[0] || "NORMAL", cycle: (d) => setSpeed(SPEEDS.find(x => x[0] === cycleOf(SPEEDS, SPEEDS.find(y => y[1] === speed)?.[0] || "NORMAL", d))[1]) },
+      { id: "sound", label: "SOUND", value: muted ? "OFF" : "ON", cycle: () => { const m = !muted; setMuted(m); SFX.setMuted(m); if (!m) SFX.unlock(); } },
+    ],
+    runs: results.length ? { label: "YOUR RUNS", items: results.map((r, i) => ({ id: `r${i}`, label: `${LEVELS[r.level]?.name || r.level} ${r.goals.length}/${r.goalsOf} ${r.letters.replace(/_/g, "·")}${r.tape ? " TAPE" : ""}`, value: comma(r.score) })) } : null,
+    controls: <ControlsGuide mode={COARSE() ? "touch" : "keys"} family="generic" goofy={stance === "goofy"} compact />,
+    back: true,
+  };
   return (
     <div className="sb">
-      <ScreenHead title="THE PARK" meta="SKATEBOARDING // THE PARK, THE VERT RAMP, THE PLAZA // EVERY RUN IS RECORDED" />
+      <ScreenHead title="THE PARK" meta="SKATEBOARDING // EVERY RUN IS RECORDED" />
       {gate
         ? <GuideGate onDone={leaveGuide} goofy={stance === "goofy"} />
         : play
-          ? <Play key={play.n} game={play} skater={skater} onRestart={() => setPlay(p => ({ ...p, n: Date.now(), seed: seedNow() }))} onQuit={() => { if (opts.cab) { window.location.hash = "play"; return; } setPlay(null); }} />
-          : <Home skater={skater} setSkater={setSkater} onStart={start} diff={diff} setDiff={setDiff} stance={stance} setStance={setStance} speed={speed} setSpeed={setSpeed} />}
+          ? <Play key={play.n} game={play} skater={skater} onRestart={() => setPlay(p => ({ ...p, n: Date.now(), seed: seedNow() }))}
+              onQuit={() => { if (opts.cab) { window.location.hash = "play"; return; } toFront(true); }}
+              onOther={() => { if (opts.cab) { window.location.hash = "play"; return; } toFront("modes"); }} />
+          : <TitleScreen key={front.n} game="skate" title="SKATE" sub={`THE PARK, THE VERT RAMP, THE PLAZA // ${diff.toUpperCase()} // ${SKATER[skater].name}`} colors={COLORS} at={front.at} rows={rows}
+              note="TWO-MINUTE RUNS: COMBOS, S-K-A-T-E, THE SECRET TAPE, THE GOALS. OR FREE SKATE." />}
     </div>
   );
 }
@@ -89,76 +126,6 @@ function GuideGate({ onDone, goofy }) {
   useEffect(() => { const t = setInterval(() => setPad(readPad()), 500); return () => clearInterval(t); }, []);
   const mode = pad.connected ? "pad" : COARSE() ? "touch" : "keys";
   return <ControlsGuide mode={mode} family={pad.family || "generic"} goofy={goofy} onDone={onDone} />;
-}
-
-// ---- the start ---------------------------------------------------------------------------------------------------
-function Home({ skater, setSkater, onStart, diff, setDiff, stance, setStance, speed, setSpeed }) {
-  const prog = useMemo(() => readProgress(), []);
-  const P0 = (id) => prog[progKey(id, diff)] || { goals: [], best: 0 };
-  const results = useMemo(() => readResults(), []);
-  const first = useRef(null);
-  useEffect(() => { first.current?.focus({ preventScroll: true }); }, []);
-  useEffect(() => {   // A or START on a pad: a run at the park
-    let raf, prev = null;
-    const tick = () => { raf = requestAnimationFrame(tick); const p = readPad(); if (p.connected && prev && ((p.held.act && !prev.act) || (p.held.start && !prev.start))) onStart("park", "run"); prev = p.connected ? p.held : null; };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  });
-  return (
-    <>
-      <p className="pg-lede">Skate the city. A two-minute run: string tricks into combos, grab the letters S-K-A-T-E, find the secret tape, tick off the goals. Or free skate with no clock. The controls are the classic skate layout: hold the bottom button to crouch and let go to ollie, the left one flips (hold it longer for a double or a triple), the right one grabs, the top one grinds, R2 reverts. A controller works; phones get a d-pad.</p>
-      <div className="sb-opts">
-        <span className="sb-row" role="radiogroup" aria-label="Level of difficulty"><b>DIFFICULTY</b>{DIFF_IDS.map(d => <button key={d} type="button" role="radio" aria-checked={diff === d} className={`sb-chip${diff === d ? " on" : ""}`} onClick={() => setDiff(d)}>{d.toUpperCase()}</button>)}</span>
-        <span className="sb-row" role="radiogroup" aria-label="Stance"><b>STANCE</b>{["regular", "goofy"].map(d => <button key={d} type="button" role="radio" aria-checked={stance === d} className={`sb-chip${stance === d ? " on" : ""}`} onClick={() => setStance(d)}>{d.toUpperCase()}</button>)}</span>
-        <span className="sb-row" role="radiogroup" aria-label="Game speed"><b>SPEED</b>{SPEEDS.map(([n, v]) => <button key={n} type="button" role="radio" aria-checked={speed === v} className={`sb-chip${speed === v ? " on" : ""}`} onClick={() => setSpeed(v)}>{n}</button>)}</span>
-        <span>{DIFF_NOTE[diff]}</span>
-      </div>
-      <div className="pg-start">
-        <Button variant="primary" ref={first} onClick={() => onStart("park", "run")}>RUN THE PARK</Button>
-        <span className="pg-sub">TWO MINUTES ON THE RECREATION GROUND. {P0("park").best ? `YOUR BEST (${diff.toUpperCase()}): ${comma(P0("park").best)}.` : "NO RUN YET."}</span>
-      </div>
-      <div className="sb-levels">
-        {LEVEL_IDS.map(id => {
-          const D = LEVELS[id], P = P0(id), goals = goalsFor(id, diff);
-          return (
-            <section key={id} className="sb-level" aria-label={D.name}>
-              <h3>{D.name} <small>{D.place}</small></h3>
-              <p className="sb-small">{D.blurb}</p>
-              <div className="sb-row">
-                <button type="button" className="sb-chip on" onClick={() => onStart(id, "run")}>RUN (2:00)</button>
-                <button type="button" className="sb-chip" onClick={() => onStart(id, "free")}>FREE SKATE</button>
-                <span className="sb-best">{P.best ? `BEST ${comma(P.best)}` : ""}</span>
-              </div>
-              <ul className="sb-goals">
-                {goals.map(g => <li key={g.id} className={P.goals?.includes(g.id) ? "done" : ""}><span aria-hidden="true">{P.goals?.includes(g.id) ? "■" : "□"}</span> {g.name}{P.goals?.includes(g.id) ? <span className="sr-only"> (done)</span> : null}</li>)}
-              </ul>
-            </section>
-          );
-        })}
-      </div>
-      <details className="pg-more">
-        <summary>SKATER: {SKATER[skater].name}</summary>
-        <div className="pg-more-body">
-          <div className="sb-row" role="radiogroup" aria-label="Skater">
-            {SKATERS.map(s => <button key={s.key} type="button" role="radio" aria-checked={skater === s.key} className={`sb-chip${skater === s.key ? " on" : ""}`} onClick={() => setSkater(s.key)}>{s.name}</button>)}
-          </div>
-          <p className="sb-small">YOU SKATE WITH YOUR OWN FILE'S FACE. EVERYONE GETS THE SAME BOARD AND THE SAME LEGS.</p>
-        </div>
-      </details>
-      <details className="pg-more">
-        <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><ControlsGuide mode={COARSE() ? "touch" : "keys"} family="generic" goofy={stance === "goofy"} compact /></div>
-      </details>
-      <details className="pg-more">
-        <summary>YOUR RUNS ({results.length})</summary>
-        <div className="pg-more-body">
-          {!results.length ? <p className="sb-small">NONE YET. A FINISHED RUN IS RE-SKATED FROM ITS INPUT LOG BEFORE IT IS KEPT HERE.</p> : (
-            <ul className="sb-runs">{results.map((r, i) => <li key={i}><b>{comma(r.score)}</b> {LEVELS[r.level]?.name} // {r.goals.length}/{r.goalsOf} GOALS // {r.letters.replace(/_/g, "·")}{r.tape ? " // TAPE" : ""} // {new Date(r.at).toLocaleDateString()}</li>)}</ul>
-          )}
-        </div>
-      </details>
-    </>
-  );
 }
 
 // ---- how the skater looks -----------------------------------------------------------------------------------------
@@ -185,7 +152,7 @@ function useLook(key) {
 }
 
 // ---- the game -----------------------------------------------------------------------------------------------------
-function Play({ game, skater, onRestart, onQuit }) {
+function Play({ game, skater, onRestart, onQuit, onOther }) {
   const canvasRef = useRef(null), wrapRef = useRef(null), inputRef = useRef(null), apiRef = useRef({}), lookRef = useRef(null);
   const look = useLook(skater); lookRef.current = look;
   const [menu, setMenu] = useState(null);   // null | "pause" | {end}
@@ -320,23 +287,19 @@ function Play({ game, skater, onRestart, onQuit }) {
       </div>
       <div className="sr-only" aria-live="polite" aria-atomic="true">{sr}</div>
       {touch && !watching && <TouchPad input={inputRef} />}
+      {/* restart, sound, controls, ending a free skate and leaving: the pause menu */}
       <ButtonRow>
         <Button onClick={() => api.pause?.()}>Pause</Button>
-        <Button onClick={onRestart}>Restart</Button>
-        {game.mode === "free" && <Button onClick={() => api.end?.()}>End session</Button>}
-        <Button onClick={toggleMute}>{muted ? "Sound on" : "Mute"}</Button>
-        <Button variant="back" onClick={onQuit}>Leave the park</Button>
       </ButtonRow>
-      {!touch && <details className="pg-more sb-legend-wrap"><summary>CONTROLS // {mode === "pad" ? `CONTROLLER (${String(family || "pad").toUpperCase()})` : "KEYBOARD"} // {game.diff.toUpperCase()}, {game.goofy ? "GOOFY" : "REGULAR"}</summary><div className="pg-more-body">{legend}</div></details>}
       {menu === "pause" && (
-        <GameMenu kind="pause" title="PAUSED." summary={`${L.name}. ${game.mode === "run" ? "THE CLOCK IS STOPPED." : "FREE SKATE."}`} onBack={() => api.resume?.()}
-          options={{ resume: () => api.resume?.(), restart: onRestart, controls: legend, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "LEAVE THE PARK", onSelect: onQuit } }} />
+        <GameMenu kind="pause" title="PAUSED." summary={`${L.name}. ${game.mode === "run" ? "THE CLOCK IS STOPPED." : "FREE SKATE."} ${game.diff.toUpperCase()}, ${game.goofy ? "GOOFY" : "REGULAR"}.`} onBack={() => api.resume?.()}
+          options={{ resume: () => api.resume?.(), restart: onRestart, ...(game.mode === "free" ? { endfree: { label: "END THE SESSION", onSelect: () => api.end?.() } } : {}), controls: legend, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "LEAVE THE PARK", onSelect: onQuit } }} />
       )}
       {end && !watching && (
         <GameMenu key="end" kind="end" title={`${comma(end.end.score)} POINTS.`}
           summary={`${L.name}. BEST COMBO ${comma(end.end.best)}. LETTERS ${end.end.letters.replace(/_/g, "·")}${end.end.tape ? ", THE TAPE" : ""}. GOALS ${end.end.goals.length} OF ${end.end.goalsOf}.${end.beat ? " A NEW BEST." : ""}${end.verified ? " RE-SKATED FROM THE LOG: THE SAME." : ""}`}
           onBack={() => setMenu(null)}
-          options={{ again: onRestart, replay: () => api.watch?.(), settings: { label: "ANOTHER LEVEL", onSelect: onQuit }, play: true, city: true }} />
+          options={{ again: onRestart, replay: () => api.watch?.(), settings: { label: "ANOTHER LEVEL", onSelect: onOther || onQuit }, play: true, city: true }} />
       )}
     </div>
   );

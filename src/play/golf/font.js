@@ -14,6 +14,7 @@ const G = {
 };
 const COLS = {};
 for (const [k, hex] of Object.entries(G)) COLS[k] = [0, 2, 4, 6, 8].map(i => parseInt(hex.slice(i, i + 2), 16));
+export const hasGlyph = (ch) => Object.prototype.hasOwnProperty.call(COLS, String(ch).toUpperCase());
 export const CW = 6, CH = 8;   // advance and line height, in font pixels
 
 export function textWidth(s, scale = 1) { return String(s).length * CW * scale - scale; }

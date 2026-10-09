@@ -8,6 +8,7 @@ import { loadScores, saveScore, loadTag, saveTag } from "./scores.js";
 import { getPermit, fileHunt, loadBoard } from "./api.js";
 import * as sfx from "./audio.js";
 import GameMenu from "../GameMenu.jsx";
+import TitleScreen from "../TitleScreen.jsx";
 import HuntGuide, { GUIDE_KEY, TIPS_KEY, tipText } from "./Guide.jsx";
 import { guideSeen, markGuideSeen, tipsUsed, markTipUsed, Tip } from "../guideKit.jsx";
 import "./hunt.css";
@@ -25,6 +26,26 @@ const defaultTrip = (at) => (TRIPS.find(t => !t.decoys && seasonOpen(t.id, at)) 
 // Back to the bar: a cabinet in the city's overlay closes itself (FunnelOverlay listens).
 export const leaveCabinet = () => { try { window.parent?.postMessage({ hvi: "cabinet-close" }, window.location.origin); } catch { /* not framed */ } };
 
+// The title's four colours: night, white letters, the blaze orange of a hunter's cap, the dusk sky's yellow.
+const COLORS = ["#000000", "#fcfcfc", "#e45c10", "#f8b800"];
+const guideMode = () => { try { return readPad().connected ? "pad" : window.matchMedia("(pointer: coarse)").matches ? "touch" : "keys"; } catch { return "keys"; } };
+
+// The marquee initials: a text field, inside the menu (the menu lets its keys through).
+// Its own state: the menu holds this element as it was when opened, so the prop goes stale.
+function TagField({ tag: tag0, setTag: setOuter }) {
+  const [tag, setLocal] = useState(tag0);
+  const setTag = (v) => { setLocal(v); setOuter(v); };
+  const ref = useRef(null);
+  useEffect(() => { ref.current?.focus({ preventScroll: true }); }, []);
+  return (
+    <div className="hu-tag">
+      <label htmlFor="hu-tag">YOUR INITIALS ON THE MARQUEE (THREE LETTERS OR DIGITS). THE BOARD FILES TRIPS UNDER THEM.</label>
+      <input id="hu-tag" ref={ref} value={tag} maxLength={3} autoComplete="off" spellCheck={false} inputMode="text"
+        onChange={e => { const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3); setTag(v); saveTag(v); }} />
+    </div>
+  );
+}
+
 export default function Hunt({ route }) {
   const { trip: trip0, cab } = useMemo(() => parseRoute(route), [route]);
   const [at, setAt] = useState(() => Date.now());
@@ -36,10 +57,12 @@ export default function Hunt({ route }) {
   const [scores, setScores] = useState(loadScores);
   const [board, setBoard] = useState(null);
   const [tag, setTag] = useState(loadTag);
-  const playRef = useRef(null);
+  // the title screen: where it opens (false: the title). A bar's cabinet (?cab=1) or a link to one
+  // trip (?trip=) opens on the menu, past the title.
+  const [front, setFront] = useState(() => ({ at: cab || trip0 ? true : false, n: 0 }));
+  const toFront = (where = true) => { setGame(null); setFront(f => ({ at: where, n: f.n + 1 })); };
   useEffect(() => { if (trip0) setTrip(trip0); }, [trip0]);
   useEffect(() => { const t = setInterval(() => setAt(Date.now()), 15000); return () => clearInterval(t); }, []);
-  useEffect(() => { if (!game) playRef.current?.focus({ preventScroll: true }); }, [game]);
   useEffect(() => { if (game && !game.demo) return; let off = false; loadBoard().then(j => { if (!off) setBoard(j); }).catch(() => { if (!off) setBoard(null); }); return () => { off = true; }; }, [game]);
 
   // A signed permit from the board when it answers (the seed and the start are the server's, so the
@@ -50,100 +73,61 @@ export default function Hunt({ route }) {
     let cfg = { seed: (Math.floor(Math.random() * 0xfffffffe) + 1) >>> 0, trip: which, at: Date.now(), player: { name: tag || "YOU" } }, permit = null, line = "";
     if (!demo) {
       setBusy(true);
-      try { const p = await getPermit(which); cfg = { ...cfg, seed: p.seed, at: p.at }; permit = p.permit; line = "PERMIT ISSUED. THIS TRIP CAN GO ON THE CABINET'S BOARD."; }
-      catch (e) { line = `NO PERMIT (${e.message}). HUNT ANYWAY: THIS TRIP STAYS IN THIS BROWSER.`; }
+      try { const p = await getPermit(which); cfg = { ...cfg, seed: p.seed, at: p.at }; permit = p.permit; }
+      catch (e) { line = `NO PERMIT (${e.message}). THIS TRIP STAYS IN THIS BROWSER.`; }
       setBusy(false);
     }
-    setNote(demo ? "THE DEPARTMENT'S MARKSMAN, FOR DEMONSTRATION." : line);
+    setNote(line);   // only the case worth a line: a trip that cannot go on the board
     setGame({ key: cfg.seed ^ cfg.at, cfg, demo, permit });
   };
   const toggleMute = () => { sfx.setMuted(!muted); setMuted(!muted); };
   const t = TRIP[trip], cnow = conditionsAt(at), open = seasonOpen(trip, at);
+  const n = (v) => v.toLocaleString("en-US");
+  const rows = {
+    play: { label: busy ? "ISSUING TAGS..." : `PLAY: ${t.name}`, disabled: busy, onSelect: () => begin(false) },
+    modes: { label: "TRIPS", items: [
+      ...TRIPS.map(x => {
+        const o = seasonOpen(x.id, at), best = scores[x.id]?.[0]?.score;
+        return { id: x.id, label: `${x.rank}. ${x.name}`, hint: x.decoys ? "ALWAYS IN SEASON" : o ? "OPEN" : "CLOSED",
+          note: `${x.note} ${x.decoys ? "" : o ? `OPEN // ${openSeasonsLine(x.sp)}.` : `OUT OF SEASON: AN EXHIBITION. OPENS ${openSeasonsLine(x.sp)}.`} ${best != null ? `YOUR BEST ${n(best)}.` : ""}`,
+          onSelect: () => { setTrip(x.id); begin(false, x.id); } };
+      }),
+      { id: "marksman", label: "WATCH THE DEPARTMENT'S MARKSMAN", note: "THE DEPARTMENT'S MARKSMAN PLAYS THE TRIP, FOR DEMONSTRATION.", onSelect: () => begin(true) },
+    ] },
+    scores: { label: board ? `TODAY'S BOARD (DAY ${board.day})` : "SCORES", items: [
+      ...(board?.top || []).map((r, i) => ({ id: `b${i}`, label: `${i + 1}. ${r.tag} ${TRIP[r.trip]?.name || r.trip}`, value: n(r.score) })),
+      ...(board && !board.top?.length ? [{ id: "none", label: "NOTHING FILED TODAY", value: "-" }] : []),
+      ...TRIPS.map(x => ({ id: `y-${x.id}`, label: `YOUR BEST: ${x.name}`, value: scores[x.id]?.[0] ? n(scores[x.id][0].score) : "-" })),
+    ] },
+    settings: [
+      { id: "tag", label: "INITIALS", value: tag || "---", legend: <TagField tag={tag} setTag={setTag} /> },
+      { id: "sound", label: "SOUND", value: muted ? "OFF" : "ON", cycle: toggleMute },
+    ],
+    seasons: { label: "THE SEASONS", items: [
+      ...TRIPS.filter(x => !x.decoys).map(x => ({ id: x.id, label: SPECIES_BY[x.sp].name, value: openSeasonsLine(x.sp) })),
+      { id: "dept", label: "THE DEPARTMENT SHOOT", value: "ALWAYS" },
+    ] },
+    controls: <Controls mode={guideMode()} family={readPad().family || null} />,
+    back: cab ? { label: "BACK TO THE BAR", onSelect: leaveCabinet } : true,
+  };
 
   return (
     <div className={`hu${cab ? " hu-cab" : ""}`}>
       {!cab && <ScreenHead title="TAGGED OUT" meta="A BAR CABINET. A VIDEO GAME: NO ANIMAL IN THE CITY IS HARMED." />}
       {game ? (
         <>
-          {note && !cab && <p className="hu-p dim">{note}</p>}
+          {note && !cab && !game.demo && <p className="hu-p dim">{note}</p>}
           <Play key={game.key} game={game} muted={muted} cab={cab} tag={tag} onMute={toggleMute}
             onScores={() => setScores(loadScores())}
-            onAgain={() => begin(game.demo, game.cfg.trip)} onMenu={() => setGame(null)}
+            onAgain={() => begin(game.demo, game.cfg.trip)} onMenu={() => toFront("modes")} onLeave={() => toFront(true)}
             onReplay={(cfg, log) => begin(false, cfg.trip, log, cfg)} />
-          {!cab && (
-            <ButtonRow split stackOnMobile>
-              <Button variant="back" onClick={() => setGame(null)}>Leave the hunt</Button>
-              <Button variant="secondary" onClick={toggleMute}>{muted ? "SOUND: OFF" : "SOUND: ON"}</Button>
-            </ButtonRow>
-          )}
         </>
       ) : (
-        <>
-          {!cab && <p className="pg-lede">THE LIGHT-GUN CABINET IN THE CITY'S BARS. POINT AND SHOOT THE BUCKS AND THE BULLS; NEVER THE DOES OR THE COWS (THREE STRIKES AND THE LICENCE IS REVOKED). SHOOT OFF THE SCREEN, OR RIGHT-CLICK, TO RELOAD. ONE MALE A STAGE OR THE SEASON CLOSES ON YOU.</p>}
-          {cab && <p className="hu-cabhead">TAGGED OUT // PICK A TRIP. POINT, CLICK TO SHOOT, RIGHT-CLICK OR SHOOT OFF SCREEN TO RELOAD.</p>}
-          <div className="pg-start">
-            <Button variant="primary" ref={playRef} disabled={busy} onClick={() => begin(false)}>{busy ? "ISSUING TAGS..." : `PLAY NOW: ${t.name}`}</Button>
-            <span className="pg-sub">{nowLine(cnow)} // {open ? "SEASON OPEN" : "OUT OF SEASON: EXHIBITION, THE DEPARTMENT LOOKS AWAY"}</span>
-          </div>
-          <div className="hu-trips" role="group" aria-label="The trips">
-            {TRIPS.map(x => {
-              const o = seasonOpen(x.id, at), best = scores[x.id]?.[0]?.score;
-              return (
-                <button key={x.id} type="button" className="hu-trip" aria-pressed={trip === x.id} onClick={() => setTrip(x.id)}>
-                  <b>{x.rank}. {x.name}</b>
-                  <span>{x.note}</span>
-                  <span className={o ? "ok" : "off"}>{x.decoys ? "ALWAYS IN SEASON" : o ? `OPEN // ${openSeasonsLine(x.sp)}` : `CLOSED // OPENS ${openSeasonsLine(x.sp)}`}</span>
-                  <span className="dim">{best != null ? `YOUR BEST ${best.toLocaleString("en-US")}` : "NO SCORE YET"}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="hu-tag">
-            <label htmlFor="hu-tag">YOUR INITIALS ON THE MARQUEE</label>
-            <input id="hu-tag" value={tag} maxLength={3} autoComplete="off" spellCheck={false} inputMode="text"
-              onChange={e => { const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3); setTag(v); saveTag(v); }} />
-            <ButtonRow>
-              <Button variant="secondary" onClick={() => begin(true)}>WATCH THE DEPARTMENT'S MARKSMAN</Button>
-              {cab && <Button variant="back" onClick={leaveCabinet}>BACK TO THE BAR</Button>}
-            </ButtonRow>
-          </div>
-          <details className="pg-more" open={cab}>
-            <summary>TODAY'S BOARD ({board ? `DAY ${board.day}` : "THE CABINET"})</summary>
-            <div className="pg-more-body"><Board board={board} scores={scores} /></div>
-          </details>
-          {!cab && (
-            <details className="pg-more">
-              <summary>THE SEASONS</summary>
-              <div className="pg-more-body">
-                <p className="hu-p">THE DEPARTMENT ISSUES TAGS BY THE CITY'S OWN CALENDAR (FOUR SEASONS OF 28 MACHINE DAYS; IT IS {SEASONS[cnow.season]} ON DAY {cnow.day}). OUT OF SEASON THE CABINET STILL PLAYS: AN EXHIBITION, AND THE DEPARTMENT LOOKS AWAY.</p>
-                <ul className="hu-list">{TRIPS.filter(x => !x.decoys).map(x => <li key={x.id}>{SPECIES_BY[x.sp].name}: {openSeasonsLine(x.sp)}</li>)}<li>THE DEPARTMENT SHOOT: ALWAYS. THE DEPARTMENT IS ALWAYS IN SEASON.</li></ul>
-              </div>
-            </details>
-          )}
-        </>
-      )}
-      {!cab && (
-        <details className="pg-more">
-          <summary>HOW TO PLAY</summary>
-          <div className="pg-more-body"><Controls /></div>
-        </details>
+        <TitleScreen key={front.n} game="hunt" title="TAGGED OUT" colors={COLORS} at={front.at} rows={rows}
+          sub={`${nowLine(cnow)} // ${open ? "SEASON OPEN" : "OUT OF SEASON: AN EXHIBITION"}`}
+          note="SHOOT THE BUCKS AND BULLS, NEVER THE DOES OR COWS. SHOOT OFF THE SCREEN TO RELOAD." />
       )}
     </div>
-  );
-}
-
-function Board({ board, scores }) {
-  return (
-    <>
-      <p className="hu-p dim">THE CABINET'S BOARD IS TODAY'S (THE MACHINE DAY'S) VERIFIED TRIPS: EVERY ONE RE-PLAYED ON THE SERVER FROM ITS LOG BEFORE IT WENT UP.{board ? "" : " THE BOARD DID NOT ANSWER; ONLY THIS BROWSER'S BESTS ARE SHOWN."}</p>
-      {board?.top?.length ? (
-        <table className="hu-board">
-          <thead><tr><th scope="col">#</th><th scope="col">TAG</th><th scope="col">TRIP</th><th scope="col">SCORE</th><th scope="col">TROPHY</th></tr></thead>
-          <tbody>{board.top.map((r, i) => <tr key={i}><td>{i + 1}</td><th scope="row">{r.tag}</th><td>{TRIP[r.trip]?.name || r.trip}</td><td>{r.score.toLocaleString("en-US")}</td><td>{r.pts ? `${r.pts} PTS, ${(r.inches / 10).toFixed(1)} IN` : "-"}</td></tr>)}</tbody>
-        </table>
-      ) : board ? <p className="hu-p">NOTHING FILED TODAY. THE BOARD IS YOURS TO TAKE.</p> : null}
-      <ul className="hu-list">{TRIPS.map(t => <li key={t.id}>{t.name}: {scores[t.id]?.length ? scores[t.id].map(s => s.score.toLocaleString("en-US")).join(" // ") : "-"}</li>)}</ul>
-    </>
   );
 }
 
@@ -165,7 +149,7 @@ function Controls({ mode = "keys", family = null }) {
 // ---- the game: canvas, the fixed-step loop, input --------------------------------------------------------
 const typing = (e) => { const t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable); };
 
-function Play({ game, muted, cab, tag, onMute, onScores, onAgain, onMenu, onReplay }) {
+function Play({ game, muted, cab, tag, onMute, onScores, onAgain, onMenu, onLeave: onQuit, onReplay }) {
   const { cfg, demo, permit, replayLog } = game;
   const canvas = useRef(null), wrap = useRef(null);
   const aim = useRef([OFF, OFF]), fireLatch = useRef(0), reloadLatch = useRef(0), held = useRef(0);
@@ -320,7 +304,7 @@ function Play({ game, muted, cab, tag, onMute, onScores, onAgain, onMenu, onRepl
   const onBorder = (e) => { if (e.target === e.currentTarget) { e.preventDefault(); reloadLatch.current = 1; sfx.unlock(); } };
   const file = async () => {
     if (!ended || !permit || filed?.busy || filed?.ok) return;
-    if (!tag) { setFiled({ error: "INITIALS FIRST: SET THEM ON THE CABINET'S PAGE (THE MARQUEE HAS ROOM FOR THREE)." }); return; }
+    if (!tag) { setFiled({ error: "INITIALS FIRST: SET THEM UNDER SETTINGS ON THE MENU (THE MARQUEE HAS ROOM FOR THREE)." }); return; }
     setFiled({ busy: true });
     try {
       const j = await fileHunt(permit, logRef.current.slice(), ended.r.score, tag);
@@ -362,24 +346,20 @@ function Play({ game, muted, cab, tag, onMute, onScores, onAgain, onMenu, onRepl
             resume, restart: { label: "NEW TRIP, SAME SPECIES", onSelect: onAgain },
             controls: <HuntGuide mode={legendMode} family={pad} compact />,
             sound: { on: !muted, onSelect: onMute },
-            quit: cab ? { label: "BACK TO THE BAR", onSelect: leaveCabinet } : true,
+            quit: cab ? { label: "BACK TO THE BAR", onSelect: leaveCabinet } : { label: "LEAVE THE HUNT", onSelect: onQuit },
           }} />
       )}
       {!guide && <Tip text={tipText(tip.id, legendMode, pad)} gone={tip.gone} />}
-      <div className="hu-status">{pad ? `CONTROLLER: ${pad.toUpperCase()} // STICK AIMS, RT SHOOTS, X RELOADS` : mode === "touch" ? "TAP TO SHOOT // RELOAD BUTTON, OR TAP THE BORDER // II PAUSES" : "MOUSE AIMS // CLICK SHOOTS // RIGHT-CLICK OR CLICK OFF SCREEN RELOADS // ENTER PAUSES"}{muted ? " // MUTED" : ""}{demo ? " // THE MARKSMAN IS SHOOTING" : replayLog ? " // REPLAY" : permit ? " // PERMITTED TRIP" : ""}</div>
+      {/* one short line; the whole legend is CONTROLS in the pause menu */}
+      <div className="hu-status">{pad ? "STICK AIMS // RT SHOOTS // X RELOADS" : mode === "touch" ? "TAP SHOOTS // RELOAD OR TAP THE BORDER // II PAUSES" : "CLICK SHOOTS // RIGHT-CLICK RELOADS // ENTER PAUSES"}{demo ? " // THE MARKSMAN IS SHOOTING" : replayLog ? " // REPLAY" : ""}</div>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{say}</p>
       <div className="hu-touch" aria-label="Touch controls">
         <button type="button" className="hu-tb" onPointerDown={(e) => { e.preventDefault(); reloadLatch.current = 1; }}>RELOAD</button>
         <button type="button" className="hu-tb" aria-label={paused ? "Resume" : "Pause"} onClick={togglePause}>{paused ? "GO" : "II"}</button>
         {cab && <button type="button" className="hu-tb" onClick={leaveCabinet}>BAR</button>}
       </div>
-      {cab && !ended && <ButtonRow><Button variant="back" onClick={leaveCabinet}>BACK TO THE BAR</Button><Button variant="secondary" onClick={onMute}>{muted ? "SOUND: OFF" : "SOUND: ON"}</Button></ButtonRow>}
-      {!cab && (
-        <details className="pg-more">
-          <summary>CONTROLS: {legendMode === "pad" ? `CONTROLLER (${(pad || "").toUpperCase()})` : legendMode === "touch" ? "TOUCH" : "MOUSE AND KEYS"}</summary>
-          <div className="pg-more-body"><Controls mode={legendMode} family={pad} /></div>
-        </details>
-      )}
+      {/* sound, leaving and the controls are in the pause menu; a mouse needs one way to reach it */}
+      {mode !== "touch" && !ended && <ButtonRow><Button onClick={togglePause}>{paused ? "Resume" : "Pause"}</Button></ButtonRow>}
     </div>
   );
 }

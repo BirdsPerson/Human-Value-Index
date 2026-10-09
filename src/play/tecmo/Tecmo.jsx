@@ -4,10 +4,12 @@ import { readCaseId } from "../../caseFile.jsx";
 import { loadSprite } from "../../sprites.js";
 import { headFrom } from "../heads.js";
 import GameMenu from "../GameMenu.jsx";
+import TitleScreen from "../TitleScreen.jsx";
+import { liveItems, cycleOf } from "../titleLogic.js";
 import { highScore } from "../../city/funnels.js";
 import { TEAM_IDS, teamShort, teamName, kitsFor, FALLBACK, loadLeague, sortEleven, teamRating, teamOfCase, citizenKeyOf, playNowPair, shownName, machineDay, CROPS } from "../football/roster.js";
 import { newGame, step, rleEncode, replay, resultOf, lineup, VERSION, HZ, QLENS, BTN, O, D, PLAYS, bookOf, abilities } from "./sim.js";
-import { draw, drawAttract, camInit, camFollow, W, H, lastName } from "./render.js";
+import { draw, camInit, camFollow, W, H, lastName } from "./render.js";
 import { createInput, padAt } from "./input.js";
 import * as SFX from "./audio.js";
 import ControlsGuide, { guideSeen, markGuideSeen, namesFor, tipFor, tipsSeen, markTip } from "./Guide.jsx";
@@ -60,13 +62,18 @@ function elevenOf(league, id, caseId) {
 // the cabinet's marquee today (the house games' high score, held by a figure on file) and yours
 const marquee = () => { try { return highScore("house-football", null, machineDay()); } catch { return null; } };
 
+// The title's four colours: night, white letters, the field's green, the helmet's gold.
+const COLORS = ["#000000", "#fcfcfc", "#00a800", "#f8b800"];
+
 export default function Tecmo({ route }) {
   const opts = useMemo(() => parseRoute(route), [route]);
   const league = useLeague();
   const caseId = useMemo(() => { try { return readCaseId(); } catch { return null; } }, []);
   const mine = teamOfCase(league, caseId);
   const [screen, setScreen] = useState("title");
+  const [front, setFront] = useState(() => ({ at: false, n: 0 }));   // the title screen: where it opens (false: the title)
   const [two, setTwo] = useState(opts.two);
+  const [home, setHome] = useState(null);   // TEAM SELECT's pick; the opponent list then starts the game
   const [qlen, setQlen] = useState(() => { try { const v = Number(localStorage.getItem(QKEY)); return QLENS.includes(v) ? v : opts.qlen; } catch { return opts.qlen; } });
   const [game, setGame] = useState(null);
   const [scores, setScores] = useState(loadScores);
@@ -83,13 +90,47 @@ export default function Tecmo({ route }) {
     setGame({ n: Date.now(), cfg: tape ? tape.cfg : cfg, seed: tape ? tape.seed : seedNow(), kits, ids: [home, away], two: twoP, tape });
     setScreen("game");
   };
-  const quick = () => {
+  const quickPair = () => {
     const [h0, a0] = playNowPair(league, mine);
     const h = opts.home || h0, a = opts.vs && opts.vs !== h ? opts.vs : h === h0 ? a0 : playNowPair(league, h)[1];
-    start(h, a, false);
+    return [h, a];
   };
+  const quick = () => { const [h, a] = quickPair(); start(h, a, opts.two); };
+  const toFront = (at = true) => { setGame(null); setScreen("title"); setFront(f => ({ at, n: f.n + 1 })); };
   const toggleMute = () => { SFX.setMuted(!muted); setMuted(!muted); };
   useEffect(() => () => SFX.close(), []);
+  // ?home= / ?vs= / ?p=2: a link to a game kicks off at once, past the title (the bar cabinet, ?cab=1, keeps its title)
+  useEffect(() => { if (!opts.cab && (opts.home || opts.vs || opts.two)) quick(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const cards = useMemo(() => Object.fromEntries(TEAM_IDS.map(id => [id, teamCard(league.teams[id])])), [league]);
+  const teamItem = (id, onSelect) => {
+    const c = cards[id];
+    return { id, label: `${teamName(id)}${id === mine ? " (YOURS)" : ""}`, value: c.all, hint: `RUN ${c.run} PASS ${c.pass} DEF ${c.def}`, onSelect,
+      note: `${c.stars.length ? c.stars.map(s => `${s.name} ${s.r}`).join(", ") : "NO STARS"}. PLAYS: ${bookOf(id).map(k => PLAYS[k].name).join(" / ")}.` };
+  };
+  const [qh, qa] = quickPair();
+  const hs = marquee();
+  const rows = {
+    play: { label: "PLAY", hint: `${teamShort(qh)} V ${teamShort(qa)}`, onSelect: quick },
+    modes: [
+      { id: "one", label: "1 PLAYER V CPU", hint: two ? "" : "CHOSEN", onSelect: () => { setTwo(false); return "team"; } },
+      { id: "two", label: "2 PLAYERS: ONE SCREEN", hint: two ? "CHOSEN" : "", onSelect: () => { setTwo(true); return "team"; } },
+    ],
+    team: { label: "TEAM SELECT", value: home ? teamShort(home) : null, items: TEAM_IDS.map(id => teamItem(id, () => { setHome(id); return "opp"; })) },
+    opp: { label: two ? "PLAYER 2 TEAM" : "CPU TEAM", items: TEAM_IDS.filter(id => id !== (home || qh)).map(id => teamItem(id, () => start(home || qh, id, two))) },
+    live: opts.cab ? null : liveItems("football"),
+    settings: [
+      { id: "q", label: "QUARTERS", value: `${qlen} MIN`, cycle: (d) => pickQ(cycleOf(QLENS, qlen, d)) },
+      { id: "level", label: "CPU", value: level === "pro" ? "PRO" : "ROOKIE", note: level === "pro" ? "PRO: THE CPU PLAYS IT STRAIGHT." : "ROOKIE: THE CPU GOES EASY.", cycle: () => pickLevel(level === "pro" ? "rookie" : "pro") },
+      { id: "sound", label: "SOUND", value: muted ? "OFF" : "ON", cycle: toggleMute },
+    ],
+    scores: { label: "HIGH SCORES", items: [
+      { id: "marquee", label: "THE MARQUEE TODAY", value: hs ? `${hs.initials} ${hs.score}` : "-" },
+      ...(scores.length ? scores.map((s, i) => ({ id: `s${i}`, label: `${teamShort(s.team)} V ${teamShort(s.vs)}`, value: s.line })) : [{ id: "none", label: "YOUR BEST WINS", value: "NONE YET" }]),
+    ] },
+    controls: <ControlsGuide family={padAt(0).connected ? padAt(0).family : null} two={two} compact />,
+    back: opts.cab ? { label: "BACK TO THE BAR", onSelect: leaveCabinet } : true,
+  };
 
   let body;
   if (guide) body = <ControlsGuide family={padAt(0).connected ? padAt(0).family : null} two={guide[2]} onDone={() => { markGuideSeen(); const g = guide; setGuide(null); start(g[0], g[1], g[2]); }} />;
@@ -104,143 +145,21 @@ export default function Tecmo({ route }) {
       }}
       onAgain={() => start(game.ids[0], game.ids[1], game.two)}
       onTape={(rec) => setGame({ ...game, n: Date.now(), cfg: rec.cfg, seed: rec.seed, tape: rec })}
-      onTeams={() => setScreen("teams")} onTitle={() => { setGame(null); setScreen("title"); }} />;
-  } else if (screen === "teams") {
-    body = <Teams league={league} mine={mine} two={two} onStart={(h, a) => start(h, a, two)} onBack={() => setScreen("title")} />;
+      onTeams={() => toFront("team")} onMenu={() => toFront(true)} onTitle={() => toFront(false)} />;
   } else {
-    body = <Title quickPair={opts} league={league} mine={mine} cab={opts.cab} qlen={qlen} pickQ={pickQ} level={level} pickLevel={pickLevel} scores={scores} muted={muted} onMute={toggleMute}
-      onQuick={quick} onOne={() => { setTwo(false); setScreen("teams"); }} onTwo={() => { setTwo(true); setScreen("teams"); }} />;
+    body = <TitleScreen key={front.n} game="tecmo" title="FOURTH AND LONG" sub={`ARCADE FOOTBALL // FOUR PLAYS A TEAM // ${qlen}-MINUTE QUARTERS`} colors={COLORS} at={front.at} rows={rows}
+      note="TWO RUNS, TWO PASSES. ON DEFENCE, GUESS THEIR CALL. TAP A TO BREAK A TACKLE. EXHIBITIONS: NOTHING REACHES THE LEAGUE." />;
   }
   return (
     <div className={`tb${opts.cab ? " tb-cab" : ""}`}>
-      {!opts.cab && <ScreenHead title="FOURTH AND LONG" meta="ARCADE FOOTBALL // ELEVEN A SIDE, FOUR PLAYS A TEAM. EXHIBITION GAMES." />}
+      {!opts.cab && <ScreenHead title="FOURTH AND LONG" meta="ARCADE FOOTBALL // EXHIBITION" />}
       {body}
     </div>
   );
 }
 
-// ---- the title: the attract mode behind the menu ------------------------------------------------------------
-function Title({ quickPair, league, mine, cab, qlen, pickQ, level, pickLevel, scores, muted, onMute, onQuick, onOne, onTwo }) {
-  const canvas = useRef(null), first = useRef(null);
-  const [h0, a0] = playNowPair(league, mine);
-  const h = quickPair.home || h0, a = quickPair.vs && quickPair.vs !== h ? quickPair.vs : h === h0 ? a0 : playNowPair(league, h)[1];
-  const hs = marquee();
-  useEffect(() => { first.current?.focus({ preventScroll: true }); }, []);
-  // the attract: the CPU plays the CPU, a quarter at a time
-  useEffect(() => {
-    const cv = canvas.current; if (!cv) return undefined;
-    const ctx = cv.getContext("2d"), reduced = REDUCED();
-    const ids = [TEAM_IDS[Math.floor(Math.random() * 10)], null]; ids[1] = TEAM_IDS.filter(x => x !== ids[0])[Math.floor(Math.random() * 9)];
-    const kits = kitsFor(ids[0], ids[1]), names = ids.map(i => teamShort(i));
-    const mk = () => newGame({ qlen: 1, sides: ["cpu", "cpu"], teams: ids.map(id => ({ id, short: teamShort(id), rows: sortEleven(league.teams[id]).map(([k, n, r]) => [k, shownName(n), r]) })) }, seedNow());
-    let st = mk(), cam = camInit(st), raf = 0, last = performance.now(), acc = 0;
-    const loop = (now) => {
-      acc = Math.min(acc + (now - last) / 1000, 4 / HZ); last = now;
-      while (acc >= 1 / HZ) { acc -= 1 / HZ; step(st, 0); if (st.over) { st = mk(); cam = camInit(st); } }
-      camFollow(cam, st, reduced);
-      drawAttract(ctx, st, cam, { names, kits, sides: ["cpu", "cpu"], reduced, t: now / 1000 });
-      raf = requestAnimationFrame(loop);
-    };
-    if (reduced) { for (let i = 0; i < 900; i++) step(st, 0); camFollow(cam, st, true); drawAttract(ctx, st, cam, { names, kits, sides: ["cpu", "cpu"], reduced, t: 0 }); }
-    else raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [league]);
-  usePadMenu(true);
-  return (
-    <>
-      <div className="tb-stage tb-attract"><canvas ref={canvas} width={W} height={H} aria-hidden="true" /></div>
-      {cab && <p className="tb-cabhead">FOURTH AND LONG // ARCADE FOOTBALL. FOUR PLAYS A TEAM: GUESS THEIR CALL ON DEFENCE. TAP A TO BREAK TACKLES.</p>}
-      {!cab && <p className="pg-lede">ARCADE FOOTBALL ON A SCROLLING FIELD. ELEVEN A SIDE FROM THE CITY'S OWN LEAGUE, FOUR PLAYS A TEAM: TWO RUNS, TWO PASSES. ON DEFENCE YOU GUESS THEIR CALL; GUESS RIGHT AND YOUR MEN ARE THROUGH THE LINE BEFORE THE BALL IS. TAP A AS FAST AS YOU CAN TO BREAK A TACKLE. ONE PLAYER AGAINST THE CPU, OR TWO ON ONE SCREEN.</p>}
-      <div className="tb-menu" role="group" aria-label="Choose a mode">
-        <Button variant="primary" ref={first} onClick={onQuick}>QUICK PLAY</Button>
-        <Button variant="secondary" onClick={onOne}>1 PLAYER V CPU: CHOOSE TEAMS</Button>
-        <Button variant="secondary" onClick={onTwo}>2 PLAYERS: ONE SCREEN</Button>
-      </div>
-      <p className="tb-sub">QUICK PLAY: {teamName(h)}{h === mine ? " (YOUR TEAM)" : ""} V {teamName(a)}. FOUR {qlen}-MINUTE QUARTERS.</p>
-      <div className="tb-chips" role="radiogroup" aria-label="Quarter length">
-        {QLENS.map(q => <button key={q} type="button" role="radio" aria-checked={qlen === q} className={`tb-chip${qlen === q ? " on" : ""}`} onClick={() => pickQ(q)}>{q}-MINUTE QUARTERS</button>)}
-      </div>
-      <div className="tb-chips" role="radiogroup" aria-label="CPU level">
-        {[["rookie", "ROOKIE: THE CPU GOES EASY"], ["pro", "PRO: THE CPU PLAYS IT STRAIGHT"]].map(([v, l]) => <button key={v} type="button" role="radio" aria-checked={level === v} className={`tb-chip${level === v ? " on" : ""}`} onClick={() => pickLevel(v)}>{l}</button>)}
-        <button type="button" className="tb-chip" aria-pressed={!muted} onClick={onMute}>{muted ? "SOUND: OFF" : "SOUND: ON"}</button>
-      </div>
-      <div className="tb-board">
-        <p><b>THE MARQUEE TODAY</b> {hs ? `${hs.initials} ${hs.score}` : "-"}</p>
-        <p><b>YOUR BEST WINS</b> {scores.length ? scores.map(s => `${s.line} (${teamShort(s.team)} V ${teamShort(s.vs)})`).join(" // ") : "NONE YET. BEAT THE CPU."}</p>
-      </div>
-      {cab && <ButtonRow><Button variant="back" onClick={leaveCabinet}>BACK TO THE BAR</Button></ButtonRow>}
-      <details className="pg-more">
-        <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><ControlsGuide /></div>
-      </details>
-    </>
-  );
-}
-
-// The pad on the menu screens: the d-pad moves the focus between the buttons, A presses, B goes back.
-function usePadMenu(on, onBack = null) {
-  useEffect(() => {
-    if (!on) return undefined;
-    let raf = 0, prev = null;
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
-      const p = padAt(0);
-      if (!p.connected) { prev = null; return; }
-      const now = { y: p.y <= -0.5 ? -1 : p.y >= 0.5 ? 1 : 0, x: p.x <= -0.5 ? -1 : p.x >= 0.5 ? 1 : 0, act: p.held.act, back: p.held.back };
-      if (prev) {
-        const dir = (now.y && now.y !== prev.y) ? now.y : (now.x && now.x !== prev.x) ? now.x : 0;
-        if (dir) {
-          const els = [...document.querySelectorAll(".tb button:not([disabled]), .tb summary")];
-          const i = els.indexOf(document.activeElement);
-          const n = els[Math.max(0, Math.min(els.length - 1, (i < 0 ? 0 : i + dir)))];
-          n?.focus({ preventScroll: false });
-        }
-        if (prev.act && !now.act && document.activeElement?.closest?.(".tb")) document.activeElement.click();
-        if (now.back && !prev.back && onBack) onBack();
-      }
-      prev = now;
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [on, onBack]);
-}
-
-// ---- choosing teams ------------------------------------------------------------------------------------------
-function Teams({ league, mine, two, onStart, onBack }) {
-  const [p1, setP1] = useState(null);
-  const ref = useRef(null);
-  useEffect(() => { ref.current?.querySelector("button")?.focus({ preventScroll: true }); }, [p1]);
-  usePadMenu(true, p1 ? () => setP1(null) : onBack);
-  const cards = useMemo(() => Object.fromEntries(TEAM_IDS.map(id => [id, teamCard(league.teams[id])])), [league]);
-  const pick = (id) => { if (!p1) setP1(id); else onStart(p1, id); };
-  const who = !p1 ? "PLAYER 1: PICK YOUR TEAM" : two ? "PLAYER 2: PICK YOURS" : "NOW PICK THE CPU'S TEAM";
-  return (
-    <>
-      <p className="tb-cabhead" aria-live="polite">{who}{p1 ? ` (P1 HAS ${teamName(p1)})` : ""}</p>
-      <ul className="tb-teams" ref={ref}>
-        {TEAM_IDS.filter(id => id !== p1).map(id => {
-          const c = cards[id], kit = kitsFor(p1 || id, id)[p1 ? 1 : 0];
-          return (
-            <li key={id}>
-              <button type="button" className="tb-team" onClick={() => pick(id)} aria-label={`${teamName(id)}${id === mine ? ", your team" : ""}. Overall ${c.all}, run ${c.run}, pass ${c.pass}, defence ${c.def}.${c.stars.length ? ` Stars: ${c.stars.map(s => `${s.name} ${s.r}`).join(", ")}.` : ""}`}>
-                <i className="sw" style={{ background: kit[0], borderColor: kit[1] }} aria-hidden="true" />
-                <span className="nm">{teamName(id)}{id === mine ? " (YOURS)" : ""}</span>
-                <span className="rt" aria-hidden="true"><b>{c.all}</b> RUN {c.run} PASS {c.pass} DEF {c.def}</span>
-                <span className="st" aria-hidden="true">{c.stars.length ? c.stars.map(s => `★ ${s.name} ${s.r}`).join("  ") : "NO STARS."}</span>
-                <span className="pb" aria-hidden="true">{bookOf(id).map(k => PLAYS[k].name).join(" / ")}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      <ButtonRow><Button variant="back" onClick={p1 ? () => setP1(null) : onBack}>{p1 ? "PICK AGAIN" : "BACK"}</Button></ButtonRow>
-      <p className="tb-sub">RATINGS COME FROM THIS SEASON'S LEAGUE. STARS RUN FASTER, HIT HARDER AND BREAK MORE TACKLES.</p>
-    </>
-  );
-}
-
 // ---- the game ------------------------------------------------------------------------------------------------
-function Match({ game, muted, onMute, cab, onEnd, onAgain, onTape, onTeams, onTitle }) {
+function Match({ game, muted, onMute, cab, onEnd, onAgain, onTape, onTeams, onMenu, onTitle }) {
   const canvas = useRef(null);
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(null);
@@ -332,14 +251,10 @@ function Match({ game, muted, onMute, cab, onEnd, onAgain, onTape, onTeams, onTi
       <p className="sr-only" aria-live="polite">{live}</p>
       <TouchPad input={inputRef} />
       <p className="tb-status" aria-hidden="true">{statusLine(game.two, pads)}</p>
-      {!cab && !over && (
-        <ButtonRow split stackOnMobile>
-          <Button variant="back" onClick={() => setPaused(true)}>PAUSE</Button>
-          <Button variant="secondary" onClick={onMute}>{muted ? "SOUND: OFF" : "SOUND: ON"}</Button>
-        </ButtonRow>
-      )}
+      {/* sound and quitting are in the pause menu */}
+      {!cab && !over && <ButtonRow><Button variant="back" onClick={() => setPaused(true)}>PAUSE</Button></ButtonRow>}
       {paused && !over && <GameMenu key="pause" kind="pause" title="PAUSED." onBack={resume}
-        options={{ resume, restart: onAgain, controls: <ControlsGuide family={pads[0]} two={game.two} compact />, sound: { on: !muted, onSelect: onMute }, quit: { label: "QUIT TO THE TITLE", onSelect: onTitle }, ...(cab ? { bar: { label: "BACK TO THE BAR", onSelect: leaveCabinet } } : {}) }} />}
+        options={{ resume, restart: onAgain, controls: <ControlsGuide family={pads[0]} two={game.two} compact />, sound: { on: !muted, onSelect: onMute }, quit: { label: "QUIT TO THE MENU", onSelect: onMenu }, ...(cab ? { bar: { label: "BACK TO THE BAR", onSelect: leaveCabinet } } : {}) }} />}
       {over && <GameMenu key="end" kind="end" title={tape ? "END OF THE TAPE." : "FINAL."} summary={`${names[0]} ${res.score[0]}, ${names[1]} ${res.score[1]}. ${verdict}${over.verified === false ? " THE REPLAY CHECK FAILED." : over.verified ? " REPLAY CHECKED." : ""}`}
         options={{ again: onAgain, rematch: { label: "CHOOSE TEAMS", onSelect: onTeams }, replay: !tape && over.rec ? () => onTape(over.rec) : false, title: { label: "THE TITLE SCREEN", onSelect: onTitle }, ...(cab ? { bar: { label: "BACK TO THE BAR", onSelect: leaveCabinet } } : { play: true }) }} />}
     </div>

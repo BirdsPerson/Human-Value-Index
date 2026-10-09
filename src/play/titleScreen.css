@@ -1,0 +1,43 @@
+/* TitleScreen (src/play/TitleScreen.jsx): the NES-style title and front menu. Four colours, set by
+   the game: --ts-bg, --ts-ink (letters), --ts-shadow, --ts-hi (the highlight). Nothing else. */
+.ts { --ts-bg: #000; --ts-ink: #fcfcfc; --ts-shadow: #0058f8; --ts-hi: #f8b800;
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: min(78vh, 560px); margin: 0 auto var(--s4); padding: var(--s5) var(--s4); width: 100%; max-width: 760px; box-sizing: border-box;
+  background: var(--ts-bg); color: var(--ts-ink); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.08em;
+  border: 4px solid var(--ts-bg); outline: 2px solid var(--ts-shadow); outline-offset: -8px; }
+.ts-title { cursor: pointer; }
+.ts-title, .ts-menu { display: flex; flex-direction: column; align-items: center; width: 100%; gap: var(--s4); }
+.ts-big { width: 100%; display: flex; justify-content: center; }
+.ts-big canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+.ts-menu .ts-big { margin-bottom: var(--s2); }
+.ts-sub { margin: 0; font-size: var(--t-s, 15px); color: var(--ts-ink); opacity: 0.85; text-align: center; }
+.ts-start { margin-top: var(--s5); padding: var(--s2) var(--s4); min-height: 44px; background: none; border: 0; font: inherit; font-size: var(--t-m, 17px); font-weight: 700; letter-spacing: 0.16em; color: var(--ts-hi); cursor: pointer; }
+.ts :is(.ts-start, .ts-row):is(a, button):focus-visible { outline: 2px dashed var(--ts-hi); outline-offset: 2px; box-shadow: none; }
+.ts .ts-row.on:is(a, button):focus-visible { outline: none; }   /* the caret and the highlight already say which row */
+.ts-head { margin: 0; font-size: var(--t-s, 15px); color: var(--ts-hi); }
+.ts-list, .ts-legend { display: flex; flex-direction: column; width: min(100%, 30rem); max-height: 52vh; overflow: auto; scrollbar-width: thin; }
+.ts-row { display: flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0 var(--s2); font: inherit; font-size: var(--t-m, 17px); font-weight: 700; letter-spacing: 0.08em;
+  text-align: left; text-decoration: none; color: var(--ts-ink); background: none; border: 0; cursor: pointer; }
+.ts-row.on { color: var(--ts-hi); }
+.ts-row[aria-disabled="true"] { opacity: 0.4; cursor: default; }
+.ts-caret { width: 1.2em; flex: none; color: var(--ts-hi); }
+.ts-art { flex: none; display: flex; align-items: center; }
+.ts-art canvas, .ts-art img { image-rendering: pixelated; height: 36px !important; width: auto !important; margin: 0 !important; }   /* the picture keeps its own shape: a 32x48 face or a square crest */
+.ts-lbl { flex: 1 1 auto; min-width: 0; }
+.ts-val { flex: none; color: var(--ts-hi); }
+.ts-val b { padding: 0 var(--s1); cursor: pointer; font-weight: 700; }
+.ts-hint { flex: none; margin-left: auto; font-size: var(--t-xs); font-weight: 400; opacity: 0.7; max-width: 45%; text-align: right; }
+.ts-legend { text-transform: none; letter-spacing: 0; color: var(--ts-ink); font-size: var(--t-s, 15px); gap: var(--s2); }
+.ts-legend .ts-row { margin-top: var(--s3); }
+.ts-note { margin: 0; font-size: var(--t-xs); opacity: 0.7; text-align: center; max-width: 34rem; }
+.ts-keys { margin: 0; font-size: var(--t-xs); opacity: 0.55; text-align: center; }
+@media (max-width: 520px) { .ts { min-height: 70vh; padding: var(--s4) var(--s3); } .ts-hint { display: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .ts-start { animation: ts-blink 1.1s linear infinite; }
+  @keyframes ts-blink { 0%, 64% { opacity: 1; } 65%, 100% { opacity: 0; } }
+  .ts-drop .ts-title .ts-big { animation: ts-drop 900ms steps(9, end) both; }
+  .ts-drop .ts-title .ts-sub, .ts-drop .ts-title .ts-start { animation-delay: 900ms; }
+  .ts-drop .ts-title .ts-sub { animation: ts-show 1ms 900ms both; }
+  @keyframes ts-drop { from { transform: translateY(-40vh); } to { transform: none; } }
+  @keyframes ts-show { from { visibility: hidden; } to { visibility: visible; } }
+}

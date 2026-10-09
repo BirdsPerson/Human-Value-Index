@@ -19,7 +19,7 @@ export function rowsFor(mode, family, hand = 1) {
     ["BOWL", "Press SPACE three times: it sets the power (stop short of the red), then the accuracy (on the green), then the hook. Or with the mouse: pull back on the lane, then flick forward."],
     ["HOOK", `The third press is the hook. With the mouse, curl the end of the flick to the ${hand === -1 ? "right" : "left"}. BACKSPACE cancels. ESC pauses.`],
   ];
-  rows.push(["EASY", "EASY is on at first: slower meters, a straighter ball, the line drawn for you. BUMPERS keep the ball out of the gutter. Both are on the setup screen."]);
+  rows.push(["EASY", "EASY is on at first: slower meters, a straighter ball, the line drawn for you. BUMPERS keep the ball out of the gutter. Both are under SETTINGS on the bowling menu."]);
   if (hand === -1) rows.push(["LEFT-HANDED", "You bowl left-handed: you start on the left and the pocket is the 1-2."]);
   return rows;
 }

@@ -3,6 +3,8 @@ import { Frame, Button, ButtonRow } from "../../ui/index.js";
 import { readCaseId } from "../../caseFile.jsx";
 import { readPad, deadzone, GLYPHS } from "../../city/gamepad.js";
 import GameMenu from "../GameMenu.jsx";
+import TitleScreen from "../TitleScreen.jsx";
+import { liveItems, cycleOf } from "../titleLogic.js";
 import { newGame, step, act, replay, resultOf, Logger, clone, VERSION, BTN, WEIGHTS, HEAD_Y, ARROWS_Y, LANE_HW, R_BALL } from "./sim.js";
 import { frames as framesOf, maxPossible, position } from "./score.js";
 import { OPPONENTS, OPP_BY_KEY, actFor } from "./roster.js";
@@ -65,13 +67,22 @@ function cfgOf(setup, seed) {
   };
 }
 
+// The title's four colours: the lanes at night, white letters, the ball's blue, the pin stripe's red.
+const COLORS = ["#000000", "#fcfcfc", "#2b5fbf", "#f83800"];
+const LIGHTS = [["auto", "BY THE CLOCK"], ["cosmic", "COSMIC"], ["house", "HOUSE"]];
+
 export default function Bowling({ route }) {
   useEffect(injectStyles, []);
   const r = useMemo(() => parseRoute(route), [route]);
   const [setup, setSetup] = useState(() => { const s = loadSetup() || defaultSetup(r.vs); if (r.vs) { const i = s.players.findIndex(p => p.kind === "cpu"); if (i >= 0) s.players[i] = { kind: "cpu", key: r.vs }; else if (s.players.length < 4) s.players.push({ kind: "cpu", key: r.vs }); } return s; });
   const [game, setGame] = useState(null);
+  const [muted, setMuted] = useState(() => SFX.isMuted());
+  const pm = usePlayMode();
   useEffect(() => saveSetup(setup), [setup]);
   const start = (s = setup) => { SFX.unlock(); setGame({ cfg: cfgOf(s, (Date.now() % 2147483647) >>> 0), id: Date.now() }); };
+  // the title screen: where it opens next (false: the title; true: the menu; "settings" / "team")
+  const [front, setFront] = useState(() => ({ at: r.vs ? true : false, n: 0 }));
+  const toFront = (at = true) => { setGame(null); setFront(f => ({ at, n: f.n + 1 })); };
   // THE TOURNAMENT (src/tournament/, #bowling?t=<event>): LEAGUE NIGHT's three games on the event's oil
   // and racks, one bowler (your ball and hand; bumpers only in ASSISTED); each official game is filed
   // (re-played by the server) as it ends, then the next.
@@ -85,98 +96,59 @@ export default function Bowling({ route }) {
     T.next = leg + 1 < ev.legs ? () => startTour({ ev, div, official, entry }, leg + 1) : null;
     setGame({ cfg: bowlCfg(ev, leg, div, bowler, VERSION), id: Date.now(), tour: T });
   };
-  if (!game) return <Setup setup={setup} setSetup={setSetup} onBowl={start} lane={r.lane} desk={<TournamentDesk game="bowling" id={r.t} onStart={startTour} refresh={tourRefresh} />} first={Boolean(r.t)} />;
-  return <Lane key={game.id} cfg={game.cfg} setup={setup} lane={game.tour ? game.tour.ev.cond.lane : r.lane} tour={game.tour || null} onAgain={() => start()} onSettings={() => setGame(null)} />;
-}
-
-// ---- the desk: who bowls, which ball, the house rules ---------------------------------------------------
-function Setup({ setup, setSetup, onBowl, lane, desk = null, first = false }) {
-  const [picking, setPicking] = useState(false);
-  const ck = machineClock();
-  const P = setup.players;
-  const upd = (i, patch) => setSetup(s => ({ ...s, players: s.players.map((p, k) => (k === i ? { ...p, ...patch } : p)) }));
-  const remove = (i) => setSetup(s => ({ ...s, players: s.players.filter((_, k) => k !== i) }));
-  const add = (p) => setSetup(s => (s.players.length >= 4 ? s : { ...s, players: [...s.players, p] }));
-  const last = readResults()[0];
-  return (
+  if (game) return <Lane key={game.id} cfg={game.cfg} setup={setup} lane={game.tour ? game.tour.ev.cond.lane : r.lane} tour={game.tour || null} onAgain={() => start()}
+    onSettings={() => (game.tour ? setGame(null) : toFront("settings"))} onBowlers={() => (game.tour ? setGame(null) : toFront("team"))} onLeave={() => (game.tour ? setGame(null) : toFront(true))} />;
+  // #bowling?t=<event>: the tournament's own desk, past the title
+  if (r.t) return (
     <div className="bw">
-      {first && desk}
-      <Frame box title="THE LANES" meta={`LANE ${lane} // EXHIBITION`}>
-        <p className="bw-p">TEN PINS, TEN FRAMES, ONE TO FOUR BOWLERS IN TURN. THE HOUSE SUPPLIES THE SHOES. THE SHOES ARE LOGGED.</p>
-        <h2 className="bw-h">BOWLERS</h2>
-        <ol className="bw-players">
-          {P.map((p, i) => {
-            const o = p.kind === "cpu" ? OPP_BY_KEY.get(p.key) : null;
-            return (
-              <li key={i} className="bw-player">
-                <div className="bw-who">
-                  <b style={{ color: BALL_COLORS[i] }}>{i + 1}.</b>
-                  {o ? <span><b>{o.name}</b> <span className="bw-rt">RATING {o.rating}</span><span className="bw-why">{o.why}</span></span>
-                    : <input className="bw-name" aria-label={`Bowler ${i + 1}'s name`} maxLength={18} value={p.name || ""} placeholder={i === 0 ? meName() : `PLAYER ${i + 1}`} onChange={(e) => upd(i, { name: e.target.value.toUpperCase() })} />}
-                </div>
-                {!o && (
-                  <div className="bw-opts">
-                    <span className="bw-lab">BALL</span>
-                    {WEIGHTS.map(w => <button type="button" key={w} className={`bw-chip${p.weight === w ? " on" : ""}`} aria-pressed={p.weight === w} onClick={() => upd(i, { weight: w })}>{w} LB</button>)}
-                    <span className="bw-lab">HAND</span>
-                    <button type="button" className={`bw-chip${p.hand !== -1 ? " on" : ""}`} aria-pressed={p.hand !== -1} onClick={() => upd(i, { hand: 1, handPicked: true })}>RIGHT</button>
-                    <button type="button" className={`bw-chip${p.hand === -1 ? " on" : ""}`} aria-pressed={p.hand === -1} onClick={() => upd(i, { hand: -1, handPicked: true })}>LEFT</button>
-                    <button type="button" className={`bw-chip${p.bumpers ? " on" : ""}`} aria-pressed={!!p.bumpers} onClick={() => upd(i, { bumpers: !p.bumpers })}>BUMPERS {p.bumpers ? "UP" : "DOWN"}</button>
-                  </div>
-                )}
-                {P.length > 1 && <button type="button" className="bw-x" onClick={() => remove(i)} aria-label={`Remove bowler ${i + 1}`}>REMOVE</button>}
-              </li>
-            );
-          })}
-        </ol>
-        {P.length < 4 && (
-          <ButtonRow>
-            <Button onClick={() => add({ kind: "human", name: "", weight: 12, hand: profileHand() || 1, bumpers: false })}>Add a bowler (hot seat)</Button>
-            <Button onClick={() => setPicking(v => !v)}>{picking ? "Close the list" : "Add a figure"}</Button>
-          </ButtonRow>
-        )}
-        {picking && (
-          <ul className="bw-opps">
-            {OPPONENTS.map(o => (
-              <li key={o.key}><button type="button" className="bw-opp" onClick={() => { add({ kind: "cpu", key: o.key }); setPicking(false); }}>
-                <span className="nm">{o.name}<span className="tag">{o.why}</span></span><span className="rt">{o.rating}</span>
-              </button></li>
-            ))}
-          </ul>
-        )}
-        <h2 className="bw-h">THE HOUSE</h2>
-        <div className="bw-opts">
-          <button type="button" className={`bw-chip${setup.fouls ? " on" : ""}`} aria-pressed={setup.fouls} onClick={() => setSetup(s => ({ ...s, fouls: !s.fouls }))}>FOUL LINE {setup.fouls ? "ON" : "OFF"}</button>
-          <button type="button" className={`bw-chip${setup.easy ? " on" : ""}`} aria-pressed={setup.easy} onClick={() => setSetup(s => ({ ...s, easy: !s.easy, easyPicked: true }))}>EASY {setup.easy ? "ON" : "OFF"}</button>
-          <span className="bw-lab">LIGHTS</span>
-          {[["auto", "BY THE CLOCK"], ["cosmic", "COSMIC"], ["house", "HOUSE"]].map(([k, l]) => <button type="button" key={k} className={`bw-chip${setup.lights === k ? " on" : ""}`} aria-pressed={setup.lights === k} onClick={() => setSetup(s => ({ ...s, lights: k }))}>{l}</button>)}
-        </div>
-        <p className="bw-small">MACHINE TIME {String(Math.floor(ck.hour)).padStart(2, "0")}:{String(Math.floor((ck.hour % 1) * 60)).padStart(2, "0")}, DAY {ck.day}. COSMIC BOWLING RUNS 21:00 TO 03:00. EASY: SLOWER METERS, A STRAIGHTER BALL, THE LINE DRAWN FOR YOU.</p>
-        <ButtonRow>
-          <Button variant="primary" onClick={() => onBowl()}>Bowl</Button>
-          <Button variant="back" href="#play">Back to play</Button>
-        </ButtonRow>
-        {last && <p className="bw-small">LAST GAME ON THIS BROWSER: {resultLine(last)}. {last.verified ? "RE-RUN AND CONFIRMED." : ""}</p>}
-        <Legend />
-        <p className="bw-notice">{NOTICE}</p>
-      </Frame>
-      {!first && desk}
+      <TournamentDesk game="bowling" id={r.t} onStart={startTour} refresh={tourRefresh} />
+      <ButtonRow><Button variant="back" href="#bowling">The bowling menu</Button></ButtonRow>
     </div>
   );
-}
 
-function Legend({ pad }) {
-  const g = GLYPHS[pad] || GLYPHS.generic;
+  const P = setup.players;
+  const upd = (i, patch) => setSetup(s => ({ ...s, players: s.players.map((p, k) => (k === i ? { ...p, ...patch } : p)) }));
+  const remove = (i) => setSetup(s => (s.players.length > 1 ? { ...s, players: s.players.filter((_, k) => k !== i) } : s));
+  const add = (p) => setSetup(s => (s.players.length >= 4 ? s : { ...s, players: [...s.players, p] }));
+  const humans = P.map((p, i) => [p, i]).filter(([p]) => p.kind === "human");
+  const nameOf = (p, i) => (p.kind === "cpu" ? OPP_BY_KEY.get(p.key)?.name || "A FIGURE" : p.name || (i === 0 ? meName() : `PLAYER ${humans.findIndex(([, k]) => k === i) + 1}`));
+  const ck = machineClock();
+  const last = readResults()[0];
+  const rows = {
+    play: () => start(),
+    modes: [
+      { id: "alone", label: "BOWL ALONE", hint: "JUST YOU", onSelect: () => { const me = P.find(p => p.kind === "human") || defaultSetup().players[0]; const s = { ...setup, players: [me] }; setSetup(s); start(s); } },
+      { id: "figure", label: "AGAINST A FIGURE", hint: `${OPPONENTS.length} ON FILE`, onSelect: () => "team" },
+      { id: "hotseat", label: "HOT SEAT", hint: P.length < 4 ? "ADD A BOWLER ON THIS SCREEN" : "FOUR ALREADY", disabled: P.length >= 4, onSelect: () => { add({ kind: "human", name: "", weight: 12, hand: profileHand() || 1, bumpers: false }); return "team"; } },
+    ],
+    team: { label: "BOWLER SELECT", items: [
+      ...P.map((p, i) => ({ id: `b${i}`, label: `${i + 1}. ${nameOf(p, i)}`, value: p.kind === "cpu" ? OPP_BY_KEY.get(p.key)?.rating : `${p.weight} LB`, hint: P.length > 1 ? "SELECT TO REMOVE" : "", note: p.kind === "cpu" ? OPP_BY_KEY.get(p.key)?.why : undefined, onSelect: P.length > 1 ? () => remove(i) : undefined, disabled: P.length <= 1 })),
+      ...(P.length < 4 ? [{ id: "add", label: "ADD A FIGURE", items: OPPONENTS.map(o => ({ id: o.key, label: o.name, value: o.rating, note: o.why, onSelect: () => { add({ kind: "cpu", key: o.key }); return "team"; } })) }] : []),
+      { id: "bowl", label: "BOWL", onSelect: () => start() },
+    ] },
+    live: liveItems("bowling"),
+    settings: [
+      ...humans.flatMap(([p, i]) => {
+        const who = humans.length > 1 ? `${nameOf(p, i)}: ` : "";
+        return [
+          { id: `w${i}`, label: `${who}BALL`, value: `${p.weight} LB`, cycle: (d) => upd(i, { weight: cycleOf(WEIGHTS, p.weight, d) }) },
+          { id: `h${i}`, label: `${who}HAND`, value: p.hand === -1 ? "LEFT" : "RIGHT", cycle: () => upd(i, { hand: p.hand === -1 ? 1 : -1, handPicked: true }) },
+          { id: `u${i}`, label: `${who}BUMPERS`, value: p.bumpers ? "UP" : "DOWN", cycle: () => upd(i, { bumpers: !p.bumpers }) },
+        ];
+      }),
+      { id: "fouls", label: "FOUL LINE", value: setup.fouls ? "ON" : "OFF", cycle: () => setSetup(s => ({ ...s, fouls: !s.fouls })) },
+      { id: "easy", label: "EASY", value: setup.easy ? "ON" : "OFF", note: "EASY: SLOWER METERS, A STRAIGHTER BALL, THE LINE DRAWN FOR YOU.", cycle: () => setSetup(s => ({ ...s, easy: !s.easy, easyPicked: true })) },
+      { id: "lights", label: "LIGHTS", value: LIGHTS.find(l => l[0] === setup.lights)?.[1] || "BY THE CLOCK", note: `COSMIC BOWLING RUNS 21:00 TO 03:00 MACHINE TIME. IT IS ${String(Math.floor(ck.hour)).padStart(2, "0")}:${String(Math.floor((ck.hour % 1) * 60)).padStart(2, "0")}.`, cycle: (d) => setSetup(s => ({ ...s, lights: cycleOf(LIGHTS, s.lights, d) })) },
+      { id: "sound", label: "SOUND", value: muted ? "OFF" : "ON", cycle: () => { const m = !muted; setMuted(m); SFX.setMuted(m); if (!m) SFX.unlock(); } },
+    ],
+    controls: <BowlGuide mode={pm.mode} family={pm.family} hand={humans[0]?.[0].hand ?? 1} compact />,
+    back: true,
+  };
   return (
-    <details className="bw-legend">
-      <summary>HOW TO BOWL</summary>
-      <dl className="bw-keys">
-        <dt>MOUSE / TOUCH</dt><dd>DRAG ON THE APPROACH (THE FLOOR AT THE BOTTOM) TO STAND LEFT OR RIGHT. DRAG THE ARROW'S HEAD TO AIM. THEN, ANYWHERE ON THE LANE: PULL BACK, AND FLICK FORWARD. FASTER IS FASTER. CURL THE END OF THE FLICK LEFT TO HOOK IT (RIGHT FOR A LEFT HAND). FAR TOO HARD AND YOU CROSS THE LINE.</dd>
-        <dt>KEYBOARD</dt><dd>&larr; &rarr; STAND. A / D AIM. SPACE THREE TIMES: POWER (NOT INTO THE RED), ACCURACY (ON THE GREEN), HOOK. BACKSPACE CANCELS. ESC PAUSES.</dd>
-        <dt>CONTROLLER</dt><dd>LEFT STICK STANDS. {g.turnL} / {g.turnR} AIM. RIGHT STICK: PULL BACK, PUSH FORWARD (FASTER PUSH, FASTER BALL; LEAN IT LEFT AS IT GOES THROUGH TO HOOK). {g.act}: THE THREE-PRESS METER INSTEAD. {g.start}: PAUSE.</dd>
-        <dt>THE LANE</dt><dd>FRESH OIL IN THE HEADS, DRY ON THE BACKEND: A HOOK SKIDS, THEN BITES. THE POCKET IS THE 1-3 (THE 1-2 LEFT-HANDED). HEAD-ON LEAVES SPLITS.</dd>
-      </dl>
-    </details>
+    <div className="bw">
+      <TitleScreen key={front.n} game="bowling" title="BOWLING" sub={`THE LANES // LANE ${r.lane} // ${P.map((p, i) => nameOf(p, i)).join(", ")}`} colors={COLORS} at={front.at} rows={rows}
+        note={`${last ? `LAST GAME HERE: ${resultLine(last)}. ` : ""}${NOTICE}`} />
+    </div>
   );
 }
 
@@ -232,7 +204,7 @@ const CALLS = {
 };
 
 // ---- a game on the lane ------------------------------------------------------------------------------------
-function Lane({ cfg, setup, lane, onAgain, onSettings, tour = null }) {
+function Lane({ cfg, setup, lane, onAgain, onSettings, onBowlers, onLeave, tour = null }) {
   const canvasRef = useRef(null), wrapRef = useRef(null);
   const stRef = useRef(null), logRef = useRef(null), viewRef = useRef(makeView());
   const queue = useRef([]), keys = useRef(0), taps = useRef(0), pend = useRef(null);
@@ -449,20 +421,19 @@ function Lane({ cfg, setup, lane, onAgain, onSettings, tour = null }) {
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} />
         </div>
       </div>
+      {/* sound, the lights, changing bowlers and leaving: the pause menu */}
       <ButtonRow>
         <Button onClick={togglePause}>Pause</Button>
         <Button onClick={instant} disabled={!snapRef.current}>Instant replay</Button>
-        <Button onClick={toggleMute}>{muted ? "Sound on" : "Mute"}</Button>
-        <Button onClick={() => { cosmicRef.current = !cosmicRef.current; setHud(h => ({ ...h, n: -1 })); }}>{cosmicRef.current ? "House lights" : "Cosmic"}</Button>
         {done?.closed && <Button variant="primary" onClick={() => setDone(d => ({ ...d, closed: false }))}>The final sheet</Button>}
-        <Button variant="back" onClick={onSettings}>Change bowlers</Button>
       </ButtonRow>
       <Tip text={tipText(tip.id, pm.mode)} gone={tip.gone} />
-      <Legend pad={pad} />
-      <p className="bw-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{tour ? "TOURNAMENT GAMES ARE FILED AS THEY END AND RE-PLAYED BY THE DEPARTMENT." : "EXHIBITION: THIS GAME DOES NOT COUNT TOWARDS A LEAGUE."}</p>
       {paused && !done && (
         <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE GAME IS HELD. THE BALL STAYS WHERE IT IS." onBack={() => setPaused(false)}
-          options={{ resume: () => setPaused(false), restart: onAgain, controls: <BowlGuide mode={pm.mode} family={pm.family} hand={cur.hand} compact />, sound: { on: !muted, onSelect: toggleMute }, quit: true }} />
+          options={{ resume: () => setPaused(false), restart: onAgain, controls: <BowlGuide mode={pm.mode} family={pm.family} hand={cur.hand} compact />, sound: { on: !muted, onSelect: toggleMute },
+            lights: { label: cosmicRef.current ? "LIGHTS: COSMIC" : "LIGHTS: HOUSE", onSelect: () => { cosmicRef.current = !cosmicRef.current; setHud(h => ({ ...h, n: -1 })); } },
+            bowlers: tour ? false : { label: "CHANGE BOWLERS", onSelect: onBowlers },
+            quit: onLeave ? { label: "LEAVE THE LANE", onSelect: onLeave } : true }} />
       )}
       {done && !done.closed && (
         <GameMenu key="end" kind="end" title={tour ? `${tour.ev.name.replace(/^LEAGUE NIGHT: /, "")}: GAME ${tour.leg + 1} OF ${tour.ev.legs}` : "GAME FILED."} summary={`${resultLine(done.shape)}. ${done.verified ? "RE-RUN FROM THE LOG: SAME SHEET." : "THE RE-RUN DISAGREED. NOT KEPT."}${done.tourLine ? ` ${done.tourLine}` : ""}`}

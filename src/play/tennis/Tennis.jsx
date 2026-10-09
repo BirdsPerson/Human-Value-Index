@@ -13,6 +13,8 @@ import { createShow, REVIEW } from "./show.js";
 import { createInput, SELECT_GLYPH } from "./input.js";
 import ControlsGuide, { guideSeen, markGuideSeen, namesFor } from "./Guide.jsx";
 import GameMenu from "../GameMenu.jsx";
+import TitleScreen from "../TitleScreen.jsx";
+import { liveItems, cycleOf } from "../titleLogic.js";
 import * as SFX from "./audio.js";
 import CSS from "./tennis.css?inline";
 import "../pages.css";
@@ -86,6 +88,10 @@ function Face({ spec, url, size = 1, pending = null }) {
   return <canvas ref={ref} width={32} height={48} className="tn-face" style={{ width: 32 * size, height: 48 * size }} aria-hidden="true" />;
 }
 
+// The title's four colours: the night court's blue, the ball's yellow.
+const COLORS = ["#000000", "#fcfcfc", "#0058f8", "#d8f878"];
+const FMT_NAME = { short: "FIRST TO 4 GAMES", set: "ONE SET, TIEBREAK AT 6-ALL" };
+
 export default function Tennis({ route }) {
   useEffect(() => { injectStyles(); }, []);
   const { vs, fmt: fmt0, court: court0 } = useMemo(() => parseRoute(route), [route]);
@@ -95,137 +101,53 @@ export default function Tennis({ route }) {
   const [opp, setOpp] = useState(() => (vs && OPP_BY_KEY.get(vs)) || null);
   const [match, setMatch] = useState(null);   // {seed, key: n}
   const [done, setDone] = useState(null);
-  const [more, setMore] = useState(false);   // CHANGE SETTINGS opens the picker's options
+  const [front, setFront] = useState(() => ({ at: false, n: 0 }));   // the title screen: where it opens (false: the title)
   const [level, setLevelS] = useState(readLevel);
   const [hand, setHandS] = useState(readHand);
+  const [cuts, setCuts] = useState(() => readFlag(CUTS_KEY, !REDUCED()));
+  const [muted, setMuted] = useState(() => SFX.isMuted());
   const [guide, setGuide] = useState(null);   // {o, f}: the controls guide, before the first match
   const setLevel = (v) => { setLevelS(v); writeLevel(v); };
   const setHand = (v) => { setHandS(v); writeHand(v); };
-  const begin = (o, f) => { SFX.unlock(); if (f) setFmt(f); setOpp(o); setDone(null); setMore(false); setGuide(null); setMatch({ seed: seedNow(), n: Date.now() }); };
+  const begin = (o, f) => { SFX.unlock(); if (f) setFmt(f); setOpp(o); setDone(null); setGuide(null); setMatch({ seed: seedNow(), n: Date.now() }); };
   // the first match shows the controls guide first (skippable, remembered)
   const start = (o, f) => { if (!guideSeen()) { SFX.unlock(); setGuide({ o, f }); setOpp(o); setMatch(null); setDone(null); } else begin(o, f); };
   const leaveGuide = () => { markGuideSeen(); if (guide) begin(guide.o, guide.f); };
-  const toPicker = (open) => { setDone(null); setMatch(null); setMore(open); };
+  const toFront = (at = true) => { setDone(null); setMatch(null); setFront(f => ({ at, n: f.n + 1 })); };
+  // ?vs=<key>: a link to one opponent goes straight on court, past the title
+  useEffect(() => { if (vs && OPP_BY_KEY.get(vs)) start(OPP_BY_KEY.get(vs)); }, [vs]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const cyc = (list, cur, set) => (d) => set(cycleOf(list, cur, d));
+  const rows = {
+    play: () => start(OPP_BY_KEY.get(EASIEST), "short"),
+    modes: Object.entries(FMT_NAME).map(([id, l]) => ({ id, label: l, hint: fmt === id ? "CHOSEN" : "", onSelect: () => { setFmt(id); return "team"; } })),
+    team: { label: "PLAYER SELECT", items: OPPONENTS.map(o => ({ id: o.key, label: o.name, value: o.rating, art: <Face spec={o.spec} url={spriteOf(o)} pending={pendingSpec(o, DEFAULT_SPEC)} size={0.75} />, onSelect: () => start(o) })) },
+    live: liveItems("tennis"),
+    settings: [
+      { id: "level", label: "DIFFICULTY", value: LEVELS[level].name, note: LEVEL_NOTES[level], cycle: cyc(LEVEL_ORDER, level, setLevel) },
+      { id: "hand", label: "HAND", value: hand === "L" ? "LEFT" : "RIGHT", cycle: () => setHand(hand === "L" ? "R" : "L") },
+      { id: "court", label: "COURT", value: COURTS.find(c => c[0] === court)[1], note: COURTS.find(c => c[0] === court)[2], cycle: cyc(COURTS.map(c => c[0]), court, setCourt) },
+      { id: "cuts", label: "CROWD CAMERAS", value: cuts ? "ON" : "OFF", cycle: () => setCuts(v => { writeFlag(CUTS_KEY, !v); return !v; }) },
+      { id: "sound", label: "SOUND", value: muted ? "OFF" : "ON", cycle: () => { const m = !muted; setMuted(m); SFX.setMuted(m); if (!m) SFX.unlock(); } },
+    ],
+    controls: <ControlsGuide mode={guideMode()} family={guideFamily()} hand={hand} compact />,
+    back: true,
+  };
   return (
     <div className="tn">
       <ScreenHead title="THE TENNIS CLUB" meta={`${SURFACE_NAMES[court]} // EXHIBITION`} />
       {guide
         ? <ControlsGuide mode={guideMode()} family={guideFamily()} hand={hand} onDone={leaveGuide} />
         : match && opp && !done
-          ? <Match key={match.n} seed={match.seed} fmt={fmt} court={court} opp={opp} me={me} level={level} hand={hand} onDone={setDone} onQuit={() => setMatch(null)} onRestart={() => begin(opp)} onSettings={() => toPicker(true)} />
+          ? <Match key={match.n} seed={match.seed} fmt={fmt} court={court} opp={opp} me={me} level={level} hand={hand} onDone={setDone} onQuit={() => toFront(true)} onRestart={() => begin(opp)} onSettings={() => toFront("settings")} />
           : done
-            ? <Done done={done} me={me} level={level} onAgain={() => start(opp)} onPick={() => toPicker(false)} onSettings={() => toPicker(true)} />
-            : <Picker key={more ? "more" : "plain"} fmt={fmt} setFmt={setFmt} court={court} setCourt={setCourt} level={level} setLevel={setLevel} hand={hand} setHand={setHand} pre={vs ? opp?.key || null : null} open={more} onPick={start} />}
+            ? <Done done={done} me={me} level={level} onAgain={() => start(opp)} onPick={() => toFront("team")} onSettings={() => toFront("settings")} />
+            : <TitleScreen key={front.n} game="tennis" title="TENNIS" sub={`THE TENNIS CLUB // ${LEVELS[level].name} // ${FMT_NAME[fmt]}`} colors={COLORS} at={front.at} rows={rows}
+                note={NOTICE} />}
     </div>
   );
 }
 function seedNow() {
   try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] || 1; } catch { return (Date.now() >>> 0) || 1; }
-}
-
-// ---- choosing ------------------------------------------------------------------------------------
-// One line, one button: PLAY NOW is a short match against the easiest member. The rest is folded.
-function Picker({ fmt, setFmt, court, setCourt, level, setLevel, hand, setHand, pre, open = false, onPick }) {
-  const [sel, setSel] = useState(() => Math.max(0, OPPONENTS.findIndex(o => o.key === pre)));
-  const [more, setMore] = useState(Boolean(pre) || open);
-  const refs = useRef([]), playRef = useRef(null);
-  const quick = () => onPick(OPP_BY_KEY.get(EASIEST), "short");
-  useEffect(() => { if (!pre) playRef.current?.focus({ preventScroll: true }); }, [pre]);
-  // a controller can choose too: A or Start plays now; with the list open, up / down picks
-  const moreRef = useRef(more); moreRef.current = more;
-  useEffect(() => {
-    let raf, prev = null, held = 0;
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
-      const p = readPad();
-      if (!p.connected) { prev = null; return; }
-      const dir = p.y > 0.5 ? 1 : p.y < -0.5 ? -1 : 0;
-      if (moreRef.current && dir && held <= 0) { setSel(s => { const n = (s + dir + OPPONENTS.length) % OPPONENTS.length; refs.current[n]?.focus(); return n; }); held = 14; } else if (!dir) held = 0; else held--;
-      if (prev && ((p.held.act && !prev.act) || (p.held.start && !prev.start))) { if (moreRef.current) setSel(s => { onPick(OPPONENTS[s]); return s; }); else quick(); }
-      prev = p.held;
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [onPick]);   // eslint-disable-line react-hooks/exhaustive-deps
-  return (
-    <>
-      <p className="pg-lede">TENNIS AGAINST THE COMPUTER. ARROW KEYS MOVE, Z SWINGS, Z TWICE SERVES. A CONTROLLER WORKS, AND PHONES GET A PAD ON SCREEN. SOUND IS OPTIONAL.</p>
-      <div className="pg-start">
-        <Button variant="primary" ref={playRef} onClick={quick}>PLAY NOW</Button>
-        <span className="pg-sub">FIRST TO 4 GAMES, AGAINST THE EASIEST MEMBER OF THE CLUB, ON {SURFACE_NAMES[court]}. {LEVELS[level].name}{hand === "L" ? ", LEFT-HANDED" : ""}.</span>
-      </div>
-      <details className="pg-more" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
-        <summary>CHOOSE AN OPPONENT, DIFFICULTY, HAND, COURT AND MATCH LENGTH ({OPPONENTS.length} ON COURT)</summary>
-        <div className="pg-more-body">
-          <div className="tn-opts">
-            <h3>DIFFICULTY</h3>
-            <div className="tn-fmt" role="radiogroup" aria-label="Difficulty">
-              {LEVEL_ORDER.map(id => (
-                <button key={id} type="button" role="radio" aria-checked={level === id} className={`tn-chip${level === id ? " on" : ""}`} onClick={() => setLevel(id)}>{LEVELS[id].name}</button>
-              ))}
-            </div>
-            <p className="tn-small">{LEVEL_NOTES[level]} REMEMBERED.</p>
-            <h3>YOUR HAND</h3>
-            <div className="tn-fmt" role="radiogroup" aria-label="Handedness">
-              {[["R", "RIGHT-HANDED"], ["L", "LEFT-HANDED"]].map(([k, l]) => (
-                <button key={k} type="button" role="radio" aria-checked={hand === k} className={`tn-chip${hand === k ? " on" : ""}`} onClick={() => setHand(k)}>{l}</button>
-              ))}
-            </div>
-            <p className="tn-small">A LEFT-HANDER STANDS AND TOSSES ON THE LEFT. THE BUTTONS ARE THE SAME. REMEMBERED.</p>
-            <h3>COURT</h3>
-          </div>
-          <div className="tn-fmt" role="radiogroup" aria-label="Court surface">
-            {COURTS.map(([id, label, how]) => (
-              <button key={id} type="button" role="radio" aria-checked={court === id} className={`tn-chip${court === id ? " on" : ""}`} onClick={() => setCourt(id)} title={how}>
-                {label}: {SURFACE_NAMES[id]}
-              </button>
-            ))}
-          </div>
-          <p className="tn-small">{COURTS.find(c => c[0] === court)[2]}</p>
-          <div className="tn-fmt" role="radiogroup" aria-label="Match length">
-            {Object.values(FORMATS).map(f => (
-              <button key={f.id} type="button" role="radio" aria-checked={fmt === f.id} className={`tn-chip${fmt === f.id ? " on" : ""}`} onClick={() => setFmt(f.id)}>
-                {f.id === "set" ? "ONE SET, TIEBREAK AT 6-ALL" : "FIRST TO 4 GAMES"}
-              </button>
-            ))}
-          </div>
-          <p className="tn-small">THEN PICK WHO TO PLAY; THE MATCH STARTS AT ONCE. SPEED, REACH AND NERVE FOLLOW THE RATING. A LEFT-HANDER ON THE LIST PLAYS LEFT.</p>
-          <ul className="tn-opps">
-            {OPPONENTS.map((o, i) => (
-              <li key={o.key}>
-                <button type="button" ref={el => { refs.current[i] = el; }} className={`tn-opp${i === sel ? " sel" : ""}`} onClick={() => onPick(o)} onFocus={() => setSel(i)} aria-label={`Play ${o.name}, rated ${o.rating}`}>
-                  <Face spec={o.spec} url={spriteOf(o)} pending={pendingSpec(o, DEFAULT_SPEC)} size={2} />
-                  <span className="nm">{o.name}<span className="tag">{o.regular ? o.note : "ON FILE // A CLUB PLAYER. RATED BY THE CLUB, NOT BY THE DEPARTMENT."}</span></span>
-                  <span className="rt">{o.rating}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </details>
-      <details className="pg-more">
-        <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><Controls /></div>
-      </details>
-      <p className="tn-notice"><b>EXHIBITION.</b> {NOTICE} IT IS KEPT IN THIS BROWSER ONLY.</p>
-    </>
-  );
-}
-
-function Controls() {
-  return (
-    <dl className="tn-keys">
-      <dt>MOVE</dt><dd>ARROWS / WASD // STICK OR D-PAD // THE ROUND PAD ON A PHONE</dd>
-      <dt>A</dt><dd>Z OR J // PAD A: SWING. A HIGH BALL IS SMASHED.</dd>
-      <dt>B</dt><dd>X OR K // PAD B: LOB. HOLD DOWN FOR A SLICE.</dd>
-      <dt>AIM</dt><dd>HOLD A DIRECTION AS YOU HIT: LEFT / RIGHT FOR THE LINES, UP DEEP, DOWN SHORT.</dd>
-      <dt>SERVE</dt><dd>A TOSSES. A AGAIN AS THE BALL DROPS INTO THE GREEN BAND BESIDE YOU. LEFT / RIGHT AIMS.</dd>
-      <dt>PAUSE</dt><dd>ENTER / ESC // START</dd>
-      <dt>CAMERA</dt><dd>BETWEEN POINTS THE BROADCAST MAY FIND SOMEONE IN THE STAND. A OR B (OR A TAP) RETURNS TO THE MATCH. TURN IT OFF UNDER THE COURT.</dd>
-      <dt>CHALLENGE</dt><dd>C // PAD SELECT (VIEW, CREATE, MINUS) // TAP THE PROMPT. RIGHT AFTER A CLOSE CALL AGAINST YOU. THREE WRONG CHALLENGES A SET, ONE MORE IN A TIEBREAK; A RIGHT ONE COSTS NOTHING. DO NOT HOLD IT AT THE UMPIRE.</dd>
-      <dt>MOUSE / TOUCH</dt><dd>CLICK OR TAP WHERE TO RUN. HOLD, DRAG FOR SPIN, RELEASE TO SWING: DRAG UP TOPSPIN, DOWN SLICE, STILL FLAT, A BIG FLICK UP A LOB; LEFT / RIGHT AIMS. SERVING: PRESS TO TOSS, RELEASE TO HIT; DRAG UP KICKS, DOWN SLICES.</dd>
-    </dl>
-  );
 }
 
 // ---- the legend under the court: what each button does, in the hands you are using ---------------
@@ -341,7 +263,7 @@ function Match({ seed, fmt, court, opp, me, level, hand, onDone, onQuit, onResta
   const [lastKind, setLastKind] = useState("keys");
   const [prompt, setPrompt] = useState(null);   // {left, frac}: the challenge window, open
   const [revSay, setRevSay] = useState("");     // challenges and verdicts, for the screen reader
-  const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, !touch));
+  const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, false));   // folded: the guide before the first match taught it
   const [cutsOn, setCutsOn] = useState(() => readFlag(CUTS_KEY, !REDUCED()));
   const [over, setOver] = useState(null);   // {bubble, cut}: the broadcast's words on the picture
   const [tell] = useState(() => talkFor(opp, "start", seed % 3));
@@ -558,6 +480,8 @@ function Match({ seed, fmt, court, opp, me, level, hand, onDone, onQuit, onResta
             restart: onRestart,
             controls: <ControlsGuide mode={mode} family={pad} hand={hand} compact />,
             sound: { on: !muted, onSelect: toggleMute },
+            cams: { label: `CROWD CAMERAS: ${cutsOn ? "ON" : "OFF"}`, onSelect: toggleCuts },
+            ...(touch ? { touchpad: { label: classic ? "TOUCH BUTTONS: ON" : "TOUCH BUTTONS: OFF", onSelect: toggleClassic } } : {}),
             settings: { label: "CHANGE SETTINGS (DIFFICULTY, HAND, COURT)", onSelect: onSettings },
             quit: { label: "LEAVE THE COURT", onSelect: onQuit },
           }} />
@@ -567,12 +491,8 @@ function Match({ seed, fmt, court, opp, me, level, hand, onDone, onQuit, onResta
       {tell && <p className={`tn-tell ${tell.kind}`}>{tell.kind === "say" ? `${opp.name}: "${tell.text}"` : tell.text}</p>}
       <ButtonRow>
         <Button onClick={() => togglePause()}>{paused ? "Resume" : "Pause"}</Button>
-        <Button onClick={toggleMute}>{muted ? "Sound on" : "Mute"}</Button>
-        <Button onClick={toggleCuts}>{cutsOn ? "Crowd cameras: on" : "Crowd cameras: off"}</Button>
-        {touch && <Button onClick={toggleClassic}>{classic ? "\u2212 Touch buttons" : "+ Touch buttons"}</Button>}
-        <Button variant="back" onClick={onQuit}>Leave the court</Button>
       </ButtonRow>
-      <p className="tn-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{NOTICE}</p>
+      {/* sound, crowd cameras, touch buttons and leaving the court: the pause menu */}
     </div>
   );
 }
