@@ -5,10 +5,12 @@ import { paintAvatar, loadSprite } from "../../sprites.js";
 import { DEFAULT_SPEC } from "../../avatar.js";
 import GameMenu from "../GameMenu.jsx";
 import { newGame, step, rleEncode, rleDecode, resultOf, replay, VERSION, BTN, CALL_SHIFT, CODE, QLENS, TILT, PLAYS, DEFS, OFF_BOOK, DEF_BOOK, lineup, contextOf, iconsOf, coordinatorPick, legalOffence, downText, spotText, goalToGo, toGoal, OS, ICONS, DS_NAMES } from "./sim.js";
-import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortEleven, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS, divisionsOf, divisionOf, defaultLevelIndex, allClubs } from "./roster.js";
-import { draw, camInit, camFollow, headOf, skinOf, shade, W, H, PS_GLYPH, CAMS } from "./render.js";
+import { TEAM_IDS, teamName, teamShort, kitsFor, FALLBACK, loadLeague, sortEleven, teamOfCase, citizenKeyOf, playNowPair, shownName, HINTS, CROPS, divisionsOf, divisionOf, defaultLevelIndex, allClubs, difficultyOf, teamUnits } from "./roster.js";
+import { draw, camInit, camFollow, headOf, skinOf, shade, W, H, PS_GLYPH, CAMS, CAM_NAMES } from "./render.js";
 import { drawOffArt, drawDefArt, ART_W, ART_H } from "./playart.js";
-import { FrontEnd, Setup, Sheet, Tapes, DIFF_IDS } from "./menus.jsx";
+import { Setup, DIFFS, DIFF_IDS } from "./menus.jsx";
+import TitleScreen from "../TitleScreen.jsx";
+import { liveItems } from "../titleLogic.js";
 import { sheetHints } from "../heads.js";
 import { callFor, crowdFor, bannerFor } from "./calls.js";
 import { createInput, PAD_GLYPHS, KEY_GLYPHS } from "./input.js";
@@ -43,6 +45,8 @@ const writeFlag = (k, v) => { try { localStorage.setItem(k, v ? "1" : "0"); } ca
 const readStr = (k, dflt) => { try { return localStorage.getItem(k) || dflt; } catch { return dflt; } };
 const REDUCED = () => { try { return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches); } catch { return false; } };
 const NOTICE = "EXHIBITION. THIS GAME DOES NOT COUNT IN THE LEAGUE.";
+// The title's four colours: night, white letters, the turf's green, the goalpost yellow.
+const COLORS = ["#000000", "#fcfcfc", "#00a800", "#f8b800"];
 function seedNow() { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] || 1; } catch { return (Date.now() >>> 0) || 1; } }
 // Each district's coach: a lean to the pass, fixed per district.
 const coachOf = (id) => { let h = 7; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return 0.3 + ((h % 1000) / 1000) * 0.4; };
@@ -101,11 +105,16 @@ export default function Football({ route }) {
   useEffect(() => { if (!opts.home && mine && setupRef.current.home !== mine && setupRef.current.away !== mine) setSetupS(s => withDivisionDiff({ ...s, home: mine, side: "home", away: playNowPair(league, mine)[1] }, league)); }, [mine]);   // eslint-disable-line react-hooks/exhaustive-deps
   // the live league arriving brings the pyramid: the difficulty follows the division you play in
   useEffect(() => { setSetupS(s => withDivisionDiff(s, league)); }, [league]);
-  const [screen, setScreen] = useState("front");
   const [game, setGame] = useState(null);
   const [done, setDone] = useState(null);
   const [tape, setTape] = useState(null);
-  const records = useMemo(() => loadRecords(), [done, screen]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // the front menu (../TitleScreen.jsx): where it opens next. A link with ?home= / ?vs= opens on the menu, its PLAY is that pairing.
+  const deep = Boolean(opts.home || opts.vs);
+  const [front, setFront] = useState(() => ({ at: deep, n: 0 }));
+  const [screen, setScreen] = useState("front");   // "front" | "setup": EXHIBITION SETUP, the team cards
+  const [muted, setMuted] = useState(() => SFX.isMuted());
+  const [lefty, setLefty] = useState(() => readFlag(LEFTY_KEY, false));
+  const records = useMemo(() => loadRecords(), [done, screen, front]);   // eslint-disable-line react-hooks/exhaustive-deps
   const quickPair = useMemo(() => (mine ? [mine, playNowPair(league, mine)[1]] : playNowPair(league, null)), [league, mine]);
   const start = (s) => {
     SFX.unlock();
@@ -116,21 +125,49 @@ export default function Football({ route }) {
   };
   const quick = () => { const s = { ...setup, home: quickPair[0], away: quickPair[1], side: "home" }; setSetup(s); start(s); };
   const again = () => start({ ...setup, home: game.side === "away" ? game.away : game.home, away: game.side === "away" ? game.home : game.away, side: game.side, qlen: game.cfg.qlen });
-  const toFront = () => { setDone(null); setGame(null); setScreen("front"); };
+  const toFront = (at = true) => { setDone(null); setGame(null); setTape(null); setScreen("front"); setFront(f => ({ at, n: f.n + 1 })); };
   const watch = (rec) => { setTape({ rec, game: { seed: rec.seed, cfg: rec.cfg, home: rec.home, away: rec.away, side: rec.side || "home", cam: setup.cam } }); setScreen("front"); };
+  // the front menu's rows: the setup's own values
+  const clubs = allClubs(league).length ? allClubs(league) : TEAM_IDS, divs = divisionsOf(league);
+  const tag = (id) => (divs.length > 1 ? ` (${difficultyOf(league, divisionOf(league, id)).short})` : "");
+  const yours = setup.side === "away" ? setup.away : setup.home, theirs = setup.side === "away" ? setup.home : setup.away;
+  const pick = (mineId, oppId) => setSetup(s => (s.side === "away" ? { ...s, away: mineId, home: oppId } : { ...s, home: mineId, away: oppId }));
+  const turn = (list, v, d) => list[(list.indexOf(v) + d + list.length) % list.length];
+  const diffName = DIFFS.find(d => d[0] === setup.diff)?.[1] || "PRO";
+  const ago = (t) => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 60 ? `${m} MIN AGO` : m < 1440 ? `${Math.round(m / 60)} H AGO` : `${Math.round(m / 1440)} D AGO`; };
+  const rows = {
+    play: deep ? { label: `PLAY ${teamShort(theirs)}`, onSelect: () => start(setup) } : quick,
+    modes: [
+      { id: "quick", label: "QUICK PLAY", hint: `${teamShort(quickPair[0])} V ${teamShort(quickPair[1])}`, onSelect: quick },
+      { id: "setup", label: "EXHIBITION SETUP", hint: "BOTH TEAMS, RATINGS, KEY MEN", onSelect: () => setScreen("setup") },
+      records.length ? { id: "tapes", label: "THE TAPES", hint: `${records.length} KEPT`, onSelect: () => "tapes" } : null,
+    ].filter(Boolean),
+    team: { label: "TEAM SELECT", value: teamShort(yours), items: clubs.map(id => ({ id, label: `${teamName(id)}${tag(id)}`, value: teamUnits(league.teams[id]).ovr, hint: id === mine ? "YOURS" : "", onSelect: () => { pick(id, id === theirs ? playNowPair(league, id)[1] : theirs); return "vs"; } })) },
+    vs: { label: "OPPONENT", value: teamShort(theirs), items: clubs.filter(id => id !== yours).map(id => ({ id, label: `${teamName(id)}${tag(id)}`, value: teamUnits(league.teams[id]).ovr, onSelect: () => { const s = setup.side === "away" ? { ...setup, home: id } : { ...setup, away: id }; setSetup(s); start(s); } })) },
+    live: liveItems("football"),
+    settings: [
+      { id: "side", label: "YOU PLAY AS", value: setup.side === "home" ? "HOME" : "AWAY", note: "THE CROWD IS THE HOME SIDE'S.", cycle: () => setSetup(s => ({ ...s, side: s.side === "home" ? "away" : "home", home: s.away, away: s.home })) },
+      { id: "diff", label: "DIFFICULTY", value: diffName, note: `${DIFFS.find(d => d[0] === setup.diff)?.[2] || ""}${divs.length > 1 ? " A PICK IS REMEMBERED FOR YOUR DIVISION." : ""}`, cycle: (d) => setSetup(s => { const diff = turn(DIFF_IDS, s.diff, d), k = divisionOf(league, s.side === "away" ? s.away : s.home); return { ...s, diff, diffBy: { ...(s.diffBy || {}), [k]: diff } }; }) },
+      { id: "qlen", label: "QUARTERS", value: `${setup.qlen} MIN`, note: "FOUR QUARTERS ON AN ACCELERATED CLOCK. THREE MINUTES IS ABOUT THIRTY-SEVEN PLAYS A SIDE.", cycle: (d) => setSetup(s => ({ ...s, qlen: turn(QLENS, s.qlen, d) })) },
+      { id: "cam", label: "CAMERA", value: CAM_NAMES[setup.cam] || "BROADCAST", note: "BROADCAST FOLLOWS THE PLAY FROM BEHIND. HIGH AND WIDE SHOWS THE WHOLE FIELD.", cycle: (d) => setSetup(s => ({ ...s, cam: turn(Object.keys(CAM_NAMES), s.cam, d) })) },
+      { id: "qb", label: "QUARTERBACK", value: lefty ? "LEFTY" : "RIGHTY", note: "A LEFT-HANDED QB: THE THROWING ARM MIRRORED, NOTHING ELSE.", cycle: () => setLefty(v => { writeFlag(LEFTY_KEY, !v); return !v; }) },
+      { id: "sound", label: "SOUND", value: muted ? "OFF" : "ON", cycle: () => { const m = !muted; setMuted(m); SFX.setMuted(m); if (!m) SFX.unlock(); } },
+    ],
+    tapes: records.length ? { label: "THE TAPES", items: records.map(rec => { const r = rec.result, hi = rec.side === "away" ? 1 : 0, L = 1 - hi; return { id: String(rec.at), label: `${teamShort(L ? rec.away : rec.home)} ${r.score[L]}, ${teamShort(hi ? rec.away : rec.home)} ${r.score[hi]}`, hint: ago(rec.at), onSelect: () => watch(rec) }; }) } : null,
+    controls: <Controls />,
+    back: true,
+  };
   let body;
-  if (tape) body = <Match key={`tape${tape.rec.at}`} game={tape.game} me={me} tape={tape.rec} onDone={() => setTape(null)} onQuit={() => setTape(null)} />;
-  else if (game && !done) body = <Match key={game.n} game={game} me={me} onDone={setDone} onQuit={toFront} onRestart={again} />;
-  else if (done) body = <Done done={done} game={game} onAgain={again} onTape={() => watch(done.rec)} onPick={() => { setDone(null); setGame(null); setScreen("setup"); }} onFront={toFront} />;
-  else if (screen === "setup") body = <Setup league={league} setup={setup} setSetup={setSetup} mine={mine} onStart={start} onBack={() => setScreen("front")} />;
-  else if (screen === "how") body = <Sheet title="HOW TO PLAY" meta="THE CONTROLS // THE RULES" onBack={() => setScreen("front")}><Controls /><p className="fb-notice">{NOTICE} NOT IN THE STANDINGS, NOT IN THE CUP, NOT ON YOUR FILE. THE TAPE IS KEPT IN THIS BROWSER.</p></Sheet>;
-  else if (screen === "tapes") body = <Tapes records={records} onWatch={watch} onBack={() => setScreen("front")} />;
-  else body = <FrontEnd league={league} pair={quickPair} setup={setup} mine={mine} me={me} records={records} onQuick={quick} onSetup={() => setScreen("setup")} onHow={() => setScreen("how")} onTapes={() => setScreen("tapes")} />;
+  if (tape) body = <Match key={`tape${tape.rec.at}`} game={tape.game} me={me} tape={tape.rec} onDone={() => toFront("tapes")} onQuit={() => toFront("tapes")} />;
+  else if (game && !done) body = <Match key={game.n} game={game} me={me} onDone={setDone} onQuit={() => toFront(true)} onRestart={again} />;
+  else if (done) body = <Done done={done} game={game} onAgain={again} onTape={() => watch(done.rec)} onPick={() => toFront("team")} onFront={() => toFront(true)} />;
+  else if (screen === "setup") body = <Setup league={league} setup={setup} setSetup={setSetup} mine={mine} onStart={start} onBack={() => toFront("modes")} />;
+  else body = <TitleScreen key={front.n} game="football" title="FOOTBALL" sub={`THE BOWL // ${teamShort(yours)} V ${teamShort(theirs)} // ${diffName}`} colors={COLORS} at={front.at} rows={rows}
+    note={`${NOTICE} ROSTERS: SEASON ${league.season || "?"}${league.live ? ", AS DRAFTED" : ", AS FILED"}.`} />;
   return (
     <div className="fb">
       <ScreenHead title="THE BOWL" meta="FOOTBALL // EXHIBITION // ELEVEN ON ELEVEN, THE LEAGUE'S OWN TEAMS" />
       {body}
-      {!game && !tape && <p className="fb-small">ROSTERS: SEASON {league.season || "?"}, MACHINE DAY {league.day}{league.live ? ", AS DRAFTED" : ". THE LIVE LEAGUE DID NOT ANSWER; THESE ARE THE ROSTERS ON FILE"}.</p>}
     </div>
   );
 }
@@ -225,7 +262,7 @@ function Match({ game, me, tape = null, onDone, onQuit, onRestart }) {
   const [scale, setScale] = useState(1);
   const [pad, setPad] = useState(null);
   const [touch, setTouch] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer: coarse)").matches));
-  const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, !touch));
+  const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, false));   // folded: the guide before the first game taught it
   const [skipping, setSkipping] = useState(false);
   const [guide, setGuide] = useState(() => !tape && !guideSeen());   // the controls guide, once, before the first game
   const [tip, setTip] = useState({ text: "", gone: false });
@@ -408,17 +445,15 @@ function Match({ game, me, tape = null, onDone, onQuit, onRestart }) {
       {!tape && hud?.ctl && hud.cx !== "call" && <p className="fb-ctl">YOU: <b>{hud.ctl}</b> {hud.off ? "// ON OFFENCE" : "// ON DEFENCE"}</p>}
       {touch && !tape && <TouchPad input={inputRef} cx={hud?.cx} onStart={() => togglePause()} />}
       {!tape && <Legend mode={mode} family={pad} open={legendOpen} onToggle={toggleLegend} />}
+      {/* sound, the QB's hand and leaving: the pause menu. The tape keeps its own two buttons (it has no pause menu). */}
       <ButtonRow>
         <Button onClick={() => togglePause()}>{paused ? "Resume" : "Pause"}</Button>
-        <Button onClick={toggleMute}>{muted ? "Sound on" : "Mute"}</Button>
-        {!tape && <Button onClick={() => setLefty(v => { writeFlag(LEFTY_KEY, !v); return !v; })}>{lefty ? "QB: lefty" : "QB: righty"}</Button>}
         {tape && <Button onClick={() => { skipRef.current = true; setSkipping(true); }}>Skip to the end</Button>}
-        <Button variant="back" onClick={onQuit}>{tape ? "Stop the tape" : "Leave the stadium"}</Button>
+        {tape && <Button variant="back" onClick={onQuit}>Stop the tape</Button>}
       </ButtonRow>
-      <p className="fb-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{NOTICE}</p>
       {paused && !tape && (
         <GameMenu key="pause" kind="pause" title="PAUSED." summary={hud ? `${shorts[L]} ${hud.score[L]}, ${shorts[Rr]} ${hud.score[Rr]} // ${hud.period} ${hud.clock}` : ""} onBack={() => togglePause(false)}
-          options={{ resume: () => togglePause(false), restart: onRestart ? { label: "RESTART THE GAME", onSelect: onRestart } : null, controls: <ControlsGuide mode={mode} family={pad} compact />, sound: { on: !muted, onSelect: toggleMute }, quit: { label: "LEAVE THE STADIUM", onSelect: onQuit } }} />
+          options={{ resume: () => togglePause(false), restart: onRestart ? { label: "RESTART THE GAME", onSelect: onRestart } : null, controls: <ControlsGuide mode={mode} family={pad} compact />, sound: { on: !muted, onSelect: toggleMute }, qb: { label: `QUARTERBACK: ${lefty ? "LEFTY" : "RIGHTY"}`, onSelect: () => setLefty(v => { writeFlag(LEFTY_KEY, !v); return !v; }) }, quit: { label: "LEAVE THE STADIUM", onSelect: onQuit } }} />
       )}
     </div>
   );
@@ -565,11 +600,11 @@ function Done({ done, game, onAgain, onTape, onPick, onFront }) {
       <ButtonRow>
         <Button variant="primary" onClick={onAgain}>Rematch</Button>
         <Button onClick={onTape}>Watch the tape</Button>
-        <Button onClick={onPick}>Exhibition setup</Button>
+        <Button onClick={onPick}>Team select</Button>
         <Button variant="back" onClick={onFront}>The Bowl</Button>
       </ButtonRow>
       {menu && <GameMenu key="end" kind="end" title="FINAL." summary={summary} onBack={() => setMenu(false)}
-        options={{ again: { label: "REMATCH", onSelect: onAgain }, settings: { label: "EXHIBITION SETUP", onSelect: onPick }, replay: { label: "WATCH THE TAPE", onSelect: onTape }, box: { label: "THE BOX SCORE", onSelect: () => setMenu(false) }, front: { label: "THE BOWL", onSelect: onFront }, play: true, city: true }} />}
+        options={{ again: { label: "REMATCH", onSelect: onAgain }, rematch: { label: "TEAM SELECT", onSelect: onPick }, replay: { label: "WATCH THE TAPE", onSelect: onTape }, box: { label: "THE BOX SCORE", onSelect: () => setMenu(false) }, front: { label: "THE BOWL", onSelect: onFront }, play: true, city: true }} />}
     </Frame>
   );
 }
