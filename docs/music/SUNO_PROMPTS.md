@@ -63,7 +63,8 @@ This song has been played. Your enjoyment has been logged.
 ## 2. Game themes
 
 ### Tennis: Show Court
-Style: `instrumental, 16-bit sports game music, upbeat, bouncy synth bass, bright brass stabs, crowd energy, Saturday morning, loopable, 140 bpm`
+Style: `instrumental, 8-bit chiptune, NES sound chip, two square wave leads, triangle wave bass, noise channel drums, only 4 channels, dry, no reverb, no pads, upbeat sports game, catchy, loopable, 150 bpm`
+Exclude styles: `synthwave, orchestral, pads, reverb, modern EDM, electric guitar, real drums`
 Lyrics: `[Instrumental] [Intro] [Main Theme] [Breakdown] [Main Theme] [Outro: seamless loop]`
 
 ### Golf: The Department Links
