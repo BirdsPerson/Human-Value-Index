@@ -11,7 +11,8 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 0. [in progress 2026-09-29, Scott's order: scale -> community -> HQ]
    a. [shipped 2026-09-29, see Done] **Scale.** Production sprite atlas + slim /api/pen.
-   b. **Community + incidents.** Real-life ties from Wikidata (spouse, sibling, bandmates
+   b. [slice 2 shipped 2026-10-08: named cliques + home hangout, docs/CITY_SPEC.md "GROUPS"; left: group
+      outings, cross-group gossip, incidents] **Community + incidents.** Real-life ties from Wikidata (spouse, sibling, bandmates
       /member of, teammates, partners) raise affinity so real friends gravitate together;
       ties carry a sign from the public record where it exists (documented friendships warm, documented feuds/estrangements cold; Scott 2026-09-29: 'whatever's available'), then evolve freely in the sim; friendship cliques become named groups (Overlord-named) with a home hangout and group
       outings; odd cross-group pairs logged as gossip. Fallout Shelter incidents: a fire,
@@ -157,8 +158,8 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       Season 2 spine after UNRATIFIED. Guardrails: crowds are anonymous subjects; named
       living people never shown rioting or doing violence; cold satire, non-graphic.
 
-1. [in progress: slices 1 and 2 shipped, see Done] **Side quests → vouches.**
-   Remaining slices: (b) [next] vouch → score effect: DECIDED by Scott 2026-09-28: +2 to that category per vouch (max +14 across 7); show it on the file and in the breakdown; each vouch appends a history entry with cause "vouch" (src/movement.js: YOUR CHANGES, not a visit, not capped);
+1. [in progress: slices 1, 2 and (b) shipped, see Done] **Side quests → vouches.**
+   Remaining slices: (b) [shipped 2026-10-09: +2 to that category per vouch (max +14 across 7) as a history entry with cause "vouch"; an unassessed category is filed with no number moved; the next interview blends it like any prior reading];
    (c2) bring someone (needs a second player or a referral; witness shipped as c1);
    (d) real-world Directives
    reported back via appeal; (e) text-chat quests on Haiku (capped); (f) offers from
@@ -229,6 +230,38 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 12. **Holding Cells with meaning:** subjects under Review (arraignment/summons, appeals under hearing, harm reviews, news re-scores) walk into a holding cell until their case is heard at the Tribunal, then are released ("RELEASED. FILE AMENDED."). Driven by real events; visible "who is in trouble" board.
 
+## Standing tracks (Scott, 2026-10-09: "mostly self-improving ... I can check in and see how the place is growing")
+
+The nightly build rotates through these by weekday unless an open bug is marked P0 or DESK_ANSWERS.md
+holds an unacted answer (those go first). Take the next unshipped slice in that track, one night's work,
+built well (research first for new systems, reusable engines, checks that can fail). Record the track
+in the Shipped bullet. If a track has nothing shippable tonight, take the next weekday's track.
+
+- **Mon: THE OCEAN, the coast and the clubs.** Order: the marina + public pier on the southwest coast;
+  boats as transport and leisure; the YACHT CLUB and the GOLF & COUNTRY CLUB proposed through the
+  Assembly as wealth concentrates (vault backlog "THE OCEAN, the clubs and the strata"); public
+  alternatives always exist; THE SANCTIONED offshore last.
+- **Tue: SURFING, then the other open games.** Surfing mini-game at THE COAST's break (vault backlog
+  "Surfing mini-game": paddle, catch, carve, cutbacks, tubes, wipeouts, combos, casual bot, cabinet).
+  When surfing ships, this day takes: the dungeon's next stage (docs/design/DUNGEON.md), football
+  playtest notes (vault backlog "Football playtest notes"), basketball S2 (docs/design/BASKETBALL.md).
+- **Wed: THE CITY, more real.** docs/CITY_SPEC.md + item 6 above: more places per district,
+  day/night, weather, news into the city, realistic layouts, NPC routines.
+- **Thu: DATA ANALYTICS.** The analytics view: field/era backfill (item 8), better charts, region
+  and field breakdowns, trends over time, plain-English readings; every number traceable.
+- **Fri: PEOPLE FROM ALL OVER THE WORLD.** Keep the intake flowing: if the newest
+  docs/roster/diversity-*.json has fewer than 150 figures left to file, research and write the next
+  list (docs/roster/diversity-YYYY-MM-DD.json, same shape) aimed at the regions and fields most
+  under-represented vs UN population share (analytics WHO IS ON FILE); living people never get
+  invented crimes; grave-harm exclusions stay. The daily com.hvi.roster-queue job files from the
+  newest list automatically.
+- **Sat/Sun:** the existing playtest (Sat) and calibration (Sun) jobs run; the build takes the top
+  ROADMAP item.
+
+Every Monday's report adds a "## How the place is growing" section: figures on file (and added this
+week, by region), editions printed, games played and new players if the data exists, what shipped per
+track, and what is next per track. Plain English, no internal codes.
+
 ## Guardrails (the loop must obey)
 
 - One item per night; stop at the time budget and report partial work honestly.
@@ -240,6 +273,11 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
   ~/projects/organize/collect_reports.py.
 
 ## Done
+
+- 2026-10-09 Side quests (b), vouch score effect (Scott 2026-09-28): completing a directive adds
+  +2 to its category on the file (netlify/lib/quests.js vouchEffect): a history entry of cause
+  "vouch", score moved by the formula's change (held remainders stay held), pen card updated,
+  "SCORE +n" in the confirmation line. Check: check-quests.
 
 - 2026-10-07 Park chess polish: the Recreation Ground keeps ONE stone table and one kibitzer
   (src/chess/park.js); its side-view cutaway has the chess table with two seated and a watcher

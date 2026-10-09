@@ -32,6 +32,12 @@ export function Associates({ slug }) {
           })}
         </ul>
       )}
+      {d?.group && (
+        <div className="hvi-assoc-group">
+          GROUP: {d.group.name} // {d.group.size} ON FILE{d.group.hangout ? ` // HOME: ${d.group.hangout}` : ""}
+          <span> WITH {d.group.others.map(o => o.name).join(", ").toUpperCase()}</span>
+        </div>
+      )}
       {d?.events?.[0] && <div className="hvi-assoc-last">LATEST: {d.events[0].text}</div>}
     </div>
   );
@@ -41,6 +47,8 @@ export const ASSOC_CSS = `
   .hvi-assoc { margin: var(--s3) 0; }
   .hvi-assoc-h { color: var(--fg-dim); font-size: var(--t-xs); letter-spacing: .08em; margin-bottom: var(--s2); }
   .hvi-assoc-h span { color: var(--fg-mute); margin-left: var(--s2); }
+  .hvi-assoc-group { margin-top: var(--s2); color: var(--accent); font-size: var(--t-xs); line-height: 1.5; }
+  .hvi-assoc-group span { color: var(--fg-mute); }
   .hvi-assoc-none, .hvi-assoc-last { color: var(--fg-mute); font-size: var(--t-xs); line-height: 1.5; }
   .hvi-assoc-last { margin-top: var(--s2); }
   .hvi-assoc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }

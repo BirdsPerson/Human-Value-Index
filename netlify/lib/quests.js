@@ -4,6 +4,7 @@
 // record.vouches = [{quest, figure, name, dim, at}]; one per category (dim), from
 // whichever directive in that category is discharged first.
 import { QUEST, questFigure, contactAt } from "../../src/quests.js";
+import { assessedBreakdown, computeScore, cube, getTier, rubricOf, RUBRIC } from "./intake.js";
 
 export const COMPLETIONS_PER_DAY = 2;
 export const MIN_ELAPSED_MS = 60 * 1000;   // accept, then go and look; no instant reports
@@ -23,6 +24,28 @@ export function questState(record, now = Date.now()) {
     today: done.filter(d => d.at?.slice(0, 10) === today(now)).length,
     perDay: COMPLETIONS_PER_DAY,
   };
+}
+
+// A vouch moves its category +VOUCH_POINTS (Scott 2026-09-28; one per category, so +14 at
+// most across the 7). It lands as a history entry of cause "vouch": not a visit, not capped.
+// The score moves by the formula's change, so a held remainder (applyCap) stays held. A
+// category the interview never assessed is not guessed at: the vouch is filed, no number moves.
+export const VOUCH_POINTS = 2;
+function vouchEffect(record, dim, name, at) {
+  const prev = [...(record.history || [])].reverse().find(h => h && !h.voided && typeof h.score === "number");
+  if (!prev || rubricOf(prev) < RUBRIC) return null;
+  const before = assessedBreakdown(prev);
+  if (typeof before[dim] !== "number") return null;
+  const breakdown = { ...before, [dim]: Math.min(100, before[dim] + VOUCH_POINTS) };
+  if (breakdown[dim] === before[dim]) return null;
+  const score = Math.max(0, Math.min(1000, prev.score + computeScore(breakdown) - computeScore(before)));
+  if (score === prev.score) return null;
+  const { transcript, raw, sid, asked, appeal, appealOutcome, appealRulings, capped, capNote, newlyAssessed, rawScore, ...keep } = prev;
+  const entry = {
+    ...keep, at, score, tier: getTier(score), ...cube(breakdown), breakdown, delta: score - prev.score,
+    cause: "vouch", note: `${name.toUpperCase()} VOUCHES FOR ${dim.toUpperCase()}. +${VOUCH_POINTS}.`,
+  };
+  return { entry, delta: score - prev.score };
 }
 
 const no = (status, error) => ({ status, error });
@@ -60,9 +83,15 @@ export function applyQuest(record, { action, questId, buildingId }, now = Date.n
     }
     const f = questFigure(q);
     const at = new Date(now).toISOString();
-    const vouch = { quest: q.id, kind: q.kind, figure: q.figure, name: f.name, dim: q.dim, at };
+    const effect = vouchEffect(record, q.dim, f.name, at);
+    const vouch = { quest: q.id, kind: q.kind, figure: q.figure, name: f.name, dim: q.dim, at, ...(effect ? { delta: effect.delta } : {}) };
     return {
-      record: { ...record, quests: { active: null, done: [...quests.done, { id: q.id, at }] }, vouches: [...(record.vouches || []), vouch] },
+      record: {
+        ...record,
+        history: effect ? [...record.history, effect.entry] : record.history,
+        quests: { active: null, done: [...quests.done, { id: q.id, at }] },
+        vouches: [...(record.vouches || []), vouch],
+      },
       vouch,
     };
   }

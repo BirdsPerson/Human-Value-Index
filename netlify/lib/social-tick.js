@@ -18,6 +18,7 @@
 // give the same city for the same plan (scripts/check-social.mjs).
 import { machineClock, SEED, rosterVersion, WINDOW_H } from "../../src/city/sim.js";
 import { emptyState, advance, publish, publishAll, fromV1, sectorPresence } from "../../src/city/social.js";
+import { findGroups, groupOf } from "../../src/city/groups.js";
 import { fullRoster } from "../../src/city/roster.js";
 
 export const FAST_FORWARD_DAYS = 30;
@@ -120,6 +121,9 @@ export async function tick(nowMs = Date.now(), io, opts = {}) {
     const c = clock();
     const pub = publish(state, state.hour);
     const bySubject = publishAll(state, roster.map(s => s.slug), { relations: SUBJECT_RELATIONS, events: SUBJECT_EVENTS });
+    const groups = findGroups(state);
+    pub.groups = groups.slice(0, 30).map(({ id, name, size, hangoutName, members }) => ({ id, name, size, hangout: hangoutName, members: members.slice(0, 6).map(k => state.names[k] || k) }));
+    for (const g of groups) for (const k of g.members) if (bySubject[k]) bySubject[k].group = groupOf(groups, k, state.names);
     pub.at = new Date(nowMs).toISOString();
     t.sim += clock() - c;
     if (io.putSubjects) await timed("io", () => io.putSubjects(bySubject, { hour: state.hour, at: pub.at }));

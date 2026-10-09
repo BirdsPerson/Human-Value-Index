@@ -131,6 +131,28 @@ assert.deepEqual(st.done, [q.id]);
 assert.equal(st.active, null);
 assert.equal(st.vouches.length, 1);
 assert.equal(applyQuest(rec, { action: "accept", questId: q.id }, at).status, 409, "a figure vouches once");
+// vouch score effect (Scott 2026-09-28): +2 in the category, an entry of cause "vouch"
+{
+  const { computeScore, cube } = await import("../netlify/lib/intake.js");
+  const b = { care: 60, alignment: 60, threat: 10, utility: 60, legacy: 60, adaptability: 60, network: 60, redundancy: 40, physical: null };
+  const h0 = { at: "2026-01-01T00:00:00Z", score: computeScore(b), tier: "x", rubric: 3, breakdown: b, ...cube(b), transcript: [{ role: "user", text: "hi" }], sid: "s" };
+  const base = { caseId: "HVI-TESTBBBB", history: [h0] };
+  const vouchOn = (rec0) => applyQuest(applyQuest(rec0, { action: "accept", questId: q.id }, at - MIN_ELAPSED_MS - 5000).record, { action: "complete", questId: q.id, buildingId: seen.b }, at);
+  const v = vouchOn(base);
+  const last = v.record.history.at(-1);
+  assert.equal(v.record.history.length, 2, "a vouch appends one entry");
+  assert.equal(last.cause, "vouch");
+  assert.equal(last.breakdown[q.dim], (b[q.dim] ?? 0) + 2, "+2 in the category");
+  assert.ok(last.score > h0.score && v.vouch.delta === last.score - h0.score, "score moves by the formula");
+  assert.ok(!last.transcript && !last.sid, "the vouch entry carries no transcript");
+  const M = await import("../src/movement.js");
+  assert.equal(M.visitCount(v.record.history), 1, "a vouch is not a visit");
+  const hv = vouchOn({ ...base, history: [{ ...h0, breakdown: { ...b, [q.dim]: 99 } }] });
+  assert.equal(hv.record.history.at(-1).breakdown[q.dim], 100, "category tops out at 100");
+  const uv = vouchOn({ ...base, history: [{ ...h0, breakdown: { ...b, [q.dim]: null } }] });
+  assert.equal(uv.record.history.length, 1, "an unassessed category moves nothing");
+  assert.equal(uv.record.vouches.length, 1, "...but the vouch is filed");
+}
 // abandon
 r = applyQuest(rec, { action: "accept", questId: QUESTS[1].id }, at);
 assert.equal(applyQuest(r.record, { action: "abandon", questId: QUESTS[2].id }, at).status, 409);
