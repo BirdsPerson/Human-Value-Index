@@ -13,6 +13,9 @@ import { TOWERS, isTower, towerPlan, storeysAbove, placeAll, residentFlat, homeR
 import { proprietorOf } from "../src/city/proprietors.js";
 import { propsFor, residentProps, residentTags, splitTags, CURATED, VOCAB } from "../src/city/figureProps.js";
 import { furnishLook } from "../src/economy/shops.js";
+import * as SHOPS from "../src/economy/shops.js";
+import * as JC from "../src/city/jetsamCab.js";
+import { existsSync } from "node:fs";
 import BY_FIGURE from "../src/city/props-by-figure.json" with { type: "json" };
 import { worldOf, fitCam, clampCam, zoomRange, levelAt, focusAt, hitWorld, screenToWorld, worldToScreen, unitAt, roomAt, moveFocus, crumbs, parseLink, linkParams, itemBoxes, topBox, itemAction, stepCam, LEVELS, deeper, shallower, nextLevel, GEO } from "../src/city/zoomCam.js";
 
@@ -276,6 +279,29 @@ ok(!isTower(null) && !isTower(BUILDINGS.find(b => b.id === "hq")), "HQ keeps the
   // vacant flats: JETSAM! about one in sixty, not one in fifteen
   const vac = flats.filter(({ p, st, u }) => dressUnit(u, { band: p.band, penthouse: st.code === "PH", tags: [] }).rooms && Object.values(dressUnit(u, { band: p.band, penthouse: st.code === "PH", tags: [] }).rooms).some(r => r.furniture.some(f => f.item === "arcade"))).length;
   ok(vac / flats.length <= 0.05, `JETSAM! in vacant flats is rare (${vac}/${flats.length})`);
+  // a JETSAM! cabinet in a flat of the city (found in the city's own dressing, nobody's case) resolves,
+  // tap -> itemAction -> the overlay's spec, to the same game the venue cabinets open
+  const jf = flats.find(({ p, st, u }) => Object.values(dressUnit(u, { band: p.band, penthouse: st.code === "PH", tags: [] }).rooms).some(r => r.furniture.some(f => f.item === "arcade")));
+  ok(jf, "a flat in the city stands a JETSAM! cabinet");
+  if (jf) {
+    const JL = dressUnit(jf.u, { band: jf.p.band, penthouse: jf.st.code === "PH", tags: [] });
+    const jr = jf.u.rooms.find(r => JL.rooms[r.id].furniture.some(f => f.item === "arcade"));
+    const jb = itemBoxes(JL.rooms[jr.id].furniture, true, 0, 0, 300, 400, true).find(b => b.item === "arcade");
+    const hit = topBox(itemBoxes(JL.rooms[jr.id].furniture, true, 0, 0, 300, 400, true), (jb.x0 + jb.x1) / 2, (jb.y0 + jb.y1) / 2);
+    const act = itemAction(hit, false);
+    ok(hit.item === "arcade" && act.kind === "play" && act.play.game === "jetsam", `${jf.u.id}: a tap on its cabinet plays (not your flat, not bought)`);
+    const spec = SHOPS.homePlaySpec(hit.item);
+    ok(spec && spec.kind === "game" && spec.slug === "jetsam" && spec.campaign === "home-cabinet", `${jf.u.id}: the cabinet opens the JETSAM! overlay spec ${JSON.stringify(spec)}`);
+    ok(SHOPS.playsHere("arcade", false, false) && !SHOPS.playsHere("golf-sim", false, true) && SHOPS.playsHere("golf-sim", true, true), "playsHere: the cabinet anywhere, the rest yours and placed");
+    const placedFL = furnishLook(JL, [{ room: jr.id, spot: "f2", item: "arcade" }]);
+    const pb = itemBoxes(placedFL.rooms[jr.id].furniture, true, 0, 0, 300, 400, true).filter(b => b.item === "arcade");
+    ok(pb.length >= 1 && pb.every(b => itemAction(b, true).kind === "play" && SHOPS.homePlaySpec(b.item).slug === "jetsam"), "your own flat's cabinet (placed or dressed) takes the same path");
+  }
+  // the render (jetsamCab.js): the screen measured in the PNG, the pixel-snapped fit
+  ok(Math.abs(JC.JETSAM_CAB_SCREEN.x - 0.383) < 0.01 && Math.abs(JC.JETSAM_CAB_SCREEN.y - 0.234) < 0.01 && JC.JETSAM_CAB_SCREEN.w > 0.4 && JC.JETSAM_CAB_SCREEN.h > 0.29, "the cabinet's screen rectangle is the PNG's glass");
+  ok(JC.jetsamCabFit(128).h === 128 && !JC.jetsamCabFit(128).smooth && JC.jetsamCabFit(250).h === 256 && JC.jetsamCabFit(380).h === 384 && JC.jetsamCabFit(380).src === 128 && JC.jetsamCabFit(520).src === 256 && JC.jetsamCabFit(100).smooth && JC.jetsamCabFit(100).src === 128, "the render snaps to whole-number scales, smooths a downscale");
+  ok(JC.JETSAM_CAB_SIZES.every(S => existsSync(new URL(`../public/funnels/jetsam-cabinet-${S}.png`, import.meta.url))), "the cabinet PNGs are in public/funnels");
+  { let fills = 0; CATALOG.arcade.draw({ fillStyle: "", fillRect() { fills++; }, save() {}, restore() {}, font: "", fillText() {} }, 50, 100, 2, { on: true }); ok(fills >= 8, `with no image (node) the cabinet falls back to its drawn rects (${fills})`); }
   console.log(`  props: ${figs} figures on file, ${Object.keys(CURATED).length} curated, ${Object.keys(BY_FIGURE).length} cached, ${placedProps}/${wantedProps} test props placed, JETSAM ${jetS}/${strangers} strangers, ${jetAll}/${all.length} assigned, ${vac}/${flats.length} vacant flats`);
 }
 // 7. DEEP ZOOM (zoomCam.js): BUILDING > FLOOR > FLAT > ROOM resolve for every room of every tower,
@@ -385,7 +411,9 @@ ok(!isTower(null) && !isTower(BUILDINGS.find(b => b.id === "hq")), "HQ keeps the
     ok(topBox(boxes, -50, -50) === null, "a tap on bare wall finds none");
     // what a tap does
     const A = (item, placed, mine) => itemAction({ item, name: item, placed }, mine).kind;
-    ok(A("arcade", true, true) === "play" && A("arcade", true, false) === "none" && A("arcade", false, true) === "none", "the JETSAM cabinet plays in your own flat only");
+    ok(A("arcade", true, true) === "play" && A("arcade", true, false) === "play" && A("arcade", false, true) === "play" && A("arcade", false, false) === "play", "a JETSAM! cabinet plays in any flat, yours or a resident's, bought or dressed");
+    ok(A("golf-cabinet", true, true) === "play" && A("golf-cabinet", true, false) === "none" && A("golf-cabinet", false, true) === "none", "the other home pieces still play in your own flat only");
+    ok(itemAction({ item: "arcade", name: "x", placed: false }, false).aria === "Play JETSAM! on the cabinet", "the cabinet's control is named for a screen reader");
     ok(A("ebtv", false, false) === "ebtv" && A("tv", false, true) === "ebtv", "an EBTV set opens the channel for anyone");
     ok(A("wardrobe", false, true) === "closet" && A("wardrobe", false, false) === "none", "the wardrobe opens the closet in your own flat");
     ok(itemAction({ item: "beige-pc", name: "x", placed: true }, true).play.go.startsWith("#mail"), "the PC opens Department Mail");

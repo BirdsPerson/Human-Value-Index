@@ -78,6 +78,7 @@ const CSS = `
 .hvi-fn-tag.live{color:var(--accent)}.hvi-fn-tag.beta{color:#f97316}.hvi-fn-tag.dev{color:var(--fg-mute)}.hvi-fn-tag.tt{color:#f472b6}
 .hvi-fn-cab{font:inherit;text-align:left;cursor:pointer;background:#16121e;color:#e5e7eb;border:1px solid #2a2436;padding:12px;display:flex;flex-direction:column;gap:6px;min-height:120px}
 .hvi-fn-cab:hover{border-color:#a78bfa}
+.hvi-fn-cab .pic{align-self:center;width:64px;height:128px;image-rendering:pixelated;filter:drop-shadow(0 0 8px rgba(34,211,238,.25))}
 .hvi-fn-cab .mq{font-weight:700;letter-spacing:.06em;padding:4px 6px;color:#0b0b0f}
 .hvi-fn-cab .hs{font-size:var(--t-xs,12px);color:#67e8f9}
 .hvi-fn-cab.dev{opacity:.7}.hvi-fn-cab.dev .mq{background:#3a3a3a;color:#9ca3af}
@@ -110,14 +111,18 @@ function useEbtvNow() {
   return now;
 }
 
+// Is an overlay mounted to answer openFunnel (the city has one; the shops' pages do not)?
+let HOSTS_UP = 0;
+export const funnelHostUp = () => HOSTS_UP > 0;
 export default function FunnelHost() {
   const [spec, setSpec] = useState(null);
   const now = useEbtvNow();
   useEffect(() => {
     const on = (e) => { const s = e.detail; if (!s) return; injectStyles(); setSpec(s); countFunnel(s.campaign || (s.kind === "arcade" ? "the-arcade" : "city"), "open"); };
     window.addEventListener("hvi-funnel", on);
+    HOSTS_UP++;
     if (import.meta.env?.DEV) window.__hviFunnel = openFunnel;
-    return () => window.removeEventListener("hvi-funnel", on);
+    return () => { HOSTS_UP--; window.removeEventListener("hvi-funnel", on); };
   }, []);
   const close = useCallback(() => setSpec(null), []);
   // a house cabinet's game, in the CRT, says when the player is done: back to the bar
@@ -279,6 +284,7 @@ function ArcadeFloor({ setSpec }) {
           return (
             <button key={g.slug} type="button" className={`hvi-fn-cab ${g.status}`} onClick={() => setSpec({ kind: "game", slug: g.slug, campaign: campaignFor(g.slug, "the-arcade"), back: { kind: "arcade" } })}
               aria-label={`${g.title}, ${g.neighbour ? "a neighbouring city" : g.status === "dev" ? "out of order" : g.status === "beta" ? "beta" : "playable"}`}>
+              {g.slug === "jetsam" && <img className="pic" src="/funnels/jetsam-cabinet-128.png" srcSet="/funnels/jetsam-cabinet-128.png 1x, /funnels/jetsam-cabinet-256.png 2x" width="64" height="128" alt="" loading="lazy" decoding="async" />}
               <span className="mq" style={{ background: g.status === "dev" ? undefined : cabColor(g.slug) }}>{g.title}</span>
               <span className={`hvi-fn-tag ${g.status}`} style={{ alignSelf: "flex-start" }}>{g.neighbour ? "A NEIGHBOUR" : g.status === "live" ? (g.self ? "YOU ARE HERE" : "PLAY") : g.status === "beta" ? "BETA" : "OUT OF ORDER"}</span>
               <span style={{ fontSize: 12, color: "#9ca3af" }}>{g.neighbour ? g.line : g.role}</span>

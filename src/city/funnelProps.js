@@ -13,6 +13,7 @@ import { GAMES, GAME, PLAYABLE, OWN_GAMES, NEIGHBOURS, HOUSE, cabColors, highSco
 import { HOUSE_PLACES, HOUSE_PLACE_TYPES, houseFor, houseScreen, houseExtras, loadVerified } from "./houseGames.js";
 import { ebtvFrame, drawFrame, drawBug, tvBox } from "./ebtvFrame.js";
 import { drawBrand } from "./brand.js";
+import { drawJetsamCab, jetsamAttract, JETSAM_CAB_ASPECT } from "./jetsamCab.js";   // JETSAM!'s own cabinet render
 import { machineClock } from "./sim.js";
 import { NPC } from "./npcHook.js";
 import { shopState, wallOpen, loadShop, shopSlots, thumb, shopFocus } from "./shopStock.js";
@@ -112,9 +113,13 @@ function sheet() {
 const rightOf = (X, W, a, p, side) => { const px = a ? a.x : X + W * side; return [px + 7 * p, X + W - p]; };
 const CAB_H = 44;
 // A cabinet's box in the room (for the tap), from its plan item: [x0, y0, x1, y1].
-export function cabinetBox(it, rowY, p, side) {
+// slug "jetsam": the render's box (jetsamCab.js), 22p wide on the same centre, a little headroom.
+export function cabinetBox(it, rowY, p, side, slug = null) {
   const [x0, x1] = it.a ? rightOf(it.x0, it.x1 - it.x0, it.a, p, side) : [it.x0 + p, it.x1 - p];
-  return [x0, rowY - CAB_H * p, Math.max(x0 + 4 * p, Math.min(x1, x0 + 16 * p)), rowY];
+  const b = [x0, rowY - CAB_H * p, Math.max(x0 + 4 * p, Math.min(x1, x0 + 16 * p)), rowY];
+  if (slug !== "jetsam") return b;
+  const cx = (b[0] + b[2]) / 2, half = CAB_H * p * JETSAM_CAB_ASPECT * 0.5 * 1.12;
+  return [cx - half, rowY - CAB_H * p * 1.12, cx + half, rowY];
 }
 
 // The marquees with a real logo (public/brand/atlas.json): JETSAM!'s cabinet art, ANAMNESIS's
@@ -130,6 +135,17 @@ function cabinet(slug, side) {
       const w = bx1 - bx0, top = by0;
       // the glow on the wall behind a lit screen
       if (!dark) { c.fillStyle = `${c1}22`; c.fillRect(Math.round(bx0 - 4 * p), Math.round(top - 2 * p), Math.round(w + 8 * p), Math.round(26 * p)); }
+      // JETSAM!: its own cabinet, the render (jetsamCab.js), the attract mode in its glass; the
+      // procedural one below until the PNG lands
+      if (slug === "jetsam" && !dark && !g.house) {
+        const r = drawJetsamCab(c, bx0 + w / 2, Y, CAB_H * p);
+        if (r) {
+          const s = r.screen;
+          jetsamAttract(c, s.x, s.y, s.w, s.h, Math.max(1, s.w / 14), t, a?.i || 0, c2);
+          if (g.status === "beta") { R(c, "#f97316", s.x + s.w - 7 * p, s.y - p, 8 * p, 3.2 * p); if (p >= 1.4) text(c, "BETA", s.x + s.w - 3 * p, s.y - 0.6 * p, 2.6 * p, "#0b0b0f", "center"); }
+          return;
+        }
+      }
       R(c, "#16121e", bx0, top, w, CAB_H * p);                       // the body
       R(c, dark ? "#2a2a2e" : c2, bx0, top + 8 * p, 2 * p, 30 * p);   // side art
       // the marquee: a game with a real logo wears it, backlit on its own dark glass (JETSAM!'s
@@ -160,11 +176,7 @@ function cabinet(slug, side) {
         // the attract screen, ours: a little isometric skyline, its windows coming on
         neighbourScreen(c, sx, sy, sw, sh, p, t, c1, c2);
       } else if (slug === "jetsam") {
-        // stars, the ring, the ship slinging round it
-        for (let k = 0; k < 6; k++) R(c, "#e0f2fe", sx + ((hk("st" + k) % 97) / 97) * sw, sy + ((hk("sy" + k) % 89) / 89) * sh, p * 0.8, p * 0.8);
-        const cx = sx + sw / 2, cy = sy + sh / 2, an = t * 2.2 + (a?.i || 0);
-        c.strokeStyle = c2; c.lineWidth = Math.max(1, p * 0.6); c.beginPath(); c.ellipse(cx, cy, sw * 0.3, sh * 0.3, 0, 0, Math.PI * 2); c.stroke();
-        R(c, "#fbbf24", cx + Math.cos(an) * sw * 0.3 - p, cy + Math.sin(an) * sh * 0.3 - p, 2 * p, 2 * p);
+        jetsamAttract(c, sx, sy, sw, sh, p, t, a?.i || 0, c2);   // stars, the ring, the ship slinging round it
       } else if (slug === "anamnesis") {
         // one phosphor: lines of the terminal typing out, a cursor
         const n = 1 + (Math.floor(t * 1.5 + (a?.i || 0)) % 4);
@@ -574,7 +586,7 @@ export function funnelRoomHits(pid, plan, side = 0.3, u = null) {
       if (shop && it.prop === "shopCounter") { const f = featured(); if (f) { const b = turntableBox(it.x0, row.y, it.x1 - it.x0, p); out.push({ spec: { kind: "shop", campaign: "eb-shop", item: f.handle }, box: [b[0] - p, b[1] - p, b[2] + p, b[3] + p] }); } }
       const slug = cabinetGame(it.prop);
       if (!slug) continue;
-      out.push({ spec: { kind: "game", slug, campaign: campaignFor(slug, CAMPAIGN_OF_PLACE[pid]), place: pid, ...(pid === "arcade" ? { back: { kind: "arcade" } } : {}) }, box: cabinetBox(it, row.y, p, side) });
+      out.push({ spec: { kind: "game", slug, campaign: campaignFor(slug, CAMPAIGN_OF_PLACE[pid]), place: pid, ...(pid === "arcade" ? { back: { kind: "arcade" } } : {}) }, box: cabinetBox(it, row.y, p, side, slug) });
     }
   }
   // the hosts, frontmost: a tap turns one to you (hostsLive.tapHost, via openFunnel)

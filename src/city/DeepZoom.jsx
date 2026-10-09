@@ -123,15 +123,38 @@ export default function DeepZoom({ plan, name, censusRef, mine, start, onOpen, o
     const rm = world.at[f.i].units[f.k].rooms[f.j];
     if (rm.rm.id !== here.rm.id) { setPick(null); V.pick = null; goLevel("room", f); return; }
     for (let n = V.hits.length - 1; n >= 0; n--) { const q = V.hits[n]; if (sx >= q[0] && sx <= q[2] && sy >= q[1] && sy <= q[3]) { onOpen?.(q[4]); return; } }
+    const hit = pieceAt(f, sx, sy);
+    if (!hit) { setPick(null); V.pick = null; V.dirty = true; return; }
+    V.pick = { roomId: hit.roomId, item: hit.box.item }; V.dirty = true;
+    setPick({ label: hit.box.name, action: hit.action, item: hit.box.item });
+  }, [V, world, goLevel, stepOut, onOpen]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // ROOM: the piece at screen (sx, sy) in room f -> {roomId, box, action} | null (the tap and the hover)
+  function pieceAt(f, sx, sy) {
+    const rm = world.at[f.i].units[f.k].rooms[f.j];
     const row = world.at[f.i], u = row.units[f.k], st = row.st;
     const look = unitLook(st, u.u), furn = look ? look.rooms[rm.rm.id]?.furniture : rm.rm.furniture;
     const X0 = (rm.x - V.cam.cx) * V.cam.z + V.vw / 2, Y0 = (rm.y - V.cam.cy) * V.cam.z + V.vh / 2;
     const box = topBox(itemBoxes(furn, !!look, rd(X0), rd(Y0), rd(rm.w * V.cam.z), rd(rm.h * V.cam.z), true), sx, sy, 3);
-    if (!box) { setPick(null); V.pick = null; V.dirty = true; return; }
-    const action = itemAction(box, u.u.id === V.mine);
-    V.pick = { roomId: rm.rm.id, item: box.item }; V.dirty = true;
-    setPick({ label: box.name, action, item: box.item });
-  }, [V, world, goLevel, stepOut, onOpen]);   // eslint-disable-line react-hooks/exhaustive-deps
+    return box ? { roomId: rm.rm.id, box, action: itemAction(box, u.u.id === V.mine) } : null;
+  }
+  // a mouse over a playable piece in the room: the pointer is a hand and the piece is outlined
+  const hover = (sx, sy) => {
+    let hot = null;
+    if (V.level === "room" && V.cam) {
+      const p = screenToWorld(V.cam, V.vw, V.vh, sx, sy), h = hitWorld(world, p.x, p.y);
+      if (h && h.k >= 0 && h.j != null) { const hit = pieceAt({ i: h.i, k: h.k, j: h.j }, sx, sy); if (hit && hit.action.kind !== "none") hot = { roomId: hit.roomId, item: hit.box.item }; }
+    }
+    if ((hot?.item || null) !== (V.hover?.item || null) || (hot?.roomId || null) !== (V.hover?.roomId || null)) { V.hover = hot; V.dirty = true; }
+    if (canRef.current) canRef.current.style.cursor = hot ? "pointer" : "";
+  };
+  // Enter / A in a room: the picked piece plays; with none picked, the first playable piece is picked
+  // (outlined, named in the footer), so the keyboard and the pad reach a cabinet without a pointer.
+  const pickPiece = (b) => { V.pick = { roomId: V.roomNowId, item: b.item }; V.dirty = true; setPick({ label: b.name, action: b.action, item: b.item }); };
+  V.act = () => {
+    if (V.level !== "room") { stepIn(); return; }
+    if (V.pickNow) { activate(V.pickNow); return; }
+    if (V.roomItems?.length) pickPiece(V.roomItems.find(b => b.action.kind === "play") || V.roomItems[0]); else stepIn();
+  };
   const activate = useCallback((pk) => {
     if (!pk) return;
     if (pk.action.kind === "closet") setPanel(true);
@@ -157,7 +180,7 @@ export default function DeepZoom({ plan, name, censusRef, mine, start, onOpen, o
   };
   const onMove = (e) => {
     const q = V.ptr.get(e.pointerId);
-    if (!q) return;
+    if (!q) { if (e.pointerType === "mouse") { const p = pt(e); hover(p.x, p.y); } return; }
     const p = pt(e);
     if (V.ptr.size === 2) {
       const prev = [...V.ptr.values()], ox = (prev[0].x + prev[1].x) / 2, oy = (prev[0].y + prev[1].y) / 2;
@@ -185,7 +208,7 @@ export default function DeepZoom({ plan, name, censusRef, mine, start, onOpen, o
     else if (k === "-" || k === "_") { e.preventDefault(); stepOut(); }
     else if (k === "Enter" || k === " ") {
       e.preventDefault();
-      if (V.level === "room" && pick) activate(pick); else stepIn();
+      V.act();
     } else if (k === "Escape" || k === "Backspace") {
       e.preventDefault();
       if (panel) setPanel(false); else if (pick) { setPick(null); V.pick = null; V.dirty = true; } else stepOut();
@@ -234,7 +257,7 @@ export default function DeepZoom({ plan, name, censusRef, mine, start, onOpen, o
       const ax = g.axes[0] || 0, ay = g.axes[1] || 0;
       if (Math.abs(ax) > 0.2 || Math.abs(ay) > 0.2) panBy(-ax * dt * 420, -ay * dt * 420);
       if (edge(12)) V.move("up"); if (edge(13)) V.move("down"); if (edge(14)) V.move("left"); if (edge(15)) V.move("right");
-      if (edge(0)) V.stepIn(); if (edge(1)) V.stepOut();
+      if (edge(0)) V.act(); if (edge(1)) V.stepOut();
     }
     function frame(now) {
       if (!alive) return;
@@ -306,6 +329,11 @@ export default function DeepZoom({ plan, name, censusRef, mine, start, onOpen, o
                 const fur = look ? look.rooms[q.rm.id]?.furniture : q.rm.furniture;
                 const bx = itemBoxes(fur, !!look, rx0, sy0, rx1 - rx0, rh, true).find(b => b.item === V.pick.item);
                 if (bx) { c.strokeStyle = "#fbbf24"; c.lineWidth = 2; c.setLineDash([5, 3]); c.strokeRect(rd(bx.x0) - 2, rd(bx.y0) - 2, rd(bx.x1 - bx.x0) + 4, rd(bx.y1 - bx.y0) + 4); c.setLineDash([]); }
+              }
+              if (V.hover && V.hover.roomId === q.rm.id && !(V.pick && V.pick.roomId === q.rm.id && V.pick.item === V.hover.item)) {
+                const fur = look ? look.rooms[q.rm.id]?.furniture : q.rm.furniture;
+                const bx = itemBoxes(fur, !!look, rx0, sy0, rx1 - rx0, rh, true).find(b => b.item === V.hover.item);
+                if (bx) { c.strokeStyle = "#22d3ee"; c.lineWidth = 2; c.strokeRect(rd(bx.x0) - 2, rd(bx.y0) - 2, rd(bx.x1 - bx.x0) + 4, rd(bx.y1 - bx.y0) + 4); }
               }
             }
             if (q.j > 0) { c.fillStyle = "rgba(0,0,0,0.5)"; c.fillRect(rx0, sy0, Math.max(1, rd(z * 0.5)), rh); }
@@ -386,6 +414,7 @@ export default function DeepZoom({ plan, name, censusRef, mine, start, onOpen, o
   const lookNow = crumb.level === "room" && u ? (u.kind === "flat" || u.kind === "suite" ? unitLook(st, u) : null) : null;
   const roomItems = crumb.level === "room" && u ? itemBoxes(lookNow ? lookNow.rooms[rmNow.id]?.furniture : rmNow.furniture, !!lookNow, 0, 0, 100, 45, true).map(b => ({ ...b, action: itemAction(b, u.id === V.mine) })).filter(b => b.action.kind !== "none") : [];
   const btn = { font: "inherit" };
+  V.roomItems = roomItems; V.roomNowId = rmNow?.id || null; V.pickNow = pick;
 
   return (
     <div className="hvi-dz" ref={rootRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${name}, deep zoom`} onKeyDown={onKey}>
@@ -417,7 +446,7 @@ export default function DeepZoom({ plan, name, censusRef, mine, start, onOpen, o
             {pick.action.kind !== "none" && <button type="button" onClick={() => activate(pick)}>{pick.action.kind === "closet" ? "OPEN" : pick.action.kind === "ebtv" ? "WATCH" : "PLAY"}</button>}
           </span>
         ) : <span aria-hidden="true" style={{ color: "var(--fg-mute)" }}>{crumb.level === "room" ? "TAP A PIECE OR A PERSON." : "TAP TO ZOOM. PINCH OR SCROLL. DRAG TO PAN."}</span>}
-        {roomItems.map(b => <button key={b.item} type="button" className="sr-only" onClick={() => activate({ label: b.name, action: b.action })}>{b.action.label}</button>)}
+        {roomItems.map(b => <button key={b.item} type="button" className="sr-only" aria-label={b.action.aria || undefined} onFocus={() => pickPiece(b)} onClick={() => activate({ label: b.name, action: b.action })}>{b.action.label}</button>)}
       </div>
     </div>
   );

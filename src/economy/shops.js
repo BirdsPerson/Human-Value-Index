@@ -145,6 +145,17 @@ export const PLAY_AT_HOME = {
   "server-rack": { go: "#mail?at=home&pc=rack", label: "THE SERVER RACK: DEPARTMENT MAIL" },
   "ebtv-big": { ebtv: true, label: "WATCH EBTV, BIG" }, "home-theater": { ebtv: true, label: "EBTV IN THE HOME THEATER" },
 };
+// A cabinet in ANY flat (yours or a resident's, bought or dressed by furniture.js / figureProps.js)
+// plays: the same JETSAM! overlay as the venue cabinets (FunnelOverlay {kind: "game"}), not a tab.
+// The rest of PLAY_AT_HOME stays your own placed pieces. Pure: check-shops resolves both.
+export const ANY_FLAT_PLAYS = new Set(["arcade"]);
+export const HOME_CAMPAIGN = "home-cabinet";
+export const playsHere = (item, mine, placed) => Boolean(PLAY_AT_HOME[item]) && (ANY_FLAT_PLAYS.has(item) || (mine && placed));
+// The overlay spec a home piece opens: {kind: "game", slug, campaign, place} | null (not a game)
+export const homeGameSpec = (slug) => ({ kind: "game", slug, campaign: HOME_CAMPAIGN, place: "home" });
+export function homePlaySpec(item) { const g = PLAY_AT_HOME[item]?.game; return g ? homeGameSpec(g) : null; }
+// The accessible name of a home piece's play control ("Play JETSAM! on the cabinet")
+export const homePlayAria = (item) => (item === "arcade" ? "Play JETSAM! on the cabinet" : PLAY_AT_HOME[item]?.label || "");
 // The top of each chain: at night, the city's figures gather round it (render-side, the cutaway).
 export const TOP_TIER = new Set(["golf-sim", "home-theater", "brewery"]);
 export const FURN_SECTIONS = [

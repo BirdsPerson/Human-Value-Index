@@ -8,7 +8,7 @@
 // 68), a room 45 tall inside the slabs, so furniture.js's "a room is 45 units tall" holds and
 // drawRoom's scale s = min(h/45, w/22) is simply the camera zoom (times 1 at the building).
 import { pieceOf } from "./furniture.js";
-import { PLAY_AT_HOME } from "../economy/shops.js";
+import { PLAY_AT_HOME, playsHere, homePlayAria } from "../economy/shops.js";
 import { PURPOSE_NAME } from "./tower.js";
 
 export const GEO = { W: 360, SHAFT: 30, EXPRESS: 18, ROOF_H: 40, STREET_H: 16, FOUND_H: 12, H: 52, PH_H: 68, SLAB_T: 3, SLAB_B: 4, GAP: 3 };
@@ -219,7 +219,7 @@ export function itemBoxes(furniture, hasLook, x, y, w, h, snap) {
   for (const p of furniture || []) {
     const it = pieceOf(p.item);
     if (!it) continue;
-    const half = (it.footprint.w * s) / 2, cx = x + p.x * w;
+    const half = ((it.hitW || it.footprint.w) * s) / 2, cx = x + p.x * w;
     out.push({ item: p.item, name: p.label || it.name, role: it.role, placed: !!p.placed, x0: cx - half, x1: cx + half, y0: it.wall ? ffy - Math.max(it.footprint.h, 24) * s : ffy - it.footprint.h * s, y1: it.wall ? ffy - 6 * s : ffy });
   }
   return out;
@@ -234,7 +234,8 @@ export function topBox(boxes, px, py, pad = 2) {
 export function itemAction(box, mine) {
   const pl = PLAY_AT_HOME[box.item];
   if (pl?.ebtv) return { label: pl.label, kind: "ebtv", play: pl };
-  if (mine && pl && box.placed) return { label: pl.label, kind: "play", play: pl };
+  // your own placed pieces, and a JETSAM! cabinet in anyone's flat (shops.js playsHere)
+  if (pl && playsHere(box.item, mine, box.placed)) return { label: pl.label, aria: homePlayAria(box.item), kind: "play", play: pl };
   if (mine && box.item === "wardrobe") return { label: "OPEN THE CLOSET", kind: "closet" };
   return { label: box.name, kind: "none" };
 }

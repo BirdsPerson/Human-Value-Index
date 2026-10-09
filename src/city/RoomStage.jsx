@@ -549,11 +549,14 @@ function RoomStage({ cells, layout, assign, censusRef, onOpen, onCell, onPresent
         hideTip();
         // a casino table opens its game (src/casino/cityRooms.js)
         const ri = V.rects.findIndex(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h), G = ri >= 0 ? V.geo[ri] : null;
+        // the funnels (funnelProps.js): a cabinet plays its game, a rack in the EB Shop opens its
+        // product, the rest of the shop floor the shop, the arcade floor its cabinet list. A cabinet
+        // wins over a card table's tall tap box in front of it (the Union Lounge on a phone); the
+        // table still takes the taps below the cabinet's floor line.
+        const spec = G && funnelTapAt(placeOf[ri], G.plan, x - V.rects[ri].x - G.ix, y - V.rects[ri].y - G.iy, G.u);
+        if (spec?.kind === "game") { openFunnel(spec); return; }
         const game = G && casinoTap(G.plan, x - V.rects[ri].x - G.ix, y - V.rects[ri].y - G.iy);
         if (game) { window.location.hash = game; return; }
-        // the funnels (funnelProps.js): a cabinet plays its game, a rack in the EB Shop opens its
-        // product, the rest of the shop floor the shop, the arcade floor its cabinet list
-        const spec = G && funnelTapAt(placeOf[ri], G.plan, x - V.rects[ri].x - G.ix, y - V.rects[ri].y - G.iy, G.u);
         if (spec) { openFunnel(spec); return; }
         const c = cellAt(x, y);
         if (c && cb.current.onCell) cb.current.onCell(c);

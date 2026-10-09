@@ -4,11 +4,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, ButtonRow, PaLine } from "../ui/index.js";
 import { loadShops, shopAct, onView, lastView, forgetRooms, newNonce } from "./client.js";
-import { openFunnel } from "../city/FunnelOverlay.jsx";
+import { openFunnel, funnelHostUp } from "../city/FunnelOverlay.jsx";
 import { GAME, utm } from "../city/funnels.js";
 import { watchHref } from "../city/ebtvFrame.js";
 import { garmentSprite, pieceSprite, wearingSpec, avatarSheet, blitScaled } from "./pixels.js";
-import { itemOf, SLOT_NAME, OUTFIT_SLOTS, spotsFor, fmtC, SHOP_LINES, EFFECTS_FROM_DAY } from "../economy/shops.js";
+import { HOME_CAMPAIGN, homeGameSpec, itemOf, SLOT_NAME, OUTFIT_SLOTS, spotsFor, fmtC, SHOP_LINES, EFFECTS_FROM_DAY } from "../economy/shops.js";
 import { WEAR_SLOTS } from "../wear.js";
 import { PURPOSE_NAME } from "../city/tower.js";
 import CSS from "./shops.css?inline";
@@ -149,7 +149,8 @@ export function Closet({ caseId, S }) {
 // ---- PLAYABLE AT HOME (shops.js PLAY_AT_HOME): the cabinet's game, the golf presets, the channel -------
 export function playAtHome(play) {
   if (!play) return;
-  if (play.game && GAME[play.game]?.play) openFunnel({ href: utm(GAME[play.game].play, "home-cabinet"), campaign: "home-cabinet" });
+  // the cabinet overlay, as in the bars (shops.js homePlaySpec); off the city's pages, the game in a tab
+  if (play.game && GAME[play.game]?.play) openFunnel(funnelHostUp() ? homeGameSpec(play.game) : { href: utm(GAME[play.game].play, HOME_CAMPAIGN), campaign: HOME_CAMPAIGN });
   else if (play.go) window.location.hash = play.go;
   else if (play.ebtv) openFunnel({ href: watchHref("home-tv"), campaign: "home-tv" });
 }

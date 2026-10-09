@@ -27,7 +27,7 @@ import { displayName } from "../figures.js";
 import { readCaseId } from "../caseFile.jsx";
 import { loadRooms, loadShops, lastView, onView } from "../shops/client.js";
 import { useShops, Closet, Furnish, playAtHome, injectShopStyles } from "../shops/parts.jsx";
-import { furnishLook, PLAY_AT_HOME, TOP_TIER, withIssuedPc } from "../economy/shops.js";
+import { furnishLook, PLAY_AT_HOME, TOP_TIER, withIssuedPc, playsHere, ANY_FLAT_PLAYS, homePlayAria } from "../economy/shops.js";
 
 const DeepZoom = lazy(() => import("./DeepZoom.jsx"));   // DEEP ZOOM: its own chunk, fetched on the first zoom
 const ROOF_H = 40, STREET_H = 16, FOUND_H = 12;
@@ -50,6 +50,8 @@ const CSS = `
   .hvi-tw-sheet-h b { color: var(--accent); }
   .hvi-tw-sheet-h button { font: inherit; font-size: var(--t-xs); min-width: 44px; min-height: 44px; background: none; color: var(--accent); border: var(--bw) solid var(--accent); cursor: pointer; flex: none; }
   .hvi-tw-sheet canvas { display: block; width: 100%; margin: var(--s2) 0; image-rendering: pixelated; }
+  .hvi-tw-play { font: inherit; font-size: var(--t-xs); min-width: 44px; min-height: 44px; padding: 0 10px; background: none; color: #22d3ee; border: var(--bw) solid #22d3ee; cursor: pointer; letter-spacing: 0.06em; }
+  .hvi-tw-play:hover, .hvi-tw-play:focus-visible { background: #22d3ee; color: #0b0b0f; outline: 2px solid #fbbf24; outline-offset: 2px; }
   .hvi-tw-sub { font-size: var(--t-xs); color: var(--fg-mute); margin: var(--s2) 0 var(--s1); letter-spacing: 0.06em; }
   @media (prefers-reduced-motion: reduce) { .hvi-tw-sheet { transition: none; } }
 `;
@@ -228,9 +230,10 @@ export function drawRoom(c, room, x, y, w, h, d) {   // also YOUR FLAT on the de
     // an EBTV set in the open flat is always on: the Department never turns the channel off
     const ebtvSet = p.item === "ebtv" || p.item === "ebtv-big" || p.item === "home-theater";
     const on = it.glow || (lit && (role === "lamp" || p.item === "chandelier" || p.item === "beer-tap")) || (role === "tv" && watching) || (ebtvSet && d.sheet) || ((role === "desk") && working);
-    it.draw(c, x + p.x * w, ffy, s, { on, tint: p.tint, flip: p.flip, screen: ebtvSet ? ebtvScreen : null });
-    // your own flat's playable pieces take a tap (shops.js PLAY_AT_HOME)
-    if (d.play && p.placed && PLAY_AT_HOME[p.item]) { const fw = it.footprint.w * s / 2; d.play.push([x + p.x * w - fw, ffy - it.footprint.h * s, x + p.x * w + fw, ffy, p.item]); }
+    it.draw(c, x + p.x * w, ffy, s, { on, tint: p.tint, flip: p.flip, screen: ebtvSet ? ebtvScreen : null, t: d.t });
+    // the playable pieces take a tap (shops.js PLAY_AT_HOME): your own placed ones, and a JETSAM!
+    // cabinet in anyone's flat (playsHere)
+    if (d.play && playsHere(p.item, d.mine, p.placed)) { const fw = (it.hitW || it.footprint.w) * s / 2; d.play.push([x + p.x * w - fw, ffy - it.footprint.h * s, x + p.x * w + fw, ffy, p.item]); }
   }
   // people
   const bed = furniture.find(f => (f.role || f.item) === "bed");
@@ -711,6 +714,7 @@ export function fitText(c, text, x, y, w) {
 function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord, mine = false, onEnter }) {
   const ref = useRef(null), closeRef = useRef(null);
   const playRef = useRef([]);
+  const hotRef = useRef(null);   // the playable piece under the pointer or the focused button: outlined
   // the guests round a top-tier piece at night: three figures on the census, the same all evening
   const guests = useMemo(() => {
     const list = (censusRef.current?.list || []).map(e => e.s).filter(x => x && !x.crowd && x.kind !== "citizen");
@@ -732,9 +736,18 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord, mine
   const onTap = (e) => {
     const r = ref.current.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
     const hitPlay = playRef.current.find(([a, b, c2, d2]) => x >= a - 4 && x <= c2 + 4 && y >= b - 4 && y <= d2 + 4);
-    if (hitPlay) { playAtHome(PLAY_AT_HOME[hitPlay[4]]); return; }
+    if (hitPlay) { hotRef.current = null; playAtHome(PLAY_AT_HOME[hitPlay[4]]); return; }
     if (tvRef.current.some(([a, b, c2, d2]) => x >= a - 4 && x <= c2 + 4 && y >= b - 4 && y <= d2 + 4)) openFunnel({ href: watchHref(), campaign: "ebtv-tv" });
   };
+  // hover: a playable piece under the pointer is outlined, the pointer a hand
+  const onHover = (e) => {
+    const r = ref.current.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    const hit = playRef.current.find(([a, b, c2, d2]) => x >= a - 4 && x <= c2 + 4 && y >= b - 4 && y <= d2 + 4);
+    hotRef.current = hit ? hit[4] : null;
+    ref.current.style.cursor = hit ? "pointer" : "";
+  };
+  // the pieces any visitor can play here (a JETSAM! cabinet), for the buttons under the picture
+  const anyPlays = useMemo(() => { const st = plan.storeys.find(s => s.units.includes(u)); const L = lookOf(plan, st, u, tagsOf(res.get(u.id))); return L ? [...new Set(Object.values(L.rooms).flatMap(r => r.furniture.map(f => f.item)).filter(i => ANY_FLAT_PLAYS.has(i)))] : []; }, [plan, u, res]);
   const hasEbtv = useMemo(() => { const st = plan.storeys.find(s => s.units.includes(u)); const L = lookOf(plan, st, u, tagsOf(res.get(u.id))); return !!L && Object.values(L.rooms).some(r => r.furniture.some(f => f.item === "ebtv")); }, [plan, u, res]);
   useEffect(() => {
     const cv = ref.current;
@@ -753,19 +766,22 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord, mine
       const mt = censusRef.current.mt ?? clockAt(Date.now()).mt, hour = ((mt % 24) + 24) % 24, night = isDark(hour);
       const st = plan.storeys.find(s => s.units.includes(u));
       const rw = (W - (cols - 1) * 3) / cols;
-      const play = mine ? [] : null;
+      const play = [];
       u.rooms.forEach((rm, j) => {
         const cx = (j % cols) * (rw + 3), cy = Math.floor(j / cols) * (RH + LBL);
         c.fillStyle = wallOf(plan, st); c.fillRect(cx, cy, rw, RH);
         c.fillStyle = floorStyle(st.id, st.code === "PH").corridor; c.fillRect(cx, cy + RH - 4, rw, 4);
         const lamp = night && !Pref.current?.units?.get(u.id) ? lampRoom(u, mt, (Pref.current?.residents.get(u.id) || []).length > 0) : null;
-        drawRoom(c, rm, cx, cy, rw, RH - 4, { night, lamp: lamp === rm.id, sprite: true, sheet: true, t: reduced ? 0 : now / 1000, reduced, people: Pref.current?.rooms.get(rm.id) || [], look: mine ? withIssuedPc(lookOf(plan, st, u, tagsOf(Pref.current?.residents.get(u.id))), u) : lookOf(plan, st, u, tagsOf(Pref.current?.residents.get(u.id))), play, guests });
+        drawRoom(c, rm, cx, cy, rw, RH - 4, { night, lamp: lamp === rm.id, sprite: true, sheet: true, t: reduced ? 0 : now / 1000, reduced, people: Pref.current?.rooms.get(rm.id) || [], look: mine ? withIssuedPc(lookOf(plan, st, u, tagsOf(Pref.current?.residents.get(u.id))), u) : lookOf(plan, st, u, tagsOf(Pref.current?.residents.get(u.id))), play, mine, guests });
         c.font = `9px ${FONT}`; c.fillStyle = "#4d8a62"; c.textBaseline = "top";
         fitText(c, `${PURPOSE_NAME[rm.purpose]}`, cx + 2, cy + RH + 3, rw - 4);
         c.textBaseline = "alphabetic";
       });
       tvRef.current = takeTvBoxes();
-      playRef.current = play || [];
+      playRef.current = play;
+      // the hovered or focused playable piece: a dashed amber box round it (DeepZoom's pick)
+      const hot = hotRef.current && play.find(q => q[4] === hotRef.current);
+      if (hot) { c.strokeStyle = "#fbbf24"; c.lineWidth = 2; c.setLineDash([4, 3]); c.strokeRect(Math.round(hot[0]) - 3, Math.round(hot[1]) - 3, Math.round(hot[2] - hot[0]) + 6, Math.round(hot[3] - hot[1]) + 6); c.setLineDash([]); }
     };
     raf = requestAnimationFrame(draw);
     return () => { alive = false; cancelAnimationFrame(raf); };
@@ -785,7 +801,11 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord, mine
             <button ref={closeRef} type="button" onClick={onClose} aria-label="Close and return to the floors">[ X ]</button>
           </span>
         </div>
-        <canvas ref={ref} aria-hidden="true" onClick={onTap} style={{ height: rowsN * (RH + LBL) }} />
+        <canvas ref={ref} aria-hidden="true" onClick={onTap} onMouseMove={onHover} onMouseLeave={() => { hotRef.current = null; }} style={{ height: rowsN * (RH + LBL) }} />
+        {anyPlays.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+          {anyPlays.map(item => <button key={item} type="button" className="hvi-tw-play" aria-label={homePlayAria(item)} onClick={() => playAtHome(PLAY_AT_HOME[item])}
+            onFocus={() => { hotRef.current = item; }} onBlur={() => { hotRef.current = null; }} onMouseEnter={() => { hotRef.current = item; }} onMouseLeave={() => { hotRef.current = null; }}>{PLAY_AT_HOME[item].label}</button>)}
+        </div>}
         {mine && <YourFlat u={u} plan={plan} />}
         {hasEbtv && <a className="sr-only" href={watchHref()} target="_blank" rel="noopener" aria-label={ebtvLabel()}>Electric Basement TV, live</a>}
         <div className="hvi-tw-sub">{here.length ? `PRESENT // ${here.length}` : "NOBODY PRESENT. THE ROOMS ARE BEING MONITORED ANYWAY."}</div>
@@ -807,7 +827,8 @@ function YourFlat({ u, plan }) {
   const [panel, setPanel] = useState(null);   // closet | furnish
   useEffect(() => { injectShopStyles(); }, []);
   const look = withIssuedPc(lookOf(plan, plan.storeys.find(s => s.units.includes(u)), u, ""), u);   // DEPARTMENT MAIL: the issued BEIGE PC
-  const playable = look ? Object.values(look.rooms).flatMap(r => r.furniture).filter(f => f.placed && PLAY_AT_HOME[f.item]) : [];
+  // (a JETSAM! cabinet has its own button under the picture, as in anyone's flat)
+  const playable = look ? Object.values(look.rooms).flatMap(r => r.furniture).filter(f => f.placed && PLAY_AT_HOME[f.item] && !ANY_FLAT_PLAYS.has(f.item)) : [];
   const btn = { font: "inherit", fontSize: "var(--t-xs)", minHeight: 44, minWidth: 44, background: "none", color: "var(--accent)", border: "var(--bw) solid var(--accent)", cursor: "pointer", padding: "0 10px" };
   return (
     <div style={{ margin: "var(--s2) 0" }}>

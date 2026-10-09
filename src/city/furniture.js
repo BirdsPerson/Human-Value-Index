@@ -24,6 +24,7 @@ const pick = (list, str) => list[Math.min(list.length - 1, Math.floor(h01(str) *
 // The brand marks (JETSAM! cabinet, EBTV set, Irene's tap) come from brand.js, which only loads
 // its atlas in a browser; in node it answers "not ready" and the lettered fallback is drawn.
 import { drawBrand } from "./brand.js";
+import { drawJetsamCab, jetsamAttract } from "./jetsamCab.js";   // the JETSAM! cabinet's own render (null in node)
 
 // ---- drawing ---------------------------------------------------------------------------------
 // rects: [dx, up, w, h, colour]; colour "$a".."$c" is the piece's tint, [off, on] lights up.
@@ -160,10 +161,18 @@ const ITEMS = [
     rects: [[-7, 20, 14, 7, "$a"], [-6, 22, 9, 3, "#7c8c94"], [-6, 21.5, 7, 1, "#5c6c74"], [-6, 24.5, 8, 0.8, "#e4e4e4"], [3, 21.5, 2.5, 4, "#7c8c94"], [-5, 23.3, 0.8, 0.8, "#111"], [-1, 18.5, 2, 1.5, "#c9a34a"]] },
   { id: "pc", name: "COMPUTER DESK", rooms: ["study", "living", "bedroom"], tiers: [0, 1, 2], role: "desk", fw: 14,
     rects: [[-7, 9, 14, 1.5, "#3a3a40"], [-6, 0, 1, 9, "#2a2a30"], [5, 0, 1, 9, "#2a2a30"], [-5, 10.5, 7, 5, "#111"], [-4.5, 11, 6, 4, W("#40e0a0")], [3, 10.5, 2, 6, "#2a2a30"], [3.5, 15, 1, 0.6, ["#1a3a1a", "#40ff40"]]] },
-  { id: "arcade", name: "JETSAM ARCADE CABINET", rooms: ["living", "bedroom", "study"], tiers: [0, 1, 2], fw: 9, glow: true, tints: [["#2a1a4a", "#ff40c0"], ["#1a2a4a", "#40e0ff"], ["#4a1a1a", "#ffd040"]],
+  { id: "arcade", name: "JETSAM ARCADE CABINET", rooms: ["living", "bedroom", "study"], tiers: [0, 1, 2], fw: 9, hitW: 13, glow: true, tints: [["#2a1a4a", "#ff40c0"], ["#1a2a4a", "#40e0ff"], ["#4a1a1a", "#ffd040"]],
     rects: [[-4.5, 0, 9, 24, "$a"], [-4.5, 22, 9, 4, "#0f1c22"], [-4.5, 21.6, 9, 0.5, "$b"], [-3.5, 12, 7, 8, ["#203040", "#3ad0ff"]], [-3.5, 9, 7, 2, "#1a1a1a"], [-2, 10.5, 1, 1.5, "#ff3030"], [1, 10.5, 1, 1, "#30ff30"], [-3, 3, 6, 4, "#1a1a1a"]],
     // the marquee: the game's own logotype (brand.js), backlit on the cabinet's dark glass
-    after: (c, cx, fy, s) => { if (!drawBrand(c, "jetsam", cx, fy - 24 * s, 3.2 * s)) word(c, "JETSAM!", cx, fy, 24, s, "#e5f6f6", 2.3); } },
+    after: (c, cx, fy, s) => { if (!drawBrand(c, "jetsam", cx, fy - 24 * s, 3.2 * s)) word(c, "JETSAM!", cx, fy, 24, s, "#e5f6f6", 2.3); },
+    // JETSAM!'s own cabinet (jetsamCab.js), its attract mode in the glass; the rects above until it loads
+    image: (c, cx, fy, s, o) => {
+      const r = drawJetsamCab(c, cx, fy, 26 * s, { flip: o.flip });
+      if (!r) return false;
+      const t = o.t ?? (typeof performance !== "undefined" ? performance.now() / 1000 : 0);
+      jetsamAttract(c, r.screen.x, r.screen.y, r.screen.w, r.screen.h, Math.max(1, r.screen.w / 14), t, o.flip ? 1 : 0, "#f472b6");
+      return true;
+    } },
   // DEPARTMENT MAIL (src/mail/): the BEIGE PC the Department issues to every assigned flat (tap it at
   // home: a little desktop with the mail, the market, the paper, solitaire), and what it upgrades into.
   { id: "beige-pc", name: "BEIGE PC", rooms: ["study", "living", "bedroom"], tiers: [0, 1, 2], role: "desk", fw: 14,
@@ -320,9 +329,10 @@ const footprintOf = (rects) => {
 };
 export const CATALOG = Object.freeze(Object.fromEntries(ITEMS.map(it => [it.id, Object.freeze({
   id: it.id, name: it.name, rooms: it.rooms, tiers: it.tiers, role: it.role || it.id,
-  footprint: { w: it.fw, h: footprintOf(it.rects) }, wall: !!it.wall, floor: !!it.floor, glow: !!it.glow, whole: !!it.whole,
+  // hitW: the tap's width (the JETSAM! render is wider than its floor)
+  footprint: { w: it.fw, h: footprintOf(it.rects) }, hitW: it.hitW || it.fw, wall: !!it.wall, floor: !!it.floor, glow: !!it.glow, whole: !!it.whole,
   tints: it.tints || null,
-  draw(c, cx, fy, s, o = {}) { paint(c, it.rects, cx, fy, s, o); it.after?.(c, cx, fy, s, o); },
+  draw(c, cx, fy, s, o = {}) { if (it.image?.(c, cx, fy, s, o)) return; paint(c, it.rects, cx, fy, s, o); it.after?.(c, cx, fy, s, o); },
 })])));
 // A piece by id: the catalog's, an EB SHOP virtual copy's (ebPieces.js, "v-..." ids), or a tournament
 // trophy (trophyPieces.js, "trophy...." ids).

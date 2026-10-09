@@ -246,6 +246,8 @@ for (const [pid, games] of Object.entries(F.CABINET_PLACES)) {
     ok(FP.funnelTapAt("dive-bar", pl, (h.box[0] + h.box[2]) / 2, (h.box[1] + h.box[3]) / 2)?.slug === s, `${s}: the tap lands on its own box`);
     ok(HG.houseSrc(F.GAME[s]) === `/${F.GAME[s].route}?cab=1`, `${s} plays its own route in the CRT, in cabinet mode`);
   }
+  { const b = FP.cabinetBox({ x0: 0, x1: 40 }, 100, 2, 0.3), j = FP.cabinetBox({ x0: 0, x1: 40 }, 100, 2, 0.3, "jetsam");
+    ok(j[2] - j[0] >= 44 * 2 * 0.5 && Math.abs((j[0] + j[2]) / 2 - (b[0] + b[2]) / 2) < 1e-9 && j[3] === b[3] && j[1] <= b[1], "the JETSAM! cabinet's tap box covers its render (jetsamCab.js), on the same centre and floor"); }
   ok(F.funnelButtons("the-dive").some(b => b.label === "TAGGED OUT") && F.funnelButtons("the-surfside").some(b => b.label === "TEE'D OFF"), "the toolbar offers the house cabinets in their buildings");
   // the marquee: the dead hold the day's high score in the game's own units; a verified player's beats it
   const hs = F.highScore("house-golf", "dive-bar", 600);
