@@ -10,6 +10,8 @@ import { draw, camFollow, camStart, camOf, proj, CAMS, CAM_ORDER, DEFAULT_CAM, A
 import HoopsGuide, { guideSeen, markGuideSeen, namesFor, PAD_GLYPHS } from "./Guide.jsx";
 import { profileHand, usePlayMode } from "../guideKit.jsx";
 import GameMenu from "../GameMenu.jsx";
+import TitleScreen from "../TitleScreen.jsx";
+import { liveItems, cycleOf } from "../titleLogic.js";
 import { sheetHints } from "../heads.js";
 import { callFor, crowdFor } from "./calls.js";
 import { createInput, floorJ, headingOf } from "./input.js";
@@ -111,6 +113,10 @@ function defaultPicks(league, me, mode, home, away) {
   return { home: mineSide.map(p => p.key), away: of(away).slice(0, n).map(p => p.key) };
 }
 
+// The title's four colours: the gym's dark, white letters, the ball's orange, the rim's yellow.
+const COLORS = ["#000000", "#fcfcfc", "#e45c10", "#f8b800"];
+const FIVE_FMTS = ["quarters", "to21"];
+
 export default function Hoops({ route }) {
   useEffect(() => { injectStyles(); }, []);
   const opts = useMemo(() => parseRoute(route), [route]);
@@ -127,22 +133,32 @@ export default function Hoops({ route }) {
   const [picks, setPicks] = useState(null);   // the street game's sides: {mode, home: [keys], away: [keys]}
   const [level, setLevelS] = useState(() => readLevel());
   const setLevel = (v, k = 0) => { writeLevel(v, k); setLevelS(v); };
-  const levelFor = (k) => setLevelS(readLevel(league, k));   // the division's remembered or default level
   const [game, setGame] = useState(null);   // {seed, n, home, away, cfg, labels?}
   const [done, setDone] = useState(null);
   const [tape, setTape] = useState(null);
   const [guide, setGuide] = useState(null);   // the controls guide before the first game: the game it holds
   const [camId, setCamIdS] = useState(readCam);
   const [adj, setAdjS] = useState(readAdj);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [hands, setHandsS] = useState(readHands);
   const setHands = (v) => { writeHands(v); setHandsS(v); };
   const [inb, setInbS] = useState(readInb);
   const setInb = (v) => { writeInb(v); setInbS(v); };
   const setCamId = (v) => { writeCam(v); setCamIdS(v); };
   const setAdj = (id, k, v) => setAdjS(a => { const next = { ...a, [id]: { ...adjOf(a, id), [k]: Math.max(0, Math.min(10, v)) } }; writeAdj(next); return next; });
+  const [muted, setMuted] = useState(() => SFX.isMuted());
+  // the title screen: where it opens next (false: the title; true: the menu; "team" / "settings").
+  // A link naming the teams (?home= / ?vs=) opens on TEAM SELECT.
+  const [front, setFront] = useState(() => ({ at: opts.home || opts.vs ? "team" : false, n: 0 }));
+  const [streetPick, setStreetPick] = useState(false);   // 3 ON 3 / 1 ON 1: the player picker, after the menu
   const mine = teamOfCase(league, me.caseId);
-  const launch = (g) => { if (!guideSeen()) { setGuide(g); setDone(null); setTape(null); setGame(null); } else { setDone(null); setTape(null); setGame(g); } };
+  // 5 ON 5: your team (the link's, then the one you picked, then your own, then the play-now pair's)
+  const [home5, setHome5] = useState(opts.home);
+  const homeId = home5 || mine || playNowPair(league, mine)[0];
+  const awayId = opts.vs && opts.vs !== homeId ? opts.vs : playNowPair(league, homeId)[1];
+  // THE PYRAMID: the division you play in sets the difficulty's default (a pick is remembered per division)
+  const divs = divisionsOf(league), k5 = divisionOf(league, homeId), diff = difficultyOf(league, k5), dflt = LEVEL_ORDER[defaultLevelIndex(league, k5, LEVEL_ORDER.length)];
+  useEffect(() => { if (mode === "5v5") setLevelS(readLevel(league, k5)); }, [k5, league.day, mode]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const launch = (g) => { setStreetPick(false); if (!guideSeen()) { setGuide(g); setDone(null); setTape(null); setGame(null); } else { setDone(null); setTape(null); setGame(g); } };
   const start = (home, away, f = fmt, s = shot) => {
     SFX.unlock();
     const cfg = { mode: "5v5", fmt: f, shot: s, level, home: fiveOf(league, home, me), away: fiveOf(league, away, me), div: divisionOf(league, home), ...(inb === "me" ? { inb: "me" } : {}) };   // div: the pyramid's division, data the sim carries
@@ -162,8 +178,9 @@ export default function Hoops({ route }) {
     const label = (ps) => (ps.length === 1 ? ps[0].name.split(" ").slice(-1)[0] : `${ps[0].name.split(" ").slice(-1)[0]} THREE`);
     launch({ seed: seedNow(), n: Date.now(), home, away, cfg, labels: [label(H0), label(A0)], tips: !readFlag(TIPS_KEY, false) });
   };
+  const streetDefault = (m) => { const [h, a] = playNowPair(league, mine); const pk = picks && picks.mode === m ? picks : { mode: m, ...defaultPicks(league, me, m, h, a) }; return pk; };
   const leaveGuide = () => { markGuideSeen(); const g = guide; setGuide(null); if (g) setGame(g); };
-  // quick (the BUCKETS cabinet): onto the floor as soon as the league has answered
+  // quick (the BUCKETS cabinet): onto the floor as soon as the league has answered, past the title
   const quickDone = useRef(false);
   useEffect(() => {
     if (!opts.quick || quickDone.current || !ready) return;
@@ -175,20 +192,59 @@ export default function Hoops({ route }) {
     setPicks({ mode: m, ...pk });
     startStreet(pk, m);
   }, [ready]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const toFront = (at = true) => { setDone(null); setGame(null); setTape(null); setStreetPick(false); setFront(f => ({ at, n: f.n + 1 })); };
   let body;
   const street = game && game.cfg.mode !== "5v5";
   const again = () => (street ? startStreet({ home: game.cfg.home.map(r => r[0]), away: game.cfg.away.map(r => r[0]) }, game.cfg.mode) : start(game.home, game.away, game.cfg.fmt, game.cfg.shot));
-  const nextOpponent = () => {
-    if (street) { setDone(null); setGame(null); setTape(null); setMoreOpen(true); return; }
-    const ids = TEAM_IDS.filter(id => id !== game.home); start(game.home, ids[(ids.indexOf(game.away) + 1) % ids.length], game.cfg.fmt, game.cfg.shot);
-  };
-  const settings = () => { setDone(null); setGame(null); setTape(null); setMoreOpen(true); };
+  // a new opponent: 5 ON 5 opens TEAM SELECT, the street game its player picker
+  const nextOpponent = () => { if (street) { setDone(null); setGame(null); setTape(null); setStreetPick(true); } else toFront("team"); };
   const camProps = { camId, setCamId, adj, setAdj, hands, setHands, inb, setInb };
+  const cyc = (list, cur, set) => (d) => set(cycleOf(list, cur, d));
+  const clubs = allClubs(league);
+  const levelNote = `${LEVEL_NOTES[level]}${mode === "5v5" && divs.length > 1 ? ` ${diff.name} DEFAULTS TO ${LEVELS[dflt].name}. A PICK IS REMEMBERED FOR THIS DIVISION.` : ""}`;
+  const rows = {
+    play: () => (mode === "5v5" ? start(homeId, awayId) : startStreet(streetDefault(mode), mode)),
+    modes: Object.values(MODES).map(M => ({
+      id: M.id, label: `${M.name}${M.half ? ", HALF COURT" : ""}`, hint: mode === M.id ? "CHOSEN" : "",
+      note: M.n === 5 ? "THE FULL COURT WITH THE CITY'S OWN LEAGUE TEAMS. PICK WHO TO PLAY NEXT." : `STREET RULES ON A HALF COURT: ONES AND TWOS, CHECK BALL AT THE TOP. ANY PLAYER IN THE LEAGUE, EITHER SIDE.`,
+      onSelect: () => { setMode(M.id); if (M.n === 5) return "team"; setStreetPick(true); return undefined; },
+    })),
+    team: {
+      label: "TEAM SELECT",
+      items: [
+        { id: "yours", label: "YOUR TEAM", value: teamShort(homeId), cycle: cyc(clubs, homeId, setHome5),
+          note: mine ? `YOU ARE ON THE ${teamName(mine)} THIS SEASON. YOU PLAY AS YOURSELF, AT YOUR RATING.` : me.caseId ? "YOUR FILE IS NOT ON A BASKETBALL ROSTER THIS SEASON. ENTRIES ARE MADE FROM MY FILE." : "ANY TEAM IN THE CITY. THE DIVISION SETS THE DEFAULT DIFFICULTY." },
+        ...clubs.filter(id => id !== homeId).map(id => {
+          const five = sortFive(league.teams[id]), kd = divisionOf(league, id), kit = kitsFor(homeId, id)[1];
+          return { id, label: teamName(id), value: teamRating(five), art: <i className="sw" style={{ display: "inline-block", width: 14, height: 14, background: kit[0], border: `2px solid ${kit[1]}` }} />,
+            note: `${five.slice(0, 3).map(r => shownName(r[1])).join(", ")}${league.pos[id] ? `. ${ordinal(league.pos[id])} IN ${divs.length > 1 ? difficultyOf(league, kd).short : "THE LEAGUE"}` : ""}.`,
+            onSelect: () => { setMode("5v5"); start(homeId, id); } };
+        }),
+      ],
+    },
+    live: liveItems("basketball"),
+    settings: [
+      { id: "level", label: "DIFFICULTY", value: LEVELS[level].name, note: levelNote, cycle: cyc(LEVEL_ORDER, level, (v) => setLevel(v, mode === "5v5" ? k5 : 0)) },
+      { id: "fmt", label: "GAME LENGTH (5 ON 5)", value: FORMATS[fmt].name, cycle: cyc(FIVE_FMTS, fmt, setFmt) },
+      { id: "shot", label: "SHOT CLOCK", value: `${shot} SECONDS`, cycle: () => setShot(shot === 24 ? 14 : 24) },
+      { id: "to", label: "STREET GAME TO", value: String(to), cycle: () => setTo(to === 21 ? 11 : 21) },
+      { id: "mitt", label: "MAKE IT TAKE IT", value: mitt ? "ON" : "OFF", note: "STREET GAMES: A BASKET KEEPS THE BALL.", cycle: () => setMitt(!mitt) },
+      { id: "cam", label: "CAMERA", value: CAMS[camId].name, cycle: cyc(CAM_ORDER, camId, setCamId) },
+      { id: "hands", label: "STICK", value: HANDS_NAME[hands], note: hands === "camera" ? "UP IS UP THE SCREEN." : "UP IS THE FAR SIDELINE, WHATEVER THE CAMERA SHOWS.", cycle: () => setHands(hands === "camera" ? "court" : "camera") },
+      { id: "inb", label: "THROW-INS", value: inb === "me" ? "YOU THROW IT IN" : "YOU CALL FOR IT", cycle: () => setInb(inb === "me" ? "guard" : "me") },
+      { id: "sound", label: "SOUND", value: muted ? "OFF" : "ON", cycle: () => { const m = !muted; setMuted(m); SFX.setMuted(m); if (!m) SFX.unlock(); } },
+    ],
+    controls: <Controls />,
+    back: true,
+  };
   if (guide) body = <HoopsGuideGate street={guide.cfg.mode !== "5v5"} onDone={leaveGuide} />;
   else if (tape) body = <Match key={`tape${tape.rec.at}`} game={tape.game} me={me} tape={tape.rec} {...camProps} onDone={() => setTape(null)} onQuit={() => setTape(null)} />;
-  else if (game && !done) body = <Match key={game.n} game={game} me={me} {...camProps} onDone={setDone} onQuit={() => setGame(null)} onRestart={again} />;
-  else if (done) body = <Done done={done} game={game} onAgain={again} onNew={nextOpponent} onSettings={settings} onTape={() => setTape({ rec: done.rec, game })} />;
-  else body = <Picker league={league} me={me} mine={mine} pre={opts} fmt={fmt} setFmt={setFmt} shot={shot} setShot={setShot} level={level} setLevel={setLevel} levelFor={levelFor} onStart={start} onStreet={startStreet} mode={mode} setMode={setMode} to={to} setTo={setTo} mitt={mitt} setMitt={setMitt} picks={picks} setPicks={setPicks} camId={camId} setCamId={setCamId} moreOpen={moreOpen} />;
+  else if (game && !done) body = <Match key={game.n} game={game} me={me} {...camProps} onDone={setDone} onQuit={() => toFront(true)} onRestart={again} />;
+  else if (done) body = <Done done={done} game={game} onAgain={again} onNew={nextOpponent} onSettings={() => toFront("settings")} onTape={() => setTape({ rec: done.rec, game })} />;
+  else if (opts.quick && !quickDone.current) body = <p className="hp-small">TIPPING OFF.</p>;
+  else if (streetPick && mode !== "5v5") body = <StreetPicker key={mode} league={league} me={me} mine={mine} mode={mode} to={to} mitt={mitt} picks={picks} setPicks={setPicks} onStreet={startStreet} onMenu={() => toFront(true)} />;
+  else body = <TitleScreen key={front.n} game="hoops" title="BASKETBALL" sub={`THE COURTS // ${MODES[mode].name} // ${LEVELS[level].name}`} colors={COLORS} at={front.at} rows={rows}
+    note={`${NOTICE}${league.live ? "" : " THE LIVE LEAGUE DID NOT ANSWER; THESE ARE THE ROSTERS ON FILE."}`} />;
   const meta = game && game.cfg.mode !== "5v5" ? `BASKETBALL // EXHIBITION // ${MODES[game.cfg.mode].name}, HALF COURT, STREET RULES. EVERYTHING IS RECORDED.` : "BASKETBALL // EXHIBITION // 5 ON 5, 3 ON 3, 1 ON 1. PICKUP PERMITTED. EVERYTHING IS RECORDED.";
   return (
     <div className="hp">
@@ -203,32 +259,10 @@ function HoopsGuideGate({ street, onDone }) {
   return <HoopsGuide mode={mode} family={family} street={street} onDone={onDone} />;
 }
 // ---- choosing ------------------------------------------------------------------------------------
-function Picker(props) {
-  const { mode, setMode, level, setLevel } = props;
-  return (
-    <>
-      <div className="hp-chips hp-modes" role="radiogroup" aria-label="Mode">
-        {Object.values(MODES).map(M => <button key={M.id} type="button" role="radio" aria-checked={mode === M.id} className={`hp-chip${mode === M.id ? " on" : ""}`} onClick={() => setMode(M.id)}>{M.name}{M.half ? ", HALF COURT" : ""}</button>)}
-      </div>
-      {mode === "5v5" ? <TeamPicker {...props} /> : <StreetPicker key={mode} {...props} />}
-      {mode !== "5v5" && <LevelChips level={level} setLevel={setLevel} k={0} />}
-    </>
-  );
-}
-function LevelChips({ level, setLevel, k, extra = "" }) {
-  return (
-    <div className="hp-level">
-      <p className="hp-small">DIFFICULTY</p>
-      <div className="hp-chips" role="radiogroup" aria-label="Difficulty">
-        {LEVEL_ORDER.map(id => <button key={id} type="button" role="radio" aria-checked={level === id} className={`hp-chip${level === id ? " on" : ""}`} onClick={() => setLevel(id, k)}>{LEVELS[id].name}</button>)}
-      </div>
-      <p className="hp-small hp-level-note">{LEVEL_NOTES[level]}{extra}</p>
-    </div>
-  );
-}
-// THE STREET: 3 ON 3 and 1 ON 1. Pick any of the league's players for either side (and yourself, when
-// you have a file): a slot, then a player. To 21 or 11, make-it-take-it if you like.
-function StreetPicker({ league, me, mine, mode, to, setTo, mitt, setMitt, picks, setPicks, onStreet, shot, setShot }) {
+// THE STREET: 3 ON 3 and 1 ON 1, after the menu's MODES. Pick any of the league's players for either side
+// (and yourself, when you have a file): a slot, then a player. Game length, make-it-take-it, the shot
+// clock and the difficulty are the menu's SETTINGS.
+function StreetPicker({ league, me, mine, mode, to, mitt, picks, setPicks, onStreet, onMenu }) {
   const n = MODES[mode].n, pool = useMemo(() => poolOf(league, me), [league, me]);
   const [h0, a0] = playNowPair(league, mine);
   const pk = picks && picks.mode === mode ? picks : { mode, ...defaultPicks(league, me, mode, h0, a0) };
@@ -247,7 +281,7 @@ function StreetPicker({ league, me, mine, mode, to, setTo, mitt, setMitt, picks,
   const go = () => onStreet(pk, mode);
   useEffect(() => {
     let raf, prev = null;
-    const tick = () => { raf = requestAnimationFrame(tick); const p = readPad(); if (p.connected && prev && ((p.held.act && !prev.act) || (p.held.start && !prev.start))) go(); prev = p.connected ? p.held : null; };
+    const tick = () => { raf = requestAnimationFrame(tick); const p = readPad(); if (p.connected && prev && ((p.held.act && !prev.act) || (p.held.start && !prev.start))) go(); else if (p.connected && prev && p.held.back && !prev.back) onMenu(); prev = p.connected ? p.held : null; };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   });
@@ -256,10 +290,11 @@ function StreetPicker({ league, me, mine, mode, to, setTo, mitt, setMitt, picks,
   const clubs = allClubs(league);
   return (
     <>
-      <p className="pg-lede">{n === 1 ? "ONE ON ONE" : "THREE ON THREE"} ON A HALF COURT, STREET RULES: ONES AND TWOS, CHECK BALL AT THE TOP, TAKE IT BACK PAST THE ARC AFTER A DEFENSIVE REBOUND OR A STEAL. ANY PLAYER IN THE LEAGUE, EITHER SIDE.</p>
+      <p className="pg-lede">{n === 1 ? "ONE ON ONE" : "THREE ON THREE"}, HALF COURT. PICK A SLOT, THEN A PLAYER.</p>
       <div className="pg-start">
         <Button variant="primary" ref={playRef} onClick={go}>PLAY NOW</Button>
         <span className="pg-sub">{pk.home.map(nameOf).join(", ")} V {pk.away.map(nameOf).join(", ")}. TO {to}{mitt ? ", MAKE IT TAKE IT" : ""}.</span>
+        <Button variant="back" onClick={onMenu}>Menu</Button>
       </div>
       <div className="hp-sides">
         {["home", "away"].map(side => (
@@ -270,11 +305,6 @@ function StreetPicker({ league, me, mine, mode, to, setTo, mitt, setMitt, picks,
             </div>
           </div>
         ))}
-      </div>
-      <div className="hp-chips" role="radiogroup" aria-label="Game to">
-        {[21, 11].map(t => <button key={t} type="button" role="radio" aria-checked={to === t} className={`hp-chip${to === t ? " on" : ""}`} onClick={() => setTo(t)}>TO {t}</button>)}
-        <button type="button" role="switch" aria-checked={mitt} className={`hp-chip${mitt ? " on" : ""}`} onClick={() => setMitt(!mitt)}>MAKE IT TAKE IT: {mitt ? "ON" : "OFF"}</button>
-        {[24, 14].map(sc => <button key={sc} type="button" role="radio" aria-checked={shot === sc} className={`hp-chip${shot === sc ? " on" : ""}`} onClick={() => setShot(sc)}>{sc}-SECOND CLOCK</button>)}
       </div>
       <p className="hp-small">PICK A SLOT ABOVE, THEN A PLAYER. NOW CHOOSING: {slot[0] === "home" ? "YOUR SIDE" : "THEIR SIDE"}, PLAYER {slot[1] + 1}.</p>
       <div className="hp-chips" role="radiogroup" aria-label="Show players from">
@@ -291,91 +321,10 @@ function StreetPicker({ league, me, mine, mode, to, setTo, mitt, setMitt, picks,
     </>
   );
 }
-function TeamPicker({ league, me, mine, pre, fmt, setFmt, shot, setShot, level, setLevel, levelFor, onStart, camId, setCamId, moreOpen }) {
-  const [home0, away0] = playNowPair(league, mine);
-  const [home, setHome] = useState(pre.home || home0);
-  useEffect(() => { if (!pre.home) setHome(mine || home0); }, [mine, home0]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const away = pre.vs && pre.vs !== home ? pre.vs : playNowPair(league, home)[1];
-  // THE PYRAMID: the division you play in sets the difficulty's default (a pick is remembered per division)
-  const divs = divisionsOf(league), k = divisionOf(league, home), diff = difficultyOf(league, k), dflt = LEVEL_ORDER[defaultLevelIndex(league, k, LEVEL_ORDER.length)];
-  useEffect(() => { levelFor(k); }, [k, league.day]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const clubs = allClubs(league);
-  const playRef = useRef(null);
-  const quick = () => onStart(home, away);
-  useEffect(() => { playRef.current?.focus({ preventScroll: true }); }, []);
-  useEffect(() => {
-    let raf, prev = null;
-    const tick = () => { raf = requestAnimationFrame(tick); const p = readPad(); if (p.connected && prev && ((p.held.act && !prev.act) || (p.held.start && !prev.start))) quick(); prev = p.connected ? p.held : null; };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  });
-  const len = fmt === "to21" ? "FIRST TO 21" : "FOUR 2-MINUTE QUARTERS";
-  return (
-    <>
-      <p className="pg-lede">BASKETBALL, FIVE ON FIVE, WITH THE CITY'S OWN LEAGUE TEAMS. YOU STEER THE MAN WITH THE BALL, AND ON DEFENCE THE MAN NEAREST IT. A CONTROLLER PLAYS LIKE 2K: X SHOOTS (LET GO AT THE TOP), A PASSES (IT LEADS A RUNNER), HOLD RB FOR ICON PASSING, DOUBLE-TAP Y FOR THE ALLEY-OOP, THE RIGHT STICK DRIBBLES. KEYS: ARROWS, Z SHOOTS, X PASSES, HOLD G + 1-4 ICON PASSES, SHIFT SPRINTS. PHONES GET A PAD.</p>
-      <div className="pg-start">
-        <Button variant="primary" ref={playRef} onClick={quick}>PLAY NOW</Button>
-        <span className="pg-sub">{teamName(home)}{home === mine ? " (YOUR TEAM)" : ""} V {teamName(away)}. {len}, {shot}-SECOND CLOCK, {divs.length > 1 ? `${diff.name}, ` : ""}{LEVELS[level].name}.</span>
-      </div>
-      <div className="hp-level">
-        <p className="hp-small">DIFFICULTY</p>
-        <div className="hp-chips" role="radiogroup" aria-label="Difficulty">
-          {LEVEL_ORDER.map(id => <button key={id} type="button" role="radio" aria-checked={level === id} className={`hp-chip${level === id ? " on" : ""}`} onClick={() => setLevel(id, k)}>{LEVELS[id].name}</button>)}
-        </div>
-        <p className="hp-small hp-level-note">{LEVEL_NOTES[level]}{divs.length > 1 ? ` ${diff.name} DEFAULTS TO ${LEVELS[dflt].name}${k === 0 ? ": THE TOP FLIGHT IS THE HARDEST" : k === divs.length - 1 ? ": THE BOTTOM DIVISION IS THE EASIEST" : ""}. A PICK IS REMEMBERED FOR THIS DIVISION.` : ""}</p>
-      </div>
-      {mine ? <p className="hp-you">YOU ARE ON THE {teamName(mine)} THIS SEASON. YOU PLAY AS YOURSELF, AT YOUR RATING.</p>
-        : me.caseId ? <p className="hp-you hp-dim">YOUR FILE IS NOT ON A BASKETBALL ROSTER THIS SEASON. ENTRIES ARE MADE FROM <a href="#file">MY FILE</a>.</p> : null}
-      <details className="pg-more" open={moreOpen || undefined}>
-        <summary>CHOOSE TEAMS, CAMERA, GAME LENGTH AND SHOT CLOCK</summary>
-        <div className="pg-more-body">
-          <div className="hp-chips" role="radiogroup" aria-label="Camera">
-            {CAM_ORDER.map(id => <button key={id} type="button" role="radio" aria-checked={camId === id} className={`hp-chip${camId === id ? " on" : ""}`} onClick={() => setCamId(id)}>{CAMS[id].name}</button>)}
-          </div>
-          <div className="hp-chips" role="radiogroup" aria-label="Game length">
-            {Object.values(FORMATS).map(f => <button key={f.id} type="button" role="radio" aria-checked={fmt === f.id} className={`hp-chip${fmt === f.id ? " on" : ""}`} onClick={() => setFmt(f.id)}>{f.name}</button>)}
-          </div>
-          <div className="hp-chips" role="radiogroup" aria-label="Shot clock">
-            {[24, 14].map(s => <button key={s} type="button" role="radio" aria-checked={shot === s} className={`hp-chip${shot === s ? " on" : ""}`} onClick={() => setShot(s)}>{s}-SECOND SHOT CLOCK</button>)}
-          </div>
-          <p className="hp-small">YOUR TEAM{divs.length > 1 ? " (ANY DIVISION; THE DIVISION SETS THE DEFAULT DIFFICULTY)" : ""}:</p>
-          {(divs.length > 1 ? divs : [clubs]).map((ids, i) => (
-            <div key={i}>
-              {divs.length > 1 && <p className="hp-small">{difficultyOf(league, i).name}:</p>}
-              <div className="hp-chips" role="radiogroup" aria-label={divs.length > 1 ? `Your team, ${difficultyOf(league, i).name}` : "Your team"}>
-                {ids.filter(id => league.teams[id]?.length).map(id => <button key={id} type="button" role="radio" aria-checked={home === id} className={`hp-chip${home === id ? " on" : ""}`} onClick={() => setHome(id)}>{teamShort(id)}{id === mine ? " (YOURS)" : ""}</button>)}
-              </div>
-            </div>
-          ))}
-          <p className="hp-small">THEN PICK WHO TO PLAY; THE GAME STARTS AT ONCE. SPEED, TOUCH AND DEFENCE FOLLOW EACH PLAYER'S LEAGUE RATING.</p>
-          <ul className="hp-teams">
-            {clubs.filter(id => id !== home).map(id => {
-              const five = sortFive(league.teams[id]), kd = divisionOf(league, id);
-              return (
-                <li key={id}>
-                  <button type="button" className="hp-team" onClick={() => onStart(home, id)} aria-label={`Play ${teamName(id)}, rated ${teamRating(five)}`}>
-                    <i className="sw" style={{ background: kitsFor(home, id)[1][0], borderColor: kitsFor(home, id)[1][1] }} aria-hidden="true" />
-                    <span className="nm">{teamName(id)}<span className="tag">{five.slice(0, 3).map(r => shownName(r[1])).join(", ")}{league.pos[id] ? ` // ${ordinal(league.pos[id])} IN ${divs.length > 1 ? difficultyOf(league, kd).short : "THE LEAGUE"}` : ""}</span></span>
-                    <span className="rt">{teamRating(five)}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </details>
-      <details className="pg-more">
-        <summary>HOW TO PLAY</summary>
-        <div className="pg-more-body"><Controls /></div>
-      </details>
-      <p className="hp-notice"><b>EXHIBITION.</b> {NOTICE} NOT IN THE STANDINGS, NOT IN THE CUP, NOT ON YOUR FILE. THE DEPARTMENT KEEPS THE TAPE ANYWAY.</p>
-      <p className="hp-small">ROSTERS: SEASON {league.season || "?"}, MACHINE DAY {league.day}{league.live ? ", AS DRAFTED" : ". THE LIVE LEAGUE DID NOT ANSWER; THESE ARE THE ROSTERS ON FILE"}.</p>
-    </>
-  );
-}
 const ordinal = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "TH" : ["TH", "ST", "ND", "RD"][n % 10] || "TH"}`;
 
-function Controls() { return <HoopsGuide mode="keys" family="generic" street compact />; }
+// The front menu's CONTROLS: the guide, in the hands you are using now.
+function Controls() { const { mode, family } = usePlayMode(); return <HoopsGuide mode={mode} family={family} street compact />; }
 
 export function legendRows(mode, family) {
   if (mode === "pad") {
@@ -448,7 +397,7 @@ function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, hands, set
   const [scale, setScale] = useState(1);
   const [pad, setPad] = useState(null);
   const [touch, setTouch] = useState(() => typeof window !== "undefined" && Boolean(window.matchMedia?.("(pointer: coarse)").matches));
-  const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, !touch));
+  const [legendOpen, setLegendOpen] = useState(() => readFlag(LEGEND_KEY, false));   // folded: the guide before the first game taught it
   const [skipping, setSkipping] = useState(false);
   const [tip, setTip] = useState(null);
   const modeRef = useRef("keys"), padRef = useRef(null);
@@ -614,27 +563,23 @@ function Match({ game, me, tape = null, camId, setCamId, adj, setAdj, hands, set
       {touch && !tape && <TouchPad input={inputRef} off={hud?.off} onStart={() => togglePause()} />}
       {paused && <GameMenu key="pause" kind="pause" title="PAUSED." summary="THE DEPARTMENT HAS STOPPED THE CLOCK. IT DOES NOT USUALLY." onBack={() => togglePause(false)}
         options={{ resume: () => togglePause(false), restart: !tape && onRestart, camera: { label: `CAMERA: ${CAMS[camId].name}`, onSelect: cycleCam },
+          camset: { label: "CAMERA ZOOM, HEIGHT, FOLLOW", hint: "UNDER THE COURT", onSelect: () => { setCamPanel(true); togglePause(false); } },
           hands: { label: `STICK: ${HANDS_NAME[hands]}`, hint: hands === "camera" ? "UP IS UP THE SCREEN" : "UP IS THE FAR SIDELINE", onSelect: () => setHands(hands === "camera" ? "court" : "camera") },
           ...(street ? {} : { inbound: { label: `THROW-INS: ${inb === "me" ? "YOU THROW IT IN" : "THE BIG THROWS, YOU CALL FOR IT"}`, hint: "FROM THE NEXT GAME", onSelect: () => setInb(inb === "me" ? "guard" : "me") } }),
-          ...Object.fromEntries(["zoom", "height", "follow"].map(k => [`cam${k}`, { label: `CAMERA ${k.toUpperCase()}: ${adjOf(adj, camId)[k]}`, hint: "+1", onSelect: () => setAdj(camId, k, (adjOf(adj, camId)[k] + 1) % 11) }])),
           controls: <HoopsGuide mode={mode} family={pad} street={street} compact />, sound: { on: !muted, onSelect: toggleMute }, quit: { label: tape ? "STOP THE TAPE" : "LEAVE THE COURT", onSelect: onQuit } }} />}
-      {camPanel && <CamPanel camId={camId} setCamId={setCamId} adj={adj} setAdj={setAdj} hands={hands} setHands={setHands} />}
+      {camPanel && <CamPanel camId={camId} setCamId={setCamId} adj={adj} setAdj={setAdj} hands={hands} setHands={setHands} onClose={() => setCamPanel(false)} />}
       {!tape && <Legend mode={mode} family={pad} open={legendOpen} onToggle={toggleLegend} />}
+      {/* sound, the camera and leaving the court: the pause menu */}
       <ButtonRow>
         <Button onClick={() => togglePause()}>{paused ? "Resume" : "Pause"}</Button>
-        <Button onClick={toggleMute}>{muted ? "Sound on" : "Mute"}</Button>
-        <Button onClick={cycleCam}>Camera: {CAMS[camId].name}</Button>
-        <Button onClick={() => setCamPanel(v => !v)} aria-expanded={camPanel} aria-label="Camera settings">{camPanel ? "−" : "+"}</Button>
         {tape && <Button onClick={() => { skipRef.current = true; setSkipping(true); }}>Skip to the end</Button>}
-        <Button variant="back" onClick={onQuit}>{tape ? "Stop the tape" : "Leave the court"}</Button>
+        {tape && <Button variant="back" onClick={onQuit}>Stop the tape</Button>}
       </ButtonRow>
-      <p className="hp-small">{pad ? `CONTROLLER: ${pad.toUpperCase()}. ` : ""}{NOTICE}</p>
     </div>
   );
 }
-
 // The camera's adjustments, 2K's: ZOOM, HEIGHT, FOLLOW, 0 to 10 for each camera, remembered.
-function CamPanel({ camId, setCamId, adj, setAdj, hands, setHands }) {
+function CamPanel({ camId, setCamId, adj, setAdj, hands, setHands, onClose }) {
   const a = adjOf(adj, camId);
   return (
     <section className="hp-cam" aria-label="Camera settings">
@@ -650,6 +595,7 @@ function CamPanel({ camId, setCamId, adj, setAdj, hands, setHands }) {
       <div className="hp-chips" role="radiogroup" aria-label="The stick">
         {["camera", "court"].map(v => <button key={v} type="button" role="radio" aria-checked={hands === v} className={`hp-chip${hands === v ? " on" : ""}`} onClick={() => setHands(v)}>STICK {HANDS_NAME[v]}</button>)}
       </div>
+      {onClose && <button type="button" className="hp-chip" onClick={onClose}>DONE</button>}
     </section>
   );
 }
