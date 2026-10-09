@@ -91,7 +91,7 @@ export default function TitleScreen({ game, title, sub, colors = ["#000000", "#f
     if (phase === "title") startEl.current?.focus({ preventScroll: true });
     else if (legend) backEl.current?.focus({ preventScroll: true });
     else { const el = rowEls.current[f]; el?.focus({ preventScroll: true }); el?.scrollIntoView?.({ block: "nearest" }); }
-  }, [phase, f, legend, path.length]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phase, f, legend, path.join("/")]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const play = () => { const p = live.current.items.find(x => x.id === "play"); if (live.current.onStart) live.current.onStart(); else if (p?.onSelect) p.onSelect(); else if (p?.href) window.location.hash = p.href.replace(/^#/, ""); };
   const choose = (i) => {
