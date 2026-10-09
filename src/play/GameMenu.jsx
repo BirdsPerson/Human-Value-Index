@@ -122,14 +122,14 @@ export default function GameMenu({ kind = "end", title, summary, options, onBack
           <div className="gm-list" role="menu" aria-label={title || (kind === "pause" ? "Paused" : "Game over")}>
             {items.map((it, i) => {
               const props = {
-                key: it.id, role: "menuitem", className: `gm-row${i === focus ? " on" : ""}`, tabIndex: i === focus ? 0 : -1,
+                role: "menuitem", className: `gm-row${i === focus ? " on" : ""}`, tabIndex: i === focus ? 0 : -1,
                 ref: (el) => { rows.current[i] = el; }, onMouseEnter: () => !it.disabled && setFocus(i), onFocus: () => focus !== i && setFocus(i),
                 "aria-disabled": it.disabled || undefined, "aria-label": it.hint ? `${it.label}. ${it.hint}` : undefined,
               };
               const body = <><span className="gm-caret" aria-hidden="true">{i === focus ? "▸" : " "}</span><span>{it.label}</span>{it.hint && <span className="gm-hint" aria-hidden="true">{it.hint}</span>}</>;
               return it.href && !it.onSelect
-                ? <a {...props} href={it.href}>{body}</a>
-                : <button {...props} type="button" onClick={() => choose(i)}>{body}</button>;
+                ? <a key={it.id} {...props} href={it.href}>{body}</a>
+                : <button key={it.id} {...props} type="button" onClick={() => choose(i)}>{body}</button>;
             })}
           </div>
         )}
