@@ -62,32 +62,84 @@ This song has been played. Your enjoyment has been logged.
 
 ## 2. Game themes
 
-### Tennis: Show Court
-Style: `instrumental, 8-bit chiptune, NES sound chip, two square wave leads, triangle wave bass, noise channel drums, only 4 channels, dry, no reverb, no pads, upbeat sports game, catchy, loopable, 150 bpm`
-Exclude styles: `synthwave, orchestral, pads, reverb, modern EDM, electric guitar, real drums`
+**Arcade games sound like real old hardware.** The arcade games (sports, the dungeon, the cabinets)
+use the NES sound chip: two square waves, one triangle bass, one noise channel for drums, nothing
+else. Every arcade Style below starts with that. Paste this into Suno's **Exclude styles** box for
+all of them (it's under the advanced options in Custom mode):
+`synthwave, orchestral, pads, reverb, modern EDM, electric guitar, real drums, piano`
+
+If a take still sounds glossy (Dreamcast / Sega), add `NES, 1987` to the front of the Style.
+
+### Arcade
+
+#### Tennis: Show Court
+Style: `instrumental, 8-bit chiptune, NES sound chip, two square wave leads, triangle wave bass, noise channel drums, only 4 channels, dry, no reverb, upbeat sports game, bouncy, catchy, loopable, 150 bpm`
 Lyrics: `[Instrumental] [Intro] [Main Theme] [Breakdown] [Main Theme] [Outro: seamless loop]`
 
-### Golf: The Department Links
-Style: `instrumental, smooth jazz fusion, 16-bit golf game, warm electric piano, fretless bass, soft sax, sunny afternoon, relaxed, loopable, 92 bpm`
-Lyrics: `[Instrumental] [Intro] [Theme] [Sax solo] [Theme] [Outro: seamless loop]`
+#### Golf: The Department Links
+Style: `instrumental, 8-bit chiptune, NES sound chip, square wave melody, triangle wave bass, soft noise channel hi-hat, only 4 channels, dry, no reverb, relaxed sunny golf game, jazzy chords on square waves, loopable, 100 bpm`
+Lyrics: `[Instrumental] [Intro] [Theme] [Bridge] [Theme] [Outro: seamless loop]`
 
-### Golf: The 19th Hole (end-of-round)
-Style: `instrumental, short honky tonk bar piano jingle, clinking glasses, cheerful, 20 seconds`
+#### Golf: The 19th Hole (end-of-round)
+Style: `instrumental, 8-bit chiptune, NES sound chip, short cheerful jingle, square waves, triangle bass, dry, 15 seconds`
 Lyrics: `[Instrumental] [Short jingle] [End]`
 
-### Chess: The Park Tables
-Style: `instrumental, baroque harpsichord meets chiptune, contemplative, pizzicato strings, ticking clock, loopable, 84 bpm`
-Lyrics: `[Instrumental] [Intro: clock ticking] [Theme] [Counterpoint] [Theme] [Outro: seamless loop]`
+#### Basketball: Full Court
+Style: `instrumental, 8-bit chiptune, NES sound chip, two square wave leads, triangle wave bass, punchy noise channel drums, only 4 channels, dry, no reverb, funky arcade basketball, fast, swagger, loopable, 140 bpm`
+Lyrics: `[Instrumental] [Intro] [Main Theme] [Breakdown] [Main Theme] [Outro: seamless loop]`
 
-### Casino: House Chips
+#### Football: The Gridiron
+Style: `instrumental, 8-bit chiptune, NES sound chip, square wave fanfare lead, triangle wave bass, marching noise channel drums, only 4 channels, dry, no reverb, heroic arcade football, stadium energy, loopable, 132 bpm`
+Lyrics: `[Instrumental] [Intro: fanfare] [Main Theme] [Breakdown] [Main Theme] [Outro: seamless loop]`
+
+#### Fourth and Long (the arcade football cabinet)
+The most old-school one: short, catchy, repeats a lot.
+Style: `instrumental, 8-bit chiptune, NES sound chip, 1980s arcade football, square wave lead, triangle bass, noise drums, only 4 channels, dry, short catchy loop, intense, 144 bpm`
+Lyrics: `[Instrumental] [Kickoff riff] [Loop A] [Loop B] [Outro: seamless loop]`
+
+#### Soccer: The Pitch
+Style: `instrumental, 8-bit chiptune, NES sound chip, two square wave leads, triangle wave bass, noise channel drums, only 4 channels, dry, no reverb, sunny world cup arcade game, chant-like melody, loopable, 138 bpm`
+Lyrics: `[Instrumental] [Intro] [Main Theme] [Breakdown] [Main Theme] [Outro: seamless loop]`
+
+#### Skiing: The Whole Mountain
+Style: `instrumental, 8-bit chiptune, NES sound chip, fast square wave arpeggios, triangle wave bass, noise channel drums, only 4 channels, dry, no reverb, crisp winter downhill, exhilarating, loopable, 156 bpm`
+Lyrics: `[Instrumental] [Intro] [Main Theme] [Breakdown] [Main Theme] [Outro: seamless loop]`
+
+#### Skate: The Park
+Style: `instrumental, 8-bit chiptune, NES sound chip, punk rock riff on square waves, driving triangle bass, fast noise channel drums, only 4 channels, dry, no reverb, skate punk energy, loopable, 168 bpm`
+Lyrics: `[Instrumental] [Intro] [Riff] [Breakdown] [Riff] [Outro: seamless loop]`
+
+#### Bowling: The Lanes
+Style: `instrumental, 8-bit chiptune, NES sound chip, square wave melody, walking triangle wave bass, swing noise channel drums, only 4 channels, dry, no reverb, retro bowling alley, goofy and cheerful, loopable, 120 bpm`
+Lyrics: `[Instrumental] [Intro] [Theme] [Bridge] [Theme] [Outro: seamless loop]`
+
+#### Fishing: The Pier
+Style: `instrumental, 8-bit chiptune, NES sound chip, gentle square wave melody, slow triangle wave bass, sparse noise channel, only 4 channels, dry, calm lakeside morning, peaceful, loopable, 84 bpm`
+Lyrics: `[Instrumental] [Intro] [Theme] [Bridge] [Theme] [Outro: seamless loop]`
+
+#### The Sub-Basements (dungeon)
+Style: `instrumental, 8-bit chiptune, NES sound chip, minor key square wave melody, ominous triangle wave bass, sparse noise channel, only 4 channels, dry, no reverb, dungeon crawler, tense, descending, loopable, 96 bpm`
+Lyrics: `[Instrumental] [Intro] [Theme] [Deeper] [Theme] [Outro: seamless loop]`
+
+#### Tagged Out (the light-gun hunting cabinet)
+Style: `instrumental, 8-bit chiptune, NES sound chip, light gun hunting game, jaunty square wave lead, triangle wave bass, noise channel drums, only 4 channels, dry, short catchy loop, 128 bpm`
+Lyrics: `[Instrumental] [Intro] [Loop A] [Loop B] [Outro: seamless loop]`
+
+#### Chess: The Park Tables
+Style: `instrumental, 8-bit chiptune, NES sound chip, baroque counterpoint on two square waves, triangle wave bass line, no drums, only 3 channels, dry, contemplative, loopable, 84 bpm`
+Lyrics: `[Instrumental] [Intro] [Theme] [Counterpoint] [Theme] [Outro: seamless loop]`
+
+### City (real instruments; these are places, not cabinets)
+
+#### Casino: House Chips
 Style: `instrumental, 60s lounge jazz, upright bass, muted trumpet, vibraphone, cocktail piano, sly, loopable, 108 bpm`
 Lyrics: `[Instrumental] [Intro] [Theme] [Trumpet solo] [Theme] [Outro: seamless loop]`
 
-### Leagues / Draft Night
+#### Leagues / Draft Night
 Style: `instrumental, sports broadcast theme, big drums, brass fanfare, synth strings, dramatic, 128 bpm, 60 seconds`
 Lyrics: `[Instrumental] [Fanfare] [Theme] [Build] [Big finish]`
 
-### The Assembly
+#### The Assembly
 Style: `instrumental, civic march, brass band, snare drum, pompous and slightly absurd, municipal ceremony, 112 bpm`
 Lyrics: `[Instrumental] [Intro: snare roll] [March] [Trio] [March] [End]`
 
@@ -159,13 +211,13 @@ Revolution's cheaper than a penthouse chair
 
 | Slug | Style |
 |---|---|
-| `stinger-hole-in-one` | `short triumphant 16-bit fanfare, brass and crowd roar, 5 seconds` |
-| `stinger-match-won` | `short victory jingle, chiptune, bright, 4 seconds` |
-| `stinger-match-lost` | `short sad trombone chiptune, comedic, 3 seconds` |
+| `stinger-hole-in-one` | `8-bit chiptune, NES sound chip, short triumphant square wave fanfare, noise channel crowd roar, dry, 5 seconds` |
+| `stinger-match-won` | `8-bit chiptune, NES sound chip, short victory jingle, square waves, triangle bass, dry, 4 seconds` |
+| `stinger-match-lost` | `8-bit chiptune, NES sound chip, short sad descending square wave, comedic, dry, 3 seconds` |
 | `stinger-new-day` | `short morning chime, synth bells, city waking, 4 seconds` |
 | `stinger-vote-result` | `short gavel and brass sting, official, 4 seconds` |
 | `stinger-score-filed` | `short ominous computer processing chime, 3 seconds` |
-| `stinger-jackpot` | `short slot machine win jingle, retro, 5 seconds` |
+| `stinger-jackpot` (casino) | `short slot machine win jingle, retro, 5 seconds` |
 
 Lyrics for all stingers: `[Instrumental] [Short sting] [End]`
 
