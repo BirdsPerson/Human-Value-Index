@@ -7,6 +7,14 @@
 // were kept) is a leaderboard card, not a blank screen.
 import { useEffect, useRef, useState } from "react";
 import { pickEvent, leadersOf, scoreText, holder, whenText } from "./board.js";
+import { useSetNow } from "./cycle.jsx";
+
+// the set's caption: the event, who leads it and the score, and when it closes
+const captionOf = (pick) => {
+  if (!pick) return pick === null ? "NO TOURNAMENT HAS BEEN HELD YET." : "";
+  const { ev, live } = pick, l = leadersOf(ev)[0];
+  return `${ev.name}: ${l ? `${live ? "" : "WON BY "}${holder(l)}${live ? " LEADS" : ""}, ${scoreText(ev, l)}` : "NO CARDS IN YET"}. ${whenText(ev, live)}.`;
+};
 
 const getJSON = (u) => fetch(u).then(r => (r.ok ? r.json() : null)).catch(() => null);
 const reduced = () => { try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
@@ -60,6 +68,7 @@ export default function TourneyChannel() {
     return () => { off = true; clearInterval(iv); };
   }, [rec, pick]);
 
+  useSetNow(captionOf(pick));
   if (pick === undefined) return <div className="tv-card"><p className="big">TUNING…</p></div>;
   if (!pick) return <div className="tv-card"><p className="big">OFF AIR</p><p>NO TOURNAMENT HAS BEEN HELD. THE DEPARTMENT IS PREPARING ONE.</p></div>;
   const { ev, live } = pick, rows = leadersOf(ev).slice(0, 5);

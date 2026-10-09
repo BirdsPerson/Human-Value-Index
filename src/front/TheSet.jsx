@@ -17,6 +17,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Frame } from "../ui/index.js";
 import { FAMOUS_FIGURES, slugify } from "../figures.js";
 import { paperNow, cupsNow, openCups, getOnce } from "./Smalls.jsx";
+import { SetNow, useSetNow } from "./cycle.jsx";
 import Surveillance from "./Surveillance.jsx";
 
 const TourneyChannel = lazy(() => import("./TourneyChannel.jsx"));
@@ -66,6 +67,7 @@ function Snn({ day }) {
   const e = useLoad(paperNow);
   const k = useTick(5000);
   const heads = e ? [e.front?.lead, ...(e.front?.stories || [])].filter(Boolean).slice(0, 5) : [];
+  useSetNow(heads.length ? heads[k % heads.length].text : "");
   if (!heads.length) return <NoSignal d={e === undefined ? undefined : null} />;
   const [a, b] = anchorsOn(day);
   const h = heads[k % heads.length], who = k % 2 && b ? b : a;
@@ -79,19 +81,21 @@ function Snn({ day }) {
 }
 
 function Sports() {
-  const e = useLoad(paperNow), evs = useLoad(cupsNow);
-  if (!e) return <NoSignal d={e} />;
-  const lines = [
+  const e = useLoad(paperNow), evs = useLoad(cupsNow), k = useTick(4000);
+  const lines = e ? [
     ...(e.sports?.leagues || []).map(l => (l.results?.[0] ? `${l.name}: ${l.results[0]}` : null)),
     ...(e.sports?.cup?.rows || []).slice(0, 3).map(r => `CUP ${r.pos}. ${r.team}, ${r.pts} PTS`),
     ...openCups(evs).slice(0, 2).map(t => `NOW OPEN: ${t.name}`),
-  ].filter(Boolean).slice(0, 7);
+  ].filter(Boolean).slice(0, 7) : [];
+  useSetNow(lines.length ? lines[k % lines.length] : "");
+  if (!e) return <NoSignal d={e} />;
   return <div className="tv-board"><p className="hd">SPORTS DESK</p><ul>{lines.map((l, i) => <li key={i}>{l}</li>)}</ul></div>;
 }
 
 function Markets() {
-  const d = useLoad(() => getOnce("/api/market?ticker=1"));
-  const mv = d?.movers;
+  const d = useLoad(() => getOnce("/api/market?ticker=1")), k = useTick(4000);
+  const mv = d?.movers, all = mv ? [...mv.up.slice(0, 2), ...mv.down.slice(0, 2)] : [], r0 = all.length ? all[k % all.length] : null;
+  useSetNow(r0 ? `${r0.name} ${r0.chg > 0 ? "▲" : "▼"}${(Math.abs(r0.chg * 100)).toFixed(1)}%${r0.why ? `. ${r0.why}` : ""}` : "");
   if (!mv) return <NoSignal d={d} />;
   const row = (r, up) => <li key={r.slug}><span className={up ? "up" : "dn"}>{up ? "▲" : "▼"} {(Math.abs(r.chg * 100)).toFixed(1)}%</span> {r.name}{r.why ? <span className="why"> {r.why}</span> : null}</li>;
   return (
@@ -105,9 +109,10 @@ function Markets() {
 function Weather() {
   const e = useLoad(paperNow);
   const w = useLoad(() => fetch(`/api/watch?m=${Math.floor(Date.now() / 60000)}`).then(r => (r.ok ? r.json() : null)));
-  if (!e && !w) return <NoSignal d={e === undefined || w === undefined ? undefined : null} />;
   const c = w?.clock, wx = e?.weather || {};
   const p2 = (n) => String(n).padStart(2, "0");
+  useSetNow(e || w ? [c && `${p2(c.hour)}:${p2(c.minute)}, MACHINE DAY ${c.day}`, wx.heights && `THE HEIGHTS: ${wx.heights}`, wx.waters && `THE WATERS: ${wx.waters}`].filter(Boolean).join(". ") : "");
+  if (!e && !w) return <NoSignal d={e === undefined || w === undefined ? undefined : null} />;
   return (
     <div className="tv-wx">
       <p className="t">{c ? `${p2(c.hour)}:${p2(c.minute)}` : "--:--"}</p>
@@ -139,6 +144,7 @@ function Ebtv() {
     mod.drawBug(c, 0, 0, W, H * 0.7, "br");
   }, [k, mod]);
   const title = mod?.ebtvTitle?.();
+  useSetNow(title ? `ELECTRIC BASEMENT TV, NOW: ${String(title).toUpperCase()}` : "ELECTRIC BASEMENT TV. TAP TO WATCH.");
   return (
     <a className="tv-ebtv" href={mod ? mod.watchHref("hvi-desk-set") : "https://electricbasement.tv/watch"} target="_blank" rel="noopener" aria-label={mod ? mod.ebtvLabel() : "Watch Electric Basement TV live"}>
       <canvas ref={ref} width="192" height="108" aria-hidden="true" />
@@ -196,7 +202,8 @@ const VIEWS_set = {
       </ul>
     </div>
   ),
-  M: (t) => <div className="fr-set-m"><Screen ch={t.ch} body={t.body} snow={t.snow} /><div className="side"><span className="big">CH {String(t.ch.n).padStart(2, "0")}</span><span className="ln1"><span className="n">{t.ch.name}</span></span><Ctl t={t} /></div></div>,
+  // M: a small set beside the caption: what the channel is showing, in words big enough to read, over the buttons
+  M: (t) => <div className="fr-set-m"><Screen ch={t.ch} body={t.body} snow={t.snow} /><div className="side"><span className="ch">CH {String(t.ch.n).padStart(2, "0")} · {t.ch.name}</span><p className="now" aria-hidden="true">{t.now || "TUNING…"}</p><Ctl t={t} small /></div></div>,
   L: (t) => <><Screen ch={t.ch} body={t.body} snow={t.snow} /><Ctl t={t} /></>,
 };
 export default function TheSet({ size = "M" }) {
@@ -206,12 +213,13 @@ export default function TheSet({ size = "M" }) {
   const [hold, setHold] = useState(false);
   const [snow, setSnow] = useState(false);
   const [day] = useState(() => Math.floor(Date.now() / 86400000));
+  const [now, setNow] = useState("");   // the caption the channel on the air reports (useSetNow)
   const ch = CHANNELS[ci];
   const tune = (k) => {
-    setCi(v => (v + k + CHANNELS.length) % CHANNELS.length);
+    setCi(v => (v + k + CHANNELS.length) % CHANNELS.length); setNow("");
     if (!rm) { setSnow(true); setTimeout(() => setSnow(false), STATIC_MS); }
   };
-  const pick = (k) => { setCi(k); if (!rm) { setSnow(true); setTimeout(() => setSnow(false), STATIC_MS); } };
+  const pick = (k) => { setCi(k); setNow(""); if (!rm) { setSnow(true); setTimeout(() => setSnow(false), STATIC_MS); } };
   useEffect(() => {
     if (!auto || hold) return undefined;
     const t = setTimeout(() => { if (!document.hidden) tune(1); }, SURF_MS);
@@ -222,7 +230,7 @@ export default function TheSet({ size = "M" }) {
   return (
     <Frame title="THE SET" meta={`CH ${ch.n} // ${ch.name}`} tone="var(--eb-amber)" className={`fr-set v-${size}`}>
       <div className="fr-set-w" onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)} onFocus={() => setHold(true)} onBlur={() => setHold(false)}>
-        <V ch={ch} body={body} snow={snow} tune={tune} pick={pick} auto={auto} setAuto={setAuto} />
+        <SetNow.Provider value={setNow}><V ch={ch} body={body} snow={snow} now={now} tune={tune} pick={pick} auto={auto} setAuto={setAuto} /></SetNow.Provider>
         <p className="sr-only" aria-live="polite">CHANNEL {ch.n}, {ch.name}.</p>
       </div>
     </Frame>
