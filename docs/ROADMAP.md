@@ -158,8 +158,8 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
       Season 2 spine after UNRATIFIED. Guardrails: crowds are anonymous subjects; named
       living people never shown rioting or doing violence; cold satire, non-graphic.
 
-1. [in progress: slices 1 and 2 shipped, see Done] **Side quests → vouches.**
-   Remaining slices: (b) [next] vouch → score effect: DECIDED by Scott 2026-09-28: +2 to that category per vouch (max +14 across 7); show it on the file and in the breakdown; each vouch appends a history entry with cause "vouch" (src/movement.js: YOUR CHANGES, not a visit, not capped);
+1. [in progress: slices 1, 2 and (b) shipped, see Done] **Side quests → vouches.**
+   Remaining slices: (b) [shipped 2026-10-09: +2 to that category per vouch (max +14 across 7) as a history entry with cause "vouch"; an unassessed category is filed with no number moved; the next interview blends it like any prior reading];
    (c2) bring someone (needs a second player or a referral; witness shipped as c1);
    (d) real-world Directives
    reported back via appeal; (e) text-chat quests on Haiku (capped); (f) offers from
@@ -241,6 +241,11 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
   ~/projects/organize/collect_reports.py.
 
 ## Done
+
+- 2026-10-09 Side quests (b), vouch score effect (Scott 2026-09-28): completing a directive adds
+  +2 to its category on the file (netlify/lib/quests.js vouchEffect): a history entry of cause
+  "vouch", score moved by the formula's change (held remainders stay held), pen card updated,
+  "SCORE +n" in the confirmation line. Check: check-quests.
 
 - 2026-10-07 Park chess polish: the Recreation Ground keeps ONE stone table and one kibitzer
   (src/chess/park.js); its side-view cutaway has the chess table with two seated and a watcher

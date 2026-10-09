@@ -27,7 +27,7 @@ export function useQuests(caseId) {
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setError(d.error || "The Archive refused. It gave no reason. It does not owe you one."); return; }
       setState(d);
-      if (d.vouch) setNote(`${d.vouch.kind === "witness" ? "ATTENDANCE" : "CONTACT"} CONFIRMED. ${d.vouch.name.toUpperCase()} VOUCHES FOR YOUR ${DIM_LABEL[d.vouch.dim]}. ENTERED ON YOUR FILE.`);
+      if (d.vouch) setNote(`${d.vouch.kind === "witness" ? "ATTENDANCE" : "CONTACT"} CONFIRMED. ${d.vouch.name.toUpperCase()} VOUCHES FOR YOUR ${DIM_LABEL[d.vouch.dim]}. ENTERED ON YOUR FILE.${d.vouch.delta ? ` SCORE ${d.vouch.delta > 0 ? "+" : ""}${d.vouch.delta}.` : ""}`);
       else if (action === "accept") setNote("DIRECTIVE ACCEPTED. THE SUBJECT DOES NOT KNOW YOU ARE COMING. IT WILL NOT BE SURPRISED.");
       else if (action === "abandon") setNote("DIRECTIVE ABANDONED. LOGGED, WITHOUT SURPRISE.");
     } catch {

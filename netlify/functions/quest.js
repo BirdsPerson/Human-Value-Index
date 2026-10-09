@@ -4,7 +4,9 @@
 // session (lib/auth.js requireCaseAuth). Completion is checked against the city sim
 // server-side: the figure must be in that building now. No paid API is called here.
 import { isCaseId } from "../lib/intake.js";
-import { getCase, updateCase, hitLimit } from "../lib/store.js";
+import { getCase, updateCase, putPenCard, hitLimit } from "../lib/store.js";
+import { housedUnderAt } from "../../src/city/sim.js";
+import { sanitizeAvatar } from "../../src/avatar.js";
 import { requireCaseAuth, caseAuthBody } from "../lib/auth.js";
 import { applyQuest, questState } from "../lib/quests.js";
 import { loadSocialSnapshots } from "../lib/social-store.js";
@@ -66,6 +68,16 @@ export default async (req, context) => {
       return r.record;
     });
     if (fail) return json(fail.status, { error: fail.error });
+    // A vouch that moved the score moves the citizen's pen card with it.
+    if (vouch?.delta) {
+      const e = saved.history[saved.history.length - 1];
+      const last4 = caseId.slice(-4);
+      await putPenCard(caseId, {
+        slug: `citizen-${last4.toLowerCase()}`, name: `Subject ${last4}`, score: e.score, tier: e.tier, quadrant: e.quadrant, warmth: e.warmth, competence: e.competence, scarcity: e.scarcity ?? null,
+        housedUnder: housedUnderAt(e.at), avatar: sanitizeAvatar(saved.avatar), sprite: saved.avatar?.kind === "sprite" ? saved.avatar.url : null,
+        kind: "citizen", updated: e.at,
+      }).catch(err => console.error("vouch pen card failed", err?.message));
+    }
     return json(200, { ...questState(saved, now), vouch }, noStore);
   } catch (err) {
     console.error("quest failed", err?.name);
