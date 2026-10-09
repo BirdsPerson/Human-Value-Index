@@ -22,7 +22,7 @@
 .ts-row[aria-disabled="true"] { opacity: 0.4; cursor: default; }
 .ts-caret { width: 1.2em; flex: none; color: var(--ts-hi); }
 .ts-art { flex: none; display: flex; align-items: center; }
-.ts-art canvas, .ts-art img { image-rendering: pixelated; width: 24px !important; height: 36px !important; margin: 0 !important; }
+.ts-art canvas, .ts-art img { image-rendering: pixelated; height: 36px !important; width: auto !important; margin: 0 !important; }   /* the picture keeps its own shape: a 32x48 face or a square crest */
 .ts-lbl { flex: 1 1 auto; min-width: 0; }
 .ts-val { flex: none; color: var(--ts-hi); }
 .ts-val b { padding: 0 var(--s1); cursor: pointer; font-weight: 700; }
