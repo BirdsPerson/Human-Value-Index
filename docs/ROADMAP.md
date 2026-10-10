@@ -289,7 +289,9 @@ in the Shipped bullet. If a track has nothing shippable tonight, take the next w
   alternatives always exist; THE SANCTIONED offshore last.
 - **Tue: SURFING, then the other open games.** Surfing mini-game at THE COAST's break (vault backlog
   "Surfing mini-game": paddle, catch, carve, cutbacks, tubes, wipeouts, combos, casual bot, cabinet).
-  When surfing ships, this day takes: the dungeon's next stage (docs/design/DUNGEON.md), football
+  Then the BAR GAMES PACK (vault backlog "Bar games pack"): billiards, darts, quoits, table
+  shuffleboard as tap-to-play props in the city's bars; one shared bar-table engine; research first.
+  When surfing and the bar games ship, this day takes: the dungeon's next stage (docs/design/DUNGEON.md), football
   playtest notes (vault backlog "Football playtest notes"), basketball S2 (docs/design/BASKETBALL.md).
 - **Wed: THE CITY, more real.** docs/CITY_SPEC.md + item 6 above: more places per district,
   day/night, weather, news into the city, realistic layouts, NPC routines.
