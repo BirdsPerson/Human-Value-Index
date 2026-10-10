@@ -9,6 +9,52 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Backlog (priority order)
 
+P. **Playtest 2026-10-10 findings** (390x844 touch emulation + 1440; screens docs/screens/playtest/2026-10-10/).
+   Bugs:
+   - **Score index lists 62 of ~1,209 files.** #scores reads the static `FAMOUS_FIGURES` (src/App.jsx:605
+     `uniqueFigures = FAMOUS_FIGURES`), so every referral and roster-engine figure is missing ("62 ON FILE"
+     while the cube says 1,209 and the city POP 1210). Feed it from /api/pen like the cube does.
+   - **Command-bar labels vanish once visited.** The F-key links have no class, so `src/ui/ui.css:12`
+     `a:not([class]):visited { color: var(--accent) }` paints the label accent-green on the green tab:
+     CITY and MY FILE turn invisible after one visit (seen on #scores, #cube, #play). Exempt the nav.
+   - **Floor counts disagree.** THE MERIDIAN: cutaway and the Finance directory say 6 FLOORS (PH, 4F-1F,
+     lobby); #city/finance/the-meridian says 14F with PH, 12F..1F, G.
+   - **First-day checklist miscounts:** "0 OF 4 DONE" over "FIVE THINGS", steps numbered 1-5 (+ optional 6).
+     And step 1 is locked ("VESTS ON 2026-10-12") and step 2 asks you to invest ¢0: a new player's first two
+     steps are dead ends. Lead with something doable now (find yourself, play a game).
+   - **"Release in ~31 real min" contradicts the city.** Intake lists your file as awaiting release, but
+     FIND ME already shows you on the Arena platform boarding Loop 5. Pick one story.
+   - **Your own file is absent from the cube** (FIND "Subject MU6P" finds nothing; no YOU marker) and the
+     cube copy still says "HOLLOW POINTS: THE THIRD AXIS IS NOT YET ON FILE" with 0 pending.
+   - **Phone tap on the iso city did not open a building** under touch emulation (synthetic tap at three spots;
+     `]` key and desktop click both open the cutaway). Verify on a real phone before fixing (item 9).
+   - **#pen redirects to #arrivals** silently; old links/bookmarks to the pen land on INTAKE.
+   Confusions / polish:
+   - Result screen: three badges (RETAINED SPECIALIST / KEYSTONE / UNRATIFIED) plus a fourth name in the copy
+     (CERTIFIED CONTRIBUTOR); a new player cannot tell tier from cubrant from status. One line saying which is which.
+   - Breakdown "EV 90%" is unexplained jargon; appeal checklist drops the ↓ (lower-is-better) marks, so
+     THREAT 12 reads like a bad score worth appealing.
+   - After the result, F3 swaps PLAY for APPEAL; "REQUEST RE-ASSESSMENT" and "APPEAL" sit side by side
+     with no word on how they differ.
+   - Returning assessed subject still gets "SHALL WE ASSESS YOUR VALUE?" and GET EVALUATED as option 1.
+   - Three version numbers on one screen: BETA V2.0.0, VERSION 3.1, PROTOCOL V7.4.1 (and METHOD V4 on the cube).
+   - Interview: officer acks repeat ("LOYALTY TO KIN" twice, "LARGE" twice), "DIRECTIVE 7" gag reappears as
+     "DIRECTIVE 37" in the verdict; "how long to train someone" and "what skill took years" ask the same thing.
+     "Nine billion other people" vs the boot's 8,045,311,447 entries.
+   - Referral pick list renders every namesake twice (tap rows that file at once + a checkbox list with
+     FILE SELECTED); row 1 is pre-highlighted, so one stray tap files John Smith the explorer. Keep one list.
+   - Phone city: CLOCK.SYS + view tabs take ~55% of the first screen before the map; canvas is 344x340.
+     Cutaway toolbar truncates the building name ("THE..."), ENTER/CLOSE text touches the borders.
+   - MAP view labels only edge districts (centre unlabelled), truncates "SPRAW", short names differ from the
+     directory (OLD / THE OLD TOWN, SUBURB / THE SUBURBS). STREET clips labels at the frame edge.
+   - Four city views (CITY/MAP/STACK/STREET) with no line on what STACK is for.
+   - MY FILE is ~11 phone screens; the first-day checklist sits above your own score.
+   - Desktop: city controls fall below the 900px fold; cube tier chips overflow at 1440 (SURPLUS hidden);
+     #cube highlights MENU in the command bar.
+   - Header truncates "CASE UN…" / "CASE HV…" at 390 on every screen.
+   Missing (what a player reached for): rank among all files on the result; "where am I" marker on the cube
+   and MAP; a way to see what my sprite will look like / redo the photo description.
+
 0. [in progress 2026-09-29, Scott's order: scale -> community -> HQ]
    a. [shipped 2026-09-29, see Done] **Scale.** Production sprite atlas + slim /api/pen.
    b. [slice 2 shipped 2026-10-08: named cliques + home hangout, docs/CITY_SPEC.md "GROUPS"; left: group
