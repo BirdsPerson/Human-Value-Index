@@ -38,7 +38,7 @@ export async function syncFile(caseId) {
     if (!res.ok && res.status !== 404) return null;          // offline or metered: keep the cache
     const d = await res.json().catch(() => null);
     const cached = readLastResult();
-    if (d?.latest) writeLastResult({ caseId, ...d.latest, avatar: d.avatar || null, history: d.history, at: Date.now() });
+    if (d?.latest) writeLastResult({ caseId, ...d.latest, avatar: d.avatar || null, history: d.history, ...(d.home ? { home: d.home } : {}), at: Date.now() });
     else if (cached?.caseId === caseId) { try { localStorage.removeItem(LAST_KEY); } catch { /* ignore */ } }
     try { window.dispatchEvent(new CustomEvent("hvi-file", { detail: caseId })); } catch { /* ignore */ }
     return d;

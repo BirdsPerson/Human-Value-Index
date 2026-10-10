@@ -23,23 +23,25 @@ const districtName = (id) => SIM.DISTRICTS.find(d => d.id === id)?.name || Strin
 export function citizenOf(caseId, rec) {
   const last = (rec?.history || []).filter(h => h && typeof h.score === "number").pop();
   const last4 = caseId.slice(-4);
-  return { slug: `citizen-${last4.toLowerCase()}`, name: `Subject ${last4}`, score: last?.score, tier: last?.tier, kind: "citizen", housedUnder: SIM.housedUnderAt(last?.at) };
+  return { slug: `citizen-${last4.toLowerCase()}`, name: `Subject ${last4}`, score: last?.score, tier: last?.tier, kind: "citizen", housedUnder: SIM.housedUnderAt(last?.at), ...(rec?.home ? { home: rec.home } : {}) };
 }
 // MY APARTMENT names the same door as the tower: where the cutaway (tower.js residentFlat) puts the
 // citizen, its storey, flat and rooms. A home that is not a tower (a house, a cottage) keeps the
 // floor and a unit number hashed from the citizen (no cutaway flat, so no furniture placement yet).
-export function apartmentOf(caseId, rec) {
+// day: the machine day (default: now). The Housing Office's assignment (rec.home) is the citizen's
+// own door from its day (netlify/lib/housing.js), as the census and the tower read it.
+export function apartmentOf(caseId, rec, day) {
   try {
     const s = citizenOf(caseId, rec);
-    const place = SIM.homeOf(s), p = SIM.PLACES[place];
+    const place = SIM.homeOf(s, SIM.SEED, day), p = SIM.PLACES[place];
     const b = SIM.BUILDING[p?.building];
-    const fi = SIM.floorOf(place, SIM.keyOf(s));
+    const fi = SIM.floorOf(place, SIM.keyOf(s), SIM.SEED, s, day);
     const f = b?.floors?.find(x => x.index === fi) || null;
     let floorCode = f ? (f.code || (f.index === 0 ? "G" : `${f.index}F`)) : null;
     let unit = `${floorCode || "G"}-${String(1 + (SIM.keyOf(s).split("").reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7) % 24)).padStart(2, "0")}`;
     let flat = null, storeyLevel = null;
     const plan = b ? towerPlan(b) : null;
-    const u = plan ? residentFlat(plan, s) : null;
+    const u = plan ? residentFlat(plan, s, SIM.SEED, day) : null;
     if (u) {
       const st = plan.storeys.find(x => x.units.includes(u));
       storeyLevel = st.level; floorCode = st.code; unit = u.label;

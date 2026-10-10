@@ -37,6 +37,8 @@ export async function censusSubjects({ strict = false, withTimes = false } = {})
       quadrant: c.quadrant ?? null, warmth: c.warmth ?? null, competence: c.competence ?? null, scarcity: c.scarcity ?? null, judge: "UNRATIFIED", realityIndex: REALITY_INDEX,
       // Which ladder houses them (SCALE.md §4.3): the card's own flag, else the card's time (a card from before the flag).
       housedUnder: c.housedUnder ?? housedUnderAt(c.updated),
+      // Their own apartment (netlify/lib/housing.js; src/city/sim.js homeAt): every viewer houses them there.
+      ...(c.home ? { home: c.home } : {}),
       ...(withTimes ? { filedAt: c.updated ?? null } : {}),
     })),
     // Referred figures: breakdown once fact-checked (see publicFigure); the verdict and

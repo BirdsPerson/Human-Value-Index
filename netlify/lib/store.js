@@ -41,10 +41,12 @@ const PEN_INDEX = "index";
 export async function putPenCard(caseId, card) {
   const store = pen();
   const key = `citizen:${caseId}`;
-  // A hand-assigned sprite (e.g. /sprites/scott.png) survives re-assessment.
-  if (card.sprite == null) {
+  // A hand-assigned sprite (e.g. /sprites/scott.png) and the Housing Office's assignment
+  // (netlify/lib/housing.js) survive re-assessment.
+  if (card.sprite == null || card.home == null) {
     const prev = await store.get(key, { type: "json" }).catch(() => null);
-    if (prev?.sprite) card = { ...card, sprite: prev.sprite };
+    if (card.sprite == null && prev?.sprite) card = { ...card, sprite: prev.sprite };
+    if (card.home == null && prev?.home) card = { ...card, home: prev.home };
   }
   await store.setJSON(key, card);
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -70,6 +72,25 @@ export async function setPenAvatar(caseId, avatar) {
     if (!cur?.data?.cards) return true;
     if (!cur.data.cards.some(c => c.key === key)) return true;
     const cards = cur.data.cards.map(c => (c.key === key ? { ...c, avatar } : c));
+    const res = await store.setJSON(PEN_INDEX, { cards }, { onlyIfMatch: cur.etag });
+    if (res.modified) return true;
+  }
+  return true;
+}
+
+// The Housing Office's assignment on a citizen's card and its line in the index (src/city/sim.js
+// homeAt reads it from the census). In place, like the avatar. No card on file: nothing to change.
+export async function setPenHome(caseId, home) {
+  const store = pen();
+  const key = `citizen:${caseId}`;
+  const prev = await store.get(key, { type: "json" }).catch(() => null);
+  if (!prev) return false;
+  await store.setJSON(key, { ...prev, home });
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const cur = await store.getWithMetadata(PEN_INDEX, { type: "json" });
+    if (!cur?.data?.cards) return true;
+    if (!cur.data.cards.some(c => c.key === key)) return true;
+    const cards = cur.data.cards.map(c => (c.key === key ? { ...c, home } : c));
     const res = await store.setJSON(PEN_INDEX, { cards }, { onlyIfMatch: cur.etag });
     if (res.modified) return true;
   }

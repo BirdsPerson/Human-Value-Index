@@ -27,6 +27,7 @@ import { displayName } from "../figures.js";
 import { readCaseId } from "../caseFile.jsx";
 import { loadRooms, loadShops, lastView, onView } from "../shops/client.js";
 import { useShops, Closet, Furnish, playAtHome, injectShopStyles } from "../shops/parts.jsx";
+import { TransferDesk } from "../economy/Transfer.jsx";
 import { furnishLook, PLAY_AT_HOME, TOP_TIER, withIssuedPc, playsHere, ANY_FLAT_PLAYS, homePlayAria } from "../economy/shops.js";
 
 const DeepZoom = lazy(() => import("./DeepZoom.jsx"));   // DEEP ZOOM: its own chunk, fetched on the first zoom
@@ -824,7 +825,7 @@ function UnitSheet({ u, plan, P, res, onClose, onOpen, censusRef, unitWord, mine
 function YourFlat({ u, plan }) {
   const caseId = readCaseId();
   const S = useShops(caseId);
-  const [panel, setPanel] = useState(null);   // closet | furnish
+  const [panel, setPanel] = useState(null);   // closet | furnish | transfer
   useEffect(() => { injectShopStyles(); }, []);
   const look = withIssuedPc(lookOf(plan, plan.storeys.find(s => s.units.includes(u)), u, ""), u);   // DEPARTMENT MAIL: the issued BEIGE PC
   // (a JETSAM! cabinet has its own button under the picture, as in anyone's flat)
@@ -838,9 +839,11 @@ function YourFlat({ u, plan }) {
         <button type="button" style={btn} aria-expanded={panel === "closet"} onClick={() => setPanel(p => (p === "closet" ? null : "closet"))}>THE BEDROOM CLOSET</button>
         <button type="button" style={btn} aria-expanded={panel === "furnish"} onClick={() => setPanel(p => (p === "furnish" ? null : "furnish"))}>FURNISH</button>
         <a style={{ ...btn, display: "inline-flex", alignItems: "center", textDecoration: "none" }} href="#shop">THE SHOPS</a>
+        <button type="button" style={btn} aria-expanded={panel === "transfer"} onClick={() => setPanel(p => (p === "transfer" ? null : "transfer"))}>REQUEST A TRANSFER</button>
       </div>
       {panel === "closet" && <div style={{ marginTop: "var(--s3)" }}><Closet caseId={caseId} S={S} /></div>}
       {panel === "furnish" && <div style={{ marginTop: "var(--s3)" }}><Furnish S={S} /></div>}
+      {panel === "transfer" && <div style={{ marginTop: "var(--s3)" }}><TransferDesk caseId={caseId} startOpen /></div>}
     </div>
   );
 }

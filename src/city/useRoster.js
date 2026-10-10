@@ -23,7 +23,8 @@ function withSelf(list) {
   // Your sealed verdict and breakdown open on your own card. Everything the sim reads
   // (slug, tier, warmth, competence, sprite) stays as the census has it, so you see
   // yourself in the same job, at the same place, as every other viewer does.
-  const own = { verdict: last.verdict, breakdown: last.breakdown, rubric: last.rubric ?? 1, you: true, caseId };
+  // home: the Housing Office's assignment, as the census has it (sim.js homeAt), for when the census is not in yet
+  const own = { verdict: last.verdict, breakdown: last.breakdown, rubric: last.rubric ?? 1, you: true, caseId, ...(last.home ? { home: last.home } : {}) };
   if (i >= 0) { const out = list.slice(); out[i] = { ...list[i], ...own, avatar: list[i].avatar || last.avatar || null }; return out; }
   // Not in the census (offline, or not yet indexed): the server's slug, so the job matches.
   return [...list, { name, score: last.score, tier: last.tier, avatar: last.avatar || null, kind: "citizen", slug: `citizen-${tag.toLowerCase()}`, ...own }];

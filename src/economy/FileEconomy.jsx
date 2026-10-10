@@ -21,7 +21,7 @@ export function FileEconomy({ caseId }) {
         <LegalFine />
       </Disclosure>
       <Disclosure title="MY APARTMENT" meta={st.apartment ? st.apartment.buildingName : ""}>
-        <ApartmentCard apt={st.apartment} />
+        <ApartmentCard apt={st.apartment} caseId={caseId} />
       </Disclosure>
       {st.open && (
         <Disclosure id="hvi-wardrobe" title="WARDROBE AND HOME" meta="THE CLOSET // YOUR FURNITURE">

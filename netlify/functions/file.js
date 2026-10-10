@@ -20,7 +20,10 @@ export function currentFile(record) {
   // Recalibrations (the Department's changes) are in the history but are not visits.
   // profile.hand: "L" | "R", admin-set (scripts/set-hand.mjs); the games read it as their default hand.
   const hand = record?.profile?.hand === "L" || record?.profile?.hand === "R" ? record.profile.hand : null;
-  return { visits: visitCount(history), latest, avatar: record?.avatar || null, history: publicHistory(history), ...(hand ? { profile: { hand } } : {}) };
+  // home: the Housing Office's assignment (netlify/lib/housing.js), as the census carries it, so this
+  // browser's own file is housed where every other viewer houses it (src/city/sim.js homeAt)
+  const home = record?.home && typeof record.home === "object" ? record.home : null;
+  return { visits: visitCount(history), latest, avatar: record?.avatar || null, history: publicHistory(history), ...(hand ? { profile: { hand } } : {}), ...(home ? { home } : {}) };
 }
 
 export default async (req, context) => {

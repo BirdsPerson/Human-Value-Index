@@ -39,7 +39,7 @@ export default function Economy() {
 
       {caseId && st?.apartment && (
         <Frame title="MY APARTMENT" meta="ASSIGNED. FREE. PERMANENT.">
-          <ApartmentCard apt={st.apartment} />
+          <ApartmentCard apt={st.apartment} caseId={caseId} />
         </Frame>
       )}
 

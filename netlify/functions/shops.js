@@ -25,6 +25,7 @@ import { ledger, LedgerDown } from "../lib/economy-db.js";
 import { SHOP_ACTIONS, shopsView, buy, upgrade, setOutfit, place, buildingRooms, machineDayNow } from "../lib/shops.js";
 import { CLOSED_LINE } from "../../src/economy/rules.js";
 import { collectionOf } from "../../src/economy/shops.js";
+import { ensureHome } from "../lib/housing.js";
 
 export { SHOP_ACTIONS };
 export const SHOP_IP_PER_HOUR = 600;
@@ -66,7 +67,7 @@ export default async (req, context) => {
     } catch {
       return json(503, { error: LIMITER_DOWN_LINE }, { "Retry-After": "60" });
     }
-    const rec = await getCase(caseId);
+    let rec = await getCase(caseId);
     if (!rec) {
       const miss = await hitLimit(`shop-miss:${ip}`, SHOP_MISS_PER_HOUR, "hour").catch(() => ({ ok: false }));
       return json(miss.ok ? 404 : 429, { error: miss.ok ? NO_SUCH_FILE : "Too many wrong case numbers. The Department suspects you are guessing." });
@@ -76,6 +77,7 @@ export default async (req, context) => {
     const auth = await requireCaseAuth(req, caseId, { write: req.method === "POST" });
     if (!auth.ok) return json(auth.status, { open, assessed, ...caseAuthBody(auth) }, noStore);
     if (!open) return json(req.method === "GET" ? 200 : 503, { open, assessed, error: CLOSED_LINE, machineDay: md, collection: collectionOf(md) }, noStore);
+    rec = (await ensureHome(caseId, rec)).rec;   // the Housing Office: the door in force, the furniture with it
     if (req.method === "GET") return json(200, { open, assessed, ...(await shopsView(caseId, rec)) }, noStore);
 
     let out;

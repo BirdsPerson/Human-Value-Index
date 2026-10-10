@@ -608,7 +608,9 @@ function placedOn(day) {
 // The building and floor a moved place stood in on a day (the Plaza's, or its old lot's).
 export const placedAt = (id, day) => (PLAZA_MOVED.has(id) ? (plazaOn(day) ? PLACED.new[id] : PLACED.old[id]) : PLACES[id]);
 // Which of its place's floors a subject keeps. Stable for the whole stay.
-export function floorOf(placeId, key, seed = SEED) {
+// A citizen at their assigned home keeps the assigned unit's floor (pass the subject, and the day).
+export function floorOf(placeId, key, seed = SEED, s = null, day) {
+  if (s?.kind === "citizen" && s.home) { const a = homeAt(s, day); if (a && a.p === placeId) return a.f; }
   const fl = PLACES[placeId]?.floors;
   if (!fl || !fl.length) return null;
   return fl.length === 1 ? fl[0] : fl[Math.floor(h01(`${seed}|floor|${key}|${placeId}`) * fl.length)];
@@ -948,7 +950,7 @@ function printOf(s) {
   return p;
 }
 // The ladder in force is part of the key: the two ladders never share a cached answer.
-const subjKey = (s, seed, day) => `${seed}|${keyOf(s)}|L${ladderOn(day)}|${tierOf(s, day)}|${homeClass(s, day)}|${s?.died ? "d" : "l"}|${printOf(s)}`;
+const subjKey = (s, seed, day) => `${seed}|${keyOf(s)}|L${ladderOn(day)}|${tierOf(s, day)}|${homeClass(s, day)}|${s?.died ? "d" : "l"}|${printOf(s)}${s?.home ? `|H${homeTag(s, day)}` : ""}`;
 
 // For subjects the record places (evidence >= 3); the rest are drafted (below).
 function scoreJob(job, fields, dims, key, seed, dead) {
@@ -1033,7 +1035,37 @@ export const HOMES_BY_BAND = [["penthouses", "surfside", "chalets", ...ENGINE_HO
 export const HOME_ONLY_TIERS = { ...Object.fromEntries(SUBURB_STARTERS.map(id => [id, [3]])), ...Object.fromEntries(FARM_HOMES[2].map(id => [id, [4, 5]])) };
 const bandHomes = (k, t) => HOMES_BY_BAND[k].filter(id => !HOME_ONLY_TIERS[id] || HOME_ONLY_TIERS[id].includes(t));
 const BAND_FOR = LEGACY_TIER_ORDER.map((_, t) => { const k = t === 0 ? 0 : t <= 2 ? 1 : 2, band = bandHomes(k, t); return { band, cap: band.reduce((n, id) => n + PLACES[id].cap, 0) }; });   // by housing class 0..5
+// A PLAYER'S OWN APARTMENT (from HOUSING_DAY): a citizen's file carries the unit the Housing
+// Office assigned it (`home`, written by netlify/lib/housing.js onto the case and its pen card, so
+// the census, the published plans' records and this browser's own file all hold it):
+//   {u: unit id, p: home place, f: sim floor, d: machine day it takes effect, k: "assign"|"transfer",
+//    was: {u, p, f} | null (what held before d)}
+// d is always past every day already published (plans.js LOOKAHEAD), so a move lands at a day
+// boundary and no published day changes. An assignment outside the citizen's band (their tier moved)
+// is not honored: they fall back to the hashed home until the office assigns again. One band up is
+// honored (a transfer the score qualified for). Famous residents never hold one.
+export const HOUSING_DAY = 867;   // machine day; set past every day published at the deploy
+export const citizenBand = (s, day) => { const t = Math.max(0, homeClass(s, day)); return t === 0 ? 0 : t <= 2 ? 1 : 2; };
+export const bandHomesFor = (s, day, up = false) => {
+  const k = citizenBand(s, day);
+  if (!up) return bandHomes(k, Math.max(0, homeClass(s, day)));
+  return k > 0 ? HOMES_BY_BAND[k - 1].filter(id => !HOME_ONLY_TIERS[id]) : [];
+};
+// -> {u, p, f} in force for this citizen on `day`, or null (not a citizen, nothing assigned, not valid)
+export function homeAt(s, day) {
+  const h = s?.kind === "citizen" ? s.home : null;
+  if (!h || typeof h !== "object") return null;
+  const D = ladderDay(day);
+  if (D < HOUSING_DAY) return null;
+  const a = D >= (Number(h.d) || 0) ? h : h.was;
+  if (!a || typeof a.u !== "string" || !PLACES[a.p] || PLACES[a.p].kind !== "home" || !PLACES[a.p].floors?.includes(a.f)) return null;
+  if (!bandHomesFor(s, D).includes(a.p) && !bandHomesFor(s, D, true).includes(a.p)) return null;
+  return { u: a.u, p: a.p, f: a.f };
+}
+const homeTag = (s, day) => { const a = s?.kind === "citizen" && s.home ? homeAt(s, day) : null; return a ? `${a.p}/${a.f}` : ""; };
 export function homeOf(s, seed = SEED, day) {
+  const a = s?.kind === "citizen" && s.home ? homeAt(s, day) : null;
+  if (a) return a.p;
   const t = Math.max(0, homeClass(s, day));
   const { band, cap } = BAND_FOR[t];
   let r = h01(`${seed}|home|${keyOf(s)}`) * cap;
@@ -1674,7 +1706,7 @@ export function setRoster(list) {
   // ROSTER_VER is the legacy-ladder hash the published days carry (`plan.roster`), byte for byte;
   // ROSTER_VER2 adds the v2 label, so a score move inside a legacy rung still invalidates the memo.
   const ver = String(fnv(order.map(s => `${keyOf(s)}:${tierOf(s, SCALE_FROM - 1)}:${printOf(s)}`).join(",")));
-  const ver2 = String(fnv(order.map(s => `${keyOf(s)}:${tierOf(s, SCALE_FROM - 1)}:${tierOf(s, SCALE_FROM)}:${s?.housedUnder || 0}:${printOf(s)}`).join(",")));
+  const ver2 = String(fnv(order.map(s => `${keyOf(s)}:${tierOf(s, SCALE_FROM - 1)}:${tierOf(s, SCALE_FROM)}:${s?.housedUnder || 0}:${printOf(s)}${s?.home ? `:${s.home.p}/${s.home.f}/${s.home.d}/${s.home.was?.p || ""}/${s.home.was?.f ?? ""}` : ""}`).join(",")));
   if (ver2 === ROSTER_VER2) return false;
   ROSTER_ORDER = order; ROSTER_KEYS = seen; ROSTER_VER = ver; ROSTER_VER2 = ver2;
   memo.clear();
@@ -3003,7 +3035,7 @@ export function whereAt(s, machineTime, seed = SEED) {
     // a stay at Sam's or Irene's before PLAZA_DAY stands on their old lot (the plan's walks end there);
     // the building and floor are the Plaza's, as the city is drawn (THE SHORE PLAZA)
     const p = PLAZA_MOVED.has(g.placeId) && plazaOn(d0 + 1) !== PLACED_NEW ? onGround(d0 + 1, () => spotIn(g.placeId, key, seed)) : spotIn(g.placeId, key, seed), pl = PLACES[g.placeId];
-    const floor = floorOf(g.placeId, key, seed);
+    const floor = floorOf(g.placeId, key, seed, s, d0 + 1);
     const out = { placeId: g.placeId, districtId: pl.district, activity: g.activity, progress, x: p.x, y: p.y, buildingId: pl.building, floor, floorId: BUILDING[pl.building].floors[floor].id };
     if (g.haunt) out.haunt = true;
     return out;

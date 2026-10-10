@@ -21,6 +21,7 @@ import { deviceHash } from "../lib/proposals.js";
 import { NO_SUCH_FILE } from "./case.js";
 import { ledger, LedgerDown } from "../lib/economy-db.js";
 import { ACTIONS, apartmentOf, boardView, walletView, collect, trade } from "../lib/economy.js";
+import { ensureHome } from "../lib/housing.js";
 import { CLOSED_LINE, UBI_LINE, LEGAL_LINES, UBI, TRAY_DAYS, MIN_INVEST, LOCK_DAYS } from "../../src/economy/rules.js";
 
 export { ACTIONS };
@@ -73,10 +74,12 @@ export default async (req, context) => {
     if (!auth.ok) return json(auth.status, { open, assessed, ...caseAuthBody(auth) }, noStore);
 
     if (req.method === "GET") {
-      if (!open) return json(200, { open, assessed, ...PUBLIC, ...(chip ? {} : { apartment: apartmentOf(caseId, rec), board: await boardView() }) }, noStore);
-      const wallet = await walletView(caseId, rec);
+      // the Housing Office first: a door of their own, and the movers when a move has landed
+      const housed = chip ? rec : (await ensureHome(caseId, rec)).rec;
+      if (!open) return json(200, { open, assessed, ...PUBLIC, ...(chip ? {} : { apartment: apartmentOf(caseId, housed), board: await boardView() }) }, noStore);
+      const wallet = await walletView(caseId, housed);
       if (chip) return json(200, { open, assessed, balance: wallet.balance, tray: wallet.tray.days, worth: wallet.worth }, noStore);
-      return json(200, { open, assessed, ...PUBLIC, apartment: apartmentOf(caseId, rec), wallet, board: await boardView() }, noStore);
+      return json(200, { open, assessed, ...PUBLIC, apartment: apartmentOf(caseId, housed), wallet, board: await boardView() }, noStore);
     }
 
     if (!open) return json(503, { open, error: CLOSED_LINE });

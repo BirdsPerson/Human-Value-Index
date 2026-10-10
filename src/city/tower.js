@@ -16,7 +16,7 @@
 // Every unit has an `owner` slot (THE DEPARTMENT until slice 2) and every room a `purpose` and
 // `furniture[]` ({item, x: 0..1 across the room}), so dressing a room later is data only.
 
-import { PLACES, BUILDINGS, SEED, HOUSING_TIERS, homeOf, floorOf, keyOf, isOwl, toHours } from "./sim.js";
+import { PLACES, BUILDINGS, SEED, HOUSING_TIERS, HOUSING_DAY, homeOf, homeAt, floorOf, keyOf, isOwl, toHours, ladderDay } from "./sim.js";
 import { SAMS, IRENES, BREWHOUSE, TAPROOM } from "./shorePlaza.js";   // THE SHORE PLAZA's storefront and brewery
 import { proprietorOf } from "./proprietors.js";   // a business with a subject on record as its proprietor
 
@@ -149,11 +149,16 @@ export function towerPlan(b) {
       const top = st.level === N - 1 && /^(PH)$/.test(st.code);
       const count = top ? 1 : Math.max(1, FLATS_PER[band] - (st.level === 0 ? 1 : 0) - (other.length ? 1 : 0));
       const rooms = top ? FLAT_ROOMS[0] : FLAT_ROOMS[band];
+      const made = [];
       for (let j = 0; j < count; j++) {
         const pid = homes[j % homes.length];
         const letter = LETTERS[n];
-        unit("flat", pid, rooms, `${st.code === "G" ? "G" : st.code === "PH" ? "PH" : st.level}${letter}`);
+        made.push(unit("flat", pid, rooms, `${st.code === "G" ? "G" : st.code === "PH" ? "PH" : st.level}${letter}`));
       }
+      // THE PLAYERS' FLATS (from HOUSING_DAY): where a home has two flats or more on a storey, its
+      // last is kept for citizens (players): famous residents never hash into it, so a player can
+      // be given a door of their own (src/city/housing.js assigns them).
+      for (const pid of homes) { const mine = made.filter(u => u.placeId === pid); if (mine.length >= 2) mine[mine.length - 1].citizen = true; }
     }
   }
   // a business with a proprietor on record holds its own units (and a storey that is all its own)
@@ -172,19 +177,39 @@ export function towerPlan(b) {
 // ---- who lives where ---------------------------------------------------------------------------
 // A resident's flat: the sim floor floorOf gives them, a storey of it and a flat on it, hashed
 // from their key. The same for the nameplate and for where they sleep.
-export function flatOf(plan, placeId, simFloor, key) {
+// who: "citizen" | "figure" | null (null: every flat, as before HOUSING_DAY). From HOUSING_DAY
+// a famous resident hashes over the flats not kept for players, a player over the kept ones (or,
+// on a floor with none, every flat), with the same hash strings as before.
+export function flatOf(plan, placeId, simFloor, key, who = null) {
   const sts = plan.bySim[simFloor];
   if (!sts) return null;
-  const withFlats = sts.filter(st => st.units.some(u => u.kind === "flat" && u.placeId === placeId));
+  const all = (st) => st.units.filter(u => u.kind === "flat" && u.placeId === placeId);
+  let fits = all;
+  if (who) {
+    const want = who === "citizen";
+    const sub = (st) => all(st).filter(u => Boolean(u.citizen) === want);
+    if (sts.some(st => sub(st).length)) fits = sub;
+  }
+  const withFlats = sts.filter(st => fits(st).length);
   if (!withFlats.length) return null;
   const st = pick(withFlats, `${key}|storey|${plan.id}`);
-  return pick(st.units.filter(u => u.kind === "flat" && u.placeId === placeId), `${key}|flat|${plan.id}`);
+  return pick(fits(st), `${key}|flat|${plan.id}`);
+}
+export const whoOn = (s, day) => (ladderDay(day) >= HOUSING_DAY ? (s?.kind === "citizen" ? "citizen" : "figure") : null);
+// The flat a subject sleeps in at a home place on a sim floor: a player's assigned unit when it is
+// in force and there, else the hash (flatOf) over the flats their kind may draw.
+export function homeFlat(plan, s, placeId, simFloor, day) {
+  const a = s?.kind === "citizen" && s.home ? homeAt(s, day) : null;
+  if (a && a.p === placeId && a.f === simFloor) {
+    const u = (plan.bySim[simFloor] || []).flatMap(st => st.units).find(x => x.id === a.u && x.kind === "flat" && x.placeId === placeId);
+    if (u) return u;
+  }
+  return flatOf(plan, placeId, simFloor, keyOf(s), whoOn(s, day));
 }
 export function residentFlat(plan, s, seed = SEED, day) {
   const home = homeOf(s, seed, day);   // the ladder in force on that day: whereAt houses people by it
   if (!plan.homePlaces.has(home)) return null;
-  const key = keyOf(s);
-  return flatOf(plan, home, floorOf(home, key, seed), key);
+  return homeFlat(plan, s, home, floorOf(home, keyOf(s), seed, s, day), day);
 }
 
 // ---- which room, now --------------------------------------------------------------------------
@@ -213,7 +238,7 @@ export function homeRoom(unit, key, mt, owl = false) {
 // at: Map(key -> roomId), residents: Map(unitId -> [s]), units: Map(unitId -> n present)}.
 export function placeAll(plan, entries, mt, seed = SEED) {
   const rooms = new Map(), at = new Map(), residents = new Map(), units = new Map();
-  const day = Math.floor(toHours(mt) / 24);
+  const day = Math.floor(toHours(mt) / 24) + 1;   // the machine day (whereAt's d0 + 1)
   const unitById = new Map(), lobby = plan.storeys.find(s => s.level === 0)?.units.find(u => u.kind === "lobby");
   for (const st of plan.storeys) for (const u of st.units) unitById.set(u.id, u);
   const put = (u, roomObj, s, key, act) => {
@@ -234,7 +259,7 @@ export function placeAll(plan, entries, mt, seed = SEED) {
     if (r.mode !== "here") { if (lobby) put(lobby, lobby.rooms[0], s, key, "walk"); continue; }
     const pl = PLACES[r.placeId];
     if (pl?.kind === "home") {
-      const f = flatOf(plan, r.placeId, r.floor, key);
+      const f = homeFlat(plan, s, r.placeId, r.floor, day);
       if (!f) continue;
       const hr = homeRoom(f, key, mt, isOwl(s, seed));
       put(f, f.rooms.find(x => x.purpose === hr.purpose) || f.rooms[0], s, key, hr.act);

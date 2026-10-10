@@ -165,6 +165,7 @@ export async function upgrade(caseId, rec, { itemId, nonce }) {
 
 // ---- what a building's flats hold (public, for the cutaway): [{room, spot, item}] ----------------------
 const roomsCache = new Map();
+export const forgetRooms = () => roomsCache.clear();   // the movers (housing.js) carried pieces between flats
 export async function buildingRooms(buildingId, nowMs = Date.now()) {
   const L = ledger();
   if (!L || !SIM.BUILDING[buildingId]) return [];

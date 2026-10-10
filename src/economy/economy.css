@@ -73,3 +73,11 @@
   .ec-ind-row .sh { grid-area: sh; }
   .ec-ind-row .ec-spark { grid-area: sp; }
 }
+/* REQUEST A TRANSFER (Transfer.jsx) */
+.ec-xfer { margin-top: var(--s3); }
+.ec-xfer-list { display: grid; row-gap: var(--s1); margin: 0 0 var(--s3); }
+.ec-xfer-row { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 1ch; align-items: baseline; padding: var(--s1) 0; cursor: pointer; min-height: 44px; }
+.ec-xfer-row input { margin: 0; accent-color: var(--warn); }
+.ec-xfer-row .n { color: var(--fg); overflow-wrap: anywhere; }
+.ec-xfer-row .lk { grid-column: 2; font-size: var(--t-xs); color: var(--fg-mute); }
+.ec-xfer-row.on .n { color: var(--warn); }

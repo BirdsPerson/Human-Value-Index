@@ -30,7 +30,7 @@ export default function YourFlat({ size = "L" }) {
       const unit = plan?.storeys.flatMap(st => st.units).find(u => u.id === apt.flat.id);
       if (!unit) { setHome(null); return; }
       const l4 = id.slice(-4);
-      const me = { slug: `citizen-${l4.toLowerCase()}`, name: `Subject ${l4}`, score: last?.score, tier: last?.tier, kind: "citizen", you: true, avatar: last?.avatar || null,
+      const me = { slug: `citizen-${l4.toLowerCase()}`, name: `Subject ${l4}`, score: last?.score, tier: last?.tier, kind: "citizen", you: true, avatar: last?.avatar || null, ...(last?.home ? { home: last.home } : {}),
         housedUnder: S.housedUnderAt((last?.history || []).filter(h => typeof h?.score === "number").pop()?.at) };   // as the server houses it (economy.js citizenOf)
       const draw = () => {
         const c = cv.current?.getContext("2d");

@@ -22,6 +22,7 @@ const fnDir = root + "netlify/functions/";
 // "exists, and how many visits"). me.js claims a case to a SESSION (requireAccount), a different gate.
 const ALLOW = {
   "me.js": "claiming needs a session of its own (requireAccount); nothing acts on the case by its number",
+  "housing-tick.js": "scheduled, no request reaches it: the Housing Office's rounds over the census's own files",
 };
 const WRITES = ["updateCase(", "updateRecord(", "updateWallet(", "updateTanks(", "updateBoards(", "putGame(", "castBallot(", "castVote(", "setEntry(",
   "trade(", "collect(", "placeOrder(", "buy(", "upgrade(", "setOutfit(", "place(", "fileProposal(", "cosign(", "review(", "declareCandidacy(", "resignSeat(",
@@ -47,7 +48,7 @@ for (const f of readdirSync(fnDir).filter(f => f.endsWith(".js")).sort()) {
   covered.push(f);
 }
 assert.ok(covered.length >= 20, `only ${covered.length} case endpoints found: the scan is broken`);
-for (const must of ["casino.js", "economy.js", "market.js", "shops.js", "chess.js", "assembly.js", "elections.js", "petition.js", "proposals.js", "purge.js", "intake-score.js", "refer.js", "tournament.js", "eb-claim.js", "ski.js", "aquarium.js"])
+for (const must of ["casino.js", "economy.js", "market.js", "shops.js", "chess.js", "assembly.js", "elections.js", "petition.js", "proposals.js", "purge.js", "intake-score.js", "refer.js", "tournament.js", "eb-claim.js", "ski.js", "aquarium.js", "housing.js"])
   assert.ok(covered.includes(must), `${must} should be a covered case endpoint`);
 
 // ---- 2. no case number in the source --------------------------------------------------------------
@@ -90,7 +91,7 @@ process.env.HVI_ECONOMY_BACKEND = "memory";   // the Treasury open on the in-mem
 
 const A = await import("../netlify/lib/auth.js");
 const S = await import("../netlify/lib/store.js");
-const fns = Object.fromEntries(await Promise.all(["file", "quest", "casino", "chess", "economy", "intake-session", "purge", "assembly", "proposals", "refer", "me", "leagues", "aquarium", "ski", "market", "shops", "petition", "elections", "avatar", "tournament"]
+const fns = Object.fromEntries(await Promise.all(["file", "quest", "casino", "chess", "economy", "intake-session", "purge", "assembly", "proposals", "refer", "me", "leagues", "aquarium", "ski", "market", "shops", "petition", "elections", "avatar", "tournament", "housing"]
   .map(async n => [n, (await import(`../netlify/functions/${n}.js`)).default])));
 
 const HOST = "https://humanvalueindex.com";
@@ -149,6 +150,7 @@ const WRITES_TO_TRY = [
   ["avatar redraw", fns.avatar, "/api/avatar", id => ({ caseId: id, description: "tall, red coat, curly hair" })],
   ["elections ballot", fns.elections, "/api/elections", id => ({ caseId: id, district: "x", candidate: "y" })],
   ["tournament enter", fns.tournament, "/api/tournament", id => ({ caseId: id, action: "enter", id: "nope", div: "open" })],
+  ["housing transfer", fns.housing, "/api/housing", id => ({ caseId: id, action: "transfer", unit: "nope" })],
 ];
 // first every refusal, then the proof that nothing moved, then the allowed calls
 const POST = { method: "POST" };
@@ -174,7 +176,7 @@ assert.equal(unclaimedCasino.status, 200); assert.equal(unclaimedCasino.body.cla
 assert.equal((await call(fns.casino, `/api/casino?caseId=${C}`, { cookie: cK })).body.claimedToday, true, "the claimed file collected with its own session");
 
 // private reads: refused for a claimed file, open for an unclaimed one, the file's own session reads
-for (const [label, fn, path] of [["file", fns.file, "/api/file"], ["quest", fns.quest, "/api/quest"], ["casino", fns.casino, "/api/casino"], ["shops", fns.shops, "/api/shops"], ["leagues", fns.leagues, "/api/leagues"]]) {
+for (const [label, fn, path] of [["file", fns.file, "/api/file"], ["quest", fns.quest, "/api/quest"], ["casino", fns.casino, "/api/casino"], ["shops", fns.shops, "/api/shops"], ["leagues", fns.leagues, "/api/leagues"], ["housing", fns.housing, "/api/housing"]]) {
   refused(await call(fn, `${path}?caseId=${C}`), 401, `${label} read: claimed, no session`);
   refused(await call(fn, `${path}?caseId=${C}`, { cookie: cO }), 403, `${label} read: claimed, a stranger`);
   notRefused(await call(fn, `${path}?caseId=${C}`, { cookie: cK }), `${label} read: its own session`);

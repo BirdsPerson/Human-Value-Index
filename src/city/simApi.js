@@ -44,7 +44,7 @@ export const whereOf = (subject, mt) => (subject?.crowd ? subject.at(mt) : SIM.w
 // A stand-in: drawn as a dot, never opened, never listed.
 export const isCrowd = (subject) => Boolean(subject?.crowd);
 // Which floor of its place's building a subject keeps while there (stable per stay).
-export const floorFor = (subject, placeId) => SIM.floorOf(placeId, SIM.keyOf(subject));
+export const floorFor = (subject, placeId) => SIM.floorOf(placeId, SIM.keyOf(subject), SIM.SEED, subject);
 export const stationOf = (districtId) => STATIONS[districtId] || null;
 // Where the subject physically is: a district id, or "loop" while riding.
 export const atDistrict = (w) => w.atDistrictId || w.districtId;

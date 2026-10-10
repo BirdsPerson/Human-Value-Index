@@ -6,6 +6,7 @@ import { Button, ButtonRow, PaLine } from "../ui/index.js";
 import { loadEconomy, econAct, newNonce } from "./client.js";
 import { CLOSED_LINE, UBI_LINE, LEGAL_LINES, MIN_INVEST, LOCK_DAYS, fmt, fmtSigned, fmtPpm } from "./rules.js";
 import CSS from "./economy.css?inline";
+import { TransferDesk } from "./Transfer.jsx";
 
 export function injectEconomyStyles() {
   let el = document.getElementById("ec-styles");
@@ -45,7 +46,7 @@ const ppmTone = (p) => (p > 0 ? "ec-up" : p < 0 ? "ec-down" : "ec-flat");
 const dateOf = (iso) => (iso ? String(iso).slice(5, 10).replace("-", "/") : "");
 
 // ---- MY APARTMENT ------------------------------------------------------------------------------
-export function ApartmentCard({ apt }) {
+export function ApartmentCard({ apt, caseId }) {
   if (!apt) return <p className="ec-p ec-dim">THE HOUSING OFFICE CANNOT LOCATE YOUR FILE'S ASSIGNMENT. THIS IS NOT YOUR PROBLEM. IT WILL BECOME YOUR PROBLEM.</p>;
   return (
     <div className="ec-apt">
@@ -57,8 +58,9 @@ export function ApartmentCard({ apt }) {
         <span className="k">ASSIGNED BY</span><span className="v">TIER{apt.tier ? `: ${apt.tier}` : ""}</span>
         <span className="k">RENT</span><span className="v">NONE. TENURE: {apt.tenure}.</span>
       </div>
-      <p className="ec-p">YOUR CITIZEN SLEEPS HERE. THE DEPARTMENT CHOSE IT FROM YOUR TIER, AS IT CHOOSES EVERYTHING. IT CANNOT BE LOST, SOLD OR IMPROVED. A BETTER TIER IS A BETTER BUILDING. CYCLES ARE NOT A TIER.</p>
+      <p className="ec-p">YOUR CITIZEN SLEEPS HERE. THE DEPARTMENT CHOSE IT FROM YOUR TIER, AS IT CHOOSES EVERYTHING. IT CANNOT BE LOST, SOLD OR IMPROVED. IT CAN BE EXCHANGED, ON REQUEST, SLOWLY. A BETTER TIER IS A BETTER BUILDING. CYCLES ARE NOT A TIER.</p>
       <ButtonRow><Button variant="secondary" href={apt.href}>SEE IT IN THE CITY</Button></ButtonRow>
+      <TransferDesk caseId={caseId} />
     </div>
   );
 }
