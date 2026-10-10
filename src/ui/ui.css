@@ -10,6 +10,10 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 400 var(--t-s)/
 /* A bare link in running text: the accent, never the browser's blue or visited purple
    (the purple failed contrast on --bg). */
 a:not([class]), a:not([class]):visited { color: var(--accent); text-underline-offset: 3px; }
+/* The nav links are bare too: keep the bar's own ink and the current tab's, visited or not
+   (the accent on the accent tab made CITY and MY FILE vanish once visited). */
+.ui-bar a:not([aria-current]):visited, .ui-head-nav a:not([aria-current]):visited { color: var(--bar-ink, var(--accent-ink)); }
+.ui-bar a[aria-current="page"]:visited, .ui-head-nav a[aria-current="page"]:visited { color: var(--bar-cur, var(--accent)); }
 [id] { scroll-margin-top: calc(var(--head-h) + var(--safe-t) + var(--s2)); }
 
 /* ---------- the desktop (DEPARTMENT OS, 2026-10-05) ----------

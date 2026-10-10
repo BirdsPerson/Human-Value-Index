@@ -9,19 +9,17 @@ Status tags: [next] [blocked: reason] [in progress] [needs Scott]
 
 ## Backlog (priority order)
 
-P. **Playtest 2026-10-10 findings** (390x844 touch emulation + 1440; screens docs/screens/playtest/2026-10-10/).
+P. [in progress: slice 1 shipped 2026-10-10 = score index from the census, nav visited colour, first-day
+   checklist count/order; every other bullet below is still open] **Playtest 2026-10-10 findings** (390x844 touch emulation + 1440; screens docs/screens/playtest/2026-10-10/).
    Bugs:
-   - **Score index lists 62 of ~1,209 files.** #scores reads the static `FAMOUS_FIGURES` (src/App.jsx:605
-     `uniqueFigures = FAMOUS_FIGURES`), so every referral and roster-engine figure is missing ("62 ON FILE"
-     while the cube says 1,209 and the city POP 1210). Feed it from /api/pen like the cube does.
-   - **Command-bar labels vanish once visited.** The F-key links have no class, so `src/ui/ui.css:12`
-     `a:not([class]):visited { color: var(--accent) }` paints the label accent-green on the green tab:
-     CITY and MY FILE turn invisible after one visit (seen on #scores, #cube, #play). Exempt the nav.
+   - [fixed 2026-10-10: App.jsx merges the /api/pen census into the index (mergeCensus, check-score-index);
+     not seen against the live census] ~~Score index lists 62 of ~1,209 files.~~
+   - [fixed 2026-10-10: ui.css exempts .ui-bar / .ui-head-nav from the visited rule] ~~Command-bar labels vanish once visited.~~
    - **Floor counts disagree.** THE MERIDIAN: cutaway and the Finance directory say 6 FLOORS (PH, 4F-1F,
      lobby); #city/finance/the-meridian says 14F with PH, 12F..1F, G.
-   - **First-day checklist miscounts:** "0 OF 4 DONE" over "FIVE THINGS", steps numbered 1-5 (+ optional 6).
-     And step 1 is locked ("VESTS ON 2026-10-12") and step 2 asks you to invest ¢0: a new player's first two
-     steps are dead ends. Lead with something doable now (find yourself, play a game).
+   - [fixed 2026-10-10: steps that cannot be taken yet (vesting allowance, invest included) sink below the
+     doable ones, numbered in shown order; the intro line counts what the header counts (introOf, check-firstday)]
+     ~~First-day checklist miscounts and leads with dead ends.~~
    - **"Release in ~31 real min" contradicts the city.** Intake lists your file as awaiting release, but
      FIND ME already shows you on the Arena platform boarding Loop 5. Pick one story.
    - **Your own file is absent from the cube** (FIND "Subject MU6P" finds nothing; no YOU marker) and the

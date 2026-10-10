@@ -6,7 +6,9 @@
 // INVEST OR SAVE goes here. The single place to point it at the market page when it lands.
 export const MARKET_HREF = "#market";
 
-export const INTRO = "THE DEPARTMENT EXPECTS FIVE THINGS. NONE ARE MANDATORY. ALL ARE NOTED.";
+const WORDS = ["NO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX"];
+// n = the steps that can be taken now (the count the header shows), so the line and the tally agree.
+export const introOf = (n) => `THE DEPARTMENT EXPECTS ${WORDS[n] ?? n} THING${n === 1 ? "" : "S"} NOW. NONE ARE MANDATORY. ALL ARE NOTED.`;
 export const DONE_LINE = "ORIENTATION COMPLETE. YOU ARE NOW ORDINARY.";
 
 // Your own citizen in the city: the census slug every server function uses (citizen-<last 4>).
@@ -68,7 +70,7 @@ export function stepsFrom(s = {}, caseId = null) {
       status: st(collected, shut || vesting) },
     { id: "invest", n: 2, label: "INVEST OR SAVE", href: MARKET_HREF,
       note: invested ? "A POSITION ON FILE. THE DISTRICTS THANK YOU. THEY DO NOT." : s.saved ? "YOU CHOSE TO SAVE. PRUDENCE, NOTED." : shut ? "THE TREASURY IS NOT YET OPEN. SAVING NEEDS NO TREASURY." : "BACK A DISTRICT, OR KEEP IT ALL IN CASH.",
-      status: st(invested || Boolean(s.saved)), canSave: !invested && !s.saved },
+      status: st(invested || Boolean(s.saved), vesting), canSave: !invested && !s.saved },
     { id: "vote", n: 3, label: "CAST A VOTE", href: sitting || !s.assembly ? "#assembly" : "#scores",
       note: voted ? "BALLOT RECEIVED. NON-BINDING. NOTED ANYWAY."
         : sitting || !s.assembly ? "THE ASSEMBLY IS SITTING. ONE BALLOT. NON-BINDING."
@@ -88,6 +90,10 @@ export function stepsFrom(s = {}, caseId = null) {
 
 // -> {done, total, complete, next}: the count over the steps that can be taken now, optional
 // steps aside; complete when every one of those is done (and at least one could be taken).
+// The steps in the order they are shown: what can be done now first, "later" steps after (a new
+// file's first rows must not be the ones it cannot take). Stable within each group.
+export const shownOrder = (steps) => [...steps.filter(x => x.status !== "later"), ...steps.filter(x => x.status === "later")];
+
 export function progressOf(steps) {
   const counted = steps.filter(x => !x.optional && x.status !== "later");
   const done = counted.filter(x => x.status === "done").length;

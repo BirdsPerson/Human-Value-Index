@@ -3,7 +3,7 @@ import { Frame } from "./ui/components.jsx";
 import { loadEconomy } from "./economy/client.js";
 import { loadAssembly } from "./assembly/client.js";
 import { loadChess } from "./chess/api.js";
-import { stepsFrom, progressOf, noted, note, localGames, INTRO, DONE_LINE } from "./firstDay.js";
+import { stepsFrom, progressOf, noted, note, localGames, introOf, shownOrder, DONE_LINE } from "./firstDay.js";
 
 // YOUR FIRST DAY (src/firstDay.js): the checklist on MY FILE and the interview's result, and its
 // one-line form on the landing (variant="compact"). Reads the file's real state from the rooms'
@@ -127,8 +127,8 @@ export default function FirstDay({ caseId, variant = "full" }) {
   const { steps, prog, loading, complete } = useFirstDay(caseId);
   const [reopen, setReopen] = useState(false);
   if (!caseId) return null;
-  const required = steps.filter(s => !s.optional);
-  const extra = steps.filter(s => s.optional);
+  const required = shownOrder(steps.filter(s => !s.optional)).map((s, i) => ({ ...s, n: i + 1 }));
+  const extra = steps.filter(s => s.optional).map((s, i) => ({ ...s, n: required.length + 1 + i }));
   const meta = loading ? "CHECKING YOUR FILE" : `${prog.done} OF ${prog.total} DONE`;
 
   if (variant === "compact") {
@@ -157,7 +157,7 @@ export default function FirstDay({ caseId, variant = "full" }) {
     <Frame title="YOUR FIRST DAY" meta={meta} className="fd">
       {complete
         ? <p className="fd-intro">{DONE_LINE}</p>
-        : <p className="fd-intro">{INTRO}</p>}
+        : <p className="fd-intro">{introOf(prog.total)}</p>}
       <ol className="fd-list" aria-label={`Your first day: ${meta.toLowerCase()}`}>
         {required.map(s => <Step key={s.id} s={s} caseId={caseId} total={required.length} />)}
       </ol>

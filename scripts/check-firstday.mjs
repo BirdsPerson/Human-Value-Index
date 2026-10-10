@@ -87,3 +87,19 @@ assert.ok(app.includes(`routePath === "${MARKET_HREF}"`), `MARKET_HREF ${MARKET_
 if (MARKET_HREF !== "#market" && app.includes(`routePath === "#market"`)) console.log("NOTE #market is a route now: point MARKET_HREF in src/firstDay.js at it.");
 
 console.log("check-firstday: OK");
+
+// Playtest 2026-10-10: a vesting file's first rows are things it can do; the intro agrees with the tally.
+{
+  const { introOf, shownOrder } = await import("../src/firstDay.js");
+  const vest = stepsFrom({ econ: { open: true, wallet: wallet({ enrolled: false, tray: { vesting: true } }) } }, CASE);
+  assert.equal(by(vest).invest, "later", "invest cannot be taken while the allowance vests");
+  const req = shownOrder(vest.filter(s => !s.optional));
+  assert.notEqual(req[0].status, "later");
+  assert.ok(req.slice(-2).every(s => s.status === "later"), "later steps sink to the end");
+  const total = progressOf(vest).total;
+  assert.equal(total, 3);
+  assert.match(introOf(total), /THREE THINGS/);
+  assert.match(introOf(1), /ONE THING NOW/);
+  assert.equal(by(stepsFrom({ saved: true, econ: { open: true, wallet: wallet({ enrolled: false, tray: { vesting: true } }) } })).invest, "done");
+}
+console.log("check-firstday: playtest order ok");

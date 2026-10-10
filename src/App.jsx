@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
+import { fetchPen } from "./penClient.js";
 import CubePanel, { CubeChips, cubePlace, cubeOf } from "./CubePanel.jsx";
-import { FAMOUS_FIGURES, TIERS, getTier, displayName } from "./figures.js";
+import { FAMOUS_FIGURES, mergeCensus, TIERS, getTier, displayName } from "./figures.js";
 import { ScoreCard, Breakdown, readCaseId, readLastResult, CaseLogon, syncFile, assessedMeta, FlagsList, flagsMeta } from "./caseFile.jsx";
 import { FILE_PHOTO_CSS } from "./filePhotoCss.js";
 // The compare card's photo only: the sprite painter stays out of the entry bundle.
@@ -602,7 +603,17 @@ export default function OverlordAssessment() {
   const q = questions?.[currentQ];
   const tier = result ? getTier(result.score) : null;
   const ct = compareTarget ? getTier(compareTarget.score) : null;
-  const uniqueFigures = FAMOUS_FIGURES;
+  // The index lists the whole census (referrals and roster-engine figures too), not only the
+  // starter list bundled with the page. The starter list shows at once; the census joins it.
+  const wantCensus = routePathT === "#scores" || phase === "leaderboard" || phase === "result";
+  const [census, setCensus] = useState(null);
+  useEffect(() => {
+    if (!wantCensus || census) return;
+    let off = false;
+    fetchPen({ fields: "list", kind: "figure" }).then(l => { if (!off) setCensus(l); }).catch(() => {});
+    return () => { off = true; };
+  }, [wantCensus, census]);
+  const uniqueFigures = useMemo(() => mergeCensus(FAMOUS_FIGURES, census), [census]);
 
   // v9 ROUTES. #file is MY FILE in the command bar: for now the intake screen, which
   // opens on the case file, the breakdown and the appeals desk when one is on record.

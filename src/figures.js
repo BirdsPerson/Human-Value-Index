@@ -109,7 +109,16 @@ export function tierLine(score, ladder = TIERS) {
 
 // Deduped by name, first entry wins (same rule App.jsx has always used).
 // Each figure carries its People judge (likability) when public ratings exist; see peopleData.js.
-export const FAMOUS_FIGURES = ALL_FIGURES.filter((f, i, arr) => arr.findIndex(x => x.name === f.name) === i)
+// The bundled starter list plus the live census' figures (pen rows), deduped by name; the
+// bundled entry wins (it carries the verdict). Rows without a name or score are dropped.
+export function mergeCensus(bundled, census) {
+  if (!census?.length) return bundled;
+  const seen = new Set(bundled.map(f => f.name));
+  const extra = census.filter(s => s && s.name && typeof s.score === "number" && !seen.has(s.name) && seen.add(s.name));
+  return [...bundled, ...extra];
+}
+
+export const FAMOUS_FIGURES =ALL_FIGURES.filter((f, i, arr) => arr.findIndex(x => x.name === f.name) === i)
   .map(f => (PEOPLE[f.name] ? { ...f, people: PEOPLE[f.name] } : f));
 
 // Namesakes carry a qualifier ("Jack Johnson" + "boxer"); this is the name as shown.
